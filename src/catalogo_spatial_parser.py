@@ -17,7 +17,17 @@ from typing import Any
 # Logos/marcas que aparecen en el PDF pero NO son parte del texto del catálogo
 LOGO_BLACKLIST = frozenset({
     "ESSVE",  # Marca de herramientas que aparece como logotipo
-    "KNAPP",  # connectors.com
+    "KNAPP", "KNAPP®",  # connectors.com
+    "CONNECTORS.COM",  # Web de KNAPP
+    "MAMUT",  # Logo de la empresa
+    "SMAMUL", "SOMAMUT", "SEMAMUT",  # Variantes OCR del logo mamut
+    "INOX",  # Aparece como indicador de producto inoxidable al final de líneas
+    "O",  # Ícono circular que aparece al final de algunas líneas de producto
+    "TECFI", "TECFIL",  # Logos de Tecfi
+    "THAKITA", "MAKITA", "PRAKTTI",  # Logos de herramientas
+    "REGALO",  # Texto promocional
+    "EUROTEC", "EUROTEC®",  # Logo de Eurotec
+    "SISTEMI", "FISSAGGIO",  # Partes de "Sistemi di Fissaggio" (logo Tecfi)
 })
 
 # Palabras que NO son SKUs
@@ -33,6 +43,8 @@ SKU_BLACKLIST = frozenset({
     "E6010", "E6011", "E7018", "E6010/6011/7018",
     # Valores de PTA TORX (punta Torx) - NO son SKUs
     "T10", "T15", "T20", "T25", "T30", "T40", "T50", "T55", "T60",
+    # Modelos de herramientas Makita - son descripciones, no SKUs de productos
+    "DHP485RFE", "DHP482RFJ", "DDF485RFE",
 })
 
 
@@ -62,6 +74,14 @@ def looks_like_sku(token: str) -> bool:
         return False
     if t in SKU_BLACKLIST:
         return False
+    
+    # Códigos RAL son colores, no SKUs (ej: RAL9002, RAL3009)
+    if re.match(r'^RAL\d{4}$', t):
+        return False
+    # Códigos RL también son colores abreviados (ej: RL9002, RL3009)
+    if re.match(r'^RL\d{4}$', t):
+        return False
+    
     # Debe contener al menos un dígito
     if not re.search(r"\d", t):
         return False
@@ -88,6 +108,54 @@ def clean_logo_text(text: str) -> str:
     words = text.split()
     cleaned = [w for w in words if w.upper() not in LOGO_BLACKLIST]
     return " ".join(cleaned)
+
+
+def clean_title_text(text: str) -> str:
+    """
+    Limpia títulos removiendo texto extra que no debería estar.
+    - Remueve logos/marcas
+    - Remueve patrones de encabezados de columna concatenados
+    - Remueve descripciones/características concatenadas
+    - Detecta y marca títulos inválidos (fragmentos, residuos)
+    """
+    if not text:
+        return text
+    
+    # Primero limpiar logos
+    text = clean_logo_text(text)
+    
+    # Patrones de texto que no deberían estar en títulos (texto de columnas derecha)
+    # Estos aparecen cuando se concatena texto de descripciones
+    patterns_to_remove = [
+        r'\s*Entre\s+Caras\s*',  # Encabezado de columna
+        r'\s*Características\s+\d+\..*$',  # Características numeradas
+        r'\s*Capacidad\s+.*$',  # Descripciones de capacidad
+        r'\s*\d+\.\s+Capacidad\s+.*$',  # "5. Capacidad..."
+        r'\s*Referencia\s+Tecfi\s*\([^)]+\)\s*$',  # Referencias Tecfi
+        r'\s*Cod\s+Tecfi\s*$',  # "Cod Tecfi" al final
+        r'\s*Cod\s+Makita\s*$',  # "Cod Makita" al final
+    ]
+    
+    import re
+    for pattern in patterns_to_remove:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+    
+    cleaned = text.strip()
+    
+    # Detectar títulos inválidos (fragmentos/residuos)
+    # Si el título es solo un número con punto (ej: "6."), es un residuo
+    if re.match(r'^\d+\.$', cleaned):
+        return ""  # Descartar
+    
+    # Si empieza con "Y " solo, es un fragmento de título (ej: "Y TUERCAS" sin "PERNO")
+    if cleaned.upper().startswith("Y ") and len(cleaned) < 15:
+        return ""  # Descartar
+    
+    # Remover letras sueltas al final (residuos de layout del PDF)
+    # Ej: "SOPORTES MULTIUSO A" -> "SOPORTES MULTIUSO"
+    cleaned = re.sub(r'\s+[A-Z]$', '', cleaned)
+    
+    return cleaned
 
 
 def split_line_halves(line: str, gap_end_pos: int = 56) -> tuple[str, str]:
@@ -186,12 +254,22 @@ def parse_row_parts(parts: list[str]) -> dict[str, str] | None:
         for i, part in enumerate(remaining):
             # ENVASE típico: "500 U", "100 U", "1,000 U", "200 U b/BL2Eu"
             # También puede venir con Cod Tecfi pegado: "100 U AB0106180"
+            # Para soldaduras el envase puede ser en kilogramos: "5 K", "10 K"
             if " U" in part:
                 # Extraer solo la parte del ENVASE (número + U)
                 envase_match = re.match(r'^([\d,\.]+\s*U)\b', part)
                 if envase_match:
                     envase = envase_match.group(1)
                     # El resto después de "U " es Cod Tecfi - ignorar
+                else:
+                    envase = part
+                envase_idx = i
+                break
+            elif " K" in part or part.endswith("K"):
+                # ENVASE en kilogramos para soldaduras: "5 K", "10 K"
+                envase_match_k = re.match(r'^([\d,\.]+\s*K)\b', part)
+                if envase_match_k:
+                    envase = envase_match_k.group(1)
                 else:
                     envase = part
                 envase_idx = i
@@ -231,27 +309,34 @@ def parse_row_parts(parts: list[str]) -> dict[str, str] | None:
         # NOMINAL típico: #X-Y, #X-Y[CRS], #X(valor), #X-Y[fracción], números como M5, 5.2, 6.3[1/4-14]
         # LARGO típico: fracciones, medidas con ", números
         
-        # Patrón 1: # seguido de dígitos, guiones, corchetes, paréntesis, barras, decimales
-        match = re.match(r'^(#[\d\-\[\]A-Za-z\(\)\.\,\/]+)\s+(.+)$', val)
-        if match:
-            result["NOMINAL"] = match.group(1)
-            result["LARGO"] = match.group(2)
+        # Patrón 0: Soldaduras - formato "2.5(3/32) 300mm" o "4.0(5/32) 350mm"
+        # NOMINAL: número.decimal(fracción), LARGO: NNNmm
+        match_soldadura = re.match(r'^([\d\.]+\([\d/]+\))\s+(\d+mm)$', val)
+        if match_soldadura:
+            result["NOMINAL"] = match_soldadura.group(1)
+            result["LARGO"] = match_soldadura.group(2)
         else:
-            # Patrón 2: M seguido de número (métrico)
-            match2 = re.match(r'^(M\d+[xX]?\d*[\.\d]*)\s+(.+)$', val)
-            if match2:
-                result["NOMINAL"] = match2.group(1)
-                result["LARGO"] = match2.group(2)
+            # Patrón 1: # seguido de dígitos, guiones, corchetes, paréntesis, barras, decimales
+            match = re.match(r'^(#[\d\-\[\]A-Za-z\(\)\.\,\/]+)\s+(.+)$', val)
+            if match:
+                result["NOMINAL"] = match.group(1)
+                result["LARGO"] = match.group(2)
             else:
-                # Patrón 3: Número con corchetes como 6.3[1/4-14] seguido de espacio y LARGO
-                # Formato: número.decimal[fracción-número] espacio largo
-                match3 = re.match(r'^([\d\.]+\[[\d/\-]+\])\s+(.+)$', val)
-                if match3:
-                    result["NOMINAL"] = match3.group(1)
-                    result["LARGO"] = match3.group(2)
+                # Patrón 2: M seguido de número (métrico)
+                match2 = re.match(r'^(M\d+[xX]?\d*[\.\d]*)\s+(.+)$', val)
+                if match2:
+                    result["NOMINAL"] = match2.group(1)
+                    result["LARGO"] = match2.group(2)
                 else:
-                    # Asumir que es solo LARGO (NOMINAL heredado)
-                    result["LARGO"] = val
+                    # Patrón 3: Número con corchetes como 6.3[1/4-14] seguido de espacio y LARGO
+                    # Formato: número.decimal[fracción-número] espacio largo
+                    match3 = re.match(r'^([\d\.]+\[[\d/\-]+\])\s+(.+)$', val)
+                    if match3:
+                        result["NOMINAL"] = match3.group(1)
+                        result["LARGO"] = match3.group(2)
+                    else:
+                        # Asumir que es solo LARGO (NOMINAL heredado)
+                        result["LARGO"] = val
     
     elif len(remaining) == 2:
         result["NOMINAL"] = remaining[0]
@@ -324,18 +409,97 @@ def detect_column_positions(header_line: str) -> list[tuple[int, int, str]]:
 
 
 def is_header_line(line: str) -> bool:
-    """Detecta línea de encabezado de tabla."""
+    """Detecta línea de encabezado de tabla con columnas numéricas."""
     upper = line.upper().strip()
     return "CODIGO" in upper and ("NOMINAL" in upper or "LARGO" in upper)
+
+
+def is_description_only_header(line: str) -> bool:
+    """Detecta headers de tabla CODIGO + DESCRIPCION sin columnas numéricas.
+    Estas tablas (remachadoras, etc.) deben saltarse ya que no tienen atributos."""
+    upper = line.upper().strip()
+    # Tiene CODIGO y DESCRIPCION pero NO tiene NOMINAL ni LARGO ni ENVASE
+    if "CODIGO" in upper and "DESCRIP" in upper:
+        if "NOMINAL" not in upper and "LARGO" not in upper and "ENVASE" not in upper:
+            return True
+    return False
+
+
+def is_subtype_with_finish(line: str) -> tuple[bool, str, str]:
+    """
+    Detecta si una línea es "SUBTIPO - ACABADO" o "ACABADO - DESCRIPCION" combinado.
+    Retorna (es_subtipo_con_acabado, subtipo, acabado).
+    
+    Ejemplos:
+    - "PUNTA BROCA - Zincado Brillante" → (True, "PUNTA BROCA", "Zincado Brillante")
+    - "PUNTA FINA - Fosfatizado" → (True, "PUNTA FINA", "Fosfatizado")
+    - "Phillips - Granel" → (True, "Phillips", "Granel")
+    - "Plástico - Para Volcanitas hasta 15mm" → (True, "Plástico", "Para Volcanitas hasta 15mm")
+    """
+    if " - " not in line:
+        return (False, "", "")
+    
+    stripped = line.strip()
+    parts = stripped.split(" - ", 1)
+    if len(parts) != 2:
+        return (False, "", "")
+    
+    before, after = parts[0].strip(), parts[1].strip()
+    before_lower = before.lower()
+    after_lower = after.lower()
+    
+    # Lista de acabados/formatos conocidos (pueden estar antes O después del guión)
+    finish_keywords = [
+        "zincado", "fosfatizado", "ruspert", "dacromet", "iridiscente",
+        "pavonado", "bronce", "granel", "pequeño", "emb.", "continuación",
+        "continuacion", "inoxidable", "brillante", "blister", "formato",
+        "plástico", "plastico", "metálico", "metalico", "nylon",
+        "aluminio", "collar",  # Remaches estructurales
+        "aluminizado", "bronceado", "plastificado",  # Cables y cadenas
+        "niquelado", "galvanizado",  # Acabados comunes
+        "gatillo", "tipo d",  # Mosquetones profesionales
+    ]
+    
+    before_is_finish = any(kw in before_lower for kw in finish_keywords)
+    after_is_finish = any(kw in after_lower for kw in finish_keywords)
+    
+    # Si AMBAS partes son acabados/formatos, es un acabado compuesto, no subtipo
+    # Ej: "Zincado Brillante - Formato Blister" → acabado completo
+    if before_is_finish and after_is_finish:
+        return (True, "", f"{before} - {after}")
+    
+    # Si la parte después del guión es un acabado/formato conocido
+    if after_is_finish:
+        return (True, before, after)
+    
+    # Si la parte ANTES del guión es un acabado/material y después es una descripción
+    # Ej: "Plástico - Para Volcanitas hasta 15mm"
+    if before_is_finish:
+        # La parte antes es el acabado/material, la parte después es descripción adicional
+        # Retornamos el acabado completo como "before - after"
+        return (True, "", f"{before} - {after}")
+    
+    return (False, "", "")
 
 
 def is_finish_line(line: str) -> bool:
     """Detecta línea de acabado."""
     stripped = line.strip().lower()
+    # Si tiene "DIN" o "AISI-" es un título técnico, no acabado
+    if "din " in stripped or "aisi-" in stripped or "clase" in stripped:
+        return False
+    # Si es muy largo probablemente es título, no acabado
+    if len(stripped) > 35:
+        return False
     finishes = [
         "zincado", "fosfatizado", "ruspert", "dacromet", "iridiscente",
-        "balde", "envase pequeño", "acero inoxidable", "inox",
+        "balde", "envase pequeño", "acero inoxidable", "inox", "acero negro",
         "acabado especial", "revestimiento", "bronce", "pavonado",
+        "aluminio", "collar",  # Remaches estructurales
+        "aluminizado", "bronceado", "plastificado",  # Cables y cadenas
+        "niquelado", "galvanizado",  # Acabados comunes
+        "gatillo", "tipo d",  # Mosquetones profesionales
+        "acero alloy",  # Ganchos elevación
     ]
     return any(stripped.startswith(f) for f in finishes)
 
@@ -349,14 +513,37 @@ def is_title_line(line: str) -> bool:
         return False
     if is_finish_line(line):
         return False
-    # Títulos típicos
-    keywords = ["TORNILLO", "PERNO", "TUERCA", "GOLILLA", "AUTOPERFORANTE", 
-                "REMACHE", "ANCLAJE", "TARUGO", "CLAVO", "BROCA", "DISCO",
-                "CADENA", "CABLE", "FRAMER", "CONECTOR"]
     upper = stripped.upper()
     # Ignorar líneas que son solo logos
     if upper in LOGO_BLACKLIST:
         return False
+    # Líneas con " - " son típicamente títulos de SECCIÓN, no de producto
+    # Ej: "PERNOS PARKER - Cabeza Cilíndrica", "GOLILLAS - De Presión"
+    if " - " in stripped:
+        return False
+    # Títulos típicos de producto
+    keywords = ["TORNILLO", "PERNO", "TUERCA", "GOLILLA", "AUTOPERFORANTE", 
+                "REMACHE", "ANCLAJE", "TARUGO", "CLAVO", "BROCA", "DISCO",
+                "CADENA", "CABLE", "FRAMER", "CONECTOR", "ROSCALATA", 
+                "ATERRAJADOR", "ESPÁRRAGO", "ESPARRAGO", "ARANDELA", "SOLDADURA",
+                "HILO", "BARRA", "PRISIONERO",
+                "PUNTAS", "PUNTA", "INSERTO", "DADO",  # Puntas, insertos y dados
+                "REMACHADORA", "TALADRO",  # Herramientas
+                # Complementos de línea
+                "MOSQUETON", "MOSQUETONES", "CHAVETA", "DESTORCEDOR", 
+                "AMARRA", "ABRAZADERA", "SEGURO", "SEAGERS",
+                "GRAPA", "GANCHO", "ARGOLLA", "MAILLON", "MAILLONES",
+                # Productos para techo
+                "CAPUCHON", "CAPUCHÓN", "PARAGUAS",
+                # Conectores madera
+                "CRAMPON", "HOLD", "PLETINA", "ESCUADRA", "SOPORTE",
+                "UNION", "UNIÓN", "BASE",
+                # Anclajes y accesorios
+                "CANCAMO", "CÁNCAMO", "CINTA",
+                # Herramientas eléctricas
+                "ELECTRICA", "ELÉCTRICA", "ELECTRICO", "ELÉCTRICO",
+                "ATORNILLADOR", "PISTOLA",
+                ]
     return any(kw in upper for kw in keywords)
 
 
@@ -378,39 +565,213 @@ def is_subtype_line(line: str) -> bool:
 def is_incomplete_title(title: str) -> bool:
     """
     Detecta si un título está incompleto y necesita continuación.
-    Por ejemplo: "TORNILLO PARA" necesita más texto.
+    
+    Enfoque sistemático - un título probablemente está incompleto si:
+    1. Termina en preposición/artículo (PARA, DE, CON, EN, A, Y, X)
+    2. Termina en palabra que típicamente tiene modificador (CAB., CABEZA, ROSCA)
+    3. Es muy corto (1-2 palabras) y es un tipo de producto genérico
+    4. NO termina en un acabado o material específico
+    
+    La idea es que los títulos completos típicamente terminan en:
+    - Un material (BRONCE, INOXIDABLE, ACERO)
+    - Una especificación final (304, A2, PHILLIPS, TORX)
+    - Un número de norma (DIN 934, ASTM F-436)
     """
     if not title:
         return False
     words = title.strip().upper().split()
     if not words:
         return False
-    # Palabras que indican título incompleto
-    incomplete_endings = ["PARA", "DE", "CON", "EN", "A", "Y"]
-    return words[-1] in incomplete_endings
+    
+    last_word = words[-1]
+    
+    # 1. Preposiciones/artículos/conectores al final = siempre incompleto
+    connectors = {"PARA", "DE", "CON", "EN", "A", "Y", "X", "O", "DEL", "LA", "EL", "LOS", "LAS"}
+    if last_word in connectors:
+        return True
+    
+    # 2. Abreviaciones que necesitan continuación
+    abbreviations = {"CAB.", "CABEZA", "C/", "S/", "R.", "TCA.", "GOL.", "PTA."}
+    if last_word in abbreviations:
+        return True
+    
+    # 3. Palabras que típicamente tienen modificador después
+    # Estas son palabras que rara vez son el final de un título de producto
+    needs_modifier = {
+        "ROSCA", "RANURA", "PUNTA", "HILO", "METRO",  # Necesitan tipo
+        "HEXAGONAL", "REDONDA", "PLANA", "OVAL", "LENTEJA", "BINDING",  # Tipos de cabeza que pueden tener más info
+        "METRICA", "MÉTRICA", "MÉTRICO", "METRICO",  # Necesitan clase o norma
+        "UNC", "BSW", "UNF",  # Roscas que pueden tener grado
+        "ESTRELLA", "PRESION", "PRESIÓN",  # Golillas que tienen tipo
+        "COCINA", "COCHE", "MAQUINA", "MÁQUINA",  # Tipos de perno que necesitan cabeza
+    }
+    if last_word in needs_modifier:
+        return True
+    
+    # 4. Títulos de 1 palabra que son categorías genéricas = probablemente incompleto
+    generic_single = {
+        "TORNILLO", "PERNO", "TUERCA", "GOLILLA", "ARANDELA", 
+        "REMACHE", "CLAVO", "ANCLAJE", "ROSCALATA", "AUTOPERFORANTE",
+        "BROCA", "DISCO", "CONECTOR", "CABLE",  # Agregados
+        "DISCOS", "BROCAS", "TORNILLOS", "PERNOS", "TUERCAS", "GOLILLAS",  # Plurales
+        "SOLDADURA", "TARUGO",  # Más productos genéricos
+        "INSERTO", "DADO",  # Puntas, insertos y dados
+    }
+    if len(words) == 1 and last_word in generic_single:
+        return True
+    
+    # 4b. Títulos de 2 palabras que terminan en palabra genérica sin modificador
+    # Ej: "BROCA CILINDRICA" (falta "PARA METAL"), "DISCO CORTE" (falta tipo)
+    needs_continuation_after = {
+        "CILINDRICA", "CILÍNDRICA",  # BROCA CILINDRICA PARA...
+        "FORSTNER",  # BROCA FORSTNER PARA MADERA
+        "SIERRA",  # BROCA SIERRA CORONA
+        "CORTE",  # DISCO DE CORTE (falta material)
+        "AVELLANADORA",  # BROCA AVELLANADORA
+        "HELICOIDAL",  # BROCA HELICOIDAL PARA...
+        "SDS-PLUS",  # BROCA SDS-PLUS (tipo técnico)
+        "MINIFIX",  # CONECTOR MINIFIX
+        "CÓNICA", "CONICA",  # GOLILLA CÓNICA PARA...
+        "PARED",  # CONECTOR DE PARED WALCO
+        "OCULTA",  # UNION OCULTA PARA ELEMENTOS DE PARED
+        "FRAMER",  # FRAMER PUNTA FINA/BROCA
+        "ELEVACION", "ELEVACIÓN",  # GANCHO ELEVACION CON SEGURO
+        "COMB.",  # PERNO COCINA CAB. RED. COMB. + TCA. COC. HEX. + GOL. PLANA CAL.
+    }
+    if last_word in needs_continuation_after:
+        return True
+    
+    # 5. Si termina en número solo (como "M8" o "1/4"), probablemente incompleto
+    # a menos que sea parte de una norma completa
+    if re.match(r'^[M]?\d', last_word) and not re.search(r'(DIN|ISO|ASTM|AISI)', title.upper()):
+        # Podría ser incompleto, pero no siempre - ser conservador
+        pass
+    
+    return False
 
 
 def is_title_continuation(text: str) -> bool:
     """
     Detecta si un texto puede ser continuación de un título incompleto.
-    Por ejemplo: "TERRAZAS", "DECK", "MADERA", etc.
+    
+    Enfoque sistemático por EXCLUSIÓN:
+    - NO es header (CODIGO, NOMINAL, ENVASE, etc.)
+    - NO es acabado (Zincado, Pavonado, etc.)
+    - NO es un SKU
+    - NO es un logo
+    - ES texto en mayúsculas relativamente corto
+    
+    Ejemplos: "TERRAZAS", "DECK", "CAB. PLANA PHILLIPS", "DIENTES EXTERNOS",
+              "ASTM F-436", "ESTRELLA", etc.
     """
-    stripped = text.strip()
-    if not stripped or len(stripped) < 3 or len(stripped) > 30:
+    # Limpiar logos primero y normalizar espacios
+    stripped = " ".join(clean_logo_text(text).split())
+    if not stripped or len(stripped) < 2 or len(stripped) > 50:
         return False
     upper = stripped.upper()
-    # No puede ser un header, acabado, o tener dígitos (sería datos)
-    if is_header_line(text) or is_finish_line(text):
+    
+    # EXCLUSIONES: No puede ser...
+    
+    # 1. Header de tabla
+    if is_header_line(text):
         return False
-    if re.search(r'\d', stripped):
+    
+    # 2. Acabado/finish (pero cuidado con títulos técnicos como "INOXIDABLE A2 DIN 934")
+    if is_finish_line(text):
         return False
-    # No puede ser un logo
+    
+    # 3. Logo
     if upper in LOGO_BLACKLIST:
         return False
-    # Palabras que típicamente continúan títulos
-    continuations = ["TERRAZAS", "DECK", "MADERA", "METALCON", "VOLCANITA",
-                     "FACHADAS", "MOLDURAS", "AGLOMERADA", "DRYWALL"]
-    return upper in continuations or (len(stripped) > 3 and stripped.isupper())
+    
+    # 4. SKU - verificar si parece código de producto
+    # Si es una sola "palabra" que parece SKU, no es continuación
+    words = stripped.split()
+    if len(words) == 1 and looks_like_sku(stripped):
+        return False
+    
+    # 5. Línea con patrón de datos de producto (SKU + valores numéricos)
+    # Ej: "B02GES 5/32 1,000 U" - tiene SKU seguido de medidas
+    if len(words) >= 2 and looks_like_sku(words[0]):
+        return False
+    
+    # 6. Valores numéricos puros o medidas solas
+    if re.match(r'^[\d\s\.,/\-x\"\#]+$', stripped, re.IGNORECASE):
+        return False
+    
+    # INCLUSIONES: Probablemente ES continuación si...
+    
+    # Palabras conocidas que típicamente continúan títulos (prioridad alta)
+    known_continuations = [
+        "TERRAZAS", "DECK", "MADERA", "METALCON", "VOLCANITA",
+        "FACHADAS", "MOLDURAS", "AGLOMERADA", "DRYWALL",
+        "PHILLIPS", "BINDING", "COMBINADA", "HEXAGONAL", "BARRIL",
+        "UNC", "BSW", "MÉTRICO", "METRICO", "ISO",
+        "SEGURO", "NYLON", "FLANGE", "GRADO",
+        "INOXIDABLE", "DIN", "CLASE", "AISI", "A2", "A4",
+        "CALIBRADA", "CORRIENTE", "ANCHA",
+        "ESTRELLA", "DIENTES", "EXTERNOS", "SUPERPUESTOS",  # Golillas
+        "ASTM", "ESTRUCTURAL",  # Normas
+        "PRESION", "PRESIÓN",  # Golillas de presión
+        # Continuaciones para BROCA, DISCO, CABLE
+        "AVELLANADORA", "CORONA", "FORSTNER",  # Tipos de broca
+        "HORMIGÓN", "HORMIGON", "CONCRETO", "METAL", "CERÁMICO", "CERAMICO", "VIDRIO",  # Materiales
+        "ACERO", "PVC", "PULIDO",  # Para cables
+        "DESBASTE",  # Para discos
+        "NO FERROSOS",  # Para brocas
+        # Continuaciones para GOLILLA PARA
+        "TORNILLO", "GANCHO", "TECHO",  # Golilla para tornillo/gancho techo
+        # Continuaciones para SOLDADURA
+        "MIG", "AWS", "E6010", "E6011", "E7018",  # Tipos de soldadura
+        # Continuaciones para TARUGO
+        "ESPIGA", "NAIL-IT", "ZAMAC", "ZAMAK",  # Tipos de tarugo
+        # Continuaciones para REMACHE
+        "TIPO POP", "POP",  # Remache tipo pop
+        # Continuaciones para PUNTAS
+        "POZI",  # Puntas phillips y pozi
+        # Continuaciones para INSERTO/DADO
+        "MAGNETICO", "MAGNÉTICO",  # Inserto/Dado magnético
+        # Continuaciones para GOLILLA PARA / REMACHADORA PARA
+        "GANCHO TECHO", "TORNILLO TECHO",  # Golilla para gancho/tornillo techo
+        "TUERCA REMACHABLE",  # Remachadora para tuerca remachable
+        # Continuaciones para CONECTOR
+        "MINIFIX",  # Conector Minifix
+        # Continuaciones para GOLILLA CÓNICA
+        "TT02",  # Golilla cónica para tornillos TT02
+        # Continuaciones para FRAMER
+        "PUNTA FINA", "PUNTA BROCA",  # FRAMER PUNTA FINA/BROCA
+        # Continuaciones para GANCHO ELEVACION
+        "CON SEGURO",  # GANCHO ELEVACION CON SEGURO
+        # Continuaciones para PERNO COCINA CAB. RED. COMB.
+        "+ TCA",  # + TCA. COC. HEX. + GOL. PLANA CAL.
+    ]
+    if any(kw in upper for kw in known_continuations):
+        return True
+    
+    # Patrones conocidos
+    continuation_patterns = [
+        "CAB.", "CABEZA", "RANURA", "PLANA", "PAN", "TRUSS",
+        "ISO 8.8", "ISO 10.9", "ISO 4.8",
+        "DIN 934", "DIN 936", "DIN 125", "DIN 127",
+        "AISI-304", "AISI-316", "(AISI",
+        "GRADO 2", "GRADO 5", "GRADO 8",
+        "ASTM F-", "ASTM A-",  # Normas ASTM
+        "F-436", "A-325", "A-194",  # Códigos de norma
+    ]
+    if any(pat in upper for pat in continuation_patterns):
+        return True
+    
+    # Heurística final: Es texto TODO MAYÚSCULAS, sin números solos,
+    # y tiene entre 3 y 35 caracteres (títulos de producto típicos)
+    if stripped.isupper() and len(stripped) >= 3 and len(stripped) <= 35:
+        # Verificar que no sea solo números/medidas
+        has_letters = bool(re.search(r'[A-Z]', upper))
+        # Verificar que tenga al menos 2 letras consecutivas (no solo "A2" o "M8")
+        has_word = bool(re.search(r'[A-Z]{2,}', upper))
+        if has_letters and has_word:
+            return True
+    
+    return False
 
 
 def is_subtype_text(text: str) -> bool:
@@ -546,6 +907,10 @@ def parse_spatial_catalog(text: str) -> tuple[dict[str, Any], dict[str, dict]]:
     pending_title_left = ""
     pending_title_right = ""
     
+    # Banderas para saltar tablas de solo descripción (sin atributos numéricos)
+    skip_left_table = False
+    skip_right_table = False
+    
     # Posición del gap central (donde empieza la tabla derecha)
     # Detectar desde headers con doble CODIGO
     gap_end_positions = []
@@ -569,6 +934,9 @@ def parse_spatial_catalog(text: str) -> tuple[dict[str, Any], dict[str, dict]]:
             continue
         if line.strip() == "<<<" or line.strip().startswith("<<<"):
             after_page_break = True
+            # Resetear banderas de skip al cambiar de página
+            skip_left_table = False
+            skip_right_table = False
             continue
         
         # Detectar cambio de sección (FIJACIONES - Tornillos para Volcanita)
@@ -587,6 +955,12 @@ def parse_spatial_catalog(text: str) -> tuple[dict[str, Any], dict[str, dict]]:
                     subtype_right = ""
                     pending_title_left = ""
                     pending_title_right = ""
+                    # Resetear acabados al cambiar de sección
+                    finish_left = ""
+                    finish_right = ""
+                    # Resetear banderas de skip al cambiar de sección
+                    skip_left_table = False
+                    skip_right_table = False
                     after_page_break = False
                     continue
         
@@ -614,6 +988,10 @@ def parse_spatial_catalog(text: str) -> tuple[dict[str, Any], dict[str, dict]]:
                 "PUNTAS E INSERTOS",
                 "PUNTAS, INSERTOS Y DADOS",
                 "PERNOS HEXAGONALES",
+                "BARRAS ROSCADAS",
+                "TUERCAS",
+                "GOLILLAS",
+                "REMACHES",
                 "PRODUCTOS PARA TECHO",
                 "ANCLAJES",
                 "TARUGOS",
@@ -629,14 +1007,17 @@ def parse_spatial_catalog(text: str) -> tuple[dict[str, Any], dict[str, dict]]:
             # Verificar si es una sección principal conocida
             for section in KNOWN_MAIN_SECTIONS:
                 if section in stripped_upper or stripped_upper in section:
-                    # Actualizar subcategoría a esta sección
-                    current_subcategory = stripped.strip()
+                    # Actualizar subcategoría a esta sección (normalizar espacios)
+                    current_subcategory = " ".join(stripped.split())
                     product_type_left = ""
                     product_type_right = ""
                     subtype_left = ""
                     subtype_right = ""
                     pending_title_left = ""
                     pending_title_right = ""
+                    # Resetear acabados al cambiar de sección principal
+                    finish_left = ""
+                    finish_right = ""
                     after_page_break = False
                     break
             else:
@@ -657,20 +1038,29 @@ def parse_spatial_catalog(text: str) -> tuple[dict[str, Any], dict[str, dict]]:
         # Detectar header de tabla en la línea COMPLETA
         # NOTA: No resetear nominales aquí, hacerlo después del split para cada lado
         if is_header_line(line):
-            # Consolidar títulos pendientes
-            if pending_title_left:
-                product_type_left = clean_logo_text(pending_title_left)
-                pending_title_left = ""
-            if pending_title_right:
-                product_type_right = clean_logo_text(pending_title_right)
-                pending_title_right = ""
-            # Solo continuar si la línea SOLO tiene header (no datos)
-            # Si hay datos en un lado, procesar normalmente
+            # Solo continuar si la línea SOLO tiene header en ambos lados (no datos)
+            # Si hay datos/título en un lado, procesar normalmente para no perder la continuación
             left_test, right_test = split_line_halves(line, gap_end_pos)
+            
+            # Si AMBOS lados son header, consolidar títulos y continuar
             if is_header_line(left_test) and (not right_test or is_header_line(right_test)):
+                if pending_title_left:
+                    product_type_left = clean_title_text(pending_title_left)
+                    pending_title_left = ""
+                if pending_title_right:
+                    product_type_right = clean_title_text(pending_title_right)
+                    pending_title_right = ""
                 last_nominal_left = ""
                 last_nominal_right = ""
                 continue
+            # Si solo la derecha es header, consolidar solo derecha y continuar procesando
+            # la izquierda (puede tener continuación de título)
+            elif is_header_line(right_test) and not is_header_line(left_test):
+                if pending_title_right:
+                    product_type_right = clean_title_text(pending_title_right)
+                    pending_title_right = ""
+                last_nominal_right = ""
+                # NO consolidar pending_title_left, continuar procesando
         
         # Dividir línea en mitades para procesamiento INDEPENDIENTE
         left_part, right_part = split_line_halves(line, gap_end_pos)
@@ -679,14 +1069,24 @@ def parse_spatial_catalog(text: str) -> tuple[dict[str, Any], dict[str, dict]]:
         
         # ========== PROCESAR MITAD IZQUIERDA ==========
         if left_stripped:
-            # Detectar header en izquierda
-            if is_header_line(left_part):
+            # Detectar header de tabla con solo CODIGO + DESCRIPCION (saltar productos)
+            if is_description_only_header(left_part):
+                skip_left_table = True
+                subtype_left = ""
+            # Detectar header en izquierda (tabla con columnas numéricas)
+            elif is_header_line(left_part):
+                skip_left_table = False  # Nueva tabla válida
                 if pending_title_left:
-                    product_type_left = clean_logo_text(pending_title_left)
+                    product_type_left = clean_title_text(pending_title_left)
                     pending_title_left = ""
                 last_nominal_left = ""
                 # Resetear subtipo cuando hay nueva tabla (nuevo header)
                 subtype_left = ""
+            # Detectar "SUBTIPO - ACABADO" combinado (ej: "PUNTA BROCA - Zincado Brillante")
+            elif is_subtype_with_finish(left_part)[0]:
+                is_combined, subtipo, acabado = is_subtype_with_finish(left_part)
+                subtype_left = subtipo
+                finish_left = acabado
             # Detectar acabado en izquierda
             elif is_finish_line(left_part):
                 finish_left = left_stripped
@@ -695,13 +1095,21 @@ def parse_spatial_catalog(text: str) -> tuple[dict[str, Any], dict[str, dict]]:
                     subtype_left = ""
             # Detectar título en izquierda
             elif is_title_line(left_part) and not looks_like_sku(left_stripped.split()[0] if left_stripped.split() else ""):
+                cleaned_title = clean_logo_text(left_stripped)
                 if pending_title_left:
-                    pending_title_left += " " + left_stripped
+                    # Si el título pendiente está INCOMPLETO, concatenar
+                    if is_incomplete_title(pending_title_left):
+                        pending_title_left += " " + cleaned_title
+                    else:
+                        # El título anterior está COMPLETO, consolidarlo y empezar nuevo
+                        product_type_left = clean_title_text(pending_title_left)
+                        pending_title_left = cleaned_title
                 else:
-                    pending_title_left = left_stripped
+                    pending_title_left = cleaned_title
             # Detectar continuación de título incompleto (ej: "TERRAZAS" después de "TORNILLO PARA")
             elif pending_title_left and is_incomplete_title(pending_title_left) and is_title_continuation(left_stripped):
-                pending_title_left += " " + left_stripped
+                cleaned_continuation = clean_logo_text(left_stripped)
+                pending_title_left += " " + cleaned_continuation
             # Detectar subtipo en izquierda
             elif is_subtype_text(left_stripped) and not looks_like_sku(left_stripped.split()[0] if left_stripped.split() else ""):
                 if pending_title_left:
@@ -710,29 +1118,43 @@ def parse_spatial_catalog(text: str) -> tuple[dict[str, Any], dict[str, dict]]:
                     subtype_left = left_stripped
             # Fila de datos izquierda
             else:
-                row_left = parse_table_row(left_part)
-                if row_left and row_left.get("CODIGO"):
-                    sku = fix_ocr_errors(row_left["CODIGO"])
-                    nominal = row_left.get("NOMINAL", "").strip()
-                    if nominal:
-                        last_nominal_left = nominal
-                    else:
-                        row_left["NOMINAL"] = last_nominal_left
-                    
-                    _add_product(products, structure, sku, row_left, 
-                                current_category, current_subcategory, 
-                                product_type_left, subtype_left, finish_left)
+                # Saltar si estamos en una tabla de solo descripción
+                if skip_left_table:
+                    pass  # Ignorar filas de tablas sin atributos numéricos
+                else:
+                    row_left = parse_table_row(left_part)
+                    if row_left and row_left.get("CODIGO"):
+                        sku = fix_ocr_errors(row_left["CODIGO"])
+                        nominal = row_left.get("NOMINAL", "").strip()
+                        if nominal:
+                            last_nominal_left = nominal
+                        else:
+                            row_left["NOMINAL"] = last_nominal_left
+                        
+                        _add_product(products, structure, sku, row_left, 
+                                    current_category, current_subcategory, 
+                                    product_type_left, subtype_left, finish_left)
         
         # ========== PROCESAR MITAD DERECHA ==========
         if has_two_tables and right_stripped:
-            # Detectar header en derecha
-            if is_header_line(right_part):
+            # Detectar header de tabla con solo CODIGO + DESCRIPCION (saltar productos)
+            if is_description_only_header(right_part):
+                skip_right_table = True
+                subtype_right = ""
+            # Detectar header en derecha (tabla con columnas numéricas)
+            elif is_header_line(right_part):
+                skip_right_table = False  # Nueva tabla válida
                 if pending_title_right:
-                    product_type_right = clean_logo_text(pending_title_right)
+                    product_type_right = clean_title_text(pending_title_right)
                     pending_title_right = ""
                 last_nominal_right = ""
                 # Resetear subtipo cuando hay nueva tabla (nuevo header)
                 subtype_right = ""
+            # Detectar "SUBTIPO - ACABADO" combinado (ej: "PUNTA BROCA - Zincado Brillante")
+            elif is_subtype_with_finish(right_part)[0]:
+                is_combined, subtipo, acabado = is_subtype_with_finish(right_part)
+                subtype_right = subtipo
+                finish_right = acabado
             # Detectar acabado en derecha
             elif is_finish_line(right_part):
                 finish_right = right_stripped
@@ -742,13 +1164,21 @@ def parse_spatial_catalog(text: str) -> tuple[dict[str, Any], dict[str, dict]]:
                     subtype_right = ""
             # Detectar título en derecha
             elif is_title_line(right_part) and not looks_like_sku(right_stripped.split()[0] if right_stripped.split() else ""):
+                cleaned_title = clean_logo_text(right_stripped)
                 if pending_title_right:
-                    pending_title_right += " " + right_stripped
+                    # Si el título pendiente está INCOMPLETO, concatenar
+                    if is_incomplete_title(pending_title_right):
+                        pending_title_right += " " + cleaned_title
+                    else:
+                        # El título anterior está COMPLETO, consolidarlo y empezar nuevo
+                        product_type_right = clean_title_text(pending_title_right)
+                        pending_title_right = cleaned_title
                 else:
-                    pending_title_right = right_stripped
+                    pending_title_right = cleaned_title
             # Detectar continuación de título incompleto (ej: "DECK DE MADERA" después de "TORNILLO PARA")
             elif pending_title_right and is_incomplete_title(pending_title_right) and is_title_continuation(right_stripped):
-                pending_title_right += " " + right_stripped
+                cleaned_continuation = clean_logo_text(right_stripped)
+                pending_title_right += " " + cleaned_continuation
             # Detectar subtipo en derecha
             elif is_subtype_text(right_stripped) and not looks_like_sku(right_stripped.split()[0] if right_stripped.split() else ""):
                 if pending_title_right:
@@ -757,18 +1187,22 @@ def parse_spatial_catalog(text: str) -> tuple[dict[str, Any], dict[str, dict]]:
                     subtype_right = right_stripped
             # Fila de datos derecha
             else:
-                row_right = parse_table_row(right_part)
-                if row_right and row_right.get("CODIGO"):
-                    sku = fix_ocr_errors(row_right["CODIGO"])
-                    nominal = row_right.get("NOMINAL", "").strip()
-                    if nominal:
-                        last_nominal_right = nominal
-                    else:
-                        row_right["NOMINAL"] = last_nominal_right
-                    
-                    _add_product(products, structure, sku, row_right,
-                                current_category, current_subcategory,
-                                product_type_right, subtype_right, finish_right)
+                # Saltar si estamos en una tabla de solo descripción
+                if skip_right_table:
+                    pass  # Ignorar filas de tablas sin atributos numéricos
+                else:
+                    row_right = parse_table_row(right_part)
+                    if row_right and row_right.get("CODIGO"):
+                        sku = fix_ocr_errors(row_right["CODIGO"])
+                        nominal = row_right.get("NOMINAL", "").strip()
+                        if nominal:
+                            last_nominal_right = nominal
+                        else:
+                            row_right["NOMINAL"] = last_nominal_right
+                        
+                        _add_product(products, structure, sku, row_right,
+                                    current_category, current_subcategory,
+                                    product_type_right, subtype_right, finish_right)
     
     return structure, products
 
@@ -798,6 +1232,9 @@ def _add_product(products, structure, sku, row, category, subcategory, product_t
     if clean_product_type:
         # Normalizar espacios múltiples
         clean_product_type = " ".join(clean_product_type.split())
+        # Remover "(unidades)" específicamente (no otros paréntesis como AISI-304 o Material: S2)
+        import re
+        clean_product_type = re.sub(r'\s*\(unidades\)\s*', ' ', clean_product_type, flags=re.IGNORECASE).strip()
         # Normalizar abreviaciones
         clean_product_type = clean_product_type.replace("R. METAL", "ROSCA METAL")
         clean_product_type = clean_product_type.replace("R. MAD.", "ROSCA MADERA")
@@ -806,13 +1243,60 @@ def _add_product(products, structure, sku, row, category, subcategory, product_t
             clean_product_type = clean_product_type.replace(" - Continuación", "").replace(" - Continuacion", "")
             clean_product_type = clean_product_type.strip()
     
+    # Limpiar subtipo de continuación
+    clean_subtype = subtype
+    if clean_subtype:
+        clean_subtype = " ".join(clean_subtype.split())
+        if "Continuación" in clean_subtype or "Continuacion" in clean_subtype or "(Continuación)" in clean_subtype:
+            clean_subtype = ""  # No agregar continuación al nombre
+    
+    # Si no hay tipo pero sí hay subtipo, promover el subtipo a tipo
+    # Esto evita que subtipos huérfanos se conviertan en categorías independientes
+    if not clean_product_type and clean_subtype:
+        clean_product_type = clean_subtype
+        clean_subtype = ""
+    
+    # Construir nombre del producto
+    # Formato: TIPO PRODUCTO [SUBTIPO] [- ACABADO]
+    nombre_parts = []
+    if clean_product_type:
+        nombre_parts.append(clean_product_type)
+    if clean_subtype:
+        nombre_parts.append(clean_subtype)
+    
+    nombre_base = " ".join(nombre_parts) if nombre_parts else ""
+    
+    # Productos que NO llevan acabado en el nombre
+    # (el "acabado" es en realidad tipo de material o no aplica)
+    productos_sin_acabado_en_nombre = [
+        "DISCO", "SOLDADURA", "HERRAMIENTA",
+        "ACCESORIO", "CAJA", "CONECTOR", "ADHESIVO", "SILICONA",
+    ]
+    incluir_acabado = True
+    nombre_upper = nombre_base.upper()
+    for prod in productos_sin_acabado_en_nombre:
+        if prod in nombre_upper:
+            incluir_acabado = False
+            break
+    
+    # Agregar acabado al nombre para diferenciar variantes del mismo producto
+    # (ej: "PERNO COCHE - Zincado Brillante" vs "PERNO COCHE - Pavonado")
+    nombre_producto = nombre_base
+    if finish and nombre_base and incluir_acabado:
+        # Limpiar el acabado de paréntesis y texto extra
+        clean_finish = finish
+        if "(" in clean_finish:
+            clean_finish = clean_finish.split("(")[0].strip()
+        nombre_producto = f"{nombre_base} - {clean_finish}"
+    
     # Construir atributos
     attrs = []
     for key in ["NOMINAL", "LARGO", "ENVASE", "ENTRE CARAS", "PTA TORX", "COD TECFI"]:
         if key in row and row[key]:
             attrs.append({"name": key, "value": row[key]})
     
-    if finish:
+    # Solo agregar Acabado como atributo para productos que lo tienen
+    if finish and incluir_acabado:
         attrs.append({"name": "Acabado", "value": finish})
     
     # Construir path de categoría
@@ -823,12 +1307,13 @@ def _add_product(products, structure, sku, row, category, subcategory, product_t
         cat_path.append(subcategory)
     if clean_product_type:
         cat_path.append(clean_product_type)
-    if subtype:
-        cat_path.append(subtype)
+    if clean_subtype:
+        cat_path.append(clean_subtype)
     
     # Guardar producto
     if sku not in products:
         products[sku] = {
+            "nombre_producto": nombre_producto,
             "category_path": cat_path,
             "attributes": attrs,
         }

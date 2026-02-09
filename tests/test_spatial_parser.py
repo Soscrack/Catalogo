@@ -509,6 +509,286 @@ class TestCategoryParsing:
         # El path debe contener TERRAZAS
         assert "TERRAZAS" in path_str.upper(), \
             f"11TDPF debe estar bajo 'TORNILLO PARA TERRAZAS', got: {path}"
+    
+    def test_nombre_producto_incluye_acabado(self, catalog):
+        """
+        El campo nombre_producto debe combinar tipo de producto + acabado.
+        Productos con el mismo tipo pero diferente acabado deben tener
+        nombres diferentes para distinguirlos.
+        """
+        products = catalog["products"]
+        
+        # 90PCO y B90PCO son el mismo producto con diferente acabado
+        assert "90PCO" in products
+        assert "B90PCO" in products
+        
+        nombre_90 = products["90PCO"].get("nombre_producto", "")
+        nombre_b90 = products["B90PCO"].get("nombre_producto", "")
+        
+        # Ambos deben tener "PERNO COCHE" en el nombre
+        assert "PERNO COCHE" in nombre_90.upper(), f"90PCO debe incluir PERNO COCHE: {nombre_90}"
+        assert "PERNO COCHE" in nombre_b90.upper(), f"B90PCO debe incluir PERNO COCHE: {nombre_b90}"
+        
+        # Los nombres deben ser diferentes por el acabado
+        assert nombre_90 != nombre_b90, \
+            f"Nombres deben ser diferentes: {nombre_90} vs {nombre_b90}"
+        
+        # 90PCO es Pavonado, B90PCO es Zincado
+        assert "Pavonado" in nombre_90, f"90PCO debe incluir Pavonado: {nombre_90}"
+        assert "Zincado" in nombre_b90, f"B90PCO debe incluir Zincado: {nombre_b90}"
+
+    def test_roscalata_titulo_multilinea(self, catalog):
+        """
+        Caso: 01RLPP
+        Problema: El título "ROSCALATA CAB. PLANA PHILLIPS" estaba dividido
+        en dos líneas en el PDF:
+            Línea 1: ROSCALATA
+            Línea 2: CAB. PLANA PHILLIPS
+        
+        El parser debe concatenar estos títulos usando is_incomplete_title()
+        e is_title_continuation() para formar el título completo.
+        
+        Estructura esperada:
+        - Categoría: FIJACIONES
+        - Subcategoría: ROSCALATAS Y ATERRAJADORES
+        - Tipo producto: ROSCALATA CAB. PLANA PHILLIPS
+        """
+        products = catalog["products"]
+        
+        # 01RLPP debe existir
+        assert "01RLPP" in products, "01RLPP debe existir en el catálogo"
+        
+        prod = products["01RLPP"]
+        path = prod.get("category_path", [])
+        nombre = prod.get("nombre_producto", "")
+        
+        # El path debe incluir "ROSCALATAS Y ATERRAJADORES" como subcategoría
+        path_str = " > ".join(path)
+        assert "ROSCALATAS Y ATERRAJADORES" in path_str, \
+            f"01RLPP debe estar bajo 'ROSCALATAS Y ATERRAJADORES', got: {path}"
+        
+        # El path debe incluir el título completo "ROSCALATA CAB. PLANA PHILLIPS"
+        assert any("ROSCALATA CAB" in segment.upper() for segment in path), \
+            f"01RLPP debe tener tipo producto 'ROSCALATA CAB. PLANA PHILLIPS', got: {path}"
+        
+        # El nombre_producto debe incluir el título concatenado y acabado
+        assert "ROSCALATA" in nombre.upper(), \
+            f"nombre_producto debe incluir ROSCALATA, got: {nombre}"
+        assert "PHILLIPS" in nombre.upper(), \
+            f"nombre_producto debe incluir PHILLIPS, got: {nombre}"
+        assert "Zincado" in nombre, \
+            f"nombre_producto debe incluir acabado Zincado, got: {nombre}"
+
+    def test_hilo_x_metro_titulo_multilinea(self, catalog):
+        """
+        Caso: 03HPM
+        Problema: El título "HILO X METRO UNC" estaba dividido en dos líneas:
+            Línea 1: HILO X METRO
+            Línea 2: UNC
+        
+        Además, la subcategoría "BARRAS ROSCADAS" aparece después de un
+        page break y debe ser detectada correctamente (no heredar la
+        subcategoría anterior "PERNOS HEXAGONALES").
+        
+        Estructura esperada:
+        - Categoría: FIJACIONES
+        - Subcategoría: BARRAS ROSCADAS
+        - Tipo producto: HILO X METRO UNC
+        """
+        products = catalog["products"]
+        
+        # 03HPM debe existir
+        assert "03HPM" in products, "03HPM debe existir en el catálogo"
+        
+        prod = products["03HPM"]
+        path = prod.get("category_path", [])
+        nombre = prod.get("nombre_producto", "")
+        
+        # El path debe incluir "BARRAS ROSCADAS" como subcategoría
+        path_str = " > ".join(path)
+        assert "BARRAS ROSCADAS" in path_str, \
+            f"03HPM debe estar bajo 'BARRAS ROSCADAS', got: {path}"
+        
+        # NO debe estar bajo PERNOS HEXAGONALES
+        assert "PERNOS HEXAGONALES" not in path_str, \
+            f"03HPM NO debe estar bajo 'PERNOS HEXAGONALES', got: {path}"
+        
+        # El path debe incluir el título completo "HILO X METRO UNC"
+        assert any("HILO X METRO UNC" in segment.upper() for segment in path), \
+            f"03HPM debe tener tipo producto 'HILO X METRO UNC', got: {path}"
+        
+        # El nombre_producto debe incluir el título concatenado
+        assert "HILO" in nombre.upper(), \
+            f"nombre_producto debe incluir HILO, got: {nombre}"
+        assert "METRO" in nombre.upper(), \
+            f"nombre_producto debe incluir METRO, got: {nombre}"
+        assert "UNC" in nombre.upper(), \
+            f"nombre_producto debe incluir UNC, got: {nombre}"
+
+    def test_perno_hexagonal_metrico_iso_titulo_multilinea(self, catalog):
+        """
+        Caso: 01PHM8
+        Problema: El título "PERNO HEXAGONAL METRICO ISO 8.8" estaba dividido
+        en dos líneas:
+            Línea 1: PERNO HEXAGONAL
+            Línea 2: METRICO ISO 8.8
+        
+        El parser debe concatenar estos títulos. El problema adicional era
+        que "METRICO ISO 8.8" tiene dígitos y la lógica original rechazaba
+        continuaciones con números.
+        
+        Estructura esperada:
+        - Tipo producto: PERNO HEXAGONAL METRICO ISO 8.8
+        """
+        products = catalog["products"]
+        
+        # 01PHM8 debe existir
+        assert "01PHM8" in products, "01PHM8 debe existir en el catálogo"
+        
+        prod = products["01PHM8"]
+        path = prod.get("category_path", [])
+        nombre = prod.get("nombre_producto", "")
+        
+        # El path debe incluir el título completo con "METRICO ISO 8.8"
+        assert any("METRICO ISO 8.8" in segment.upper() for segment in path), \
+            f"01PHM8 debe tener tipo producto 'PERNO HEXAGONAL METRICO ISO 8.8', got: {path}"
+        
+        # El nombre_producto debe incluir el título concatenado
+        assert "PERNO HEXAGONAL" in nombre.upper(), \
+            f"nombre_producto debe incluir PERNO HEXAGONAL, got: {nombre}"
+        assert "METRICO" in nombre.upper(), \
+            f"nombre_producto debe incluir METRICO, got: {nombre}"
+        assert "ISO" in nombre.upper(), \
+            f"nombre_producto debe incluir ISO, got: {nombre}"
+        assert "8.8" in nombre, \
+            f"nombre_producto debe incluir 8.8, got: {nombre}"
+
+    def test_tuerca_hexagonal_con_seguro_nylon_titulo_multilinea(self, catalog):
+        """
+        Caso: 02TSNI
+        Problema: El título "TUERCA HEXAGONAL CON SEGURO DE NYLON UNC" estaba
+        dividido en dos líneas con logos al final:
+            Línea 1: TUERCA HEXAGONAL CON                INOX
+            Línea 2: SEGURO DE NYLON UNC                   mamut
+        
+        Los logos INOX y mamut deben ser limpiados, y las dos líneas
+        deben concatenarse para formar el título completo.
+        """
+        products = catalog["products"]
+        
+        # 02TSNI debe existir
+        assert "02TSNI" in products, "02TSNI debe existir en el catálogo"
+        
+        prod = products["02TSNI"]
+        path = prod.get("category_path", [])
+        nombre = prod.get("nombre_producto", "")
+        
+        # El path debe incluir el título completo
+        assert any("TUERCA HEXAGONAL CON SEGURO DE NYLON UNC" in segment.upper() for segment in path), \
+            f"02TSNI debe tener tipo producto completo, got: {path}"
+        
+        # El path NO debe contener "INOX" (es un logo)
+        for segment in path:
+            assert "INOX" not in segment.upper() or "INOX" in segment.upper() and "SEGURO" in segment.upper(), \
+                f"02TSNI path no debe contener solo 'INOX' como logo, got: {path}"
+        
+        # El nombre_producto debe incluir el título concatenado
+        assert "SEGURO" in nombre.upper(), \
+            f"nombre_producto debe incluir SEGURO, got: {nombre}"
+        assert "NYLON" in nombre.upper(), \
+            f"nombre_producto debe incluir NYLON, got: {nombre}"
+        assert "UNC" in nombre.upper(), \
+            f"nombre_producto debe incluir UNC, got: {nombre}"
+
+    def test_tuerca_hexagonal_metrica_inoxidable_din_titulo_multilinea(self, catalog):
+        """
+        Caso: 201THMI
+        Problema: El título "TUERCA HEXAGONAL METRICA INOXIDABLE A2 (AISI-304) DIN 934"
+        estaba dividido en dos líneas:
+            Línea 1: TUERCA HEXAGONAL METRICA
+            Línea 2: INOXIDABLE A2 (AISI-304) DIN 934
+        
+        El problema adicional era que "INOXIDABLE..." empezaba con "inox" y se
+        detectaba erróneamente como línea de acabado.
+        """
+        products = catalog["products"]
+        
+        # 201THMI debe existir
+        assert "201THMI" in products, "201THMI debe existir en el catálogo"
+        
+        prod = products["201THMI"]
+        path = prod.get("category_path", [])
+        nombre = prod.get("nombre_producto", "")
+        
+        # El path debe incluir el título completo con "DIN 934"
+        assert any("DIN 934" in segment.upper() for segment in path), \
+            f"201THMI debe tener tipo producto con 'DIN 934', got: {path}"
+        
+        # El nombre_producto debe incluir el título concatenado
+        assert "INOXIDABLE" in nombre.upper(), \
+            f"nombre_producto debe incluir INOXIDABLE, got: {nombre}"
+        assert "A2" in nombre.upper(), \
+            f"nombre_producto debe incluir A2, got: {nombre}"
+        assert "AISI-304" in nombre.upper(), \
+            f"nombre_producto debe incluir AISI-304, got: {nombre}"
+
+    def test_golilla_estrella_dientes_externos_titulo_multilinea(self, catalog):
+        """
+        Caso: B02GES
+        Problema: El título "GOLILLA ESTRELLA DIENTES EXTERNOS" estaba dividido:
+            Línea 1: GOLILLA ESTRELLA
+            Línea 2: DIENTES EXTERNOS
+        
+        Verificamos que se detecta "DIENTES EXTERNOS" como continuación usando
+        el enfoque sistemático (no es header, no es acabado, no es SKU).
+        """
+        products = catalog["products"]
+        
+        assert "B02GES" in products, "B02GES debe existir en el catálogo"
+        
+        prod = products["B02GES"]
+        path = prod.get("category_path", [])
+        nombre = prod.get("nombre_producto", "")
+        
+        # El path debe incluir "GOLILLA ESTRELLA DIENTES EXTERNOS" o similar
+        assert any("ESTRELLA" in segment.upper() for segment in path), \
+            f"B02GES debe tener 'ESTRELLA' en category_path, got: {path}"
+        assert any("DIENTES" in segment.upper() or "EXTERNOS" in segment.upper() for segment in path), \
+            f"B02GES debe tener 'DIENTES' o 'EXTERNOS' en category_path, got: {path}"
+        
+        # El nombre debe incluir GOLILLA ESTRELLA
+        assert "GOLILLA" in nombre.upper() and "ESTRELLA" in nombre.upper(), \
+            f"nombre_producto debe incluir GOLILLA ESTRELLA, got: {nombre}"
+
+    def test_golilla_astm_f436_titulo_multilinea(self, catalog):
+        """
+        Caso: 05GPS
+        Problema: El título "GOLILLA ASTM F-436" estaba dividido:
+            Línea 1: GOLILLA
+            Línea 2: ASTM F-436
+        
+        Verificamos que se detecta "ASTM F-436" como continuación usando
+        el enfoque sistemático (contiene patrón ASTM F-).
+        """
+        products = catalog["products"]
+        
+        assert "05GPS" in products, "05GPS debe existir en el catálogo"
+        
+        prod = products["05GPS"]
+        path = prod.get("category_path", [])
+        nombre = prod.get("nombre_producto", "")
+        
+        # El path debe incluir "GOLILLA ASTM F-436" o similar
+        assert any("ASTM" in segment.upper() for segment in path), \
+            f"05GPS debe tener 'ASTM' en category_path, got: {path}"
+        assert any("F-436" in segment.upper() or "F436" in segment.upper() for segment in path), \
+            f"05GPS debe tener 'F-436' en category_path, got: {path}"
+        
+        # El nombre debe incluir GOLILLA y ASTM
+        assert "GOLILLA" in nombre.upper(), \
+            f"nombre_producto debe incluir GOLILLA, got: {nombre}"
+        assert "ASTM" in nombre.upper(), \
+            f"nombre_producto debe incluir ASTM, got: {nombre}"
 
 
 class TestCatalogStructure:
@@ -863,6 +1143,147 @@ class TestCatalogStructure:
             path_str = " ".join(path).upper()
             assert "MADERA" in path_str, \
                 f"Producto {sku} de Perno Coche debe estar bajo Madera: {path}"
+
+    def test_08lock_acabado_aluminio(self, catalog):
+        """
+        Caso: 08LOCK
+        Problema: El acabado de remaches Lock-Bolt es "Aluminio" pero el parser
+        no lo detectaba porque "Aluminio" no estaba en la lista de acabados.
+        
+        Contexto espacial:
+        - REMACHES ESTRUCTURALES Lock-Bolt
+        - Acabado: Aluminio
+        - 02LOCK, 04LOCK, 06LOCK, 08LOCK
+        """
+        products = catalog["products"]
+        
+        assert "08LOCK" in products, "08LOCK debe existir en el catálogo"
+        
+        prod = products["08LOCK"]
+        attrs = {a["name"]: a["value"] for a in prod.get("attributes", [])}
+        
+        assert attrs.get("Acabado") == "Aluminio", \
+            f"08LOCK Acabado debe ser 'Aluminio', got: {attrs.get('Acabado')}"
+
+    def test_02colb_acabado_collar_aluminio(self, catalog):
+        """
+        Caso: 02COLB
+        Problema: El acabado de collares Lock-Bolt es "Collar - Aluminio" 
+        que es un acabado compuesto.
+        
+        Contexto espacial:
+        - REMACHES ESTRUCTURALES Lock-Bolt
+        - Acabado: Collar - Aluminio
+        - 02COLB
+        """
+        products = catalog["products"]
+        
+        assert "02COLB" in products, "02COLB debe existir en el catálogo"
+        
+        prod = products["02COLB"]
+        attrs = {a["name"]: a["value"] for a in prod.get("attributes", [])}
+        
+        assert attrs.get("Acabado") == "Collar - Aluminio", \
+            f"02COLB Acabado debe ser 'Collar - Aluminio', got: {attrs.get('Acabado')}"
+
+    def test_04ccev_acabado_aluminizado(self, catalog):
+        """Clavo acero estría vertical templado - acabado Aluminizado."""
+        products = catalog["products"]
+        assert "04CCEV" in products, "04CCEV debe existir"
+        attrs = {a["name"]: a["value"] for a in products["04CCEV"].get("attributes", [])}
+        assert attrs.get("Acabado") == "Aluminizado", \
+            f"04CCEV Acabado debe ser 'Aluminizado', got: {attrs.get('Acabado')}"
+
+    def test_118cadf_acabado_bronceado(self, catalog):
+        """Cadena decorativa - acabado Bronceado."""
+        products = catalog["products"]
+        assert "118CADF" in products, "118CADF debe existir"
+        attrs = {a["name"]: a["value"] for a in products["118CADF"].get("attributes", [])}
+        assert attrs.get("Acabado") == "Bronceado", \
+            f"118CADF Acabado debe ser 'Bronceado', got: {attrs.get('Acabado')}"
+
+    def test_107cplc_acabado_plastificado(self, catalog):
+        """Cable de acero PVC - acabado Plastificado."""
+        products = catalog["products"]
+        assert "107CPLC" in products, "107CPLC debe existir"
+        attrs = {a["name"]: a["value"] for a in products["107CPLC"].get("attributes", [])}
+        assert attrs.get("Acabado") == "Plastificado", \
+            f"107CPLC Acabado debe ser 'Plastificado', got: {attrs.get('Acabado')}"
+
+    def test_02ros_acabado_niquelado_brillante(self, catalog):
+        """Roldana simple - acabado Niquelado Brillante."""
+        products = catalog["products"]
+        assert "02ROS" in products, "02ROS debe existir"
+        attrs = {a["name"]: a["value"] for a in products["02ROS"].get("attributes", [])}
+        assert attrs.get("Acabado") == "Niquelado Brillante", \
+            f"02ROS Acabado debe ser 'Niquelado Brillante', got: {attrs.get('Acabado')}"
+
+    def test_10mga_acabado_gatillo_alambre(self, catalog):
+        """Mosquetón profesional - acabado Gatillo Alambre."""
+        products = catalog["products"]
+        assert "10MGA" in products, "10MGA debe existir"
+        attrs = {a["name"]: a["value"] for a in products["10MGA"].get("attributes", [])}
+        assert attrs.get("Acabado") == "Gatillo Alambre", \
+            f"10MGA Acabado debe ser 'Gatillo Alambre', got: {attrs.get('Acabado')}"
+
+    def test_10mgr_acabado_gatillo_recto(self, catalog):
+        """Mosquetón profesional - acabado Gatillo Recto."""
+        products = catalog["products"]
+        assert "10MGR" in products, "10MGR debe existir"
+        attrs = {a["name"]: a["value"] for a in products["10MGR"].get("attributes", [])}
+        assert attrs.get("Acabado") == "Gatillo Recto", \
+            f"10MGR Acabado debe ser 'Gatillo Recto', got: {attrs.get('Acabado')}"
+
+    def test_10mcsr_acabado_tipo_d_curvo(self, catalog):
+        """Mosquetón profesional cierre seguridad - acabado Tipo D Curvo."""
+        products = catalog["products"]
+        assert "10MCSR" in products, "10MCSR debe existir"
+        attrs = {a["name"]: a["value"] for a in products["10MCSR"].get("attributes", [])}
+        assert attrs.get("Acabado") == "Tipo D Curvo", \
+            f"10MCSR Acabado debe ser 'Tipo D Curvo', got: {attrs.get('Acabado')}"
+
+    def test_10clipw_acabado_galvanizado(self, catalog):
+        """Fijaciones grating clip W - acabado Galvanizado."""
+        products = catalog["products"]
+        assert "10CLIPW" in products, "10CLIPW debe existir"
+        attrs = {a["name"]: a["value"] for a in products["10CLIPW"].get("attributes", [])}
+        assert attrs.get("Acabado") == "Galvanizado", \
+            f"10CLIPW Acabado debe ser 'Galvanizado', got: {attrs.get('Acabado')}"
+
+    def test_02gae_gancho_elevacion_con_seguro(self, catalog):
+        """Gancho elevación - nombre completo y acabado Acero Alloy Pintado."""
+        products = catalog["products"]
+        assert "02GAE" in products, "02GAE debe existir"
+        nombre = products["02GAE"]["nombre_producto"]
+        assert "GANCHO ELEVACION CON SEGURO" in nombre.upper(), \
+            f"02GAE nombre debe contener 'GANCHO ELEVACION CON SEGURO', got: {nombre}"
+        attrs = {a["name"]: a["value"] for a in products["02GAE"].get("attributes", [])}
+        assert attrs.get("Acabado") == "Acero Alloy Pintado", \
+            f"02GAE Acabado debe ser 'Acero Alloy Pintado', got: {attrs.get('Acabado')}"
+
+    def test_160be01_broca_acabado_zincado_brillante(self, catalog):
+        """Broca helicoidal SDS-Plus - debe tener acabado Zincado Brillante."""
+        products = catalog["products"]
+        assert "160BE01" in products, "160BE01 debe existir"
+        attrs = {a["name"]: a["value"] for a in products["160BE01"].get("attributes", [])}
+        assert attrs.get("Acabado") == "Zincado Brillante", \
+            f"160BE01 Acabado debe ser 'Zincado Brillante', got: {attrs.get('Acabado')}"
+
+    def test_50sds_broca_sin_acabado(self, catalog):
+        """Broca SDS-Plus - NO debe tener acabado (sección sin acabados)."""
+        products = catalog["products"]
+        assert "50SDS" in products, "50SDS debe existir"
+        attrs = {a["name"]: a["value"] for a in products["50SDS"].get("attributes", [])}
+        assert "Acabado" not in attrs, \
+            f"50SDS NO debe tener acabado, got: {attrs.get('Acabado')}"
+
+    def test_35bma_broca_sin_acabado(self, catalog):
+        """Broca cilíndrica madera - NO debe tener acabado (sección sin acabados)."""
+        products = catalog["products"]
+        assert "35BMA" in products, "35BMA debe existir"
+        attrs = {a["name"]: a["value"] for a in products["35BMA"].get("attributes", [])}
+        assert "Acabado" not in attrs, \
+            f"35BMA NO debe tener acabado, got: {attrs.get('Acabado')}"
 
 
 if __name__ == "__main__":

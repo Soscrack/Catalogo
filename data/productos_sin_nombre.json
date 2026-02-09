@@ -1,0 +1,476 @@
+{
+  "total_productos": 5178,
+  "con_nombre": 5158,
+  "sin_nombre": 20,
+  "porcentaje_cobertura": 99.61,
+  "productos": [
+    {
+      "sku": "06SVEA",
+      "category_path": [
+        "FIJACIONES",
+        "CONECTORES PARA MADERA"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "40"
+        },
+        {
+          "name": "LARGO",
+          "value": "60"
+        },
+        {
+          "name": "ENVASE",
+          "value": "1 U"
+        },
+        {
+          "name": "Acabado",
+          "value": "Revestimiento Especial"
+        }
+      ]
+    },
+    {
+      "sku": "08SVEA",
+      "category_path": [
+        "FIJACIONES",
+        "CONECTORES PARA MADERA"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "40"
+        },
+        {
+          "name": "LARGO",
+          "value": "80"
+        },
+        {
+          "name": "ENVASE",
+          "value": "1 U"
+        },
+        {
+          "name": "Acabado",
+          "value": "Revestimiento Especial"
+        }
+      ]
+    },
+    {
+      "sku": "10SVEA",
+      "category_path": [
+        "FIJACIONES",
+        "CONECTORES PARA MADERA"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "40"
+        },
+        {
+          "name": "LARGO",
+          "value": "100"
+        },
+        {
+          "name": "ENVASE",
+          "value": "1 U"
+        },
+        {
+          "name": "Acabado",
+          "value": "Revestimiento Especial"
+        }
+      ]
+    },
+    {
+      "sku": "12SVEA",
+      "category_path": [
+        "FIJACIONES",
+        "CONECTORES PARA MADERA"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "40"
+        },
+        {
+          "name": "LARGO",
+          "value": "120"
+        },
+        {
+          "name": "ENVASE",
+          "value": "1 U"
+        },
+        {
+          "name": "Acabado",
+          "value": "Revestimiento Especial"
+        }
+      ]
+    },
+    {
+      "sku": "14SVEA",
+      "category_path": [
+        "FIJACIONES",
+        "CONECTORES PARA MADERA"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "40"
+        },
+        {
+          "name": "LARGO",
+          "value": "140"
+        },
+        {
+          "name": "ENVASE",
+          "value": "1 U"
+        },
+        {
+          "name": "Acabado",
+          "value": "Revestimiento Especial"
+        }
+      ]
+    },
+    {
+      "sku": "16SVEA",
+      "category_path": [
+        "FIJACIONES",
+        "CONECTORES PARA MADERA"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "40"
+        },
+        {
+          "name": "LARGO",
+          "value": "160"
+        },
+        {
+          "name": "ENVASE",
+          "value": "1 U"
+        },
+        {
+          "name": "Acabado",
+          "value": "Revestimiento Especial"
+        }
+      ]
+    },
+    {
+      "sku": "A2-70",
+      "category_path": [
+        "FIJACIONES",
+        "PERNOS HEXAGONALES - Pernos Métricos 8.8"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "50"
+        },
+        {
+          "name": "LARGO",
+          "value": "DIN933"
+        },
+        {
+          "name": "Acabado",
+          "value": "Pavonado"
+        }
+      ]
+    },
+    {
+      "sku": "10mm",
+      "category_path": [
+        "ANCLAJES",
+        "Anclajes Pesados"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "2.9"
+        },
+        {
+          "name": "LARGO",
+          "value": "y no fisurado."
+        },
+        {
+          "name": "Acabado",
+          "value": "Zincado Brillante"
+        }
+      ]
+    },
+    {
+      "sku": "13mm",
+      "category_path": [
+        "ANCLAJES",
+        "Anclajes Pesados"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "2.9"
+        },
+        {
+          "name": "LARGO",
+          "value": "Control del par de apriete no"
+        },
+        {
+          "name": "Acabado",
+          "value": "Zincado Brillante"
+        }
+      ]
+    },
+    {
+      "sku": "15mm",
+      "category_path": [
+        "ANCLAJES",
+        "Anclajes Pesados"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "2.9"
+        },
+        {
+          "name": "Acabado",
+          "value": "Zincado Brillante"
+        }
+      ]
+    },
+    {
+      "sku": "01PEU",
+      "category_path": [
+        "ANCLAJES",
+        "CABLES, CADENAS Y ACCESORIOS"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "1/4"
+        },
+        {
+          "name": "LARGO",
+          "value": "2.1/4"
+        },
+        {
+          "name": "ENVASE",
+          "value": "5 U"
+        },
+        {
+          "name": "Acabado",
+          "value": "Zincado Brillante"
+        }
+      ]
+    },
+    {
+      "sku": "02PEU",
+      "category_path": [
+        "ANCLAJES",
+        "CABLES, CADENAS Y ACCESORIOS"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "5/16"
+        },
+        {
+          "name": "LARGO",
+          "value": "2.1/2"
+        },
+        {
+          "name": "ENVASE",
+          "value": "5 U"
+        },
+        {
+          "name": "Acabado",
+          "value": "Zincado Brillante"
+        }
+      ]
+    },
+    {
+      "sku": "03PEU",
+      "category_path": [
+        "ANCLAJES",
+        "CABLES, CADENAS Y ACCESORIOS"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "5/16"
+        },
+        {
+          "name": "LARGO",
+          "value": "3\""
+        },
+        {
+          "name": "ENVASE",
+          "value": "5 U"
+        },
+        {
+          "name": "Acabado",
+          "value": "Zincado Brillante"
+        }
+      ]
+    },
+    {
+      "sku": "04PEU",
+      "category_path": [
+        "ANCLAJES",
+        "CABLES, CADENAS Y ACCESORIOS"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "5/16"
+        },
+        {
+          "name": "LARGO",
+          "value": "3\"(2\")"
+        },
+        {
+          "name": "ENVASE",
+          "value": "5 U"
+        },
+        {
+          "name": "Acabado",
+          "value": "Zincado Brillante"
+        }
+      ]
+    },
+    {
+      "sku": "05PEU",
+      "category_path": [
+        "ANCLAJES",
+        "CABLES, CADENAS Y ACCESORIOS"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "5/16"
+        },
+        {
+          "name": "LARGO",
+          "value": "4.1/4"
+        },
+        {
+          "name": "ENVASE",
+          "value": "5 U"
+        },
+        {
+          "name": "Acabado",
+          "value": "Zincado Brillante"
+        }
+      ]
+    },
+    {
+      "sku": "06PEU",
+      "category_path": [
+        "ANCLAJES",
+        "CABLES, CADENAS Y ACCESORIOS"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "5/16"
+        },
+        {
+          "name": "LARGO",
+          "value": "5\""
+        },
+        {
+          "name": "ENVASE",
+          "value": "5 U"
+        },
+        {
+          "name": "Acabado",
+          "value": "Zincado Brillante"
+        }
+      ]
+    },
+    {
+      "sku": "07PEU",
+      "category_path": [
+        "ANCLAJES",
+        "CABLES, CADENAS Y ACCESORIOS"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "3/8"
+        },
+        {
+          "name": "LARGO",
+          "value": "4.3/4"
+        },
+        {
+          "name": "ENVASE",
+          "value": "5 U"
+        },
+        {
+          "name": "Acabado",
+          "value": "Zincado Brillante"
+        }
+      ]
+    },
+    {
+      "sku": "FS4000",
+      "category_path": [
+        "ANCLAJES",
+        "HERRAMIENTAS"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "A"
+        },
+        {
+          "name": "LARGO",
+          "value": "FS2700"
+        },
+        {
+          "name": "Acabado",
+          "value": "Zincado Brillante"
+        }
+      ]
+    },
+    {
+      "sku": "DDF485RFE",
+      "category_path": [
+        "ANCLAJES",
+        "HERRAMIENTAS"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "A"
+        },
+        {
+          "name": "LARGO",
+          "value": "DDF482RFJ"
+        },
+        {
+          "name": "Acabado",
+          "value": "Zincado Brillante"
+        }
+      ]
+    },
+    {
+      "sku": "DHP485RFE",
+      "category_path": [
+        "ANCLAJES",
+        "HERRAMIENTAS"
+      ],
+      "attributes": [
+        {
+          "name": "NOMINAL",
+          "value": "A"
+        },
+        {
+          "name": "LARGO",
+          "value": "DHP482RFJ"
+        },
+        {
+          "name": "Acabado",
+          "value": "Zincado Brillante"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,5090 @@
+{
+  "total_products": 5178,
+  "total_product_types": 331,
+  "valid_types": [
+    {
+      "product_type": "(MAILLON OVALADO)",
+      "count": 9,
+      "sample_skus": [
+        "01URA",
+        "02URA",
+        "03URA",
+        "04URA",
+        "05URA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "(STITCH) PUNTA FINA",
+      "count": 1,
+      "sample_skus": [
+        "98ATPF"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "+ GOLILLA ALUMINIO 24mm",
+      "count": 4,
+      "sample_skus": [
+        "20CX0",
+        "40CX0",
+        "50CX0",
+        "60CX0"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "+ GOLILLA METÁLICA 24mm",
+      "count": 2,
+      "sample_skus": [
+        "10FI00",
+        "20FI04"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "+ TAPA + BROCA",
+      "count": 10,
+      "sample_skus": [
+        "03TSTB-BM",
+        "01TSTB-BM",
+        "04TSTB-BM",
+        "02TSTB-BM",
+        "01JN01"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "+ TARUGO AUTOPERFORANTE",
+      "count": 5,
+      "sample_skus": [
+        "01RLTV-BM",
+        "02RLTV-BM",
+        "03RLTV-BM",
+        "09CAJA",
+        "10CAJA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "+ TARUGO NYLON",
+      "count": 9,
+      "sample_skus": [
+        "13RLTN-BM",
+        "14RLTN-BM",
+        "46RLTN-BM",
+        "22RLTN-BM",
+        "23RLTN-BM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "+ TARUGO NYLON + BROCA",
+      "count": 12,
+      "sample_skus": [
+        "01RLTB-BM",
+        "02RLTB-BM",
+        "03RLTB-BM",
+        "04RLTB-BM",
+        "05RLTB-BM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ABRAZADERAS CABLE",
+      "count": 10,
+      "sample_skus": [
+        "01APCO",
+        "02APCO",
+        "03APCO",
+        "04APCO",
+        "05APCO"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ABRAZADERAS TUBULARES",
+      "count": 8,
+      "sample_skus": [
+        "01ATA",
+        "04ATA",
+        "02ATA",
+        "05ATA",
+        "03ATA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ADAPTADOR BROCA",
+      "count": 2,
+      "sample_skus": [
+        "10ABSC",
+        "20ABSC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "AMARRA CABLES",
+      "count": 49,
+      "sample_skus": [
+        "10AMA",
+        "11AMA",
+        "12AMA",
+        "13AMA",
+        "14AMA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "AMARRA CABLES DE NYLON",
+      "count": 2,
+      "sample_skus": [
+        "10AMDA",
+        "20AMDA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ANCLAJE CON GRAPA",
+      "count": 1,
+      "sample_skus": [
+        "10HN01"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ANCLAJE PARA HORMIGON",
+      "count": 4,
+      "sample_skus": [
+        "40HXE03",
+        "50HXE03",
+        "70HXE03",
+        "80HXE03"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ANCLAJE PARA HORMIGON CAB. HEXAGONAL - ANTISISMICO",
+      "count": 12,
+      "sample_skus": [
+        "04HXE01",
+        "06HXE01",
+        "08HXE01",
+        "10HXE01",
+        "20HXE01"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ANCLAJE PARA PAREDES HUECAS",
+      "count": 20,
+      "sample_skus": [
+        "02APH",
+        "04APH",
+        "06APH",
+        "08APH",
+        "10APH"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ANCLAJE PAREDES",
+      "count": 5,
+      "sample_skus": [
+        "10HP03",
+        "20HP03",
+        "30HP04",
+        "40HP04",
+        "50HP05"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ANCLAJE TIPO MARIPOSA",
+      "count": 8,
+      "sample_skus": [
+        "02ATM",
+        "04ATM",
+        "06ATM",
+        "08ATM",
+        "10ATM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ARGOLLA",
+      "count": 17,
+      "sample_skus": [
+        "02ARG",
+        "03ARG",
+        "04ARG",
+        "05ARG",
+        "06ARG"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ATERRAJADOR CAB. PLANA RANURA TORX",
+      "count": 3,
+      "sample_skus": [
+        "01ATPT",
+        "02ATPT",
+        "03ATPT"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ATERRAJADOR TIPO F CABEZA PAN PHILLIPS",
+      "count": 6,
+      "sample_skus": [
+        "02ATBP",
+        "04ATBP",
+        "05ATBP",
+        "06ATBP",
+        "08ATBP"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "AUTOPERFORANTE HEX.",
+      "count": 19,
+      "sample_skus": [
+        "110RLHN-S",
+        "111RLHN-S",
+        "116RLHN-S",
+        "103RLHN-L",
+        "104RLHN-L"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "AUTOPERFORANTE HEX. CUBIERTA A MADERA (Hasta 4mm)",
+      "count": 1,
+      "sample_skus": [
+        "90HY01"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "AUTOPERFORANTE HEXAGONAL PARA VIGA",
+      "count": 3,
+      "sample_skus": [
+        "120ATPF",
+        "R120ATPFI",
+        "120ATPFI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "AUTOPERFORANTE HEXAGONAL SIN GOLILLA",
+      "count": 18,
+      "sample_skus": [
+        "02RLHB",
+        "03RLHB",
+        "04RLHB",
+        "20RLHB",
+        "23RLHB"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "AUTOPERFORANTE PHILLIPS",
+      "count": 13,
+      "sample_skus": [
+        "05ATPF-G",
+        "59ATPF",
+        "20ATPF-G",
+        "63ATPF",
+        "10ATPF-G"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "AUTOPERFORANTE PUNTA \"S\" LATA-MADERA (TAPFAST)",
+      "count": 9,
+      "sample_skus": [
+        "105ATHN",
+        "110ATHN",
+        "120ATHN",
+        "130ATHN",
+        "140ATHN"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Acabado Especial para altas prestaciones",
+      "count": 2,
+      "sample_skus": [
+        "80TX01",
+        "130TX01"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "BASES AMARRA CABLES",
+      "count": 2,
+      "sample_skus": [
+        "10AMTM",
+        "40AMTM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "BASES PARA PILARES DE MADERA",
+      "count": 2,
+      "sample_skus": [
+        "30TG2",
+        "10TU01"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "BIT CONECTOR",
+      "count": 1,
+      "sample_skus": [
+        "200PTA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "BROCA AVELLANADORA",
+      "count": 3,
+      "sample_skus": [
+        "08BAM",
+        "10BAM",
+        "12BAM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "BROCA CILINDRICA PARA CONCRETO",
+      "count": 7,
+      "sample_skus": [
+        "40BCO",
+        "50BCO",
+        "60BCO",
+        "80BCO",
+        "100BCO"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "BROCA CILINDRICA PARA METAL",
+      "count": 16,
+      "sample_skus": [
+        "20BME",
+        "25BME",
+        "30BME",
+        "35BME",
+        "40BME"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "BROCA CILINDRICA PARA NO FERROSOS/MADERA",
+      "count": 5,
+      "sample_skus": [
+        "35BMA",
+        "40BMA",
+        "60BMA",
+        "80BMA",
+        "100BMA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "BROCA FORSTNER PARA MADERA",
+      "count": 5,
+      "sample_skus": [
+        "16BFM",
+        "20BFM",
+        "25BFM",
+        "30BFM",
+        "35BFM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "BROCA HELICOIDAL PARA HORMIGÓN, SDS-PLUS",
+      "count": 2,
+      "sample_skus": [
+        "160BE01",
+        "170BE01"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "BROCA PUNTA FLECHA",
+      "count": 2,
+      "sample_skus": [
+        "60BFLE",
+        "80BFLE"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "BROCA SDS-PLUS",
+      "count": 15,
+      "sample_skus": [
+        "50SDS",
+        "60SDS",
+        "61SDS",
+        "65SDS",
+        "80SDS"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "BROCA SIERRA CORONA",
+      "count": 10,
+      "sample_skus": [
+        "19BSC",
+        "22BSC",
+        "25BSC",
+        "29BSC",
+        "32BSC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "C/GOLILLA ACERO + PVC (24mm)",
+      "count": 4,
+      "sample_skus": [
+        "301TTPH",
+        "302TTPH",
+        "303TTPH",
+        "403TTPH"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "C/GOLILLA INTEGRADA + EPDM",
+      "count": 4,
+      "sample_skus": [
+        "R103RLIN",
+        "R104RLIN",
+        "R107RLIN",
+        "R108RLIN"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "C/GOLILLA METAL + EPDM",
+      "count": 43,
+      "sample_skus": [
+        "135RLHN",
+        "136RLHN",
+        "137RLHN",
+        "138RLHN",
+        "139RLHN"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "C/GOLILLA METAL + EPDM da",
+      "count": 5,
+      "sample_skus": [
+        "107RLHNI-S",
+        "108RLHNI-S",
+        "120RLHNI-S",
+        "109RLHNI-S",
+        "124RLHNI-S"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "C/GOLILLA, P/ PANELES",
+      "count": 10,
+      "sample_skus": [
+        "R102RHPV",
+        "R103RHPV",
+        "R104RHPV",
+        "R106RHPV",
+        "R108RHPV"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CABLE 7x19",
+      "count": 4,
+      "sample_skus": [
+        "101CAX",
+        "108CAX",
+        "102CAX",
+        "107CAX"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CABLE DE ACERO PULIDO 6×7",
+      "count": 9,
+      "sample_skus": [
+        "101CAPC",
+        "108CAPC",
+        "102CAPC",
+        "107CAPC",
+        "103CAPC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CABLE DE ACERO PVC 6x7",
+      "count": 7,
+      "sample_skus": [
+        "106CPLC",
+        "107CPLC",
+        "102CPLC",
+        "105CPLC",
+        "101CPLC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CADENA DEC. BRONCE PARA SANITARIO",
+      "count": 1,
+      "sample_skus": [
+        "101CADB"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CADENA DECOR. ACERO",
+      "count": 4,
+      "sample_skus": [
+        "113CADF",
+        "116CADF",
+        "117CADF",
+        "118CADF"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CADENA DECORATIVA",
+      "count": 12,
+      "sample_skus": [
+        "112CADF",
+        "120CADF",
+        "114CADF",
+        "115CADF",
+        "119CADF"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CADENA DECORATIVA ACERO",
+      "count": 4,
+      "sample_skus": [
+        "101CADF",
+        "102CADF",
+        "103CADF",
+        "104CADF"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CADENA ESLABON",
+      "count": 18,
+      "sample_skus": [
+        "102CECM",
+        "103CECM",
+        "104CECM",
+        "105CECM",
+        "107CECM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CADENA PARA PLANTA DE GALVANIZADO",
+      "count": 3,
+      "sample_skus": [
+        "01CPG",
+        "02CPG",
+        "03CPG"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CANCAMO",
+      "count": 9,
+      "sample_skus": [
+        "12CAN",
+        "02CAN",
+        "04CAN",
+        "06CAN",
+        "11CAN"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CANCAMO ABIERTO ROSCA MADERA",
+      "count": 10,
+      "sample_skus": [
+        "10CMA",
+        "11CMA",
+        "12CMA",
+        "13CMA",
+        "14CMA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CANCAMO CERRADO ROSCA MADERA",
+      "count": 12,
+      "sample_skus": [
+        "10CCM",
+        "11CCM",
+        "12CCM",
+        "13CCM",
+        "14CCM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CANCAMOS ROSCA MADERA",
+      "count": 4,
+      "sample_skus": [
+        "01CCMX",
+        "02CCMX",
+        "02CMAX",
+        "03CMAX"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CERCO ELÉCTRICO",
+      "count": 1,
+      "sample_skus": [
+        "07GCE"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CHAVETA",
+      "count": 6,
+      "sample_skus": [
+        "01CHPA",
+        "02CHPA",
+        "03CHPA",
+        "04CHPA",
+        "05CHPA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CHAVETA CLAMPS",
+      "count": 6,
+      "sample_skus": [
+        "04CHC",
+        "06CHC",
+        "08CHC",
+        "09CHC",
+        "10CHC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CHAVETA RÁPIDA",
+      "count": 7,
+      "sample_skus": [
+        "02CHR",
+        "03CHR",
+        "04CHR",
+        "05CHR",
+        "06CHR"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CINTA PERFORADA",
+      "count": 1,
+      "sample_skus": [
+        "10JH01"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CLAVO ACERO ESTRIA",
+      "count": 17,
+      "sample_skus": [
+        "01CCEV",
+        "02CCEV",
+        "03CCEV",
+        "04CCEV",
+        "05CCEV"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CLAVO ACERO LISO TEMPLADO PARA CONCRETO",
+      "count": 22,
+      "sample_skus": [
+        "01CCA",
+        "02CCA",
+        "03CCA",
+        "07CCA",
+        "08CCA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CLAVO ESCUADRA",
+      "count": 4,
+      "sample_skus": [
+        "03CEEV",
+        "05CEEV",
+        "07CEEV",
+        "09CEEV"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CLAVO POLVORA",
+      "count": 13,
+      "sample_skus": [
+        "02FMNK",
+        "03FMNK",
+        "04FMNK",
+        "07FMNK",
+        "08FMNK"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CLAVO POLVORA TIPO",
+      "count": 12,
+      "sample_skus": [
+        "02CLIP",
+        "01CLIP",
+        "03FV27",
+        "04FV27",
+        "05FV27"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CLAVO PUNTA TEMPLADO",
+      "count": 7,
+      "sample_skus": [
+        "02PSC",
+        "04PSC",
+        "06PSC",
+        "08PSC",
+        "10PSC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CLAVO TECHO PARAGUA",
+      "count": 1,
+      "sample_skus": [
+        "10CTP"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CLAVO TEJA",
+      "count": 2,
+      "sample_skus": [
+        "10CTJ",
+        "20CTJ"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CON ARGOLLA",
+      "count": 11,
+      "sample_skus": [
+        "01CRM",
+        "01GRI",
+        "03GRI",
+        "04GRI",
+        "05GRI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CON ARGOLLA Y TUERCA",
+      "count": 4,
+      "sample_skus": [
+        "01APO",
+        "02APO",
+        "101APO",
+        "102APO"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CON CLAVO DE NYLON",
+      "count": 6,
+      "sample_skus": [
+        "20ZZE01",
+        "30ZZE01",
+        "40ZZE01",
+        "50ZZE01",
+        "60ZZE01"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CON GOLILLA",
+      "count": 4,
+      "sample_skus": [
+        "10CTE",
+        "20CTE",
+        "30CTE",
+        "40CTE"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CON GOLILLA INTEGRADA",
+      "count": 13,
+      "sample_skus": [
+        "31RLHG",
+        "32RLHG",
+        "33RLHG",
+        "38RLHG",
+        "39RLHG"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CON GOLILLA PVC",
+      "count": 5,
+      "sample_skus": [
+        "202TTCG",
+        "203TTCG",
+        "205TTCG",
+        "206TTCG",
+        "208TTCG"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CON SEGURO",
+      "count": 9,
+      "sample_skus": [
+        "01GAE",
+        "02GAE",
+        "03GAE",
+        "01ROS",
+        "02ROS"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CON TUERCA",
+      "count": 26,
+      "sample_skus": [
+        "01POJ",
+        "02POJ",
+        "03POJ",
+        "04POJ",
+        "05POJ"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CONECTOR DE ABRAZADERA",
+      "count": 4,
+      "sample_skus": [
+        "10CADK",
+        "20CADK",
+        "30CADK",
+        "10ACAD"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CONECTOR DE MADERA PARA JUNTAS DE VIGAS",
+      "count": 7,
+      "sample_skus": [
+        "14SVCS",
+        "20SVCS",
+        "21SVCS",
+        "29SVCS",
+        "39SVCS"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CONECTOR DE PARED",
+      "count": 4,
+      "sample_skus": [
+        "06CPTV",
+        "08CPTV",
+        "06PPW",
+        "08PPW"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CONECTOR LOSA COLABORANTE",
+      "count": 1,
+      "sample_skus": [
+        "01CNL"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CONECTOR MINIFIX",
+      "count": 3,
+      "sample_skus": [
+        "01COMT",
+        "04COMT",
+        "07COMT"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "CRAMPON BULLDOG",
+      "count": 12,
+      "sample_skus": [
+        "10CBDS",
+        "20CBDS",
+        "30CBDS",
+        "10CBDD",
+        "20CBDD"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Cinta Perforada de Acero de 10mt",
+      "count": 1,
+      "sample_skus": [
+        "10JE01"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Clavadora para clavos",
+      "count": 3,
+      "sample_skus": [
+        "10CLIPW",
+        "20BR",
+        "30BR"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Clavo Losa Colaborante (t/spit)",
+      "count": 2,
+      "sample_skus": [
+        "01CLC",
+        "01FD25"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Clavos de percusión con collarín",
+      "count": 1,
+      "sample_skus": [
+        "10JF01"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "DADO MAGNETICO HEXAGONAL",
+      "count": 12,
+      "sample_skus": [
+        "102PTA",
+        "104PTA",
+        "106PTA",
+        "108PTA",
+        "110PTA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "DADO MAGNETICO HEXAGONAL MÉTRICO",
+      "count": 3,
+      "sample_skus": [
+        "114PTA",
+        "116PTA",
+        "124PTA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "DE ANCLAJE UNC",
+      "count": 6,
+      "sample_skus": [
+        "101TAN",
+        "106TAN",
+        "102TAN",
+        "103TAN",
+        "104TAN"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "DE UNIÓN",
+      "count": 6,
+      "sample_skus": [
+        "03UDC",
+        "04UDC",
+        "05UDC",
+        "06UDC",
+        "08UDC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "DISCO DE CORTE",
+      "count": 2,
+      "sample_skus": [
+        "450DCORI",
+        "700DCORI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "DISCOS DE CORTE",
+      "count": 5,
+      "sample_skus": [
+        "450DCOR",
+        "451DCOR",
+        "700DCOR",
+        "900DCOR",
+        "1400DCOR"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "DISCOS DE DESBASTE",
+      "count": 2,
+      "sample_skus": [
+        "450DDES",
+        "700DDES"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "DOBLE ROSCA + TUERCA +GOLILLA",
+      "count": 5,
+      "sample_skus": [
+        "40HXE02",
+        "50HXE02",
+        "70HXE02",
+        "80HXE02",
+        "90HXE02"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ESCUADRAS ESTRUCTURALES PARA VIGAS DE MADERA",
+      "count": 2,
+      "sample_skus": [
+        "20TD02",
+        "20KS02"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ESPÁRRAGO CONECTOR MADERA / MADERA",
+      "count": 3,
+      "sample_skus": [
+        "20VRMA",
+        "21VRMA",
+        "22VRMA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ESPÁRRAGO CONECTOR MADERA / METAL",
+      "count": 6,
+      "sample_skus": [
+        "22VRMM",
+        "23VRMM",
+        "24VRMM",
+        "30VRMM",
+        "33VRMM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Fosfatizado",
+      "count": 6,
+      "sample_skus": [
+        "F01TAD-BM",
+        "F02TAD-BM",
+        "F03TAD-BM",
+        "F20TAD-BM",
+        "F21TAD-BM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GANCHO",
+      "count": 18,
+      "sample_skus": [
+        "01GTE",
+        "02GTE",
+        "03GTE",
+        "04GTE",
+        "05GTE"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GANCHO COSTANERA MADERA",
+      "count": 3,
+      "sample_skus": [
+        "01GCMA",
+        "02GCMA",
+        "03GCMA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GANCHO COSTANERA METAL",
+      "count": 3,
+      "sample_skus": [
+        "01GCME",
+        "02GCME",
+        "03GCME"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GANCHO DE CANAL",
+      "count": 10,
+      "sample_skus": [
+        "01GCHO",
+        "05CLIPOM",
+        "10CLIPOM",
+        "20CLIPOM",
+        "30CLIPOM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GANCHO MULTIUSO",
+      "count": 2,
+      "sample_skus": [
+        "01SCG",
+        "01SGM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GANCHO OJO",
+      "count": 16,
+      "sample_skus": [
+        "01TGO",
+        "02TGO",
+        "03TGO",
+        "04TGO",
+        "05TGO"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA \"K\" (Capelote)",
+      "count": 7,
+      "sample_skus": [
+        "10AE09",
+        "20AE09",
+        "40AE09",
+        "50AE09",
+        "80AE09"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA ACERO",
+      "count": 8,
+      "sample_skus": [
+        "31GNEI",
+        "32GNEI",
+        "33GNEI",
+        "34GNEI",
+        "35GNEI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA ACERO + EPDM",
+      "count": 18,
+      "sample_skus": [
+        "02GNE",
+        "03GNE",
+        "04GNE",
+        "06GNE",
+        "09GNE"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA ACERO + PVC",
+      "count": 3,
+      "sample_skus": [
+        "03GPVC",
+        "04GPVC",
+        "05GPVC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA ASTM F-436",
+      "count": 16,
+      "sample_skus": [
+        "05GPS",
+        "01GPS",
+        "02GPS",
+        "03GPS",
+        "04GPS"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA CONCAVA",
+      "count": 2,
+      "sample_skus": [
+        "01GCA",
+        "03GCA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA CÓNICA PARA TORNILLOS TT02",
+      "count": 3,
+      "sample_skus": [
+        "10TTR01",
+        "20TTR01",
+        "30TTR01"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA DE PRESION",
+      "count": 50,
+      "sample_skus": [
+        "01GPR",
+        "02GPR",
+        "03GPR",
+        "04GPR",
+        "05GPR"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA DIAMANTE",
+      "count": 1,
+      "sample_skus": [
+        "01GDI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA ESTRELLA DIENTES EXTERNOS",
+      "count": 5,
+      "sample_skus": [
+        "B02GES",
+        "B03GES",
+        "B04GES",
+        "B05GES",
+        "B06GES"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA ESTRELLA DIENTES SUPERPUESTOS EXTERNOS",
+      "count": 7,
+      "sample_skus": [
+        "B03GESS",
+        "B04GESS",
+        "B05GESS",
+        "B06GESS",
+        "B08GESS"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA METÁLICA CURVA",
+      "count": 7,
+      "sample_skus": [
+        "10KC01",
+        "20KC01",
+        "40KC01",
+        "50KC01",
+        "80KC01"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA PARA GANCHO TECHO",
+      "count": 2,
+      "sample_skus": [
+        "01GGT",
+        "01CAPUC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA PARA TORNILLO TECHO",
+      "count": 1,
+      "sample_skus": [
+        "01GTT"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA PLANA ANCHA",
+      "count": 7,
+      "sample_skus": [
+        "01GPAF",
+        "02GPAF",
+        "03GPAF",
+        "09GPAF",
+        "05GPAF"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA PLANA ANCHA INOXIDABLE",
+      "count": 5,
+      "sample_skus": [
+        "04GPAI",
+        "02GPAI",
+        "03GPAI",
+        "08GPAI",
+        "B08EGP"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA PLANA CALIBRADA",
+      "count": 29,
+      "sample_skus": [
+        "01GPCU",
+        "02GPCU",
+        "03GPCU",
+        "04GPCU",
+        "05GPCU"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GOLILLA PLANA CORRIENTE",
+      "count": 47,
+      "sample_skus": [
+        "02GPI",
+        "03GPI",
+        "04GPI",
+        "05GPI",
+        "06GPI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "GRADO 2 UNC/BSW",
+      "count": 211,
+      "sample_skus": [
+        "182PH2",
+        "192PH2",
+        "193PH2",
+        "194PH2",
+        "39PH2"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Gancho \"L\"",
+      "count": 2,
+      "sample_skus": [
+        "60HP05",
+        "240AY12"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "HILO X 1/2 METRO UNC",
+      "count": 11,
+      "sample_skus": [
+        "05HPM2",
+        "06HPM2",
+        "09HPM2",
+        "10HPM2",
+        "B03HPM2"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "HILO X 3 METROS",
+      "count": 14,
+      "sample_skus": [
+        "B04HM3",
+        "B05HM3",
+        "B06HM3",
+        "B08HM3",
+        "B10HM3"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "HILO X METRO",
+      "count": 21,
+      "sample_skus": [
+        "04HPMI",
+        "05HPMI",
+        "06HPMI",
+        "08HPMI",
+        "10HPMI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "HILO X METRO Métrico",
+      "count": 6,
+      "sample_skus": [
+        "B104HPMM",
+        "B105HPMM",
+        "B107HPMM",
+        "B108HPMM",
+        "B110HPMM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "HILO X METRO UNC",
+      "count": 46,
+      "sample_skus": [
+        "03HPM",
+        "04HPM",
+        "05HPM",
+        "06HPM",
+        "07HPM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "INSERTO MAGNETICO",
+      "count": 2,
+      "sample_skus": [
+        "150PTA",
+        "150PTA-G"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "INSERTOS PARA MADERA",
+      "count": 12,
+      "sample_skus": [
+        "01INS",
+        "02INS",
+        "03INS",
+        "04INS",
+        "05INS"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "INSTALACIÓN TORNILLOS HDS",
+      "count": 4,
+      "sample_skus": [
+        "05HDS",
+        "10HDS",
+        "20HDS",
+        "30HDS"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "MAILLON",
+      "count": 6,
+      "sample_skus": [
+        "01MDEL",
+        "02MDEL",
+        "03MDEL",
+        "04MDEL",
+        "05MDEL"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "METRICO ISO 4.8",
+      "count": 16,
+      "sample_skus": [
+        "264PHM",
+        "265PHM",
+        "266PHM",
+        "267PHM",
+        "268PHM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "MOSQUETON",
+      "count": 10,
+      "sample_skus": [
+        "01MSA",
+        "02MSA",
+        "03MSA",
+        "04MSA",
+        "05MSA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "MOSQUETON ALUMINIO",
+      "count": 1,
+      "sample_skus": [
+        "11MSA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "MOSQUETON PROFESIONAL",
+      "count": 8,
+      "sample_skus": [
+        "10MCSR",
+        "12MCSR",
+        "20MCSR",
+        "22MCSR",
+        "30MCSR"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "MOSQUETON PROFESIONAL CIERRE SEGURIDAD ROSCA COB",
+      "count": 10,
+      "sample_skus": [
+        "10MCSA",
+        "12MCSA",
+        "20MCSA",
+        "22MCSA",
+        "30MCSA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "MOSQUETONES LINEA PROFESIONAL",
+      "count": 7,
+      "sample_skus": [
+        "10MGA",
+        "12MGA",
+        "14MGA",
+        "10MGR",
+        "12MGR"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "P/ PISTOLA A GAS",
+      "count": 6,
+      "sample_skus": [
+        "02CMPG",
+        "03CMPG",
+        "04CMPG",
+        "02CCPG",
+        "03CCPG"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "P/ VIGA SIN GOLILLA",
+      "count": 1,
+      "sample_skus": [
+        "120ATPFIS"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PARA AMARRA 0",
+      "count": 13,
+      "sample_skus": [
+        "01TRAC",
+        "02TRAC",
+        "03TRAC",
+        "04TRAC",
+        "01TRAC-F"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PARA AMARRA CABLES",
+      "count": 2,
+      "sample_skus": [
+        "20AMAD",
+        "30AMAD"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PARA ANCLAJE QUÍMICO",
+      "count": 12,
+      "sample_skus": [
+        "02BRA",
+        "04BRA",
+        "06BRA",
+        "08BRA",
+        "10BRA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PARA ANCLAJES AJE",
+      "count": 16,
+      "sample_skus": [
+        "10SPS",
+        "20SPS",
+        "70SPS",
+        "80SPS",
+        "400SWE"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PARA CABLE",
+      "count": 33,
+      "sample_skus": [
+        "01GUC",
+        "03GUC",
+        "04GUC",
+        "05GUC",
+        "06GUC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PARA CABLE (Niquelado)",
+      "count": 4,
+      "sample_skus": [
+        "01DCA",
+        "02DCA",
+        "03DCA",
+        "04DCA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO ANCLAJE",
+      "count": 18,
+      "sample_skus": [
+        "02ADC",
+        "04ADC",
+        "06ADC",
+        "08ADC",
+        "10ADC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO CABEZA BUTTON",
+      "count": 45,
+      "sample_skus": [
+        "03PBTM",
+        "03PCBI",
+        "05PBTM",
+        "05PCBI",
+        "06PBTM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO COCHE UNC",
+      "count": 35,
+      "sample_skus": [
+        "72PCOI",
+        "01PCOI",
+        "02PCOI",
+        "03PCOI",
+        "04PCOI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO COCHE UNC / BSW",
+      "count": 119,
+      "sample_skus": [
+        "90PCO",
+        "91PCO",
+        "92PCO",
+        "93PCO",
+        "94PCO"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO COCINA CAB. REDONDA INOXIDABLE",
+      "count": 17,
+      "sample_skus": [
+        "115PCRI",
+        "117PCRI",
+        "118PCRI",
+        "119PCRI",
+        "120PCRI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO COCINA CAB. REDONDA RANURA COMBINADA BRONCE",
+      "count": 13,
+      "sample_skus": [
+        "101PCRB",
+        "103PCRB",
+        "104PCRB",
+        "106PCRB",
+        "114PCRB"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO COCINA CABEZA BINDING ROSCA METRICA",
+      "count": 48,
+      "sample_skus": [
+        "01PMB",
+        "02PMB",
+        "03PMB",
+        "04PMB",
+        "05PMB"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO COCINA CABEZA LENTEJA",
+      "count": 8,
+      "sample_skus": [
+        "117PCL",
+        "118PCL",
+        "120PCL",
+        "121PCL",
+        "17PML"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO COCINA CABEZA PLANA ROSCA METRICA",
+      "count": 16,
+      "sample_skus": [
+        "33PCPM",
+        "34PCPM",
+        "15PCPM",
+        "16PCPM",
+        "21PCPM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO COCINA UNC CABEZA PLANA",
+      "count": 8,
+      "sample_skus": [
+        "26PCPI",
+        "28PCPI",
+        "29PCPI",
+        "31PCPI",
+        "38PCPI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO COCINA UNC CABEZA PLANA, RANURA PHILLIPS",
+      "count": 49,
+      "sample_skus": [
+        "03PCPP",
+        "04PCPP",
+        "05PCPP",
+        "06PCPP",
+        "07PCPP"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO COCINA UNC CABEZA REDONDA RANURA COMBINADA",
+      "count": 60,
+      "sample_skus": [
+        "100PCRC",
+        "101PCRC",
+        "102PCRC",
+        "103PCRC",
+        "104PCRC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO DE ANCLAJE",
+      "count": 39,
+      "sample_skus": [
+        "100PAN",
+        "101PAN",
+        "102PAN",
+        "122PAN",
+        "127PAN"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO DE ANCLAJE DE CUÑA",
+      "count": 6,
+      "sample_skus": [
+        "10AJE01",
+        "30AJE01",
+        "60AJE01",
+        "80AJE01",
+        "120AJE01"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO DE OJO",
+      "count": 7,
+      "sample_skus": [
+        "06POST",
+        "08POST",
+        "10POST",
+        "12POST",
+        "14POST"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO HEX. METRICO",
+      "count": 28,
+      "sample_skus": [
+        "290PHMI",
+        "294PHMI",
+        "296PHMI",
+        "201PHMI",
+        "202PHMI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO HEXAGONAL",
+      "count": 50,
+      "sample_skus": [
+        "22PHM8",
+        "23PHM8",
+        "24PHM8",
+        "25PHM8",
+        "26PHM8"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO HEXAGONAL ASTM A-325",
+      "count": 70,
+      "sample_skus": [
+        "40PHS",
+        "G40PHS",
+        "41PHS",
+        "G41PHS",
+        "42PHS"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO HEXAGONAL GRADO 2 UNC/BSW",
+      "count": 128,
+      "sample_skus": [
+        "01PH2",
+        "02PH2",
+        "03PH2",
+        "04PH2",
+        "05PH2"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO HEXAGONAL GRADO 5 UNC",
+      "count": 72,
+      "sample_skus": [
+        "08PH5",
+        "09PH5",
+        "10PH5",
+        "11PH5",
+        "12PH5"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO HEXAGONAL GRADO 5 UNF",
+      "count": 42,
+      "sample_skus": [
+        "321PH5",
+        "322PH5",
+        "323PH5",
+        "324PH5",
+        "325PH5"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO HEXAGONAL GRADO 8 UNC",
+      "count": 87,
+      "sample_skus": [
+        "20PH8",
+        "21PH8",
+        "22PH8",
+        "23PH8",
+        "24PH8"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO HEXAGONAL METRICO ISO 4.8",
+      "count": 103,
+      "sample_skus": [
+        "201PHM",
+        "202PHM",
+        "203PHM",
+        "204PHM",
+        "205PHM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO HEXAGONAL METRICO ISO 8.8",
+      "count": 87,
+      "sample_skus": [
+        "01PHM8",
+        "02PHM8",
+        "03PHM8",
+        "04PHM8",
+        "05PHM8"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO HEXAGONAL METRICO ISO 8.8 - ROSCA FINA",
+      "count": 53,
+      "sample_skus": [
+        "117PHM8",
+        "118PHM8",
+        "119PHM8",
+        "120PHM8",
+        "121PHM8"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO HEXAGONAL UNC INOXIDABLE",
+      "count": 51,
+      "sample_skus": [
+        "01PHI",
+        "03PHI",
+        "04PHI",
+        "05PHI",
+        "06PHI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO PARKER ROSCA FINA",
+      "count": 17,
+      "sample_skus": [
+        "201PPM",
+        "202PPM",
+        "203PPM",
+        "204PPM",
+        "205PPM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO PARKER ROSCA METRICA CABEZA PLANA",
+      "count": 26,
+      "sample_skus": [
+        "02PPMP",
+        "03PPMP",
+        "04PPMP",
+        "05PPMP",
+        "06PPMP"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO PARKER ROSCA METRICA ISO 12.9",
+      "count": 46,
+      "sample_skus": [
+        "101PPM",
+        "103PPM",
+        "105PPM",
+        "107PPM",
+        "108PPM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO PARKER ROSCA UNC CABEZA PLANA ISO 12.9",
+      "count": 30,
+      "sample_skus": [
+        "20PPKP",
+        "21PPKP",
+        "22PPKP",
+        "23PPKP",
+        "30PPKP"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO PARKER ROSCA UNC GRADO ISO 12.9",
+      "count": 69,
+      "sample_skus": [
+        "101PPK",
+        "103PPK",
+        "107PPK",
+        "115PPK",
+        "117PPK"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNO PARKER ROSCA UNF GRADO ISO 12.9",
+      "count": 28,
+      "sample_skus": [
+        "200PPK",
+        "201PPK",
+        "202PPK",
+        "203PPK",
+        "204PPK"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PERNOS DE TORQUE",
+      "count": 56,
+      "sample_skus": [
+        "K01PTC",
+        "KH01PTC",
+        "K02PTC",
+        "KH02PTC",
+        "K03PTC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PHILLIPS PUNTA BROCA",
+      "count": 11,
+      "sample_skus": [
+        "05RLBB",
+        "10RLBB",
+        "12RLBB",
+        "13RLBB",
+        "18RLBB"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PISTOLA A GAS",
+      "count": 4,
+      "sample_skus": [
+        "200PPG",
+        "100PPG",
+        "125PPG",
+        "150PPG"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PISTOLA PROFESIONAL PARA ESPUMA DE POLIURETANO",
+      "count": 1,
+      "sample_skus": [
+        "10BS"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PLETINA EN \"T\"",
+      "count": 2,
+      "sample_skus": [
+        "20TE02",
+        "40TE02"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PLETINA RECTAGULAR",
+      "count": 4,
+      "sample_skus": [
+        "20TB2",
+        "70TB2",
+        "140TB2",
+        "150TB2"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PRISIONERO ALLEN",
+      "count": 48,
+      "sample_skus": [
+        "01PAC",
+        "02PAC",
+        "03PAC",
+        "04PAC",
+        "05PAC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PRISIONERO ALLEN METRICO",
+      "count": 33,
+      "sample_skus": [
+        "U01PACI",
+        "U02PACI",
+        "U16PACI",
+        "U17PACI",
+        "U18PACI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PTA. ESPADA / CAB. WAFER",
+      "count": 2,
+      "sample_skus": [
+        "10TFCW",
+        "20TFCW"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PUNTA 'AT'",
+      "count": 1,
+      "sample_skus": [
+        "B42TAD"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PUNTA BROCA",
+      "count": 46,
+      "sample_skus": [
+        "01TADB",
+        "02TADB",
+        "03TADB",
+        "04TADB",
+        "05TADB"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PUNTA FINA",
+      "count": 16,
+      "sample_skus": [
+        "B30ATPF-G",
+        "B30ATPF",
+        "30ATPF-G",
+        "30ATPF",
+        "30ATPF-L"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "PUNTA FINA (TRUEGRIP)",
+      "count": 8,
+      "sample_skus": [
+        "10ATHN",
+        "20ATHN",
+        "30ATHN",
+        "50ATHN",
+        "B10ATHN"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Para Drywall",
+      "count": 2,
+      "sample_skus": [
+        "100ELE",
+        "140ELE"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Pavonado",
+      "count": 21,
+      "sample_skus": [
+        "01TRT-BM",
+        "02TRT-BM",
+        "03TRT-BM",
+        "04TRT-BM",
+        "02TRU"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Phillips",
+      "count": 45,
+      "sample_skus": [
+        "02PTA",
+        "04PTA",
+        "06PTA",
+        "08PTA",
+        "14PTA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Plástico",
+      "count": 1,
+      "sample_skus": [
+        "04TRV-BM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Pozi",
+      "count": 5,
+      "sample_skus": [
+        "52PTA-G",
+        "56PTA-G",
+        "58PTA-G",
+        "60PTA-G",
+        "62PTA-G"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "RANURA TORX. PUNTA FINA",
+      "count": 2,
+      "sample_skus": [
+        "10TFRT",
+        "20TFRT"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "REMACHADORA PARA TUERCA REMACHABLE SN-10 SN-6",
+      "count": 1,
+      "sample_skus": [
+        "HN02"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "REMACHADORAS",
+      "count": 4,
+      "sample_skus": [
+        "SRC502H",
+        "HR710",
+        "HR730",
+        "PS15"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "REMACHE",
+      "count": 21,
+      "sample_skus": [
+        "01RTP-S",
+        "02RTP-S",
+        "03RTP-S",
+        "04RTP-S",
+        "05RTP-S"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "REMACHE DE ALUMINIO CABEZA REDONDA",
+      "count": 46,
+      "sample_skus": [
+        "01RAR",
+        "02RAR",
+        "03RAR",
+        "04RAR",
+        "05RAR"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "REMACHE DE HIERRO CABEZA REDONDA",
+      "count": 40,
+      "sample_skus": [
+        "01RFR",
+        "02RFR",
+        "03RFR",
+        "04RFR",
+        "05RFR"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "REMACHE HOJALATERO CABEZA PLANA",
+      "count": 14,
+      "sample_skus": [
+        "201RFP",
+        "202RFP",
+        "203RFP",
+        "204RFP",
+        "205RFP"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "REMACHE POP ABIERTO",
+      "count": 17,
+      "sample_skus": [
+        "AD32BS",
+        "AD41BS",
+        "AD42BS",
+        "AD43BS",
+        "AD44BS"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "REMACHE POP CERRADO",
+      "count": 6,
+      "sample_skus": [
+        "AD43H",
+        "AD44H",
+        "AD45H",
+        "AD53H",
+        "AD55H"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "REMACHE TIPO POP",
+      "count": 84,
+      "sample_skus": [
+        "01RTP",
+        "09RTPB-L",
+        "02RTP",
+        "10RTPB-L",
+        "03RTP"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "REMACHE TIPO POP AC/ACERO CABEZA AVELLANADA",
+      "count": 1,
+      "sample_skus": [
+        "18SSC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "REMACHES ESTRUCTURALES",
+      "count": 10,
+      "sample_skus": [
+        "02RESA",
+        "04RESA",
+        "02RESI",
+        "04RESI",
+        "02LOCK"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ROSCALATA CAB. BINDING PHILLIPS",
+      "count": 26,
+      "sample_skus": [
+        "09RLBI",
+        "10RLBI",
+        "11RLBI",
+        "12RLBI",
+        "13RLBI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ROSCALATA CAB. BINDING RANURA COMBINADA",
+      "count": 54,
+      "sample_skus": [
+        "N03RLBC",
+        "N04RLBC",
+        "N05RLBC",
+        "N08RLBC",
+        "N09RLBC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ROSCALATA CAB. PLANA PHILLIPS",
+      "count": 73,
+      "sample_skus": [
+        "01RLPP",
+        "11RLPI",
+        "02RLPP",
+        "12RLPI",
+        "03RLPP"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ROSCALATA CAB. TRUSS RANURA PHILLIPS",
+      "count": 8,
+      "sample_skus": [
+        "17RLTP",
+        "18RLTP",
+        "19RLTP",
+        "20RLTP",
+        "22RLTP"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ROSCALATA CABEZA BARRIL",
+      "count": 4,
+      "sample_skus": [
+        "B01RLA",
+        "B01RLA-S",
+        "03RLA",
+        "03RLA-S"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ROSCALATA CABEZA PAN PHILLIPS",
+      "count": 43,
+      "sample_skus": [
+        "03RLBP",
+        "04RLBP",
+        "05RLBP",
+        "06RLBP",
+        "07RLBP"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ROSCALATA HEXAGONAL CON GOLILLA Y RANURA RECTA",
+      "count": 8,
+      "sample_skus": [
+        "10RHRG",
+        "20RHRG",
+        "30RHRG",
+        "31RHRG",
+        "32RHRG"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "ROSCALATA PHILLIPS",
+      "count": 6,
+      "sample_skus": [
+        "10RLPR",
+        "11RLPR",
+        "14RLPR",
+        "N10RLPR",
+        "N11RLPR"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Remachadora Manual",
+      "count": 5,
+      "sample_skus": [
+        "PRG510",
+        "SN6",
+        "SN10",
+        "01RESN10",
+        "02RESN10"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Remachadoras Manuales",
+      "count": 5,
+      "sample_skus": [
+        "SRC56P",
+        "SR1",
+        "SR2",
+        "SR3",
+        "01RER"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "SEGURO SEAGERS EXTERIOR",
+      "count": 15,
+      "sample_skus": [
+        "01SSE",
+        "02SSE",
+        "03SSE",
+        "04SSE",
+        "05SSE"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "SEGURO SEAGERS INTERIOR",
+      "count": 14,
+      "sample_skus": [
+        "01SSI",
+        "03SSI",
+        "04SSI",
+        "06SSI",
+        "08SSI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "SEGURO SEAGERS TIPO",
+      "count": 12,
+      "sample_skus": [
+        "03ARU",
+        "04ARU",
+        "05ARU",
+        "06ARU",
+        "07ARU"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "SIN ARGOLLA",
+      "count": 6,
+      "sample_skus": [
+        "01MOS",
+        "02MOS",
+        "03MOS",
+        "04MOS",
+        "05MOS"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "SOLDADURA E6010",
+      "count": 3,
+      "sample_skus": [
+        "01S6010",
+        "02S6010",
+        "03S6010"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "SOLDADURA E6011",
+      "count": 3,
+      "sample_skus": [
+        "01S6011",
+        "02S6011",
+        "03S6011"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "SOLDADURA E7018",
+      "count": 3,
+      "sample_skus": [
+        "01S7018",
+        "02S7018",
+        "03S7018"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "SOLDADURA MIG AWS",
+      "count": 4,
+      "sample_skus": [
+        "08SMIG",
+        "09SMIG",
+        "10SMIG",
+        "12SMIG"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "SOPORTE ALAS EXTERIORES di Fissagg PARA VIGAS DE MADERA",
+      "count": 3,
+      "sample_skus": [
+        "30KT2",
+        "40KT2",
+        "50KT2"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "SOPORTE PLANCHA",
+      "count": 1,
+      "sample_skus": [
+        "10SPO"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "SOPORTES MULTIUSO",
+      "count": 10,
+      "sample_skus": [
+        "01SPC",
+        "02SPC",
+        "03SPC",
+        "04SPC",
+        "05SPC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TACO ANCLAJE",
+      "count": 8,
+      "sample_skus": [
+        "01TAZ",
+        "02TAZ",
+        "03TAZ",
+        "04TAZ",
+        "05TAZ"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TACOS DE ANCLAJE",
+      "count": 5,
+      "sample_skus": [
+        "01BOTAN",
+        "02BOTAN",
+        "04BOTAN",
+        "05BOTAN",
+        "06BOTAN"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TARUGO AUTOPERFORANTE PARA VOLCANITA",
+      "count": 2,
+      "sample_skus": [
+        "04TRV",
+        "05TRV"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TARUGO CLAVO",
+      "count": 10,
+      "sample_skus": [
+        "01TRC",
+        "02TRC",
+        "03TRC",
+        "04TRC",
+        "05TRC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TARUGO DE NYLON",
+      "count": 16,
+      "sample_skus": [
+        "07TRN",
+        "02RX00",
+        "01TRN",
+        "03RX00",
+        "02TRN"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TARUGO ESPIGA",
+      "count": 4,
+      "sample_skus": [
+        "01TRE",
+        "02TRE",
+        "03TRE",
+        "04TRE"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TARUGO METALICO",
+      "count": 2,
+      "sample_skus": [
+        "03TGZ",
+        "04TGZ"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TARUGO NAIL-IT",
+      "count": 3,
+      "sample_skus": [
+        "02TGN",
+        "03TGN",
+        "04TGN"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TARUGO NYLON",
+      "count": 17,
+      "sample_skus": [
+        "190AY10",
+        "200AY10",
+        "210AY11",
+        "220AY11",
+        "230AY12"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TARUGO PARA INTERNIT",
+      "count": 1,
+      "sample_skus": [
+        "02TRV"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TARUGO PARA VOLCANITA",
+      "count": 3,
+      "sample_skus": [
+        "01TRV",
+        "03TRV",
+        "01TRV-G"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TOPE PARA CABLES",
+      "count": 8,
+      "sample_skus": [
+        "01TER",
+        "02TER",
+        "03TER",
+        "04TER",
+        "05TER"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO CAB. HEXAGONAL",
+      "count": 1,
+      "sample_skus": [
+        "10BZ05"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO CABEZA BARRIL",
+      "count": 1,
+      "sample_skus": [
+        "01PVCB"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO CABEZA LENTEJA C/GOLILLA PUNTA BROCA",
+      "count": 17,
+      "sample_skus": [
+        "50ATPF-G",
+        "45ATPF-G",
+        "46ATPF-G",
+        "47ATPF-G",
+        "49ATPF-G"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO CABEZA LENTEJA C/GOLILLA PUNTA FINA",
+      "count": 15,
+      "sample_skus": [
+        "52ATPF",
+        "65ATPF-G",
+        "70ATPF-G",
+        "80ATPF-G",
+        "71ATPF-G"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO COLOCACION DE HERRAJES",
+      "count": 10,
+      "sample_skus": [
+        "01PVCA",
+        "02PVCA",
+        "03PVCA",
+        "04PVCA",
+        "B01PVCA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO CONECTOR",
+      "count": 6,
+      "sample_skus": [
+        "05TICM",
+        "10TICM",
+        "20TICM",
+        "30TICM",
+        "40TICM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO CONECTOR HEXAGONAL",
+      "count": 5,
+      "sample_skus": [
+        "10THCM",
+        "20THCM",
+        "30THCM",
+        "40THCM",
+        "50THCM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO CONECTOR LOSA - MADERA",
+      "count": 3,
+      "sample_skus": [
+        "10TCLM",
+        "20TCLM",
+        "V40-15-E8"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO DRYWALL",
+      "count": 32,
+      "sample_skus": [
+        "F08TAD",
+        "F01TAD",
+        "F02TAD",
+        "F03TAD",
+        "F04TAD"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO DRYWALL DENSIDAD DURA",
+      "count": 3,
+      "sample_skus": [
+        "40TADA",
+        "50TADA",
+        "60TADA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO DRYWALL DOS CAPAS",
+      "count": 1,
+      "sample_skus": [
+        "10TADO"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO DRYWALL ROSCA MADERA (CRS)",
+      "count": 78,
+      "sample_skus": [
+        "B18TAD",
+        "B19TAD",
+        "B20TAD",
+        "B21TAD",
+        "B22TAD"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO DRYWALL ROSCA METAL",
+      "count": 20,
+      "sample_skus": [
+        "B01TAD",
+        "B02TAD",
+        "B03TAD",
+        "B04TAD",
+        "B05TAD"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO DRYWALL TORX ROSCA MADERA (CRS)",
+      "count": 14,
+      "sample_skus": [
+        "B27TADT-S",
+        "B25TADT-S",
+        "B26TADT-S",
+        "B31TADT-S",
+        "B28TADT-S"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO ESCUADRA",
+      "count": 5,
+      "sample_skus": [
+        "01TESC",
+        "02TESC",
+        "03TESC",
+        "04TESC",
+        "05TESC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO HDS PARA TERRAZAS",
+      "count": 2,
+      "sample_skus": [
+        "22TDPEI",
+        "23TDPEI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO INOXIDABLI PARA TERRAZAS",
+      "count": 3,
+      "sample_skus": [
+        "21TDPFI",
+        "22TDPFI",
+        "23TDPFI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO INSTALACIÓN OBRA",
+      "count": 20,
+      "sample_skus": [
+        "01PVCC-K",
+        "02PVCC-K",
+        "03PVCC-K",
+        "04PVCC-K",
+        "05PVCC-K"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO LANCERO HT",
+      "count": 17,
+      "sample_skus": [
+        "11TEHT",
+        "12TEHT",
+        "13TEHT",
+        "14TEHT",
+        "15TEHT"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO LANCERO WT",
+      "count": 13,
+      "sample_skus": [
+        "11TETT",
+        "12TETT",
+        "13TETT",
+        "14TETT",
+        "15TETT"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO MAD. CAB. LENTEJA RANURA TORX, CON FRESA.",
+      "count": 18,
+      "sample_skus": [
+        "11TCML",
+        "12TCML",
+        "13TCML",
+        "14TCML",
+        "15TCML"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO MAD. RAN. TORX CON FRESA Y ROSCA ESPECIAL",
+      "count": 58,
+      "sample_skus": [
+        "40TJ02",
+        "610TT02",
+        "42TJ02",
+        "620TT02",
+        "44TJ02"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO MADERA CAB. PLANA - RAN. PHILLIPS",
+      "count": 47,
+      "sample_skus": [
+        "01TMPP",
+        "02TMPP",
+        "03TMPP",
+        "04TMPP",
+        "05TMPP"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO MADERA ROSCA COMPLETA",
+      "count": 6,
+      "sample_skus": [
+        "10TMRC",
+        "20TMRC",
+        "30TMRC",
+        "40TMRC",
+        "30TACL"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO MADERA TRUSS PHILLIPS",
+      "count": 15,
+      "sample_skus": [
+        "03TMTP",
+        "05TMTP",
+        "10TMTP",
+        "20TMTP",
+        "30TMTP"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO P/MADERA",
+      "count": 14,
+      "sample_skus": [
+        "09TMPX",
+        "11TMPX",
+        "12TMPX",
+        "22TMPX",
+        "24TMPX"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO PANEL SIP",
+      "count": 6,
+      "sample_skus": [
+        "30TMMT",
+        "10TMMT",
+        "20TMMT",
+        "30TPSB",
+        "10TPSB"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO PARA BISAGRA CANGREJO",
+      "count": 2,
+      "sample_skus": [
+        "05TMO",
+        "Q05TMO"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO PARA CORREDERA",
+      "count": 2,
+      "sample_skus": [
+        "01TMPAC",
+        "02TMPAC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO PARA DECK DE MADERA",
+      "count": 17,
+      "sample_skus": [
+        "10TMCT",
+        "11TMCT",
+        "12TMCT",
+        "13TMCT",
+        "14TMCT"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO PARA FACHADAS CABEZA CILINDRICA",
+      "count": 2,
+      "sample_skus": [
+        "10TFMCI",
+        "20TFMCI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO PARA FACHADAS CABEZA PLANA PINTADA",
+      "count": 4,
+      "sample_skus": [
+        "10TFMPI",
+        "20TFMPI",
+        "30TFMPI",
+        "40TFMPI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO PARA MADERA",
+      "count": 131,
+      "sample_skus": [
+        "50TMPA",
+        "PZ1",
+        "51TMPA",
+        "01TMPA",
+        "53TMPA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO PARA MADERA AGLOMERADA A METAL",
+      "count": 3,
+      "sample_skus": [
+        "10TMAM",
+        "20TMAM",
+        "30TMAM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO PARA MADERA CABEZA OVAL",
+      "count": 2,
+      "sample_skus": [
+        "01TMO",
+        "03TMO"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO PARA MADERA CABEZA PLANA",
+      "count": 19,
+      "sample_skus": [
+        "203TMPB",
+        "204TMPB",
+        "207TMPB",
+        "208TMPB",
+        "209TMPB"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO PARA MOLDURAS",
+      "count": 4,
+      "sample_skus": [
+        "10TIMO",
+        "20TIMO",
+        "30TIMO",
+        "40TIMO"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO PARA TECHO CABEZA PAN COMBINADA",
+      "count": 9,
+      "sample_skus": [
+        "200TTBC",
+        "201TTBC",
+        "202TTBC",
+        "203TTBC",
+        "204TTBC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO PARA TERRAZAS",
+      "count": 3,
+      "sample_skus": [
+        "11TDPF",
+        "12TDPF",
+        "13TDPF"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO PASADOR MADERA METAL",
+      "count": 9,
+      "sample_skus": [
+        "10TPMM",
+        "20TPMM",
+        "30TPMM",
+        "40TPMM",
+        "50TPMM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO REFUERZO",
+      "count": 5,
+      "sample_skus": [
+        "20RLPB",
+        "21RLPB",
+        "22RLPB",
+        "23RLPB",
+        "24RLPB"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO REPOSICIÓN",
+      "count": 4,
+      "sample_skus": [
+        "01PVCE",
+        "02PVCE",
+        "B01PVCE",
+        "B02PVCE"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO SIN ESTRIAS P/MADERA AGLOMERADA",
+      "count": 3,
+      "sample_skus": [
+        "137TMPA",
+        "122TMPA",
+        "07CAJA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO SOBERBIO",
+      "count": 6,
+      "sample_skus": [
+        "03TMS",
+        "02TMS",
+        "01TMS",
+        "06TMS",
+        "03TMSU-L"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO SOBERBIO RANURA PHILLIPS",
+      "count": 2,
+      "sample_skus": [
+        "103TMS",
+        "102TMS"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO TIRAFONDO",
+      "count": 103,
+      "sample_skus": [
+        "40TFC",
+        "41TFC",
+        "42TFC",
+        "43TFC",
+        "44TFC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO TURBO",
+      "count": 97,
+      "sample_skus": [
+        "01TMTS",
+        "R111TMTX",
+        "02TMTS",
+        "R113TMTX",
+        "03TMTS"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLO UNION PVC",
+      "count": 3,
+      "sample_skus": [
+        "01TUPV",
+        "I01TUPV",
+        "N01TUPV"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLOS CAB. HEXAGONAL",
+      "count": 14,
+      "sample_skus": [
+        "10QE01",
+        "20QE01",
+        "50QE01",
+        "60QE01",
+        "90QE01"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLOS PARA CLIP DE DECK",
+      "count": 3,
+      "sample_skus": [
+        "05DSF",
+        "02DSB",
+        "04DSB"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLOS PARA CONCRETO CABEZA HEXAGONAL",
+      "count": 9,
+      "sample_skus": [
+        "20TCOH",
+        "21TCOH",
+        "22TCOH",
+        "24TCOH",
+        "26TCOH"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TORNILLOS PARA CONCRETO CABEZA PLANA",
+      "count": 9,
+      "sample_skus": [
+        "18TCOP",
+        "20TCOP",
+        "22TCOP",
+        "24TCOP",
+        "26TCOP"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA ACOPLE UNC GRADO 2",
+      "count": 7,
+      "sample_skus": [
+        "04TAC",
+        "05TAC",
+        "06TAC",
+        "07TAC",
+        "08TAC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA ANCLAJE MÉTRICA PARA MUEBLE",
+      "count": 5,
+      "sample_skus": [
+        "01TAMM",
+        "02TAMM",
+        "03TAMM",
+        "04TAMM",
+        "05TAMM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA ANCLAJE PARA MUEBLE",
+      "count": 3,
+      "sample_skus": [
+        "04TAM",
+        "05TAM",
+        "06TAM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA CILINDRICA DE NYLON",
+      "count": 2,
+      "sample_skus": [
+        "01TNA",
+        "01TACT"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA COCINA CUADRADA UNC",
+      "count": 5,
+      "sample_skus": [
+        "01TCC",
+        "02TCC",
+        "03TCC",
+        "04TCC",
+        "05TCC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA COCINA HEXAGONAL METRICA",
+      "count": 4,
+      "sample_skus": [
+        "201TCH",
+        "202TCH",
+        "203TCH",
+        "204TCH"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA COCINA HEXAGONAL UNC",
+      "count": 9,
+      "sample_skus": [
+        "01TCH",
+        "05TCH",
+        "02TCH",
+        "03TCH",
+        "04TCH"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA DE OJO",
+      "count": 7,
+      "sample_skus": [
+        "06TOJ",
+        "08TOJ",
+        "10TOJ",
+        "12TOJ",
+        "14TOJ"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA GORRO UNC",
+      "count": 10,
+      "sample_skus": [
+        "01TGA",
+        "02TGA",
+        "03TGA",
+        "04TGA",
+        "05TGA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA HEXAGONAL ASTM A-194",
+      "count": 17,
+      "sample_skus": [
+        "05THL",
+        "01THL",
+        "02THL",
+        "03THL",
+        "04THL"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA HEXAGONAL CON FLANGE, GRADO 5",
+      "count": 8,
+      "sample_skus": [
+        "02TFA",
+        "03TFA",
+        "04TFA",
+        "05TFA",
+        "06TFA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA HEXAGONAL CON SEGURO DE NYLON METRICA",
+      "count": 5,
+      "sample_skus": [
+        "201TSN",
+        "202TSN",
+        "203TSN",
+        "205TSN",
+        "206TSN"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA HEXAGONAL CON SEGURO DE NYLON UNC",
+      "count": 15,
+      "sample_skus": [
+        "01TSN",
+        "02TSN",
+        "03TSN",
+        "04TSN",
+        "08TSN"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA HEXAGONAL GRADO 2 UNC",
+      "count": 51,
+      "sample_skus": [
+        "201TH1-G",
+        "02THI",
+        "202TH1-G",
+        "03THI",
+        "201TH1"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA HEXAGONAL GRADO 2 UNF",
+      "count": 10,
+      "sample_skus": [
+        "01TH1",
+        "02TH1",
+        "03TH1",
+        "04TH1",
+        "05TH1"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA HEXAGONAL GRADO 5 UNC",
+      "count": 10,
+      "sample_skus": [
+        "01TH5",
+        "02TH5",
+        "03TH5",
+        "04TH5",
+        "05TH5"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA HEXAGONAL GRADO 5 UNF",
+      "count": 10,
+      "sample_skus": [
+        "203TH5",
+        "204TH5",
+        "200TH5",
+        "207TH5",
+        "201TH5"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA HEXAGONAL GRADO 8 UNC",
+      "count": 12,
+      "sample_skus": [
+        "01TH8",
+        "02TH8",
+        "03TH8",
+        "04TH8",
+        "05TH8"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA HEXAGONAL ISO CLASE 8",
+      "count": 13,
+      "sample_skus": [
+        "13THM8",
+        "01THM8",
+        "02THM8",
+        "03THM8",
+        "05THM8"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA HEXAGONAL ISO CLASE 8 - ROSCA FINA",
+      "count": 5,
+      "sample_skus": [
+        "14THM8",
+        "04THM8",
+        "06THM8",
+        "07THM8",
+        "08THM8"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA HEXAGONAL METRICA INOXIDABLE A2 (AISI-304) DIN 934",
+      "count": 4,
+      "sample_skus": [
+        "201THMI",
+        "202THMI",
+        "203THMI",
+        "204THMI"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA HEXAGONAL METRICA ISO CLASE 5",
+      "count": 14,
+      "sample_skus": [
+        "201THM",
+        "202THM",
+        "203THM",
+        "204THM",
+        "205THM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA JAULA",
+      "count": 1,
+      "sample_skus": [
+        "01ETJA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA MARIPOSA UNC",
+      "count": 6,
+      "sample_skus": [
+        "01TMA",
+        "02TMA",
+        "03TMA",
+        "05TMA",
+        "06TMA"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA REMACHABLE MÉTRICA",
+      "count": 5,
+      "sample_skus": [
+        "05BRN",
+        "01BRN",
+        "02BRN",
+        "03BRN",
+        "04BRN"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "TUERCA REMACHABLE UNC",
+      "count": 5,
+      "sample_skus": [
+        "105BRN",
+        "101BRN",
+        "102BRN",
+        "103BRN",
+        "104BRN"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Taladro Atornillador Inalámbrico",
+      "count": 2,
+      "sample_skus": [
+        "100BAT",
+        "120BAT"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Taladro Percutor Inalámbrico",
+      "count": 2,
+      "sample_skus": [
+        "200BAT",
+        "220BAT"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "UNC / BSW",
+      "count": 17,
+      "sample_skus": [
+        "61PCO",
+        "62PCO",
+        "63PCO",
+        "64PCO",
+        "65PCO"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "UNION OCULTA",
+      "count": 3,
+      "sample_skus": [
+        "90CPW",
+        "92CPW",
+        "91CPW"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Y DESTORCEDOR (Niquelado)",
+      "count": 3,
+      "sample_skus": [
+        "01MAD",
+        "02MAD",
+        "03MAD"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Zincado Brillante",
+      "count": 61,
+      "sample_skus": [
+        "B01TAD-BM",
+        "B02TAD-BM",
+        "B03TAD-BM",
+        "37RLBP",
+        "24RLBC"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    },
+    {
+      "product_type": "Zincado Iridiscente",
+      "count": 6,
+      "sample_skus": [
+        "04TMPA-BM",
+        "01TESC-BM",
+        "02TESC-BM",
+        "03TESC-BM",
+        "04TESC-BM"
+      ],
+      "analysis": {
+        "issues": [],
+        "suggestions": [],
+        "is_valid": true
+      }
+    }
+  ],
+  "problematic_types": [],
+  "statistics": {
+    "by_issue": {}
+  },
+  "similar_types": [
+    [
+      "+ TARUGO NYLON",
+      "+ TARUGO NYLON + BROCA"
+    ],
+    [
+      "C/GOLILLA METAL + EPDM",
+      "C/GOLILLA METAL + EPDM da"
+    ],
+    [
+      "DADO MAGNETICO HEXAGONAL",
+      "DADO MAGNETICO HEXAGONAL MÉTRICO"
+    ],
+    [
+      "ESPÁRRAGO CONECTOR MADERA / MADERA",
+      "ESPÁRRAGO CONECTOR MADERA / METAL"
+    ],
+    [
+      "GOLILLA ESTRELLA DIENTES EXTERNOS",
+      "GOLILLA ESTRELLA DIENTES SUPERPUESTOS EXTERNOS"
+    ],
+    [
+      "GOLILLA PLANA ANCHA",
+      "GOLILLA PLANA ANCHA INOXIDABLE"
+    ],
+    [
+      "HILO X 1/2 METRO UNC",
+      "HILO X METRO UNC"
+    ],
+    [
+      "HILO X METRO",
+      "HILO X METRO Métrico"
+    ],
+    [
+      "P/ PISTOLA A GAS",
+      "PISTOLA A GAS"
+    ],
+    [
+      "PERNO COCINA CABEZA BINDING ROSCA METRICA",
+      "PERNO COCINA CABEZA PLANA ROSCA METRICA"
+    ],
+    [
+      "PERNO DE ANCLAJE",
+      "PERNO DE ANCLAJE DE CUÑA"
+    ],
+    [
+      "PERNO PARKER ROSCA UNC GRADO ISO 12.9",
+      "PERNO PARKER ROSCA UNF GRADO ISO 12.9"
+    ],
+    [
+      "TARUGO AUTOPERFORANTE PARA VOLCANITA",
+      "TARUGO PARA VOLCANITA"
+    ],
+    [
+      "TORNILLO CABEZA LENTEJA C/GOLILLA PUNTA BROCA",
+      "TORNILLO CABEZA LENTEJA C/GOLILLA PUNTA FINA"
+    ],
+    [
+      "TORNILLO DRYWALL ROSCA MADERA (CRS)",
+      "TORNILLO DRYWALL TORX ROSCA MADERA (CRS)"
+    ],
+    [
+      "TORNILLO HDS PARA TERRAZAS",
+      "TORNILLO PARA TERRAZAS"
+    ],
+    [
+      "TUERCA ANCLAJE MÉTRICA PARA MUEBLE",
+      "TUERCA ANCLAJE PARA MUEBLE"
+    ],
+    [
+      "TUERCA HEXAGONAL CON SEGURO DE NYLON METRICA",
+      "TUERCA HEXAGONAL CON SEGURO DE NYLON UNC"
+    ]
+  ]
+}

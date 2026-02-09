@@ -1,0 +1,44 @@
+================================================================================
+ANÁLISIS DE CATEGORÍAS DEL CATÁLOGO MAMUT 2025
+Generado: 2026-02-03 19:04:23
+================================================================================
+
+RESUMEN
+----------------------------------------
+Total productos: 5178
+Total tipos de producto: 331
+Tipos válidos: 331
+Tipos con problemas: 0
+
+PROBLEMAS DETECTADOS
+----------------------------------------
+
+================================================================================
+TIPOS DE PRODUCTO CON PROBLEMAS
+================================================================================
+
+================================================================================
+TIPOS DE PRODUCTO VÁLIDOS (muestra)
+================================================================================
+
+✓ (MAILLON OVALADO) (9 productos)
+✓ (STITCH) PUNTA FINA (1 productos)
+✓ + GOLILLA ALUMINIO 24mm (4 productos)
+✓ + GOLILLA METÁLICA 24mm (2 productos)
+✓ + TAPA + BROCA (10 productos)
+✓ + TARUGO AUTOPERFORANTE (5 productos)
+✓ + TARUGO NYLON (9 productos)
+✓ + TARUGO NYLON + BROCA (12 productos)
+✓ ABRAZADERAS CABLE (10 productos)
+✓ ABRAZADERAS TUBULARES (8 productos)
+✓ ADAPTADOR BROCA (2 productos)
+✓ AMARRA CABLES (49 productos)
+✓ AMARRA CABLES DE NYLON (2 productos)
+✓ ANCLAJE CON GRAPA (1 productos)
+✓ ANCLAJE PARA HORMIGON (4 productos)
+✓ ANCLAJE PARA HORMIGON CAB. HEXAGONAL - ANTISISMICO (12 productos)
+✓ ANCLAJE PARA PAREDES HUECAS (20 productos)
+✓ ANCLAJE PAREDES (5 productos)
+✓ ANCLAJE TIPO MARIPOSA (8 productos)
+✓ ARGOLLA (17 productos)
+  ... y 311 más

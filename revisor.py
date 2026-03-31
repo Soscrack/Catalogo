@@ -1359,7 +1359,9 @@ def find_latest_file(directory: str = 'data/processed') -> Optional[str]:
     if not dir_path.exists():
         return None
     
-    files = list(dir_path.glob('maestro_revision_*.xlsx'))
+    files = list(dir_path.glob('revision_final_*.xlsx'))
+    if not files:
+        files = list(dir_path.glob('maestro_revision_*.xlsx'))
     if not files:
         files = list(dir_path.glob('maestro_revision_*.csv'))
     

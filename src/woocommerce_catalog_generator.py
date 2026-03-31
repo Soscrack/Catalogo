@@ -153,11 +153,21 @@ def generate_woocommerce_from_catalog(
                 cached_mappings += 1
                 break
         
+        # Validar que el SKU del mapeo existe en el catálogo actual
+        if found_sku and found_sku not in catalog:
+            # Mapeo obsoleto: SKU ya no está en catálogo
+            found_sku = None
+        
         # Si no está en mapeo, buscar por texto
         if not found_sku:
             found_sku = find_sku_in_text(nombre, catalog_skus)
             if not found_sku:
                 found_sku = find_sku_in_text(sku_excel, catalog_skus)
+            
+            # Validar que el SKU encontrado realmente existe en el catálogo
+            if found_sku and found_sku not in catalog:
+                # SKU encontrado por regex pero no está en catálogo (ej: T50 es atributo, no SKU)
+                found_sku = None
             
             # Guardar nueva relación en el mapeo
             if found_sku and sku_excel:
@@ -393,8 +403,28 @@ def generate_woocommerce_from_catalog(
 
 if __name__ == "__main__":
     import sys
+    import os
     
-    excel_path = sys.argv[1] if len(sys.argv) > 1 else "data/processed/maestro_revision_20260129_185533.xlsx"
+    # Agregar directorio raíz al path si estamos en src/
+    if os.path.basename(os.getcwd()) == 'src':
+        sys.path.insert(0, os.path.dirname(os.getcwd()))
+    
+    # Usar argumento o solicitar archivo interactivamente
+    if len(sys.argv) > 1:
+        excel_path = sys.argv[1]
+    else:
+        try:
+            from src.utils import select_xlsx_file
+        except ModuleNotFoundError:
+            from utils import select_xlsx_file
+        
+        # Intentar buscar archivos nuevos primero, luego viejos
+        try:
+            excel_path = select_xlsx_file('data/processed', 'revision_final_*.xlsx')
+        except FileNotFoundError:
+            print("No se encontraron archivos revision_final_*.xlsx, buscando maestro_revision_*.xlsx...")
+            excel_path = select_xlsx_file('data/processed', 'maestro_revision_*.xlsx')
+    
     catalog_path = sys.argv[2] if len(sys.argv) > 2 else "data/catalogo_mamut_2025_spatial.json"
     
     df, excel_out, csv_out = generate_woocommerce_from_catalog(excel_path, catalog_path)

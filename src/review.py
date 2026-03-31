@@ -1020,7 +1020,7 @@ class ReviewFormatter:
         Returns:
             Path del archivo guardado
         """
-        output_path = Path(output_dir) / f"maestro_revision_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        output_path = Path(output_dir) / f"revision_final_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Guardar con formato

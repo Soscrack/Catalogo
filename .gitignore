@@ -42,3 +42,5 @@ Thumbs.db
 *.temp
 *.bak
 data/catalogo_mamut_2025_spatial.json
+/XML
+prompts/.env

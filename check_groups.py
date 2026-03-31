@@ -1,8 +1,25 @@
 """Script para verificar duplicados en grupos."""
 import pandas as pd
 from collections import Counter
+import sys
+import os
 
-df = pd.read_excel('data/processed/maestro_revision_20260129_185533.xlsx')
+# Asegurar que el import funcione desde cualquier ubicación
+try:
+    from src.utils import select_xlsx_file
+except ModuleNotFoundError:
+    # Si falla, agregar directorio raíz al path
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from src.utils import select_xlsx_file
+
+# Solicitar archivo xlsx interactivamente (busca nuevo y viejo formato)
+try:
+    xlsx_path = select_xlsx_file('data/processed', 'revision_final_*.xlsx')
+except FileNotFoundError:
+    print("No se encontraron archivos revision_final_*.xlsx, buscando maestro_revision_*.xlsx...")
+    xlsx_path = select_xlsx_file('data/processed', 'maestro_revision_*.xlsx')
+
+df = pd.read_excel(xlsx_path)
 
 print("=== RESUMEN ===")
 print(f"Total registros: {len(df)}")

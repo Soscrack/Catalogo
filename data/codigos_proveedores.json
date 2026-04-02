@@ -1,0 +1,371 @@
+{
+  "76141242-6": {
+    "razon_social": "SOC VIACAVA Y SANCHEZ SPA",
+    "codigos": [
+      {
+        "codigo": "BOLPOAL152515",
+        "tipo": "INT1",
+        "nombre": "KG BOLSA 15 X 25 X 0.150 00FP",
+        "folio": "90388",
+        "fecha": "2026-03-06"
+      }
+    ]
+  },
+  "77190661-3": {
+    "razon_social": "PAGOS Y SERVICIOS S.A.",
+    "codigos": [
+      {
+        "codigo": "1",
+        "tipo": "INT1",
+        "nombre": "COBRO COMISIÓN TRANSACCIONES CON TARJETA DÉBITO",
+        "folio": "433215",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "172",
+        "tipo": "INT1",
+        "nombre": "COBRO COMISIÓN TRANSACCIONES OTRAS TARJETAS",
+        "folio": "433215",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "182",
+        "tipo": "INT1",
+        "nombre": "COBRO COMISIÓN ARRIENDO TERMINAL POS",
+        "folio": "433215",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "202",
+        "tipo": "INT1",
+        "nombre": "COBRO COMISIÓN POR BAJO PROCESAMIENTO",
+        "folio": "433215",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "4",
+        "tipo": "INT1",
+        "nombre": "COBRO COMISIÓN TRANSACCIONES CON TARJETA CRÉDITO",
+        "folio": "433215",
+        "fecha": "2026-02-28"
+      }
+    ]
+  },
+  "77658823-7": {
+    "razon_social": "MAYCO SPA",
+    "codigos": []
+  },
+  "78030500-2": {
+    "razon_social": "MOSAICO S.A.",
+    "codigos": [
+      {
+        "codigo": "10CX3017102",
+        "tipo": "INT1",
+        "nombre": "Bushing He-Hi 1/2x3/8",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "15TF5526100",
+        "tipo": "INT1",
+        "nombre": "Llave Angular He 1/2x1/2 Inox",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "19ST3092500",
+        "tipo": "INT1",
+        "nombre": "Sifon Lavamanos PP 1 1/4'' con salida curva",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "20CI5003000",
+        "tipo": "INT1",
+        "nombre": "Monomando Lavatorio Cincinnati",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "21BE0000114",
+        "tipo": "INT1",
+        "nombre": "Percha Doble Benton Inox Satinado",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "21ST7000011",
+        "tipo": "INT1",
+        "nombre": "Ducha Bidet 1 Funciones",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "21ST7000018",
+        "tipo": "INT1",
+        "nombre": "Juego de Ducha 3 Funciones 1,75 MT",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "21ST7200001",
+        "tipo": "INT1",
+        "nombre": "Juego Ducha Cromo 2 Funciones ST",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "21ST7210000",
+        "tipo": "INT1",
+        "nombre": "Juego Ducha 5 Funciones",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "25ST1000100",
+        "tipo": "INT1",
+        "nombre": "Nueva Llave de Gas",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "35CX0504100",
+        "tipo": "INT1",
+        "nombre": "Flexible Agua Metálico Hi-Hi 1/2 25cm",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "35CX1004100",
+        "tipo": "INT1",
+        "nombre": "Flexible Agua Metálico Hi-Hi 1/2 35cm",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "35CX1507100",
+        "tipo": "INT1",
+        "nombre": "Flexible Agua Metálico He-Hi 1/2 40cm",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "35CX1704100",
+        "tipo": "INT1",
+        "nombre": "Flexible Metálico Hi-Hi 1/2 50cm",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "35CX1704110",
+        "tipo": "INT1",
+        "nombre": "Flexible Metálico Hi-Hi 1/2 100cm",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "35GS3504145",
+        "tipo": "INT1",
+        "nombre": "Flexible para Gas HI-HI 1/2 x 3/8 en 100 cm",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "35TF8605461",
+        "tipo": "INT1",
+        "nombre": "FLEXIBLE AGUA VINILO 1/2  X M10 50CM. TECHNOFLEX",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "40TG1306612",
+        "tipo": "INT1",
+        "nombre": "Teflón de Gas 1/2 en 6,6 mts",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "40TG2306612",
+        "tipo": "INT1",
+        "nombre": "Teflón de Gas 3/4 en 6,6 mts",
+        "folio": "513146",
+        "fecha": "2026-02-28"
+      },
+      {
+        "codigo": "60AU1901050",
+        "tipo": "INT1",
+        "nombre": "Asiento y Tapa PP paraÂ WC Aura",
+        "folio": "513147",
+        "fecha": "2026-02-28"
+      }
+    ]
+  },
+  "91144000-8": {
+    "razon_social": "Embotelladora Andina S.A.",
+    "codigos": [
+      {
+        "codigo": "122905",
+        "tipo": "0",
+        "nombre": "Benedictino C/G PT1,5 x 6",
+        "folio": "93928108",
+        "fecha": "2026-03-05"
+      },
+      {
+        "codigo": "124216",
+        "tipo": "0",
+        "nombre": "Andina Light Pina PT1,5 x 6",
+        "folio": "93928108",
+        "fecha": "2026-03-05"
+      },
+      {
+        "codigo": "124224",
+        "tipo": "0",
+        "nombre": "And Frut Naranja Light PT1,5 x 6",
+        "folio": "93928108",
+        "fecha": "2026-03-05"
+      },
+      {
+        "codigo": "124257",
+        "tipo": "0",
+        "nombre": "ADV Kiwi 0% PT1,5 x 6",
+        "folio": "93928108",
+        "fecha": "2026-03-05"
+      },
+      {
+        "codigo": "125154",
+        "tipo": "0",
+        "nombre": "Aquarius Manzana PT500cc x 6",
+        "folio": "93928108",
+        "fecha": "2026-03-05"
+      },
+      {
+        "codigo": "125156",
+        "tipo": "0",
+        "nombre": "Aquarius Uva PT500cc x 6",
+        "folio": "93928108",
+        "fecha": "2026-03-05"
+      },
+      {
+        "codigo": "122422",
+        "tipo": "0",
+        "nombre": "Ades Manzana TT200cc x 6",
+        "folio": "93928108",
+        "fecha": "2026-03-05"
+      },
+      {
+        "codigo": "122424",
+        "tipo": "0",
+        "nombre": "Ades Pina TT200cc x 6",
+        "folio": "93928108",
+        "fecha": "2026-03-05"
+      },
+      {
+        "codigo": "122233",
+        "tipo": "0",
+        "nombre": "Monster NJ Ripper LT473cc x 6",
+        "folio": "93928108",
+        "fecha": "2026-03-05"
+      },
+      {
+        "codigo": "122236",
+        "tipo": "0",
+        "nombre": "Monster Ultra Peachy Keen LT473cc x 6",
+        "folio": "93928108",
+        "fecha": "2026-03-05"
+      },
+      {
+        "codigo": "125694",
+        "tipo": "0",
+        "nombre": "Benedictino Frutos Rojos PT500 ml x6",
+        "folio": "93928108",
+        "fecha": "2026-03-05"
+      },
+      {
+        "codigo": "120437",
+        "tipo": "0",
+        "nombre": "Coca Cola PT591cc x 6",
+        "folio": "24559067",
+        "fecha": "2026-03-05"
+      }
+    ]
+  },
+  "96689310-9": {
+    "razon_social": "TRANSBANK S.A.",
+    "codigos": []
+  },
+  "99594030-2": {
+    "razon_social": "Soudal S.A.",
+    "codigos": [
+      {
+        "codigo": "121273",
+        "tipo": "EAN",
+        "nombre": "SILIRUB S TRANSPARENTE 280ml",
+        "folio": "251999",
+        "fecha": "2026-03-09"
+      },
+      {
+        "codigo": "121480",
+        "tipo": "EAN",
+        "nombre": "Soudal Sil Bano Cocina Blanco 280ml SAM",
+        "folio": "251999",
+        "fecha": "2026-03-09"
+      },
+      {
+        "codigo": "123380",
+        "tipo": "EAN",
+        "nombre": "Silirub AC+ Negro 280ml SAM",
+        "folio": "251999",
+        "fecha": "2026-03-09"
+      },
+      {
+        "codigo": "123393",
+        "tipo": "EAN",
+        "nombre": "290ML FIX ALL HIGH TACK BLANCO",
+        "folio": "251999",
+        "fecha": "2026-03-09"
+      },
+      {
+        "codigo": "159996",
+        "tipo": "EAN",
+        "nombre": "Silirub AC+ Titanio 280ml",
+        "folio": "251999",
+        "fecha": "2026-03-09"
+      },
+      {
+        "codigo": "121273",
+        "tipo": "EAN",
+        "nombre": "SILIRUB S TRANSPARENTE 280ml",
+        "folio": "81187",
+        "fecha": "2026-03-09"
+      },
+      {
+        "codigo": "121480",
+        "tipo": "EAN",
+        "nombre": "Soudal Sil Bano Cocina Blanco 280ml SAM",
+        "folio": "81187",
+        "fecha": "2026-03-09"
+      },
+      {
+        "codigo": "123380",
+        "tipo": "EAN",
+        "nombre": "Silirub AC+ Negro 280ml SAM",
+        "folio": "81187",
+        "fecha": "2026-03-09"
+      },
+      {
+        "codigo": "123393",
+        "tipo": "EAN",
+        "nombre": "290ML FIX ALL HIGH TACK BLANCO",
+        "folio": "81187",
+        "fecha": "2026-03-09"
+      },
+      {
+        "codigo": "159996",
+        "tipo": "EAN",
+        "nombre": "Silirub AC+ Titanio 280ml",
+        "folio": "81187",
+        "fecha": "2026-03-09"
+      }
+    ]
+  }
+}

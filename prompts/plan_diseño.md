@@ -241,6 +241,9 @@ Quiero que WooCommerce tenga una estructura de permisos para Usuarios de Cotizac
 
 En .env estan las credencieles para explorar, WooCommerce tiene productos de prueba.
 
+# Objetivos Extras
+En C:\Users\jorge\Documents\GitHub\Simulacion\Catalogo\XML hay facturas de los archivos que nos llegan. Al mometo de llegar un pedido llega una de esas facturaz deberiamos ser capaces de encontrarla en la pagína, modificar el contenido si es que algo no llega, aceptarla. Y con los codigos del proveedor relacionado con los SKU's hacer tareas de etiquetado para los trabajadore, tareas de rodenar en la bodega que diga el lugar de la bodega asociado en la bade de datos, que los empleados puedan terminar las tareas. Que cuando falte informacion por que no se encuentrasn los codigos hacer tareas administrativas para rellenar lugares o realciones de codigos faltantes. Resolver y llevar historial de codigos tanto locales, proveedores y de barra. Hacer un gestor de tareas.
+
 
 
 # PRIMERA IDEA  DE: Arquitectura técnica — Riverso POS para WooCommerce
@@ -507,3 +510,4 @@ riverso-pos/
 │
 └── languages/
     └── riverso-pos.pot
+

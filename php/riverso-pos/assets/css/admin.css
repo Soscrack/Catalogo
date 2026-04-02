@@ -1,0 +1,380 @@
+/**
+ * Riverso POS - Admin Styles
+ */
+
+/* Variables */
+:root {
+    --riverso-primary: #0073aa;
+    --riverso-success: #5cb85c;
+    --riverso-warning: #f0ad4e;
+    --riverso-danger: #d9534f;
+    --riverso-info: #5bc0de;
+    --riverso-dark: #23282d;
+    --riverso-light: #f1f1f1;
+    --riverso-border: #e1e1e1;
+}
+
+/* Wrap principal */
+.riverso-pos-wrap {
+    margin: 20px 20px 20px 0;
+}
+
+.riverso-pos-wrap h1 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.riverso-pos-wrap h1 .dashicons {
+    font-size: 30px;
+    width: 30px;
+    height: 30px;
+}
+
+/* Grid de estadísticas */
+.riverso-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.riverso-stat-card {
+    background: #fff;
+    border: 1px solid var(--riverso-border);
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.riverso-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.riverso-stat-card.alert {
+    border-color: var(--riverso-danger);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+}
+
+.stat-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.stat-icon .dashicons {
+    color: #fff;
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+}
+
+.stat-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-number {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--riverso-dark);
+    line-height: 1;
+}
+
+.stat-label {
+    font-size: 13px;
+    color: #666;
+    margin-top: 5px;
+}
+
+/* Grid del dashboard */
+.riverso-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+/* Paneles */
+.riverso-panel {
+    background: #fff;
+    border: 1px solid var(--riverso-border);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--riverso-border);
+    background: #fafafa;
+    border-radius: 8px 8px 0 0;
+}
+
+.panel-header h2 {
+    margin: 0;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.panel-header h2 .dashicons {
+    color: var(--riverso-primary);
+}
+
+.panel-body {
+    padding: 20px;
+}
+
+.panel-body .no-items {
+    color: #666;
+    text-align: center;
+    padding: 20px;
+    margin: 0;
+}
+
+/* Tablas */
+.riverso-panel .wp-list-table {
+    border: none;
+    margin: 0;
+}
+
+.riverso-panel .wp-list-table th,
+.riverso-panel .wp-list-table td {
+    padding: 10px 12px;
+}
+
+/* Badges de estado */
+.status-badge,
+.priority-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+    text-transform: uppercase;
+}
+
+/* Lista de tareas */
+.task-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.task-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--riverso-border);
+}
+
+.task-item:last-child {
+    border-bottom: none;
+}
+
+.task-item.priority-urgente {
+    background: #fff5f5;
+    margin: 0 -20px;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+.task-icon {
+    color: var(--riverso-primary);
+    margin-top: 2px;
+}
+
+.task-content {
+    flex: 1;
+}
+
+.task-content strong {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.task-meta {
+    font-size: 12px;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Acciones rápidas */
+.quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.quick-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: var(--riverso-light);
+    border: 1px solid var(--riverso-border);
+    border-radius: 6px;
+    text-decoration: none;
+    color: var(--riverso-dark);
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.quick-action-btn:hover {
+    background: var(--riverso-primary);
+    border-color: var(--riverso-primary);
+    color: #fff;
+}
+
+.quick-action-btn .dashicons {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+}
+
+/* Formularios */
+.riverso-form-row {
+    margin-bottom: 15px;
+}
+
+.riverso-form-row label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.riverso-form-row input[type="text"],
+.riverso-form-row input[type="number"],
+.riverso-form-row select,
+.riverso-form-row textarea {
+    width: 100%;
+    max-width: 400px;
+}
+
+/* Upload área */
+.riverso-upload-area {
+    border: 2px dashed var(--riverso-border);
+    border-radius: 8px;
+    padding: 40px;
+    text-align: center;
+    background: #fafafa;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.riverso-upload-area:hover,
+.riverso-upload-area.dragover {
+    border-color: var(--riverso-primary);
+    background: #f0f7fc;
+}
+
+.riverso-upload-area .dashicons {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    color: #999;
+}
+
+.riverso-upload-area p {
+    margin: 15px 0 0;
+    color: #666;
+}
+
+/* Modal */
+.riverso-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100000;
+}
+
+.riverso-modal {
+    background: #fff;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+
+.riverso-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--riverso-border);
+}
+
+.riverso-modal-header h3 {
+    margin: 0;
+}
+
+.riverso-modal-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #666;
+}
+
+.riverso-modal-body {
+    padding: 20px;
+}
+
+.riverso-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 15px 20px;
+    border-top: 1px solid var(--riverso-border);
+    background: #fafafa;
+}
+
+/* Responsive */
+@media screen and (max-width: 782px) {
+    .riverso-stats-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .riverso-dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .quick-actions {
+        flex-direction: column;
+    }
+    
+    .quick-action-btn {
+        justify-content: center;
+    }
+}

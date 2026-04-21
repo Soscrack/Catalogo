@@ -35,6 +35,11 @@ $movement_types = Riverso_Warehouse_Module::MOVEMENT_TYPES;
                         <option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></option>
                     <?php endforeach; ?>
                 </select>
+                <select id="filter-estado-ubicacion">
+                    <option value="1">Activas</option>
+                    <option value="0">Desactivadas</option>
+                    <option value="">Todas</option>
+                </select>
                 <input type="text" id="search-ubicacion" placeholder="Buscar código o nombre...">
             </div>
             <?php if (current_user_can('riverso_edit_stock')): ?>
@@ -308,6 +313,33 @@ $movement_types = Riverso_Warehouse_Module::MOVEMENT_TYPES;
     gap: 5px;
 }
 
+.location-card.inactive {
+    background: #f5f5f5;
+    opacity: 0.7;
+    border-color: #ccc;
+}
+
+.location-card.inactive .location-code {
+    color: #999;
+}
+
+.location-card .location-status {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-left: 5px;
+}
+
+.location-card .location-status.active {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.location-card .location-status.inactive {
+    background: #ffebee;
+    color: #c62828;
+}
+
 .search-product-box {
     max-width: 500px;
     margin-bottom: 20px;
@@ -384,29 +416,50 @@ jQuery(function($) {
     let currentProductId = null;
     let locationsCache = [];
 
-    // Tabs
+    // Tabs - cargar datos al cambiar de tab
     $('.nav-tab').on('click', function(e) {
         e.preventDefault();
         $('.nav-tab').removeClass('nav-tab-active');
         $(this).addClass('nav-tab-active');
         $('.tab-content').hide();
-        $('#tab-' + $(this).data('tab')).show();
+        const tab = $(this).data('tab');
+        $('#tab-' + tab).show();
+        
+        // Cargar datos según el tab
+        if (tab === 'ubicaciones') {
+            loadLocations();
+        } else if (tab === 'movimientos') {
+            loadMovements();
+        }
     });
 
     // ========== UBICACIONES ==========
     function loadLocations() {
-        $.post(ajaxurl, {
+        const estadoFilter = $('#filter-estado-ubicacion').val();
+        $('#locations-grid').html('<p style="padding: 40px; text-align: center; color: #666;"><span class="spinner is-active" style="float: none;"></span><br>Cargando ubicaciones...</p>');
+        
+        const data = {
             action: 'riverso_get_locations',
             nonce: nonce,
             tipo: $('#filter-tipo-ubicacion').val(),
-            search: $('#search-ubicacion').val(),
-            activo: 1
-        }, function(response) {
+            search: $('#search-ubicacion').val()
+        };
+        
+        // Solo enviar filtro activo si tiene valor
+        if (estadoFilter !== '') {
+            data.activo = parseInt(estadoFilter);
+        }
+        
+        $.post(ajaxurl, data, function(response) {
             if (response.success) {
-                locationsCache = response.data.locations;
-                renderLocations(response.data.locations);
+                locationsCache = response.data.locations || [];
+                renderLocations(locationsCache);
                 updateLocationSelects();
+            } else {
+                $('#locations-grid').html('<p style="padding: 40px; text-align: center; color: #d9534f;">Error: ' + (response.data?.message || 'Error al cargar ubicaciones') + '</p>');
             }
+        }).fail(function() {
+            $('#locations-grid').html('<p style="padding: 40px; text-align: center; color: #d9534f;">Error de conexión al servidor</p>');
         });
     }
 
@@ -420,19 +473,39 @@ jQuery(function($) {
         }
 
         locations.forEach(function(loc) {
+            const isActive = parseInt(loc.activo) === 1;
+            const cardClass = isActive ? '' : 'inactive';
+            const statusClass = isActive ? 'active' : 'inactive';
+            const statusText = isActive ? 'Activa' : 'Desactivada';
+            
+            let actions = '';
+            if (isActive) {
+                actions = `
+                    <button class="button button-small btn-edit-location">Editar</button>
+                    <button class="button button-small btn-deactivate-location">Desactivar</button>
+                `;
+            } else {
+                actions = `
+                    <button class="button button-small btn-activate-location" style="background: #4caf50; color: white; border-color: #4caf50;">Reactivar</button>
+                    <button class="button button-small btn-delete-permanent" style="background: #d32f2f; color: white; border-color: #d32f2f;">Eliminar</button>
+                `;
+            }
+            
             grid.append(`
-                <div class="location-card" data-id="${loc.id}">
+                <div class="location-card ${cardClass}" data-id="${loc.id}">
                     <div class="location-header">
                         <span class="location-code">${loc.codigo}</span>
-                        <span class="location-type">${locationTypes[loc.tipo] || loc.tipo}</span>
+                        <span>
+                            <span class="location-type">${locationTypes[loc.tipo] || loc.tipo}</span>
+                            <span class="location-status ${statusClass}">${statusText}</span>
+                        </span>
                     </div>
                     <div class="location-name">${loc.nombre}</div>
                     <div class="location-products">
                         <span class="dashicons dashicons-archive"></span> ${loc.productos_count} productos
                     </div>
                     <div class="location-actions">
-                        <button class="button button-small btn-edit-location">Editar</button>
-                        <button class="button button-small btn-delete-location">Desactivar</button>
+                        ${actions}
                     </div>
                 </div>
             `);
@@ -445,47 +518,110 @@ jQuery(function($) {
         $('#mov-ubicacion-origen, #mov-ubicacion-destino').html(options);
     }
 
-    $('#filter-tipo-ubicacion, #search-ubicacion').on('change keyup', debounce(loadLocations, 300));
+    $('#filter-tipo-ubicacion, #filter-estado-ubicacion, #search-ubicacion').on('change keyup', debounce(loadLocations, 300));
 
     $('#btn-new-location').on('click', function() {
         $('#form-location')[0].reset();
         $('#location-id').val('');
+        $('#modal-location').find('.riverso-modal-header h2').text('Nueva Ubicación');
         $('#modal-location').show();
     });
 
     $('#btn-save-location').on('click', function() {
+        const $btn = $(this);
         const id = $('#location-id').val();
+        const nombre = $('#location-nombre').val().trim();
+        
+        if (!nombre) {
+            alert('El nombre es requerido');
+            return;
+        }
+        
+        $btn.prop('disabled', true).text('Guardando...');
+        
         const data = {
             action: id ? 'riverso_update_location' : 'riverso_create_location',
             nonce: nonce,
             location_id: id,
             tipo: $('#location-tipo').val(),
-            nombre: $('#location-nombre').val(),
+            nombre: nombre,
             codigo: $('#location-codigo').val(),
             descripcion: $('#location-descripcion').val(),
-            capacidad: $('#location-capacidad').val()
+            capacidad: $('#location-capacidad').val() || 0
         };
 
         $.post(ajaxurl, data, function(response) {
+            $btn.prop('disabled', false).text('Guardar');
             if (response.success) {
                 $('#modal-location').hide();
                 loadLocations();
+                alert(response.data.message || 'Ubicación guardada');
             } else {
-                alert(response.data.message);
+                alert('Error: ' + (response.data?.message || 'Error desconocido'));
+            }
+        }).fail(function() {
+            $btn.prop('disabled', false).text('Guardar');
+            alert('Error de conexión al servidor');
+        });
+    });
+
+    $(document).on('click', '.btn-edit-location', function() {
+        const card = $(this).closest('.location-card');
+        const id = card.data('id');
+        const loc = locationsCache.find(l => l.id == id);
+        if (loc) {
+            $('#location-id').val(loc.id);
+            $('#location-tipo').val(loc.tipo);
+            $('#location-nombre').val(loc.nombre);
+            $('#location-codigo').val(loc.codigo);
+            $('#location-descripcion').val(loc.descripcion || '');
+            $('#location-capacidad').val(loc.capacidad || 0);
+            $('#modal-location').find('.riverso-modal-header h2').text('Editar Ubicación');
+            $('#modal-location').show();
+        }
+    });
+
+    $(document).on('click', '.btn-deactivate-location', function() {
+        if (!confirm('¿Desactivar esta ubicación?')) return;
+        const id = $(this).closest('.location-card').data('id');
+        $.post(ajaxurl, {action: 'riverso_delete_location', nonce: nonce, location_id: id}, function(response) {
+            if (response.success) {
+                loadLocations();
+            } else {
+                alert('Error: ' + (response.data?.message || 'No se pudo desactivar'));
             }
         });
     });
 
-    $(document).on('click', '.btn-delete-location', function() {
-        if (!confirm('¿Desactivar esta ubicación?')) return;
+    $(document).on('click', '.btn-activate-location', function() {
         const id = $(this).closest('.location-card').data('id');
-        $.post(ajaxurl, {action: 'riverso_delete_location', nonce: nonce, location_id: id}, function() {
-            loadLocations();
+        $.post(ajaxurl, {action: 'riverso_activate_location', nonce: nonce, location_id: id}, function(response) {
+            if (response.success) {
+                loadLocations();
+                alert('Ubicación reactivada');
+            } else {
+                alert('Error: ' + (response.data?.message || 'No se pudo reactivar'));
+            }
+        });
+    });
+
+    $(document).on('click', '.btn-delete-permanent', function() {
+        if (!confirm('¿ELIMINAR PERMANENTEMENTE esta ubicación? Esta acción no se puede deshacer.')) return;
+        const id = $(this).closest('.location-card').data('id');
+        $.post(ajaxurl, {action: 'riverso_delete_location', nonce: nonce, location_id: id, permanent: 1}, function(response) {
+            if (response.success) {
+                loadLocations();
+                alert('Ubicación eliminada permanentemente');
+            } else {
+                alert('Error: ' + (response.data?.message || 'No se pudo eliminar'));
+            }
         });
     });
 
     // ========== MOVIMIENTOS ==========
     function loadMovements() {
+        $('#movements-list').html('<tr><td colspan="8" style="text-align: center;"><span class="spinner is-active" style="float: none;"></span> Cargando...</td></tr>');
+        
         $.post(ajaxurl, {
             action: 'riverso_get_movements',
             nonce: nonce,
@@ -494,8 +630,12 @@ jQuery(function($) {
             fecha_hasta: $('#filter-mov-hasta').val()
         }, function(response) {
             if (response.success) {
-                renderMovements(response.data.movements);
+                renderMovements(response.data.movements || []);
+            } else {
+                $('#movements-list').html('<tr><td colspan="8" style="text-align: center; color: #d9534f;">Error al cargar movimientos</td></tr>');
             }
+        }).fail(function() {
+            $('#movements-list').html('<tr><td colspan="8" style="text-align: center; color: #d9534f;">Error de conexión</td></tr>');
         });
     }
 

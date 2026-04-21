@@ -43,7 +43,7 @@ class Riverso_POS_Assets {
         );
         
         // Localización
-        wp_localize_script('riverso-pos-admin', 'riversoPOS', [
+        wp_localize_script('riverso-pos-admin', 'riverso_pos', [
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('riverso_pos_nonce'),
             'i18n' => [

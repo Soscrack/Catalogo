@@ -57,13 +57,13 @@ final class Riverso_POS {
      * Constructor
      */
     private function __construct() {
-        $this->check_requirements();
         $this->includes();
         $this->init_hooks();
     }
     
     /**
      * Verifica requisitos mínimos
+     * @return bool
      */
     private function check_requirements() {
         // Verificar WooCommerce
@@ -73,8 +73,9 @@ final class Riverso_POS {
                 echo '<strong>Riverso POS</strong> requiere WooCommerce para funcionar.';
                 echo '</p></div>';
             });
-            return;
+            return false;
         }
+        return true;
     }
     
     /**
@@ -87,6 +88,7 @@ final class Riverso_POS {
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-deactivator.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-admin-menu.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-permissions.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-audit.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-ajax.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-assets.php';
         
@@ -107,6 +109,10 @@ final class Riverso_POS {
         add_action('init', [$this, 'init']);
         add_action('admin_init', [$this, 'admin_init']);
         
+        // Redirección de login según rol
+        add_filter('login_redirect', [$this, 'login_redirect'], 10, 3);
+        add_action('template_redirect', [$this, 'protect_internal_pages']);
+        
         // HPOS Compatibility
         add_action('before_woocommerce_init', function() {
             if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
@@ -120,9 +126,45 @@ final class Riverso_POS {
     }
     
     /**
+     * Redirecciona al usuario según su rol después del login
+     */
+    public function login_redirect($redirect_to, $requested_redirect_to, $user) {
+        if (!is_wp_error($user) && $user instanceof WP_User) {
+            // Si es empleado interno, redirigir al portal
+            if (Riverso_POS_Permissions::is_employee($user->ID)) {
+                return home_url('/interno/');
+            }
+        }
+        return $redirect_to;
+    }
+    
+    /**
+     * Protege las páginas internas - solo empleados pueden acceder
+     */
+    public function protect_internal_pages() {
+        // Verificar si estamos en /interno/
+        $uri = $_SERVER['REQUEST_URI'] ?? '';
+        if (strpos($uri, '/interno') !== false) {
+            if (!is_user_logged_in()) {
+                wp_redirect(wp_login_url(home_url('/interno/')));
+                exit;
+            }
+            if (!Riverso_POS_Permissions::is_employee()) {
+                wp_redirect(home_url());
+                exit;
+            }
+        }
+    }
+    
+    /**
      * Ejecuta cuando todos los plugins están cargados
      */
     public function on_plugins_loaded() {
+        // Verificar requisitos
+        if (!$this->check_requirements()) {
+            return;
+        }
+        
         // Cargar traducciones
         load_plugin_textdomain(
             'riverso-pos',
@@ -140,6 +182,9 @@ final class Riverso_POS {
     public function init() {
         // Registrar endpoints personalizados si es necesario
         do_action('riverso_pos_init');
+        
+        // Inicializar AJAX de permisos
+        Riverso_POS_Permissions::init_ajax();
     }
     
     /**
@@ -160,9 +205,19 @@ final class Riverso_POS {
         
         // Lista de módulos a cargar
         $module_list = [
+            'portal'    => ['file' => 'class-portal-module.php', 'class' => 'Riverso_Portal_Module'],
             'invoices'  => ['file' => 'class-invoice-module.php', 'class' => 'Riverso_Invoice_Module'],
             'tasks'     => ['file' => 'class-task-module.php', 'class' => 'Riverso_Task_Module'],
             'warehouse' => ['file' => 'class-warehouse-module.php', 'class' => 'Riverso_Warehouse_Module'],
+            'suppliers' => ['file' => 'class-supplier-module.php', 'class' => 'Riverso_POS_Supplier_Module'],
+            'employees' => ['file' => 'class-employee-module.php', 'class' => 'Riverso_POS_Employee_Module'],
+            'quotes'    => ['file' => 'class-received-quote-module.php', 'class' => 'Riverso_POS_Received_Quote_Module'],
+            'costs'     => ['file' => 'class-cost-history-module.php', 'class' => 'Riverso_Cost_History_Module'],
+            'codes'     => ['file' => 'class-supplier-links-module.php', 'class' => 'Riverso_Supplier_Links_Module'],
+            'barcodes'  => ['file' => 'class-barcode-module.php', 'class' => 'Riverso_Barcode_Module'],
+            'customer-quotes' => ['file' => 'class-customer-quote-module.php', 'class' => 'Riverso_Customer_Quote_Module'],
+            'pos'             => ['file' => 'class-pos-module.php', 'class' => 'Riverso_POS_Module'],
+            'reports'         => ['file' => 'class-reports-module.php', 'class' => 'Riverso_Reports_Module'],
         ];
         
         foreach ($module_list as $module_name => $config) {
@@ -174,7 +229,13 @@ final class Riverso_POS {
                 $class_name = $config['class'];
                 
                 if (class_exists($class_name)) {
-                    $module = new $class_name();
+                    // Usar get_instance() si existe (singleton), sino new
+                    if (method_exists($class_name, 'get_instance')) {
+                        $module = $class_name::get_instance();
+                    } else {
+                        $module = new $class_name();
+                    }
+                    
                     if (method_exists($module, 'init')) {
                         $module->init();
                     }

@@ -177,23 +177,20 @@ class Riverso_POS_Activator {
             descripcion TEXT DEFAULT NULL,
             prioridad VARCHAR(20) DEFAULT 'normal',
             estado VARCHAR(20) DEFAULT 'pendiente',
-            factura_id BIGINT UNSIGNED DEFAULT NULL,
-            factura_item_id BIGINT UNSIGNED DEFAULT NULL,
-            product_id BIGINT UNSIGNED DEFAULT NULL,
-            codigo_id BIGINT UNSIGNED DEFAULT NULL,
-            ubicacion_id BIGINT UNSIGNED DEFAULT NULL,
             asignado_a BIGINT UNSIGNED DEFAULT NULL,
             creado_por BIGINT UNSIGNED DEFAULT NULL,
+            referencia_tipo VARCHAR(50) DEFAULT NULL,
+            referencia_id BIGINT UNSIGNED DEFAULT NULL,
+            datos_extra JSON DEFAULT NULL,
             fecha_limite DATETIME DEFAULT NULL,
-            completado_por BIGINT UNSIGNED DEFAULT NULL,
-            completado_at DATETIME DEFAULT NULL,
-            metadata JSON DEFAULT NULL,
+            completado_en DATETIME DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             KEY tipo (tipo),
             KEY estado (estado),
-            KEY asignado_a (asignado_a)
+            KEY asignado_a (asignado_a),
+            KEY prioridad (prioridad)
         ) $charset_collate;";
         dbDelta($sql);
         
@@ -202,18 +199,16 @@ class Riverso_POS_Activator {
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             codigo VARCHAR(50) NOT NULL,
             nombre VARCHAR(100) DEFAULT NULL,
-            pasillo VARCHAR(10) DEFAULT NULL,
-            estante VARCHAR(10) DEFAULT NULL,
-            nivel VARCHAR(10) DEFAULT NULL,
-            posicion VARCHAR(10) DEFAULT NULL,
             tipo VARCHAR(20) DEFAULT 'estante',
-            capacidad_max INT DEFAULT NULL,
+            descripcion TEXT DEFAULT NULL,
+            capacidad INT DEFAULT 0,
             activo TINYINT(1) DEFAULT 1,
-            notas TEXT DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
-            UNIQUE KEY codigo (codigo)
+            UNIQUE KEY codigo (codigo),
+            KEY tipo (tipo),
+            KEY activo (activo)
         ) $charset_collate;";
         dbDelta($sql);
         
@@ -221,14 +216,14 @@ class Riverso_POS_Activator {
         $sql = "CREATE TABLE {$prefix}producto_ubicacion (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             product_id BIGINT UNSIGNED NOT NULL,
-            variation_id BIGINT UNSIGNED DEFAULT NULL,
             ubicacion_id BIGINT UNSIGNED NOT NULL,
             cantidad INT DEFAULT 0,
-            es_principal TINYINT(1) DEFAULT 0,
+            posicion VARCHAR(50) DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
-            UNIQUE KEY producto_ubicacion (product_id, variation_id, ubicacion_id)
+            UNIQUE KEY producto_ubicacion (product_id, ubicacion_id),
+            KEY ubicacion_id (ubicacion_id)
         ) $charset_collate;";
         dbDelta($sql);
         
@@ -236,17 +231,15 @@ class Riverso_POS_Activator {
         $sql = "CREATE TABLE {$prefix}movimientos (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             product_id BIGINT UNSIGNED NOT NULL,
-            variation_id BIGINT UNSIGNED DEFAULT NULL,
             tipo VARCHAR(20) NOT NULL,
             cantidad DECIMAL(12,4) NOT NULL,
-            cantidad_anterior DECIMAL(12,4) DEFAULT NULL,
-            cantidad_posterior DECIMAL(12,4) DEFAULT NULL,
-            ubicacion_origen_id BIGINT UNSIGNED DEFAULT NULL,
-            ubicacion_destino_id BIGINT UNSIGNED DEFAULT NULL,
-            factura_id BIGINT UNSIGNED DEFAULT NULL,
-            order_id BIGINT UNSIGNED DEFAULT NULL,
-            referencia VARCHAR(100) DEFAULT NULL,
-            motivo TEXT DEFAULT NULL,
+            stock_anterior DECIMAL(12,4) DEFAULT NULL,
+            stock_nuevo DECIMAL(12,4) DEFAULT NULL,
+            ubicacion_origen BIGINT UNSIGNED DEFAULT NULL,
+            ubicacion_destino BIGINT UNSIGNED DEFAULT NULL,
+            referencia_tipo VARCHAR(50) DEFAULT NULL,
+            referencia_id BIGINT UNSIGNED DEFAULT NULL,
+            notas TEXT DEFAULT NULL,
             usuario_id BIGINT UNSIGNED DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
@@ -256,6 +249,10 @@ class Riverso_POS_Activator {
         ) $charset_collate;";
         dbDelta($sql);
         
+        // Tabla: Auditoría
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-audit.php';
+        Riverso_POS_Audit::create_table();
+        
         update_option('riverso_pos_db_version', RIVERSO_POS_VERSION);
     }
     
@@ -263,79 +260,9 @@ class Riverso_POS_Activator {
      * Crea los roles personalizados
      */
     public static function create_roles() {
-        // Capacidades base
-        $base_caps = [
-            'read' => true,
-        ];
-        
-        // Rol: Cotizador
-        add_role('riverso_cotizador', __('Cotizador', 'riverso-pos'), array_merge($base_caps, [
-            'riverso_view_products'    => true,
-            'riverso_create_quotes'    => true,
-            'riverso_view_quotes'      => true,
-        ]));
-        
-        // Rol: Vendedor
-        add_role('riverso_vendedor', __('Vendedor', 'riverso-pos'), array_merge($base_caps, [
-            'riverso_view_products'    => true,
-            'riverso_view_stock'       => true,
-            'riverso_create_quotes'    => true,
-            'riverso_view_quotes'      => true,
-            'riverso_create_sales'     => true,
-            'riverso_view_sales'       => true,
-            'riverso_view_invoices'    => true,
-            'riverso_view_tasks'       => true,
-            'riverso_complete_tasks'   => true,
-        ]));
-        
-        // Rol: Editor POS
-        add_role('riverso_editor', __('Editor POS', 'riverso-pos'), array_merge($base_caps, [
-            'riverso_view_products'    => true,
-            'riverso_edit_products'    => true,
-            'riverso_view_stock'       => true,
-            'riverso_edit_stock'       => true,
-            'riverso_create_quotes'    => true,
-            'riverso_view_quotes'      => true,
-            'riverso_create_sales'     => true,
-            'riverso_view_sales'       => true,
-            'riverso_view_invoices'    => true,
-            'riverso_process_invoices' => true,
-            'riverso_view_tasks'       => true,
-            'riverso_create_tasks'     => true,
-            'riverso_complete_tasks'   => true,
-            'riverso_assign_tasks'     => true,
-            'riverso_manage_codes'     => true,
-            'riverso_view_reports'     => true,
-        ]));
-        
-        // Agregar capacidades al administrador
-        $admin = get_role('administrator');
-        if ($admin) {
-            $all_caps = [
-                'riverso_view_products',
-                'riverso_edit_products',
-                'riverso_view_stock',
-                'riverso_edit_stock',
-                'riverso_create_quotes',
-                'riverso_view_quotes',
-                'riverso_create_sales',
-                'riverso_view_sales',
-                'riverso_view_invoices',
-                'riverso_process_invoices',
-                'riverso_view_tasks',
-                'riverso_create_tasks',
-                'riverso_complete_tasks',
-                'riverso_assign_tasks',
-                'riverso_manage_codes',
-                'riverso_view_reports',
-                'riverso_manage_settings',
-                'riverso_manage_users',
-            ];
-            
-            foreach ($all_caps as $cap) {
-                $admin->add_cap($cap);
-            }
-        }
+        // Usar el método centralizado de la clase de permisos
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-permissions.php';
+        Riverso_POS_Permissions::setup_roles();
     }
     
     /**

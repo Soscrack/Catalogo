@@ -317,15 +317,22 @@ jQuery(function($) {
         if (currentTab === 'mis-tareas') {
             filters.asignado_a = <?php echo get_current_user_id(); ?>;
         } else if (currentTab === 'sin-asignar') {
-            filters.estado = 'pendiente';
+            filters.sin_asignar = 1;
         } else if (currentTab === 'completadas') {
             filters.estado = 'completada';
         }
+        // Tab "todas" no filtra por estado - muestra todas las no completadas
+        
+        $('#tasks-list').html('<div class="loading-tasks" style="text-align: center; padding: 60px;"><span class="spinner is-active" style="float: none;"></span><p>Cargando tareas...</p></div>');
         
         $.post(ajaxurl, filters, function(response) {
             if (response.success) {
                 renderTasks(response.data.tasks);
+            } else {
+                $('#tasks-list').html('<div class="empty-tasks"><span class="dashicons dashicons-warning"></span><p>Error al cargar tareas: ' + (response.data?.message || 'Error desconocido') + '</p></div>');
             }
+        }).fail(function() {
+            $('#tasks-list').html('<div class="empty-tasks"><span class="dashicons dashicons-warning"></span><p>Error de conexión</p></div>');
         });
     }
     
@@ -439,16 +446,34 @@ jQuery(function($) {
         });
     });
     
-    // Editar tarea
+    // Editar tarea - cargar datos del servidor
     $(document).on('click', '.btn-edit-task', function() {
         const card = $(this).closest('.task-card');
         const taskId = card.data('id');
         
-        // Por ahora solo abrimos el modal con datos básicos
-        // En producción cargaríamos los datos del servidor
-        $('#task-id').val(taskId);
-        $('#modal-task-title').text('Editar Tarea');
-        $('#modal-task').show();
+        // Cargar datos de la tarea desde el servidor
+        $.post(ajaxurl, {
+            action: 'riverso_get_task',
+            nonce: nonce,
+            task_id: taskId
+        }, function(response) {
+            if (response.success && response.data.task) {
+                const task = response.data.task;
+                $('#task-id').val(task.id);
+                $('#task-tipo').val(task.tipo);
+                $('#task-titulo').val(task.titulo);
+                $('#task-descripcion').val(task.descripcion || '');
+                $('#task-prioridad').val(task.prioridad);
+                $('#task-fecha-limite').val(task.fecha_limite || '');
+                $('#task-asignado').val(task.asignado_a || '');
+                $('#modal-task-title').text('Editar Tarea');
+                $('#modal-task').show();
+            } else {
+                alert('Error al cargar la tarea');
+            }
+        }).fail(function() {
+            alert('Error de conexión');
+        });
     });
     
     // Completar tarea

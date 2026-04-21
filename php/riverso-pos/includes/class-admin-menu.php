@@ -51,6 +51,16 @@ class Riverso_POS_Admin_Menu {
             [$this, 'render_invoices']
         );
         
+        // Recepción de Mercadería
+        add_submenu_page(
+            'riverso-pos',
+            __('Recepción', 'riverso-pos'),
+            __('Recepción', 'riverso-pos'),
+            'riverso_receive_items',
+            'riverso-pos-reception',
+            [$this, 'render_reception']
+        );
+        
         // Códigos
         add_submenu_page(
             'riverso-pos',
@@ -81,6 +91,96 @@ class Riverso_POS_Admin_Menu {
             [$this, 'render_warehouse']
         );
         
+        // Proveedores
+        add_submenu_page(
+            'riverso-pos',
+            __('Proveedores', 'riverso-pos'),
+            __('Proveedores', 'riverso-pos'),
+            'riverso_view_suppliers',
+            'riverso-pos-suppliers',
+            [$this, 'render_suppliers']
+        );
+        
+        // Cotizaciones Recibidas
+        add_submenu_page(
+            'riverso-pos',
+            __('Cotizaciones Recibidas', 'riverso-pos'),
+            __('Cotizaciones Recibidas', 'riverso-pos'),
+            'riverso_view_invoices',
+            'riverso-pos-received-quotes',
+            [$this, 'render_received_quotes']
+        );
+        
+        // Auditoría
+        add_submenu_page(
+            'riverso-pos',
+            __('Auditoría', 'riverso-pos'),
+            __('Auditoría', 'riverso-pos'),
+            'riverso_view_audit',
+            'riverso-pos-audit',
+            [$this, 'render_audit']
+        );
+        
+        // Empleados
+        add_submenu_page(
+            'riverso-pos',
+            __('Empleados', 'riverso-pos'),
+            __('Empleados', 'riverso-pos'),
+            'riverso_manage_users',
+            'riverso-pos-employees',
+            [$this, 'render_employees']
+        );
+        
+        // Historial de Costos
+        add_submenu_page(
+            'riverso-pos',
+            __('Historial de Costos', 'riverso-pos'),
+            __('Historial de Costos', 'riverso-pos'),
+            'riverso_view_costs',
+            'riverso-pos-costs',
+            [$this, 'render_costs']
+        );
+        
+        // Códigos de Barra
+        add_submenu_page(
+            'riverso-pos',
+            __('Códigos de Barra', 'riverso-pos'),
+            __('Códigos de Barra', 'riverso-pos'),
+            'riverso_manage_products',
+            'riverso-pos-barcodes',
+            [$this, 'render_barcodes']
+        );
+        
+        // Cotizaciones a Clientes
+        add_submenu_page(
+            'riverso-pos',
+            __('Cotizaciones a Clientes', 'riverso-pos'),
+            __('Cotizaciones a Clientes', 'riverso-pos'),
+            'riverso_view_quotes',
+            'riverso-pos-customer-quotes',
+            [$this, 'render_customer_quotes']
+        );
+        
+        // POS (Punto de Venta)
+        add_submenu_page(
+            'riverso-pos',
+            __('Punto de Venta', 'riverso-pos'),
+            __('🛒 Punto de Venta', 'riverso-pos'),
+            'riverso_use_pos',
+            'riverso-pos-pos',
+            [$this, 'render_pos']
+        );
+        
+        // Reportes
+        add_submenu_page(
+            'riverso-pos',
+            __('Reportes', 'riverso-pos'),
+            __('📊 Reportes', 'riverso-pos'),
+            'riverso_view_reports',
+            'riverso-pos-reports',
+            [$this, 'render_reports']
+        );
+        
         // Configuración
         add_submenu_page(
             'riverso-pos',
@@ -89,6 +189,16 @@ class Riverso_POS_Admin_Menu {
             'riverso_manage_settings',
             'riverso-pos-settings',
             [$this, 'render_settings']
+        );
+        
+        // Permisos - visible para admin WP o empleados con riverso_manage_permissions
+        add_submenu_page(
+            'riverso-pos',
+            __('Permisos', 'riverso-pos'),
+            __('🔐 Permisos', 'riverso-pos'),
+            'riverso_manage_permissions',
+            'riverso-pos-permissions',
+            [$this, 'render_permissions']
         );
     }
     
@@ -104,6 +214,13 @@ class Riverso_POS_Admin_Menu {
      */
     public function render_invoices() {
         $this->render_page('invoices');
+    }
+    
+    /**
+     * Renderiza la página de recepción
+     */
+    public function render_reception() {
+        $this->render_page('reception');
     }
     
     /**
@@ -130,10 +247,83 @@ class Riverso_POS_Admin_Menu {
     }
     
     /**
+     * Renderiza la página de proveedores
+     */
+    public function render_suppliers() {
+        $this->render_page('suppliers');
+    }
+    
+    /**
+     * Renderiza la página de cotizaciones recibidas
+     */
+    public function render_received_quotes() {
+        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/quotes/class-received-quote-module.php';
+        $this->render_page('received-quotes');
+    }
+    
+    /**
+     * Renderiza la página de auditoría
+     */
+    public function render_audit() {
+        $this->render_page('audit');
+    }
+    
+    /**
+     * Renderiza la página de empleados
+     */
+    public function render_employees() {
+        $this->render_page('employees');
+    }
+    
+    /**
+     * Renderiza la página de costos
+     */
+    public function render_costs() {
+        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/costs/class-cost-history-module.php';
+        $this->render_page('cost-history');
+    }
+    
+    /**
+     * Renderiza la página de códigos de barra
+     */
+    public function render_barcodes() {
+        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/barcodes/class-barcode-module.php';
+        $this->render_page('barcodes');
+    }
+    
+    /**
      * Renderiza la página de configuración
      */
     public function render_settings() {
         $this->render_page('settings');
+    }
+    
+    /**
+     * Renderiza la página de cotizaciones a clientes
+     */
+    public function render_customer_quotes() {
+        $this->render_page('customer-quotes');
+    }
+    
+    /**
+     * Renderiza la página de POS
+     */
+    public function render_pos() {
+        $this->render_page('pos');
+    }
+    
+    /**
+     * Renderiza la página de reportes
+     */
+    public function render_reports() {
+        $this->render_page('reports');
+    }
+    
+    /**
+     * Renderiza la página de permisos
+     */
+    public function render_permissions() {
+        $this->render_page('permissions');
     }
     
     /**

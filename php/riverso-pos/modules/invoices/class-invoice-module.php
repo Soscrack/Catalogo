@@ -12,6 +12,33 @@ if (!defined('ABSPATH')) {
 class Riverso_Invoice_Module {
 
     /**
+     * Estados de factura
+     */
+    const INVOICE_STATES = [
+        'uploaded' => 'Cargada',
+        'pending_reception' => 'Pendiente Recepción',
+        'in_reception' => 'En Recepción',
+        'reception_complete' => 'Recepción Completa',
+        'pending_approval' => 'Pendiente Aprobación',
+        'approved' => 'Aprobada',
+        'rejected' => 'Rechazada',
+        'archived' => 'Archivada'
+    ];
+    
+    /**
+     * Estados de ítem
+     */
+    const ITEM_STATES = [
+        'pending' => 'Pendiente',
+        'received_ok' => 'Recibido OK',
+        'modified' => 'Modificado',
+        'missing' => 'Faltante',
+        'extra' => 'Sobrante',
+        'rejected' => 'Rechazado',
+        'approved' => 'Aprobado'
+    ];
+    
+    /**
      * Inicializar módulo
      */
     public function init() {
@@ -20,6 +47,14 @@ class Riverso_Invoice_Module {
         add_action('wp_ajax_riverso_update_invoice_status', [$this, 'ajax_update_status']);
         add_action('wp_ajax_riverso_link_code', [$this, 'ajax_link_code']);
         add_action('wp_ajax_riverso_get_invoices_list', [$this, 'ajax_get_invoices_list']);
+        
+        // Nuevos handlers para recepción física
+        add_action('wp_ajax_riverso_start_reception', [$this, 'ajax_start_reception']);
+        add_action('wp_ajax_riverso_update_item_reception', [$this, 'ajax_update_item_reception']);
+        add_action('wp_ajax_riverso_complete_reception', [$this, 'ajax_complete_reception']);
+        add_action('wp_ajax_riverso_approve_invoice', [$this, 'ajax_approve_invoice']);
+        add_action('wp_ajax_riverso_search_invoice', [$this, 'ajax_search_invoice']);
+        add_action('wp_ajax_riverso_get_reception_stats', [$this, 'ajax_get_reception_stats']);
     }
 
     /**
@@ -591,5 +626,487 @@ class Riverso_Invoice_Module {
             'per_page' => $per_page,
             'total_pages' => ceil($total / $per_page),
         ]);
+    }
+    
+    // ==================== RECEPCIÓN FÍSICA ====================
+    
+    /**
+     * AJAX: Buscar factura por número para iniciar recepción
+     */
+    public function ajax_search_invoice() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        
+        if (!current_user_can('riverso_receive_items')) {
+            wp_send_json_error(['message' => 'Sin permisos para recepción']);
+        }
+        
+        $folio = sanitize_text_field($_POST['folio'] ?? '');
+        $proveedor_search = sanitize_text_field($_POST['proveedor'] ?? '');
+        
+        if (empty($folio) && empty($proveedor_search)) {
+            wp_send_json_error(['message' => 'Ingrese folio o proveedor']);
+        }
+        
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        
+        $where = ['1=1'];
+        $params = [];
+        
+        if (!empty($folio)) {
+            $where[] = 'f.folio = %d';
+            $params[] = intval($folio);
+        }
+        
+        if (!empty($proveedor_search)) {
+            $where[] = '(p.nombre LIKE %s OR p.rut LIKE %s)';
+            $params[] = '%' . $wpdb->esc_like($proveedor_search) . '%';
+            $params[] = '%' . $wpdb->esc_like($proveedor_search) . '%';
+        }
+        
+        $where_sql = implode(' AND ', $where);
+        
+        $sql = "SELECT f.*, p.nombre as proveedor_nombre, p.rut as proveedor_rut,
+                (SELECT COUNT(*) FROM {$prefix}factura_items WHERE factura_id = f.id) as total_items,
+                (SELECT COUNT(*) FROM {$prefix}factura_items WHERE factura_id = f.id AND item_status = 'pending') as pending_items
+                FROM {$prefix}facturas f
+                JOIN {$prefix}proveedores p ON f.proveedor_id = p.id
+                WHERE {$where_sql}
+                ORDER BY f.created_at DESC
+                LIMIT 20";
+        
+        $invoices = $wpdb->get_results($wpdb->prepare($sql, ...$params), ARRAY_A);
+        
+        wp_send_json_success(['invoices' => $invoices]);
+    }
+    
+    /**
+     * AJAX: Iniciar proceso de recepción física
+     */
+    public function ajax_start_reception() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        
+        if (!current_user_can('riverso_receive_items')) {
+            wp_send_json_error(['message' => 'Sin permisos para recepción']);
+        }
+        
+        $factura_id = intval($_POST['factura_id'] ?? 0);
+        
+        if (!$factura_id) {
+            wp_send_json_error(['message' => 'ID de factura requerido']);
+        }
+        
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        
+        // Verificar que la factura existe y puede ser recibida
+        $factura = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}facturas WHERE id = %d",
+            $factura_id
+        ));
+        
+        if (!$factura) {
+            wp_send_json_error(['message' => 'Factura no encontrada']);
+        }
+        
+        $valid_states = ['uploaded', 'pending_reception', 'recibido'];
+        if (!in_array($factura->estado, $valid_states)) {
+            wp_send_json_error(['message' => 'Esta factura ya está en proceso de recepción o fue aprobada']);
+        }
+        
+        // Actualizar estado de factura
+        $wpdb->update(
+            "{$prefix}facturas",
+            [
+                'estado' => 'in_reception',
+                'reception_started_at' => current_time('mysql'),
+                'reception_started_by' => get_current_user_id()
+            ],
+            ['id' => $factura_id],
+            ['%s', '%s', '%d'],
+            ['%d']
+        );
+        
+        // Asegurar que todos los ítems tengan item_status
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}factura_items 
+             SET item_status = 'pending', qty_received = 0 
+             WHERE factura_id = %d AND (item_status IS NULL OR item_status = '')",
+            $factura_id
+        ));
+        
+        // Log de auditoría
+        if (class_exists('Riverso_Audit_Module')) {
+            Riverso_Audit_Module::get_instance()->log(
+                'reception_started',
+                'invoice',
+                $factura_id,
+                ['estado' => $factura->estado],
+                ['estado' => 'in_reception']
+            );
+        }
+        
+        wp_send_json_success(['message' => 'Recepción iniciada', 'factura_id' => $factura_id]);
+    }
+    
+    /**
+     * AJAX: Actualizar recepción de un ítem
+     */
+    public function ajax_update_item_reception() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        
+        if (!current_user_can('riverso_receive_items')) {
+            wp_send_json_error(['message' => 'Sin permisos para recepción']);
+        }
+        
+        $item_id = intval($_POST['item_id'] ?? 0);
+        $qty_received = floatval($_POST['qty_received'] ?? 0);
+        $item_status = sanitize_text_field($_POST['item_status'] ?? '');
+        $notes = sanitize_textarea_field($_POST['notes'] ?? '');
+        
+        if (!$item_id) {
+            wp_send_json_error(['message' => 'ID de ítem requerido']);
+        }
+        
+        $valid_statuses = array_keys(self::ITEM_STATES);
+        if (!in_array($item_status, $valid_statuses)) {
+            wp_send_json_error(['message' => 'Estado de ítem inválido']);
+        }
+        
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        
+        // Obtener ítem actual
+        $item = $wpdb->get_row($wpdb->prepare(
+            "SELECT fi.*, f.estado as invoice_status 
+             FROM {$prefix}factura_items fi
+             JOIN {$prefix}facturas f ON fi.factura_id = f.id
+             WHERE fi.id = %d",
+            $item_id
+        ));
+        
+        if (!$item) {
+            wp_send_json_error(['message' => 'Ítem no encontrado']);
+        }
+        
+        if ($item->invoice_status !== 'in_reception') {
+            wp_send_json_error(['message' => 'La factura no está en proceso de recepción']);
+        }
+        
+        $old_data = [
+            'qty_received' => $item->qty_received,
+            'item_status' => $item->item_status
+        ];
+        
+        // Actualizar ítem
+        $wpdb->update(
+            "{$prefix}factura_items",
+            [
+                'qty_received' => $qty_received,
+                'item_status' => $item_status,
+                'item_notes' => $notes,
+                'received_by' => get_current_user_id(),
+                'received_at' => current_time('mysql')
+            ],
+            ['id' => $item_id],
+            ['%f', '%s', '%s', '%d', '%s'],
+            ['%d']
+        );
+        
+        // Log de auditoría
+        if (class_exists('Riverso_Audit_Module')) {
+            Riverso_Audit_Module::get_instance()->log(
+                'item_received',
+                'invoice_item',
+                $item_id,
+                $old_data,
+                ['qty_received' => $qty_received, 'item_status' => $item_status]
+            );
+        }
+        
+        // Verificar si todos los ítems fueron procesados
+        $pending = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$prefix}factura_items 
+             WHERE factura_id = %d AND item_status = 'pending'",
+            $item->factura_id
+        ));
+        
+        $all_done = $pending == 0;
+        
+        wp_send_json_success([
+            'message' => 'Ítem actualizado',
+            'all_items_processed' => $all_done
+        ]);
+    }
+    
+    /**
+     * AJAX: Completar proceso de recepción
+     */
+    public function ajax_complete_reception() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        
+        if (!current_user_can('riverso_receive_items')) {
+            wp_send_json_error(['message' => 'Sin permisos para recepción']);
+        }
+        
+        $factura_id = intval($_POST['factura_id'] ?? 0);
+        
+        if (!$factura_id) {
+            wp_send_json_error(['message' => 'ID de factura requerido']);
+        }
+        
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        
+        // Verificar que todos los ítems fueron procesados
+        $pending = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$prefix}factura_items 
+             WHERE factura_id = %d AND item_status = 'pending'",
+            $factura_id
+        ));
+        
+        if ($pending > 0) {
+            wp_send_json_error(['message' => "Aún hay {$pending} ítems pendientes de revisar"]);
+        }
+        
+        // Actualizar estado de factura
+        $wpdb->update(
+            "{$prefix}facturas",
+            [
+                'estado' => 'pending_approval',
+                'reception_completed_at' => current_time('mysql'),
+                'reception_completed_by' => get_current_user_id()
+            ],
+            ['id' => $factura_id],
+            ['%s', '%s', '%d'],
+            ['%d']
+        );
+        
+        // Log de auditoría
+        if (class_exists('Riverso_Audit_Module')) {
+            Riverso_Audit_Module::get_instance()->log(
+                'reception_completed',
+                'invoice',
+                $factura_id,
+                null,
+                ['estado' => 'pending_approval']
+            );
+        }
+        
+        wp_send_json_success(['message' => 'Recepción completada, pendiente aprobación']);
+    }
+    
+    /**
+     * AJAX: Aprobar factura (después de recepción)
+     */
+    public function ajax_approve_invoice() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        
+        if (!current_user_can('riverso_approve_invoices')) {
+            wp_send_json_error(['message' => 'Sin permisos para aprobar']);
+        }
+        
+        $factura_id = intval($_POST['factura_id'] ?? 0);
+        $notes = sanitize_textarea_field($_POST['notes'] ?? '');
+        
+        if (!$factura_id) {
+            wp_send_json_error(['message' => 'ID de factura requerido']);
+        }
+        
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        
+        // Verificar que la factura puede ser aprobada
+        $factura = $wpdb->get_row($wpdb->prepare(
+            "SELECT f.*, p.id as supplier_id FROM {$prefix}facturas f
+             JOIN {$prefix}proveedores p ON f.proveedor_id = p.id
+             WHERE f.id = %d",
+            $factura_id
+        ));
+        
+        if (!$factura) {
+            wp_send_json_error(['message' => 'Factura no encontrada']);
+        }
+        
+        $valid_states = ['pending_approval', 'reception_complete', 'procesado'];
+        if (!in_array($factura->estado, $valid_states)) {
+            wp_send_json_error(['message' => 'Esta factura no puede ser aprobada en su estado actual']);
+        }
+        
+        // Obtener ítems aprobados/recibidos
+        $items = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$prefix}factura_items 
+             WHERE factura_id = %d AND item_status IN ('received_ok', 'modified', 'approved')",
+            $factura_id
+        ));
+        
+        // Actualizar estado de factura
+        $wpdb->update(
+            "{$prefix}facturas",
+            [
+                'estado' => 'approved',
+                'approved_at' => current_time('mysql'),
+                'approved_by' => get_current_user_id(),
+                'approval_notes' => $notes
+            ],
+            ['id' => $factura_id],
+            ['%s', '%s', '%d', '%s'],
+            ['%d']
+        );
+        
+        // Procesar efectos de aprobación
+        $tasks_created = [];
+        $costs_recorded = 0;
+        
+        foreach ($items as $item) {
+            // A. Registrar historial de costos
+            if (class_exists('Riverso_Cost_History_Module') && $item->sku_local) {
+                $product_id = wc_get_product_id_by_sku($item->sku_local);
+                if ($product_id) {
+                    $cost_module = Riverso_Cost_History_Module::get_instance();
+                    $result = $cost_module->record_cost([
+                        'product_id' => $product_id,
+                        'supplier_id' => $factura->supplier_id,
+                        'source_type' => 'invoice',
+                        'source_document_id' => $factura_id,
+                        'source_item_id' => $item->id,
+                        'supplier_code' => $item->codigo_proveedor,
+                        'cost' => $item->monto_total,
+                        'quantity' => $item->qty_received ?: $item->cantidad,
+                        'document_date' => $factura->fecha_emision
+                    ]);
+                    if (!is_wp_error($result)) {
+                        $costs_recorded++;
+                    }
+                }
+            }
+            
+            // B. Generar tarea de etiquetado si hay producto vinculado
+            if ($item->sku_local && class_exists('Riverso_Task_Module')) {
+                $task_module = Riverso_Task_Module::get_instance();
+                $qty = $item->qty_received ?: $item->cantidad;
+                
+                $task_id = $task_module->create_task([
+                    'titulo' => "Etiquetar: {$item->descripcion}",
+                    'descripcion' => "Etiquetar {$qty} unidades de {$item->sku_local}\nFactura: {$factura->folio}",
+                    'tipo' => 'etiquetado',
+                    'prioridad' => 'media',
+                    'estado' => 'pendiente',
+                    'entidad_tipo' => 'product',
+                    'entidad_id' => wc_get_product_id_by_sku($item->sku_local),
+                    'datos_extra' => json_encode([
+                        'invoice_id' => $factura_id,
+                        'item_id' => $item->id,
+                        'quantity' => $qty
+                    ])
+                ]);
+                
+                if ($task_id && !is_wp_error($task_id)) {
+                    $tasks_created[] = $task_id;
+                }
+            }
+            
+            // C. Si no hay producto vinculado, crear tarea para vincular
+            if (empty($item->sku_local) && class_exists('Riverso_Task_Module')) {
+                $task_module = Riverso_Task_Module::get_instance();
+                
+                $task_id = $task_module->create_task([
+                    'titulo' => "Vincular código: {$item->codigo_proveedor}",
+                    'descripcion' => "Vincular código proveedor '{$item->codigo_proveedor}' con producto interno\nDescripción: {$item->descripcion}\nFactura: {$factura->folio}",
+                    'tipo' => 'vinculacion_codigo',
+                    'prioridad' => 'alta',
+                    'estado' => 'pendiente',
+                    'entidad_tipo' => 'invoice_item',
+                    'entidad_id' => $item->id
+                ]);
+                
+                if ($task_id && !is_wp_error($task_id)) {
+                    $tasks_created[] = $task_id;
+                }
+            }
+            
+            // Marcar ítem como aprobado
+            $wpdb->update(
+                "{$prefix}factura_items",
+                [
+                    'item_status' => 'approved',
+                    'approved_by' => get_current_user_id(),
+                    'approved_at' => current_time('mysql')
+                ],
+                ['id' => $item->id],
+                ['%s', '%d', '%s'],
+                ['%d']
+            );
+        }
+        
+        // Log de auditoría
+        if (class_exists('Riverso_Audit_Module')) {
+            Riverso_Audit_Module::get_instance()->log(
+                'invoice_approved',
+                'invoice',
+                $factura_id,
+                null,
+                [
+                    'items_approved' => count($items),
+                    'costs_recorded' => $costs_recorded,
+                    'tasks_created' => count($tasks_created)
+                ]
+            );
+        }
+        
+        wp_send_json_success([
+            'message' => 'Factura aprobada correctamente',
+            'items_processed' => count($items),
+            'costs_recorded' => $costs_recorded,
+            'tasks_created' => count($tasks_created)
+        ]);
+    }
+    
+    /**
+     * AJAX: Obtener estadísticas de recepción
+     */
+    public function ajax_get_reception_stats() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        
+        if (!current_user_can('riverso_view_invoices')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        
+        $stats = [];
+        
+        // Facturas pendientes de recepción
+        $stats['pending_reception'] = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$prefix}facturas 
+             WHERE estado IN ('uploaded', 'pending_reception', 'recibido')"
+        );
+        
+        // Facturas en recepción
+        $stats['in_reception'] = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$prefix}facturas WHERE estado = 'in_reception'"
+        );
+        
+        // Facturas pendientes de aprobación
+        $stats['pending_approval'] = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$prefix}facturas WHERE estado = 'pending_approval'"
+        );
+        
+        // Facturas aprobadas este mes
+        $stats['approved_this_month'] = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$prefix}facturas 
+             WHERE estado = 'approved' 
+             AND MONTH(approved_at) = MONTH(CURRENT_DATE()) 
+             AND YEAR(approved_at) = YEAR(CURRENT_DATE())"
+        );
+        
+        // Ítems con discrepancias (missing, extra, modified)
+        $stats['items_with_issues'] = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$prefix}factura_items 
+             WHERE item_status IN ('missing', 'extra', 'modified', 'rejected')"
+        );
+        
+        wp_send_json_success($stats);
     }
 }

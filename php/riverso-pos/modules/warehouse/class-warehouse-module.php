@@ -43,6 +43,7 @@ class Riverso_Warehouse_Module {
         add_action('wp_ajax_riverso_create_location', [$this, 'ajax_create_location']);
         add_action('wp_ajax_riverso_update_location', [$this, 'ajax_update_location']);
         add_action('wp_ajax_riverso_delete_location', [$this, 'ajax_delete_location']);
+        add_action('wp_ajax_riverso_activate_location', [$this, 'ajax_activate_location']);
         add_action('wp_ajax_riverso_assign_product_location', [$this, 'ajax_assign_product']);
         add_action('wp_ajax_riverso_get_product_locations', [$this, 'ajax_get_product_locations']);
         add_action('wp_ajax_riverso_record_movement', [$this, 'ajax_record_movement']);
@@ -314,8 +315,35 @@ class Riverso_Warehouse_Module {
         if (!current_user_can('riverso_edit_stock')) wp_send_json_error(['message' => 'Sin permisos']);
 
         global $wpdb;
-        $wpdb->update($wpdb->prefix . 'riverso_ubicaciones', ['activo' => 0], ['id' => intval($_POST['location_id'] ?? 0)]);
-        wp_send_json_success(['message' => 'Ubicación desactivada']);
+        $id = intval($_POST['location_id'] ?? 0);
+        $permanent = !empty($_POST['permanent']);
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        if ($permanent) {
+            // Verificar que no tiene productos asignados
+            $count = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$prefix}producto_ubicacion WHERE ubicacion_id = %d",
+                $id
+            ));
+            if ($count > 0) {
+                wp_send_json_error(['message' => 'No se puede eliminar: tiene productos asignados']);
+            }
+            $wpdb->delete("{$prefix}ubicaciones", ['id' => $id], ['%d']);
+            wp_send_json_success(['message' => 'Ubicación eliminada permanentemente']);
+        } else {
+            $wpdb->update("{$prefix}ubicaciones", ['activo' => 0], ['id' => $id]);
+            wp_send_json_success(['message' => 'Ubicación desactivada']);
+        }
+    }
+
+    public function ajax_activate_location() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_edit_stock')) wp_send_json_error(['message' => 'Sin permisos']);
+
+        global $wpdb;
+        $id = intval($_POST['location_id'] ?? 0);
+        $wpdb->update($wpdb->prefix . 'riverso_ubicaciones', ['activo' => 1], ['id' => $id]);
+        wp_send_json_success(['message' => 'Ubicación reactivada']);
     }
 
     public function ajax_assign_product() {
@@ -391,11 +419,23 @@ class Riverso_Warehouse_Module {
         $search = sanitize_text_field($_POST['search'] ?? '');
         if (strlen($search) < 2) wp_send_json_success(['products' => []]);
 
-        $products = wc_get_products(['limit' => 20, 'status' => 'publish', 's' => $search, 'return' => 'ids']);
+        // Incluir productos publicados, privados y borradores
+        $products = wc_get_products([
+            'limit' => 20, 
+            'status' => ['publish', 'private', 'draft'], 
+            's' => $search, 
+            'return' => 'ids'
+        ]);
         $results = [];
         foreach ($products as $pid) {
             $p = wc_get_product($pid);
-            if ($p) $results[] = ['id' => $pid, 'name' => $p->get_name(), 'sku' => $p->get_sku(), 'stock' => $p->get_stock_quantity()];
+            if ($p) $results[] = [
+                'id' => $pid, 
+                'name' => $p->get_name(), 
+                'sku' => $p->get_sku(), 
+                'stock' => $p->get_stock_quantity(),
+                'status' => $p->get_status()
+            ];
         }
         wp_send_json_success(['products' => $results]);
     }

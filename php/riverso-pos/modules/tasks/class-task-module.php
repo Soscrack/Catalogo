@@ -10,6 +10,21 @@ if (!defined('ABSPATH')) {
 }
 
 class Riverso_Task_Module {
+    
+    /**
+     * Instancia singleton
+     */
+    private static $instance = null;
+    
+    /**
+     * Obtener instancia singleton
+     */
+    public static function get_instance() {
+        if (null === self::$instance) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
 
     /**
      * Tipos de tareas disponibles
@@ -22,8 +37,10 @@ class Riverso_Task_Module {
         'inventario' => 'Conteo de inventario',
         'ubicacion' => 'Cambio de ubicación',
         'etiquetado' => 'Etiquetado de productos',
+        'bodegaje' => 'Ubicar en bodega',
         'devolucion' => 'Procesamiento de devolución',
         'codigo_faltante' => 'Vincular código proveedor',
+        'barcode_faltante' => 'Asignar código de barra',
     ];
 
     /**
@@ -42,6 +59,7 @@ class Riverso_Task_Module {
     public function init() {
         add_action('wp_ajax_riverso_create_task', [$this, 'ajax_create_task']);
         add_action('wp_ajax_riverso_get_tasks', [$this, 'ajax_get_tasks']);
+        add_action('wp_ajax_riverso_get_task', [$this, 'ajax_get_task']);
         add_action('wp_ajax_riverso_update_task', [$this, 'ajax_update_task']);
         add_action('wp_ajax_riverso_complete_task', [$this, 'ajax_complete_task']);
         add_action('wp_ajax_riverso_assign_task', [$this, 'ajax_assign_task']);
@@ -98,6 +116,9 @@ class Riverso_Task_Module {
         if (!empty($filters['estado'])) {
             $where[] = 't.estado = %s';
             $params[] = $filters['estado'];
+        } elseif (empty($filters['include_completed'])) {
+            // Por defecto excluir completadas a menos que se pida explícitamente
+            $where[] = "t.estado NOT IN ('completada', 'cancelada')";
         }
 
         if (!empty($filters['prioridad'])) {
@@ -247,6 +268,215 @@ class Riverso_Task_Module {
             ],
         ]);
     }
+    
+    /**
+     * Crear tarea de etiquetado de productos
+     */
+    public function create_labeling_task($factura_id, $items, $proveedor_nombre) {
+        $items_list = array();
+        foreach ($items as $item) {
+            $items_list[] = sprintf(
+                "- %s x %d (SKU: %s)",
+                $item['descripcion'] ?? 'Sin descripción',
+                $item['cantidad'] ?? 1,
+                $item['sku_local'] ?? 'N/A'
+            );
+        }
+        
+        return $this->create_task([
+            'tipo' => 'etiquetado',
+            'titulo' => "Etiquetar productos - Factura #{$factura_id}",
+            'descripcion' => "Etiquetar productos recibidos de {$proveedor_nombre}:\n\n" . implode("\n", $items_list),
+            'prioridad' => 'normal',
+            'referencia_tipo' => 'factura',
+            'referencia_id' => $factura_id,
+            'datos_extra' => [
+                'proveedor' => $proveedor_nombre,
+                'total_items' => count($items),
+                'items' => $items,
+            ],
+        ]);
+    }
+    
+    /**
+     * Crear tarea de bodegaje (ubicar productos en bodega)
+     */
+    public function create_storage_task($factura_id, $items, $proveedor_nombre) {
+        $items_list = array();
+        foreach ($items as $item) {
+            $ubicacion = $item['ubicacion_sugerida'] ?? 'Sin ubicación asignada';
+            $items_list[] = sprintf(
+                "- %s x %d → %s",
+                $item['descripcion'] ?? 'Sin descripción',
+                $item['cantidad'] ?? 1,
+                $ubicacion
+            );
+        }
+        
+        return $this->create_task([
+            'tipo' => 'bodegaje',
+            'titulo' => "Ubicar en bodega - Factura #{$factura_id}",
+            'descripcion' => "Ubicar productos de {$proveedor_nombre} en bodega:\n\n" . implode("\n", $items_list),
+            'prioridad' => 'normal',
+            'referencia_tipo' => 'factura',
+            'referencia_id' => $factura_id,
+            'datos_extra' => [
+                'proveedor' => $proveedor_nombre,
+                'total_items' => count($items),
+                'items' => $items,
+            ],
+        ]);
+    }
+    
+    /**
+     * Crear tarea de asignar código de barra
+     */
+    public function create_barcode_task($product_id, $product_name, $sku) {
+        return $this->create_task([
+            'tipo' => 'barcode_faltante',
+            'titulo' => "Asignar código de barra: {$sku}",
+            'descripcion' => "El producto '{$product_name}' (SKU: {$sku}) no tiene código de barra asignado.\n\nEscanear código de barra del producto y vincularlo.",
+            'prioridad' => 'baja',
+            'referencia_tipo' => 'producto',
+            'referencia_id' => $product_id,
+            'datos_extra' => [
+                'product_id' => $product_id,
+                'product_name' => $product_name,
+                'sku' => $sku,
+            ],
+        ]);
+    }
+    
+    /**
+     * Crear tareas de bodegaje desde factura aprobada
+     */
+    public function create_tasks_from_approved_invoice($factura_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        
+        // Obtener factura
+        $factura = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}facturas WHERE id = %d",
+            $factura_id
+        ), ARRAY_A);
+        
+        if (!$factura) {
+            return new WP_Error('not_found', 'Factura no encontrada');
+        }
+        
+        // Obtener items aprobados
+        $items = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$prefix}factura_items 
+             WHERE factura_id = %d 
+             AND item_status IN ('received_ok', 'modified', 'approved')",
+            $factura_id
+        ), ARRAY_A);
+        
+        if (empty($items)) {
+            return new WP_Error('no_items', 'No hay items para procesar');
+        }
+        
+        $tasks_created = array();
+        $items_for_labeling = array();
+        $items_for_storage = array();
+        $items_missing_code = array();
+        
+        // Clasificar items
+        foreach ($items as $item) {
+            $item_data = array(
+                'id' => $item['id'],
+                'descripcion' => $item['descripcion'],
+                'cantidad' => $item['qty_received'] ?: $item['cantidad'],
+                'sku_local' => $item['sku_local'],
+                'codigo_proveedor' => $item['codigo_proveedor'],
+            );
+            
+            // Todos los items necesitan etiquetado
+            $items_for_labeling[] = $item_data;
+            
+            // Buscar ubicación sugerida si tiene SKU
+            if (!empty($item['sku_local'])) {
+                $ubicacion = $this->get_suggested_location($item['sku_local']);
+                $item_data['ubicacion_sugerida'] = $ubicacion;
+                $items_for_storage[] = $item_data;
+            }
+            
+            // Si no tiene SKU local, crear tarea de código faltante
+            if (empty($item['sku_local'])) {
+                $items_missing_code[] = $item;
+            }
+        }
+        
+        // Crear tarea de etiquetado (una por factura)
+        if (!empty($items_for_labeling)) {
+            $task_id = $this->create_labeling_task(
+                $factura_id,
+                $items_for_labeling,
+                $factura['razon_social_emisor']
+            );
+            if (!is_wp_error($task_id)) {
+                $tasks_created['labeling'] = $task_id;
+            }
+        }
+        
+        // Crear tarea de bodegaje (una por factura)
+        if (!empty($items_for_storage)) {
+            $task_id = $this->create_storage_task(
+                $factura_id,
+                $items_for_storage,
+                $factura['razon_social_emisor']
+            );
+            if (!is_wp_error($task_id)) {
+                $tasks_created['storage'] = $task_id;
+            }
+        }
+        
+        // Crear tareas de códigos faltantes (una por item)
+        foreach ($items_missing_code as $item) {
+            $task_id = $this->create_missing_code_task(
+                $item['id'],
+                $item['codigo_proveedor'],
+                $item['descripcion'],
+                $factura['razon_social_emisor']
+            );
+            if (!is_wp_error($task_id)) {
+                $tasks_created['missing_code_' . $item['id']] = $task_id;
+            }
+        }
+        
+        return $tasks_created;
+    }
+    
+    /**
+     * Obtener ubicación sugerida para un SKU
+     */
+    private function get_suggested_location($sku) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        
+        // Buscar producto por SKU
+        $product_id = wc_get_product_id_by_sku($sku);
+        if (!$product_id) {
+            return 'Sin ubicación asignada';
+        }
+        
+        // Buscar ubicación existente del producto
+        $ubicacion = $wpdb->get_row($wpdb->prepare(
+            "SELECT pu.*, u.nombre as ubicacion_nombre, u.codigo as ubicacion_codigo
+             FROM {$prefix}producto_ubicacion pu
+             JOIN {$prefix}ubicaciones u ON pu.ubicacion_id = u.id
+             WHERE pu.producto_id = %d
+             ORDER BY pu.cantidad DESC
+             LIMIT 1",
+            $product_id
+        ), ARRAY_A);
+        
+        if ($ubicacion) {
+            return $ubicacion['ubicacion_codigo'] . ' - ' . $ubicacion['ubicacion_nombre'];
+        }
+        
+        return 'Sin ubicación asignada';
+    }
 
     /**
      * AJAX: Crear tarea
@@ -298,6 +528,7 @@ class Riverso_Task_Module {
             'estado' => sanitize_text_field($_POST['estado'] ?? ''),
             'prioridad' => sanitize_text_field($_POST['prioridad'] ?? ''),
             'asignado_a' => intval($_POST['asignado_a'] ?? 0),
+            'sin_asignar' => !empty($_POST['sin_asignar']),
             'limit' => min(100, intval($_POST['limit'] ?? 50)),
             'offset' => intval($_POST['offset'] ?? 0),
         ];
@@ -309,6 +540,42 @@ class Riverso_Task_Module {
             'types' => self::TASK_TYPES,
             'priorities' => self::PRIORITIES,
         ]);
+    }
+
+    /**
+     * AJAX: Obtener una tarea específica
+     */
+    public function ajax_get_task() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_view_tasks')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        $task_id = intval($_POST['task_id'] ?? 0);
+        if (!$task_id) {
+            wp_send_json_error(['message' => 'ID de tarea requerido']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $task = $wpdb->get_row($wpdb->prepare(
+            "SELECT t.*, 
+                u_asignado.display_name as asignado_nombre,
+                u_creador.display_name as creador_nombre
+                FROM {$prefix}tareas t
+                LEFT JOIN {$wpdb->users} u_asignado ON t.asignado_a = u_asignado.ID
+                LEFT JOIN {$wpdb->users} u_creador ON t.creado_por = u_creador.ID
+                WHERE t.id = %d",
+            $task_id
+        ), ARRAY_A);
+
+        if (!$task) {
+            wp_send_json_error(['message' => 'Tarea no encontrada']);
+        }
+
+        wp_send_json_success(['task' => $task]);
     }
 
     /**

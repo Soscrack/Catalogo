@@ -23,10 +23,10 @@ class Riverso_POS_Ajax {
         add_action('wp_ajax_riverso_search_products', [$this, 'search_products']);
         add_action('wp_ajax_riverso_verify_code', [$this, 'verify_code']);
         
-        // Tareas
-        add_action('wp_ajax_riverso_get_tasks', [$this, 'get_tasks']);
-        add_action('wp_ajax_riverso_update_task', [$this, 'update_task']);
-        add_action('wp_ajax_riverso_create_task', [$this, 'create_task']);
+        // Tareas - manejados por class-task-module.php
+        // add_action('wp_ajax_riverso_get_tasks', [$this, 'get_tasks']);
+        // add_action('wp_ajax_riverso_update_task', [$this, 'update_task']);
+        // add_action('wp_ajax_riverso_create_task', [$this, 'create_task']);
         
         // Dashboard
         add_action('wp_ajax_riverso_get_stats', [$this, 'get_stats']);

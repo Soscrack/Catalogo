@@ -318,6 +318,19 @@
 }
 
 .riverso-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.riverso-modal-content {
     background: #fff;
     border-radius: 8px;
     width: 90%;
@@ -333,18 +346,27 @@
     justify-content: space-between;
     padding: 15px 20px;
     border-bottom: 1px solid var(--riverso-border);
+    background: #fafafa;
 }
 
+.riverso-modal-header h2,
 .riverso-modal-header h3 {
     margin: 0;
+    font-size: 18px;
 }
 
 .riverso-modal-close {
     background: none;
     border: none;
-    font-size: 20px;
+    font-size: 24px;
     cursor: pointer;
     color: #666;
+    line-height: 1;
+    padding: 0;
+}
+
+.riverso-modal-close:hover {
+    color: #d9534f;
 }
 
 .riverso-modal-body {
@@ -377,4 +399,161 @@
     .quick-action-btn {
         justify-content: center;
     }
+}
+
+/* ========== WAREHOUSE STYLES ========== */
+.riverso-warehouse .nav-tab-wrapper {
+    margin-bottom: 0;
+}
+
+.riverso-warehouse .tab-content {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-top: none;
+    padding: 20px;
+}
+
+.riverso-warehouse .tab-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.riverso-warehouse .filters {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.riverso-warehouse .filters input,
+.riverso-warehouse .filters select {
+    min-width: 150px;
+}
+
+/* Grid de ubicaciones */
+.locations-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 15px;
+}
+
+.location-card {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 15px;
+    transition: box-shadow 0.2s;
+}
+
+.location-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.location-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.location-code {
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--riverso-primary);
+}
+
+.location-type {
+    font-size: 11px;
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: #666;
+}
+
+.location-name {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.location-products {
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 12px;
+}
+
+.location-products .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    vertical-align: middle;
+}
+
+.location-actions {
+    display: flex;
+    gap: 5px;
+}
+
+/* Búsqueda de producto */
+.search-product-box {
+    max-width: 500px;
+    margin-bottom: 20px;
+}
+
+#product-search-results {
+    border: 1px solid #ddd;
+    border-top: none;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+}
+
+#product-search-results .result-item {
+    padding: 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+}
+
+#product-search-results .result-item:hover {
+    background: #f5f5f5;
+}
+
+.product-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.info-item label {
+    font-weight: 600;
+    display: block;
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 3px;
+}
+
+.stock-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.stock-badge.in-stock {
+    background: #d4edda;
+    color: #155724;
+}
+
+.stock-badge.low-stock {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.stock-badge.out-of-stock {
+    background: #f8d7da;
+    color: #721c24;
 }

@@ -109,12 +109,15 @@ function riverso_get_task_statuses() {
  */
 function riverso_get_task_types() {
     return [
-        'etiquetado' => ['label' => 'Etiquetado', 'icon' => 'tag'],
-        'reordenar' => ['label' => 'Reordenar Bodega', 'icon' => 'move'],
-        'codigo_faltante' => ['label' => 'Código Faltante', 'icon' => 'warning'],
-        'verificar_stock' => ['label' => 'Verificar Stock', 'icon' => 'clipboard'],
-        'admin' => ['label' => 'Administrativa', 'icon' => 'admin-generic'],
-        'otro' => ['label' => 'Otro', 'icon' => 'marker'],
+        'cotizacion' => ['label' => 'Cotización pendiente', 'icon' => 'cart'],
+        'picking' => ['label' => 'Picking para venta', 'icon' => 'clipboard'],
+        'reposicion' => ['label' => 'Reposición de stock', 'icon' => 'update'],
+        'recepcion' => ['label' => 'Recepción de mercadería', 'icon' => 'download'],
+        'inventario' => ['label' => 'Conteo de inventario', 'icon' => 'list-view'],
+        'ubicacion' => ['label' => 'Cambio de ubicación', 'icon' => 'move'],
+        'etiquetado' => ['label' => 'Etiquetado de productos', 'icon' => 'tag'],
+        'devolucion' => ['label' => 'Procesamiento de devolución', 'icon' => 'undo'],
+        'codigo_faltante' => ['label' => 'Vincular código proveedor', 'icon' => 'warning'],
     ];
 }
 

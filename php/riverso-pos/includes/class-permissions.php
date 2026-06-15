@@ -28,6 +28,7 @@ class Riverso_POS_Permissions {
         
         // === PRODUCTOS / CATÁLOGO ===
         'riverso_view_products'      => 'Ver productos',
+        'riverso_manage_products'    => 'Gestionar productos',
         'riverso_edit_products'      => 'Editar productos',
         'riverso_edit_skus'          => 'Editar SKUs internos',
         
@@ -120,6 +121,7 @@ class Riverso_POS_Permissions {
         ],
         'Productos' => [
             'riverso_view_products',
+            'riverso_manage_products',
             'riverso_edit_products',
             'riverso_edit_skus',
         ],
@@ -304,6 +306,7 @@ class Riverso_POS_Permissions {
             'capabilities' => [
                 'riverso_access_portal',
                 'riverso_view_products',
+                'riverso_manage_products',
                 'riverso_edit_products',
                 'riverso_edit_skus',
                 'riverso_view_stock',

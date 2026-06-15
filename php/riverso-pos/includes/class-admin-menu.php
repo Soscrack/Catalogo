@@ -190,6 +190,16 @@ class Riverso_POS_Admin_Menu {
             'riverso-pos-barcodes',
             [$this, 'render_barcodes']
         );
+
+        // Tienda Local
+        add_submenu_page(
+            'riverso-pos',
+            __('Tienda Local', 'riverso-pos'),
+            __('Tienda Local', 'riverso-pos'),
+            'riverso_scan_barcodes',
+            'riverso-pos-tienda-local',
+            [$this, 'render_tienda_local']
+        );
         
         // Cotizaciones a Clientes
         add_submenu_page(
@@ -337,6 +347,14 @@ class Riverso_POS_Admin_Menu {
     public function render_barcodes() {
         require_once RIVERSO_POS_PLUGIN_DIR . 'modules/barcodes/class-barcode-module.php';
         $this->render_page('barcodes');
+    }
+
+    /**
+     * Renderiza la página de búsqueda de tienda local.
+     */
+    public function render_tienda_local() {
+        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/tienda-local/class-tienda-local-module.php';
+        $this->render_page('tienda-local');
     }
 
     /**

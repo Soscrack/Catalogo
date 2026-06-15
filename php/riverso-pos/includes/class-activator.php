@@ -324,6 +324,7 @@ class Riverso_POS_Activator {
         $module_defs = [
             ['path' => 'modules/codes/class-supplier-links-module.php', 'class' => 'Riverso_Supplier_Links_Module'],
             ['path' => 'modules/barcodes/class-barcode-module.php', 'class' => 'Riverso_Barcode_Module'],
+            ['path' => 'modules/tienda-local/class-tienda-local-module.php', 'class' => 'Riverso_Tienda_Local_Module'],
             ['path' => 'modules/costs/class-cost-history-module.php', 'class' => 'Riverso_Cost_History_Module'],
             ['path' => 'modules/pos/class-pos-module.php', 'class' => 'Riverso_POS_Module'],
             ['path' => 'modules/quotes/class-received-quote-module.php', 'class' => 'Riverso_POS_Received_Quote_Module'],

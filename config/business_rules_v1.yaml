@@ -1,0 +1,46 @@
+version: 1
+scope: phase1
+
+rules:
+  supplier_code_uniqueness:
+    id: BR-001
+    description: "Cada proveedor no puede repetir codigo_proveedor."
+    target: riverso_producto_proveedor
+    constraint: "UNIQUE(proveedor_id, codigo_proveedor)"
+
+  one_preferred_supplier_item:
+    id: BR-002
+    description: "Un producto base puede tener muchos producto_proveedor, pero solo uno preferido por proveedor."
+    target: riverso_producto_proveedor
+    validation: "si es_preferido=1, no debe existir otro es_preferido=1 para mismo producto_base_id y proveedor_id"
+
+  lot_required_for_receipt:
+    id: BR-003
+    description: "Toda entrada de inventario de compra debe asociarse a lote."
+    target: riverso_lotes
+    validation: "documento_tipo + documento_id + cantidad_inicial > 0"
+
+  lot_stock_bounds:
+    id: BR-004
+    description: "cantidad_disponible debe estar entre 0 y cantidad_inicial."
+    target: riverso_lotes
+    validation: "0 <= cantidad_disponible <= cantidad_inicial"
+
+  product_open_code_policy:
+    id: BR-005
+    description: "codigo_abierto solo puede existir si stock_abierto_habilitado=1."
+    target: riverso_producto_base
+    validation: "codigo_abierto IS NULL OR stock_abierto_habilitado=1"
+
+  equivalence_membership_active:
+    id: BR-006
+    description: "Miembros de equivalencia inactivos no participan en sustitución."
+    target: riverso_equivalence_members
+    validation: "consultas operativas deben filtrar activo=1"
+
+  substitution_priority:
+    id: BR-007
+    description: "A menor prioridad numérica, mayor preferencia de sustitución."
+    target: riverso_equivalence_members
+    validation: "ORDER BY prioridad ASC, es_reemplazo_preferido DESC"
+

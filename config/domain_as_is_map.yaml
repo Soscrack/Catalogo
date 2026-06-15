@@ -1,0 +1,99 @@
+version: 1
+scope: phase1
+sources:
+  raw_products_excel:
+    path: data/raw/productos.xlsx
+    role: catalog_input
+  local_barcodes_csv:
+    path: CodigosBarra/codigos_barras_2026-04-01.csv
+    role: barcode_input
+  local_products_csv:
+    path: CodigosBarra/productos_2026-04-01.csv
+    role: local_sales_input
+  mamut_catalog_json:
+    path: data/catalogo_mamut_2025_spatial.json
+    role: enrichment_input
+  wordpress_tables:
+    prefix: "{wp_prefix}riverso_"
+    role: operational_source
+
+join_keys:
+  strong_keys:
+    - product_id
+    - variation_id
+    - sku_local
+    - codigo_proveedor
+    - codigo_barras
+  weak_keys:
+    - nombre_proveedor
+    - supplier_description
+
+legacy_tables:
+  proveedores:
+    table: riverso_proveedores
+    primary_key: id
+  codigos:
+    table: riverso_codigos
+    primary_key: id
+    keys:
+      - sku_local
+      - product_id
+      - proveedor_id
+      - codigo_proveedor
+      - codigo_barras
+  supplier_links:
+    table: riverso_supplier_product_links
+    primary_key: id
+    keys:
+      - supplier_id
+      - supplier_code
+      - supplier_barcode
+      - internal_sku
+  barcodes:
+    table: riverso_barcodes
+    primary_key: id
+    keys:
+      - barcode
+      - product_id
+      - variation_id
+      - sku
+  facturas:
+    table: riverso_facturas
+    primary_key: id
+  factura_items:
+    table: riverso_factura_items
+    primary_key: id
+    keys:
+      - factura_id
+      - codigo_id
+      - product_id
+  cost_history:
+    table: riverso_cost_history
+    primary_key: id
+    keys:
+      - product_id
+      - supplier_id
+      - supplier_code
+
+phase1_targets:
+  producto_base:
+    table: riverso_producto_base
+    maps_from:
+      - riverso_codigos.product_id
+      - riverso_codigos.sku_local
+  producto_proveedor:
+    table: riverso_producto_proveedor
+    maps_from:
+      - riverso_codigos
+      - riverso_supplier_product_links
+  lotes:
+    table: riverso_lotes
+    maps_from:
+      - riverso_factura_items
+      - riverso_facturas
+      - riverso_codigos
+  equivalence_groups:
+    table: riverso_equivalence_groups
+  equivalence_members:
+    table: riverso_equivalence_members
+

@@ -8,6 +8,8 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+require_once __DIR__ . '/class-ean13-generator.php';
+
 class Riverso_Barcode_Module {
     
     private static $instance = null;
@@ -54,6 +56,7 @@ class Riverso_Barcode_Module {
             sku VARCHAR(100) DEFAULT NULL,
             barcode_type ENUM('EAN13','EAN8','UPC','CODE128','CODE39','INTERNAL') DEFAULT 'EAN13',
             is_primary TINYINT(1) DEFAULT 0,
+            is_active TINYINT(1) DEFAULT 1,
             notes TEXT,
             source VARCHAR(50) DEFAULT 'manual',
             created_by BIGINT(20) UNSIGNED NOT NULL,
@@ -62,7 +65,8 @@ class Riverso_Barcode_Module {
             UNIQUE KEY idx_barcode (barcode),
             KEY idx_product (product_id),
             KEY idx_variation (variation_id),
-            KEY idx_sku (sku)
+            KEY idx_sku (sku),
+            KEY idx_is_active (is_active)
         ) $charset_collate;";
         
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
@@ -81,11 +85,19 @@ class Riverso_Barcode_Module {
         if (empty($barcode)) {
             return null;
         }
+        $normalized = ltrim($barcode, '0');
+        if ($normalized === '') {
+            $normalized = '0';
+        }
         
         // First check our barcodes table
         $result = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$this->table_barcodes} WHERE barcode = %s",
-            $barcode
+            "SELECT * FROM {$this->table_barcodes}
+             WHERE barcode = %s
+                OR TRIM(LEADING '0' FROM barcode) = %s
+             LIMIT 1",
+            $barcode,
+            $normalized
         ), ARRAY_A);
         
         if ($result && $result['product_id']) {
@@ -108,10 +120,11 @@ class Riverso_Barcode_Module {
         // Check WooCommerce product meta (_barcode)
         $product_id = $wpdb->get_var($wpdb->prepare(
             "SELECT post_id FROM {$wpdb->postmeta} 
-             WHERE meta_key IN ('_barcode', '_ean', '_upc', 'barcode') 
-             AND meta_value = %s
+              WHERE meta_key IN ('_barcode', '_ean', '_upc', 'barcode') 
+             AND (meta_value = %s OR TRIM(LEADING '0' FROM meta_value) = %s)
              LIMIT 1",
-            $barcode
+            $barcode,
+            $normalized
         ));
         
         if ($product_id) {
@@ -148,6 +161,15 @@ class Riverso_Barcode_Module {
             }
         }
         
+        // EAN13 interno propio (formato 2SSSSSSQQQQQX): parsing inverso.
+        $internal = Riverso_EAN13_Generator::parse($barcode);
+        if ($internal !== null) {
+            $bag = $this->resolve_internal_barcode($barcode, $internal);
+            if ($bag) {
+                return $bag;
+            }
+        }
+
         // Barcode exists but not linked
         if ($result) {
             return array(
@@ -161,6 +183,115 @@ class Riverso_Barcode_Module {
         
         // Not found
         return null;
+    }
+
+    /**
+     * Resuelve un EAN13 interno (bolsa) a su producto y cantidad embolsada.
+     *
+     * @param string $barcode
+     * @param array  $internal ['sku' => ..., 'cantidad' => ...]
+     * @return array|null
+     */
+    private function resolve_internal_barcode($barcode, $internal) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $bolsa = $wpdb->get_row($wpdb->prepare(
+            "SELECT b.*, pb.woocommerce_product_id, pb.nombre_canonico, pb.canonical_sku
+             FROM {$prefix}bolsas b
+             INNER JOIN {$prefix}producto_base pb ON pb.id = b.producto_base_id
+             WHERE b.ean13 = %s
+             LIMIT 1",
+            $barcode
+        ), ARRAY_A);
+
+        if ($bolsa) {
+            $product = $bolsa['woocommerce_product_id'] ? wc_get_product($bolsa['woocommerce_product_id']) : null;
+            return array(
+                'source' => 'internal_bag',
+                'barcode' => $barcode,
+                'bolsa_id' => intval($bolsa['id']),
+                'producto_base_id' => intval($bolsa['producto_base_id']),
+                'product_id' => $product ? $product->get_id() : null,
+                'variation_id' => null,
+                'sku' => $bolsa['sku_bolsa'] ?: $bolsa['canonical_sku'],
+                'name' => ($bolsa['nombre_canonico'] ?: 'Bolsa') . ' x' . rtrim(rtrim($bolsa['cantidad'], '0'), '.'),
+                'cantidad' => (float) $bolsa['cantidad'],
+                'price' => $product ? $product->get_price() : null,
+                'costo_unitario' => $bolsa['costo_unitario'],
+                'message' => 'Bolsa interna detectada (EAN13 propio)'
+            );
+        }
+
+        // Sin bolsa registrada: devolver datos parseados del código.
+        return array(
+            'source' => 'internal_parsed',
+            'barcode' => $barcode,
+            'sku' => $internal['sku'],
+            'cantidad' => (float) $internal['cantidad'],
+            'message' => 'EAN13 interno válido pero sin bolsa registrada'
+        );
+    }
+
+    /**
+     * Persiste un EAN13 generado por el sistema (source=generated, tipo INTERNAL).
+     *
+     * @param string $ean13
+     * @param int    $product_id
+     * @param array  $extra ['sku', 'bolsa_id', 'producto_base_id']
+     * @return int|false ID del barcode o false
+     */
+    public function register_generated_barcode($ean13, $product_id = 0, $extra = array()) {
+        global $wpdb;
+
+        $ean13 = trim($ean13);
+        if ($ean13 === '') {
+            return false;
+        }
+
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$this->table_barcodes} WHERE barcode = %s",
+            $ean13
+        ));
+        if ($exists) {
+            return intval($exists);
+        }
+
+        $notes = '';
+        if (!empty($extra['bolsa_id'])) {
+            $notes = 'Bolsa #' . intval($extra['bolsa_id']);
+        }
+
+        $result = $wpdb->insert(
+            $this->table_barcodes,
+            array(
+                'barcode' => $ean13,
+                'product_id' => $product_id ?: null,
+                'variation_id' => null,
+                'sku' => isset($extra['sku']) ? $extra['sku'] : null,
+                'barcode_type' => 'INTERNAL',
+                'is_primary' => 0,
+                'notes' => $notes,
+                'source' => 'generated',
+                'created_by' => get_current_user_id(),
+            ),
+            array('%s', '%d', '%d', '%s', '%s', '%d', '%s', '%s', '%d')
+        );
+
+        if ($result === false) {
+            return false;
+        }
+
+        $barcode_id = (int) $wpdb->insert_id;
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log_system('barcode_generated', 'barcode', $barcode_id, array(
+                'new_value' => array('barcode' => $ean13, 'sku' => $extra['sku'] ?? null),
+                'details' => 'EAN13 interno generado',
+            ));
+        }
+
+        return $barcode_id;
     }
     
     /**

@@ -47,6 +47,10 @@ class Riverso_POS_Permissions {
         'riverso_create_sales'       => 'Crear ventas',
         'riverso_view_sales'         => 'Ver ventas',
         'riverso_apply_discounts'    => 'Aplicar descuentos',
+        'riverso_create_orders'      => 'Crear órdenes/ventas en POS',
+        'riverso_view_orders'        => 'Ver órdenes POS',
+        'riverso_void_orders'        => 'Anular órdenes POS',
+        'riverso_unlimited_discounts' => 'Aplicar descuentos sin límite',
         
         // === COMPRAS / ABASTECIMIENTO ===
         'riverso_view_received_quotes'    => 'Ver cotizaciones recibidas',
@@ -80,6 +84,18 @@ class Riverso_POS_Permissions {
         'riverso_view_costs'         => 'Ver historial de costos',
         'riverso_manage_costs'       => 'Registrar y editar costos',
         'riverso_approve_price_alerts' => 'Aprobar alertas de precio',
+
+        // === PRECIOS ===
+        'riverso_view_prices'        => 'Ver precios y listas',
+        'riverso_manage_prices'      => 'Gestionar precios y reglas',
+        'riverso_approve_prices'     => 'Aprobar precios y listas',
+
+        // === MATCHING / EMPAREJAMIENTO ===
+        'riverso_manage_matching'    => 'Gestionar emparejamiento de productos',
+
+        // === EMBOLSADO / EAN13 ===
+        'riverso_manage_packaging'   => 'Gestionar embolsado y bolsas',
+        'riverso_generate_ean13'     => 'Generar códigos EAN13',
         
         // === CÓDIGOS DE BARRA ===
         'riverso_scan_barcodes'      => 'Escanear códigos de barra',
@@ -123,6 +139,10 @@ class Riverso_POS_Permissions {
             'riverso_create_sales',
             'riverso_view_sales',
             'riverso_apply_discounts',
+            'riverso_create_orders',
+            'riverso_view_orders',
+            'riverso_void_orders',
+            'riverso_unlimited_discounts',
         ],
         'Cotizaciones Recibidas' => [
             'riverso_view_received_quotes',
@@ -156,6 +176,18 @@ class Riverso_POS_Permissions {
             'riverso_view_costs',
             'riverso_manage_costs',
             'riverso_approve_price_alerts',
+        ],
+        'Precios' => [
+            'riverso_view_prices',
+            'riverso_manage_prices',
+            'riverso_approve_prices',
+        ],
+        'Matching' => [
+            'riverso_manage_matching',
+        ],
+        'Embolsado / EAN13' => [
+            'riverso_manage_packaging',
+            'riverso_generate_ean13',
         ],
         'Códigos de Barra' => [
             'riverso_scan_barcodes',
@@ -191,6 +223,9 @@ class Riverso_POS_Permissions {
                 'riverso_create_sales',
                 'riverso_view_sales',
                 'riverso_apply_discounts',
+                'riverso_create_orders',
+                'riverso_view_orders',
+                'riverso_view_prices',
                 'riverso_view_quotes',
                 'riverso_create_quotes',
                 'riverso_view_tasks',
@@ -236,6 +271,8 @@ class Riverso_POS_Permissions {
                 'riverso_edit_suppliers',
                 'riverso_manage_codes',
                 'riverso_view_costs',
+                'riverso_view_prices',
+                'riverso_manage_matching',
                 'riverso_view_tasks',
                 'riverso_create_tasks',
                 'riverso_complete_tasks',
@@ -276,6 +313,11 @@ class Riverso_POS_Permissions {
                 'riverso_manage_codes',
                 'riverso_view_suppliers',
                 'riverso_assign_barcodes',
+                'riverso_view_prices',
+                'riverso_manage_prices',
+                'riverso_manage_matching',
+                'riverso_manage_packaging',
+                'riverso_generate_ean13',
                 'riverso_view_tasks',
                 'riverso_create_tasks',
                 'riverso_complete_tasks',

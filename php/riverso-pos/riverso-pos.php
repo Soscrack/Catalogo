@@ -3,7 +3,7 @@
  * Plugin Name: Riverso POS
  * Plugin URI: https://riverso.cl
  * Description: Sistema POS/mini-ERP integrado con WooCommerce para gestión de productos, facturas, inventario y tareas operativas.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: Riverso
  * Author URI: https://riverso.cl
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constantes del plugin
-define('RIVERSO_POS_VERSION', '1.0.0');
+define('RIVERSO_POS_VERSION', '1.1.0');
 define('RIVERSO_POS_PLUGIN_FILE', __FILE__);
 define('RIVERSO_POS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RIVERSO_POS_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -89,6 +89,7 @@ final class Riverso_POS {
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-admin-menu.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-permissions.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-audit.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-audit-module.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-ajax.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-assets.php';
         
@@ -215,6 +216,10 @@ final class Riverso_POS {
             'costs'     => ['file' => 'class-cost-history-module.php', 'class' => 'Riverso_Cost_History_Module'],
             'codes'     => ['file' => 'class-supplier-links-module.php', 'class' => 'Riverso_Supplier_Links_Module'],
             'barcodes'  => ['file' => 'class-barcode-module.php', 'class' => 'Riverso_Barcode_Module'],
+            'matching'  => ['file' => 'class-matching-module.php', 'class' => 'Riverso_Matching_Module'],
+            'pricing'   => ['file' => 'class-pricing-module.php', 'class' => 'Riverso_Pricing_Module'],
+            'packaging' => ['file' => 'class-packaging-module.php', 'class' => 'Riverso_Packaging_Module'],
+            'import'    => ['file' => 'class-mamut-import-module.php', 'class' => 'Riverso_Mamut_Import_Module'],
             'customer-quotes' => ['file' => 'class-customer-quote-module.php', 'class' => 'Riverso_Customer_Quote_Module'],
             'pos'             => ['file' => 'class-pos-module.php', 'class' => 'Riverso_POS_Module'],
             'reports'         => ['file' => 'class-reports-module.php', 'class' => 'Riverso_Reports_Module'],

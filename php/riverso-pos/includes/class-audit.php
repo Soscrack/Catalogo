@@ -120,6 +120,7 @@ class Riverso_POS_Audit {
             user_id BIGINT UNSIGNED NOT NULL,
             user_name VARCHAR(100) DEFAULT NULL,
             user_role VARCHAR(50) DEFAULT NULL,
+            actor_type VARCHAR(20) DEFAULT 'user',
             old_value LONGTEXT DEFAULT NULL,
             new_value LONGTEXT DEFAULT NULL,
             details TEXT DEFAULT NULL,
@@ -153,14 +154,26 @@ class Riverso_POS_Audit {
         
         self::init();
         
+        // Tipo de actor: 'user' (por defecto) o 'system' para procesos automáticos.
+        $actor_type = isset($data['actor_type']) && in_array($data['actor_type'], ['user', 'system'], true)
+            ? $data['actor_type']
+            : 'user';
+
         $current_user = wp_get_current_user();
         $user_id = $current_user->ID ?: 0;
-        $user_name = $current_user->display_name ?: 'Sistema';
-        
-        // Obtener rol Riverso del usuario
-        $user_role = 'none';
-        if ($user_id > 0 && class_exists('Riverso_POS_Permissions')) {
-            $user_role = Riverso_POS_Permissions::get_riverso_role($user_id) ?: 'none';
+
+        if ($actor_type === 'system') {
+            // Acción ejecutada por el sistema (created_by=computer).
+            $user_name = 'computer';
+            $user_role = 'system';
+        } else {
+            $user_name = $current_user->display_name ?: 'Sistema';
+
+            // Obtener rol Riverso del usuario
+            $user_role = 'none';
+            if ($user_id > 0 && class_exists('Riverso_POS_Permissions')) {
+                $user_role = Riverso_POS_Permissions::get_riverso_role($user_id) ?: 'none';
+            }
         }
         
         // Preparar valores
@@ -175,6 +188,7 @@ class Riverso_POS_Audit {
             'user_id'     => $user_id,
             'user_name'   => $user_name,
             'user_role'   => $user_role,
+            'actor_type'  => $actor_type,
             'old_value'   => $old_value,
             'new_value'   => $new_value,
             'details'     => isset($data['details']) ? $data['details'] : null,
@@ -440,5 +454,22 @@ class Riverso_POS_Audit {
             'entity_name' => $task_title,
             'details' => $details,
         ]);
+    }
+
+    /**
+     * Helper: registra una acción ejecutada por el sistema (created_by=computer).
+     *
+     * Marca actor_type='system' y user_name='computer' para trazar acciones
+     * automáticas (matching, importación, generación de precios/EAN13, etc.).
+     *
+     * @param string $action      Tipo de acción
+     * @param string $entity_type Tipo de entidad
+     * @param int    $entity_id   ID de la entidad
+     * @param array  $data        Datos adicionales [old_value, new_value, details, entity_name]
+     * @return int|false
+     */
+    public static function log_system($action, $entity_type, $entity_id = null, $data = []) {
+        $data['actor_type'] = 'system';
+        return self::log($action, $entity_type, $entity_id, $data);
     }
 }

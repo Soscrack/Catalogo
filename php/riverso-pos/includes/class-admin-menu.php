@@ -70,6 +70,16 @@ class Riverso_POS_Admin_Menu {
             'riverso-pos-codes',
             [$this, 'render_codes']
         );
+
+        // Catálogo Canónico
+        add_submenu_page(
+            'riverso-pos',
+            __('Catálogo Canónico', 'riverso-pos'),
+            __('Catálogo Canónico', 'riverso-pos'),
+            'riverso_manage_codes',
+            'riverso-pos-domain',
+            [$this, 'render_domain']
+        );
         
         // Tareas
         add_submenu_page(
@@ -139,6 +149,36 @@ class Riverso_POS_Admin_Menu {
             'riverso_view_costs',
             'riverso-pos-costs',
             [$this, 'render_costs']
+        );
+
+        // Precios
+        add_submenu_page(
+            'riverso-pos',
+            __('Precios', 'riverso-pos'),
+            __('💲 Precios', 'riverso-pos'),
+            'riverso_view_prices',
+            'riverso-pos-pricing',
+            [$this, 'render_pricing']
+        );
+
+        // Reglas de Precio
+        add_submenu_page(
+            'riverso-pos',
+            __('Reglas de Precio', 'riverso-pos'),
+            __('Reglas de Precio', 'riverso-pos'),
+            'riverso_manage_prices',
+            'riverso-pos-price-rules',
+            [$this, 'render_price_rules']
+        );
+
+        // Embolsado
+        add_submenu_page(
+            'riverso-pos',
+            __('Embolsado', 'riverso-pos'),
+            __('Embolsado', 'riverso-pos'),
+            'riverso_manage_packaging',
+            'riverso-pos-packaging',
+            [$this, 'render_packaging']
         );
         
         // Códigos de Barra
@@ -229,6 +269,14 @@ class Riverso_POS_Admin_Menu {
     public function render_codes() {
         $this->render_page('codes');
     }
+
+    /**
+     * Renderiza la página de catálogo canónico.
+     */
+    public function render_domain() {
+        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/codes/class-supplier-links-module.php';
+        $this->render_page('catalog-domain');
+    }
     
     /**
      * Renderiza la página de tareas
@@ -289,6 +337,36 @@ class Riverso_POS_Admin_Menu {
     public function render_barcodes() {
         require_once RIVERSO_POS_PLUGIN_DIR . 'modules/barcodes/class-barcode-module.php';
         $this->render_page('barcodes');
+    }
+
+    /**
+     * Renderiza la página de precios
+     */
+    public function render_pricing() {
+        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/pricing/class-pricing-module.php';
+        $this->render_page('pricing');
+    }
+
+    /**
+     * Renderiza la página de reglas de precio
+     */
+    public function render_price_rules() {
+        $engine = RIVERSO_POS_PLUGIN_DIR . 'modules/pricing/class-price-rule-engine.php';
+        if (file_exists($engine)) {
+            require_once $engine;
+        }
+        $this->render_page('price-rules');
+    }
+
+    /**
+     * Renderiza la página de embolsado
+     */
+    public function render_packaging() {
+        $mod = RIVERSO_POS_PLUGIN_DIR . 'modules/packaging/class-packaging-module.php';
+        if (file_exists($mod)) {
+            require_once $mod;
+        }
+        $this->render_page('packaging');
     }
     
     /**

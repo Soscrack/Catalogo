@@ -153,6 +153,32 @@ function riverso_create_task($tipo, $titulo, $data = []) {
 }
 
 /**
+ * Crea una tarea de revisión humana generada por un proceso automático.
+ *
+ * Wrapper global del helper del módulo de tareas. Marca created_by=computer y
+ * requires_human_review=1, y deduplica por tipo + referencia.
+ *
+ * @param string $tipo            Tipo de tarea (ver Riverso_Task_Module::TASK_TYPES)
+ * @param string $titulo          Título legible
+ * @param string $referencia_tipo Tipo de entidad referenciada
+ * @param int    $referencia_id   ID de la entidad referenciada
+ * @param array  $extra           Datos adicionales: descripcion, prioridad, datos_extra
+ * @return int|WP_Error|null      ID de la tarea o null si el módulo no está disponible
+ */
+function riverso_create_review_task($tipo, $titulo, $referencia_tipo = '', $referencia_id = 0, $extra = []) {
+    if (!class_exists('Riverso_Task_Module')) {
+        return null;
+    }
+    return Riverso_Task_Module::get_instance()->create_review_task(
+        $tipo,
+        $titulo,
+        $referencia_tipo,
+        $referencia_id,
+        $extra
+    );
+}
+
+/**
  * Registra un movimiento de inventario
  */
 function riverso_log_movement($product_id, $tipo, $cantidad, $data = []) {

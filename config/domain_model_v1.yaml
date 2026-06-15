@@ -1,0 +1,83 @@
+version: 1
+model: product_supplier_lot_equivalence
+entities:
+  producto_base:
+    table: riverso_producto_base
+    primary_key: id
+    business_identity:
+      - canonical_sku
+      - woocommerce_product_id
+      - woocommerce_variation_id
+    fields:
+      canonical_sku: string
+      nombre_canonico: string
+      unidad_base: string
+      permite_decimal: boolean
+      permite_ean13_personalizado: boolean
+      stock_abierto_habilitado: boolean
+      codigo_abierto: string|null
+      estado: enum[activo,inactivo]
+  producto_proveedor:
+    table: riverso_producto_proveedor
+    primary_key: id
+    foreign_keys:
+      producto_base_id: riverso_producto_base.id
+      proveedor_id: riverso_proveedores.id
+      supplier_link_id: riverso_supplier_product_links.id
+    business_identity:
+      - proveedor_id
+      - codigo_proveedor
+    fields:
+      codigo_barras_proveedor: string|null
+      unidad_compra: string|null
+      factor_conversion: decimal
+      precio_referencia: decimal|null
+      match_confidence: int|null
+      es_preferido: boolean
+      activo: boolean
+  lote:
+    table: riverso_lotes
+    primary_key: id
+    foreign_keys:
+      producto_proveedor_id: riverso_producto_proveedor.id
+    business_identity:
+      - producto_proveedor_id
+      - lote_codigo
+    fields:
+      fecha_recepcion: datetime
+      fecha_vencimiento: date|null
+      cantidad_inicial: decimal
+      cantidad_disponible: decimal
+      costo_total: decimal|null
+      costo_unitario: decimal|null
+      moneda: string
+      estado: enum[abierto,parcial,cerrado,agotado,bloqueado]
+  grupo_equivalencia:
+    table: riverso_equivalence_groups
+    primary_key: id
+    business_identity:
+      - codigo_grupo
+    fields:
+      nombre: string
+      tipo_sustitucion: enum[compatible,sustituto,preferido]
+      activo: boolean
+  miembro_equivalencia:
+    table: riverso_equivalence_members
+    primary_key: id
+    foreign_keys:
+      grupo_id: riverso_equivalence_groups.id
+      producto_base_id: riverso_producto_base.id
+    business_identity:
+      - grupo_id
+      - producto_base_id
+    fields:
+      prioridad: int
+      es_reemplazo_preferido: boolean
+      activo: boolean
+
+relationships:
+  - "producto_base 1:N producto_proveedor"
+  - "producto_proveedor 1:N lote"
+  - "grupo_equivalencia 1:N miembro_equivalencia"
+  - "producto_base 1:N miembro_equivalencia"
+

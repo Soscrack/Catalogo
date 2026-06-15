@@ -1054,6 +1054,9 @@ class Riverso_Invoice_Module {
             );
         }
         
+        // Disparar recálculo de costos de referencia / precios (Fase 1 precios).
+        do_action('riverso_pos_invoice_approved', $factura_id);
+
         wp_send_json_success([
             'message' => 'Factura aprobada correctamente',
             'items_processed' => count($items),

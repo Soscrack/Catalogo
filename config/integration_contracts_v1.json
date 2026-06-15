@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "scope": "phase1",
+  "contracts": {
+    "pipeline_to_domain_import": {
+      "description": "Carga incremental de productos normalizados al dominio canónico.",
+      "required_fields": [
+        "SKU",
+        "Nombre",
+        "Tipo"
+      ],
+      "optional_fields": [
+        "Marca",
+        "Categorías",
+        "Nombre del atributo 1",
+        "Valor(es) del atributo 1"
+      ],
+      "identity_fields": [
+        "SKU",
+        "ID"
+      ]
+    },
+    "supplier_link_import": {
+      "description": "Contrato para vincular códigos de proveedor con producto base/proveedor.",
+      "required_fields": [
+        "supplier_id",
+        "supplier_code"
+      ],
+      "optional_fields": [
+        "supplier_barcode",
+        "product_id",
+        "variation_id",
+        "internal_sku",
+        "match_confidence"
+      ],
+      "identity_fields": [
+        "supplier_id",
+        "supplier_code"
+      ]
+    },
+    "lot_receipt_import": {
+      "description": "Contrato para registrar recepción de lotes.",
+      "required_fields": [
+        "producto_proveedor_id",
+        "lote_codigo",
+        "cantidad_inicial",
+        "fecha_recepcion"
+      ],
+      "optional_fields": [
+        "costo_total",
+        "costo_unitario",
+        "moneda",
+        "documento_tipo",
+        "documento_id",
+        "documento_item_id"
+      ],
+      "identity_fields": [
+        "producto_proveedor_id",
+        "lote_codigo"
+      ]
+    },
+    "equivalence_management": {
+      "description": "Contrato para gestionar grupos y miembros de equivalencia.",
+      "required_fields": [
+        "codigo_grupo",
+        "producto_base_id"
+      ],
+      "optional_fields": [
+        "tipo_sustitucion",
+        "prioridad",
+        "es_reemplazo_preferido",
+        "activo"
+      ],
+      "identity_fields": [
+        "codigo_grupo",
+        "producto_base_id"
+      ]
+    }
+  }
+}

@@ -41,6 +41,12 @@ class Riverso_Task_Module {
         'devolucion' => 'Procesamiento de devolución',
         'codigo_faltante' => 'Vincular código proveedor',
         'barcode_faltante' => 'Asignar código de barra',
+        // Tareas de revisión humana (procesos automáticos)
+        'revisar_relacion' => 'Revisar relación de producto',
+        'validar_categoria' => 'Validar categoría',
+        'verificar_etiquetado' => 'Verificar etiquetado',
+        'aprobar_lista_precios' => 'Aprobar lista de precios',
+        'relacionar_producto_proveedor' => 'Relacionar producto proveedor',
     ];
 
     /**
@@ -73,6 +79,17 @@ class Riverso_Task_Module {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
+        $created_by_system = !empty($data['created_by_system']) ? 1 : 0;
+        // Proceso automático => creado_por NULL (computer); usuario => id actual.
+        $creado_por = $created_by_system ? null : get_current_user_id();
+        if (isset($data['creado_por'])) {
+            $creado_por = intval($data['creado_por']) ?: null;
+        }
+        // Las tareas de revisión generadas por el sistema requieren revisión humana.
+        $requires_human_review = isset($data['requires_human_review'])
+            ? (!empty($data['requires_human_review']) ? 1 : 0)
+            : $created_by_system;
+
         $result = $wpdb->insert(
             "{$prefix}tareas",
             [
@@ -82,13 +99,15 @@ class Riverso_Task_Module {
                 'prioridad' => sanitize_text_field($data['prioridad'] ?? 'normal'),
                 'estado' => 'pendiente',
                 'asignado_a' => intval($data['asignado_a'] ?? 0) ?: null,
-                'creado_por' => get_current_user_id(),
+                'creado_por' => $creado_por,
+                'created_by_system' => $created_by_system,
+                'requires_human_review' => $requires_human_review,
                 'referencia_tipo' => sanitize_text_field($data['referencia_tipo'] ?? ''),
                 'referencia_id' => intval($data['referencia_id'] ?? 0) ?: null,
                 'datos_extra' => isset($data['datos_extra']) ? wp_json_encode($data['datos_extra']) : null,
                 'fecha_limite' => !empty($data['fecha_limite']) ? sanitize_text_field($data['fecha_limite']) : null,
             ],
-            ['%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%d', '%s', '%s']
+            ['%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%d', '%s', '%d', '%s', '%s']
         );
 
         if (!$result) {
@@ -347,6 +366,53 @@ class Riverso_Task_Module {
         ]);
     }
     
+    /**
+     * Crea (o reutiliza) una tarea de revisión humana generada por un proceso
+     * automático (matching, importación, generación de precios/EAN13, etc.).
+     *
+     * Evita duplicados: si ya existe una tarea pendiente del mismo tipo y
+     * referencia, devuelve su ID en lugar de crear otra.
+     *
+     * @param string $tipo            Tipo de tarea (ver TASK_TYPES)
+     * @param string $titulo          Título legible
+     * @param string $referencia_tipo Tipo de entidad referenciada
+     * @param int    $referencia_id   ID de la entidad referenciada
+     * @param array  $extra           Datos adicionales: descripcion, prioridad, datos_extra
+     * @return int|WP_Error           ID de la tarea
+     */
+    public function create_review_task($tipo, $titulo, $referencia_tipo = '', $referencia_id = 0, $extra = []) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        // Deduplicar tareas de revisión abiertas por tipo + referencia.
+        if ($referencia_tipo && $referencia_id) {
+            $existing = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}tareas
+                 WHERE tipo = %s AND referencia_tipo = %s AND referencia_id = %d
+                   AND estado NOT IN ('completada', 'cancelada')
+                 LIMIT 1",
+                $tipo,
+                $referencia_tipo,
+                $referencia_id
+            ));
+            if ($existing) {
+                return intval($existing);
+            }
+        }
+
+        return $this->create_task([
+            'tipo' => $tipo,
+            'titulo' => $titulo,
+            'descripcion' => $extra['descripcion'] ?? '',
+            'prioridad' => $extra['prioridad'] ?? 'normal',
+            'referencia_tipo' => $referencia_tipo,
+            'referencia_id' => $referencia_id,
+            'datos_extra' => $extra['datos_extra'] ?? null,
+            'created_by_system' => true,
+            'requires_human_review' => true,
+        ]);
+    }
+
     /**
      * Crear tareas de bodegaje desde factura aprobada
      */

@@ -52,6 +52,60 @@ class Riverso_POS_Module {
         add_action('wp_ajax_riverso_pos_get_pending_orders', [$this, 'ajax_get_pending_orders']);
         add_action('wp_ajax_riverso_pos_hold_order', [$this, 'ajax_hold_order']);
         add_action('wp_ajax_riverso_pos_resume_order', [$this, 'ajax_resume_order']);
+        add_action('wp_ajax_riverso_pos_rule_price', [$this, 'ajax_rule_price']);
+    }
+
+    /**
+     * AJAX: precio unitario aplicando regla por tramos según la cantidad.
+     *
+     * Permite a la caja recalcular el precio cuando cambia la cantidad,
+     * usando el precio asignado del dominio y la cantidad agregada de lotes
+     * equivalentes cuando corresponde.
+     */
+    public function ajax_rule_price() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_create_orders')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        $product_id = intval($_POST['product_id'] ?? 0);
+        $variation_id = intval($_POST['variation_id'] ?? 0);
+        $qty = floatval($_POST['qty'] ?? 1);
+
+        if (!$product_id || $qty <= 0) {
+            wp_send_json_error(['message' => 'Datos inválidos']);
+        }
+
+        if (!class_exists('Riverso_Pricing_Module')) {
+            wp_send_json_error(['message' => 'Módulo de precios no disponible']);
+        }
+
+        $pricing = Riverso_Pricing_Module::get_instance();
+        $base_id = $pricing->get_base_id_by_wc($product_id, $variation_id);
+
+        $unit_price = null;
+        $local_price = null;
+        if ($base_id) {
+            $local_row = $pricing->get_local_price($base_id);
+            if ($local_row && $local_row['p_asignado'] !== null && $local_row['estado_aprobacion'] === 'aprobado') {
+                $local_price = (float) $local_row['p_asignado'];
+                $unit_price = $local_price;
+            }
+            if (class_exists('Riverso_Price_Rules_Module')) {
+                $rp = Riverso_Price_Rules_Module::get_instance()->apply_for_base($base_id, $qty, $local_price);
+                if ($rp !== null) {
+                    $unit_price = (float) $rp;
+                }
+            }
+        }
+
+        wp_send_json_success([
+            'producto_base_id' => $base_id,
+            'unit_price' => $unit_price,
+            'local_price' => $local_price,
+            'qty' => $qty,
+        ]);
     }
     
     /**
@@ -144,6 +198,10 @@ class Riverso_POS_Module {
         $found_ids = [];
         $results = [];
         $search_lower = strtolower($search);
+        $search_normalized = ltrim($search, '0');
+        if ($search_normalized === '') {
+            $search_normalized = '0';
+        }
         
         // 1. Buscar por SKU exacto (prioridad máxima)
         $exact_sku = $wpdb->get_var($wpdb->prepare(
@@ -167,9 +225,10 @@ class Riverso_POS_Module {
         // 2. Buscar por código de barra exacto (tabla propia)
         $barcode_product = $wpdb->get_row($wpdb->prepare(
             "SELECT product_id, variation_id FROM {$prefix}barcodes 
-            WHERE barcode = %s AND is_active = 1 
+            WHERE (barcode = %s OR TRIM(LEADING '0' FROM barcode) = %s) AND is_active = 1 
             LIMIT 1",
-            $search
+            $search,
+            $search_normalized
         ));
         
         if ($barcode_product) {
@@ -190,9 +249,10 @@ class Riverso_POS_Module {
         $supplier_barcode = $wpdb->get_row($wpdb->prepare(
             "SELECT product_id, variation_id, supplier_code, supplier_description 
             FROM {$prefix}supplier_product_links 
-            WHERE supplier_barcode = %s AND is_active = 1 
+            WHERE (supplier_barcode = %s OR TRIM(LEADING '0' FROM supplier_barcode) = %s) AND is_active = 1 
             LIMIT 1",
-            $search
+            $search,
+            $search_normalized
         ));
         
         if ($supplier_barcode) {
@@ -215,11 +275,12 @@ class Riverso_POS_Module {
             "SELECT spl.product_id, spl.variation_id, spl.supplier_code, spl.supplier_description, p.razon_social as proveedor
             FROM {$prefix}supplier_product_links spl
             LEFT JOIN {$prefix}proveedores p ON spl.supplier_id = p.id
-            WHERE (spl.supplier_code = %s OR spl.supplier_code LIKE %s) 
+            WHERE (spl.supplier_code = %s OR spl.supplier_code LIKE %s OR TRIM(LEADING '0' FROM spl.supplier_code) = %s) 
             AND spl.is_active = 1 
             LIMIT 10",
             $search,
-            '%' . $wpdb->esc_like($search) . '%'
+            '%' . $wpdb->esc_like($search) . '%',
+            $search_normalized
         ));
         
         foreach ($supplier_codes as $row) {
@@ -403,12 +464,50 @@ class Riverso_POS_Module {
         
         $stock_qty = $product->get_stock_quantity();
         $stock_status = $product->get_stock_status();
-        
+
+        // Precio base WooCommerce.
+        $wc_price = floatval($product->get_price());
+        $effective_price = $wc_price;
+        $local_price = null;
+        $rule_price = null;
+        $producto_base_id = 0;
+
+        // Precio LOCAL del dominio (p_asignado aprobado) y regla por tramos.
+        if (class_exists('Riverso_Pricing_Module')) {
+            $pricing = Riverso_Pricing_Module::get_instance();
+            if ($product->is_type('variation')) {
+                $producto_base_id = $pricing->get_base_id_by_wc($product->get_parent_id(), $product->get_id());
+            } else {
+                $producto_base_id = $pricing->get_base_id_by_wc($product->get_id(), 0);
+            }
+
+            if ($producto_base_id) {
+                $local_row = $pricing->get_local_price($producto_base_id);
+                if ($local_row && $local_row['p_asignado'] !== null && $local_row['estado_aprobacion'] === 'aprobado') {
+                    $local_price = (float) $local_row['p_asignado'];
+                    $effective_price = $local_price;
+                }
+
+                // Precio por regla de tramos (cantidad 1 por defecto).
+                if (class_exists('Riverso_Price_Rules_Module')) {
+                    $rp = Riverso_Price_Rules_Module::get_instance()->apply_for_base($producto_base_id, 1, $local_price);
+                    if ($rp !== null) {
+                        $rule_price = (float) $rp;
+                        $effective_price = $rule_price;
+                    }
+                }
+            }
+        }
+
         return [
             'id' => $product->get_id(),
             'name' => $name,
             'sku' => $product->get_sku() ?: '',
-            'price' => floatval($product->get_price()),
+            'price' => $effective_price,
+            'wc_price' => $wc_price,
+            'local_price' => $local_price,
+            'rule_price' => $rule_price,
+            'producto_base_id' => $producto_base_id,
             'regular_price' => floatval($product->get_regular_price()),
             'sale_price' => $product->get_sale_price() ? floatval($product->get_sale_price()) : null,
             'stock_quantity' => $stock_qty,

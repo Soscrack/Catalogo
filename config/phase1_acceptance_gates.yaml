@@ -1,0 +1,24 @@
+version: 1
+scope: phase1
+gates:
+  - id: GATE-001
+    name: trazabilidad_producto_proveedor_lote
+    criterion: "Cada lote debe mapear a producto_proveedor y producto_base."
+    query_hint: "riverso_lotes -> riverso_producto_proveedor -> riverso_producto_base"
+  - id: GATE-002
+    name: codigos_operativos_consistentes
+    criterion: "Búsqueda POS por barcode/supplier_code/SKU debe resolver al mismo product_id cuando aplique."
+    query_hint: "riverso_barcodes + riverso_supplier_product_links + postmeta(_sku)"
+  - id: GATE-003
+    name: integridad_equivalencias
+    criterion: "No puede existir miembro duplicado por grupo ni grupo sin código único."
+    query_hint: "UNIQUE(grupo_id, producto_base_id), UNIQUE(codigo_grupo)"
+  - id: GATE-004
+    name: calidad_backfill
+    criterion: "Backfill debe completar product_base_id y supplier_product_id en codigos donde exista match válido."
+    query_hint: "riverso_codigos.product_base_id IS NOT NULL / supplier_product_id IS NOT NULL"
+  - id: GATE-005
+    name: no_regresion_operativa
+    criterion: "Módulos legacy siguen operando con columnas previas (activo/verificado/product_id)."
+    query_hint: "UI de códigos, proveedores, POS, facturas sin errores SQL"
+

@@ -19,9 +19,15 @@ class Riverso_POS_Audit {
         'product_created'       => 'Producto creado',
         'product_updated'       => 'Producto actualizado',
         'product_deleted'       => 'Producto eliminado',
+        'product_archived'      => 'Producto archivado',
+        'product_restored'      => 'Producto restaurado',
+        'product_published'     => 'Producto publicado',
+        'product_unpublished'   => 'Producto despublicado',
         'sku_changed'           => 'SKU modificado',
         'price_changed'         => 'Precio modificado',
         'stock_adjusted'        => 'Stock ajustado',
+        'online_match_evaluated'=> 'Match online evaluado',
+        'online_match_reviewed' => 'Match online revisado',
         
         // Cotizaciones recibidas
         'quote_received'        => 'Cotización recibida',
@@ -77,6 +83,11 @@ class Riverso_POS_Audit {
      */
     const ENTITIES = [
         'product'       => 'Producto',
+        'producto_base' => 'Producto base',
+        'producto_proveedor' => 'Producto proveedor',
+        'import'        => 'Importación',
+        'precio'        => 'Precio',
+        'tienda_local'  => 'Tienda local',
         'quote'         => 'Cotización recibida',
         'customer_quote'=> 'Cotización cliente',
         'invoice'       => 'Factura',
@@ -93,6 +104,8 @@ class Riverso_POS_Audit {
      * Tabla de la base de datos
      */
     private static $table_name;
+
+    const ACTOR_TYPES = ['human', 'computer', 'migration', 'import', 'api'];
     
     /**
      * Inicializa la clase
@@ -120,7 +133,7 @@ class Riverso_POS_Audit {
             user_id BIGINT UNSIGNED NOT NULL,
             user_name VARCHAR(100) DEFAULT NULL,
             user_role VARCHAR(50) DEFAULT NULL,
-            actor_type VARCHAR(20) DEFAULT 'user',
+            actor_type VARCHAR(20) DEFAULT 'human',
             old_value LONGTEXT DEFAULT NULL,
             new_value LONGTEXT DEFAULT NULL,
             details TEXT DEFAULT NULL,
@@ -154,18 +167,14 @@ class Riverso_POS_Audit {
         
         self::init();
         
-        // Tipo de actor: 'user' (por defecto) o 'system' para procesos automáticos.
-        $actor_type = isset($data['actor_type']) && in_array($data['actor_type'], ['user', 'system'], true)
-            ? $data['actor_type']
-            : 'user';
+        $actor_type = self::normalize_actor_type($data['actor_type'] ?? 'human');
 
         $current_user = wp_get_current_user();
         $user_id = $current_user->ID ?: 0;
 
-        if ($actor_type === 'system') {
-            // Acción ejecutada por el sistema (created_by=computer).
-            $user_name = 'computer';
-            $user_role = 'system';
+        if ($actor_type !== 'human') {
+            $user_name = $actor_type === 'computer' ? 'computer' : $actor_type;
+            $user_role = $actor_type;
         } else {
             $user_name = $current_user->display_name ?: 'Sistema';
 
@@ -204,6 +213,17 @@ class Riverso_POS_Audit {
         }
         
         return $wpdb->insert_id;
+    }
+
+    private static function normalize_actor_type($actor_type) {
+        $actor_type = strtolower((string) $actor_type);
+        if ($actor_type === 'user') {
+            return 'human';
+        }
+        if ($actor_type === 'system') {
+            return 'computer';
+        }
+        return in_array($actor_type, self::ACTOR_TYPES, true) ? $actor_type : 'human';
     }
     
     /**
@@ -469,7 +489,22 @@ class Riverso_POS_Audit {
      * @return int|false
      */
     public static function log_system($action, $entity_type, $entity_id = null, $data = []) {
-        $data['actor_type'] = 'system';
+        $data['actor_type'] = 'computer';
+        return self::log($action, $entity_type, $entity_id, $data);
+    }
+
+    public static function log_import($action, $entity_type, $entity_id = null, $data = []) {
+        $data['actor_type'] = 'import';
+        return self::log($action, $entity_type, $entity_id, $data);
+    }
+
+    public static function log_migration($action, $entity_type, $entity_id = null, $data = []) {
+        $data['actor_type'] = 'migration';
+        return self::log($action, $entity_type, $entity_id, $data);
+    }
+
+    public static function log_api($action, $entity_type, $entity_id = null, $data = []) {
+        $data['actor_type'] = 'api';
         return self::log($action, $entity_type, $entity_id, $data);
     }
 }

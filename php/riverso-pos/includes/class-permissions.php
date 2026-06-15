@@ -91,6 +91,10 @@ class Riverso_POS_Permissions {
         'riverso_manage_prices'      => 'Gestionar precios y reglas',
         'riverso_approve_prices'     => 'Aprobar precios y listas',
 
+        // === PUBLICACIÓN ===
+        'riverso_review_products'    => 'Revisar productos para publicación',
+        'riverso_publish_products'   => 'Publicar productos en WooCommerce',
+
         // === MATCHING / EMPAREJAMIENTO ===
         'riverso_manage_matching'    => 'Gestionar emparejamiento de productos',
 
@@ -183,6 +187,10 @@ class Riverso_POS_Permissions {
             'riverso_view_prices',
             'riverso_manage_prices',
             'riverso_approve_prices',
+        ],
+        'Publicación' => [
+            'riverso_review_products',
+            'riverso_publish_products',
         ],
         'Matching' => [
             'riverso_manage_matching',
@@ -318,6 +326,8 @@ class Riverso_POS_Permissions {
                 'riverso_assign_barcodes',
                 'riverso_view_prices',
                 'riverso_manage_prices',
+                'riverso_review_products',
+                'riverso_publish_products',
                 'riverso_manage_matching',
                 'riverso_manage_packaging',
                 'riverso_generate_ean13',

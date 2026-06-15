@@ -268,6 +268,7 @@ class Riverso_POS_Activator {
         self::run_phase1_backfill($prefix);
         self::create_phase2_governance($prefix);
         self::create_phase2_matching($prefix);
+        self::create_phase8_publication($prefix);
         
         // Tabla: Auditoría
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-audit.php';
@@ -324,12 +325,14 @@ class Riverso_POS_Activator {
         $module_defs = [
             ['path' => 'modules/codes/class-supplier-links-module.php', 'class' => 'Riverso_Supplier_Links_Module'],
             ['path' => 'modules/barcodes/class-barcode-module.php', 'class' => 'Riverso_Barcode_Module'],
+            ['path' => 'modules/products/class-product-module.php', 'class' => 'Riverso_Product_Module'],
             ['path' => 'modules/tienda-local/class-tienda-local-module.php', 'class' => 'Riverso_Tienda_Local_Module'],
             ['path' => 'modules/costs/class-cost-history-module.php', 'class' => 'Riverso_Cost_History_Module'],
             ['path' => 'modules/pos/class-pos-module.php', 'class' => 'Riverso_POS_Module'],
             ['path' => 'modules/quotes/class-received-quote-module.php', 'class' => 'Riverso_POS_Received_Quote_Module'],
             ['path' => 'modules/customer-quotes/class-customer-quote-module.php', 'class' => 'Riverso_Customer_Quote_Module'],
             ['path' => 'modules/pricing/class-pricing-module.php', 'class' => 'Riverso_Pricing_Module'],
+            ['path' => 'modules/publish/class-woo-publisher-module.php', 'class' => 'Riverso_Woo_Publisher_Module'],
             ['path' => 'modules/packaging/class-packaging-module.php', 'class' => 'Riverso_Packaging_Module'],
         ];
 
@@ -718,8 +721,8 @@ class Riverso_POS_Activator {
         self::add_column_if_missing("{$prefix}tareas", 'created_by_system', "created_by_system TINYINT(1) NOT NULL DEFAULT 0");
         self::add_column_if_missing("{$prefix}tareas", 'requires_human_review', "requires_human_review TINYINT(1) NOT NULL DEFAULT 0");
 
-        // Auditoría: tipo de actor (user/system).
-        self::add_column_if_missing("{$prefix}audit_log", 'actor_type', "actor_type VARCHAR(20) NOT NULL DEFAULT 'user'");
+        // Auditoría: tipo de actor (human/computer/migration/import/api).
+        self::add_column_if_missing("{$prefix}audit_log", 'actor_type', "actor_type VARCHAR(20) NOT NULL DEFAULT 'human'");
 
         // Inventario abierto (embolsado): stock suelto del producto_base.
         self::add_column_if_missing("{$prefix}producto_base", 'stock_abierto', "stock_abierto DECIMAL(12,4) NOT NULL DEFAULT 0");
@@ -735,5 +738,30 @@ class Riverso_POS_Activator {
         self::add_column_if_missing($table, 'match_origen', "match_origen VARCHAR(20) DEFAULT NULL");
         self::add_column_if_missing($table, 'matched_at', "matched_at DATETIME DEFAULT NULL");
         self::add_index_if_missing($table, 'idx_match_estado', "KEY idx_match_estado (match_estado)");
+    }
+
+    /**
+     * Fase 8 - Ciclo de vida, gates de revisión y match online para publicación.
+     */
+    private static function create_phase8_publication($prefix) {
+        $table = "{$prefix}producto_base";
+
+        self::add_column_if_missing($table, 'deleted_at', "deleted_at DATETIME DEFAULT NULL");
+        self::add_column_if_missing($table, 'archived_at', "archived_at DATETIME DEFAULT NULL");
+        self::add_column_if_missing($table, 'human_product_review', "human_product_review VARCHAR(20) NOT NULL DEFAULT 'pending'");
+        self::add_column_if_missing($table, 'human_price_review', "human_price_review VARCHAR(20) NOT NULL DEFAULT 'pending'");
+        self::add_column_if_missing($table, 'human_category_review', "human_category_review VARCHAR(20) NOT NULL DEFAULT 'pending'");
+        self::add_column_if_missing($table, 'human_attribute_review', "human_attribute_review VARCHAR(20) NOT NULL DEFAULT 'pending'");
+        self::add_column_if_missing($table, 'publication_stage', "publication_stage VARCHAR(40) NOT NULL DEFAULT 'computer_created'");
+        self::add_column_if_missing($table, 'match_estado_online', "match_estado_online VARCHAR(20) NOT NULL DEFAULT 'UNMATCHED'");
+        self::add_column_if_missing($table, 'match_score_online', "match_score_online INT DEFAULT NULL");
+        self::add_column_if_missing($table, 'match_origen_online', "match_origen_online VARCHAR(20) DEFAULT NULL");
+        self::add_column_if_missing($table, 'matched_online_at', "matched_online_at DATETIME DEFAULT NULL");
+        self::add_column_if_missing($table, 'woocommerce_candidate_id', "woocommerce_candidate_id BIGINT UNSIGNED NOT NULL DEFAULT 0");
+
+        self::add_index_if_missing($table, 'idx_deleted_at', "KEY idx_deleted_at (deleted_at)");
+        self::add_index_if_missing($table, 'idx_archived_at', "KEY idx_archived_at (archived_at)");
+        self::add_index_if_missing($table, 'idx_publication_stage', "KEY idx_publication_stage (publication_stage)");
+        self::add_index_if_missing($table, 'idx_match_estado_online', "KEY idx_match_estado_online (match_estado_online)");
     }
 }

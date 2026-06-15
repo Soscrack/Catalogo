@@ -71,10 +71,9 @@ class Riverso_Mamut_Import_Module {
                     'producto' => $path[2] ?? ($path[1] ?? ''),
                 ];
             }
-            return;
         }
         foreach ($node as $key => $child) {
-            if (is_array($child)) {
+            if ($key !== 'skus' && is_array($child)) {
                 $next = $path;
                 $next[] = $key;
                 $this->flatten($child, $next, $out);
@@ -100,6 +99,22 @@ class Riverso_Mamut_Import_Module {
         $root = isset($json['structure']) ? $json['structure'] : $json;
         $out = [];
         $this->flatten($root, [], $out);
+        $products = isset($json['products']) && is_array($json['products']) ? $json['products'] : [];
+        foreach ($out as &$entry) {
+            $detail = $products[$entry['sku']] ?? [];
+            if (!empty($detail['nombre_producto'])) {
+                $entry['nombre_producto'] = $detail['nombre_producto'];
+            }
+            if (!empty($detail['category_path']) && is_array($detail['category_path'])) {
+                $entry['category_path'] = $detail['category_path'];
+                $entry['categoria'] = $detail['category_path'][0] ?? $entry['categoria'];
+                $entry['subcategoria'] = $detail['category_path'][1] ?? $entry['subcategoria'];
+                $entry['producto'] = $detail['category_path'][2] ?? $entry['producto'];
+            }
+            $entry['attributes'] = !empty($detail['attributes']) && is_array($detail['attributes'])
+                ? $detail['attributes']
+                : [];
+        }
         return $out;
     }
 
@@ -226,7 +241,10 @@ class Riverso_Mamut_Import_Module {
             if ($sku === '') {
                 continue;
             }
-            $nombre = trim($entry['producto'] . ' ' . $entry['subcategoria']);
+            $nombre = trim($entry['nombre_producto'] ?? '');
+            if ($nombre === '') {
+                $nombre = trim($entry['producto'] . ' ' . $entry['subcategoria']);
+            }
             $nombre = $nombre ?: $sku;
 
             $base = $this->ensure_base($sku, $nombre);

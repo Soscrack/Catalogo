@@ -80,6 +80,16 @@ class Riverso_POS_Admin_Menu {
             'riverso-pos-domain',
             [$this, 'render_domain']
         );
+
+        // Productos
+        add_submenu_page(
+            'riverso-pos',
+            __('Productos', 'riverso-pos'),
+            __('Productos', 'riverso-pos'),
+            'riverso_view_products',
+            'riverso-pos-products',
+            [$this, 'render_products']
+        );
         
         // Tareas
         add_submenu_page(
@@ -169,6 +179,16 @@ class Riverso_POS_Admin_Menu {
             'riverso_manage_prices',
             'riverso-pos-price-rules',
             [$this, 'render_price_rules']
+        );
+
+        // Publicación WooCommerce
+        add_submenu_page(
+            'riverso-pos',
+            __('Publicación', 'riverso-pos'),
+            __('Publicación', 'riverso-pos'),
+            'riverso_review_products',
+            'riverso-pos-publish',
+            [$this, 'render_publish']
         );
 
         // Embolsado
@@ -287,6 +307,14 @@ class Riverso_POS_Admin_Menu {
         require_once RIVERSO_POS_PLUGIN_DIR . 'modules/codes/class-supplier-links-module.php';
         $this->render_page('catalog-domain');
     }
+
+    /**
+     * Renderiza la página de gestión de productos.
+     */
+    public function render_products() {
+        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/products/class-product-module.php';
+        $this->render_page('products');
+    }
     
     /**
      * Renderiza la página de tareas
@@ -374,6 +402,15 @@ class Riverso_POS_Admin_Menu {
             require_once $engine;
         }
         $this->render_page('price-rules');
+    }
+
+    /**
+     * Renderiza la página de publicación controlada.
+     */
+    public function render_publish() {
+        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/products/class-product-module.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/publish/class-woo-publisher-module.php';
+        $this->render_page('publish');
     }
 
     /**

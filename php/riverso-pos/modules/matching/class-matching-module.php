@@ -26,6 +26,7 @@ class Riverso_Matching_Module {
     private static $instance = null;
 
     const ESTADOS = ['UNMATCHED', 'AUTO_MATCH', 'HUMAN_REVIEW', 'VERIFIED', 'REJECTED'];
+    const ONLINE_ESTADOS = ['UNMATCHED', 'AUTO_MATCH', 'PENDING_REVIEW', 'CONFIRMED', 'REJECTED'];
 
     // Umbrales de scoring (0-100).
     const THRESHOLD_AUTO = 85;
@@ -43,6 +44,10 @@ class Riverso_Matching_Module {
         add_action('wp_ajax_riverso_matching_run', [$this, 'ajax_run']);
         add_action('wp_ajax_riverso_matching_run_all', [$this, 'ajax_run_all']);
         add_action('wp_ajax_riverso_matching_set_state', [$this, 'ajax_set_state']);
+        add_action('wp_ajax_riverso_online_matching_list', [$this, 'ajax_online_list']);
+        add_action('wp_ajax_riverso_online_matching_run', [$this, 'ajax_online_run']);
+        add_action('wp_ajax_riverso_online_matching_run_all', [$this, 'ajax_online_run_all']);
+        add_action('wp_ajax_riverso_online_matching_set_state', [$this, 'ajax_online_set_state']);
     }
 
     /* ===================== Scoring ===================== */
@@ -120,6 +125,84 @@ class Riverso_Matching_Module {
             return 'HUMAN_REVIEW';
         }
         return 'UNMATCHED';
+    }
+
+    public function score_to_online_state($score) {
+        if ($score >= self::THRESHOLD_AUTO) {
+            return 'AUTO_MATCH';
+        }
+        if ($score >= self::THRESHOLD_REVIEW) {
+            return 'PENDING_REVIEW';
+        }
+        return 'UNMATCHED';
+    }
+
+    public function compute_online_candidates(array $pb, $limit = 8) {
+        global $wpdb;
+        $limit = max(1, min(20, intval($limit)));
+        $sku = trim((string) ($pb['canonical_sku'] ?? ''));
+        $name = trim((string) ($pb['nombre_canonico'] ?? ''));
+        $ids = [];
+
+        if ($sku !== '') {
+            $by_sku = wc_get_product_id_by_sku($sku);
+            if ($by_sku) {
+                $ids[] = intval($by_sku);
+            }
+        }
+
+        if ($name !== '') {
+            $like = '%' . $wpdb->esc_like($name) . '%';
+            $found = $wpdb->get_col($wpdb->prepare(
+                "SELECT ID FROM {$wpdb->posts}
+                 WHERE post_type IN ('product','product_variation')
+                   AND post_status IN ('publish','draft','private')
+                   AND post_title LIKE %s
+                 ORDER BY post_type = 'product' DESC, ID DESC
+                 LIMIT %d",
+                $like,
+                $limit * 2
+            ));
+            foreach ($found as $id) {
+                $ids[] = intval($id);
+            }
+        }
+
+        $ids = array_values(array_unique(array_filter($ids)));
+        $candidates = [];
+
+        foreach ($ids as $id) {
+            $product = wc_get_product($id);
+            if (!$product) {
+                continue;
+            }
+            $score = 0;
+            $wc_sku = (string) $product->get_sku();
+            if ($sku !== '' && $wc_sku !== '' && $this->normalize($sku) === $this->normalize($wc_sku)) {
+                $score += 55;
+            }
+            if ($name !== '') {
+                $percent = 0.0;
+                similar_text(strtolower($name), strtolower($product->get_name()), $percent);
+                $score += (int) round(($percent / 100) * 35);
+            }
+
+            $candidates[] = [
+                'id' => $id,
+                'product_id' => $product->is_type('variation') ? $product->get_parent_id() : $id,
+                'variation_id' => $product->is_type('variation') ? $id : 0,
+                'sku' => $wc_sku,
+                'name' => $product->get_name(),
+                'status' => $product->get_status(),
+                'score' => min(100, $score),
+            ];
+        }
+
+        usort($candidates, function ($a, $b) {
+            return $b['score'] <=> $a['score'];
+        });
+
+        return array_slice($candidates, 0, $limit);
     }
 
     /* ===================== Workflow ===================== */
@@ -227,6 +310,94 @@ class Riverso_Matching_Module {
         return $count;
     }
 
+    public function run_online_match($producto_base_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $producto_base_id = absint($producto_base_id);
+
+        $pb = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}producto_base WHERE id = %d",
+            $producto_base_id
+        ), ARRAY_A);
+        if (!$pb) {
+            return new WP_Error('not_found', 'Producto base no encontrado');
+        }
+
+        if (in_array($pb['match_estado_online'] ?? '', ['CONFIRMED', 'REJECTED'], true)) {
+            return $pb;
+        }
+
+        $candidates = $this->compute_online_candidates($pb);
+        $best = $candidates[0] ?? null;
+        $score = $best ? intval($best['score']) : 0;
+        $estado = $this->score_to_online_state($score);
+        $candidate_id = $best ? intval($best['id']) : 0;
+
+        $wpdb->update(
+            "{$prefix}producto_base",
+            [
+                'match_estado_online' => $estado,
+                'match_score_online' => $score,
+                'match_origen_online' => 'computer',
+                'matched_online_at' => current_time('mysql'),
+                'woocommerce_candidate_id' => $candidate_id,
+                'requires_human_review' => 1,
+                'publication_stage' => $estado === 'UNMATCHED' ? 'computer_created' : 'pending_review',
+            ],
+            ['id' => $producto_base_id],
+            ['%s', '%d', '%s', '%s', '%d', '%d', '%s'],
+            ['%d']
+        );
+
+        if (function_exists('riverso_create_review_task') && $estado !== 'UNMATCHED') {
+            riverso_create_review_task(
+                'confirmar_relacion_online',
+                'Confirmar relación producto local ↔ online para ' . ($pb['canonical_sku'] ?: '#' . $producto_base_id),
+                'producto_base',
+                $producto_base_id,
+                ['prioridad' => $estado === 'AUTO_MATCH' ? 'normal' : 'alta']
+            );
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log_system('online_match_evaluated', 'producto_base', $producto_base_id, [
+                'new_value' => [
+                    'estado' => $estado,
+                    'score' => $score,
+                    'candidate_id' => $candidate_id,
+                ],
+                'details' => 'Evaluación automática de match local ↔ online',
+            ]);
+        }
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}producto_base WHERE id = %d",
+            $producto_base_id
+        ), ARRAY_A);
+        $row['online_candidates'] = $candidates;
+        return $row;
+    }
+
+    public function run_online_batch($limit = 100) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $limit = max(1, intval($limit));
+        $ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT id FROM {$prefix}producto_base
+             WHERE (match_estado_online IS NULL OR match_estado_online = '' OR match_estado_online = 'UNMATCHED')
+               AND deleted_at IS NULL
+             LIMIT %d",
+            $limit
+        ));
+
+        $count = 0;
+        foreach ($ids as $id) {
+            $this->run_online_match(intval($id));
+            $count++;
+        }
+        return $count;
+    }
+
     /**
      * Fija un estado humano (VERIFIED / REJECTED) y completa la revisión.
      */
@@ -264,6 +435,64 @@ class Riverso_Matching_Module {
             Riverso_POS_Audit::log('match_reviewed', 'producto_proveedor', $pp_id, [
                 'old_value' => ['estado' => $pp['match_estado']],
                 'new_value' => ['estado' => $estado],
+            ]);
+        }
+
+        return true;
+    }
+
+    public function set_online_state($producto_base_id, $estado, $candidate_id = 0) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $producto_base_id = absint($producto_base_id);
+
+        if (!in_array($estado, ['CONFIRMED', 'REJECTED', 'PENDING_REVIEW'], true)) {
+            return new WP_Error('invalid', 'Estado online no permitido');
+        }
+
+        $pb = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}producto_base WHERE id = %d",
+            $producto_base_id
+        ), ARRAY_A);
+        if (!$pb) {
+            return new WP_Error('not_found', 'Producto base no encontrado');
+        }
+
+        $candidate_id = absint($candidate_id ?: ($pb['woocommerce_candidate_id'] ?? 0));
+        $payload = [
+            'match_estado_online' => $estado,
+            'match_origen_online' => 'human',
+            'matched_online_at' => current_time('mysql'),
+            'requires_human_review' => $estado === 'CONFIRMED' ? 0 : 1,
+        ];
+        $formats = ['%s', '%s', '%s', '%d'];
+
+        if ($estado === 'CONFIRMED') {
+            if (!$candidate_id) {
+                return new WP_Error('missing_candidate', 'Candidato WooCommerce requerido');
+            }
+            $product = wc_get_product($candidate_id);
+            if (!$product) {
+                return new WP_Error('missing_wc', 'Producto WooCommerce no encontrado');
+            }
+            $payload['woocommerce_product_id'] = $product->is_type('variation') ? $product->get_parent_id() : $candidate_id;
+            $payload['woocommerce_variation_id'] = $product->is_type('variation') ? $candidate_id : 0;
+            $payload['woocommerce_candidate_id'] = $candidate_id;
+            $payload['human_product_review'] = 'approved';
+            $payload['publication_stage'] = 'human_verified';
+            $formats = array_merge($formats, ['%d', '%d', '%d', '%s', '%s']);
+        }
+
+        $wpdb->update("{$prefix}producto_base", $payload, ['id' => $producto_base_id], $formats, ['%d']);
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('online_match_reviewed', 'producto_base', $producto_base_id, [
+                'actor_type' => 'human',
+                'old_value' => [
+                    'estado' => $pb['match_estado_online'] ?? null,
+                    'woocommerce_product_id' => $pb['woocommerce_product_id'] ?? null,
+                ],
+                'new_value' => $payload,
             ]);
         }
 
@@ -340,5 +569,82 @@ class Riverso_Matching_Module {
             wp_send_json_error(['message' => $result->get_error_message()]);
         }
         wp_send_json_success(['message' => 'Estado actualizado']);
+    }
+
+    public function ajax_online_list() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_matching')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $estado = sanitize_text_field($_POST['estado'] ?? '');
+        $where = 'pb.deleted_at IS NULL';
+        $params = [];
+
+        if ($estado && in_array($estado, self::ONLINE_ESTADOS, true)) {
+            $where .= ' AND pb.match_estado_online = %s';
+            $params[] = $estado;
+        }
+
+        $limit = min(200, max(1, intval($_POST['limit'] ?? 100)));
+        $sql = "SELECT pb.id, pb.canonical_sku, pb.nombre_canonico, pb.woocommerce_product_id,
+                       pb.woocommerce_variation_id, pb.woocommerce_candidate_id,
+                       pb.match_estado_online, pb.match_score_online, pb.match_origen_online,
+                       pb.publication_stage
+                FROM {$prefix}producto_base pb
+                WHERE {$where}
+                ORDER BY pb.match_score_online ASC, pb.id DESC
+                LIMIT {$limit}";
+
+        $rows = $params
+            ? $wpdb->get_results($wpdb->prepare($sql, ...$params), ARRAY_A)
+            : $wpdb->get_results($sql, ARRAY_A);
+
+        foreach ($rows as &$row) {
+            $candidate = !empty($row['woocommerce_candidate_id']) ? wc_get_product((int) $row['woocommerce_candidate_id']) : null;
+            $row['candidate_name'] = $candidate ? $candidate->get_name() : '';
+            $row['candidate_sku'] = $candidate ? $candidate->get_sku() : '';
+        }
+
+        wp_send_json_success(['items' => $rows, 'estados' => self::ONLINE_ESTADOS]);
+    }
+
+    public function ajax_online_run() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_matching')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $result = $this->run_online_match(intval($_POST['producto_base_id'] ?? 0));
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['item' => $result]);
+    }
+
+    public function ajax_online_run_all() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_matching')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $count = $this->run_online_batch(intval($_POST['limit'] ?? 100));
+        wp_send_json_success(['processed' => $count]);
+    }
+
+    public function ajax_online_set_state() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_matching')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $result = $this->set_online_state(
+            intval($_POST['producto_base_id'] ?? 0),
+            sanitize_text_field($_POST['estado'] ?? ''),
+            intval($_POST['candidate_id'] ?? 0)
+        );
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['message' => 'Estado online actualizado']);
     }
 }

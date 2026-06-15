@@ -62,6 +62,28 @@ $nonce = wp_create_nonce('riverso_pos_nonce');
         </tr></thead>
         <tbody id="match-tbody"><tr><td colspan="8">Sin datos. Pulsa Actualizar.</td></tr></tbody>
     </table>
+
+    <h2 style="margin-top:24px;">Soft match local &harr; online</h2>
+    <p>Relaciona producto_base con WooCommerce. AUTO_MATCH y PENDING_REVIEW siempre requieren confirmación humana.</p>
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+        <select id="online-match-filter-estado">
+            <option value="">Todos los estados</option>
+            <option value="UNMATCHED">UNMATCHED</option>
+            <option value="AUTO_MATCH">AUTO_MATCH</option>
+            <option value="PENDING_REVIEW">PENDING_REVIEW</option>
+            <option value="CONFIRMED">CONFIRMED</option>
+            <option value="REJECTED">REJECTED</option>
+        </select>
+        <button class="button" id="online-match-reload">Actualizar online</button>
+        <button class="button button-secondary" id="online-match-run-all">Ejecutar soft match online</button>
+    </div>
+    <table class="wp-list-table widefat fixed striped">
+        <thead><tr>
+            <th>ID base</th><th>SKU</th><th>Producto local</th><th>Candidato Woo</th>
+            <th>Estado</th><th>Score</th><th>Origen</th><th>Pipeline</th><th>Acciones</th>
+        </tr></thead>
+        <tbody id="online-match-tbody"><tr><td colspan="9">Sin datos. Pulsa Actualizar online.</td></tr></tbody>
+    </table>
     <?php endif; ?>
 </div>
 
@@ -248,6 +270,76 @@ jQuery(function($){
         $.post(ajaxurl, {action:'riverso_matching_set_state', nonce, pp_id:$(this).data('id'), estado:'REJECTED'}, function(r){
             if (!r.success){ alert(r.data.message||'Error'); return; }
             loadMatches();
+        });
+    });
+
+    // ===================== Soft match online =====================
+    function renderOnlineMatches(items){
+        if (!items || !items.length){
+            $('#online-match-tbody').html('<tr><td colspan="9">Sin resultados.</td></tr>');
+            return;
+        }
+        $('#online-match-tbody').html(items.map(it => {
+            const estado = it.match_estado_online || 'UNMATCHED';
+            const candidate = it.candidate_name
+                ? `${it.candidate_name} <small>(${it.candidate_sku || '-'}) #${it.woocommerce_candidate_id}</small>`
+                : '-';
+            return `<tr>
+                <td>${it.id}</td>
+                <td>${it.canonical_sku || '-'}</td>
+                <td>${it.nombre_canonico || '-'}</td>
+                <td>${candidate}</td>
+                <td>${estado}</td>
+                <td>${it.match_score_online === null ? '-' : it.match_score_online}</td>
+                <td>${it.match_origen_online || '-'}</td>
+                <td>${it.publication_stage || '-'}</td>
+                <td>
+                    <button class="button button-small online-match-run" data-id="${it.id}">Re-evaluar</button>
+                    <button class="button button-small button-primary online-match-confirm" data-id="${it.id}" data-candidate="${it.woocommerce_candidate_id || 0}">Confirmar</button>
+                    <button class="button button-small online-match-reject" data-id="${it.id}">Rechazar</button>
+                </td>
+            </tr>`;
+        }).join(''));
+    }
+
+    function loadOnlineMatches(){
+        if (!$('#online-match-tbody').length) return;
+        $.post(ajaxurl, {action:'riverso_online_matching_list', nonce, estado:$('#online-match-filter-estado').val()}, function(r){
+            if (!r.success){ $('#online-match-tbody').html('<tr><td colspan="9">Error</td></tr>'); return; }
+            renderOnlineMatches(r.data.items);
+        });
+    }
+
+    $('#online-match-reload, #online-match-filter-estado').on('click change', loadOnlineMatches);
+
+    $('#online-match-run-all').on('click', function(){
+        $.post(ajaxurl, {action:'riverso_online_matching_run_all', nonce, limit:100}, function(r){
+            if (!r.success){ alert(r.data.message||'Error'); return; }
+            alert('Procesados: ' + r.data.processed);
+            loadOnlineMatches();
+        });
+    });
+
+    $(document).on('click', '.online-match-run', function(){
+        $.post(ajaxurl, {action:'riverso_online_matching_run', nonce, producto_base_id:$(this).data('id')}, function(r){
+            if (!r.success){ alert(r.data.message||'Error'); return; }
+            loadOnlineMatches();
+        });
+    });
+
+    $(document).on('click', '.online-match-confirm', function(){
+        const candidate = $(this).data('candidate');
+        if (!candidate){ alert('No hay candidato WooCommerce para confirmar. Re-evalúa primero.'); return; }
+        $.post(ajaxurl, {action:'riverso_online_matching_set_state', nonce, producto_base_id:$(this).data('id'), candidate_id:candidate, estado:'CONFIRMED'}, function(r){
+            if (!r.success){ alert(r.data.message||'Error'); return; }
+            loadOnlineMatches();
+        });
+    });
+
+    $(document).on('click', '.online-match-reject', function(){
+        $.post(ajaxurl, {action:'riverso_online_matching_set_state', nonce, producto_base_id:$(this).data('id'), estado:'REJECTED'}, function(r){
+            if (!r.success){ alert(r.data.message||'Error'); return; }
+            loadOnlineMatches();
         });
     });
 

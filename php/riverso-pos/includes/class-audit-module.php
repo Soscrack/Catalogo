@@ -86,7 +86,38 @@ class Riverso_Audit_Module {
             return false;
         }
 
-        $data = ['actor_type' => 'system'];
+        $data = ['actor_type' => 'computer'];
+        if ($old_value !== null) {
+            $data['old_value'] = $old_value;
+        }
+        if ($new_value !== null) {
+            $data['new_value'] = $new_value;
+        }
+        if ($details !== '' && $details !== null) {
+            $data['details'] = $details;
+        }
+
+        return Riverso_POS_Audit::log($action, $entity_type, $entity_id, $data);
+    }
+
+    public function log_import($action, $entity_type, $entity_id = null, $old_value = null, $new_value = null, $details = '') {
+        return $this->log_with_actor('import', $action, $entity_type, $entity_id, $old_value, $new_value, $details);
+    }
+
+    public function log_migration($action, $entity_type, $entity_id = null, $old_value = null, $new_value = null, $details = '') {
+        return $this->log_with_actor('migration', $action, $entity_type, $entity_id, $old_value, $new_value, $details);
+    }
+
+    public function log_api($action, $entity_type, $entity_id = null, $old_value = null, $new_value = null, $details = '') {
+        return $this->log_with_actor('api', $action, $entity_type, $entity_id, $old_value, $new_value, $details);
+    }
+
+    private function log_with_actor($actor_type, $action, $entity_type, $entity_id = null, $old_value = null, $new_value = null, $details = '') {
+        if (!class_exists('Riverso_POS_Audit')) {
+            return false;
+        }
+
+        $data = ['actor_type' => $actor_type];
         if ($old_value !== null) {
             $data['old_value'] = $old_value;
         }

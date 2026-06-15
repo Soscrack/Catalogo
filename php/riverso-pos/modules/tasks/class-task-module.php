@@ -47,6 +47,9 @@ class Riverso_Task_Module {
         'verificar_etiquetado' => 'Verificar etiquetado',
         'aprobar_lista_precios' => 'Aprobar lista de precios',
         'relacionar_producto_proveedor' => 'Relacionar producto proveedor',
+        'confirmar_relacion_online' => 'Confirmar relación producto local ↔ online',
+        'confirmar_estructura_atributos' => 'Confirmar estructura de atributos',
+        'autorizar_publicacion' => 'Autorizar publicación',
     ];
 
     /**

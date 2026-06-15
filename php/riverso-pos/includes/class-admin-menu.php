@@ -196,7 +196,7 @@ class Riverso_POS_Admin_Menu {
             'riverso-pos',
             __('Tienda Local', 'riverso-pos'),
             __('Tienda Local', 'riverso-pos'),
-            'riverso_scan_barcodes',
+            'riverso_view_products',
             'riverso-pos-tienda-local',
             [$this, 'render_tienda_local']
         );

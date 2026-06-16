@@ -604,6 +604,12 @@ class Riverso_Task_Module {
 
         $tasks = $this->get_tasks($filters);
 
+        // Agregar target_url a cada tarea.
+        foreach ($tasks as &$task) {
+            $task['target_url'] = riverso_resolve_task_target($task);
+        }
+        unset($task);
+
         wp_send_json_success([
             'tasks' => $tasks,
             'types' => self::TASK_TYPES,
@@ -755,6 +761,15 @@ class Riverso_Task_Module {
             'estado' => 'pendiente',
             'limit' => 10,
         ]);
+
+        // Agregar target_url a cada tarea.
+        foreach ($tasks as &$task) {
+            $task['target_url'] = riverso_resolve_task_target($task);
+        }
+        foreach ($pending as &$task) {
+            $task['target_url'] = riverso_resolve_task_target($task);
+        }
+        unset($task);
 
         wp_send_json_success([
             'mis_tareas' => $tasks,

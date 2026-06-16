@@ -35,8 +35,15 @@ unzip -o riverso-pos-deploy.zip -d /tmp/riverso-pos-extract
 # Backup current
 cp -r {PLUGIN_PATH} {PLUGIN_PATH}.bak.$(date +%Y%m%d%H%M%S) 2>/dev/null || true
 
-# Copy files
-cp -r /tmp/riverso-pos-extract/* {PLUGIN_PATH}/
+# Copy files (ZIP contains riverso-pos/ prefix)
+if [ -d /tmp/riverso-pos-extract/riverso-pos ]; then
+  cp -r /tmp/riverso-pos-extract/riverso-pos/* {PLUGIN_PATH}/
+else
+  cp -r /tmp/riverso-pos-extract/* {PLUGIN_PATH}/
+fi
+
+# Remove accidental nested copy from previous deploys
+rm -rf {PLUGIN_PATH}/riverso-pos 2>/dev/null || true
 
 # Fix permissions
 chown -R riverso.cl_1xybiw6rlcq:psacln {PLUGIN_PATH}

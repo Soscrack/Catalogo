@@ -356,8 +356,8 @@ class Riverso_POS_Activator {
 
         $sql = "CREATE TABLE {$prefix}producto_base (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-            woocommerce_product_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
-            woocommerce_variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            woocommerce_product_id BIGINT UNSIGNED DEFAULT NULL,
+            woocommerce_variation_id BIGINT UNSIGNED DEFAULT NULL,
             canonical_sku VARCHAR(100) DEFAULT NULL,
             nombre_canonico VARCHAR(255) DEFAULT NULL,
             unidad_base VARCHAR(20) DEFAULT 'unidad',
@@ -745,6 +745,13 @@ class Riverso_POS_Activator {
      */
     private static function create_phase8_publication($prefix) {
         $table = "{$prefix}producto_base";
+
+        // Permite multiples productos base aun no vinculados a WooCommerce.
+        // El indice ux_wc_ref sigue protegiendo vinculos reales duplicados.
+        global $wpdb;
+        $wpdb->query("ALTER TABLE `{$table}` MODIFY COLUMN woocommerce_product_id BIGINT UNSIGNED DEFAULT NULL");
+        $wpdb->query("ALTER TABLE `{$table}` MODIFY COLUMN woocommerce_variation_id BIGINT UNSIGNED DEFAULT NULL");
+        $wpdb->query("UPDATE `{$table}` SET woocommerce_product_id = NULL, woocommerce_variation_id = NULL WHERE woocommerce_product_id = 0 AND woocommerce_variation_id = 0");
 
         self::add_column_if_missing($table, 'deleted_at', "deleted_at DATETIME DEFAULT NULL");
         self::add_column_if_missing($table, 'archived_at', "archived_at DATETIME DEFAULT NULL");

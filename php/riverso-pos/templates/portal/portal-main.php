@@ -419,6 +419,8 @@ $user_role = Riverso_POS_Permissions::get_riverso_role();
 $role_name = Riverso_POS_Permissions::ROLES[$user_role]['name'] ?? ($user_role === 'administrator' ? 'Administrador' : 'Usuario');
 $modules = Riverso_POS_Permissions::get_accessible_modules();
 $current_page = get_query_var('riverso_portal', 'dashboard');
+$catalog_initial_product = 0;
+$catalog_initial_hash = '';
 $nonce = wp_create_nonce('riverso_pos_nonce');
 
 // Obtener estadísticas
@@ -506,6 +508,7 @@ $tareas = $wpdb->get_results($wpdb->prepare(
                 switch ($current_page) {
                     case 'dashboard': echo 'Dashboard'; break;
                     case 'tasks': echo 'Mis Tareas'; break;
+                    case 'catalog': echo 'Catálogo'; break;
                     case 'warehouse': echo 'Bodega'; break;
                     case 'invoices': echo 'Facturas'; break;
                     case 'pos': echo 'Punto de Venta'; break;
@@ -589,9 +592,14 @@ $tareas = $wpdb->get_results($wpdb->prepare(
                                 </div>
                             </div>
                             <div class="task-actions">
-                                <button class="btn btn-primary btn-sm" onclick="alert('TODO: Completar tarea')">
-                                    Completar
-                                </button>
+                                <?php 
+                                    $target_url = riverso_resolve_task_target($tarea);
+                                    if ($target_url):
+                                ?>
+                                    <a href="<?php echo esc_url($target_url); ?>" class="btn btn-info btn-sm">
+                                        Ir a la tarea
+                                    </a>
+                                <?php endif; ?>
                             </div>
                         </div>
                         <?php endforeach; ?>
@@ -684,6 +692,12 @@ $tareas = $wpdb->get_results($wpdb->prepare(
                     </div>
                     <?php if ($t['estado'] !== 'completada' && $t['estado'] !== 'cancelada'): ?>
                     <div class="task-actions">
+                        <?php 
+                            $target_url = riverso_resolve_task_target($t);
+                            if ($target_url):
+                        ?>
+                            <a href="<?php echo esc_url($target_url); ?>" class="btn btn-info btn-sm">Ir a la tarea</a>
+                        <?php endif; ?>
                         <?php if (current_user_can('riverso_complete_tasks')): ?>
                         <button class="btn btn-primary btn-sm" onclick="completarTarea(<?php echo $t['id']; ?>)">Completar</button>
                         <?php endif; ?>
@@ -840,14 +854,21 @@ $tareas = $wpdb->get_results($wpdb->prepare(
         <!-- Códigos de Barra -->
         <div class="content-section">
             <div class="section-header">
-                <h2 class="section-title">Escáner de Códigos</h2>
+                <h2 class="section-title">Buscador de Códigos de Barra</h2>
             </div>
             <div class="section-body">
-                <div style="max-width: 500px; margin: 0 auto; text-align: center;">
-                    <input type="text" id="barcode-input" placeholder="Escanea o ingresa código..." 
-                           style="width: 100%; padding: 20px; font-size: 24px; text-align: center; border: 2px solid var(--primary); border-radius: 8px;"
-                           autofocus>
-                    <div id="barcode-result" style="margin-top: 30px;"></div>
+                <div style="max-width: 760px; margin: 0 auto;">
+                    <p style="color:var(--text-secondary);margin-bottom:12px;text-align:center;">
+                        Busca en la tienda local por código de barra, SKU o nombre de producto.
+                    </p>
+                    <div style="display:flex;gap:10px;align-items:center;">
+                        <input type="text" id="barcode-input" placeholder="Escanea, pega un código, SKU o nombre..."
+                               style="flex:1; padding:18px; font-size:20px; text-align:center; border:2px solid var(--primary); border-radius:8px;"
+                               autocomplete="off" autofocus>
+                        <button type="button" id="barcode-search-btn" class="btn btn-primary" style="padding:18px 24px;">Buscar</button>
+                    </div>
+                    <div id="barcode-stats" style="margin-top:12px;font-size:12px;color:var(--text-secondary);text-align:center;"></div>
+                    <div id="barcode-result" style="margin-top: 24px;"></div>
                 </div>
             </div>
         </div>
@@ -976,6 +997,55 @@ $tareas = $wpdb->get_results($wpdb->prepare(
             </div>
         </div>
         
+        <?php elseif ($current_page === 'catalog'): ?>
+        <?php
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        if (!empty($_GET['pp'])) {
+            $catalog_initial_product = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT pb.woocommerce_product_id FROM {$prefix}producto_proveedor pp
+                 INNER JOIN {$prefix}producto_base pb ON pb.id = pp.producto_base_id
+                 WHERE pp.id = %d LIMIT 1",
+                absint($_GET['pp'])
+            ));
+            $catalog_initial_hash = 'codigos';
+        } elseif (!empty($_GET['base'])) {
+            $catalog_initial_product = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT woocommerce_product_id FROM {$prefix}producto_base WHERE id = %d LIMIT 1",
+                absint($_GET['base'])
+            ));
+        }
+        ?>
+        <!-- Catálogo MAMUT -->
+        <div class="content-section">
+            <div class="section-header">
+                <h2 class="section-title">Catálogo MAMUT</h2>
+                <input type="text" id="catalog-search" placeholder="Buscar producto..." style="padding:8px 12px;border:1px solid var(--border);border-radius:4px;min-width:240px;">
+            </div>
+            <div class="section-body">
+                <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:20px;align-items:start;">
+                    <div>
+                        <div id="catalog-list" style="max-height:70vh;overflow-y:auto;border:1px solid var(--border);border-radius:8px;"></div>
+                    </div>
+                    <div id="catalog-editor" style="background:var(--bg-light);padding:20px;border-radius:8px;min-height:400px;">
+                        <div class="empty-state">
+                            <span class="dashicons dashicons-category"></span>
+                            <p>Selecciona un producto para editar</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="catalog-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+            <div style="background:#fff;border-radius:8px;max-width:560px;width:100%;max-height:80vh;overflow:auto;padding:20px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <h3 id="catalog-modal-title" style="margin:0;">Detalle</h3>
+                    <button type="button" id="catalog-modal-close" class="btn btn-secondary btn-sm">Cerrar</button>
+                </div>
+                <div id="catalog-modal-body"></div>
+            </div>
+        </div>
+
         <?php elseif ($current_page === 'reports'): ?>
         <!-- Reportes -->
         <div class="content-section">
@@ -1027,69 +1097,592 @@ $tareas = $wpdb->get_results($wpdb->prepare(
 const riversoNonce = '<?php echo $nonce; ?>';
 const ajaxUrl = '<?php echo admin_url('admin-ajax.php'); ?>';
 
-// Completar tarea
 function completarTarea(id) {
     if (!confirm('¿Marcar tarea como completada?')) return;
-    
     fetch(ajaxUrl, {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: new URLSearchParams({
-            action: 'riverso_complete_task',
-            nonce: riversoNonce,
-            task_id: id
-        })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            location.reload();
-        } else {
-            alert(data.data?.message || 'Error al completar tarea');
-        }
+        body: new URLSearchParams({action: 'riverso_complete_task', nonce: riversoNonce, task_id: id})
+    }).then(r => r.json()).then(data => {
+        if (data.success) location.reload();
+        else alert(data.data?.message || 'Error al completar tarea');
     });
 }
 
-// Crear tarea
 function crearTarea() {
     window.location.href = '<?php echo admin_url('admin.php?page=riverso-tasks&action=new'); ?>';
 }
 
-// Barcode scanner
-document.getElementById('barcode-input')?.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-        const code = this.value.trim();
-        if (code) {
-            fetch(ajaxUrl, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: new URLSearchParams({
-                    action: 'riverso_lookup_barcode',
-                    nonce: riversoNonce,
-                    code: code
-                })
-            })
-            .then(r => r.json())
-            .then(data => {
-                const resultDiv = document.getElementById('barcode-result');
-                if (data.success && data.data.product) {
-                    const p = data.data.product;
-                    resultDiv.innerHTML = `
-                        <div style="background: var(--bg-light); padding: 20px; border-radius: 8px; text-align: left;">
-                            <h3>${p.name}</h3>
-                            <p>SKU: <strong>${p.sku}</strong></p>
-                            <p>Precio: <strong>$${p.price}</strong></p>
-                            <p>Stock: <strong>${p.stock}</strong></p>
-                        </div>
-                    `;
-                } else {
-                    resultDiv.innerHTML = `<div style="color: var(--danger);">❌ Producto no encontrado: ${code}</div>`;
-                }
+(function() {
+    const listEl = document.getElementById('catalog-list');
+    const editorEl = document.getElementById('catalog-editor');
+    const searchEl = document.getElementById('catalog-search');
+    const modalEl = document.getElementById('catalog-modal');
+    const modalBody = document.getElementById('catalog-modal-body');
+    const modalTitle = document.getElementById('catalog-modal-title');
+    if (!listEl || !editorEl) return;
+
+    let selectedId = 0;
+    let currentItem = null;
+    let providersCache = null;
+    const catalogInitialProductId = <?php echo (int) $catalog_initial_product; ?>;
+    const catalogInitialHash = <?php echo wp_json_encode($catalog_initial_hash); ?>;
+
+    function esc(s) {
+        return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function post(action, params) {
+        const body = new URLSearchParams({action, nonce: riversoNonce, ...params});
+        return fetch(ajaxUrl, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body}).then(r => r.json());
+    }
+
+    function showModal(title, html) {
+        if (!modalEl) return;
+        modalTitle.textContent = title;
+        modalBody.innerHTML = html;
+        modalEl.style.display = 'flex';
+    }
+
+    function hideModal() {
+        if (modalEl) modalEl.style.display = 'none';
+    }
+
+    document.getElementById('catalog-modal-close')?.addEventListener('click', hideModal);
+    modalEl?.addEventListener('click', e => { if (e.target === modalEl) hideModal(); });
+
+    function loadList(search) {
+        listEl.innerHTML = '<div class="loading">Cargando...</div>';
+        post('riverso_catalog_list', {search: search || '', limit: 100, offset: 0}).then(data => {
+            if (!data.success) {
+                listEl.innerHTML = '<div class="empty-state"><p>' + esc(data.data?.message || 'Error') + '</p></div>';
+                return;
+            }
+            const items = data.data.items || [];
+            if (!items.length) {
+                listEl.innerHTML = '<div class="empty-state"><p>Sin productos</p></div>';
+                return;
+            }
+            listEl.innerHTML = items.map(it => `
+                <div class="catalog-item" data-id="${it.product_id}" style="padding:12px;border-bottom:1px solid var(--border);cursor:pointer;${selectedId==it.product_id?'background:#e3f2fd;':''}">
+                    <div style="font-weight:600;">${esc(it.name)}</div>
+                    <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">
+                        ${esc((it.category_path||[]).join(' > ') || 'Sin categoría')}
+                        • ${it.variations_count} SKU • ${esc(it.status)} • ${esc(it.publication_stage)}
+                    </div>
+                </div>`).join('');
+            listEl.querySelectorAll('.catalog-item').forEach(el => el.addEventListener('click', () => loadProduct(el.dataset.id)));
+        });
+    }
+
+    function gateBadge(status) {
+        const colors = {approved:'#4caf50', pending:'#ff9800', rejected:'#f44336'};
+        return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;background:${colors[status]||'#999'};color:#fff;">${esc(status)}</span>`;
+    }
+
+    function renderCodesPanel(codes, bases) {
+        const panel = document.getElementById('codes-panel');
+        if (!panel) return;
+        const baseLabels = {};
+        (bases || []).forEach(b => {
+            baseLabels[b.id] = b.variation_label || b.canonical_sku || ('Base #' + b.id);
+        });
+        if (!codes.length) {
+            panel.innerHTML = '<p style="margin:0;color:var(--text-secondary);">Sin códigos de proveedor vinculados</p>';
+            return;
+        }
+        panel.innerHTML = codes.map(c => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #ddd;gap:8px;">
+                <span>
+                    <span style="font-size:11px;color:#666;display:block;">${esc(baseLabels[c.producto_base_id] || 'Variación')}</span>
+                    <strong>${esc(c.proveedor_nombre || 'Proveedor')}</strong>: ${esc(c.codigo_proveedor)}
+                </span>
+                <button type="button" class="btn btn-sm btn-danger catalog-code-unlink" data-pp="${c.id}">Quitar</button>
+            </div>`).join('');
+        panel.querySelectorAll('.catalog-code-unlink').forEach(btn => btn.addEventListener('click', () => {
+            if (!confirm('¿Desvincular este código?')) return;
+            post('riverso_catalog_code_unlink', {pp_id: btn.dataset.pp}).then(d => {
+                alert(d.success ? 'Código desvinculado' : (d.data?.message || 'Error'));
+                if (d.success) loadProduct(selectedId);
             });
-            this.value = '';
+        }));
+    }
+
+    function renderVariationsPanel(bases) {
+        const panel = document.getElementById('variations-panel');
+        if (!panel) return;
+        if (!bases.length) {
+            panel.innerHTML = '<p style="color:var(--text-secondary);">Sin variaciones base</p>';
+            return;
+        }
+        panel.innerHTML = bases.map(b => {
+            const label = b.variation_label || b.nombre_canonico || ('Variación #' + b.id);
+            const codes = (b.provider_codes || []).map(c =>
+                `<span style="display:inline-block;background:#eee;border-radius:4px;padding:2px 6px;margin:2px;font-size:11px;">${esc(c.proveedor_nombre||'Prov')}: ${esc(c.codigo_proveedor)}</span>`
+            ).join('') || '<span style="color:#999;font-size:12px;">Sin códigos proveedor</span>';
+            return `
+            <div class="variation-block" data-base-id="${b.id}" style="border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:10px;background:#fff;">
+                <div style="font-weight:600;margin-bottom:4px;">${esc(label)}</div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">
+                    Base #${b.id} • SKU: ${esc(b.canonical_sku || '—')}
+                    ${b.needs_local_sku ? ' • <strong style="color:#f44336;">Pendiente SKU local</strong>' : ''}
+                </div>
+                <div style="margin-bottom:8px;">${codes}</div>
+                <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Asignar SKU local</div>
+                <div style="display:flex;gap:6px;margin-bottom:6px;">
+                    <input type="text" class="var-sku-search" data-base="${b.id}" placeholder="Buscar SKU/nombre/barcode..." style="flex:1;padding:6px;border:1px solid var(--border);border-radius:4px;">
+                    <button type="button" class="btn btn-secondary btn-sm var-sku-search-btn" data-base="${b.id}">Buscar</button>
+                </div>
+                <div class="var-sku-results" data-base="${b.id}" style="max-height:90px;overflow-y:auto;margin-bottom:6px;"></div>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <input type="text" class="var-sku-pick" data-base="${b.id}" placeholder="SKU local" style="flex:1;padding:6px;border:1px solid var(--border);border-radius:4px;">
+                    <label style="font-size:11px;white-space:nowrap;"><input type="checkbox" class="var-sku-create" data-base="${b.id}"> Crear</label>
+                    <button type="button" class="btn btn-primary btn-sm var-sku-assign-btn" data-base="${b.id}">Asignar</button>
+                </div>
+            </div>`;
+        }).join('');
+
+        panel.querySelectorAll('.var-sku-search-btn').forEach(btn => btn.addEventListener('click', () => {
+            const baseId = btn.dataset.base;
+            const q = panel.querySelector(`.var-sku-search[data-base="${baseId}"]`)?.value.trim();
+            if (!q || q.length < 2) { alert('Escribe al menos 2 caracteres'); return; }
+            post('riverso_catalog_search_local_sku', {q}).then(d => {
+                const results = panel.querySelector(`.var-sku-results[data-base="${baseId}"]`);
+                if (!d.success || !results) return;
+                const items = d.data.items || [];
+                results.innerHTML = items.length ? items.map(it => `
+                    <div class="var-sku-pick-row" data-base="${baseId}" data-sku="${esc(it.sku)}" style="padding:4px;border-bottom:1px solid #ddd;cursor:pointer;font-size:12px;">
+                        <strong>${esc(it.sku)}</strong> — ${esc(it.nombre)}
+                    </div>`).join('') : '<p style="font-size:12px;">Sin resultados</p>';
+                results.querySelectorAll('.var-sku-pick-row').forEach(el => el.addEventListener('click', () => {
+                    const pick = panel.querySelector(`.var-sku-pick[data-base="${el.dataset.base}"]`);
+                    if (pick) pick.value = el.dataset.sku;
+                }));
+            });
+        }));
+
+        panel.querySelectorAll('.var-sku-assign-btn').forEach(btn => btn.addEventListener('click', () => {
+            const baseId = btn.dataset.base;
+            const sku = panel.querySelector(`.var-sku-pick[data-base="${baseId}"]`)?.value.trim();
+            const crear = panel.querySelector(`.var-sku-create[data-base="${baseId}"]`)?.checked;
+            if (!sku) { alert('Indica un SKU local'); return; }
+            post('riverso_catalog_assign_local_sku', {base_id: baseId, sku_local: sku, crear_nuevo: crear ? 1 : 0}).then(d => {
+                alert(d.success ? 'SKU local asignado' : (d.data?.message || 'Error'));
+                if (d.success) loadProduct(selectedId);
+            });
+        }));
+    }
+
+    function bindSupplierPicker() {
+        const searchEl = document.getElementById('code-link-proveedor-search');
+        const idEl = document.getElementById('code-link-proveedor-id');
+        const resultsEl = document.getElementById('code-link-proveedor-results');
+        const selectedEl = document.getElementById('code-link-proveedor-selected');
+        if (!searchEl || !idEl) return;
+
+        let searchTimer = null;
+        searchEl.addEventListener('input', () => {
+            clearTimeout(searchTimer);
+            const q = searchEl.value.trim();
+            idEl.value = '';
+            if (selectedEl) selectedEl.textContent = '';
+            if (q.length < 2) {
+                if (resultsEl) resultsEl.innerHTML = '';
+                return;
+            }
+            searchTimer = setTimeout(() => {
+                post('riverso_catalog_search_suppliers', {search: q, limit: 15}).then(d => {
+                    if (!d.success || !resultsEl) return;
+                    const items = d.data.suppliers || [];
+                    resultsEl.innerHTML = items.length ? items.map(s => `
+                        <div class="supplier-pick" data-id="${s.id}" data-nombre="${esc(s.nombre)}" style="padding:6px;border-bottom:1px solid #ddd;cursor:pointer;font-size:13px;">
+                            <strong>${esc(s.nombre)}</strong> <span style="color:#666;">(${esc(s.rut)})</span>
+                        </div>`).join('') : '<p style="font-size:12px;padding:6px;">Sin proveedores. Crea uno nuevo abajo.</p>';
+                    resultsEl.querySelectorAll('.supplier-pick').forEach(el => el.addEventListener('click', () => {
+                        idEl.value = el.dataset.id;
+                        searchEl.value = el.dataset.nombre;
+                        if (selectedEl) selectedEl.textContent = 'Seleccionado: ' + el.dataset.nombre;
+                        resultsEl.innerHTML = '';
+                    }));
+                });
+            }, 250);
+        });
+
+        document.getElementById('code-link-new-proveedor')?.addEventListener('click', () => {
+            const nombre = prompt('Nombre del proveedor:');
+            if (!nombre) return;
+            const rut = prompt('RUT del proveedor (sin puntos):');
+            if (!rut) return;
+            post('riverso_catalog_create_supplier', {nombre, rut}).then(d => {
+                if (!d.success) { alert(d.data?.message || 'Error'); return; }
+                const s = d.data.supplier;
+                idEl.value = s.id;
+                searchEl.value = s.nombre;
+                if (selectedEl) selectedEl.textContent = 'Seleccionado: ' + s.nombre + (s.existing ? ' (existente)' : ' (nuevo)');
+                alert(s.existing ? 'Proveedor ya existía, seleccionado.' : 'Proveedor creado.');
+            });
+        });
+    }
+
+    function bindCodeLinkForm() {
+        document.getElementById('catalog-code-link-btn')?.addEventListener('click', () => {
+            const baseId = document.getElementById('code-link-base')?.value;
+            const proveedorId = document.getElementById('code-link-proveedor-id')?.value;
+            const codigo = document.getElementById('code-link-codigo')?.value.trim();
+            if (!baseId || !proveedorId || !codigo) {
+                alert('Selecciona variación, proveedor (buscar por nombre) y código');
+                return;
+            }
+            post('riverso_catalog_code_link', {base_id: baseId, proveedor_id: proveedorId, codigo}).then(d => {
+                alert(d.success ? 'Código vinculado' : (d.data?.message || 'Error'));
+                if (d.success) loadProduct(selectedId);
+            });
+        });
+    }
+
+    function loadCategoryTree() {
+        post('riverso_category_tree', {parent_id: 0}).then(d => {
+            const panel = document.getElementById('category-tree-panel');
+            if (!d.success || !panel) { alert(d.data?.message || 'Error'); return; }
+            const renderTree = (items, indent = 0) => items.map(t =>
+                `<div style="margin-left:${indent*12}px;display:flex;gap:6px;align-items:center;padding:2px 0;">
+                    <span>${esc(t.name)} (${t.count})</span>
+                    <button type="button" class="btn btn-link btn-sm cat-rename" data-id="${t.id}" data-name="${esc(t.name)}" style="padding:0;font-size:11px;">Renombrar</button>
+                    <button type="button" class="btn btn-link btn-sm cat-add-child" data-id="${t.id}" style="padding:0;font-size:11px;">+ Hijo</button>
+                </div>${renderTree(t.children||[], indent+1)}`
+            ).join('');
+            panel.innerHTML = renderTree(d.data.tree) +
+                `<div style="margin-top:8px;"><button type="button" class="btn btn-sm btn-secondary" id="cat-add-root">+ Categoría raíz</button></div>`;
+            panel.querySelectorAll('.cat-rename').forEach(btn => btn.addEventListener('click', () => {
+                const newName = prompt('Nuevo nombre (global afecta todos los productos):', btn.dataset.name);
+                if (!newName) return;
+                const scope = confirm('¿Aplicar globalmente a todos los productos?\nOK=Global, Cancelar=Solo este producto') ? 'global' : 'local';
+                post('riverso_category_rename', {term_id: btn.dataset.id, new_name: newName, scope, product_id: selectedId}).then(r => {
+                    alert(r.success ? 'Categoría renombrada' : (r.data?.message || 'Error'));
+                    if (r.success) { loadCategoryTree(); loadProduct(selectedId); }
+                });
+            }));
+            panel.querySelectorAll('.cat-add-child').forEach(btn => btn.addEventListener('click', () => {
+                const name = prompt('Nombre de subcategoría:');
+                if (!name) return;
+                post('riverso_category_create', {parent_id: btn.dataset.id, name}).then(r => {
+                    alert(r.success ? 'Categoría creada' : (r.data?.message || 'Error'));
+                    if (r.success) loadCategoryTree();
+                });
+            }));
+            document.getElementById('cat-add-root')?.addEventListener('click', () => {
+                const name = prompt('Nombre categoría raíz:');
+                if (!name) return;
+                post('riverso_category_create', {parent_id: 0, name}).then(r => {
+                    alert(r.success ? 'Categoría creada' : (r.data?.message || 'Error'));
+                    if (r.success) loadCategoryTree();
+                });
+            });
+        });
+    }
+
+    function bindLocalSkuSection(item) {
+        renderVariationsPanel(item.bases || []);
+    }
+
+    function showGateContext(gate) {
+        post('riverso_gate_context', {product_id: selectedId, gate}).then(d => {
+            if (!d.success) { alert(d.data?.message || 'Error'); return; }
+            const ctx = d.data.context;
+            let html = '';
+            if (ctx.gate === 'human_product_review') {
+                html = `<p><strong>Producto:</strong> ${esc(ctx.product_name)}</p>
+                    <p><strong>Códigos proveedor:</strong> ${ctx.codes_count}</p>
+                    <p><strong>Variaciones base:</strong> ${ctx.bases_count}</p>`;
+            } else if (ctx.gate === 'human_category_review') {
+                html = `<p><strong>Ruta:</strong> ${esc((ctx.current_path||[]).join(' > ') || 'Sin categoría')}</p>`;
+            } else if (ctx.gate === 'human_attribute_review') {
+                html = '<ul>' + (ctx.attributes||[]).map(a => `<li>${esc(a.name)}: ${a.count} opciones</li>`).join('') + '</ul>';
+            } else if (ctx.gate === 'human_price_review') {
+                html = '<table style="width:100%;font-size:13px;border-collapse:collapse;"><tr><th>c_ref</th><th>p_asignado</th><th>Margen</th></tr>' +
+                    (ctx.prices||[]).map(p => `<tr><td>${esc(p.c_ref)}</td><td><input type="number" class="price-assign-input" data-id="${p.id}" value="${esc(p.p_asignado||'')}" style="width:90px;"></td><td>${p.margin_pct}%${p.alerta?' ⚠':''}</td></tr>`).join('') +
+                    '</table>';
+                if (ctx.recent_costs?.length) {
+                    html += '<p style="margin-top:12px;"><strong>Últimos costos:</strong></p><ul>' +
+                        ctx.recent_costs.slice(0,5).map(c => `<li>$${esc(c.unit_cost)} (${esc(c.document_date)}) — ${esc(c.source_type||'')}</li>`).join('') + '</ul>';
+                }
+                html += '<button type="button" class="btn btn-secondary" id="price-save-assigned" style="margin-top:10px;">Guardar precios asignados</button>';
+            }
+            showModal(ctx.label || 'Detalle gate', html);
+            document.getElementById('price-save-assigned')?.addEventListener('click', () => {
+                const inputs = modalBody.querySelectorAll('.price-assign-input');
+                const saves = [...inputs].map(inp => post('riverso_pricing_set_assigned', {precio_id: inp.dataset.id, p_asignado: inp.value}));
+                Promise.all(saves).then(() => { alert('Precios guardados'); hideModal(); loadProduct(selectedId); });
+            });
+        });
+    }
+
+    function categoryLevelsHtml(path) {
+        const levels = path && path.length ? path : [''];
+        return levels.map((value, index) => `
+            <div class="catalog-category-level" style="display:grid;grid-template-columns:90px 1fr auto;gap:8px;align-items:end;margin-bottom:8px;">
+                <label style="font-size:12px;">Nivel ${index + 1}</label>
+                <input type="text" class="catalog-cat-level-input" value="${esc(value || '')}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:4px;">
+                <button type="button" class="btn btn-danger btn-sm catalog-remove-level" ${levels.length === 1 ? 'disabled' : ''}>Quitar</button>
+            </div>
+        `).join('');
+    }
+
+    function bindCategoryLevelControls() {
+        const wrap = document.getElementById('catalog-category-levels');
+        if (!wrap) return;
+
+        document.getElementById('catalog-add-level')?.addEventListener('click', () => {
+            const current = [...wrap.querySelectorAll('.catalog-cat-level-input')].map(input => input.value);
+            current.push('');
+            wrap.innerHTML = categoryLevelsHtml(current);
+            bindCategoryLevelControls();
+        });
+
+        wrap.querySelectorAll('.catalog-remove-level').forEach((btn, index) => {
+            btn.addEventListener('click', () => {
+                const current = [...wrap.querySelectorAll('.catalog-cat-level-input')].map(input => input.value);
+                if (current.length <= 1) return;
+                current.splice(index, 1);
+                wrap.innerHTML = categoryLevelsHtml(current);
+                bindCategoryLevelControls();
+            });
+        });
+    }
+
+    function renderEditor(item) {
+        currentItem = item;
+        selectedId = item.product_id;
+        const path = item.category_path || [];
+        const gates = [['human_product_review','Producto'],['human_price_review','Precio'],['human_category_review','Categoría'],['human_attribute_review','Atributos']];
+        const firstBase = (item.bases && item.bases[0]) ? item.bases[0] : {};
+        const basesOptions = (item.bases || []).map(b => {
+            const lbl = b.variation_label || b.canonical_sku || ('Base #' + b.id);
+            return `<option value="${b.id}">${esc(lbl)}</option>`;
+        }).join('');
+        const attrsHtml = (item.attributes || []).filter(a => !String(a.name).startsWith('pa_')).map(attr => `
+            <div style="margin-bottom:12px;">
+                <label style="font-weight:600;display:block;margin-bottom:4px;">${esc(attr.name)}</label>
+                <textarea class="catalog-attr" data-name="${esc(attr.name)}" rows="2" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:4px;">${esc((attr.options||[]).join(', '))}</textarea>
+            </div>`).join('');
+
+        editorEl.innerHTML = `
+            <h3 style="margin-bottom:16px;">Editar producto #${item.product_id}</h3>
+            <div style="margin-bottom:12px;"><label style="font-weight:600;display:block;margin-bottom:4px;">Nombre</label>
+                <input type="text" id="catalog-name" value="${esc(item.name)}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:4px;"></div>
+            <h4 style="margin:16px 0 8px;">Ruta de categoría (mayor a menor)</h4>
+            <div id="catalog-category-levels" style="margin-bottom:8px;">
+                ${categoryLevelsHtml(path)}
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="catalog-add-level" style="margin-bottom:16px;">+ Agregar nivel</button>
+            <button class="btn btn-primary" id="catalog-save">Guardar nombre y categoría</button>
+
+            <h4 style="margin:20px 0 8px;">Variaciones — SKU local y códigos proveedor</h4>
+            <div id="variations-panel"></div>
+
+            <h4 style="margin:16px 0 8px;">Árbol de Categorías</h4>
+            <div id="category-tree-panel" style="background:#f5f5f5;padding:10px;border-radius:6px;margin-bottom:8px;max-height:200px;overflow-y:auto;font-size:12px;"></div>
+            <button type="button" class="btn btn-secondary btn-sm" id="catalog-load-category-tree">Cargar / refrescar árbol</button>
+
+            <h4 id="codigos" style="margin:16px 0 8px;">Vincular código de proveedor</h4>
+            <div id="codes-panel" style="background:#f5f5f5;padding:10px;border-radius:6px;margin-bottom:8px;max-height:150px;overflow-y:auto;font-size:12px;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+                <div><label style="font-size:12px;">Variación</label><select id="code-link-base" style="width:100%;padding:6px;">${basesOptions}</select></div>
+                <div><label style="font-size:12px;">Código proveedor</label><input type="text" id="code-link-codigo" placeholder="Código del proveedor" style="width:100%;padding:6px;"></div>
+            </div>
+            <div style="margin-bottom:8px;">
+                <label style="font-size:12px;">Proveedor (buscar por nombre)</label>
+                <input type="text" id="code-link-proveedor-search" placeholder="Escribe nombre o RUT..." style="width:100%;padding:6px;margin-top:4px;">
+                <input type="hidden" id="code-link-proveedor-id" value="">
+                <div id="code-link-proveedor-results" style="border:1px solid var(--border);border-radius:4px;background:#fff;"></div>
+                <p id="code-link-proveedor-selected" style="font-size:12px;color:var(--text-secondary);margin:4px 0;"></p>
+                <div style="display:flex;gap:8px;margin-top:6px;">
+                    <button type="button" class="btn btn-secondary btn-sm" id="code-link-new-proveedor">+ Crear proveedor</button>
+                    <a href="<?php echo esc_url(home_url('/interno/suppliers/')); ?>" target="_blank" class="btn btn-link btn-sm">Gestionar proveedores</a>
+                </div>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" id="catalog-code-link-btn">Vincular código</button>
+
+            <h4 style="margin:16px 0 8px;">Atributos</h4>${attrsHtml || '<p style="color:var(--text-secondary);">Sin atributos editables</p>'}
+            <button class="btn btn-secondary" id="catalog-save-attrs" style="margin-top:8px;">Guardar atributos</button>
+
+            <h4 style="margin:16px 0 8px;">Gates (${item.variations_count} SKU)</h4>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+                ${gates.map(([key,label]) => `<div style="background:#fff;padding:10px;border-radius:6px;border:1px solid var(--border);">
+                    <div style="font-size:13px;margin-bottom:6px;">${label} ${gateBadge(firstBase[key]||'pending')}</div>
+                    ${(firstBase[key]||'pending') === 'pending' ? `
+                        <button type="button" class="btn btn-sm btn-info catalog-gate-view" data-gate="${key}">Ver detalles</button>
+                        <button type="button" class="btn btn-sm btn-primary catalog-gate-approve" data-gate="${key}">Aprobar</button>
+                        <button type="button" class="btn btn-sm btn-danger catalog-gate-reject" data-gate="${key}">Rechazar</button>
+                    ` : `<span style="font-size:12px;">${firstBase[key] === 'approved' ? 'Aprobado' : 'Rechazado'}</span>`}
+                </div>`).join('')}
+            </div>
+            <?php if (current_user_can('riverso_publish_products')): ?>
+            <button class="btn btn-secondary" id="catalog-authorize">Autorizar publicación</button>
+            <button class="btn btn-primary" id="catalog-publish" style="margin-left:8px;">Publicar</button>
+            <?php endif; ?>
+            <p style="margin-top:12px;font-size:12px;color:var(--text-secondary);">Estado: ${esc(item.status)} • Etapa: ${esc(item.publication_stage)}</p>`;
+
+        renderCodesPanel(item.codes || [], item.bases || []);
+        bindLocalSkuSection(item);
+        bindSupplierPicker();
+        bindCodeLinkForm();
+        bindCategoryLevelControls();
+        loadCategoryTree();
+
+        document.getElementById('catalog-save')?.addEventListener('click', () => {
+            const categoryPath = [...editorEl.querySelectorAll('.catalog-cat-level-input')]
+                .map(input => input.value.trim())
+                .filter(Boolean);
+            post('riverso_catalog_save', {
+                product_id: selectedId,
+                name: document.getElementById('catalog-name')?.value || '',
+                category_path: JSON.stringify(categoryPath)
+            }).then(d => { alert(d.success?'Guardado':(d.data?.message||'Error')); if(d.success) loadProduct(selectedId); });
+        });
+        document.getElementById('catalog-load-category-tree')?.addEventListener('click', loadCategoryTree);
+        document.getElementById('catalog-save-attrs')?.addEventListener('click', () => {
+            const attrs = {};
+            editorEl.querySelectorAll('.catalog-attr').forEach(el => { attrs[el.dataset.name] = el.value.split(',').map(s=>s.trim()).filter(Boolean); });
+            post('riverso_catalog_save_attributes', {product_id: selectedId, attributes: JSON.stringify(attrs)}).then(d => { alert(d.success?'Atributos guardados':(d.data?.message||'Error')); if(d.success) loadProduct(selectedId); });
+        });
+        editorEl.querySelectorAll('.catalog-gate-view').forEach(btn => btn.addEventListener('click', () => showGateContext(btn.dataset.gate)));
+        editorEl.querySelectorAll('.catalog-gate-approve').forEach(btn => btn.addEventListener('click', () => {
+            post('riverso_catalog_approve_gate', {product_id: selectedId, gate: btn.dataset.gate, status: 'approved'}).then(d => { alert(d.success?'Gate aprobado':(d.data?.message||'Error')); if(d.success) loadProduct(selectedId); });
+        }));
+        editorEl.querySelectorAll('.catalog-gate-reject').forEach(btn => btn.addEventListener('click', () => {
+            if (!confirm('¿Rechazar? Se creará una tarea de revisión.')) return;
+            post('riverso_catalog_approve_gate', {product_id: selectedId, gate: btn.dataset.gate, status: 'rejected'}).then(d => { alert(d.success?'Gate rechazado':(d.data?.message||'Error')); if(d.success) loadProduct(selectedId); });
+        }));
+        document.getElementById('catalog-authorize')?.addEventListener('click', () => {
+            if (!confirm('¿Autorizar publicación?')) return;
+            post('riverso_catalog_authorize', {product_id: selectedId}).then(d => { alert(d.success?'Autorizado':(d.data?.message||'Error')); if(d.success) loadProduct(selectedId); });
+        });
+        document.getElementById('catalog-publish')?.addEventListener('click', () => {
+            if (!confirm('¿Publicar en la tienda?')) return;
+            post('riverso_catalog_publish', {product_id: selectedId}).then(d => { alert(d.success?'Publicado':(d.data?.message||'Error')); if(d.success) loadProduct(selectedId); });
+        });
+
+        if (catalogInitialHash === 'codigos' || window.location.hash === '#codigos') {
+            document.getElementById('codigos')?.scrollIntoView({behavior:'smooth'});
         }
     }
-});
+
+    function loadProduct(id) {
+        selectedId = parseInt(id, 10);
+        editorEl.innerHTML = '<div class="loading">Cargando producto...</div>';
+        post('riverso_catalog_get', {product_id: id}).then(data => {
+            if (!data.success) { editorEl.innerHTML = '<div class="empty-state"><p>' + esc(data.data?.message || 'Error') + '</p></div>'; return; }
+            renderEditor(data.data.item);
+            loadList(searchEl?.value || '');
+        });
+    }
+
+    searchEl?.addEventListener('input', () => loadList(searchEl.value));
+    loadList('');
+    if (catalogInitialProductId) {
+        loadProduct(catalogInitialProductId);
+    }
+})();
+
+// Buscador de códigos de barra / tienda local
+(function() {
+    const input = document.getElementById('barcode-input');
+    const button = document.getElementById('barcode-search-btn');
+    const resultDiv = document.getElementById('barcode-result');
+    const statsDiv = document.getElementById('barcode-stats');
+    if (!input || !resultDiv) return;
+
+    function escBarcode(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function renderStats(stats) {
+        if (!statsDiv || !stats) return;
+        statsDiv.textContent = `${stats.productos || 0} productos locales · ${stats.barcodes || 0} códigos · ${stats.productos_con_barcode || 0} productos con código`;
+    }
+
+    function renderProduct(product) {
+        const barcodes = (product.barcodes || []).map(b =>
+            `<li><code>${escBarcode(b.barcode)}</code>${b.fecha ? ` <small>(${escBarcode(b.fecha)})</small>` : ''}</li>`
+        ).join('');
+        const matched = product.matched_barcode
+            ? `<p style="margin:6px 0;color:var(--success);"><strong>Código encontrado:</strong> <code>${escBarcode(product.matched_barcode)}</code></p>`
+            : '';
+        const stockColor = Number(product.stock || 0) > 0 ? 'var(--success)' : 'var(--danger)';
+
+        return `
+            <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:18px;margin-bottom:12px;text-align:left;">
+                <h3 style="margin:0 0 8px;">${escBarcode(product.nombre)}</h3>
+                ${matched}
+                <p style="margin:8px 0;">
+                    <strong>SKU local:</strong> <code>${escBarcode(product.sku)}</code><br>
+                    <strong>Precio:</strong> ${escBarcode(product.precio_formateado || '')}<br>
+                    <strong>Stock:</strong> <span style="color:${stockColor};font-weight:600;">${escBarcode(product.stock)}</span>
+                </p>
+                <details ${(product.barcodes || []).length <= 6 ? 'open' : ''}>
+                    <summary>Códigos asociados (${(product.barcodes || []).length})</summary>
+                    <ul style="margin:8px 0 0 18px;">${barcodes || '<li>Sin códigos asociados.</li>'}</ul>
+                </details>
+            </div>
+        `;
+    }
+
+    function searchBarcode() {
+        const query = input.value.trim();
+        if (!query) {
+            resultDiv.innerHTML = '<div style="color:var(--warning);text-align:center;">Ingresa un código, SKU o nombre.</div>';
+            return;
+        }
+
+        resultDiv.innerHTML = '<div class="loading" style="text-align:center;">Buscando...</div>';
+        fetch(ajaxUrl, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({
+                action: 'riverso_tienda_local_search',
+                nonce: riversoNonce,
+                query
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                renderStats(data.data?.stats);
+                resultDiv.innerHTML = `<div style="background:#fff;border:1px solid var(--danger);border-radius:8px;padding:18px;color:var(--danger);text-align:center;">
+                    ${escBarcode(data.data?.message || 'Producto local no encontrado')}<br>
+                    <small>Consulta: ${escBarcode(query)}</small>
+                </div>`;
+                return;
+            }
+
+            renderStats(data.data.stats);
+            const items = (data.data.items || []).filter(Boolean);
+            const intro = data.data.type === 'name' && items.length > 1
+                ? `<p style="color:var(--text-secondary);text-align:center;margin-bottom:12px;">Se encontraron ${items.length} coincidencias por nombre.</p>`
+                : '';
+            resultDiv.innerHTML = intro + items.map(renderProduct).join('');
+            if (data.data.type === 'barcode') {
+                input.value = '';
+            }
+        })
+        .catch(() => {
+            resultDiv.innerHTML = '<div style="color:var(--danger);text-align:center;">Error buscando producto local.</div>';
+        });
+    }
+
+    button?.addEventListener('click', searchBarcode);
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchBarcode();
+        }
+    });
+})();
 </script>
 
 <?php wp_footer(); ?>

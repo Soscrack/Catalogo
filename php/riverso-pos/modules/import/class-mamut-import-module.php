@@ -162,9 +162,9 @@ class Riverso_Mamut_Import_Module {
             return ['id' => intval($id), 'created' => false];
         }
 
-        $wpdb->insert("{$prefix}producto_base", [
-            'woocommerce_product_id' => 0,
-            'woocommerce_variation_id' => 0,
+        $inserted = $wpdb->insert("{$prefix}producto_base", [
+            'woocommerce_product_id' => null,
+            'woocommerce_variation_id' => null,
             'canonical_sku' => $sku,
             'nombre_canonico' => $nombre ?: $sku,
             'unidad_base' => 'unidad',
@@ -174,6 +174,10 @@ class Riverso_Mamut_Import_Module {
             'requires_human_review' => 1,
             'review_status' => 'pendiente',
         ], ['%d', '%d', '%s', '%s', '%s', '%d', '%s', '%d', '%d', '%s']);
+
+        if ($inserted === false) {
+            return new WP_Error('base_insert_failed', 'No se pudo crear producto_base para SKU ' . $sku . ': ' . $wpdb->last_error);
+        }
 
         return ['id' => (int) $wpdb->insert_id, 'created' => true];
     }
@@ -248,6 +252,9 @@ class Riverso_Mamut_Import_Module {
             $nombre = $nombre ?: $sku;
 
             $base = $this->ensure_base($sku, $nombre);
+            if (is_wp_error($base)) {
+                return $base;
+            }
             if ($base['created']) {
                 $created_bases++;
             }
@@ -353,13 +360,15 @@ class Riverso_Mamut_Import_Module {
     /* ===================== WP-CLI ===================== */
 
     /**
-     * wp riverso-mamut import [--limit=<n>]
+     * wp riverso-mamut import [--limit=<n>] [--offset=<n>] [--once] [--json-path=<json>]
      */
     public function cli_import($args, $assoc) {
         $limit = isset($assoc['limit']) ? intval($assoc['limit']) : 500;
-        $offset = 0;
+        $path = $assoc['json-path'] ?? ($assoc['catalog-path'] ?? '');
+        $offset = isset($assoc['offset']) ? intval($assoc['offset']) : 0;
+        $once = isset($assoc['once']);
         do {
-            $res = $this->import_batch($offset, $limit);
+            $res = $this->import_batch($offset, $limit, $path);
             if (is_wp_error($res)) {
                 WP_CLI::error($res->get_error_message());
                 return;
@@ -369,7 +378,12 @@ class Riverso_Mamut_Import_Module {
                 $res['offset'], $res['processed'], $res['created_bases'], $res['created_pps']
             ));
             $offset = $res['next_offset'];
-        } while ($offset !== null);
+        } while (!$once && $offset !== null);
+
+        if ($once && $res['next_offset'] !== null) {
+            WP_CLI::success('Lote MAMUT completado. Siguiente offset: ' . $res['next_offset']);
+            return;
+        }
 
         WP_CLI::success('Importación MAMUT completada (' . $res['total'] . ' SKUs).');
     }

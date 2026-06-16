@@ -367,6 +367,11 @@ jQuery(function($) {
                         </div>
                     </div>
                     <div class="task-actions">
+                        ${task.target_url ? `
+                            <a href="${escapeHtml(task.target_url)}" class="button button-small btn-goto-task" title="Ir a la tarea">
+                                <span class="dashicons dashicons-arrow-right"></span>
+                            </a>
+                        ` : ''}
                         ${task.estado !== 'completada' ? `
                             <button class="button button-small btn-complete-task" title="Completar">
                                 <span class="dashicons dashicons-yes"></span>

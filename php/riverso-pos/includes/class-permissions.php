@@ -577,6 +577,11 @@ class Riverso_POS_Permissions {
         if (current_user_can('riverso_view_tasks')) {
             $modules['tasks'] = ['icon' => 'clipboard', 'label' => 'Tareas'];
         }
+
+        // Catálogo MAMUT / publicación
+        if (current_user_can('riverso_review_products') || current_user_can('riverso_publish_products')) {
+            $modules['catalog'] = ['icon' => 'category', 'label' => 'Catálogo'];
+        }
         
         // Bodega
         if (current_user_can('riverso_view_warehouse')) {

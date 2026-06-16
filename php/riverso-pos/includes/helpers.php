@@ -217,3 +217,38 @@ function riverso_set_setting($key, $value) {
     $settings[$key] = $value;
     update_option('riverso_pos_settings', $settings);
 }
+
+/**
+ * Resuelve la URL de destino de una tarea basada en su tipo de referencia.
+ *
+ * Mapea referencia_tipo -> URL para shortcuts "Ir a la tarea".
+ *
+ * @param array $task Fila de tarea con campos: id, tipo, referencia_tipo, referencia_id, datos_extra
+ * @return string|null URL de destino o null si no resolvible
+ */
+function riverso_resolve_task_target($task) {
+    $tipo = $task['referencia_tipo'] ?? null;
+    $id = $task['referencia_id'] ?? null;
+
+    if (!$tipo || !$id) {
+        return null;
+    }
+
+    switch ($tipo) {
+        case 'producto_proveedor':
+            return add_query_arg('pp', (int) $id, home_url('/interno/catalog/')) . '#codigos';
+
+        case 'producto_base':
+            return add_query_arg('base', (int) $id, home_url('/interno/catalog/'));
+
+        case 'factura_item':
+            return add_query_arg('factura_item', (int) $id, admin_url('admin.php?page=riverso-pos-codes'));
+
+        case 'factura':
+            return add_query_arg('factura', (int) $id, admin_url('admin.php?page=riverso-pos-invoices'));
+
+        default:
+            return null;
+    }
+}
+

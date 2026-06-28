@@ -101,6 +101,7 @@ class Riverso_POS_Permissions {
         // === EMBOLSADO / EAN13 ===
         'riverso_manage_packaging'   => 'Gestionar embolsado y bolsas',
         'riverso_generate_ean13'     => 'Generar códigos EAN13',
+        'riverso_print_labels'       => 'Imprimir etiquetas con código de barras',
         
         // === CÓDIGOS DE BARRA ===
         'riverso_scan_barcodes'      => 'Escanear códigos de barra',
@@ -198,6 +199,7 @@ class Riverso_POS_Permissions {
         'Embolsado / EAN13' => [
             'riverso_manage_packaging',
             'riverso_generate_ean13',
+            'riverso_print_labels',
         ],
         'Códigos de Barra' => [
             'riverso_scan_barcodes',
@@ -259,6 +261,9 @@ class Riverso_POS_Permissions {
                 'riverso_complete_tasks',
                 'riverso_scan_barcodes',
                 'riverso_assign_barcodes',
+                'riverso_manage_packaging',
+                'riverso_generate_ean13',
+                'riverso_print_labels',
             ]
         ],
         

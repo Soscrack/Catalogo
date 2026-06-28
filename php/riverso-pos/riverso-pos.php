@@ -3,7 +3,7 @@
  * Plugin Name: Riverso POS
  * Plugin URI: https://riverso.cl
  * Description: Sistema POS/mini-ERP integrado con WooCommerce para gestión de productos, facturas, inventario y tareas operativas.
- * Version: 1.2.9
+ * Version: 1.3.0
  * Author: Riverso
  * Author URI: https://riverso.cl
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constantes del plugin
-define('RIVERSO_POS_VERSION', '1.2.9');
+define('RIVERSO_POS_VERSION', '1.3.0');
 define('RIVERSO_POS_PLUGIN_FILE', __FILE__);
 define('RIVERSO_POS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RIVERSO_POS_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -219,6 +219,7 @@ final class Riverso_POS {
             'barcodes'  => ['file' => 'class-barcode-module.php', 'class' => 'Riverso_Barcode_Module'],
             'products'  => ['file' => 'class-product-module.php', 'class' => 'Riverso_Product_Module'],
             'tienda-local' => ['file' => 'class-tienda-local-module.php', 'class' => 'Riverso_Tienda_Local_Module'],
+            'labels'    => ['file' => 'class-label-print-module.php', 'class' => 'Riverso_Label_Print_Module'],
             'matching'  => ['file' => 'class-matching-module.php', 'class' => 'Riverso_Matching_Module'],
             'pricing'   => ['file' => 'class-pricing-module.php', 'class' => 'Riverso_Pricing_Module'],
             'publish'   => ['file' => 'class-woo-publisher-module.php', 'class' => 'Riverso_Woo_Publisher_Module'],

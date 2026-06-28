@@ -38,7 +38,7 @@ $nonce = wp_create_nonce('riverso_pos_nonce');
 
     <h2>Bolsas generadas</h2>
     <table class="wp-list-table widefat fixed striped">
-        <thead><tr><th>ID</th><th>SKU bolsa</th><th>Cantidad</th><th>EAN13</th><th>Costo</th><th>Estado</th></tr></thead>
+        <thead><tr><th>ID</th><th>SKU bolsa</th><th>Cantidad</th><th>EAN13</th><th>Costo</th><th>Estado</th><th>Acción</th></tr></thead>
         <tbody id="pk-bolsas-tbody"><tr><td colspan="6">-</td></tr></tbody>
     </table>
 </div>
@@ -83,8 +83,15 @@ jQuery(function($){
                 <tr>
                     <td>${b.id}</td><td>${b.sku_bolsa || '-'}</td><td>${b.cantidad}</td>
                     <td>${b.ean13 || '-'}</td><td>${b.costo_unitario || '-'}</td><td>${b.estado}</td>
+                    <td style="text-align:center;">
+                        <button type="button" class="button button-small btn-print-bolsa" 
+                            data-sku="${b.sku_bolsa}" data-nombre="Bolsa ${b.sku_bolsa}" 
+                            data-ean13="${b.ean13}" data-cantidad="${b.cantidad}">
+                            🖨️ Imprimir
+                        </button>
+                    </td>
                 </tr>`).join('');
-            $('#pk-bolsas-tbody').html(rows || '<tr><td colspan="6">Sin bolsas.</td></tr>');
+            $('#pk-bolsas-tbody').html(rows || '<tr><td colspan="7">Sin bolsas.</td></tr>');
         });
     }
 
@@ -122,6 +129,29 @@ jQuery(function($){
             $('#pk-bolsa-result').html(' EAN13: <strong>' + (r.data.ean13 || 'sin EAN') + '</strong>');
             reloadAll();
         });
+    });
+
+    // Manejador de botones de impresión de bolsas
+    $(document).on('click', '.btn-print-bolsa', function(){
+        const sku = $(this).data('sku');
+        const nombre = $(this).data('nombre');
+        const ean13 = $(this).data('ean13');
+        const cantidad = parseInt($(this).data('cantidad')) || 100;
+
+        if (typeof RiversoLabelPrint !== 'undefined') {
+            RiversoLabelPrint.showPrintDialog({
+                sku,
+                nombre,
+                precio: null,
+                cantidad,
+                copias: 1,
+                modo: 'BolsaCOD',
+                color: 'BN',
+                ean13
+            });
+        } else {
+            alert('⚠️ El módulo de impresión no está cargado. Recarga la página.');
+        }
     });
 });
 </script>

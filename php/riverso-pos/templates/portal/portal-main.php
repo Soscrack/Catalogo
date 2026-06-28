@@ -2520,6 +2520,21 @@ function portalEliminarFactura(id, folio) {
                     <summary>Códigos asociados (${(product.barcodes || []).length})</summary>
                     <ul style="margin:8px 0 0 18px;">${barcodes || '<li>Sin códigos asociados.</li>'}</ul>
                 </details>
+                <div style="margin-top:12px;display:flex;gap:8px;">
+                    <button type="button" class="btn-print-label" data-sku="${escBarcode(product.sku)}" data-nombre="${escBarcode(product.nombre)}" data-precio="${product.precio || 0}" style="
+                        padding:8px 16px;
+                        background:#4CAF50;
+                        color:white;
+                        border:none;
+                        border-radius:4px;
+                        cursor:pointer;
+                        font-size:13px;
+                        font-weight:500;
+                        transition:background 0.2s;
+                    " onmouseover="this.style.background='#45a049'" onmouseout="this.style.background='#4CAF50'">
+                        🖨️ Imprimir
+                    </button>
+                </div>
             </div>
         `;
     }
@@ -2572,6 +2587,30 @@ function portalEliminarFactura(id, folio) {
         if (e.key === 'Enter') {
             e.preventDefault();
             searchBarcode();
+        }
+    });
+
+    // Manejador de botones de impresión
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.btn-print-label');
+        if (!btn) return;
+
+        const sku = btn.dataset.sku;
+        const nombre = btn.dataset.nombre;
+        const precio = parseInt(btn.dataset.precio) || null;
+
+        if (typeof RiversoLabelPrint !== 'undefined') {
+            RiversoLabelPrint.showPrintDialog({
+                sku,
+                nombre,
+                precio,
+                cantidad: 100,
+                copias: 1,
+                modo: 'BolsaCOD',
+                color: 'BN'
+            });
+        } else {
+            alert('⚠️ El módulo de impresión no está cargado. Recarga la página o contacta soporte.');
         }
     });
 })();

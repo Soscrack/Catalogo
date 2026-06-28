@@ -372,6 +372,11 @@ jQuery(function($) {
                                 <span class="dashicons dashicons-arrow-right"></span>
                             </a>
                         ` : ''}
+                        ${task.tipo === 'etiquetado' ? `
+                            <button class="button button-small btn-print-task" data-id="${task.id}" title="Imprimir etiquetas">
+                                <span class="dashicons dashicons-print"></span> Imprimir
+                            </button>
+                        ` : ''}
                         ${task.estado !== 'completada' ? `
                             <button class="button button-small btn-complete-task" title="Completar">
                                 <span class="dashicons dashicons-yes"></span>
@@ -509,6 +514,77 @@ jQuery(function($) {
             } else {
                 alert(response.data.message);
             }
+        });
+    });
+
+    // Imprimir lote de etiquetas (tareas etiquetado)
+    $(document).on('click', '.btn-print-task', function(e) {
+        e.preventDefault();
+        const card = $(this).closest('.task-card');
+        const taskId = card.data('id');
+        
+        if (typeof RiversoLabelPrint === 'undefined') {
+            alert('⚠️ El cliente de impresión no está disponible.');
+            return;
+        }
+
+        $.post(ajaxurl, {
+            action: 'riverso_get_task',
+            nonce: nonce,
+            task_id: taskId
+        }, function(response) {
+            if (!response.success || !response.data.task) {
+                alert('Error al cargar datos de la tarea.');
+                return;
+            }
+
+            const task = response.data.task;
+            if (!task.datos_extra || !task.datos_extra.items || task.datos_extra.items.length === 0) {
+                alert('Esta tarea no tiene artículos para imprimir.');
+                return;
+            }
+
+            // Construir lote de trabajos desde items de la tarea
+            const jobs = task.datos_extra.items.map(item => ({
+                sku: item.sku_local || item.sku || '0',
+                nombre: item.nombre || 'Sin nombre',
+                cantidad: parseInt(item.cantidad) || 100,
+                precio: parseInt(item.precio) || null,
+                copias: 1,
+                modo: 'BolsaCOD',
+                color: 'BN',
+                ean13: item.ean13 || null
+            }));
+
+            if (jobs.length === 0) {
+                alert('No hay artículos válidos para imprimir.');
+                return;
+            }
+
+            // Si hay un solo job, mostrar diálogo con opciones
+            if (jobs.length === 1) {
+                RiversoLabelPrint.showPrintDialog(jobs[0]);
+            } else {
+                // Múltiples items: confirmar e imprimir
+                if (!confirm(`¿Imprimir ${jobs.length} etiquetas de esta tarea?`)) {
+                    return;
+                }
+
+                RiversoLabelPrint.print(jobs)
+                    .then(result => {
+                        if (result.ok) {
+                            alert(`✅ ${result.printed} etiquetas impresas correctamente`);
+                        } else {
+                            const errorMsg = result.errors && result.errors.length > 0 ? result.errors[0] : 'Error desconocido';
+                            alert(`❌ Error: ${errorMsg}`);
+                        }
+                    })
+                    .catch(err => {
+                        alert(`❌ Error: ${err.message}`);
+                    });
+            }
+        }).fail(function() {
+            alert('Error de conexión al cargar la tarea.');
         });
     });
     

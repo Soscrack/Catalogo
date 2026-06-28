@@ -101,6 +101,14 @@ jQuery(function($){
                 <summary>Códigos asociados (${(product.barcodes || []).length})</summary>
                 <ul>${barcodes || '<li>Sin códigos asociados.</li>'}</ul>
             </details>
+            <div style="margin-top:10px;">
+                <button type="button" class="button button-primary btn-print-tienda-local" 
+                    data-sku="${esc(product.sku)}" 
+                    data-nombre="${esc(product.nombre)}" 
+                    data-precio="${product.precio || 0}">
+                    🖨️ Imprimir
+                </button>
+            </div>
         </div>`;
     }
 
@@ -160,6 +168,28 @@ jQuery(function($){
         }).fail(function(){
             $('#tienda-local-import-status').text('Error importando.');
         });
+    });
+
+    // Manejador de botones de impresión
+    $(document).on('click', '.btn-print-tienda-local', function(){
+        const $btn = $(this);
+        const sku = $btn.data('sku');
+        const nombre = $btn.data('nombre');
+        const precio = parseInt($btn.data('precio')) || null;
+
+        if (typeof RiversoLabelPrint !== 'undefined') {
+            RiversoLabelPrint.showPrintDialog({
+                sku,
+                nombre,
+                precio,
+                cantidad: 100,
+                copias: 1,
+                modo: 'BolsaCOD',
+                color: 'BN'
+            });
+        } else {
+            alert('⚠️ El módulo de impresión no está cargado. Recarga la página.');
+        }
     });
 });
 </script>

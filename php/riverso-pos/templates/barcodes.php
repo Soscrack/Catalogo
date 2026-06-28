@@ -544,53 +544,87 @@ jQuery(function($) {
         searchBarcode($('#scanner-input').val());
     });
 
+    function renderScanProduct(p) {
+        let html = '<div class="scan-found">';
+        if (p.image) {
+            html += `<img src="${p.image}" alt="">`;
+        }
+        html += '<div class="product-info">';
+        html += `<h4>${p.name || p.nombre || ''}</h4>`;
+        html += `<code class="sku">${p.sku || ''}</code>`;
+        const price = p.price ?? p.precio;
+        if (price) {
+            html += `<div class="price">$${parseFloat(price).toLocaleString('es-CL')}</div>`;
+        }
+        if (p.stock !== null && p.stock !== undefined) {
+            html += `<div>Stock: ${p.stock}</div>`;
+        }
+        if (p.sku) {
+            html += `<div style="margin-top:10px;">
+                <button type="button" class="button button-primary btn-print-barcode-scan"
+                    data-sku="${p.sku}"
+                    data-nombre="${p.name || p.nombre || ''}"
+                    data-precio="${price || 0}">
+                    🖨️ Imprimir etiqueta
+                </button>
+            </div>`;
+        }
+        html += '</div></div>';
+        return html;
+    }
+
     function searchBarcode(barcode) {
         if (!barcode) return;
         
+        const result = $('#scanner-result');
+        result.show().html('<p>Buscando...</p>');
+
         $.post(ajaxurl, {
             action: 'riverso_search_barcode',
             nonce: nonce,
             barcode: barcode
-        }, function(response) {
-            const result = $('#scanner-result');
-            result.show();
-            
-            if (response.success) {
-                const p = response.data.product;
-                let html = '<div class="scan-found">';
-                if (p.image) {
-                    html += `<img src="${p.image}" alt="">`;
-                }
-                html += '<div class="product-info">';
-                html += `<h4>${p.name}</h4>`;
-                html += `<code class="sku">${p.sku}</code>`;
-                if (p.price) {
-                    html += `<div class="price">$${parseFloat(p.price).toLocaleString('es-CL')}</div>`;
-                }
-                if (p.stock !== null) {
-                    html += `<div>Stock: ${p.stock}</div>`;
-                }
-                html += '</div></div>';
-                result.html(html);
-                
-                // Play success sound (optional)
-                // new Audio('/wp-content/plugins/riverso-pos/assets/sounds/beep.mp3').play();
-            } else {
-                result.html(`
-                    <div class="scan-not-found">
-                        <span class="dashicons dashicons-warning"></span>
-                        <div>
-                            <strong>Código no encontrado:</strong> ${barcode}<br>
-                            <button class="button button-small" id="btn-create-barcode-task">
-                                Crear tarea para asignar producto
-                            </button>
-                        </div>
-                    </div>
-                `);
+        }).done(function(response) {
+            if (response.success && response.data.product) {
+                result.html(renderScanProduct(response.data.product));
+                $('#scanner-input').val('').focus();
+                return;
             }
-            
-            // Clear input for next scan
-            $('#scanner-input').val('').focus();
+
+            // Fallback: buscar en tienda local (SKU / nombre)
+            $.post(ajaxurl, {
+                action: 'riverso_tienda_local_search',
+                nonce: nonce,
+                query: barcode
+            }).done(function(localResp) {
+                if (localResp.success && localResp.data.items && localResp.data.items.length) {
+                    const p = localResp.data.items[0];
+                    result.html(renderScanProduct({
+                        sku: p.sku,
+                        nombre: p.nombre,
+                        precio: p.precio,
+                        stock: p.stock,
+                        name: p.nombre,
+                        price: p.precio
+                    }));
+                } else {
+                    result.html(`
+                        <div class="scan-not-found">
+                            <span class="dashicons dashicons-warning"></span>
+                            <div>
+                                <strong>Código no encontrado:</strong> ${barcode}<br>
+                                <button class="button button-small" id="btn-create-barcode-task">
+                                    Crear tarea para asignar producto
+                                </button>
+                            </div>
+                        </div>
+                    `);
+                }
+                $('#scanner-input').val('').focus();
+            }).fail(function() {
+                result.html('<div class="scan-not-found">Error buscando producto.</div>');
+            });
+        }).fail(function() {
+            result.html('<div class="scan-not-found">Error buscando producto.</div>');
         });
     }
 
@@ -599,6 +633,24 @@ jQuery(function($) {
         const barcode = $('#scanner-input').val() || $(this).closest('.scan-not-found').find('strong').next().text().trim();
         // This would create a task - integrate with task module
         alert('Tarea creada para asignar código: ' + barcode);
+    });
+
+    // Imprimir desde escáner rápido
+    $(document).on('click', '.btn-print-barcode-scan', function() {
+        const $btn = $(this);
+        if (typeof RiversoLabelPrint === 'undefined') {
+            alert('⚠️ El módulo de impresión no está cargado. Recarga la página.');
+            return;
+        }
+        RiversoLabelPrint.showPrintDialog({
+            sku: $btn.data('sku'),
+            nombre: $btn.data('nombre'),
+            precio: parseInt($btn.data('precio')) || null,
+            cantidad: 100,
+            copias: 1,
+            modo: 'BolsaCOD',
+            color: 'BN'
+        });
     });
 
     // Load barcodes

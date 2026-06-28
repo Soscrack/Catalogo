@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?><DTE xmlns="http://www.sii.cl/SiiDte" version="1.0">
+			<Documento ID="T33F90388">
+				<Encabezado>
+					<IdDoc>
+						<TipoDTE>33</TipoDTE>
+						<Folio>90388</Folio>
+						<FchEmis>2026-03-06</FchEmis>
+						<TipoDespacho>1</TipoDespacho>
+						<IndServicio>3</IndServicio>
+						<TpoTranVenta>1</TpoTranVenta>
+						<FmaPago>1</FmaPago>
+
+						<FchVenc>2026-03-06</FchVenc>
+					</IdDoc>
+					<Emisor>
+						<RUTEmisor>76141242-6</RUTEmisor>
+						<RznSoc>SOC VIACAVA Y SANCHEZ SPA</RznSoc>
+						<GiroEmis>VENTA ARTICULOS DE PLASTICO</GiroEmis>
+						<CorreoEmisor>ventas@lyplas.cl</CorreoEmisor>
+						<Acteco>472105</Acteco>
+						<Acteco>475909</Acteco>
+						<Acteco>477399</Acteco>
+						<Acteco>829900</Acteco>
+						<Sucursal>LYPLAS</Sucursal>
+						<DirOrigen>BAQUEDANO 640 ANTOFA</DirOrigen>
+						<CmnaOrigen>ANTOFAGASTA</CmnaOrigen>
+						<CiudadOrigen>Antofagasta</CiudadOrigen>
+						<CdgVendedor>16134197-5</CdgVendedor>
+					</Emisor>
+					<Receptor>
+						<RUTRecep>76443852-3</RUTRecep>
+						<CdgIntRecep>76.443.852-3</CdgIntRecep>
+						<RznSocRecep>COMERCIALIZADORA YUBINZA  RIVERA RAMIREZ E.I.R.L.</RznSocRecep>
+						<GiroRecep>FERRETERIA Y COMERCIALIZADORA,VENTAS LUB</GiroRecep>
+						<DirRecep>CONDELL 2999</DirRecep>
+						<CmnaRecep>ANTOFAGASTA</CmnaRecep>
+						<CiudadRecep>ANTOFAGASTA</CiudadRecep>
+						<DirPostal>CONDELL 2999</DirPostal>
+						<CmnaPostal>ANTOFAGASTA</CmnaPostal>
+						<CiudadPostal>ANTOFAGASTA</CiudadPostal>
+					</Receptor>
+
+					<Totales>
+						<MntNeto>14091</MntNeto>
+						<TasaIVA>19.00</TasaIVA>
+						<IVA>2677</IVA>
+						<MntTotal>16768</MntTotal>
+					</Totales>
+				</Encabezado>
+				<Detalle>
+					<NroLinDet>1</NroLinDet>
+					<CdgItem>
+						<TpoCodigo>INT1</TpoCodigo>
+						<VlrCodigo>BOLPOAL152515</VlrCodigo>
+					</CdgItem>
+					<NmbItem>KG BOLSA 15 X 25 X 0.150 00FP</NmbItem>
+					<QtyItem>2.935000</QtyItem>
+					<UnmdItem>KL</UnmdItem>
+					<PrcItem>4801.000000</PrcItem>
+					<MontoItem>14091</MontoItem>
+				</Detalle>
+				<TED version="1.0"><DD><RE>76141242-6</RE><TD>33</TD><F>90388</F><FE>2026-03-06</FE><RR>76443852-3</RR><RSR>COMERCIALIZADORA YUBINZA  RIVERA RAMIRE</RSR><MNT>16768</MNT><IT1>KG BOLSA 15 X 25 X 0.150 00FP</IT1><CAF version="1.0">
+<DA>
+<RE>76141242-6</RE>
+<RS>SOCIEDAD VIACAVA Y SANCHEZ SPA</RS>
+<TD>33</TD>
+<RNG><D>89521</D><H>92434</H></RNG>
+<FA>2026-01-12</FA>
+<RSAPK><M>x09ySFW46MkYYqWfjMEFe5FEq+vc4ZQoyskLmIRnVUtjsT21O91LYrd4UYE6CQG0UrEK7S3givjnQnxoh8ebGQ==</M><E>Aw==</E></RSAPK>
+<IDK>300</IDK>
+</DA>
+<FRMA algoritmo="SHA1withRSA">fj16BWxco9SlYqSETLhRUwAh9mwMVHNNjZjl2wfqr1OX5edG3l1hTMLhBWiwT4KutganXrE1dsGc0FbnrEw6WQ==</FRMA>
+</CAF><TSTED>2026-03-06T12:06:26</TSTED></DD><FRMT algoritmo="SHA1withRSA">t6Gj/DV4mKHP+1PswG+IhkDdpwWgL8ZmAU9MnzOq2r7PtIevkGd8qaCZSkQuBrDVsFWDiyIWoF/hDzaVERqnVQ==</FRMT></TED>
+				<TmstFirma>2026-03-06T12:06:26</TmstFirma>
+			</Documento><Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#T33F90388"><Transforms><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>P9PE6B8LQeuklJ0YP4HpZ9VsSO8=</DigestValue></Reference></SignedInfo><SignatureValue>
+s4uYnCXlku3Dc1ZYT+p9iv/6kb5988+nnpJ5cyu8fZoLR3zXt5Em+FzJgATpSx2m
+4GZqJC+j3YW1b1+AuKa9GxYFH830PUqyWEf00GlXv0Ky3f5i4w8off5ynCtLLdDE
+T3hI7vuJPuvckgiMG+FQ0tD1RmO2SqimABqNOwQ2GXOt0UyHeAyEQO4jJqnS/CTY
+15wUYUuBXWFTRDcejK7E8aUSn1dPiVA7sT7CqyPvN78pmAvJs4lw6ijd2PjDbW5/
+iMRQJnbFZ4UF6jYnVjiZgSHRKkWKrWtmdiNn0X14/MLupr4JltqwYBmUgHy8nGRl
+otl1RdLSTmBT6iIcb0Bh2g==
+</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>
+2+/I4c1DFtt0oooIzQh6ftUCwJfptRhiLld5TsB72WmaoZ3sno3vfzpZfEZ3A8kh
+uGMJ0dEk5BNPCjOeZqilOF4JVt8RZL+hIDfkKj2VQTX8fKR+zMt5Ngy7CNB7Epuy
+nubAHpm7rjwXkFuK2EiftHYdk3tfHi3ZYPy3jpQbQB1b47ErD9ftJbK4b30sxMxz
+dim+UCCktNHM5OGXqnFBBpk7T8CNP+bHE6fXmpcV9UVofX5Y+k/ltBM0n6dT5U8q
+nayN56JRPdWHfgRfsuiSgGT3/opEs7kiaFN/gFVJv8FRdbmhE+yrojCFLw7QyQdA
+y9sDCa+E6N6lotx9KCjrmQ==
+</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>
+MIIHpzCCBo+gAwIBAgITOgAAAlv5EG8wIder9wAAAAACWzANBgkqhkiG9w0BAQsF
+ADCBwTELMAkGA1UEBhMCQ0wxFjAUBgNVBAgTDU1ldHJvcG9saXRhbmExEzARBgNV
+BAcTCkxhcyBDb25kZXMxHDAaBgNVBAoTE0RFRk9OVEFOQSBDSElMRSBTUEExEzAR
+BgNVBAsTCjc2Mzg5NDY5LUsxKzApBgNVBAMTIkZJUk1BIEVMRUNUUk9OSUNBIFNJ
+TVBMRSBERUZPTlRBTkExJTAjBgkqhkiG9w0BCQEWFmNvbnRhY3RvQGRlZm9udGFu
+YS5jb20wHhcNMjYwMTI3MTQzNDU4WhcNMjcwMTI3MTQzNDU4WjCBujELMAkGA1UE
+BhMCQ0wxETAPBgNVBAgTCFNhbnRpYWdvMREwDwYDVQQHEwhTYW50aWFnbzEZMBcG
+A1UEChMQd3d3LmRlZm9udGFuYS5jbDETMBEGA1UECxMKMTM3NDM4MTMtNTEnMCUG
+A1UEAxMeQU5EUkVBIFBBVUxJTkEgVklBQ0FWQSBTQU5DSEVaMSwwKgYJKoZIhvcN
+AQkBFh1hXzE3Njk1MjUwNTNfNDRAZGVmb250YW5hLmNvbTCCASIwDQYJKoZIhvcN
+AQEBBQADggEPADCCAQoCggEBANvvyOHNQxbbdKKKCM0Ien7VAsCX6bUYYi5XeU7A
+e9lpmqGd7J6N7386WXxGdwPJIbhjCdHRJOQTTwoznmaopTheCVbfEWS/oSA35Co9
+lUE1/HykfszLeTYMuwjQexKbsp7mwB6Zu648F5BbithIn7R2HZN7Xx4t2WD8t46U
+G0AdW+OxKw/X7SWyuG99LMTMc3YpvlAgpLTRzOThl6pxQQaZO0/AjT/mxxOn15qX
+FfVFaH1+WPpP5bQTNJ+nU+VPKp2sjeeiUT3Vh34EX7LokoBk9/6KRLO5ImhTf4BV
+Sb/BUXW5oRPsq6IwhS8O0MkHQMvbAwmvhOjepaLcfSgo65kCAwEAAaOCA5swggOX
+MAsGA1UdDwQEAwIF4DCBzwYDVR0gBIHHMIHEMIHBBgkrBgEEAYO9IAMwgbMwLAYI
+KwYBBQUHAgEWIEh0dHA6Ly93d3cuZGVmb250YW5hLmNsL0NQUy5odG1sMFYGCCsG
+AQUFBwICMEoeSABDAGUAcgB0AGkAZgBpAGMAYQBkAG8AIABGAGkAcgBtAGEAIABF
+AGwAZQBjAHQAcgBvAG4AaQBjAGEAIABTAGkAbQBwAGwAZTArBggrBgEFBQcCARYf
+SHR0cDovL3d3dy5kZWZvbnRhbmEuY2wvQ1AuaHRtbDAdBgNVHQ4EFgQUOMGJ0JwD
+Bdd4NtEXtrjNkbx4F9cwIwYDVR0RBBwwGqAYBggrBgEEAcEBAaAMFgoxMzc0Mzgx
+My01MB8GA1UdIwQYMBaAFKUMm08WafNTeqkiZyeFNtoFXxkuMGUGA1UdHwReMFww
+WqBYoFaGKWh0dHA6Ly9jcmwuZGVmb250YW5hLmNvbS9EZWZvbnRhbmFGZXMuY3Js
+hilmaWxlOi8vLy8xMC4wLjE0Mi42NS9DUkwvRGVmb250YW5hRmVzLmNybDCB3AYI
+KwYBBQUHAQEEgc8wgcwwgckGCCsGAQUFBzAChoG8bGRhcDovLy9DTj1GSVJNQSUy
+MEVMRUNUUk9OSUNBJTIwU0lNUExFJTIwREVGT05UQU5BLENOPUFJQSxDTj1QdWJs
+aWMlMjBLZXklMjBTZXJ2aWNlcyxDTj1TZXJ2aWNlcyxDTj1Db25maWd1cmF0aW9u
+LERDPVBLSSxEQz1ERUZPTlRBTkE/Y0FDZXJ0aWZpY2F0ZT9iYXNlP29iamVjdENs
+YXNzPWNlcnRpZmljYXRpb25BdXRob3JpdHkwPgYJKwYBBAGCNxUHBDEwLwYnKwYB
+BAGCNxUIhMfoMYOti3qF9Y8ChJWQdYTGqV2BcoSs+2GEi41oAgFkAgEDMCkGA1Ud
+JQQiMCAGCCsGAQUFBwMEBgorBgEEAYI3CgMEBggrBgEFBQcDAjA1BgkrBgEEAYI3
+FQoEKDAmMAoGCCsGAQUFBwMEMAwGCisGAQQBgjcKAwQwCgYIKwYBBQUHAwIwRAYJ
+KoZIhvcNAQkPBDcwNTAOBggqhkiG9w0DAgICAIAwDgYIKoZIhvcNAwQCAgCAMAcG
+BSsOAwIHMAoGCCqGSIb3DQMHMCMGA1UdEgQcMBqgGAYIKwYBBAHBAQKgDBYKNzYz
+ODk0NjQtOTANBgkqhkiG9w0BAQsFAAOCAQEAK87fXiz2URNfINNGtjvIn4gquZqN
+Go54lSpl2b02optMni+Gke3FNZb2U6a9fAr2Zz0mIDLtrivLTNIynROYwM9gw21f
+3B2nKEGDJlmFd6b3yagYvVqy/jffngYCiKdsAwYnQuLb5tfFbAX3fqimuCHoT3sR
+91WgLFVlQky4WYiiSyxPvj6wJzdjUoMbG5IzK+g4jTWIiOdD1Gr77DEwH16/tXbv
+wO+WvREbrSIENaBLq4VYSSYW9bzIDA+EZZJ++gs0/BEMFORGVgzpwjV/9BEGlSLf
+/7InoAjwP967OXcqfORNMNzD1B2g93rLPwYazJeVpX2ckS/h9XA+lY/bfg==
+</X509Certificate></X509Data></KeyInfo></Signature>
+		</DTE>

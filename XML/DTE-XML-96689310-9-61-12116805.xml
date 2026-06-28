@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?><DTE xmlns="http://www.sii.cl/SiiDte" version="1.0">
+	<Documento ID="S20260227T61F12116805">
+		<Encabezado>
+			<IdDoc>
+				<TipoDTE>61</TipoDTE>
+				<Folio>12116805</Folio>
+				<FchEmis>2026-02-27</FchEmis>
+			</IdDoc>
+			<Emisor>
+				<RUTEmisor>96689310-9</RUTEmisor>
+				<RznSoc>TRANSBANK S.A.</RznSoc>
+				<GiroEmis>OPERADORA DE TARJETAS DE CREDITO Y DEBITO</GiroEmis>
+				<Acteco>671921</Acteco>
+			</Emisor><Receptor>
+				<RUTRecep>76443852-3</RUTRecep>
+				<CdgIntRecep>31436516</CdgIntRecep>
+				<RznSocRecep>COMERCIALIZADORA YUBINZA RIVERA RAMIREZ</RznSocRecep>
+				<GiroRecep>VENTA ACCESORIOS PARA VEHICULOS MOTORIZA</GiroRecep>
+				<DirRecep>CONDELL 2993 SN</DirRecep>
+				<CmnaRecep>ANTOFAGASTA</CmnaRecep>
+				<CiudadRecep>ANTOFAGASTA</CiudadRecep>
+			</Receptor>
+			<Totales>
+				<MntNeto>87</MntNeto>
+				<TasaIVA>19.00</TasaIVA>
+				<IVA>17</IVA>
+				<IVAProp>17</IVAProp>
+				<MntTotal>104</MntTotal>
+			</Totales>
+		</Encabezado>
+		<Detalle>
+			<NroLinDet>1</NroLinDet>
+			<NmbItem>Ajuste Costo de Marca</NmbItem>
+			<MontoItem>87</MontoItem>
+		</Detalle>
+		<Referencia>
+			<NroLinRef>1</NroLinRef>
+			<TpoDocRef>33</TpoDocRef>
+			<IndGlobal>1</IndGlobal>
+			<FolioRef>0</FolioRef>
+			<FchRef>2026-02-27</FchRef>
+			<CodRef>3</CodRef>
+		</Referencia>
+<TED version="1.0"><DD><RE>96689310-9</RE><TD>61</TD><F>12116805</F><FE>2026-02-27</FE><RR>76443852-3</RR><RSR>COMERCIALIZADORA YUBINZA RIVERA RAMIREZ</RSR><MNT>104</MNT><IT1>AJUSTE COSTO DE MARCA</IT1><CAF version="1.0"><DA><RE>96689310-9</RE><RS>TRANSBANK S A</RS><TD>61</TD><RNG><D>12060390</D><H>12260389</H></RNG><FA>2026-02-19</FA><RSAPK><M>vhBOPugjF9GQItLWjGQNATSNgBdrEU0OgHm8pYQTDfGYF9LPDwJdvXy81Cozk65xid6ZWvvS2LnT2bmYHe78+Q==</M><E>Aw==</E></RSAPK><IDK>300</IDK></DA><FRMA algoritmo="SHA1withRSA">AKm0pF+XZT42hRPAQVNJAWKVBnN3Fagmg9oQUwxcozBtvqA4P7hIb+loyByx/Q9h6kYvqCt5DdI3pc/61N291w==</FRMA></CAF><TSTED>2026-03-04T13:56:21</TSTED></DD><FRMT algoritmo="SHA1withRSA">GfkHv8O1OATGuIpYYRAZjj3ZKMkTbtr43ZLkKsgzG3Odmm5pCq0DEe+UokNbCnYziy5zVY8lKR3k
+geKLRtxYyA==
+</FRMT></TED>
+<TmstFirma>2026-03-04T13:56:21</TmstFirma>
+</Documento>
+<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
+  <SignedInfo>
+    <CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+    <SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+    <Reference URI="#S20260227T61F12116805">
+      <DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
+      <DigestValue>uYUMkAJVvhSB8Hl6h0T+fWtKF/k=</DigestValue>
+    </Reference>
+  </SignedInfo>
+  <SignatureValue>
+    5WoGlh+OqXoXnuo8/BQKTHHyNN6bc7eSXc1j5dCU7kEy5XI5D+r+gF7+CmaPdijl
+    dvGA0yIbNiCbUSXx2UuZzDJDag4f9/uw4aQZOJE3uQDBpLP/jHyQjlq7lCp/ipBG
+    BUrJ3PyDw8YXueQbErrQmdx9bhh5AgGOKAb+kCfU/4suOjVrMLLC/qsWJKLSqTiz
+    P7+NcIE06A8gG9gAz/ZlEQBhJYnV9+irM73VcsfWsqVMrVz6hFePfAJ+R9AE/9q6
+    /ojdDoE6X+mVtL7Tkh7yKPXMKWO7zerRip8KEzY1dJcE3wVLbFC4wPyckSrhp+I4
+    +GTnYFUiF0nNCO/3sWrKqg==
+  </SignatureValue>
+  <KeyInfo>
+    <KeyValue>
+      <RSAKeyValue>
+        <Modulus>
+          66bDq/YaLpxGY1XyM7UCSmv3EDxsmhpAGovI0J2KG+DzUGz8keB7H4gY+LrWys9V
+          F6h6bEU/1BDaFe+1U0lGd0T7phko2E5VfBLLbMDTp660DCC2SmKUbrTu+gByj8Iv
+          vmsrbpwx+51VG4hgtVtdlevIBVa9O7LDKqeYBUuQNY9qv6/dr2PLMbpLvTM5+m+J
+          k83OD9/lrVAPVlYh/dMFTOpb+MMuauvI0ZWdWUrBLFsEOpq/UFh/6nJvVqPEBWxR
+          B5mmavla/0nExiNjkfWe94JoYsrw+QsJc3dSnpLb1u5Wllu/RdjemFyrZjrgPgO2
+          dNaEjlsx5VnLbUbxIu5+gw==
+        </Modulus>
+        <Exponent>AQAB</Exponent>
+      </RSAKeyValue>
+    </KeyValue>
+    <X509Data>
+      
+      <X509Certificate>
+        MIIGcTCCBVmgAwIBAgIDBkLXMA0GCSqGSIb3DQEBCwUAMIGmMQswCQYDVQQGEwJD
+        TDEYMBYGA1UEChMPQWNlcHRhLmNvbSBTLkEuMUgwRgYDVQQDEz9BY2VwdGEuY29t
+        IEF1dG9yaWRhZCBDZXJ0aWZpY2Fkb3JhIENsYXNlIDIgUGVyc29uYSBOYXR1cmFs
+        IC0gRzQxHjAcBgkqhkiG9w0BCQEWD2luZm9AYWNlcHRhLmNvbTETMBEGA1UEBRMK
+        OTY5MTkwNTAtODAeFw0yMzEyMjExMzU4MTRaFw0yNjEyMjExMzU4MTRaMIGIMQsw
+        CQYDVQQGEwJDTDEYMBYGA1UEDBMPUEVSU09OQSBOQVRVUkFMMSUwIwYDVQQDExxY
+        SU1FTkEgUEFPTEEgVE9MRURPIEdPTlpBTEVaMSMwIQYJKoZIhvcNAQkBFhR4dG9s
+        ZWRvQHRyYW5zYmFuay5jbDETMBEGA1UEBRMKMTM2ODI5MjUtNDCCASIwDQYJKoZI
+        hvcNAQEBBQADggEPADCCAQoCggEBAOumw6v2Gi6cRmNV8jO1Akpr9xA8bJoaQBqL
+        yNCdihvg81Bs/JHgex+IGPi61srPVReoemxFP9QQ2hXvtVNJRndE+6YZKNhOVXwS
+        y2zA06eutAwgtkpilG607voAco/CL75rK26cMfudVRuIYLVbXZXryAVWvTuywyqn
+        mAVLkDWPar+v3a9jyzG6S70zOfpviZPNzg/f5a1QD1ZWIf3TBUzqW/jDLmrryNGV
+        nVlKwSxbBDqav1BYf+pyb1ajxAVsUQeZpmr5Wv9JxMYjY5H1nveCaGLK8PkLCXN3
+        Up6S29buVpZbv0XY3phcq2Y64D4DtnTWhI5bMeVZy21G8SLufoMCAwEAAaOCAsIw
+        ggK+MB8GA1UdIwQYMBaAFGWlqz4/yLZRbRF+X8MKB+ZDoAi2MB0GA1UdDgQWBBRn
+        V/byyIdnVbp//0bmGwiFQc9xWzALBgNVHQ8EBAMCBPAwHQYDVR0lBBYwFAYIKwYB
+        BQUHAwIGCCsGAQUFBwMEMBEGCWCGSAGG+EIBAQQEAwIFoDCB9QYDVR0gBIHtMIHq
+        MIHnBggrBgEEAbVrAjCB2jAxBggrBgEFBQcCARYlaHR0cHM6Ly9hY2c0LmFjZXB0
+        YS5jb20vQ1BTLUFjZXB0YWNvbTCBpAYIKwYBBQUHAgIwgZcwFhYPQWNlcHRhLmNv
+        bSBTLkEuMAMCAQkafUVsIHRpdHVsYXIgaGEgc2lkbyB2YWxpZGFkbyBlbiBmb3Jt
+        YSBvbmxpbmUsIHF1ZWRhbmRvIGhhYmlsaXRhZG8gZWwgQ2VydGlmaWNhZG8gcGFy
+        YSB1c28gdHJpYnV0YXJpbywgcGFnb3MsIGNvbWVyY2lvIHkgb3Ryb3MuMFoGA1Ud
+        EgRTMFGgGAYIKwYBBAHBAQKgDBYKOTY5MTkwNTAtOKAkBggrBgEFBQcIA6AYMBYM
+        Cjk2OTE5MDUwLTgGCCsGAQQBwQECgQ9pbmZvQGFjZXB0YS5jb20wXwYDVR0RBFgw
+        VqAYBggrBgEEAcEBAaAMFgoxMzY4MjkyNS00oCQGCCsGAQUFBwgDoBgwFgwKMTM2
+        ODI5MjUtNAYIKwYBBAHBAQKBFHh0b2xlZG9AdHJhbnNiYW5rLmNsMEcGCCsGAQUF
+        BwEBBDswOTA3BggrBgEFBQcwAYYraHR0cHM6Ly9hY2c0LmFjZXB0YS5jb20vYWNn
+        NC9vY3NwL0NsYXNlMi1HNDA/BgNVHR8EODA2MDSgMqAwhi5odHRwczovL2FjZzQu
+        YWNlcHRhLmNvbS9hY2c0L2NybC9DbGFzZTItRzQuY3JsMA0GCSqGSIb3DQEBCwUA
+        A4IBAQBYT539pRHu8m9MZsH0icW8cZziWzqfZiKQL8iaoWa1Hhz9NthxUXQ6OK+E
+        Vb+mev25DZxoSlWhEmcycLm1MoO2OcTAS3fEx39q3OcnXZBa/2/aQVCsQnN3xDo4
+        R8FSN2a0fYNH3bQvDLs0jGZdnIw8hyVHHKY/KAjhmdmKpfYpWi6YWAySIB6vImYT
+        nHl32n6ipcoTz5kLZlocR8Ebcb5gyspXuI1GAM6zUQmsHRrfFhNbPAUsJkKD7IEw
+        KVH6KT65yTopJJA4uh2tW28J4ZjO+Lnvk20xWQAbWYq6cgov1tfxYFI8aAhD4irn
+        sJa5aHxXdbdkucJeXryxOPErbhYV
+      </X509Certificate>
+    </X509Data>
+  </KeyInfo>
+</Signature>
+</DTE>

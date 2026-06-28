@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?><DTE xmlns="http://www.sii.cl/SiiDte" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.0" xsi:schemaLocation="http://www.sii.cl/SiiDte DTE_v10.xsd">
+<Documento ID="DTE_33_738179_96565870-K_20260604080100857">
+<Encabezado>
+<IdDoc>
+<TipoDTE>33</TipoDTE>
+<Folio>738179</Folio>
+<FchEmis>2026-06-04</FchEmis>
+<FchVenc>2026-06-14</FchVenc>
+</IdDoc>
+<Emisor>
+<RUTEmisor>96565870-K</RUTEmisor>
+<RznSoc>TECBOLT SA</RznSoc>
+<GiroEmis>IMPORTACION EXPORTACION FABRICACION Y COMERCIALIZACION DE ELEMENTOS DE SUJECION</GiroEmis>
+<Telefono>24767000</Telefono>
+<CorreoEmisor>gguajardo@mamut.cl</CorreoEmisor>
+<Acteco>289910</Acteco>
+<DirOrigen>AVDA. GLADYS MARIN 5760</DirOrigen>
+<CmnaOrigen>ESTACION CENTRAL</CmnaOrigen>
+<CiudadOrigen>SANTIAGO</CiudadOrigen>
+</Emisor>
+<Receptor>
+<RUTRecep>76443852-3</RUTRecep>
+<RznSocRecep>COM. YUBINZA RIVERA RAMIREZ EIRL</RznSocRecep>
+<GiroRecep>VENTA AL POR MENOR DE ARTICULOS DE FERRE</GiroRecep>
+<CorreoRecep>rs.riverso@gmail.com</CorreoRecep>
+<DirRecep>CONDELL 2999</DirRecep>
+<CmnaRecep>ANTOFAGASTA</CmnaRecep>
+<CiudadRecep>ANTOFAGASTA</CiudadRecep>
+</Receptor>
+<Totales>
+<MntNeto>169328</MntNeto>
+<MntExe>0</MntExe>
+<TasaIVA>19</TasaIVA>
+<IVA>32172</IVA>
+<MntTotal>201500</MntTotal>
+</Totales>
+</Encabezado>
+<Detalle>
+<NroLinDet>1</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>K06PTA</VlrCodigo>
+</CdgItem>
+<NmbItem>PTA.ATORN. PHIL (S2)PHIL #2x25mm</NmbItem>
+<QtyItem>1000</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>105.12</PrcItem>
+<MontoItem>105120</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>2</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>K08PTA</VlrCodigo>
+</CdgItem>
+<NmbItem>PTA.ATORN. PHIL (S2)PHIL #2x50mm</NmbItem>
+<QtyItem>100</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>198.50</PrcItem>
+<MontoItem>19850</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>3</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>06TAC</VlrCodigo>
+</CdgItem>
+<NmbItem>TUERCA.ACOPLE.UNC 3/8x9/16x1.3/4   ZBR</NmbItem>
+<QtyItem>100</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>145.15</PrcItem>
+<MontoItem>14515</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>4</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>16RTPA</VlrCodigo>
+</CdgItem>
+<NmbItem>REM.AL.ALA.ANCHA. 4.8(16)x18.0</NmbItem>
+<QtyItem>1000</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>26.90</PrcItem>
+<MontoItem>26900</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>5</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>01TRN</VlrCodigo>
+</CdgItem>
+<NmbItem>TARUGO NYLON M-5x25</NmbItem>
+<QtyItem>2000</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>4.09</PrcItem>
+<MontoItem>8180</MontoItem>
+</Detalle>
+<DscRcgGlobal>
+<NroLinDR>1</NroLinDR>
+<TpoMov>D</TpoMov>
+<TpoValor>$</TpoValor>
+<ValorDR>5237</ValorDR>
+</DscRcgGlobal>
+<Referencia>
+<NroLinRef>1</NroLinRef>
+<TpoDocRef>801</TpoDocRef>
+<FolioRef>898300</FolioRef>
+<FchRef>2026-06-04</FchRef>
+</Referencia>
+<TED version="1.0">
+<DD>
+<RE>96565870-K</RE>
+<TD>33</TD>
+<F>738179</F>
+<FE>2026-06-04</FE>
+<RR>76443852-3</RR>
+<RSR>COM. YUBINZA RIVERA RAMIREZ EIRL</RSR>
+<MNT>201500</MNT>
+<IT1>PTA.ATORN. PHIL (S2)PHIL #2x25mm</IT1>
+<CAF version="1.0">
+<DA>
+<RE>96565870-K</RE>
+<RS>TECBOLT SA</RS>
+<TD>33</TD>
+<RNG>
+<D>726001</D>
+<H>742000</H>
+</RNG>
+<FA>2026-02-06</FA>
+<RSAPK>
+<M>2s3r8QLf252lX4n2XVQZ/OabebIdVxfuWrjKo5T4z+1EkOrHlhcxVdQcJujbeu0loih863ML7gZA205/m72B/w==</M>
+<E>Aw==</E>
+</RSAPK>
+<IDK>300</IDK>
+</DA>
+<FRMA algoritmo="SHA1withRSA">ZVz6GJEWmFtFfVz8OC85UN1XX3AVWhr56qbYk82SlUmoZjznc9+MIqE0X/JCsb9xX5CFTxaw8fExLUEXv9wSSA==</FRMA>
+</CAF>
+<TSTED>2026-06-04T08:01:00</TSTED>
+</DD>
+<FRMT algoritmo="SHA1withRSA">FS456cOXGkZ8BJVIipmTJhdqhiDLUnN/LmGX4Vb4b9TJfxQsXNJp9jXSzDeulkidV/XmAgC1TFLvaiOCkCr2Aw==</FRMT>
+</TED>
+<TmstFirma>2026-06-04T08:01:00</TmstFirma>
+</Documento>
+
+<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
+<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+<CanonicalizationMethod xmlns="http://www.w3.org/2000/09/xmldsig#" Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+<SignatureMethod xmlns="http://www.w3.org/2000/09/xmldsig#" Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+<Reference xmlns="http://www.w3.org/2000/09/xmldsig#" URI="#DTE_33_738179_96565870-K_20260604080100857">
+<Transforms xmlns="http://www.w3.org/2000/09/xmldsig#">
+<Transform xmlns="http://www.w3.org/2000/09/xmldsig#" Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+</Transforms>
+<DigestMethod xmlns="http://www.w3.org/2000/09/xmldsig#" Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
+<DigestValue xmlns="http://www.w3.org/2000/09/xmldsig#">nOd24n+baUXLG3qMqLsbV1vKVMw=</DigestValue>
+</Reference>
+</SignedInfo>
+<SignatureValue xmlns="http://www.w3.org/2000/09/xmldsig#">
+HuKZOkyYZuVS67gC51IdjH8H/OSrQcCpeRw6pOmTh1Lu21TLS0P68g/jEnnoYPxuB3gbLBy0/0Yb
+otPZCsDkfKwuSjd2wfgagweJRkKmnm9m6XS7f1eEQrc3yLLURQ8adK+owY1gSTgat0eaan5cUmk9
+oVBfVdd8KxL2uCdk+Wcc5K6d9iAf1w72peM3tk0Ocw03rEI1PV6um7lgtBUSVKuQc92EjCnPx8h7
+JQUvW+6wyx1sWhZusFkyoDrbqQWuxprhnAwqTHTExq1fRd2Y3Hr1jfWwJLF+qiuU2d/JEP78kjp3
+AceDU5p1qPFXk+uPHby2ReK5Ha8iO8biwVj2Hw==
+</SignatureValue>
+<KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+<KeyValue xmlns="http://www.w3.org/2000/09/xmldsig#">
+<RSAKeyValue xmlns="http://www.w3.org/2000/09/xmldsig#">
+<Modulus xmlns="http://www.w3.org/2000/09/xmldsig#">
+iZuWOGzoNdldaFf81QW8aJ20b2UdUD7F2nju0WIlWMSoh4gsVkhLUhO+WjwdUiG/NH6R+ASW8mqc
+yApPV2BXQR7cPK0cL33b4rdOypk8CJyoBJ2N86Sgr5zShvGLdF0Q6CuPPp/bxFDjxKSiA3m9APiI
+DGnQdpzTzFJ1HwX197Z64z0xgFByP/tn9HPk/+21u/nxjoH7kKCE/PHt3XjsGYHRZcX9/o07+N4m
+tyqjz8OsKP3TFYHYPN2gLAkKwqdFYr6PuXTiH1Cm327cZNWyS5ahmtOlwlryGP5m3q8unpqN58Gi
+WvOJJPCw8Eh8M5RUB/Rac2RyjdE2RlcQu/9cjQ==
+</Modulus>
+<Exponent xmlns="http://www.w3.org/2000/09/xmldsig#">AQAB</Exponent>
+</RSAKeyValue>
+</KeyValue>
+<X509Data xmlns="http://www.w3.org/2000/09/xmldsig#">
+<X509Certificate xmlns="http://www.w3.org/2000/09/xmldsig#">
+MIIHtTCCBZ2gAwIBAgIKZaJ8pwABABKEbzANBgkqhkiG9w0BAQsFADCBvzELMAkGA1UEBhMCQ0wx
+HTAbBgNVBAgTFFJlZ2lvbiBNZXRyb3BvbGl0YW5hMREwDwYDVQQHEwhTYW50aWFnbzEUMBIGA1UE
+ChMLRS1DRVJUQ0hJTEUxIDAeBgNVBAsTF0F1dG9yaWRhZCBDZXJ0aWZpY2Fkb3JhMR4wHAYDVQQD
+ExVFLUNFUlRDSElMRSBDQSBGRVMgMDIxJjAkBgkqhkiG9w0BCQEWF3NjbGllbnRlQGUtY2VydGNo
+aWxlLmNsMB4XDTI2MDQyOTE2MjgzM1oXDTI5MDQyODE2MjgzM1owgbExCzAJBgNVBAYTAkNMMSIw
+IAYDVQQIExlNRVRST1BPTElUQU5BIERFIFNBTlRJQUdPMREwDwYDVQQHEwhTQU5USUFHTzETMBEG
+A1UEChMKVEVDQk9MVCBTQTEKMAgGA1UECwwBKjEmMCQGA1UEAxMdQ0FSTE9TIEFMQkVSVE8gSEVS
+TkFOREVaIE1FTkExIjAgBgkqhkiG9w0BCQEWE0NIRVJOQU5ERVpATUFNVVQuQ0wwggEiMA0GCSqG
+SIb3DQEBAQUAA4IBDwAwggEKAoIBAQCJm5Y4bOg12V1oV/zVBbxonbRvZR1QPsXaeO7RYiVYxKiH
+iCxWSEtSE75aPB1SIb80fpH4BJbyapzICk9XYFdBHtw8rRwvfdvit07KmTwInKgEnY3zpKCvnNKG
+8Yt0XRDoK48+n9vEUOPEpKIDeb0A+IgMadB2nNPMUnUfBfX3tnrjPTGAUHI/+2f0c+T/7bW7+fGO
+gfuQoIT88e3deOwZgdFlxf3+jTv43ia3KqPPw6wo/dMVgdg83aAsCQrCp0Vivo+5dOIfUKbfbtxk
+1bJLlqGa06XCWvIY/mbery6emo3nwaJa84kk8LDwSHwzlFQH9FpzZHKN0TZGVxC7/1yNAgMBAAGj
+ggK9MIICuTCCAV8GA1UdIASCAVYwggFSMIIBTgYIKwYBBAHDUgUwggFAMD0GCCsGAQUFBwIBFjFo
+dHRwczovL3d3dy5lLWNlcnRjaGlsZS5jbC9wb2xpdGljYXMteS1wcmFjdGljYXMvMIH+BggrBgEF
+BQcCAjCB8R6B7gBFAGwAIAByAGUAcwBwAG8AbgBkAGUAcgAgAGUAcwB0AGUAIABmAG8AcgBtAHUA
+bABhAHIAaQBvACAAZQBzACAAdQBuACAAcgBlAHEAdQBpAHMAaQB0AG8AIABpAG4AZABpAHMAcABl
+AG4AcwBhAGIAbABlACAAcABhAHIAYQAgAGQAYQByACAAaQBuAGkAYwBpAG8AIABhAGwAIABwAHIA
+bwBjAGUAcwBvACAAZABlACAAYwBlAHIAdABpAGYAaQBjAGEAYwBpAPMAbgAuACAAUABvAHMAdABl
+AHIAaQBvAHIAbQBlAG4AdABlACwwHQYDVR0OBBYEFGtT3JTFWx+8l/gfHsx1cAcAjUcMMAsGA1Ud
+DwQEAwIE8DAjBgNVHREEHDAaoBgGCCsGAQQBwQEBoAwWCjA5MzY5NTc5LTgwHwYDVR0jBBgwFoAU
+dNYhs/Ra6C18u1kGY0PvabQ6kwQwQAYDVR0fBDkwNzA1oDOgMYYvaHR0cDovL2NybC5lY2VydGNo
+aWxlLmNsL0UtQ0VSVENISUxFQ0FGRVMwMi5jcmwwPQYIKwYBBQUHAQEEMTAvMC0GCCsGAQUFBzAB
+hiFodHRwOi8vb2NzcGZlcy5lY2VydGNoaWxlLmNsL29jc3AwPAYJKwYBBAGCNxUHBC8wLQYlKwYB
+BAGCNxUIgd3STZfUOoaJnQaHiM5vg6/MYEWG0uwIhsfKfQIBZAIBBzAjBgNVHRIEHDAaoBgGCCsG
+AQQBwQECoAwWCjk2OTI4MTgwLTUwDQYJKoZIhvcNAQELBQADggIBAJvyloc7oPsfzA3goYs0uTb8
+0/6laxE6hRjUKsOX1MpvwcPDuVNgNCtbQtUvOoK6cmiZUpxG7NohS2xn8TetTNTN4RnJPZK7CQ5a
+OBMtvwKJDtOb1WdvICWsG8Cqy86EZQDQUu0WZUEQ4wQL4cLUfbBXrGtg4jOqn6ueBp+zUxNRCZbs
+Wsl7JvDHazbIjxhaeKEvgX/RomoCz2oy0ZCeK3mJE/IY78xUsO8hI3GaWq2x17pbPl+mJRi+eybf
+cWnRcUJ4tUnNOrSZrV4o49zVqF0b+wAw/rAljRuNgfy97AUrf0lDXbFut+Emz0ua9iA8f7t9QcDu
+Cbt9qLopycgX0+ljHeiOJzGifYhS+yOfKKCs/VL5uoBEB70TiL96VA4neeGZ/afruSiLv+o0Qiai
+dZg2+SzM72btRLGoBkaW9tDW8tgr9mPuLR7AA3mqci75BI9YcopQoer+dxt1OqivlPdNvu3MVWZP
+pZS3YDab909/hpnEuLbKcCWPsyjEvn6lQIRGnTqJMP05OCNKbflKWrBKVcym6qnslwsgQf7yM0z/
+EgnrbCCpyPTTB6/WCUYwC9laAh8nMFimeN5H02ibXlIFMHoKhhhdtYj0sGC+0OPIQ8BidR7UHtg+
+giD33yTftuItjrSSQtUIo7mjWnkn9P069oh19zX277mXwW8hlWmv
+</X509Certificate>
+</X509Data>
+</KeyInfo>
+</Signature>
+</DTE>

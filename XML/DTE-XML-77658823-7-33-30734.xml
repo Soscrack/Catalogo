@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?><DTE version="1.0">
+	<Documento ID="F30734T33">
+          <Encabezado>
+            <IdDoc>
+              <TipoDTE>33</TipoDTE>
+              <Folio>30734</Folio>
+              <FchEmis>2026-03-06</FchEmis>
+              <FmaPago>2</FmaPago>
+              <FchVenc>2026-03-06</FchVenc>
+            </IdDoc>
+            <Emisor>
+              <RUTEmisor>77658823-7</RUTEmisor>
+              <RznSoc>MAYCO SPA</RznSoc>
+              <GiroEmis>DISTRIBUIDORA DE ALIMENTOS AL POR MAYOR Y MENOR</GiroEmis>
+              <Acteco>463019</Acteco>
+              <DirOrigen>BERLIN 2572</DirOrigen>
+              <CmnaOrigen>CALAMA</CmnaOrigen>
+              <CiudadOrigen>CALAMA</CiudadOrigen>
+            </Emisor>
+            <Receptor>
+              <RUTRecep>76443852-3</RUTRecep>
+              <RznSocRecep>YUBINZA RIVERA</RznSocRecep>
+              <GiroRecep>FERRETERIA</GiroRecep>
+              <DirRecep>CONDELL2999</DirRecep>
+              <CmnaRecep>ANTOFAGASTA</CmnaRecep>
+              <CiudadRecep>ANTOFAGASTA</CiudadRecep>
+            </Receptor>
+            <Totales>
+              <MntNeto>42873</MntNeto>
+              <MntExe>0</MntExe>
+              <TasaIVA>19</TasaIVA>
+              <IVA>8146</IVA>
+              <MntTotal>51019</MntTotal>
+            </Totales>
+          </Encabezado>
+          <Detalle>
+            <NroLinDet>1</NroLinDet>
+            <NmbItem>VASO TERMICO 300CC 1X1000</NmbItem>
+            <DscItem>VASO TERMICO 300CC 1X1000</DscItem>
+            <QtyItem>50.000000</QtyItem>
+            <UnmdItem>UN</UnmdItem>
+            <PrcItem>54.62</PrcItem>
+            <MontoItem>2731</MontoItem>
+          </Detalle>
+          <Detalle>
+            <NroLinDet>2</NroLinDet>
+            <NmbItem>ESPONJA LISA SCRUBBER 3 UND 36 </NmbItem>
+            <DscItem>ESPONJA LISA SCRUBBER 3 UND 36 </DscItem>
+            <QtyItem>12.000000</QtyItem>
+            <UnmdItem>UN</UnmdItem>
+            <PrcItem>210.08</PrcItem>
+            <MontoItem>2521</MontoItem>
+          </Detalle>
+          <Detalle>
+            <NroLinDet>3</NroLinDet>
+            <NmbItem>TOALLA NOVA CLASICA X1 24 </NmbItem>
+            <DscItem>TOALLA NOVA CLASICA X1 24 </DscItem>
+            <QtyItem>12.000000</QtyItem>
+            <UnmdItem>UN</UnmdItem>
+            <PrcItem>546.22</PrcItem>
+            <MontoItem>6555</MontoItem>
+          </Detalle>
+          <Detalle>
+            <NroLinDet>4</NroLinDet>
+            <NmbItem>PINZAS PERRO BAMBOO ROPA GHOSH</NmbItem>
+            <DscItem>PINZAS PERRO BAMBOO ROPA GHOSH</DscItem>
+            <QtyItem>5.000000</QtyItem>
+            <UnmdItem>UN</UnmdItem>
+            <PrcItem>411.76</PrcItem>
+            <MontoItem>2059</MontoItem>
+          </Detalle>
+          <Detalle>
+            <NroLinDet>5</NroLinDet>
+            <NmbItem>CLORO CLORINDA 1000 CC 15 </NmbItem>
+            <DscItem>CLORO CLORINDA 1000 CC 15 </DscItem>
+            <QtyItem>6.000000</QtyItem>
+            <UnmdItem>UN</UnmdItem>
+            <PrcItem>1168.07</PrcItem>
+            <MontoItem>7008</MontoItem>
+          </Detalle>
+          <Detalle>
+            <NroLinDet>6</NroLinDet>
+            <NmbItem>BOLSA BAS SUPERIOR 50X70 24 </NmbItem>
+            <DscItem>BOLSA BAS SUPERIOR 50X70 24 </DscItem>
+            <QtyItem>10.000000</QtyItem>
+            <UnmdItem>UN</UnmdItem>
+            <PrcItem>747.9</PrcItem>
+            <MontoItem>7479</MontoItem>
+          </Detalle>
+          <Detalle>
+            <NroLinDet>7</NroLinDet>
+            <NmbItem>VIRUTILLA GRUESA REDONDA 12 UND 72 </NmbItem>
+            <DscItem>VIRUTILLA GRUESA REDONDA 12 UND 72 </DscItem>
+            <QtyItem>12.000000</QtyItem>
+            <UnmdItem>UN</UnmdItem>
+            <PrcItem>168.07</PrcItem>
+            <MontoItem>2017</MontoItem>
+          </Detalle>
+          <Detalle>
+            <NroLinDet>8</NroLinDet>
+            <NmbItem>GUANTE DOMESTICO AMARILLO T-L</NmbItem>
+            <DscItem>GUANTE DOMESTICO AMARILLO T-L</DscItem>
+            <QtyItem>3.000000</QtyItem>
+            <UnmdItem>UN</UnmdItem>
+            <PrcItem>1336.13</PrcItem>
+            <MontoItem>4008</MontoItem>
+          </Detalle>
+          <Detalle>
+            <NroLinDet>9</NroLinDet>
+            <NmbItem>GUANTE DOMESTICO AMARILLO T-M</NmbItem>
+            <DscItem>GUANTE DOMESTICO AMARILLO T-M</DscItem>
+            <QtyItem>3.000000</QtyItem>
+            <UnmdItem>UN</UnmdItem>
+            <PrcItem>1336.13</PrcItem>
+            <MontoItem>4008</MontoItem>
+          </Detalle>
+          <Detalle>
+            <NroLinDet>10</NroLinDet>
+            <NmbItem>LAVALOZA QUIX 200 ML 18 </NmbItem>
+            <DscItem>LAVALOZA QUIX 200 ML 18 </DscItem>
+            <QtyItem>6.000000</QtyItem>
+            <UnmdItem>UN</UnmdItem>
+            <PrcItem>747.9</PrcItem>
+            <MontoItem>4487</MontoItem>
+          </Detalle>
+        		<TED version="1.0"><DD><RE>77658823-7</RE><TD>33</TD><F>30734</F><FE>2026-03-06</FE><RR>76443852-3</RR><RSR>YUBINZA RIVERA</RSR><MNT>51019</MNT><IT1>VASO TERMICO 300CC 1X1000</IT1><CAF version="1.0"><DA><RE>77658823-7</RE><RS>MAYCO SPA</RS><TD>33</TD><RNG><D>25567</D><H>33100</H></RNG><FA>2025-11-12</FA><RSAPK><M>ukSFs/fX73T0VULKk4z5kRjtpzAGIo/ivbn8emgX9pqFwpDlc8M08mCwn4GfmU3HtabPhd93AoSTz9LQL4aljw==</M><E>Aw==</E></RSAPK><IDK>300</IDK></DA><FRMA algoritmo="SHA1withRSA">SqFfBHtuertXOvgyQItJsjBJKgqT/X6SmuaJ2kFLch8twM4Uqf3qqest343HIIPX7ZPzfrT0GMXmgMssmpQAuQ==</FRMA></CAF><TSTED>2026-03-06T11:15:49</TSTED></DD><FRMT algoritmo="SHA1withRSA">KeZSQ7x6J4++9q7TsFfXMC3MlFBt0ST5bZu/txf4TITjqcPfdY8gn4spTJs7Kuu5P28DYH/QY/iPY/GVF/ls3g==</FRMT></TED>
+			<TmstFirma>2026-03-06T11:15:49</TmstFirma>
+	</Documento>
+	<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
+	<SignedInfo>
+	<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+	<SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+	<Reference URI="#F30734T33">
+	<Transforms>
+	<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+	</Transforms>
+	<DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
+	<DigestValue>rPfkOApYuNpyvcL2YE0KRydzcT8=</DigestValue>
+	</Reference>
+	</SignedInfo>
+	<SignatureValue>bNjQuBZe+1wxmy/KPsKohiw+rdD4x9QUMFMSn697f9q9HJWX+LpPdXegNGCg/yjQ
+JVez+qVcys5JSREW1Cn9UTgcUdYdNe0EngUWP4otcwFtbSsvnFuFYlpqoU/SIXua
+VxD8HdFMj8kjoEd5GyZOVFOcg23eb+zGta7HwWEGyWPrAgLKO27xdMrtLjgfOu9K
+eBFtbETdliTX0JNs93F/wI3J2nrAREiWS0OvNl/7x4RpGk0vS9edbX36KRUQOS+w
+pNVGruugzirzi7zyTCpIztOowA7UOjYmi/LEeXSE/tn9Mrk1bANnTa/aW1NWFwzL
+Pm+oZkuy4uiEvzIaoPOthw==</SignatureValue>
+	<KeyInfo>
+	<KeyValue>
+<RSAKeyValue>
+<Modulus>
+vvEWBnjvp26ltv8rdCPg6DAp6TK9sZWYub8oUGj0RMyGZlt/noqBW9Md/KQ9/Rli
+zbutGA19p+ZZO29o/gofOC6VNA2CIVOib0ajbvpjR2JaVxygZNV19N3S4S53URXY
+mJdHNAK2y1FLd2KtsEsyQ53Nt4tCM9itrgEiF23vhuFUarTolCV0YDGDBBrAN5Zc
++2xQtt4XlSWiuSuz4FM3i23OFTwAn6Jbdl7OEoD2qvT1NKlM6QF/1gR7reGPVn7J
+J+XKOuaCtERaezUj46wbUGyqHwECKc4iAwF89Q34nu8xcm2EblymuhoCUDEEjz8D
+NOibO7YavniLNC6QpAGDtw==
+</Modulus>
+<Exponent>
+AQAB
+</Exponent>
+</RSAKeyValue>
+</KeyValue>
+	<X509Data><X509Certificate>MIIFUTCCBDmgAwIBAgIIHdQdhZpwYtIwDQYJKoZIhvcNAQELBQAwgboxHjAcBgkq
+hkiG9w0BCQEWD3NvcG9ydGVAaWRvay5jbDEiMCAGA1UEAwwZSURPSyBGSVJNQSBF
+TEVDVFJPTklDQSBWNDEXMBUGA1UECwwOUlVULTc2NjEwNzE4LTQxIDAeBgNVBAsM
+F0F1dG9yaWRhZCBDZXJ0aWZpY2Fkb3JhMRkwFwYDVQQKDBBCUE8gQWR2aXNvcnMg
+U3BBMREwDwYDVQQHDAhTYW50aWFnbzELMAkGA1UEBhMCQ0wwHhcNMjUwNDIzMjEz
+MTQ5WhcNMjcwNDIzMjEzMTQ5WjCBiDEkMCIGA1UEAwwbTFVJUyBBTlRPTklPIE1B
+UklOIENPQUdVSUxBMTEwLwYJKoZIhvcNAQkBFiJsdWlzYW50b25pb21hcmluY29h
+Z3VpbGFAZ21haWwuY29tMRMwEQYDVQQFEwoyMzk2NDU3MS0yMQswCQYDVQQGEwJD
+TDELMAkGA1UEBwwCUk0wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC+
+8RYGeO+nbqW2/yt0I+DoMCnpMr2xlZi5vyhQaPREzIZmW3+eioFb0x38pD39GWLN
+u60YDX2n5lk7b2j+Ch84LpU0DYIhU6JvRqNu+mNHYlpXHKBk1XX03dLhLndRFdiY
+l0c0ArbLUUt3Yq2wSzJDnc23i0Iz2K2uASIXbe+G4VRqtOiUJXRgMYMEGsA3llz7
+bFC23heVJaK5K7PgUzeLbc4VPACfolt2Xs4SgPaq9PU0qUzpAX/WBHut4Y9Wfskn
+5co65oK0RFp7NSPjrBtQbKofAQIpziIDAXz1Dfie7zFybYRuXKa6GgJQMQSPPwM0
+6Js7thq+eIs0LpCkAYO3AgMBAAGjggGJMIIBhTAJBgNVHRMEAjAAMB8GA1UdIwQY
+MBaAFLvdStt/EDeIdGdFssq5EoTgxngWMIGYBgNVHSAEgZAwgY0wgYoGCisGAQQB
+g4weAQQwfDAsBggrBgEFBQcCARYgaHR0cHM6Ly9wc2MuaWRvay5jbC9vcGVuL2Nw
+cy5wZGYwTAYIKwYBBQUHAgIwQB4+AEMAZQByAHQAaQBmAGkAYwBhAGQAbwAgAHAA
+YQByAGEAIAB1AHMAbwAgAFQAcgBpAGIAdQB0AGEAcgBpAG8wRgYDVR0fBD8wPTA7
+oDmgN4Y1aHR0cHM6Ly9wc2MuaWRvay5jbC9vcGVuL0lET0tfRklSTUFfRUxFQ1RS
+T05JQ0FfNC5jcmwwHQYDVR0OBBYEFFhPfDICl0pwMnpAZTG/Zpik3cURMAsGA1Ud
+DwQEAwIEkDAjBgNVHRIEHDAaoBgGCCsGAQQBwQECoAwWCjc2NjEwNzE4LTQwIwYD
+VR0RBBwwGqAYBggrBgEEAcEBAaAMFgoyMzk2NDU3MS0yMA0GCSqGSIb3DQEBCwUA
+A4IBAQDB1BLO2YxHIJTtIcNxPIafOb2+XvTQM4jrrhZyO1g/A8UeG8iKZ2Xpib4g
+1V0mXAX481O8AmYmaUE7AYEAxEIHWMRJ8qow0mEzcSaVM4qoN/RLq5B7x2oczzHf
+ZfSPqjwp14b/SsVY7fBn9r32bZguDet0YVLd8Q0lF10RmanVae1OdznTMfTbB3Y/
+dGlNC1j8snAHMr/s4SknFIlfE/kH59dgIk9GPm6vACZ026Vz29lY1I/KwDrWOJX2
+JCotruq/kud/W4Ifm3FqqRR8eAH9ZxWa8XXJRVgjfqbqj5pQeQa80SsWuyYSRSVp
+vSxIx3xfLlQDQ3udXDmnaHfcyWSP</X509Certificate></X509Data>
+	</KeyInfo>
+	</Signature>
+	</DTE>

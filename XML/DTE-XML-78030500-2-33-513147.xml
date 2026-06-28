@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?><DTE version="1.0">
+      <Documento ID="F513147T33">
+        <Encabezado>
+          <IdDoc>
+            <TipoDTE>33</TipoDTE>
+            <Folio>513147</Folio>
+            <FchEmis>2026-02-28</FchEmis>
+            <FmaPago>1</FmaPago>
+            <TermPagoGlosa>CONTADO</TermPagoGlosa>
+            <FchVenc>2026-02-28</FchVenc>
+          </IdDoc>
+          <Emisor>
+            <RUTEmisor>78030500-2</RUTEmisor>
+            <RznSoc>MOSAICO S.A.</RznSoc>
+            <GiroEmis>Import.Export.y Distrib.Artic.Ferreteria, Asesorias en Ingen.Econ.Financ.Gestion</GiroEmis>
+            <Telefono>7317600</Telefono>
+            <Acteco>466302</Acteco>
+            <Acteco>702000</Acteco>
+            <DirOrigen>Avda. del Valle Sur Nº 570 P.4 Of 402 - Huechuraba -</DirOrigen>
+            <CmnaOrigen>uechuraba</CmnaOrigen>
+            <CiudadOrigen>antiago</CiudadOrigen>
+          </Emisor>
+          <Receptor>
+            <RUTRecep>76443852-3</RUTRecep>
+            <RznSocRecep>COMERCIALIZADORA YUBINZA RIVERA RAMIREZ E.I.R.L.</RznSocRecep>
+            <GiroRecep>VENTA AL POR MENOR DE ARTICULOS DE FERRE</GiroRecep>
+            <Contacto>9 87433</Contacto>
+            <DirRecep>CONDELL 2999</DirRecep>
+            <CmnaRecep>ANTOFAGASTA</CmnaRecep>
+            <CiudadRecep>ANTOFAGASTA</CiudadRecep>
+            <DirPostal>CONDELL 2999</DirPostal>
+            <CmnaPostal>ANTOFAGASTA</CmnaPostal>
+            <CiudadPostal>ANTOFAGASTA</CiudadPostal>
+          </Receptor>
+          <Transporte>
+            <Patente>DBHL25</Patente>
+            <RUTTrans>12512520-4</RUTTrans>
+            <Chofer>
+              <RUTChofer>12512520-4</RUTChofer>
+              <NombreChofer>Jorge Espinoza Angulo</NombreChofer>
+            </Chofer>
+            <DirDest>CAPITÁN CARLOS CONDELL 2999</DirDest>
+            <CmnaDest>ANTOFAGASTA</CmnaDest>
+            <CiudadDest>ANTOFAGASTA</CiudadDest>
+          </Transporte>
+          <Totales>
+            <MntNeto>35130</MntNeto>
+            <TasaIVA>19.00</TasaIVA>
+            <IVA>6675</IVA>
+            <MntTotal>41805</MntTotal>
+          </Totales>
+        </Encabezado>
+        <Detalle>
+          <NroLinDet>1</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>60AU1901050</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Asiento y Tapa PP paraÂ WC Aura</NmbItem>
+          <DscItem>Asiento y Tapa PP paraÂ WC Aura</DscItem>
+          <QtyItem>10.000000</QtyItem>
+          <UnmdItem>UND</UnmdItem>
+          <PrcItem>3513.000000</PrcItem>
+          <MontoItem>35130</MontoItem>
+        </Detalle>
+        <Referencia>
+          <NroLinRef>1</NroLinRef>
+          <TpoDocRef>801</TpoDocRef>
+          <FolioRef>1361</FolioRef>
+          <FchRef>2026-03-03</FchRef>
+        </Referencia>
+        <Referencia>
+          <NroLinRef>2</NroLinRef>
+          <TpoDocRef>52</TpoDocRef>
+          <FolioRef>677728</FolioRef>
+          <FchRef>2026-02-27</FchRef>
+        </Referencia>
+        <TED version="1.0">
+          <DD>
+            <RE>78030500-2</RE>
+            <TD>33</TD>
+            <F>513147</F>
+            <FE>2026-02-28</FE>
+            <RR>76443852-3</RR>
+            <RSR>COMERCIALIZADORA YUBINZA RIVERA RAMIREZ </RSR>
+            <MNT>41805</MNT>
+            <IT1>Asiento y Tapa PP paraÂ WC Aura</IT1>
+            <CAF version="1.0">
+              <DA>
+                <RE>78030500-2</RE>
+                <RS>MOSAICO S.A.</RS>
+                <TD>33</TD>
+                <RNG>
+                  <D>513131</D>
+                  <H>526130</H>
+                </RNG>
+                <FA>2026-02-27</FA>
+                <RSAPK>
+                  <M>sByCbXVhHw4/4QJkv12xH/0NWG1OvsSZBNUlIATz/7YcPG6rIB/LFf6TJTsybYaRDLLTP004YXD43nG+toMmtQ==</M>
+                  <E>Aw==</E>
+                </RSAPK>
+                <IDK>300</IDK>
+              </DA>
+              <FRMA algoritmo="SHA1withRSA">fZiLOmRvAbJN3ck37oLbn4IDJSZ7pMHgjWGMgQj7tUk5cB+RID1hOv74LNBbz66LZmFIuPrlDvu8bQpBe+BToQ==</FRMA>
+            </CAF>
+            <TSTED>2026-03-03T08:59:44</TSTED>
+          </DD>
+          <FRMT algoritmo="SHA1withRSA">gU8qGSeH5+hft9dUI8bqjK1I9WMyGw3VBqT+0mKYyua5Xs5DIicq62T125u+ovLkDCL1FLIEymptXJ7grMpcwg==</FRMT>
+        </TED>
+        <TmstFirma>2026-03-03T08:59:45</TmstFirma>
+      </Documento><Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#F513147T33"><Transforms><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>4vGPShnesI3zpUzClyXigbk7VKA=</DigestValue></Reference></SignedInfo><SignatureValue>
+OudHNip6f9z3X/fLpzFVxvKfZdwy7d+TXFOuKv7ofeFXsQ/JStGXstSykhrcuQI7
+lHvS3ReuZS4Om7W6JvIit1xqk+ai1wdhj0i6DiMH/QUCZmh+N35BLmMVAIaHoQFZ
+70HExDLVFFOT9V8rSZdix7SmtfU6mzgW+WG218BroNU7+zxpPRA3DwAalXch3jnE
+o6AIBC8AZHrZOVHcqlP76pC9fJVn9lTcmak8yda5dEvb/05of797ZwME3skbmZcz
+ijNVZFYjiHk9opieFyKegEz3jbDwniKo/kwQPikHdGP7kZO2cgrIv4l0JYFNuxQ7
+PLnL0qMXZz9ZBkWuLFkWtw==
+</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>
+5BnpB9A/otM9KGJRJOuwnm1nPPJZkT7TeC59ORvXq3TKx1JXuglSko7DDzdyJnuA
+PnXF+eO8PeIfenJE7GrlShR5bj2xOl6A4nOSFhfyg77NTmUOTqKGtTQaswdotKP4
+lQ4GCwxiSFh6a/BCh32Tfn/srdOSnUCAsNaUyOW2SUzLY1rs+lIUNvT0D5OUPLBG
+3piZS9Jp6MY/xplMA35yJMqoVOVpWhMBLTat5sW2PlWdT3/0CSnjqAQ63wTYAliG
+YkbqEC4HVuCx83EY5ATUPWVYi0rUL5T/ygs+qbluCG5kH/I55QjCjBt5PWCrMiGh
+VM8GY1xYaJJ2PgFBtWsSVQ==
+</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>
+MIIHtTCCBZ2gAwIBAgIKR223lQABAA6HKDANBgkqhkiG9w0BAQsFADCBvzELMAkG
+A1UEBhMCQ0wxHTAbBgNVBAgTFFJlZ2lvbiBNZXRyb3BvbGl0YW5hMREwDwYDVQQH
+EwhTYW50aWFnbzEUMBIGA1UEChMLRS1DRVJUQ0hJTEUxIDAeBgNVBAsTF0F1dG9y
+aWRhZCBDZXJ0aWZpY2Fkb3JhMR4wHAYDVQQDExVFLUNFUlRDSElMRSBDQSBGRVMg
+MDIxJjAkBgkqhkiG9w0BCQEWF3NjbGllbnRlQGUtY2VydGNoaWxlLmNsMB4XDTI1
+MDYwNDIxNTg1OFoXDTI4MDYwMzIxNTg1OFowgbExCzAJBgNVBAYTAkNMMSIwIAYD
+VQQIExlNRVRST1BPTElUQU5BIERFIFNBTlRJQUdPMREwDwYDVQQHEwhTQU5USUFH
+TzETMBEGA1UEChMKTU9TQUlDTyBTQTEKMAgGA1UECwwBKjEmMCQGA1UEAxMdTUlH
+VUVMIEFOR0VMIENBQ0VSRVMgR09OWkFMRVoxIjAgBgkqhkiG9w0BCQEWE01DQUNF
+UkVTQE1PU0FJQ08uQ0wwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDk
+GekH0D+i0z0oYlEk67CebWc88lmRPtN4Ln05G9erdMrHUle6CVKSjsMPN3Ime4A+
+dcX547w94h96ckTsauVKFHluPbE6XoDic5IWF/KDvs1OZQ5Oooa1NBqzB2i0o/iV
+DgYLDGJIWHpr8EKHfZN+f+yt05KdQICw1pTI5bZJTMtjWuz6UhQ29PQPk5Q8sEbe
+mJlL0mnoxj/GmUwDfnIkyqhU5WlaEwEtNq3mxbY+VZ1Pf/QJKeOoBDrfBNgCWIZi
+RuoQLgdW4LHzcRjkBNQ9ZViLStQvlP/KCz6puW4IbmQf8jnlCMKMG3k9YKsyIaFU
+zwZjXFhoknY+AUG1axJVAgMBAAGjggK9MIICuTCCAV8GA1UdIASCAVYwggFSMIIB
+TgYIKwYBBAHDUgUwggFAMD0GCCsGAQUFBwIBFjFodHRwczovL3d3dy5lLWNlcnRj
+aGlsZS5jbC9wb2xpdGljYXMteS1wcmFjdGljYXMvMIH+BggrBgEFBQcCAjCB8R6B
+7gBFAGwAIAByAGUAcwBwAG8AbgBkAGUAcgAgAGUAcwB0AGUAIABmAG8AcgBtAHUA
+bABhAHIAaQBvACAAZQBzACAAdQBuACAAcgBlAHEAdQBpAHMAaQB0AG8AIABpAG4A
+ZABpAHMAcABlAG4AcwBhAGIAbABlACAAcABhAHIAYQAgAGQAYQByACAAaQBuAGkA
+YwBpAG8AIABhAGwAIABwAHIAbwBjAGUAcwBvACAAZABlACAAYwBlAHIAdABpAGYA
+aQBjAGEAYwBpAPMAbgAuACAAUABvAHMAdABlAHIAaQBvAHIAbQBlAG4AdABlACww
+HQYDVR0OBBYEFMnO2gsy7SgNj63JvnFU3uBmP0AKMAsGA1UdDwQEAwIE8DAjBgNV
+HREEHDAaoBgGCCsGAQQBwQEBoAwWCjA5ODU4OTEzLTkwHwYDVR0jBBgwFoAUdNYh
+s/Ra6C18u1kGY0PvabQ6kwQwQAYDVR0fBDkwNzA1oDOgMYYvaHR0cDovL2NybC5l
+Y2VydGNoaWxlLmNsL0UtQ0VSVENISUxFQ0FGRVMwMi5jcmwwPQYIKwYBBQUHAQEE
+MTAvMC0GCCsGAQUFBzABhiFodHRwOi8vb2NzcGZlcy5lY2VydGNoaWxlLmNsL29j
+c3AwPAYJKwYBBAGCNxUHBC8wLQYlKwYBBAGCNxUIgd3STZfUOoaJnQaHiM5vg6/M
+YEWG0uwIhsfKfQIBZAIBBzAjBgNVHRIEHDAaoBgGCCsGAQQBwQECoAwWCjk2OTI4
+MTgwLTUwDQYJKoZIhvcNAQELBQADggIBAFbND0j/vnmE7ZbVPw8cUNz6pQeBVng7
+Cd2JPBSCv3p1rr98rmkp2T7h90yIubmDXnexgFKHjjZX1ajykjXJftA3tuttGEQI
+Sb9Z1ItWxKFALG5Glq8LjB2gz4GgCGwYmsyydcK0YTcUOHgn+0UeOVb/BYJiIAKx
+IEr7IUqbO7xSXQJGRGnJ0anVzI2mFpQJ/Mu+kg/kJF9/BOntgt8ua62NDT17t5DX
+Y6LQcKz6x/LNyitoCheKfLNA9hvGObAqskvY+TvdGaoJCYP/QDZdJqdThc7MNqKm
+Ho244E4EWXeYnCkymQCSpY92UnLSvRaEri0gcE4kmOEby1Yrf1YIOmu/XRQncBV7
+kdGYF0sFP+L7J8Dkc9mEp8hBaX8ApDU95KCT3yHAw1fLs/IrxRn42aOx6h8ePHfk
+F8gBo0t33zrPoO7E6ZJ1mAVad2Dkc7spwN+zeiMAybclDqd/3ZIDt80DIJ/EPRxy
+5kPou3AP1X2PJ7VV4VqC3zmLFLZv1SyHS3vqAMpe8Uyl01ejbxU+M84J0T2nduX7
+MKJ+5bsraTvsDBwdYRkfYrlbTS7wyKndOZi0xYUsFdnvYBqwmcG8gF3lxS6wmkrv
+mqrFr9fep/TQvJVwag9h+Rp8H0Qo60ubvsN9atr+/q14MSCt6dHS3sPg7kQ5fRXm
+47SyXylsxO2l
+</X509Certificate></X509Data></KeyInfo></Signature>
+    </DTE>

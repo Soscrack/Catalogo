@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?><DTE xmlns="http://www.sii.cl/SiiDte" version="1.0">
+  <Documento ID="F24559067T61">
+<Encabezado>
+<IdDoc>
+<TipoDTE>61</TipoDTE>
+<Folio>24559067</Folio>
+<FchEmis>2026-03-05</FchEmis>
+<MntPagos>
+<FchPago>2026-03-05</FchPago>
+<MntPago>1006</MntPago>
+</MntPagos>
+<TermPagoCdg/>
+</IdDoc>
+<Emisor>
+<RUTEmisor>91144000-8</RUTEmisor>
+<RznSoc>Embotelladora Andina S.A.</RznSoc>
+<GiroEmis>FABRICA DE BEBIDAS ANALCOHOLICAS,COMERC DE ALCOHOLES,IMPORT Y EXPORTAC</GiroEmis>
+<Acteco>110401</Acteco>
+<Acteco>463020</Acteco>
+<Acteco>661903</Acteco>
+<Acteco>829900</Acteco>
+<Sucursal>Planta Antofagasta</Sucursal>
+<CdgSIISucur>049229451</CdgSIISucur>
+<DirOrigen>Pedro Aguirre Cerda 7986 Antofagasta</DirOrigen>
+<CmnaOrigen>Santiago</CmnaOrigen>
+<CiudadOrigen>Santiago</CiudadOrigen>
+<CdgVendedor>CHE2</CdgVendedor>
+</Emisor>
+<Receptor>
+<RUTRecep>76443852-3</RUTRecep>
+<CdgIntRecep>0500624587</CdgIntRecep>
+<RznSocRecep>COMERCIALIZADORA YUBINZA RIVERA</RznSocRecep>
+<GiroRecep>FERRETERIA</GiroRecep>
+<Contacto/>
+<DirRecep>CALLE CONDELL 2999</DirRecep>
+<CmnaRecep>Antofagasta</CmnaRecep>
+<CiudadRecep>Antofagasta</CiudadRecep>
+</Receptor>
+<Transporte>
+<Patente/>
+<DirDest>CALLE CONDELL 2999</DirDest>
+<CmnaDest>Antofagasta</CmnaDest>
+<CiudadDest>Antofagasta</CiudadDest>
+</Transporte>
+<Totales>
+<MntNeto>756</MntNeto>
+<MntExe>0</MntExe>
+<TasaIVA>19.00</TasaIVA>
+<IVA>144</IVA>
+<ImptoReten>
+<TipoImp>271</TipoImp>
+<TasaImp>18.00</TasaImp>
+<MontoImp>106</MontoImp>
+</ImptoReten>
+<MntTotal>1006</MntTotal>
+</Totales>
+</Encabezado>
+<Detalle>
+<NroLinDet>0001</NroLinDet>
+<CdgItem>
+<TpoCodigo>0</TpoCodigo>
+<VlrCodigo>120437</VlrCodigo>
+</CdgItem>
+<NmbItem>Coca Cola PT591cc x 6</NmbItem>
+<DscItem>000000000000000655|000000000000000106|000000000000001006|000000000000000168</DscItem>
+<QtyItem>1.000</QtyItem>
+<UnmdItem>BOT</UnmdItem>
+<PrcItem>3925</PrcItem>
+<DescuentoPct>10.00</DescuentoPct>
+<DescuentoMonto>66</DescuentoMonto>
+<RecargoMonto>167</RecargoMonto>
+<CodImpAdic>271</CodImpAdic>
+<MontoItem>756</MontoItem>
+</Detalle>
+<Referencia>
+<NroLinRef>01</NroLinRef>
+<TpoDocRef>33</TpoDocRef>
+<FolioRef>93063213</FolioRef>
+<FchRef>2026-01-05</FchRef>
+<CodRef>3</CodRef>
+<RazonRef>Devolucion Producto</RazonRef>
+</Referencia>
+
+<TED version="1.0">
+      <DD>
+        <RE>91144000-8</RE>
+        <TD>61</TD>
+        <F>24559067</F>
+        <FE>2026-03-05</FE>
+        <RR>76443852-3</RR>
+        <RSR>COMERCIALIZADORA YUBINZA RIVERA</RSR>
+        <MNT>1006</MNT>
+        <IT1>Coca Cola PT591cc x 6</IT1>
+        <CAF version="1.0">
+          <DA>
+            <RE>91144000-8</RE>
+            <RS>EMBOTELLADORA ANDINA S A</RS>
+            <TD>61</TD>
+            <RNG>
+              <D>24554402</D>
+              <H>24629401</H>
+            </RNG>
+            <FA>2026-01-21</FA>
+            <RSAPK>
+              <M>shaAWpa2chp+Q5r2/qYsbLW2Qy0TChCNKIvh2HzA1KYw7aKc27szDftGIUDPHUqFEoW/iC9wTrrCu2W/8wXngQ==</M>
+              <E>Aw==</E>
+            </RSAPK>
+            <IDK>300</IDK>
+          </DA>
+          <FRMA algoritmo="SHA1withRSA">jvxRaMPQVPdYOHhGSBn8Z9Gd34SCvl9uXwfnOY0SBML8FFJ8wsOMk/g3f8r6pkutkBgOJsaJQH2YzIbGCC2JoA==</FRMA>
+        </CAF>
+        <TSTED>2026-03-05T05:54:38</TSTED>
+      </DD>
+      <FRMT algoritmo="SHA1withRSA">LwkcXIxuyuURWieW6Yfdmpy+oVNM3jm+tKJd1z6LjAld1n5lhRK4EEQa4Ile2xqTgCIwfy4pPzzBzXRSKUigLQ==</FRMT>
+    </TED>
+    <TmstFirma>2026-03-05T05:54:38</TmstFirma>
+  </Documento>
+<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#F24559067T61"><Transforms><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315#WithComments"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>oCD3NXjSQF6VazkNGY6+o35fLck=</DigestValue></Reference></SignedInfo><SignatureValue>jCaXjOc0W+oMO5Ng5tFvFoNIoqW/J4bTCfKpEM5K1vqhAdkJD9xbWkCsIRAJVY1/E85tj8W+BaX2
+lkuMe35k45Yc6frz9V887bMtqDLUkRABsJl69zjcrCUvd1nJruXgpQ7fAey8yKqFpNDDCpnZ2ppy
+jn0lzZfrhhFXrm0C/fwAdKIADPmK9pCWPvivrSrjU+KrcSid2XPazELIBux5XdDJjfrJLO7YwXJf
+pDDQzZ/0DJPqkWKeXzoxDGZ9H0MrN6JQemCvYeXHzsT7Urp4ckfWRk6baDhYGyirmkO41i1wAUve
+c4eVJsL6IVfpcNG0tL90BFL4yPSYjJDCNQ00+Q==</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>lneyKdEAnDwkeOGWedqVHEhK4hu+I3O86X1nIRLWuop+nsxssgP39qHXSJ71KgOLS2I/FS3tnkQB
+0FCDZlsJAOmnM7kjfQOtEmcKXnCpvHAJHRn/6+d5x7G4s9op7P+NEUSgMWqTVymbaAWR7CO23KlO
+menbOvVQVU3E1QSHP0nxQmKGVerF+9vFfwVgvSDrIyTI7H1nWaNh4iqZ4apo1pGyYaCnk3B63nlU
+QFmlhaUKBMp0wHsZSetxFVL+CUvqIfgM+PNrMcn02Ksmb45VC5N72l5K7Y6ElwkRxaungQ++FtWd
+rpRqgqYW8x6MUK93uqVcXJaeYgaDwY8Ka+RkxQ==</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>MIIGVDCCBTygAwIBAgIIc3tHPmux2fUwDQYJKoZIhvcNAQELBQAwga8xCzAJBgNVBAYTAkNMMRQw
+EgYDVQQKDAtFLVNpZ24gUy5BLjE5MDcGA1UECwwwVGVybXMgb2YgdXNlIGF0IHd3dy5lc2lnbi1s
+YS5jb20vYWN1ZXJkb3RlcmNlcm9zMSswKQYDVQQDDCJFLVNpZ24gQ2xhc3MgMiBGaXJtYSBUcmli
+dXRhcmlhIENBMSIwIAYJKoZIhvcNAQkBFhNlLXNpZ25AZXNpZ24tbGEuY29tMB4XDTI0MDQxNTE4
+NTkwMFoXDTI3MDQxNTE4NTkwMFowgbMxCzAJBgNVBAYTAkNMMRQwEgYDVQQKDAtFLVNpZ24gUy5B
+LjE5MDcGA1UECwwwVGVybXMgb2YgdXNlIGF0IHd3dy5lc2lnbi1sYS5jb20vYWN1ZXJkb3RlcmNl
+cm9zMSswKQYDVQQDDCJBTEVKQU5EUkEgQkVBVFJJWiBWSUNFTkNJTyBNSVJBTkRBMSYwJAYJKoZI
+hvcNAQkBFhdhdmljZW5jaW9tQGtvYW5kaW5hLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCC
+AQoCggEBAJZ3sinRAJw8JHjhlnnalRxISuIbviNzvOl9ZyES1rqKfp7MbLID9/ah10ie9SoDi0ti
+PxUt7Z5EAdBQg2ZbCQDppzO5I30DrRJnCl5wqbxwCR0Z/+vnecexuLPaKez/jRFEoDFqk1cpm2gF
+kewjttypTpnp2zr1UFVNxNUEhz9J8UJihlXqxfvbxX8FYL0g6yMkyOx9Z1mjYeIqmeGqaNaRsmGg
+p5Nwet55VEBZpYWlCgTKdMB7GUnrcRVS/glL6iH4DPjzazHJ9NirJm+OVQuTe9peSu2OhJcJEcWr
+p4EPvhbVna6UaoKmFvMejFCvd7qlXFyWnmIGg8GPCmvkZMUCAwEAAaOCAmwwggJoMIGABggrBgEF
+BQcBAQR0MHIwSgYIKwYBBQUHMAKGPmh0dHA6Ly9wa2kuZXNpZ24tbGEuY29tL2NhY2VydHMvcGtp
+Q2xhc3MyRmlybWFUcmlidXRhcmlhQ0EuY3J0MCQGCCsGAQUFBzABhhhodHRwOi8vb2NzcC5lc2ln
+bi1sYS5jb20wHQYDVR0OBBYEFMekPbWdmm93oaYOcmehd7ULb+/dMAwGA1UdEwEB/wQCMAAwHwYD
+VR0jBBgwFoAU+Ur6wsduwucSnFdFNYQabSjpSqQwgcgGA1UdIASBwDCBvTCBugYMKwYBBAGCymoB
+BAECMIGpMH4GCCsGAQUFBwICMHIecABDAGUAcgB0AGkAZgBpAGMAYQBkAG8AIABwAGEAcgBhACAA
+dQBzAG8AIABUAHIAaQBiAHUAdABhAHIAaQBvACwAIABDAG8AbQBlAHIAYwBpAG8ALAAgAFAAYQBn
+AG8AcwAgAHkAIABPAHQAcgBvAHMwJwYIKwYBBQUHAgEWG2h0dHA6Ly93d3cuZXNpZ24tbGEuY29t
+L2NwczBRBgNVHR8ESjBIMEagRKBChkBodHRwOi8vcGtpLmVzaWduLWxhLmNvbS9jcmwvcGtpQ2xh
+c3MyRmlybWFUcmlidXRhcmlhL2VuZHVzZXIuY3JsMA4GA1UdDwEB/wQEAwIFoDAdBgNVHSUEFjAU
+BggrBgEFBQcDAgYIKwYBBQUHAwQwIwYDVR0RBBwwGqAYBggrBgEEAcEBAaAMFgoxMzAzMDQ4OS0z
+MCMGA1UdEgQcMBqgGAYIKwYBBAHBAQKgDBYKOTk1NTE3NDAtSzANBgkqhkiG9w0BAQsFAAOCAQEA
+azIrbXaxnczvEyqrJBVXe4TwBtrgYLX3sK7tNFDjJ65P/OjttEpyluexf87oTqJDI/j+IP3PklXF
+RDTe6MsojCjOoR3igBUYwFhvzYCDdD1NEZudjR1Cml9GxPFenKRBxXiFhZQ0ZLKNhG7kzsBsE6gD
+64frHRf4utXMV6cy/bDS1jX93PnizDL4or1yUjkHCdKIfIzihmI+s6XAGUH/oJ3Cu3YGw2uzTmSX
+gG4KulzQm1prHqlCD35aoIqH45ibLFRHeYbrfa4eR9D/sYdQMiHfDe76IDsI3EK6UoQh4gqQgRD2
++T0dk7ukmnihSQ8Rx1Sz3JMSAhwr3CNjaxWB+g==</X509Certificate></X509Data></KeyInfo></Signature></DTE>

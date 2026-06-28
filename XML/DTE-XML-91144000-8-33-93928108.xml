@@ -1,0 +1,319 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?><DTE xmlns="http://www.sii.cl/SiiDte" version="1.0">
+  <Documento ID="F93928108T33">
+<Encabezado>
+<IdDoc>
+<TipoDTE>33</TipoDTE>
+<Folio>93928108</Folio>
+<FchEmis>2026-03-05</FchEmis>
+<MntPagos>
+<FchPago>2026-03-05</FchPago>
+<MntPago>67853</MntPago>
+</MntPagos>
+<TermPagoCdg/>
+</IdDoc>
+<Emisor>
+<RUTEmisor>91144000-8</RUTEmisor>
+<RznSoc>Embotelladora Andina S.A.</RznSoc>
+<GiroEmis>FABRICA DE BEBIDAS ANALCOHOLICAS,COMERC DE ALCOHOLES,IMPORT Y EXPORTAC</GiroEmis>
+<Acteco>110401</Acteco>
+<Acteco>463020</Acteco>
+<Acteco>661903</Acteco>
+<Acteco>829900</Acteco>
+<Sucursal>Planta Antofagasta</Sucursal>
+<CdgSIISucur>049229451</CdgSIISucur>
+<DirOrigen>Pedro Aguirre Cerda 7986 Antofagasta</DirOrigen>
+<CmnaOrigen>Santiago</CmnaOrigen>
+<CiudadOrigen>Santiago</CiudadOrigen>
+<CdgVendedor>CHE2</CdgVendedor>
+</Emisor>
+<Receptor>
+<RUTRecep>76443852-3</RUTRecep>
+<CdgIntRecep>0500624587</CdgIntRecep>
+<RznSocRecep>COMERCIALIZADORA YUBINZA RIVERA</RznSocRecep>
+<GiroRecep>FERRETERIA</GiroRecep>
+<Contacto/>
+<DirRecep>CALLE CONDELL 2999</DirRecep>
+<CmnaRecep>Antofagasta</CmnaRecep>
+<CiudadRecep>Antofagasta</CiudadRecep>
+</Receptor>
+<Transporte>
+<Patente/>
+<DirDest>CALLE CONDELL 2999</DirDest>
+<CmnaDest>Antofagasta</CmnaDest>
+<CiudadDest>Antofagasta</CiudadDest>
+</Transporte>
+<Totales>
+<MntNeto>54576</MntNeto>
+<MntExe>0</MntExe>
+<TasaIVA>19.00</TasaIVA>
+<IVA>10369</IVA>
+<ImptoReten>
+<TipoImp>271</TipoImp>
+<TasaImp>18.00</TasaImp>
+<MontoImp>1042</MontoImp>
+</ImptoReten>
+<ImptoReten>
+<TipoImp>27</TipoImp>
+<TasaImp>10.00</TasaImp>
+<MontoImp>1866</MontoImp>
+</ImptoReten>
+<MntTotal>67853</MntTotal>
+</Totales>
+</Encabezado>
+<Detalle>
+<NroLinDet>0001</NroLinDet>
+<CdgItem>
+<TpoCodigo>0</TpoCodigo>
+<VlrCodigo>122905</VlrCodigo>
+</CdgItem>
+<NmbItem>Benedictino C/G PT1,5 x 6</NmbItem>
+<DscItem>000000000000002997|000000000000000000|000000000000005124|000000000000000854</DscItem>
+<QtyItem>1.000</QtyItem>
+<UnmdItem>PAC</UnmdItem>
+<PrcItem>2997</PrcItem>
+<DescuentoPct>17.10</DescuentoPct>
+<DescuentoMonto>512</DescuentoMonto>
+<RecargoMonto>1821</RecargoMonto>
+<MontoItem>4306</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>0002</NroLinDet>
+<CdgItem>
+<TpoCodigo>0</TpoCodigo>
+<VlrCodigo>124216</VlrCodigo>
+</CdgItem>
+<NmbItem>Andina Light Pina PT1,5 x 6</NmbItem>
+<DscItem>000000000000004889|000000000000000000|000000000000008503|000000000000001417</DscItem>
+<QtyItem>1.000</QtyItem>
+<UnmdItem>PAC</UnmdItem>
+<PrcItem>4889</PrcItem>
+<RecargoMonto>2256</RecargoMonto>
+<MontoItem>7145</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>0003</NroLinDet>
+<CdgItem>
+<TpoCodigo>0</TpoCodigo>
+<VlrCodigo>124224</VlrCodigo>
+</CdgItem>
+<NmbItem>And Frut Naranja Light PT1,5 x 6</NmbItem>
+<DscItem>000000000000004889|000000000000000000|000000000000008503|000000000000001417</DscItem>
+<QtyItem>1.000</QtyItem>
+<UnmdItem>PAC</UnmdItem>
+<PrcItem>4889</PrcItem>
+<RecargoMonto>2256</RecargoMonto>
+<MontoItem>7145</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>0004</NroLinDet>
+<CdgItem>
+<TpoCodigo>0</TpoCodigo>
+<VlrCodigo>124257</VlrCodigo>
+</CdgItem>
+<NmbItem>ADV Kiwi 0% PT1,5 x 6</NmbItem>
+<DscItem>000000000000004889|000000000000000000|000000000000008502|000000000000001417</DscItem>
+<QtyItem>1.000</QtyItem>
+<UnmdItem>PAC</UnmdItem>
+<PrcItem>4889</PrcItem>
+<RecargoMonto>2256</RecargoMonto>
+<MontoItem>7145</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>0005</NroLinDet>
+<CdgItem>
+<TpoCodigo>0</TpoCodigo>
+<VlrCodigo>125154</VlrCodigo>
+</CdgItem>
+<NmbItem>Aquarius Manzana PT500cc x 6</NmbItem>
+<DscItem>000000000000003821|000000000000000346|000000000000005496|000000000000000916</DscItem>
+<QtyItem>1.000</QtyItem>
+<UnmdItem>PAC</UnmdItem>
+<PrcItem>3821</PrcItem>
+<DescuentoPct>9.50</DescuentoPct>
+<DescuentoMonto>363</DescuentoMonto>
+<RecargoMonto>870</RecargoMonto>
+<CodImpAdic>27</CodImpAdic>
+<MontoItem>4328</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>0006</NroLinDet>
+<CdgItem>
+<TpoCodigo>0</TpoCodigo>
+<VlrCodigo>125156</VlrCodigo>
+</CdgItem>
+<NmbItem>Aquarius Uva PT500cc x 6</NmbItem>
+<DscItem>000000000000003821|000000000000000346|000000000000005496|000000000000000916</DscItem>
+<QtyItem>1.000</QtyItem>
+<UnmdItem>PAC</UnmdItem>
+<PrcItem>3821</PrcItem>
+<DescuentoPct>9.50</DescuentoPct>
+<DescuentoMonto>363</DescuentoMonto>
+<RecargoMonto>870</RecargoMonto>
+<CodImpAdic>27</CodImpAdic>
+<MontoItem>4328</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>0007</NroLinDet>
+<CdgItem>
+<TpoCodigo>0</TpoCodigo>
+<VlrCodigo>122422</VlrCodigo>
+</CdgItem>
+<NmbItem>Ades Manzana TT200cc x 6</NmbItem>
+<DscItem>000000000000001560|000000000000000138|000000000000002063|000000000000000344</DscItem>
+<QtyItem>1.000</QtyItem>
+<UnmdItem>CAJ</UnmdItem>
+<PrcItem>1560</PrcItem>
+<DescuentoPct>11.40</DescuentoPct>
+<DescuentoMonto>178</DescuentoMonto>
+<RecargoMonto>236</RecargoMonto>
+<CodImpAdic>27</CodImpAdic>
+<MontoItem>1618</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>0008</NroLinDet>
+<CdgItem>
+<TpoCodigo>0</TpoCodigo>
+<VlrCodigo>122424</VlrCodigo>
+</CdgItem>
+<NmbItem>Ades Pina TT200cc x 6</NmbItem>
+<DscItem>000000000000001560|000000000000000138|000000000000002063|000000000000000344</DscItem>
+<QtyItem>1.000</QtyItem>
+<UnmdItem>CAJ</UnmdItem>
+<PrcItem>1560</PrcItem>
+<DescuentoPct>11.40</DescuentoPct>
+<DescuentoMonto>178</DescuentoMonto>
+<RecargoMonto>236</RecargoMonto>
+<CodImpAdic>27</CodImpAdic>
+<MontoItem>1618</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>0009</NroLinDet>
+<CdgItem>
+<TpoCodigo>0</TpoCodigo>
+<VlrCodigo>122233</VlrCodigo>
+</CdgItem>
+<NmbItem>Monster NJ Ripper LT473cc x 6</NmbItem>
+<DscItem>000000000000006498|000000000000001042|000000000000008706|000000000000001451</DscItem>
+<QtyItem>1.000</QtyItem>
+<UnmdItem>PAC</UnmdItem>
+<PrcItem>6498</PrcItem>
+<DescuentoPct>10.90</DescuentoPct>
+<DescuentoMonto>708</DescuentoMonto>
+<RecargoMonto>650</RecargoMonto>
+<CodImpAdic>271</CodImpAdic>
+<MontoItem>6440</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>0010</NroLinDet>
+<CdgItem>
+<TpoCodigo>0</TpoCodigo>
+<VlrCodigo>122236</VlrCodigo>
+</CdgItem>
+<NmbItem>Monster Ultra Peachy Keen LT473cc x 6</NmbItem>
+<DscItem>000000000000006901|000000000000000615|000000000000008706|000000000000001451</DscItem>
+<QtyItem>1.000</QtyItem>
+<UnmdItem>PAC</UnmdItem>
+<PrcItem>6901</PrcItem>
+<DescuentoPct>10.90</DescuentoPct>
+<DescuentoMonto>752</DescuentoMonto>
+<RecargoMonto>650</RecargoMonto>
+<CodImpAdic>27</CodImpAdic>
+<MontoItem>6799</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>0011</NroLinDet>
+<CdgItem>
+<TpoCodigo>0</TpoCodigo>
+<VlrCodigo>125694</VlrCodigo>
+</CdgItem>
+<NmbItem>Benedictino Frutos Rojos PT500 ml x6</NmbItem>
+<DscItem>000000000000003482|000000000000000283|000000000000004691|000000000000000782</DscItem>
+<QtyItem>1.000</QtyItem>
+<UnmdItem>PAC</UnmdItem>
+<PrcItem>3482</PrcItem>
+<DescuentoPct>18.60</DescuentoPct>
+<DescuentoMonto>648</DescuentoMonto>
+<RecargoMonto>870</RecargoMonto>
+<CodImpAdic>27</CodImpAdic>
+<MontoItem>3704</MontoItem>
+</Detalle>
+<Referencia>
+<NroLinRef>01</NroLinRef>
+<TpoDocRef>801</TpoDocRef>
+<FolioRef>CHE2202603</FolioRef>
+<FchRef>2026-03-04</FchRef>
+<CodRef>1</CodRef>
+<RazonRef/>
+</Referencia>
+
+<TED version="1.0">
+      <DD>
+        <RE>91144000-8</RE>
+        <TD>33</TD>
+        <F>93928108</F>
+        <FE>2026-03-05</FE>
+        <RR>76443852-3</RR>
+        <RSR>COMERCIALIZADORA YUBINZA RIVERA</RSR>
+        <MNT>67853</MNT>
+        <IT1>Benedictino C/G PT1,5 x 6</IT1>
+        <CAF version="1.0">
+          <DA>
+            <RE>91144000-8</RE>
+            <RS>EMBOTELLADORA ANDINA S A</RS>
+            <TD>33</TD>
+            <RNG>
+              <D>93635244</D>
+              <H>93985243</H>
+            </RNG>
+            <FA>2025-12-17</FA>
+            <RSAPK>
+              <M>tRHPaHEaGBZs+OAYnKqoyKvoM2L9Xem7qszU1s8fyPws0rFlVFMIev42WgabLwK1gDJRiNZWkXyfAZeCD3n5Hw==</M>
+              <E>Aw==</E>
+            </RSAPK>
+            <IDK>300</IDK>
+          </DA>
+          <FRMA algoritmo="SHA1withRSA">Ew042Re9KgD0hCMnP1RSEyAh0VQdAhVUst6N8DK5wZBN1U95yRruKkISD0wbD3dGXnESHmMc1AscYN4nEhVFrQ==</FRMA>
+        </CAF>
+        <TSTED>2026-03-05T05:54:40</TSTED>
+      </DD>
+      <FRMT algoritmo="SHA1withRSA">ilfdL3vXtfJjpnpkCXjenq6MV1iui5OLFZrRm4jxwIdu6dy3AFVprNba3r80rhXQjAb4TmqZGr+57FLwU4HMDA==</FRMT>
+    </TED>
+    <TmstFirma>2026-03-05T05:54:40</TmstFirma>
+  </Documento>
+<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#F93928108T33"><Transforms><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315#WithComments"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>qXyX0zi03D9puBDZdCiuVsgq9vE=</DigestValue></Reference></SignedInfo><SignatureValue>WEWguCv97nWxlI8AvAMUJkUr+jwKVlLd3F9lcHkgLuB//5DZ5sxUvybcUfjf1i1GDw1TbxLYQSnk
+65uVn/HpIeJIbsDvYaZHH3EGp0Z/EdQv6UjIpr0TGeaMhaFJtFxFAiZrkxRNleYheOjjHZL0fHpS
+byogy/3o8T6uXuMn4EbheBQPt5A9xY/Jqd29Dkr1WRNuXXxxwbgWCwWcAlBI8p3fF3o4u4G9YlGR
+oZj/t98Y03SYxSkq4pdscJSxgsRZNjOrKX5bgDjxb/NGs+joPSjjLpAUX9c/PdV/SG/UyzrN7z0U
+tEw9WdoWapR5oi+cY4QJPImzChcG/ZpEhenQ1w==</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>lneyKdEAnDwkeOGWedqVHEhK4hu+I3O86X1nIRLWuop+nsxssgP39qHXSJ71KgOLS2I/FS3tnkQB
+0FCDZlsJAOmnM7kjfQOtEmcKXnCpvHAJHRn/6+d5x7G4s9op7P+NEUSgMWqTVymbaAWR7CO23KlO
+menbOvVQVU3E1QSHP0nxQmKGVerF+9vFfwVgvSDrIyTI7H1nWaNh4iqZ4apo1pGyYaCnk3B63nlU
+QFmlhaUKBMp0wHsZSetxFVL+CUvqIfgM+PNrMcn02Ksmb45VC5N72l5K7Y6ElwkRxaungQ++FtWd
+rpRqgqYW8x6MUK93uqVcXJaeYgaDwY8Ka+RkxQ==</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>MIIGVDCCBTygAwIBAgIIc3tHPmux2fUwDQYJKoZIhvcNAQELBQAwga8xCzAJBgNVBAYTAkNMMRQw
+EgYDVQQKDAtFLVNpZ24gUy5BLjE5MDcGA1UECwwwVGVybXMgb2YgdXNlIGF0IHd3dy5lc2lnbi1s
+YS5jb20vYWN1ZXJkb3RlcmNlcm9zMSswKQYDVQQDDCJFLVNpZ24gQ2xhc3MgMiBGaXJtYSBUcmli
+dXRhcmlhIENBMSIwIAYJKoZIhvcNAQkBFhNlLXNpZ25AZXNpZ24tbGEuY29tMB4XDTI0MDQxNTE4
+NTkwMFoXDTI3MDQxNTE4NTkwMFowgbMxCzAJBgNVBAYTAkNMMRQwEgYDVQQKDAtFLVNpZ24gUy5B
+LjE5MDcGA1UECwwwVGVybXMgb2YgdXNlIGF0IHd3dy5lc2lnbi1sYS5jb20vYWN1ZXJkb3RlcmNl
+cm9zMSswKQYDVQQDDCJBTEVKQU5EUkEgQkVBVFJJWiBWSUNFTkNJTyBNSVJBTkRBMSYwJAYJKoZI
+hvcNAQkBFhdhdmljZW5jaW9tQGtvYW5kaW5hLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCC
+AQoCggEBAJZ3sinRAJw8JHjhlnnalRxISuIbviNzvOl9ZyES1rqKfp7MbLID9/ah10ie9SoDi0ti
+PxUt7Z5EAdBQg2ZbCQDppzO5I30DrRJnCl5wqbxwCR0Z/+vnecexuLPaKez/jRFEoDFqk1cpm2gF
+kewjttypTpnp2zr1UFVNxNUEhz9J8UJihlXqxfvbxX8FYL0g6yMkyOx9Z1mjYeIqmeGqaNaRsmGg
+p5Nwet55VEBZpYWlCgTKdMB7GUnrcRVS/glL6iH4DPjzazHJ9NirJm+OVQuTe9peSu2OhJcJEcWr
+p4EPvhbVna6UaoKmFvMejFCvd7qlXFyWnmIGg8GPCmvkZMUCAwEAAaOCAmwwggJoMIGABggrBgEF
+BQcBAQR0MHIwSgYIKwYBBQUHMAKGPmh0dHA6Ly9wa2kuZXNpZ24tbGEuY29tL2NhY2VydHMvcGtp
+Q2xhc3MyRmlybWFUcmlidXRhcmlhQ0EuY3J0MCQGCCsGAQUFBzABhhhodHRwOi8vb2NzcC5lc2ln
+bi1sYS5jb20wHQYDVR0OBBYEFMekPbWdmm93oaYOcmehd7ULb+/dMAwGA1UdEwEB/wQCMAAwHwYD
+VR0jBBgwFoAU+Ur6wsduwucSnFdFNYQabSjpSqQwgcgGA1UdIASBwDCBvTCBugYMKwYBBAGCymoB
+BAECMIGpMH4GCCsGAQUFBwICMHIecABDAGUAcgB0AGkAZgBpAGMAYQBkAG8AIABwAGEAcgBhACAA
+dQBzAG8AIABUAHIAaQBiAHUAdABhAHIAaQBvACwAIABDAG8AbQBlAHIAYwBpAG8ALAAgAFAAYQBn
+AG8AcwAgAHkAIABPAHQAcgBvAHMwJwYIKwYBBQUHAgEWG2h0dHA6Ly93d3cuZXNpZ24tbGEuY29t
+L2NwczBRBgNVHR8ESjBIMEagRKBChkBodHRwOi8vcGtpLmVzaWduLWxhLmNvbS9jcmwvcGtpQ2xh
+c3MyRmlybWFUcmlidXRhcmlhL2VuZHVzZXIuY3JsMA4GA1UdDwEB/wQEAwIFoDAdBgNVHSUEFjAU
+BggrBgEFBQcDAgYIKwYBBQUHAwQwIwYDVR0RBBwwGqAYBggrBgEEAcEBAaAMFgoxMzAzMDQ4OS0z
+MCMGA1UdEgQcMBqgGAYIKwYBBAHBAQKgDBYKOTk1NTE3NDAtSzANBgkqhkiG9w0BAQsFAAOCAQEA
+azIrbXaxnczvEyqrJBVXe4TwBtrgYLX3sK7tNFDjJ65P/OjttEpyluexf87oTqJDI/j+IP3PklXF
+RDTe6MsojCjOoR3igBUYwFhvzYCDdD1NEZudjR1Cml9GxPFenKRBxXiFhZQ0ZLKNhG7kzsBsE6gD
+64frHRf4utXMV6cy/bDS1jX93PnizDL4or1yUjkHCdKIfIzihmI+s6XAGUH/oJ3Cu3YGw2uzTmSX
+gG4KulzQm1prHqlCD35aoIqH45ibLFRHeYbrfa4eR9D/sYdQMiHfDe76IDsI3EK6UoQh4gqQgRD2
++T0dk7ukmnihSQ8Rx1Sz3JMSAhwr3CNjaxWB+g==</X509Certificate></X509Data></KeyInfo></Signature></DTE>

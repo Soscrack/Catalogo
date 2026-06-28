@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?><DTE version="1.0">
+<Documento ID="F433215T33">
+  <Encabezado>
+    <IdDoc>
+      <TipoDTE>33</TipoDTE>
+      <Folio>433215</Folio>
+      <FchEmis>2026-02-28</FchEmis>
+      <TipoDespacho>1</TipoDespacho>
+      <FmaPago>2</FmaPago>
+      <MedioPago>EF</MedioPago>
+      <TermPagoCdg>PE</TermPagoCdg>
+      <FchVenc>2026-02-28</FchVenc>
+    </IdDoc>
+    <Emisor>
+      <RUTEmisor>77190661-3</RUTEmisor>
+      <RznSoc>PAGOS Y SERVICIOS S.A.</RznSoc>
+      <GiroEmis>OPERACION DE TARJETAS DE PAGO</GiroEmis>
+      <Acteco>661902</Acteco>
+      <Sucursal>MATTA</Sucursal>
+      <DirOrigen>AV APOQUINDO 3721 OF 131 , Depto. 131</DirOrigen>
+      <CmnaOrigen>LAS CONDES</CmnaOrigen>
+      <CiudadOrigen>SANTIAGO</CiudadOrigen>
+    </Emisor>
+    <Receptor>
+      <RUTRecep>76443852-3</RUTRecep>
+      <RznSocRecep>COMERCIALIZADORA YUBINZA RIVERA RAMIREZ E.I.R.L</RznSocRecep>
+      <GiroRecep>VENTA DE PARTES, PIEZAS Y ACCESORIOS PAR</GiroRecep>
+      <DirRecep>CONDELL  2999</DirRecep>
+      <CmnaRecep>ANTOFAGASTA</CmnaRecep>
+      <CiudadRecep>ANTOFAGASTA</CiudadRecep>
+      <DirPostal>CONDELL  2999</DirPostal>
+      <CmnaPostal>ANTOFAGASTA</CmnaPostal>
+      <CiudadPostal>ANTOFAGASTA</CiudadPostal>
+    </Receptor>
+    <RUTSolicita>76443852-3</RUTSolicita>
+    <Transporte>
+      <RUTTrans>77190661-3</RUTTrans>
+    </Transporte>
+    <Totales>
+      <MntNeto>76690</MntNeto>
+      <TasaIVA>19</TasaIVA>
+      <IVA>14571</IVA>
+      <MntTotal>91261</MntTotal>
+    </Totales>
+  </Encabezado>
+  <Detalle>
+    <NroLinDet>1</NroLinDet>
+    <CdgItem>
+      <TpoCodigo>INT1</TpoCodigo>
+      <VlrCodigo>1</VlrCodigo>
+    </CdgItem>
+    <NmbItem>COBRO COMISIÓN TRANSACCIONES CON TARJETA DÉBITO</NmbItem>
+    <QtyRef>1</QtyRef>
+    <QtyItem>1</QtyItem>
+    <PrcItem>2177</PrcItem>
+    <MontoItem>2177</MontoItem>
+  </Detalle>
+  <Detalle>
+    <NroLinDet>2</NroLinDet>
+    <CdgItem>
+      <TpoCodigo>INT1</TpoCodigo>
+      <VlrCodigo>172</VlrCodigo>
+    </CdgItem>
+    <NmbItem>COBRO COMISIÓN TRANSACCIONES OTRAS TARJETAS</NmbItem>
+    <QtyRef>1</QtyRef>
+    <QtyItem>1</QtyItem>
+    <PrcItem>45</PrcItem>
+    <MontoItem>45</MontoItem>
+  </Detalle>
+  <Detalle>
+    <NroLinDet>3</NroLinDet>
+    <CdgItem>
+      <TpoCodigo>INT1</TpoCodigo>
+      <VlrCodigo>182</VlrCodigo>
+    </CdgItem>
+    <NmbItem>COBRO COMISIÓN ARRIENDO TERMINAL POS</NmbItem>
+    <QtyRef>1</QtyRef>
+    <QtyItem>1</QtyItem>
+    <PrcItem>21832</PrcItem>
+    <MontoItem>21832</MontoItem>
+  </Detalle>
+  <Detalle>
+    <NroLinDet>4</NroLinDet>
+    <CdgItem>
+      <TpoCodigo>INT1</TpoCodigo>
+      <VlrCodigo>202</VlrCodigo>
+    </CdgItem>
+    <NmbItem>COBRO COMISIÓN POR BAJO PROCESAMIENTO</NmbItem>
+    <QtyRef>1</QtyRef>
+    <QtyItem>1</QtyItem>
+    <PrcItem>51972</PrcItem>
+    <MontoItem>51972</MontoItem>
+  </Detalle>
+  <Detalle>
+    <NroLinDet>5</NroLinDet>
+    <CdgItem>
+      <TpoCodigo>INT1</TpoCodigo>
+      <VlrCodigo>4</VlrCodigo>
+    </CdgItem>
+    <NmbItem>COBRO COMISIÓN TRANSACCIONES CON TARJETA CRÉDITO</NmbItem>
+    <QtyRef>1</QtyRef>
+    <QtyItem>1</QtyItem>
+    <PrcItem>663</PrcItem>
+    <MontoItem>663</MontoItem>
+  </Detalle>
+  <TED version="1.0">
+    <DD>
+      <RE>77190661-3</RE>
+      <TD>33</TD>
+      <F>433215</F>
+      <FE>2026-02-28</FE>
+      <RR>76443852-3</RR>
+      <RSR>COMERCIALIZADORA YUBINZA RIVERA RAMIREZ </RSR>
+      <MNT>91261</MNT>
+      <IT1>COBRO COMISIÓN TRANSACCIONES CON TARJETA</IT1>
+      <CAF version="1.0">
+        <DA>
+          <RE>77190661-3</RE>
+          <RS>PAGOS Y SERVICIOS S.A.</RS>
+          <TD>33</TD>
+          <RNG>
+            <D>416318</D>
+            <H>436317</H>
+          </RNG>
+          <FA>2025-10-22</FA>
+          <RSAPK>
+            <M>2NQmTeZ4wmjvDjyt4lzGYmgRzOItTZOa6dehd1pqMe+kpt6XzcSYqehH68aIzacJEvA+qXwSmQnCiGGEJGEuIQ==</M>
+            <E>Aw==</E>
+          </RSAPK>
+          <IDK>300</IDK>
+        </DA>
+        <FRMA algoritmo="SHA1withRSA">LpOq59KxNWZKS5M68hu4gqVEJFja8KrowR5UPG1J5uw8vLb6NUBqw7d1GjeWTdUS7KFeN5m5NzhmeLcER6A9Tw==</FRMA>
+      </CAF>
+      <TSTED>2026-03-07T00:44:47</TSTED>
+    </DD>
+    <FRMT algoritmo="SHA1withRSA">IndFXAFmFSr4aUKroHFcRzxD8I/tW+FMDyr4Ufe+LT717iaSUbZ0MyWB+AWnbBObGsqWmkTr3cioff0fTzX8jQ==</FRMT>
+  </TED>
+  <TmstFirma>2026-03-07T00:44:47</TmstFirma>
+</Documento>
+<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
+<SignedInfo>
+<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+<SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+<Reference URI="#F433215T33">
+<Transforms>
+<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+</Transforms>
+<DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
+<DigestValue>3sqsuMXRBmLkqWMgrwogNvRsuNQ=</DigestValue>
+</Reference>
+</SignedInfo>
+<SignatureValue>ad+7zP6DjbjoHo2USiPyJpz5Ti/0uDwYu0dQ18ALRx6G5/vWxGfY/NgBiDSKLAHS0AXfjn675KW6unT4cCJ5i6ganQSyy1ZBD02JIrJ29+EhucBbO9JFviL7zBfbRC4jWCG7f6AmAXxqN1wPUZ1BCsmvhCC053VvDYP2qEBp9G7dMIgevHTgbjSIaahfclaB+UZLZML7dZ4SjhpZDvGrLWOmiW7P/c2YJb7Q+ZkFKceW9OlDE97Duko1XjFJnrgnln7Q4crG8UUHNCSFLrlbMmg5Fjrs9LpP0iB3Eu3c/HFH72HbT3gRAzJtJz7q19FLGFmsgrnWj3l/wJUMr2hg0g==</SignatureValue>
+<KeyInfo>
+<KeyValue>
+<RSAKeyValue>
+<Modulus>
+o2s1SCsx8uw3Aa3DhieKn81ZIe+brLaT/NjFLI2I/YRL2t9XIx/qCAJ9bn62QAt68ZDYShW0quqA
+OuXcSSVgvhFGP9/Xu+kcssba4cGR4BgMkwz8HYSj32gJAxRMkui4JCEsp420k4406oj39dnu/xjb
+Zc91k1Sheafyifh+d+TdGhnrjfYUnsYvtr0/43/XOGUG1prc5A+okZfsDaNbosOwqPxwTZoRFCD9
+Wei7r+mgc6hZw88BKt2eVroKYST/kdW/gBr91cQpljsKLtHqh1xApDvRrtdYF55nQKPYJcKTouz3
+XYBllBZE5jx5t0cn57qGCZgN9p4Ssf4ihu3Fiw==
+</Modulus>
+<Exponent>
+AQAB
+</Exponent>
+</RSAKeyValue>
+</KeyValue>
+<X509Data>
+<X509Certificate>MIIGUzCCBTugAwIBAgIIMVCLp7DicCowDQYJKoZIhvcNAQELBQAwga8xCzAJBgNVBAYTAkNMMRQw
+EgYDVQQKDAtFLVNpZ24gUy5BLjE5MDcGA1UECwwwVGVybXMgb2YgdXNlIGF0IHd3dy5lc2lnbi1s
+YS5jb20vYWN1ZXJkb3RlcmNlcm9zMSswKQYDVQQDDCJFLVNpZ24gQ2xhc3MgMiBGaXJtYSBUcmli
+dXRhcmlhIENBMSIwIAYJKoZIhvcNAQkBFhNlLXNpZ25AZXNpZ24tbGEuY29tMB4XDTI1MDUyMjE3
+MTcwMFoXDTI4MDQxNTE4NDIwNlowgbIxCzAJBgNVBAYTAkNMMRQwEgYDVQQKDAtFLVNpZ24gUy5B
+LjE5MDcGA1UECwwwVGVybXMgb2YgdXNlIGF0IHd3dy5lc2lnbi1sYS5jb20vYWN1ZXJkb3RlcmNl
+cm9zMScwJQYDVQQDDB5KYXZpZXIgQW5kcsOpcyBQYXJyYSBCZW5hdmVudGUxKTAnBgkqhkiG9w0B
+CQEWGmphdmllci5wYXJyYUBnbG9iYWxwYXkuY29tMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB
+CgKCAQEAo2s1SCsx8uw3Aa3DhieKn81ZIe+brLaT/NjFLI2I/YRL2t9XIx/qCAJ9bn62QAt68ZDY
+ShW0quqAOuXcSSVgvhFGP9/Xu+kcssba4cGR4BgMkwz8HYSj32gJAxRMkui4JCEsp420k4406oj3
+9dnu/xjbZc91k1Sheafyifh+d+TdGhnrjfYUnsYvtr0/43/XOGUG1prc5A+okZfsDaNbosOwqPxw
+TZoRFCD9Wei7r+mgc6hZw88BKt2eVroKYST/kdW/gBr91cQpljsKLtHqh1xApDvRrtdYF55nQKPY
+JcKTouz3XYBllBZE5jx5t0cn57qGCZgN9p4Ssf4ihu3FiwIDAQABo4ICbDCCAmgwgYAGCCsGAQUF
+BwEBBHQwcjBKBggrBgEFBQcwAoY+aHR0cDovL3BraS5lc2lnbi1sYS5jb20vY2FjZXJ0cy9wa2lD
+bGFzczJGaXJtYVRyaWJ1dGFyaWFDQS5jcnQwJAYIKwYBBQUHMAGGGGh0dHA6Ly9vY3NwLmVzaWdu
+LWxhLmNvbTAdBgNVHQ4EFgQU+oWohtWiSCsPmxlGDIdkOxFJYhowDAYDVR0TAQH/BAIwADAfBgNV
+HSMEGDAWgBT5SvrCx27C5xKcV0U1hBptKOlKpDCByAYDVR0gBIHAMIG9MIG6BgwrBgEEAYLKagEE
+AQIwgakwfgYIKwYBBQUHAgIwch5wAEMAZQByAHQAaQBmAGkAYwBhAGQAbwAgAHAAYQByAGEAIAB1
+AHMAbwAgAFQAcgBpAGIAdQB0AGEAcgBpAG8ALAAgAEMAbwBtAGUAcgBjAGkAbwAsACAAUABhAGcA
+bwBzACAAeQAgAE8AdAByAG8AczAnBggrBgEFBQcCARYbaHR0cDovL3d3dy5lc2lnbi1sYS5jb20v
+Y3BzMFEGA1UdHwRKMEgwRqBEoEKGQGh0dHA6Ly9wa2kuZXNpZ24tbGEuY29tL2NybC9wa2lDbGFz
+czJGaXJtYVRyaWJ1dGFyaWEvZW5kdXNlci5jcmwwDgYDVR0PAQH/BAQDAgWgMB0GA1UdJQQWMBQG
+CCsGAQUFBwMCBggrBgEFBQcDBDAjBgNVHREEHDAaoBgGCCsGAQQBwQEBoAwWCjEzMDY1ODE4LTAw
+IwYDVR0SBBwwGqAYBggrBgEEAcEBAqAMFgo5OTU1MTc0MC1LMA0GCSqGSIb3DQEBCwUAA4IBAQCM
+6YwUmESbhrTs0lxQZlAhtQcalfcxADz1VKEzw8pvV/51Z/pJojbWLFd3spLxyIigqX2B7nK4R5+S
+w9U3iFC1jq4i6GhLPpqQlJsOg4uGRysjnyfZyoDIRymUhlRxGqA3w6kQG29YXrErPArRd3f/IG1/
+V5kH2PO8H/t1Y0avNeYStgdqddTg7i5RHusU+8/O/XgrEu//SAyVBwC1YcnPmnUk5oFTv+12UcCJ
+OSnLaxw7fJAMeLb+5/S71AlfnVovgSdXMbcgRw8xoFc03Ou6TPqDoEN3WIXWnIxeBzN3BRdgGPUt
+q0f4oyikfkybqz1xCJLYmjFo/irkUsbzol8F
+</X509Certificate>
+</X509Data>
+</KeyInfo>
+</Signature></DTE>

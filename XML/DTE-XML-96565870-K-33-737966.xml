@@ -1,0 +1,458 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?><DTE xmlns="http://www.sii.cl/SiiDte" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.0" xsi:schemaLocation="http://www.sii.cl/SiiDte DTE_v10.xsd">
+<Documento ID="DTE_33_737966_96565870-K_20260602122800897">
+<Encabezado>
+<IdDoc>
+<TipoDTE>33</TipoDTE>
+<Folio>737966</Folio>
+<FchEmis>2026-06-02</FchEmis>
+<FchVenc>2026-06-12</FchVenc>
+</IdDoc>
+<Emisor>
+<RUTEmisor>96565870-K</RUTEmisor>
+<RznSoc>TECBOLT SA</RznSoc>
+<GiroEmis>IMPORTACION EXPORTACION FABRICACION Y COMERCIALIZACION DE ELEMENTOS DE SUJECION</GiroEmis>
+<Telefono>24767000</Telefono>
+<CorreoEmisor>gguajardo@mamut.cl</CorreoEmisor>
+<Acteco>289910</Acteco>
+<DirOrigen>AVDA. GLADYS MARIN 5760</DirOrigen>
+<CmnaOrigen>ESTACION CENTRAL</CmnaOrigen>
+<CiudadOrigen>SANTIAGO</CiudadOrigen>
+</Emisor>
+<Receptor>
+<RUTRecep>76443852-3</RUTRecep>
+<RznSocRecep>COM. YUBINZA RIVERA RAMIREZ EIRL</RznSocRecep>
+<GiroRecep>VENTA AL POR MENOR DE ARTICULOS DE FERRE</GiroRecep>
+<CorreoRecep>rs.riverso@gmail.com</CorreoRecep>
+<DirRecep>CONDELL 2999</DirRecep>
+<CmnaRecep>ANTOFAGASTA</CmnaRecep>
+<CiudadRecep>ANTOFAGASTA</CiudadRecep>
+</Receptor>
+<Totales>
+<MntNeto>791672</MntNeto>
+<MntExe>0</MntExe>
+<TasaIVA>19</TasaIVA>
+<IVA>150418</IVA>
+<MntTotal>942090</MntTotal>
+</Totales>
+</Encabezado>
+<Detalle>
+<NroLinDet>1</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>05TRC</VlrCodigo>
+</CdgItem>
+<NmbItem>TAR CLAVO 6.0x80                   ZIR</NmbItem>
+<QtyItem>200</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>37.72</PrcItem>
+<MontoItem>7544</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>2</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>14RLBC</VlrCodigo>
+</CdgItem>
+<NmbItem>ROSC.BDG.COMB #6x1 1/4             ZBR</NmbItem>
+<QtyItem>3000</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>5.15</PrcItem>
+<MontoItem>15450</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>3</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>18RLBC</VlrCodigo>
+</CdgItem>
+<NmbItem>ROSC.BDG.COMB #8x1/2               ZBR</NmbItem>
+<QtyItem>3000</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>4.08</PrcItem>
+<MontoItem>12240</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>4</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>14TFC</VlrCodigo>
+</CdgItem>
+<NmbItem>TIRAFONDO 3/8-7x2"                 PAV</NmbItem>
+<QtyItem>200</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>94.13</PrcItem>
+<MontoItem>18826</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>5</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>15TFC</VlrCodigo>
+</CdgItem>
+<NmbItem>TIRAFONDO 3/8-7x2 1/2              PAV</NmbItem>
+<QtyItem>200</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>109.33</PrcItem>
+<MontoItem>21866</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>6</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>02TADB</VlrCodigo>
+</CdgItem>
+<NmbItem>DRYWALL PTA BROCA #6-20x1 1/4      ZBR</NmbItem>
+<QtyItem>50000</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>4.51</PrcItem>
+<MontoItem>225500</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>7</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>B22TAD</VlrCodigo>
+</CdgItem>
+<NmbItem>DRYWALL.MADERA #6-9[CRS]x1 5/8     ZBR</NmbItem>
+<QtyItem>30000</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>5.37</PrcItem>
+<MontoItem>161100</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>8</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>B25TAD</VlrCodigo>
+</CdgItem>
+<NmbItem>DRYWALL.MADERA #8-8[CRS]x2 1/2     ZBR</NmbItem>
+<QtyItem>4000</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>9.23</PrcItem>
+<MontoItem>36920</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>9</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>47TMPA</VlrCodigo>
+</CdgItem>
+<NmbItem>TOR.MAD.AGDA #10[5.0]x80           ZIR</NmbItem>
+<QtyItem>3</QtyItem>
+<UnmdItem>G</UnmdItem>
+<PrcItem>2653.07</PrcItem>
+<MontoItem>7959</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>10</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>30TMPA</VlrCodigo>
+</CdgItem>
+<NmbItem>TOR.MAD.AGDA #10[5.0]x75           ZIR</NmbItem>
+<QtyItem>3</QtyItem>
+<UnmdItem>G</UnmdItem>
+<PrcItem>2603.08</PrcItem>
+<MontoItem>7809</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>11</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>02TMA</VlrCodigo>
+</CdgItem>
+<NmbItem>T.MARIP.NC #8-32[5/32]             ZBR</NmbItem>
+<QtyItem>100</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>72.80</PrcItem>
+<MontoItem>7280</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>12</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>108RLHN</VlrCodigo>
+</CdgItem>
+<NmbItem>R.ATPF.HEX.G/NEOP #12-14x1"        ZBR</NmbItem>
+<QtyItem>5000</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>20.51</PrcItem>
+<MontoItem>102550</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>13</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>18PH5</VlrCodigo>
+</CdgItem>
+<NmbItem>P.HEX.G5.NC 3/8-16x1 1/2           PAV</NmbItem>
+<QtyItem>100</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>45.56</PrcItem>
+<MontoItem>4556</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>14</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>130ATHN</VlrCodigo>
+</CdgItem>
+<NmbItem>APF.HX.ITG.PTA-S #10-12x2          RSP</NmbItem>
+<QtyItem>2000</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>29.55</PrcItem>
+<MontoItem>59100</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>15</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>17PMB</VlrCodigo>
+</CdgItem>
+<NmbItem>P.COC.PAN.MET. M4-0.7x20           ZBR</NmbItem>
+<QtyItem>500</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>10.81</PrcItem>
+<MontoItem>5405</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>16</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>37PHM8</VlrCodigo>
+</CdgItem>
+<NmbItem>P.HEX.MT.8.8.HF. M10-1.25x40       PAV</NmbItem>
+<QtyItem>100</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>84.98</PrcItem>
+<MontoItem>8498</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>17</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>40PHM8</VlrCodigo>
+</CdgItem>
+<NmbItem>P.HEX.MT.8.8.HF. M10-1.25x60       PAV</NmbItem>
+<QtyItem>50</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>116.51</PrcItem>
+<MontoItem>5826</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>18</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>110PHM8</VlrCodigo>
+</CdgItem>
+<NmbItem>P.HEX.MT.8.8.HF. M10-1.25x120      PAV</NmbItem>
+<QtyItem>100</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>205.70</PrcItem>
+<MontoItem>20570</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>19</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>128PHM8</VlrCodigo>
+</CdgItem>
+<NmbItem>P.HEX.MT.8.8.HF. M8-1.00x100       PAV</NmbItem>
+<QtyItem>100</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>120.76</PrcItem>
+<MontoItem>12076</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>20</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>110ATHN</VlrCodigo>
+</CdgItem>
+<NmbItem>APF.HX.ITG.PTA-S #10-12x1          RSP</NmbItem>
+<QtyItem>2000</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>21.49</PrcItem>
+<MontoItem>42980</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>21</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>19PHM8</VlrCodigo>
+</CdgItem>
+<NmbItem>P.HEX.MT.8.8 M8-1.25x50            PAV</NmbItem>
+<QtyItem>100</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>51.99</PrcItem>
+<MontoItem>5199</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>22</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>20PHM8</VlrCodigo>
+</CdgItem>
+<NmbItem>P.HEX.MT.8.8 M8-1.25x60            PAV</NmbItem>
+<QtyItem>100</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>59.30</PrcItem>
+<MontoItem>5930</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>23</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>10PHM8</VlrCodigo>
+</CdgItem>
+<NmbItem>P.HEX.MT.8.8 M6-1.0x50             PAV</NmbItem>
+<QtyItem>100</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>29.63</PrcItem>
+<MontoItem>2963</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>24</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>01PVCC-K</VlrCodigo>
+</CdgItem>
+<NmbItem>T.TORX.PVC-CONCRE M7.5/6.5x60/25   ZIR</NmbItem>
+<QtyItem>100</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>81.19</PrcItem>
+<MontoItem>8119</MontoItem>
+</Detalle>
+<Detalle>
+<NroLinDet>25</NroLinDet>
+<CdgItem>
+<TpoCodigo>Interna</TpoCodigo>
+<VlrCodigo>02PVCC-K</VlrCodigo>
+</CdgItem>
+<NmbItem>T.TORX.PVC-CONCRE M7.5/6.5x70/25   ZIR</NmbItem>
+<QtyItem>100</QtyItem>
+<UnmdItem>U</UnmdItem>
+<PrcItem>98.91</PrcItem>
+<MontoItem>9891</MontoItem>
+</Detalle>
+<DscRcgGlobal>
+<NroLinDR>1</NroLinDR>
+<TpoMov>D</TpoMov>
+<TpoValor>$</TpoValor>
+<ValorDR>24485</ValorDR>
+</DscRcgGlobal>
+<Referencia>
+<NroLinRef>1</NroLinRef>
+<TpoDocRef>801</TpoDocRef>
+<FolioRef>897782</FolioRef>
+<FchRef>2026-06-02</FchRef>
+</Referencia>
+<TED version="1.0">
+<DD>
+<RE>96565870-K</RE>
+<TD>33</TD>
+<F>737966</F>
+<FE>2026-06-02</FE>
+<RR>76443852-3</RR>
+<RSR>COM. YUBINZA RIVERA RAMIREZ EIRL</RSR>
+<MNT>942090</MNT>
+<IT1>TAR CLAVO 6.0x80                   ZIR</IT1>
+<CAF version="1.0">
+<DA>
+<RE>96565870-K</RE>
+<RS>TECBOLT SA</RS>
+<TD>33</TD>
+<RNG>
+<D>726001</D>
+<H>742000</H>
+</RNG>
+<FA>2026-02-06</FA>
+<RSAPK>
+<M>2s3r8QLf252lX4n2XVQZ/OabebIdVxfuWrjKo5T4z+1EkOrHlhcxVdQcJujbeu0loih863ML7gZA205/m72B/w==</M>
+<E>Aw==</E>
+</RSAPK>
+<IDK>300</IDK>
+</DA>
+<FRMA algoritmo="SHA1withRSA">ZVz6GJEWmFtFfVz8OC85UN1XX3AVWhr56qbYk82SlUmoZjznc9+MIqE0X/JCsb9xX5CFTxaw8fExLUEXv9wSSA==</FRMA>
+</CAF>
+<TSTED>2026-06-02T12:28:00</TSTED>
+</DD>
+<FRMT algoritmo="SHA1withRSA">pGCn7ns+9pZnPfCiRcyZXjhUo+SGx55yParx8yBAUbrWZuvy5hKn4ou5hkrgUYX+5eSshbdYuab+df8bxS2TnQ==</FRMT>
+</TED>
+<TmstFirma>2026-06-02T12:28:00</TmstFirma>
+</Documento>
+
+<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
+<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+<CanonicalizationMethod xmlns="http://www.w3.org/2000/09/xmldsig#" Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+<SignatureMethod xmlns="http://www.w3.org/2000/09/xmldsig#" Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+<Reference xmlns="http://www.w3.org/2000/09/xmldsig#" URI="#DTE_33_737966_96565870-K_20260602122800897">
+<Transforms xmlns="http://www.w3.org/2000/09/xmldsig#">
+<Transform xmlns="http://www.w3.org/2000/09/xmldsig#" Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+</Transforms>
+<DigestMethod xmlns="http://www.w3.org/2000/09/xmldsig#" Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
+<DigestValue xmlns="http://www.w3.org/2000/09/xmldsig#">c7GyITGAqPFYDJpUPmOGNB9qUIY=</DigestValue>
+</Reference>
+</SignedInfo>
+<SignatureValue xmlns="http://www.w3.org/2000/09/xmldsig#">
+IyOpe8AR3zrAQ0aHghxYCM+ubyY0YBLOpNn2d1edX8tXNZtAOYqybzKEpPj1P4WJfW5zpa1hXGu3
+v2/GiLEdkAm/IZr1BOUSUetD2yN8Fs0imZ9AKoDwMqkSlQCrydV7tVIrbuSQVOyf7THenVVc+6mJ
+BG5pmKUB0rNgtXNl/IUK1i2DmKG6xP7t7Qu3MtYLL7PftQhzk1X6J1OZvStdV4t2vKiBCrkq3Df7
+1SwUFS64fBG6z4bnC4EPleGvJAu6OFl9hfWmgEyV14GFvh2QOS+f1LGqfka0r9puu2iYVLpyC/WX
+kOCuB/JvDLnKehWOOsDZaRHR4EufEbZa94cmWQ==
+</SignatureValue>
+<KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+<KeyValue xmlns="http://www.w3.org/2000/09/xmldsig#">
+<RSAKeyValue xmlns="http://www.w3.org/2000/09/xmldsig#">
+<Modulus xmlns="http://www.w3.org/2000/09/xmldsig#">
+iZuWOGzoNdldaFf81QW8aJ20b2UdUD7F2nju0WIlWMSoh4gsVkhLUhO+WjwdUiG/NH6R+ASW8mqc
+yApPV2BXQR7cPK0cL33b4rdOypk8CJyoBJ2N86Sgr5zShvGLdF0Q6CuPPp/bxFDjxKSiA3m9APiI
+DGnQdpzTzFJ1HwX197Z64z0xgFByP/tn9HPk/+21u/nxjoH7kKCE/PHt3XjsGYHRZcX9/o07+N4m
+tyqjz8OsKP3TFYHYPN2gLAkKwqdFYr6PuXTiH1Cm327cZNWyS5ahmtOlwlryGP5m3q8unpqN58Gi
+WvOJJPCw8Eh8M5RUB/Rac2RyjdE2RlcQu/9cjQ==
+</Modulus>
+<Exponent xmlns="http://www.w3.org/2000/09/xmldsig#">AQAB</Exponent>
+</RSAKeyValue>
+</KeyValue>
+<X509Data xmlns="http://www.w3.org/2000/09/xmldsig#">
+<X509Certificate xmlns="http://www.w3.org/2000/09/xmldsig#">
+MIIHtTCCBZ2gAwIBAgIKZaJ8pwABABKEbzANBgkqhkiG9w0BAQsFADCBvzELMAkGA1UEBhMCQ0wx
+HTAbBgNVBAgTFFJlZ2lvbiBNZXRyb3BvbGl0YW5hMREwDwYDVQQHEwhTYW50aWFnbzEUMBIGA1UE
+ChMLRS1DRVJUQ0hJTEUxIDAeBgNVBAsTF0F1dG9yaWRhZCBDZXJ0aWZpY2Fkb3JhMR4wHAYDVQQD
+ExVFLUNFUlRDSElMRSBDQSBGRVMgMDIxJjAkBgkqhkiG9w0BCQEWF3NjbGllbnRlQGUtY2VydGNo
+aWxlLmNsMB4XDTI2MDQyOTE2MjgzM1oXDTI5MDQyODE2MjgzM1owgbExCzAJBgNVBAYTAkNMMSIw
+IAYDVQQIExlNRVRST1BPTElUQU5BIERFIFNBTlRJQUdPMREwDwYDVQQHEwhTQU5USUFHTzETMBEG
+A1UEChMKVEVDQk9MVCBTQTEKMAgGA1UECwwBKjEmMCQGA1UEAxMdQ0FSTE9TIEFMQkVSVE8gSEVS
+TkFOREVaIE1FTkExIjAgBgkqhkiG9w0BCQEWE0NIRVJOQU5ERVpATUFNVVQuQ0wwggEiMA0GCSqG
+SIb3DQEBAQUAA4IBDwAwggEKAoIBAQCJm5Y4bOg12V1oV/zVBbxonbRvZR1QPsXaeO7RYiVYxKiH
+iCxWSEtSE75aPB1SIb80fpH4BJbyapzICk9XYFdBHtw8rRwvfdvit07KmTwInKgEnY3zpKCvnNKG
+8Yt0XRDoK48+n9vEUOPEpKIDeb0A+IgMadB2nNPMUnUfBfX3tnrjPTGAUHI/+2f0c+T/7bW7+fGO
+gfuQoIT88e3deOwZgdFlxf3+jTv43ia3KqPPw6wo/dMVgdg83aAsCQrCp0Vivo+5dOIfUKbfbtxk
+1bJLlqGa06XCWvIY/mbery6emo3nwaJa84kk8LDwSHwzlFQH9FpzZHKN0TZGVxC7/1yNAgMBAAGj
+ggK9MIICuTCCAV8GA1UdIASCAVYwggFSMIIBTgYIKwYBBAHDUgUwggFAMD0GCCsGAQUFBwIBFjFo
+dHRwczovL3d3dy5lLWNlcnRjaGlsZS5jbC9wb2xpdGljYXMteS1wcmFjdGljYXMvMIH+BggrBgEF
+BQcCAjCB8R6B7gBFAGwAIAByAGUAcwBwAG8AbgBkAGUAcgAgAGUAcwB0AGUAIABmAG8AcgBtAHUA
+bABhAHIAaQBvACAAZQBzACAAdQBuACAAcgBlAHEAdQBpAHMAaQB0AG8AIABpAG4AZABpAHMAcABl
+AG4AcwBhAGIAbABlACAAcABhAHIAYQAgAGQAYQByACAAaQBuAGkAYwBpAG8AIABhAGwAIABwAHIA
+bwBjAGUAcwBvACAAZABlACAAYwBlAHIAdABpAGYAaQBjAGEAYwBpAPMAbgAuACAAUABvAHMAdABl
+AHIAaQBvAHIAbQBlAG4AdABlACwwHQYDVR0OBBYEFGtT3JTFWx+8l/gfHsx1cAcAjUcMMAsGA1Ud
+DwQEAwIE8DAjBgNVHREEHDAaoBgGCCsGAQQBwQEBoAwWCjA5MzY5NTc5LTgwHwYDVR0jBBgwFoAU
+dNYhs/Ra6C18u1kGY0PvabQ6kwQwQAYDVR0fBDkwNzA1oDOgMYYvaHR0cDovL2NybC5lY2VydGNo
+aWxlLmNsL0UtQ0VSVENISUxFQ0FGRVMwMi5jcmwwPQYIKwYBBQUHAQEEMTAvMC0GCCsGAQUFBzAB
+hiFodHRwOi8vb2NzcGZlcy5lY2VydGNoaWxlLmNsL29jc3AwPAYJKwYBBAGCNxUHBC8wLQYlKwYB
+BAGCNxUIgd3STZfUOoaJnQaHiM5vg6/MYEWG0uwIhsfKfQIBZAIBBzAjBgNVHRIEHDAaoBgGCCsG
+AQQBwQECoAwWCjk2OTI4MTgwLTUwDQYJKoZIhvcNAQELBQADggIBAJvyloc7oPsfzA3goYs0uTb8
+0/6laxE6hRjUKsOX1MpvwcPDuVNgNCtbQtUvOoK6cmiZUpxG7NohS2xn8TetTNTN4RnJPZK7CQ5a
+OBMtvwKJDtOb1WdvICWsG8Cqy86EZQDQUu0WZUEQ4wQL4cLUfbBXrGtg4jOqn6ueBp+zUxNRCZbs
+Wsl7JvDHazbIjxhaeKEvgX/RomoCz2oy0ZCeK3mJE/IY78xUsO8hI3GaWq2x17pbPl+mJRi+eybf
+cWnRcUJ4tUnNOrSZrV4o49zVqF0b+wAw/rAljRuNgfy97AUrf0lDXbFut+Emz0ua9iA8f7t9QcDu
+Cbt9qLopycgX0+ljHeiOJzGifYhS+yOfKKCs/VL5uoBEB70TiL96VA4neeGZ/afruSiLv+o0Qiai
+dZg2+SzM72btRLGoBkaW9tDW8tgr9mPuLR7AA3mqci75BI9YcopQoer+dxt1OqivlPdNvu3MVWZP
+pZS3YDab909/hpnEuLbKcCWPsyjEvn6lQIRGnTqJMP05OCNKbflKWrBKVcym6qnslwsgQf7yM0z/
+EgnrbCCpyPTTB6/WCUYwC9laAh8nMFimeN5H02ibXlIFMHoKhhhdtYj0sGC+0OPIQ8BidR7UHtg+
+giD33yTftuItjrSSQtUIo7mjWnkn9P069oh19zX277mXwW8hlWmv
+</X509Certificate>
+</X509Data>
+</KeyInfo>
+</Signature>
+</DTE>

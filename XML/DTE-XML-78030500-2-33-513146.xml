@@ -1,0 +1,395 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?><DTE version="1.0">
+      <Documento ID="F513146T33">
+        <Encabezado>
+          <IdDoc>
+            <TipoDTE>33</TipoDTE>
+            <Folio>513146</Folio>
+            <FchEmis>2026-02-28</FchEmis>
+            <FmaPago>1</FmaPago>
+            <TermPagoGlosa>CONTADO</TermPagoGlosa>
+            <FchVenc>2026-02-28</FchVenc>
+          </IdDoc>
+          <Emisor>
+            <RUTEmisor>78030500-2</RUTEmisor>
+            <RznSoc>MOSAICO S.A.</RznSoc>
+            <GiroEmis>Import.Export.y Distrib.Artic.Ferreteria, Asesorias en Ingen.Econ.Financ.Gestion</GiroEmis>
+            <Telefono>7317600</Telefono>
+            <Acteco>466302</Acteco>
+            <Acteco>702000</Acteco>
+            <DirOrigen>Avda. del Valle Sur Nº 570 P.4 Of 402 - Huechuraba -</DirOrigen>
+            <CmnaOrigen>uechuraba</CmnaOrigen>
+            <CiudadOrigen>antiago</CiudadOrigen>
+          </Emisor>
+          <Receptor>
+            <RUTRecep>76443852-3</RUTRecep>
+            <RznSocRecep>COMERCIALIZADORA YUBINZA RIVERA RAMIREZ E.I.R.L.</RznSocRecep>
+            <GiroRecep>VENTA AL POR MENOR DE ARTICULOS DE FERRE</GiroRecep>
+            <Contacto>9 87433</Contacto>
+            <DirRecep>CONDELL 2999</DirRecep>
+            <CmnaRecep>ANTOFAGASTA</CmnaRecep>
+            <CiudadRecep>ANTOFAGASTA</CiudadRecep>
+            <DirPostal>CONDELL 2999</DirPostal>
+            <CmnaPostal>ANTOFAGASTA</CmnaPostal>
+            <CiudadPostal>ANTOFAGASTA</CiudadPostal>
+          </Receptor>
+          <Transporte>
+            <Patente>DBHL25</Patente>
+            <RUTTrans>12512520-4</RUTTrans>
+            <Chofer>
+              <RUTChofer>12512520-4</RUTChofer>
+              <NombreChofer>Jorge Espinoza Angulo</NombreChofer>
+            </Chofer>
+            <DirDest>CAPITÁN CARLOS CONDELL 2999</DirDest>
+            <CmnaDest>ANTOFAGASTA</CmnaDest>
+            <CiudadDest>ANTOFAGASTA</CiudadDest>
+          </Transporte>
+          <Totales>
+            <MntNeto>687050</MntNeto>
+            <TasaIVA>19.00</TasaIVA>
+            <IVA>130540</IVA>
+            <MntTotal>817590</MntTotal>
+          </Totales>
+        </Encabezado>
+        <Detalle>
+          <NroLinDet>1</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>10CX3017102</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Bushing He-Hi 1/2x3/8</NmbItem>
+          <DscItem>Bushing He-Hi 1/2x3/8</DscItem>
+          <QtyItem>50.000000</QtyItem>
+          <UnmdItem>UND</UnmdItem>
+          <PrcItem>615.000000</PrcItem>
+          <MontoItem>30750</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>2</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>15TF5526100</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Llave Angular He 1/2x1/2 Inox</NmbItem>
+          <DscItem>Llave Angular He 1/2x1/2 Inox</DscItem>
+          <QtyItem>24.000000</QtyItem>
+          <UnmdItem>UND</UnmdItem>
+          <PrcItem>1568.000000</PrcItem>
+          <MontoItem>37632</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>3</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>19ST3092500</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Sifon Lavamanos PP 1 1/4'' con salida curva</NmbItem>
+          <DscItem>Sifon Lavamanos PP 1 1/4'' con salida curva</DscItem>
+          <QtyItem>48.000000</QtyItem>
+          <PrcItem>1371.000000</PrcItem>
+          <MontoItem>65808</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>4</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>20CI5003000</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Monomando Lavatorio Cincinnati</NmbItem>
+          <DscItem>Monomando Lavatorio Cincinnati</DscItem>
+          <QtyItem>12.000000</QtyItem>
+          <UnmdItem>UND</UnmdItem>
+          <PrcItem>4790.000000</PrcItem>
+          <MontoItem>57480</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>5</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>21BE0000114</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Percha Doble Benton Inox Satinado</NmbItem>
+          <DscItem>Percha Doble Benton Inox Satinado</DscItem>
+          <QtyItem>10.000000</QtyItem>
+          <PrcItem>2820.000000</PrcItem>
+          <MontoItem>28200</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>6</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>21ST7000011</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Ducha Bidet 1 Funciones</NmbItem>
+          <DscItem>Ducha Bidet 1 Funciones</DscItem>
+          <QtyItem>6.000000</QtyItem>
+          <UnmdItem>UND</UnmdItem>
+          <PrcItem>3910.000000</PrcItem>
+          <MontoItem>23460</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>7</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>21ST7000018</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Juego de Ducha 3 Funciones 1,75 MT</NmbItem>
+          <DscItem>Juego de Ducha 3 Funciones 1,75 MT</DscItem>
+          <QtyItem>6.000000</QtyItem>
+          <UnmdItem>UND</UnmdItem>
+          <PrcItem>5190.000000</PrcItem>
+          <MontoItem>31140</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>8</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>21ST7200001</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Juego Ducha Cromo 2 Funciones ST</NmbItem>
+          <DscItem>Juego Ducha Cromo 2 Funciones ST</DscItem>
+          <QtyItem>6.000000</QtyItem>
+          <UnmdItem>UND</UnmdItem>
+          <PrcItem>4980.000000</PrcItem>
+          <MontoItem>29880</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>9</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>21ST7210000</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Juego Ducha 5 Funciones</NmbItem>
+          <DscItem>Juego Ducha 5 Funciones</DscItem>
+          <QtyItem>6.000000</QtyItem>
+          <PrcItem>5930.000000</PrcItem>
+          <MontoItem>35580</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>10</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>25ST1000100</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Nueva Llave de Gas</NmbItem>
+          <DscItem>Nueva Llave de Gas</DscItem>
+          <QtyItem>17.000000</QtyItem>
+          <UnmdItem>UND</UnmdItem>
+          <PrcItem>2885.000000</PrcItem>
+          <MontoItem>49045</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>11</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>35CX0504100</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Flexible Agua Metálico Hi-Hi 1/2 25cm</NmbItem>
+          <DscItem>Flexible Agua Metálico Hi-Hi 1/2 25cm</DscItem>
+          <QtyItem>25.000000</QtyItem>
+          <UnmdItem>UND</UnmdItem>
+          <PrcItem>853.000000</PrcItem>
+          <MontoItem>21325</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>12</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>35CX1004100</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Flexible Agua Metálico Hi-Hi 1/2 35cm</NmbItem>
+          <DscItem>Flexible Agua Metálico Hi-Hi 1/2 35cm</DscItem>
+          <QtyItem>25.000000</QtyItem>
+          <UnmdItem>UND</UnmdItem>
+          <PrcItem>1017.000000</PrcItem>
+          <MontoItem>25425</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>13</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>35CX1507100</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Flexible Agua Metálico He-Hi 1/2 40cm</NmbItem>
+          <DscItem>Flexible Agua Metálico He-Hi 1/2 40cm</DscItem>
+          <QtyItem>25.000000</QtyItem>
+          <UnmdItem>UND</UnmdItem>
+          <PrcItem>1044.000000</PrcItem>
+          <MontoItem>26100</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>14</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>35CX1704100</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Flexible Metálico Hi-Hi 1/2 50cm</NmbItem>
+          <DscItem>Flexible Metálico Hi-Hi 1/2 50cm</DscItem>
+          <QtyItem>25.000000</QtyItem>
+          <UnmdItem>UND</UnmdItem>
+          <PrcItem>984.000000</PrcItem>
+          <MontoItem>24600</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>15</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>35CX1704110</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Flexible Metálico Hi-Hi 1/2 100cm</NmbItem>
+          <DscItem>Flexible Metálico Hi-Hi 1/2 100cm</DscItem>
+          <QtyItem>25.000000</QtyItem>
+          <PrcItem>1479.000000</PrcItem>
+          <MontoItem>36975</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>16</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>35GS3504145</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Flexible para Gas HI-HI 1/2 x 3/8 en 100 cm</NmbItem>
+          <DscItem>Flexible para Gas HI-HI 1/2 x 3/8 en 100 cm</DscItem>
+          <QtyItem>20.000000</QtyItem>
+          <PrcItem>4070.000000</PrcItem>
+          <MontoItem>81400</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>17</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>35TF8605461</VlrCodigo>
+          </CdgItem>
+          <NmbItem>FLEXIBLE AGUA VINILO 1/2  X M10 50CM. TECHNOFLEX</NmbItem>
+          <DscItem>FLEXIBLE AGUA VINILO 1/2  X M10 50CM. TECHNOFLEX</DscItem>
+          <QtyItem>50.000000</QtyItem>
+          <PrcItem>1113.000000</PrcItem>
+          <MontoItem>55650</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>18</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>40TG1306612</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Teflón de Gas 1/2 en 6,6 mts</NmbItem>
+          <DscItem>Teflón de Gas 1/2 en 6,6 mts</DscItem>
+          <QtyItem>100.000000</QtyItem>
+          <PrcItem>111.000000</PrcItem>
+          <MontoItem>11100</MontoItem>
+        </Detalle>
+        <Detalle>
+          <NroLinDet>19</NroLinDet>
+          <CdgItem>
+            <TpoCodigo>INT1</TpoCodigo>
+            <VlrCodigo>40TG2306612</VlrCodigo>
+          </CdgItem>
+          <NmbItem>Teflón de Gas 3/4 en 6,6 mts</NmbItem>
+          <DscItem>Teflón de Gas 3/4 en 6,6 mts</DscItem>
+          <QtyItem>100.000000</QtyItem>
+          <PrcItem>155.000000</PrcItem>
+          <MontoItem>15500</MontoItem>
+        </Detalle>
+        <Referencia>
+          <NroLinRef>1</NroLinRef>
+          <TpoDocRef>801</TpoDocRef>
+          <FolioRef>1361</FolioRef>
+          <FchRef>2026-03-03</FchRef>
+        </Referencia>
+        <Referencia>
+          <NroLinRef>2</NroLinRef>
+          <TpoDocRef>52</TpoDocRef>
+          <FolioRef>677727</FolioRef>
+          <FchRef>2026-02-27</FchRef>
+        </Referencia>
+        <TED version="1.0">
+          <DD>
+            <RE>78030500-2</RE>
+            <TD>33</TD>
+            <F>513146</F>
+            <FE>2026-02-28</FE>
+            <RR>76443852-3</RR>
+            <RSR>COMERCIALIZADORA YUBINZA RIVERA RAMIREZ </RSR>
+            <MNT>817590</MNT>
+            <IT1>Bushing He-Hi 1/2x3/8</IT1>
+            <CAF version="1.0">
+              <DA>
+                <RE>78030500-2</RE>
+                <RS>MOSAICO S.A.</RS>
+                <TD>33</TD>
+                <RNG>
+                  <D>513131</D>
+                  <H>526130</H>
+                </RNG>
+                <FA>2026-02-27</FA>
+                <RSAPK>
+                  <M>sByCbXVhHw4/4QJkv12xH/0NWG1OvsSZBNUlIATz/7YcPG6rIB/LFf6TJTsybYaRDLLTP004YXD43nG+toMmtQ==</M>
+                  <E>Aw==</E>
+                </RSAPK>
+                <IDK>300</IDK>
+              </DA>
+              <FRMA algoritmo="SHA1withRSA">fZiLOmRvAbJN3ck37oLbn4IDJSZ7pMHgjWGMgQj7tUk5cB+RID1hOv74LNBbz66LZmFIuPrlDvu8bQpBe+BToQ==</FRMA>
+            </CAF>
+            <TSTED>2026-03-03T08:59:47</TSTED>
+          </DD>
+          <FRMT algoritmo="SHA1withRSA">SMgDoiYLzBPEfxEIrJMDx93So8B5uGSjnk92GZU838YspWyeP1LAkxLEewN100D0uhbBy+t7NsNV8dteXTQChQ==</FRMT>
+        </TED>
+        <TmstFirma>2026-03-03T08:59:48</TmstFirma>
+      </Documento><Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#F513146T33"><Transforms><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>3Y/HAJVBTvS0y495ZqyVSjPdWpU=</DigestValue></Reference></SignedInfo><SignatureValue>
+mV1xpoPu/IIFZhtZm0hTPdFB21WEJHqMQCe/4YSP24596E1y6iIKHeLBRefmfCYr
+AZct2SwlCW/D2oXTY9ALqbKyZH0H5nSKpZyRb9TBxKrYmy4AKRN/FwxUM12MLp8K
+3hWr9eVSHjJsfMQ3gwhmxl4IsjS/JGlijTWGVe8fJJKdDGrOsVZvv37KrYOBLMLg
+ZcfyWWUw69fQ6DsSu2Sjv01V+sY7+b5RVe79TLJaK7wj6AZ/JkhVMxojKtAwm+bI
+rV4dAHJ+ZD/9v4WZnSMeMbS8FdjrgbqCMIGdas9Q55+6CGzQozTOL/98POxdnyji
+rsOUxdfAV5RbojHrc1/8PQ==
+</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>
+5BnpB9A/otM9KGJRJOuwnm1nPPJZkT7TeC59ORvXq3TKx1JXuglSko7DDzdyJnuA
+PnXF+eO8PeIfenJE7GrlShR5bj2xOl6A4nOSFhfyg77NTmUOTqKGtTQaswdotKP4
+lQ4GCwxiSFh6a/BCh32Tfn/srdOSnUCAsNaUyOW2SUzLY1rs+lIUNvT0D5OUPLBG
+3piZS9Jp6MY/xplMA35yJMqoVOVpWhMBLTat5sW2PlWdT3/0CSnjqAQ63wTYAliG
+YkbqEC4HVuCx83EY5ATUPWVYi0rUL5T/ygs+qbluCG5kH/I55QjCjBt5PWCrMiGh
+VM8GY1xYaJJ2PgFBtWsSVQ==
+</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>
+MIIHtTCCBZ2gAwIBAgIKR223lQABAA6HKDANBgkqhkiG9w0BAQsFADCBvzELMAkG
+A1UEBhMCQ0wxHTAbBgNVBAgTFFJlZ2lvbiBNZXRyb3BvbGl0YW5hMREwDwYDVQQH
+EwhTYW50aWFnbzEUMBIGA1UEChMLRS1DRVJUQ0hJTEUxIDAeBgNVBAsTF0F1dG9y
+aWRhZCBDZXJ0aWZpY2Fkb3JhMR4wHAYDVQQDExVFLUNFUlRDSElMRSBDQSBGRVMg
+MDIxJjAkBgkqhkiG9w0BCQEWF3NjbGllbnRlQGUtY2VydGNoaWxlLmNsMB4XDTI1
+MDYwNDIxNTg1OFoXDTI4MDYwMzIxNTg1OFowgbExCzAJBgNVBAYTAkNMMSIwIAYD
+VQQIExlNRVRST1BPTElUQU5BIERFIFNBTlRJQUdPMREwDwYDVQQHEwhTQU5USUFH
+TzETMBEGA1UEChMKTU9TQUlDTyBTQTEKMAgGA1UECwwBKjEmMCQGA1UEAxMdTUlH
+VUVMIEFOR0VMIENBQ0VSRVMgR09OWkFMRVoxIjAgBgkqhkiG9w0BCQEWE01DQUNF
+UkVTQE1PU0FJQ08uQ0wwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDk
+GekH0D+i0z0oYlEk67CebWc88lmRPtN4Ln05G9erdMrHUle6CVKSjsMPN3Ime4A+
+dcX547w94h96ckTsauVKFHluPbE6XoDic5IWF/KDvs1OZQ5Oooa1NBqzB2i0o/iV
+DgYLDGJIWHpr8EKHfZN+f+yt05KdQICw1pTI5bZJTMtjWuz6UhQ29PQPk5Q8sEbe
+mJlL0mnoxj/GmUwDfnIkyqhU5WlaEwEtNq3mxbY+VZ1Pf/QJKeOoBDrfBNgCWIZi
+RuoQLgdW4LHzcRjkBNQ9ZViLStQvlP/KCz6puW4IbmQf8jnlCMKMG3k9YKsyIaFU
+zwZjXFhoknY+AUG1axJVAgMBAAGjggK9MIICuTCCAV8GA1UdIASCAVYwggFSMIIB
+TgYIKwYBBAHDUgUwggFAMD0GCCsGAQUFBwIBFjFodHRwczovL3d3dy5lLWNlcnRj
+aGlsZS5jbC9wb2xpdGljYXMteS1wcmFjdGljYXMvMIH+BggrBgEFBQcCAjCB8R6B
+7gBFAGwAIAByAGUAcwBwAG8AbgBkAGUAcgAgAGUAcwB0AGUAIABmAG8AcgBtAHUA
+bABhAHIAaQBvACAAZQBzACAAdQBuACAAcgBlAHEAdQBpAHMAaQB0AG8AIABpAG4A
+ZABpAHMAcABlAG4AcwBhAGIAbABlACAAcABhAHIAYQAgAGQAYQByACAAaQBuAGkA
+YwBpAG8AIABhAGwAIABwAHIAbwBjAGUAcwBvACAAZABlACAAYwBlAHIAdABpAGYA
+aQBjAGEAYwBpAPMAbgAuACAAUABvAHMAdABlAHIAaQBvAHIAbQBlAG4AdABlACww
+HQYDVR0OBBYEFMnO2gsy7SgNj63JvnFU3uBmP0AKMAsGA1UdDwQEAwIE8DAjBgNV
+HREEHDAaoBgGCCsGAQQBwQEBoAwWCjA5ODU4OTEzLTkwHwYDVR0jBBgwFoAUdNYh
+s/Ra6C18u1kGY0PvabQ6kwQwQAYDVR0fBDkwNzA1oDOgMYYvaHR0cDovL2NybC5l
+Y2VydGNoaWxlLmNsL0UtQ0VSVENISUxFQ0FGRVMwMi5jcmwwPQYIKwYBBQUHAQEE
+MTAvMC0GCCsGAQUFBzABhiFodHRwOi8vb2NzcGZlcy5lY2VydGNoaWxlLmNsL29j
+c3AwPAYJKwYBBAGCNxUHBC8wLQYlKwYBBAGCNxUIgd3STZfUOoaJnQaHiM5vg6/M
+YEWG0uwIhsfKfQIBZAIBBzAjBgNVHRIEHDAaoBgGCCsGAQQBwQECoAwWCjk2OTI4
+MTgwLTUwDQYJKoZIhvcNAQELBQADggIBAFbND0j/vnmE7ZbVPw8cUNz6pQeBVng7
+Cd2JPBSCv3p1rr98rmkp2T7h90yIubmDXnexgFKHjjZX1ajykjXJftA3tuttGEQI
+Sb9Z1ItWxKFALG5Glq8LjB2gz4GgCGwYmsyydcK0YTcUOHgn+0UeOVb/BYJiIAKx
+IEr7IUqbO7xSXQJGRGnJ0anVzI2mFpQJ/Mu+kg/kJF9/BOntgt8ua62NDT17t5DX
+Y6LQcKz6x/LNyitoCheKfLNA9hvGObAqskvY+TvdGaoJCYP/QDZdJqdThc7MNqKm
+Ho244E4EWXeYnCkymQCSpY92UnLSvRaEri0gcE4kmOEby1Yrf1YIOmu/XRQncBV7
+kdGYF0sFP+L7J8Dkc9mEp8hBaX8ApDU95KCT3yHAw1fLs/IrxRn42aOx6h8ePHfk
+F8gBo0t33zrPoO7E6ZJ1mAVad2Dkc7spwN+zeiMAybclDqd/3ZIDt80DIJ/EPRxy
+5kPou3AP1X2PJ7VV4VqC3zmLFLZv1SyHS3vqAMpe8Uyl01ejbxU+M84J0T2nduX7
+MKJ+5bsraTvsDBwdYRkfYrlbTS7wyKndOZi0xYUsFdnvYBqwmcG8gF3lxS6wmkrv
+mqrFr9fep/TQvJVwag9h+Rp8H0Qo60ubvsN9atr+/q14MSCt6dHS3sPg7kQ5fRXm
+47SyXylsxO2l
+</X509Certificate></X509Data></KeyInfo></Signature>
+    </DTE>

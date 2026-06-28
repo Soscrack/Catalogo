@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?><DTE xmlns="http://www.sii.cl/SiiDte" version="1.0">
+  <!-- O Win32 Chrome 148 central VERSION: v20190409 -->
+<Documento ID="MiPE76435405-10036">
+    <Encabezado>
+      <IdDoc>
+        <TipoDTE>33</TipoDTE>
+        <Folio>40412</Folio>
+        <FchEmis>2026-06-05</FchEmis>
+        <TpoTranCompra>1</TpoTranCompra>
+        <TpoTranVenta>1</TpoTranVenta>
+        <FmaPago>2</FmaPago>
+      </IdDoc>
+      <Emisor>
+        <RUTEmisor>76435405-2</RUTEmisor>
+        <RznSoc>TRANSPORTES GYG  LIMITADA</RznSoc>
+        <GiroEmis>TRANSPORTE DE CARGA POR CARRETERA</GiroEmis>
+        <Telefono>2981571996</Telefono>
+        <CorreoEmisor>contacto@gygtransportes.cl</CorreoEmisor>
+        <Acteco>681012</Acteco>
+        <CdgSIISucur>79048737</CdgSIISucur>
+        <DirOrigen>CERRO EL ALTAR 2821   Placilla de Penuelas</DirOrigen>
+        <CmnaOrigen>VALPARAISO</CmnaOrigen>
+        <CiudadOrigen>VALPARAISO</CiudadOrigen>
+      </Emisor>
+      <Receptor>
+        <RUTRecep>76443852-3</RUTRecep>
+        <RznSocRecep>COMERCIALIZADORA YUBINZA  RIVERA RAMIREZ E.I.R.L.</RznSocRecep>
+        <GiroRecep>OTRAS ACTIVIDADES DE VENTA POR MENOR NO</GiroRecep>
+        <DirRecep>CONDELL 2999</DirRecep>
+        <CmnaRecep>ANTOFAGASTA</CmnaRecep>
+        <CiudadRecep>ANTOFAGASTA</CiudadRecep>
+      </Receptor>
+    <Transporte>
+  </Transporte>
+      <Totales>
+        <MntNeto>8000</MntNeto>
+        <TasaIVA>19.00</TasaIVA>
+        <IVA>1520</IVA>
+        <MntTotal>9520</MntTotal>
+      </Totales>
+    </Encabezado>
+    <Detalle>
+      <NroLinDet>1</NroLinDet>
+      <CdgItem>
+        <TpoCodigo>CC</TpoCodigo>
+        <VlrCodigo>77</VlrCodigo>
+      </CdgItem>
+      <NmbItem>TRANSPORTE</NmbItem>
+      <DscItem>SANTIAGO A  ANTOFAGASTA SEGUN FACTURA N°738179 DE TECBOLT
+TRANSPORTES GYG LIMITADA CTA.CTE
+1110316005 BANCO DE CHILE</DscItem>
+      <QtyItem>1.00</QtyItem>
+      <UnmdItem>TRAS</UnmdItem>
+      <PrcItem>8000.00</PrcItem>
+      <MontoItem>8000</MontoItem>
+    </Detalle>
+<TED version="1.0"><DD><RE>76435405-2</RE><TD>33</TD><F>40412</F><FE>2026-06-05</FE><RR>76443852-3</RR><RSR>COMERCIALIZADORA YUBINZA  RIVERA RAMIREZ</RSR><MNT>9520</MNT><IT1>TRANSPORTE</IT1><CAF version="1.0"><DA><RE>76435405-2</RE><RS>TRANSPORTES GYG  LIMITADA</RS><TD>33</TD><RNG><D>40412</D><H>40412</H></RNG><FA>2026-06-05</FA><RSAPK><M>yqnUtSP23JC9ggVV/wbWlhBb0QBCCvjenGbYL5vsi0YvRCTQYO1NSz/BsVJ6YxzQQky1vGGvkeprygFvVlroDw==</M><E>Aw==</E></RSAPK><IDK>300</IDK></DA><FRMA algoritmo="SHA1withRSA">NPMqr0dsC6J/1c/67MrKut5KgdKxo5m9ULl+6Y3IXqMyOXtFKXuR1Q4WCyEF5AtikXOt7fFlpXc+XseEsuYOtg==</FRMA></CAF><TSTED>2026-06-05T10:12:47</TSTED></DD><FRMT algoritmo="SHA1withRSA">hsYswYNqh9ibwj5CocQMAvsvCgtKHvqqwWsmwuydZArYjPDr5znCPcge87u1fWjAItNz4CuBjMvoign8iVUCmg==</FRMT></TED>
+    <TmstFirma>2026-06-05T10:12:47</TmstFirma>
+
+  </Documento>
+<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
+<SignedInfo>
+<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+<SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+<Reference URI="#MiPE76435405-10036">
+<Transforms>
+<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+</Transforms>
+<DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
+<DigestValue>+zTxTDOdwT5UoW7/YTvj1YJ3oi8=</DigestValue>
+</Reference>
+</SignedInfo>
+<SignatureValue>
+J1+vCQwNsuAtiyHURP+05dabyVMiM1qiqt0a7jcUCFFhAhiV3hNmf2YOhjoRhk8NGB+6gkQVjbWZ
+BGmWSuplxyWfbdcuGkMk9TZC2D5103Uf34MZsLxjmIyQANnLjVJuhC3P//yuH2HEod7pCo87rA1k
+pWNFBCdOCLBLMNqjXcy6HGaliOQhYMgGUDxOMytimFw2HFYhMtAAUY4/zX6p+J1RyOf8vD0OyfI8
+NjNmyt1qV4qanqK1c5STb/5mHULovvTGC+eY1Dl+uzfh6rhyMnn9Q3SP+sdkL8c5uvSVem+Kt4VB
+Fc10LlO8ph5EmtEG+oAoWXIkVIfBOBKqfePwpA==
+</SignatureValue>
+<KeyInfo>
+<KeyValue>
+<RSAKeyValue>
+<Modulus>
+oi3UNu8kJwCzDg9UFbOI0uW72qP93AM46oif5o+W7QCe7lbhCtSEZJkTut6XQ/2zoGZ8YLhFxz2g
+Aq1oX0N/lKVqm/nkvr6pH4MqwbpiMRKhx1kNthz9faqInp/5QxGDymrFkDu1NaaP826tApsw1Jab
+WNMKQODpkhL7vfbrPq4UMTEqYhslTnGep/JgnxbIf5jyYueQXFaFZYnBGZEp1QIjsJofH2q3DY9X
+a4F/C1iDUbTu4YWnnoryiYTRaMP+Xu1vtkfps/DQW/HUE+XDUaa4ZhCe6AHFcBUO37CN062fEnyF
+d+paBqXH5/Fyq3cRWElQQj/9IGBpMGgQ2f/3ew==
+</Modulus>
+<Exponent>AQAB</Exponent>
+</RSAKeyValue>
+</KeyValue>
+<X509Data>
+<X509Certificate>
+MIIH5DCCBcygAwIBAgIKPc5huQABAA7HyTANBgkqhkiG9w0BAQsFADCBvzELMAkGA1UEBhMCQ0wx
+HTAbBgNVBAgTFFJlZ2lvbiBNZXRyb3BvbGl0YW5hMREwDwYDVQQHEwhTYW50aWFnbzEUMBIGA1UE
+ChMLRS1DRVJUQ0hJTEUxIDAeBgNVBAsTF0F1dG9yaWRhZCBDZXJ0aWZpY2Fkb3JhMR4wHAYDVQQD
+ExVFLUNFUlRDSElMRSBDQSBGRVMgMDIxJjAkBgkqhkiG9w0BCQEWF3NjbGllbnRlQGUtY2VydGNo
+aWxlLmNsMB4XDTI1MDYyNzIxNDA0MFoXDTI2MDYyNzIxNDA0MFowgeAxCzAJBgNVBAYTAkNMMSIw
+IAYDVQQIExlNRVRST1BPTElUQU5BIERFIFNBTlRJQUdPMREwDwYDVQQHEwhTQU5USUFHTzErMCkG
+A1UEChMiQ0FNSUxPIEFORFJFUyBNQVhJTUlMSUFOTyBRVUlOVEFOQTEKMAgGA1UECwwBKjE0MDIG
+A1UEAxMrQ0FNSUxPIEFORFJFUyBNQVhJTUlMSUFOTyBRVUlOVEFOQSBQQUlORU1BTDErMCkGCSqG
+SIb3DQEJARYcUEFJTkVNQUxGTE9STUlSRVlBQEdNQUlMLkNPTTCCASIwDQYJKoZIhvcNAQEBBQAD
+ggEPADCCAQoCggEBAKIt1DbvJCcAsw4PVBWziNLlu9qj/dwDOOqIn+aPlu0Anu5W4QrUhGSZE7re
+l0P9s6BmfGC4Rcc9oAKtaF9Df5Slapv55L6+qR+DKsG6YjESocdZDbYc/X2qiJ6f+UMRg8pqxZA7
+tTWmj/NurQKbMNSWm1jTCkDg6ZIS+7326z6uFDExKmIbJU5xnqfyYJ8WyH+Y8mLnkFxWhWWJwRmR
+KdUCI7CaHx9qtw2PV2uBfwtYg1G07uGFp56K8omE0WjD/l7tb7ZH6bPw0Fvx1BPlw1GmuGYQnugB
+xXAVDt+wjdOtnxJ8hXfqWgalx+fxcqt3EVhJUEI//SBgaTBoENn/93sCAwEAAaOCAr0wggK5MIIB
+XwYDVR0gBIIBVjCCAVIwggFOBggrBgEEAcNSBTCCAUAwPQYIKwYBBQUHAgEWMWh0dHBzOi8vd3d3
+LmUtY2VydGNoaWxlLmNsL3BvbGl0aWNhcy15LXByYWN0aWNhcy8wgf4GCCsGAQUFBwICMIHxHoHu
+AEUAbAAgAHIAZQBzAHAAbwBuAGQAZQByACAAZQBzAHQAZQAgAGYAbwByAG0AdQBsAGEAcgBpAG8A
+IABlAHMAIAB1AG4AIAByAGUAcQB1AGkAcwBpAHQAbwAgAGkAbgBkAGkAcwBwAGUAbgBzAGEAYgBs
+AGUAIABwAGEAcgBhACAAZABhAHIAIABpAG4AaQBjAGkAbwAgAGEAbAAgAHAAcgBvAGMAZQBzAG8A
+IABkAGUAIABjAGUAcgB0AGkAZgBpAGMAYQBjAGkA8wBuAC4AIABQAG8AcwB0AGUAcgBpAG8AcgBt
+AGUAbgB0AGUALDAdBgNVHQ4EFgQUoBoqKV0Q5vyrQkCegkHRPc7Afb8wCwYDVR0PBAQDAgTwMCMG
+A1UdEQQcMBqgGAYIKwYBBAHBAQGgDBYKMjA5NTgxNzAtMTAfBgNVHSMEGDAWgBR01iGz9FroLXy7
+WQZjQ+9ptDqTBDBABgNVHR8EOTA3MDWgM6Axhi9odHRwOi8vY3JsLmVjZXJ0Y2hpbGUuY2wvRS1D
+RVJUQ0hJTEVDQUZFUzAyLmNybDA9BggrBgEFBQcBAQQxMC8wLQYIKwYBBQUHMAGGIWh0dHA6Ly9v
+Y3NwZmVzLmVjZXJ0Y2hpbGUuY2wvb2NzcDA8BgkrBgEEAYI3FQcELzAtBiUrBgEEAYI3FQiB3dJN
+l9Q6homdBoeIzm+Dr8xgRYWkvjiCnp9tAgFkAgECMCMGA1UdEgQcMBqgGAYIKwYBBAHBAQKgDBYK
+OTY5MjgxODAtNTANBgkqhkiG9w0BAQsFAAOCAgEADRcocPFwOKZMdsTMgzQRMpCcpQjkGvV1amFT
+39/4Q0yRN5vNOGFWv0GTZ22YCcUchT9r7/DRg71gTv7pZ69RiyNJbqgHY4FWsDd8fHUNqOBcMtyU
+BaASNslON9atx7g6FOHPhs0AsctzXDeG3C3Mmd3RKrx26FdXAPLxC046GKysHneuAki6g5pL0Va8
+Dqa14KtVKXyTWKdOE2FbTmmQTh9TbC6a+XR0ggYLHzOT3Oi8UwmbhB/ZI9/76ID9KE/jIwbTYa4o
+k8FGCAtUat+wvRoIxFC2/tFwvzgq1bVy0G1g3PTpe0zlYQ+Zmb1zWJU4sYGxslg5ZF7pNRORPZ2V
+Ki/VhzbTVe62U9W6Ivo9f9Rpl1DNXNyx4rY5dfklsk3dLPJLH3YFBt9bgiKH5itwGcmDTjm0M5ur
+GToWHCvPnjnwoU1JHV3E6MQ9xm4IACjB1/bjeX/9DtxGoNVHBI58UtWsBkW1SlQzuOBoGTsJfgkQ
+hhc1ettgft2zm95yfoCd8Kj0ckVzaY1P41+LBkfqNnt4sVFZQL/ggd4Fpkf/td7viZWvvZWN8FTu
+23Seo2l5ovlxF65G6WrMZxIeYY5S4WJth73muzNhrmImA/QStcYJ0AF+4S88A6rFiaTguMj5Z7Dt
+UHz/rqk2VZO06FJ3yVRLbiYdtS9uGO7o3oJXkIM=
+</X509Certificate>
+</X509Data>
+</KeyInfo>
+</Signature></DTE>

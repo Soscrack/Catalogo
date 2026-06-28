@@ -1,0 +1,67 @@
+{
+  "description": "Claves meta principales de productos WooCommerce en wp_postmeta",
+  "product_types": {
+    "simple": {
+      "post_type": "product",
+      "post_parent": 0,
+      "meta": ["_product_type=simple"]
+    },
+    "variable_parent": {
+      "post_type": "product",
+      "post_parent": 0,
+      "meta": ["_product_type=variable", "_product_attributes"]
+    },
+    "variation": {
+      "post_type": "product_variation",
+      "post_parent": "ID del producto padre",
+      "meta": ["attribute_*", "_sku", "_regular_price", "_price", "_stock"]
+    }
+  },
+  "meta_keys": {
+    "identity": [
+      { "key": "_sku", "scope": "simple | variation", "description": "SKU unico del producto o variacion" },
+      { "key": "_product_type", "scope": "product", "values": ["simple", "variable", "grouped", "external"] }
+    ],
+    "pricing": [
+      { "key": "_regular_price", "scope": "simple | variation", "description": "Precio regular" },
+      { "key": "_sale_price", "scope": "simple | variation", "description": "Precio oferta (opcional)" },
+      { "key": "_price", "scope": "simple | variation", "description": "Precio activo (regular o sale)" }
+    ],
+    "inventory": [
+      { "key": "_manage_stock", "scope": "simple | variation", "values": ["yes", "no"] },
+      { "key": "_stock", "scope": "simple | variation", "description": "Cantidad en stock" },
+      { "key": "_stock_status", "scope": "simple | variation | variable", "values": ["instock", "outofstock", "onbackorder"] },
+      { "key": "_backorders", "scope": "simple | variation", "values": ["no", "notify", "yes"] }
+    ],
+    "attributes": [
+      { "key": "_product_attributes", "scope": "variable parent", "format": "serialized PHP array", "description": "Definicion de atributos custom y globales del padre" },
+      { "key": "attribute_{slug}", "scope": "variation", "description": "Valor del atributo en una variacion especifica" }
+    ],
+    "media": [
+      { "key": "_thumbnail_id", "scope": "product", "description": "ID wp_posts attachment imagen destacada" },
+      { "key": "_product_image_gallery", "scope": "product", "format": "comma-separated IDs", "description": "Galeria de imagenes" }
+    ],
+    "relations": [
+      { "key": "_children", "scope": "grouped product", "description": "IDs de productos hijos" },
+      { "key": "_crosssell_ids", "scope": "product", "description": "Productos cross-sell" },
+      { "key": "_upsell_ids", "scope": "product", "description": "Productos upsell" }
+    ]
+  },
+  "taxonomies": [
+    { "name": "product_cat", "type": "hierarchical", "description": "Categorias de producto" },
+    { "name": "product_tag", "type": "flat", "description": "Etiquetas de producto" },
+    { "name": "pa_*", "type": "flat", "description": "Atributos globales (pa_color, pa_talla, etc.)" }
+  ],
+  "lookup_tables": [
+    {
+      "table": "wc_product_meta_lookup",
+      "purpose": "Indice denormalizado para filtros y busqueda",
+      "columns": ["product_id", "sku", "min_price", "max_price", "onsale", "stock_status", "stock_quantity"]
+    },
+    {
+      "table": "wc_product_attributes_lookup",
+      "purpose": "Indice de atributos para filtros de catalogo",
+      "columns": ["product_id", "product_or_parent_id", "term_id", "taxonomy", "is_variation_attribute", "attribute_name", "attribute_value"]
+    }
+  ]
+}

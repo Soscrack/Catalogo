@@ -13,13 +13,8 @@ class Riverso_POS_Ajax {
      * Constructor
      */
     public function __construct() {
-        // Facturas
-        add_action('wp_ajax_riverso_upload_invoice', [$this, 'upload_invoice']);
+        // Facturas: manejadas por class-invoice-module.php
         add_action('wp_ajax_riverso_process_invoice', [$this, 'process_invoice']);
-        add_action('wp_ajax_riverso_get_invoice', [$this, 'get_invoice']);
-        
-        // Códigos
-        add_action('wp_ajax_riverso_link_code', [$this, 'link_code']);
         add_action('wp_ajax_riverso_search_products', [$this, 'search_products']);
         add_action('wp_ajax_riverso_verify_code', [$this, 'verify_code']);
         

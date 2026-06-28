@@ -274,13 +274,68 @@ class Riverso_Task_Module {
     }
 
     /**
+     * Crear tarea de recepción al ingresar factura XML.
+     */
+    public function create_reception_task($factura_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $existing = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}tareas
+             WHERE tipo = 'recepcion' AND referencia_tipo = 'factura' AND referencia_id = %d
+               AND estado NOT IN ('completada', 'cancelada')
+             LIMIT 1",
+            (int) $factura_id
+        ));
+        if ($existing) {
+            return (int) $existing;
+        }
+
+        $factura = $wpdb->get_row($wpdb->prepare(
+            "SELECT f.*, p.nombre AS proveedor_nombre,
+                    (SELECT COUNT(*) FROM {$prefix}factura_items fi
+                     WHERE fi.factura_id = f.id AND (fi.item_tipo = 'producto' OR fi.item_tipo IS NULL)) AS items_count
+             FROM {$prefix}facturas f
+             LEFT JOIN {$prefix}proveedores p ON p.id = f.proveedor_id
+             WHERE f.id = %d",
+            (int) $factura_id
+        ), ARRAY_A);
+
+        if (!$factura) {
+            return new WP_Error('not_found', 'Factura no encontrada');
+        }
+
+        $proveedor = $factura['proveedor_nombre'] ?? 'Proveedor';
+        $items_count = (int) ($factura['items_count'] ?? 0);
+
+        return $this->create_task([
+            'tipo' => 'recepcion',
+            'titulo' => sprintf('Ordenar y recibir mercadería - Folio %s', $factura['folio'] ?? $factura_id),
+            'descripcion' => sprintf(
+                "Recepción física de %d ítem(s) de %s.\n\n1. Verificar cantidades\n2. Ordenar productos en zona de recepción\n3. Completar recepción en el sistema",
+                $items_count,
+                $proveedor
+            ),
+            'prioridad' => 'alta',
+            'referencia_tipo' => 'factura',
+            'referencia_id' => (int) $factura_id,
+            'created_by_system' => true,
+            'datos_extra' => [
+                'proveedor' => $proveedor,
+                'items_count' => $items_count,
+                'folio' => $factura['folio'] ?? null,
+            ],
+        ]);
+    }
+
+    /**
      * Crear tarea de código faltante
      */
     public function create_missing_code_task($factura_item_id, $codigo_proveedor, $descripcion, $proveedor_nombre) {
         return $this->create_task([
             'tipo' => 'codigo_faltante',
-            'titulo' => "Vincular código: {$codigo_proveedor}",
-            'descripcion' => "Código de {$proveedor_nombre}: {$codigo_proveedor}\nDescripción: {$descripcion}\n\nBuscar producto correspondiente y vincular.",
+            'titulo' => "Vincular código proveedor → SKU local: {$codigo_proveedor}",
+            'descripcion' => "Proveedor: {$proveedor_nombre}\nCódigo interno: {$codigo_proveedor}\nDescripción factura: {$descripcion}\n\nBuscar el producto en catálogo local y asignar el SKU interno correspondiente.",
             'prioridad' => 'alta',
             'referencia_tipo' => 'factura_item',
             'referencia_id' => $factura_item_id,
@@ -423,9 +478,12 @@ class Riverso_Task_Module {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         
-        // Obtener factura
+        // Obtener factura con proveedor
         $factura = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$prefix}facturas WHERE id = %d",
+            "SELECT f.*, p.nombre AS proveedor_nombre
+             FROM {$prefix}facturas f
+             LEFT JOIN {$prefix}proveedores p ON p.id = f.proveedor_id
+             WHERE f.id = %d",
             $factura_id
         ), ARRAY_A);
         
@@ -433,11 +491,14 @@ class Riverso_Task_Module {
             return new WP_Error('not_found', 'Factura no encontrada');
         }
         
-        // Obtener items aprobados
+        $proveedor_nombre = $factura['proveedor_nombre'] ?? 'Proveedor';
+        
+        // Obtener items aprobados (solo productos)
         $items = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$prefix}factura_items 
              WHERE factura_id = %d 
-             AND item_status IN ('received_ok', 'modified', 'approved')",
+             AND item_status IN ('received_ok', 'modified', 'approved')
+             AND (item_tipo = 'producto' OR item_tipo IS NULL)",
             $factura_id
         ), ARRAY_A);
         
@@ -481,7 +542,7 @@ class Riverso_Task_Module {
             $task_id = $this->create_labeling_task(
                 $factura_id,
                 $items_for_labeling,
-                $factura['razon_social_emisor']
+                $proveedor_nombre
             );
             if (!is_wp_error($task_id)) {
                 $tasks_created['labeling'] = $task_id;
@@ -493,7 +554,7 @@ class Riverso_Task_Module {
             $task_id = $this->create_storage_task(
                 $factura_id,
                 $items_for_storage,
-                $factura['razon_social_emisor']
+                $proveedor_nombre
             );
             if (!is_wp_error($task_id)) {
                 $tasks_created['storage'] = $task_id;
@@ -506,7 +567,7 @@ class Riverso_Task_Module {
                 $item['id'],
                 $item['codigo_proveedor'],
                 $item['descripcion'],
-                $factura['razon_social_emisor']
+                $proveedor_nombre
             );
             if (!is_wp_error($task_id)) {
                 $tasks_created['missing_code_' . $item['id']] = $task_id;

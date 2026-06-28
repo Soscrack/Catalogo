@@ -1,0 +1,82 @@
+erDiagram
+    direction LR
+
+    WP_POSTS ||--o{ WP_POSTMETA : "tiene metadatos"
+    WP_POSTS ||--o{ WP_POSTS : "padre de variaciones"
+    WP_POSTS ||--o{ WP_TERM_RELATIONSHIPS : "clasificado en"
+    WP_POSTS ||--o| WP_POSTS : "imagen destacada"
+    WP_TERM_TAXONOMY ||--o{ WP_TERM_RELATIONSHIPS : "asigna termino"
+    WP_TERMS ||--|| WP_TERM_TAXONOMY : "define"
+    WP_TERMS ||--o{ WP_TERMMETA : "tiene metadatos"
+    WP_POSTS ||--o| WC_PRODUCT_META_LOOKUP : "indexado en"
+    WP_POSTS ||--o{ WC_PRODUCT_ATTRIBUTES_LOOKUP : "atributos indexados"
+    WP_TERM_TAXONOMY ||--o{ WC_PRODUCT_ATTRIBUTES_LOOKUP : "termino atributo"
+
+    WP_POSTS {
+        bigint ID PK
+        bigint post_parent FK "0=padre, ID=variacion"
+        string post_type "product | product_variation | attachment"
+        string post_status "draft | private | publish"
+        string post_title "Nombre visible"
+        text post_content "Descripcion larga"
+        text post_excerpt "Descripcion corta"
+        string post_name "Slug URL"
+        datetime post_date
+    }
+
+    WP_POSTMETA {
+        bigint meta_id PK
+        bigint post_id FK
+        string meta_key "_sku, _price, _stock..."
+        text meta_value "Valor serializado"
+    }
+
+    WP_TERMS {
+        bigint term_id PK
+        string name "Nombre categoria o atributo"
+        string slug "Slug del termino"
+    }
+
+    WP_TERM_TAXONOMY {
+        bigint term_taxonomy_id PK
+        bigint term_id FK
+        string taxonomy "product_cat | product_tag | pa_*"
+        bigint parent FK "Jerarquia categorias"
+        bigint count "Productos asociados"
+    }
+
+    WP_TERM_RELATIONSHIPS {
+        bigint object_id PK, FK "ID producto"
+        bigint term_taxonomy_id PK, FK
+        int term_order
+    }
+
+    WP_TERMMETA {
+        bigint meta_id PK
+        bigint term_id FK
+        string meta_key
+        text meta_value
+    }
+
+    WC_PRODUCT_META_LOOKUP {
+        bigint product_id PK, FK
+        string sku UK
+        decimal min_price
+        decimal max_price
+        tinyint onsale
+        tinyint stock_status
+        int stock_quantity
+        decimal total_sales
+        bigint virtual
+        bigint downloadable
+    }
+
+    WC_PRODUCT_ATTRIBUTES_LOOKUP {
+        bigint product_id PK, FK
+        bigint product_or_parent_id FK
+        bigint term_id FK "Atributo global pa_*"
+        string taxonomy
+        int is_variation_attribute
+        string attribute_name "Slug atributo custom"
+        string attribute_value "Valor variacion"
+    }

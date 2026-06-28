@@ -162,6 +162,87 @@
     padding: 10px 12px;
 }
 
+/* Evitar encabezados verticales en tablas fixed de WP */
+.riverso-invoices .wp-list-table,
+.riverso-modal .wp-list-table,
+.portal-table {
+    table-layout: auto;
+    width: 100%;
+}
+
+.riverso-invoices .wp-list-table th,
+.riverso-invoices .wp-list-table td,
+.riverso-modal .wp-list-table th,
+.riverso-modal .wp-list-table td,
+.portal-table th,
+.portal-table td {
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: break-word;
+    writing-mode: horizontal-tb;
+    vertical-align: middle;
+}
+
+.riverso-invoices .wp-list-table thead th,
+.riverso-modal .wp-list-table thead th,
+.portal-table thead th {
+    white-space: nowrap;
+    line-height: 1.3;
+}
+
+.riverso-invoices #invoices-table th.col-proveedor,
+.riverso-invoices #invoices-table td.col-proveedor,
+.portal-table th.col-proveedor,
+.portal-table td.col-proveedor {
+    min-width: 160px;
+}
+
+.riverso-modal .riverso-items-table th.col-desc,
+.riverso-modal .riverso-items-table td.col-desc {
+    min-width: 200px;
+    max-width: 360px;
+}
+
+.upload-toolbar {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+
+.upload-mode-toggle {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.bulk-queue {
+    margin-top: 14px;
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+}
+
+.bulk-queue-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #eee;
+    font-size: 13px;
+}
+
+.bulk-queue-item:last-child { border-bottom: none; }
+
+.bulk-queue-item .bulk-status { font-size: 12px; color: #666; }
+.bulk-queue-item.ok .bulk-status { color: #2e7d32; }
+.bulk-queue-item.err .bulk-status { color: #c62828; }
+.bulk-queue-item.run .bulk-status { color: #1565c0; }
+
 /* Badges de estado */
 .status-badge,
 .priority-badge {

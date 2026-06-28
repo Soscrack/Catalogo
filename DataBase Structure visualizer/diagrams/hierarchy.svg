@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620" font-family="Segoe UI, system-ui, sans-serif">
+  <defs>
+    <marker id="a3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#5eead4"/>
+    </marker>
+    <style>
+      .box { fill:#1a2332; stroke:#7c9cff; stroke-width:1.5; rx:8; }
+      .group { fill:#152030; stroke:#2d3f56; stroke-width:1.5; rx:12; }
+      .label { fill:#e8edf4; font-size:12px; font-weight:600; }
+      .sub { fill:#8b9cb3; font-size:10px; }
+      .gtitle { fill:#5eead4; font-size:11px; font-weight:600; letter-spacing:0.05em; }
+      .edge { stroke:#5eead4; stroke-width:1.2; fill:none; marker-end:url(#a3); }
+      .elabel { fill:#8b9cb3; font-size:10px; }
+    </style>
+  </defs>
+  <text x="20" y="28" fill="#e8edf4" font-size="18" font-weight="600">Jerarquia de productos WooCommerce</text>
+
+  <rect class="group" x="30" y="50" width="280" height="200"/>
+  <text class="gtitle" x="48" y="74">NUCLEO WORDPRESS</text>
+  <rect class="box" x="60" y="90" width="220" height="44"/>
+  <text class="label" x="120" y="116">wp_posts</text>
+  <rect class="box" x="60" y="150" width="220" height="44"/>
+  <text class="label" x="110" y="176">wp_postmeta</text>
+  <path class="edge" d="M170 134 L170 150"/>
+
+  <rect class="group" x="340" y="50" width="300" height="260"/>
+  <text class="gtitle" x="358" y="74">TAXONOMIAS</text>
+  <rect class="box" x="370" y="90" width="240" height="36"/>
+  <text class="label" x="430" y="112">wp_terms</text>
+  <rect class="box" x="370" y="140" width="240" height="36"/>
+  <text class="label" x="395" y="162">wp_term_taxonomy</text>
+  <rect class="box" x="370" y="190" width="240" height="36"/>
+  <text class="label" x="385" y="212">wp_term_relationships</text>
+  <rect class="box" x="370" y="250" width="115" height="44"/>
+  <text class="sub" x="382" y="268">product_cat</text>
+  <text class="sub" x="382" y="284">product_tag</text>
+  <rect class="box" x="495" y="250" width="115" height="44"/>
+  <text class="sub" x="510" y="268">pa_*</text>
+  <text class="sub" x="505" y="284">atributos</text>
+  <path class="edge" d="M490 126 L490 140"/>
+  <path class="edge" d="M490 176 L490 190"/>
+  <path class="edge" d="M490 226 L428 250"/>
+  <path class="edge" d="M490 226 L552 250"/>
+
+  <rect class="group" x="680" y="50" width="280" height="120"/>
+  <text class="gtitle" x="698" y="74">INDICE WC</text>
+  <rect class="box" x="710" y="90" width="220" height="44"/>
+  <text class="label" x="720" y="112">wc_product_meta_lookup</text>
+  <text class="sub" x="730" y="126">sku, precio, stock</text>
+
+  <rect class="group" x="30" y="290" width="930" height="280"/>
+  <text class="gtitle" x="48" y="314">TIPOS EN wp_posts</text>
+
+  <rect class="box" x="60" y="340" width="180" height="56"/>
+  <text class="label" x="95" y="364">Simple</text>
+  <text class="sub" x="72" y="382">post_type=product</text>
+
+  <rect class="box" x="280" y="340" width="180" height="56"/>
+  <text class="label" x="305" y="364">Variable (padre)</text>
+  <text class="sub" x="292" y="382">_product_type=variable</text>
+
+  <rect class="box" x="500" y="340" width="180" height="56"/>
+  <text class="label" x="530" y="364">Variacion</text>
+  <text class="sub" x="505" y="382">product_variation</text>
+
+  <rect class="box" x="720" y="340" width="180" height="56"/>
+  <text class="label" x="770" y="364">Imagen</text>
+  <text class="sub" x="735" y="382">attachment image/*</text>
+
+  <path class="edge" d="M170 310 L150 340"/>
+  <path class="edge" d="M170 310 L370 340"/>
+  <path class="edge" d="M170 310 L590 340"/>
+  <path class="edge" d="M170 310 L810 340"/>
+
+  <path class="edge" d="M460 396 L590 396"/>
+  <text class="elabel" x="490" y="388">post_parent 1:N</text>
+
+  <path class="edge" d="M370 396 L810 368"/>
+  <text class="elabel" x="560" y="370">set_image_id</text>
+  <path class="edge" d="M150 396 L810 368"/>
+
+  <rect class="box" x="280" y="440" width="420" height="100"/>
+  <text class="label" x="300" y="468">Patron MAMUT (Riverso)</text>
+  <text class="sub" x="300" y="490">NOMINAL  visible, no variacion</text>
+  <text class="sub" x="300" y="508">LARGO  visible, no variacion</text>
+  <text class="sub" x="300" y="526">nominal-x-largo  atributo de variacion real</text>
+
+  <path class="edge" d="M370 396 L490 440"/>
+  <text class="elabel" x="400" y="425">set_attributes</text>
+</svg>

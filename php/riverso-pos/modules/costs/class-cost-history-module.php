@@ -104,15 +104,47 @@ class Riverso_Cost_History_Module {
         
         $data = wp_parse_args($data, $defaults);
         
-        // Validate required fields
-        if (empty($data['product_id']) || $data['cost'] <= 0) {
-            return new WP_Error('invalid_data', 'Producto y costo son requeridos');
+        $has_product = !empty($data['product_id']);
+        $has_supplier_ref = !empty($data['supplier_code']) && !empty($data['source_item_id']);
+
+        if ((!$has_product && !$has_supplier_ref) || $data['cost'] <= 0) {
+            return new WP_Error('invalid_data', 'Se requiere producto o código proveedor con ítem de factura, y un costo válido');
+        }
+
+        // Evitar duplicados por misma línea de factura.
+        if (!empty($data['source_type']) && $data['source_type'] === 'invoice' && !empty($data['source_item_id'])) {
+            $existing = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$this->table_name}
+                 WHERE source_type = 'invoice' AND source_item_id = %d LIMIT 1",
+                absint($data['source_item_id'])
+            ));
+            if ($existing) {
+                $wpdb->update(
+                    $this->table_name,
+                    array(
+                        'product_id' => $has_product ? absint($data['product_id']) : null,
+                        'variation_id' => !empty($data['variation_id']) ? absint($data['variation_id']) : null,
+                        'supplier_id' => $data['supplier_id'] ? absint($data['supplier_id']) : null,
+                        'supplier_code' => $data['supplier_code'] ? sanitize_text_field($data['supplier_code']) : null,
+                        'cost' => floatval($data['cost']),
+                        'quantity' => floatval($data['quantity']),
+                        'document_date' => sanitize_text_field($data['document_date']),
+                        'notes' => sanitize_textarea_field($data['notes']),
+                        'descripcion_proveedor' => !empty($data['descripcion_proveedor']) ? sanitize_text_field($data['descripcion_proveedor']) : null,
+                        'costo_producto_unitario' => isset($data['costo_producto_unitario']) ? floatval($data['costo_producto_unitario']) : null,
+                        'costo_envio_prorrateado' => isset($data['costo_envio_prorrateado']) ? floatval($data['costo_envio_prorrateado']) : null,
+                        'pendiente_vinculacion' => $has_product ? 0 : 1,
+                    ),
+                    array('id' => (int) $existing)
+                );
+                return (int) $existing;
+            }
         }
         
         $result = $wpdb->insert(
             $this->table_name,
             array(
-                'product_id' => absint($data['product_id']),
+                'product_id' => $has_product ? absint($data['product_id']) : null,
                 'variation_id' => $data['variation_id'] ? absint($data['variation_id']) : null,
                 'supplier_id' => $data['supplier_id'] ? absint($data['supplier_id']) : null,
                 'source_type' => sanitize_text_field($data['source_type']),
@@ -124,9 +156,13 @@ class Riverso_Cost_History_Module {
                 'quantity' => floatval($data['quantity']),
                 'document_date' => sanitize_text_field($data['document_date']),
                 'notes' => sanitize_textarea_field($data['notes']),
-                'created_by' => absint($data['created_by'])
+                'created_by' => absint($data['created_by']),
+                'descripcion_proveedor' => !empty($data['descripcion_proveedor']) ? sanitize_text_field($data['descripcion_proveedor']) : null,
+                'costo_producto_unitario' => isset($data['costo_producto_unitario']) ? floatval($data['costo_producto_unitario']) : null,
+                'costo_envio_prorrateado' => isset($data['costo_envio_prorrateado']) ? floatval($data['costo_envio_prorrateado']) : null,
+                'pendiente_vinculacion' => $has_product ? 0 : 1,
             ),
-            array('%d', '%d', '%d', '%s', '%d', '%d', '%s', '%f', '%s', '%f', '%s', '%s', '%d')
+            array('%d', '%d', '%d', '%s', '%d', '%d', '%s', '%f', '%s', '%f', '%s', '%s', '%d', '%s', '%f', '%f', '%d')
         );
         
         if ($result === false) {

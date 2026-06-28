@@ -409,6 +409,145 @@
                 position: relative;
             }
         }
+
+        /* Tablas portal */
+        .portal-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: auto;
+        }
+        .portal-table th,
+        .portal-table td {
+            padding: 12px;
+            text-align: left;
+            vertical-align: middle;
+            white-space: normal;
+            word-break: normal;
+            writing-mode: horizontal-tb;
+        }
+        .portal-table thead th {
+            background: var(--bg-light);
+            white-space: nowrap;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        .portal-table th.col-proveedor,
+        .portal-table td.col-proveedor { min-width: 160px; }
+        .portal-table th.col-desc,
+        .portal-table td.col-desc { min-width: 200px; }
+
+        .portal-filters {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .portal-filters select,
+        .portal-filters input[type="date"] {
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            min-width: 150px;
+        }
+
+        .portal-upload-area {
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 32px;
+            text-align: center;
+            transition: all .2s;
+        }
+        .portal-upload-area.dragover {
+            border-color: var(--primary);
+            background: #e3f2fd;
+        }
+        .portal-upload-toolbar {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+        .portal-mode-toggle {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            font-size: 14px;
+        }
+
+        .portal-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.5);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .portal-modal-overlay.open { display: flex; }
+        .portal-modal {
+            background: #fff;
+            border-radius: 8px;
+            width: 100%;
+            max-width: 620px;
+            max-height: 90vh;
+            overflow: auto;
+            box-shadow: 0 10px 40px rgba(0,0,0,.25);
+        }
+        .portal-modal.large { max-width: 960px; }
+        .portal-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-light);
+        }
+        .portal-modal-body { padding: 20px; }
+        .portal-modal-footer {
+            padding: 14px 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .portal-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .portal-badge-recibido { background: #e3f2fd; color: #1565c0; }
+        .portal-badge-parcial { background: #fff3e0; color: #ef6c00; }
+        .portal-badge-procesado { background: #e8f5e9; color: #2e7d32; }
+        .portal-badge-pendiente { background: #fafafa; color: #666; }
+        .portal-badge-vinculado { background: #e8f5e9; color: #2e7d32; }
+        .portal-badge-sin_vincular { background: #fff3e0; color: #e65100; }
+
+        .bulk-queue {
+            max-height: 220px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+        .bulk-queue-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }
+        .bulk-queue-item:last-child { border-bottom: none; }
+        .bulk-queue-item .bulk-status { font-size: 12px; color: var(--text-secondary); }
+        .bulk-queue-item.ok .bulk-status { color: var(--success); }
+        .bulk-queue-item.err .bulk-status { color: var(--danger); }
+        .bulk-queue-item.run .bulk-status { color: var(--primary); }
     </style>
 </head>
 <body>
@@ -422,6 +561,7 @@ $current_page = get_query_var('riverso_portal', 'dashboard');
 $catalog_initial_product = 0;
 $catalog_initial_hash = '';
 $nonce = wp_create_nonce('riverso_pos_nonce');
+$default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
 
 // Obtener estadísticas
 global $wpdb;
@@ -629,7 +769,7 @@ $tareas = $wpdb->get_results($wpdb->prepare(
                         <?php endif; ?>
                         
                         <?php if (current_user_can('riverso_view_invoices')): ?>
-                        <a href="<?php echo admin_url('admin.php?page=riverso-invoices'); ?>" class="quick-action">
+                        <a href="<?php echo home_url('/interno/invoices/'); ?>" class="quick-action">
                             <span class="dashicons dashicons-upload"></span>
                             <span>Subir Factura</span>
                         </a>
@@ -770,46 +910,61 @@ $tareas = $wpdb->get_results($wpdb->prepare(
         </div>
         
         <?php elseif ($current_page === 'invoices'): ?>
-        <!-- Facturas -->
+        <!-- Facturas (portal interno) -->
         <div class="content-section">
             <div class="section-header">
-                <h2 class="section-title">Facturas Recibidas</h2>
-                <?php if (current_user_can('riverso_create_invoices')): ?>
+                <h2 class="section-title">Facturas DTE</h2>
+                <?php if (current_user_can('riverso_process_invoices') || current_user_can('riverso_create_invoices')): ?>
                 <button class="btn btn-primary" onclick="subirFactura()">
                     <span class="dashicons dashicons-upload"></span> Subir XML
                 </button>
                 <?php endif; ?>
             </div>
             <div class="section-body">
-                <table style="width: 100%; border-collapse: collapse;">
-                    <thead>
-                        <tr style="background: var(--bg-light);">
-                            <th style="padding: 12px; text-align: left;">Folio</th>
-                            <th style="padding: 12px; text-align: left;">Proveedor</th>
-                            <th style="padding: 12px; text-align: left;">Fecha</th>
-                            <th style="padding: 12px; text-align: right;">Total</th>
-                            <th style="padding: 12px; text-align: center;">Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                <div class="portal-filters">
+                    <select id="portal-filter-estado">
+                        <option value="">Todos los estados</option>
+                        <option value="recibido">Recibido</option>
+                        <option value="parcial">Parcial</option>
+                        <option value="procesado">Procesado</option>
+                        <option value="rechazado">Rechazado</option>
+                        <option value="sin_vincular">Flete sin asignar</option>
+                        <option value="vinculado">Flete vinculado</option>
+                    </select>
+                    <select id="portal-filter-proveedor">
+                        <option value="">Todos los proveedores</option>
                         <?php
-                        $facturas = $wpdb->get_results(
-                            "SELECT f.*, p.nombre as proveedor_nombre FROM {$prefix}facturas f
-                             LEFT JOIN {$prefix}proveedores p ON f.proveedor_id = p.id
-                             ORDER BY f.created_at DESC LIMIT 20", ARRAY_A);
-                        foreach ($facturas as $f): ?>
-                        <tr style="border-bottom: 1px solid var(--border);">
-                            <td style="padding: 12px;"><?php echo esc_html($f['folio']); ?></td>
-                            <td style="padding: 12px;"><?php echo esc_html($f['proveedor_nombre'] ?? 'Sin proveedor'); ?></td>
-                            <td style="padding: 12px;"><?php echo date_i18n('d/m/Y', strtotime($f['fecha_emision'] ?? $f['created_at'])); ?></td>
-                            <td style="padding: 12px; text-align: right;">$<?php echo number_format($f['total'] ?? 0, 0, ',', '.'); ?></td>
-                            <td style="padding: 12px; text-align: center;">
-                                <span class="badge badge-<?php echo esc_attr($f['estado']); ?>"><?php echo esc_html(ucfirst($f['estado'])); ?></span>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                        $proveedores_list = $wpdb->get_results("SELECT id, nombre FROM {$prefix}proveedores WHERE activo = 1 ORDER BY nombre");
+                        foreach ($proveedores_list as $prov) {
+                            echo '<option value="' . esc_attr($prov->id) . '">' . esc_html($prov->nombre) . '</option>';
+                        }
+                        ?>
+                    </select>
+                    <input type="date" id="portal-filter-desde">
+                    <input type="date" id="portal-filter-hasta">
+                    <button type="button" class="btn btn-secondary" onclick="portalLoadInvoices(1)">Filtrar</button>
+                </div>
+
+                <div style="overflow-x:auto;">
+                    <table class="portal-table" id="portal-invoices-table">
+                        <thead>
+                            <tr>
+                                <th>Folio</th>
+                                <th>Tipo</th>
+                                <th class="col-proveedor">Proveedor</th>
+                                <th>Fecha</th>
+                                <th style="text-align:right;">Total</th>
+                                <th>Items</th>
+                                <th>Estado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="portal-invoices-list">
+                            <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-secondary);">Cargando…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="portal-invoices-pagination" style="margin-top:12px;font-size:13px;color:var(--text-secondary);"></div>
             </div>
         </div>
         
@@ -1092,10 +1247,162 @@ $tareas = $wpdb->get_results($wpdb->prepare(
     </main>
 </div>
 
+<!-- Modal subir factura XML (portal) -->
+<div id="portal-upload-modal" class="portal-modal-overlay">
+    <div class="portal-modal large" id="portal-upload-modal-inner">
+        <div class="portal-modal-header">
+            <h3 style="margin:0;">Subir factura XML</h3>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cerrarSubirFactura()">&times;</button>
+        </div>
+        <div class="portal-modal-body">
+            <div id="portal-step-select">
+                <div class="portal-mode-toggle">
+                    <label><input type="radio" name="portal-upload-mode" value="single" checked> Un XML (con preview)</label>
+                    <label><input type="radio" name="portal-upload-mode" value="bulk"> Carga masiva</label>
+                </div>
+                <div id="portal-upload-single">
+                    <p style="color:var(--text-secondary);font-size:14px;margin-bottom:12px;">
+                        El sistema detectará si es productos o transportista antes de procesar.
+                    </p>
+                    <input type="file" id="portal-xml-file" accept=".xml" style="display:none;">
+                    <div class="portal-upload-area" id="portal-dropzone">
+                        <span class="dashicons dashicons-upload" style="font-size:40px;width:40px;height:40px;color:var(--text-secondary);"></span>
+                        <p style="margin-top:8px;color:var(--text-secondary);">Arrastra el XML aquí</p>
+                    </div>
+                    <div class="portal-upload-toolbar">
+                        <button type="button" class="btn btn-primary" id="portal-btn-browse">
+                            <span class="dashicons dashicons-open-folder"></span> Buscar archivos
+                        </button>
+                    </div>
+                    <p id="portal-file-name" style="text-align:center;font-size:13px;color:var(--text-secondary);margin-top:8px;"></p>
+                </div>
+                <div id="portal-upload-bulk" style="display:none;">
+                    <p style="color:var(--text-secondary);font-size:14px;margin-bottom:12px;">
+                        Varios XML en secuencia. Los fletes quedan sin asignar hasta vincularlos manualmente.
+                    </p>
+                    <input type="file" id="portal-xml-bulk" accept=".xml" multiple style="display:none;">
+                    <div class="portal-upload-area" id="portal-bulk-dropzone">
+                        <span class="dashicons dashicons-media-default" style="font-size:40px;width:40px;height:40px;"></span>
+                        <p style="margin-top:8px;color:var(--text-secondary);">Arrastra varios XML aquí</p>
+                    </div>
+                    <div class="portal-upload-toolbar">
+                        <button type="button" class="btn btn-primary" id="portal-btn-browse-bulk">Buscar archivos XML</button>
+                        <button type="button" class="btn btn-primary" id="portal-btn-start-bulk" disabled>Procesar todos</button>
+                    </div>
+                    <div id="portal-bulk-queue" class="bulk-queue" style="display:none;margin-top:12px;"></div>
+                </div>
+            </div>
+            <div id="portal-step-confirm" style="display:none;">
+                <div id="portal-intake-gaps" style="display:none;margin-bottom:12px;padding:10px 12px;background:#fff8e5;border:1px solid #f0c36d;border-radius:6px;font-size:13px;"></div>
+                <div id="portal-xml-preview" style="padding:12px;background:var(--bg-light);border-radius:6px;font-size:13px;margin-bottom:12px;">
+                    <div id="portal-preview-summary"></div>
+                    <div style="overflow-x:auto;margin-top:10px;">
+                        <table class="portal-table" id="portal-preview-items" style="font-size:12px;">
+                            <thead><tr><th>#</th><th class="col-desc">Descripción</th><th>Tipo</th><th style="text-align:right;">Monto</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div style="margin-bottom:12px;">
+                    <strong>Tipo de documento</strong>
+                    <p id="portal-detection-motivo" style="font-size:12px;color:var(--text-secondary);margin:6px 0;"></p>
+                    <label><input type="radio" name="portal-documento-tipo" value="productos"> Productos</label><br>
+                    <label><input type="radio" name="portal-documento-tipo" value="envio"> Transportista / flete</label>
+                </div>
+                <div id="portal-link-wrap" style="display:none;margin-bottom:12px;">
+                    <label>Vincular a factura de productos <em>(opcional)</em></label>
+                    <select id="portal-link-factura" style="width:100%;margin-top:6px;padding:8px;">
+                        <option value="">— Dejar sin asignar —</option>
+                    </select>
+                </div>
+                <div id="portal-modo-wrap" style="margin-bottom:12px;">
+                    <label><input type="radio" name="portal-modo" value="recepcion" <?php echo $default_intake_mode === 'recepcion' ? 'checked' : ''; ?>> Recepción completa</label><br>
+                    <label><input type="radio" name="portal-modo" value="solo_costos" <?php echo $default_intake_mode === 'solo_costos' ? 'checked' : ''; ?>> Solo costos (sin bodega)</label>
+                </div>
+                <label style="font-size:13px;font-weight:600;">Proveedor</label>
+                <input type="text" id="portal-prov-nombre" placeholder="Razón social" style="width:100%;margin:6px 0;padding:8px;border:1px solid var(--border);border-radius:4px;">
+                <input type="text" id="portal-prov-rut" placeholder="RUT" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:4px;" readonly>
+            </div>
+            <div id="portal-upload-result" style="margin-top:12px;font-size:14px;"></div>
+        </div>
+        <div class="portal-modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="cerrarSubirFactura()">Cancelar</button>
+            <button type="button" class="btn btn-secondary" id="portal-btn-change" style="display:none;" onclick="resetPortalUpload()">Cambiar archivo</button>
+            <button type="button" class="btn btn-primary" id="portal-btn-confirm" style="display:none;" onclick="procesarSubirFactura()">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal detalle factura (portal) -->
+<div id="portal-detail-modal" class="portal-modal-overlay">
+    <div class="portal-modal large">
+        <div class="portal-modal-header">
+            <h3 style="margin:0;">Factura <span id="portal-detail-folio"></span></h3>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cerrarDetalleFactura()">&times;</button>
+        </div>
+        <div class="portal-modal-body">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px;font-size:14px;">
+                <div><strong>Proveedor:</strong> <span id="portal-detail-proveedor"></span></div>
+                <div><strong>RUT:</strong> <span id="portal-detail-rut"></span></div>
+                <div><strong>Fecha:</strong> <span id="portal-detail-fecha"></span></div>
+                <div><strong>Total:</strong> <span id="portal-detail-total"></span></div>
+            </div>
+
+            <div id="portal-detail-shipping-section" style="display:none;margin-bottom:16px;padding:12px;background:#f0f6fc;border-radius:6px;">
+                <strong>Fletes vinculados</strong>
+                <div id="portal-detail-shipping-linked" style="margin-top:8px;"></div>
+                <div id="portal-detail-shipping-assign" style="margin-top:12px;display:none;">
+                    <label><strong>Asignar flete pendiente</strong></label>
+                    <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
+                        <select id="portal-detail-assign-flete-id" style="flex:1;min-width:200px;padding:8px;"></select>
+                        <button type="button" class="btn btn-primary btn-sm" id="portal-btn-assign-flete">Vincular flete</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="portal-detail-envio-section" style="display:none;margin-bottom:16px;padding:12px;background:#fff8e5;border-radius:6px;">
+                <strong>Vincular a facturas de productos</strong>
+                <p class="description" style="margin:6px 0 8px;">Un mismo flete puede repartirse entre varias facturas de productos.</p>
+                <div id="portal-detail-envio-linked" style="margin-bottom:10px;"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <select id="portal-detail-envio-target-id" style="flex:1;min-width:200px;padding:8px;"></select>
+                    <button type="button" class="btn btn-primary btn-sm" id="portal-btn-envio-assign">Vincular</button>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" id="portal-btn-envio-unassign-all" style="margin-top:8px;display:none;">Desvincular todas</button>
+            </div>
+
+            <div style="overflow-x:auto;">
+                <table class="portal-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Cód. Prov.</th>
+                            <th class="col-desc">Descripción</th>
+                            <th>Cant.</th>
+                            <th style="text-align:right;">Precio</th>
+                            <th style="text-align:right;">Total</th>
+                            <th>SKU Local</th>
+                            <th>SKU Online</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="portal-detail-items"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="portal-modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="cerrarDetalleFactura()">Cerrar</button>
+        </div>
+    </div>
+</div>
+
 <script>
 // Nonce para AJAX
 const riversoNonce = '<?php echo $nonce; ?>';
 const ajaxUrl = '<?php echo admin_url('admin-ajax.php'); ?>';
+const canDeleteInvoices = <?php echo (current_user_can('riverso_process_invoices') || current_user_can('riverso_create_invoices')) ? 'true' : 'false'; ?>;
+const canProcessInvoices = canDeleteInvoices;
+let portalDetailFacturaId = null;
 
 function completarTarea(id) {
     if (!confirm('¿Marcar tarea como completada?')) return;
@@ -1112,6 +1419,591 @@ function completarTarea(id) {
 function crearTarea() {
     window.location.href = '<?php echo admin_url('admin.php?page=riverso-tasks&action=new'); ?>';
 }
+
+let portalPreviewData = null;
+let portalBulkFiles = [];
+const portalDefaultModo = '<?php echo esc_js($default_intake_mode); ?>';
+const portalOnInvoicesPage = <?php echo $current_page === 'invoices' ? 'true' : 'false'; ?>;
+
+function portalSetInputFiles(input, fileList) {
+    if (!input || !fileList || !fileList.length) return false;
+    const dt = new DataTransfer();
+    Array.from(fileList).forEach(f => dt.items.add(f));
+    input.files = dt.files;
+    return input.files.length > 0;
+}
+
+function resetPortalUpload() {
+    portalPreviewData = null;
+    portalBulkFiles = [];
+    const xmlFile = document.getElementById('portal-xml-file');
+    const xmlBulk = document.getElementById('portal-xml-bulk');
+    if (xmlFile) xmlFile.value = '';
+    if (xmlBulk) xmlBulk.value = '';
+    const singleRadio = document.querySelector('input[name="portal-upload-mode"][value="single"]');
+    if (singleRadio) singleRadio.checked = true;
+    document.getElementById('portal-upload-single').style.display = 'block';
+    document.getElementById('portal-upload-bulk').style.display = 'none';
+    document.getElementById('portal-step-select').style.display = 'block';
+    document.getElementById('portal-step-confirm').style.display = 'none';
+    document.getElementById('portal-btn-change').style.display = 'none';
+    document.getElementById('portal-btn-confirm').style.display = 'none';
+    document.getElementById('portal-upload-result').textContent = '';
+    document.getElementById('portal-file-name').textContent = '';
+    const gaps = document.getElementById('portal-intake-gaps');
+    if (gaps) { gaps.style.display = 'none'; gaps.innerHTML = ''; }
+    const previewBody = document.querySelector('#portal-preview-items tbody');
+    if (previewBody) previewBody.innerHTML = '';
+    const bq = document.getElementById('portal-bulk-queue');
+    if (bq) { bq.style.display = 'none'; bq.innerHTML = ''; }
+    document.getElementById('portal-btn-start-bulk')?.setAttribute('disabled', 'disabled');
+}
+
+function subirFactura() {
+    resetPortalUpload();
+    document.getElementById('portal-upload-modal')?.classList.add('open');
+}
+
+function cerrarSubirFactura() {
+    document.getElementById('portal-upload-modal')?.classList.remove('open');
+}
+
+function cerrarDetalleFactura() {
+    document.getElementById('portal-detail-modal')?.classList.remove('open');
+    portalDetailFacturaId = null;
+}
+
+function portalUpdateTipoUi() {
+    const tipo = document.querySelector('input[name="portal-documento-tipo"]:checked')?.value;
+    document.getElementById('portal-link-wrap').style.display = tipo === 'envio' ? 'block' : 'none';
+    document.getElementById('portal-modo-wrap').style.display = tipo === 'envio' ? 'none' : 'block';
+}
+
+document.querySelectorAll('input[name="portal-documento-tipo"]').forEach(el => {
+    el.addEventListener('change', portalUpdateTipoUi);
+});
+
+document.querySelectorAll('input[name="portal-upload-mode"]').forEach(el => {
+    el.addEventListener('change', function() {
+        const bulk = this.value === 'bulk';
+        document.getElementById('portal-upload-single').style.display = bulk ? 'none' : 'block';
+        document.getElementById('portal-upload-bulk').style.display = bulk ? 'block' : 'none';
+        document.getElementById('portal-step-confirm').style.display = 'none';
+        document.getElementById('portal-btn-change').style.display = 'none';
+        document.getElementById('portal-btn-confirm').style.display = 'none';
+        document.getElementById('portal-upload-result').textContent = '';
+    });
+});
+
+function portalPreviewFile(file) {
+    const fd = new FormData();
+    fd.append('action', 'riverso_preview_invoice_xml');
+    fd.append('nonce', riversoNonce);
+    fd.append('xml_file', file);
+    return fetch(ajaxUrl, { method: 'POST', body: fd }).then(r => r.json());
+}
+
+function portalUploadFile(file, fields) {
+    const fd = new FormData();
+    fd.append('action', 'riverso_upload_invoice');
+    fd.append('nonce', riversoNonce);
+    fd.append('xml_file', file);
+    Object.entries(fields || {}).forEach(([k, v]) => fd.append(k, v ?? ''));
+    return fetch(ajaxUrl, { method: 'POST', body: fd }).then(r => r.json());
+}
+
+function portalShowConfirm(d) {
+    portalPreviewData = d;
+    const det = d.detection || {};
+    const tipoSugerido = det.tipo === 'mixto' ? 'productos' : (det.tipo || 'productos');
+
+    document.getElementById('portal-preview-summary').innerHTML =
+        `<strong>${d.emisor?.razon_social || '—'}</strong> · RUT ${d.emisor?.rut || '—'}<br>` +
+        `Folio <strong>${d.folio}</strong> · Fecha ${d.fecha_emision || '—'} · Total <strong>$${Number(d.total || 0).toLocaleString('es-CL')}</strong>`;
+
+    const tbody = document.querySelector('#portal-preview-items tbody');
+    if (tbody) {
+        tbody.innerHTML = '';
+        const items = d.items_preview || [];
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-secondary);">Sin líneas de detalle</td></tr>';
+        } else {
+            items.slice(0, 15).forEach(it => {
+                const badge = it.tipo === 'envio'
+                    ? '<span style="color:#b45309;">Flete</span>'
+                    : '<span style="color:#15803d;">Producto</span>';
+                tbody.innerHTML += `<tr>
+                    <td>${it.linea}</td>
+                    <td>${it.nombre}</td>
+                    <td>${badge}</td>
+                    <td style="text-align:right;">$${Number(it.monto || 0).toLocaleString('es-CL')}</td>
+                </tr>`;
+            });
+            if (items.length > 15) {
+                tbody.innerHTML += `<tr><td colspan="4" style="text-align:center;color:var(--text-secondary);">… y ${items.length - 15} líneas más</td></tr>`;
+            }
+        }
+    }
+
+    document.getElementById('portal-detection-motivo').innerHTML =
+        `<strong>Detección (${det.confianza || '—'}):</strong> ${det.motivo || ''}`;
+
+    const tipoRadio = document.querySelector(`input[name="portal-documento-tipo"][value="${tipoSugerido}"]`);
+    if (tipoRadio) {
+        tipoRadio.checked = true;
+    } else {
+        document.querySelector('input[name="portal-documento-tipo"][value="productos"]').checked = true;
+    }
+    portalUpdateTipoUi();
+
+    const link = document.getElementById('portal-link-factura');
+    link.innerHTML = '<option value="">— Dejar sin asignar —</option>';
+    (d.facturas_productos || []).forEach(f => {
+        link.innerHTML += `<option value="${f.id}">Folio ${f.folio} — ${f.proveedor_nombre || ''}</option>`;
+    });
+    document.getElementById('portal-prov-nombre').value = d.proveedor_existente?.nombre || d.emisor?.razon_social || '';
+    document.getElementById('portal-prov-rut').value = d.emisor?.rut || '';
+
+    const gapsEl = document.getElementById('portal-intake-gaps');
+    const gaps = d.missing_gaps || [];
+    if (gapsEl) {
+        if (gaps.length) {
+            gapsEl.innerHTML = '<strong style="color:#9a6700;">Complete antes de confirmar:</strong><ul style="margin:6px 0 0 18px;">' +
+                gaps.map(g => `<li>${g.message || g.label || ''}</li>`).join('') + '</ul>';
+            gapsEl.style.display = 'block';
+        } else {
+            gapsEl.style.display = 'none';
+            gapsEl.innerHTML = '';
+        }
+    }
+
+    document.getElementById('portal-step-select').style.display = 'none';
+    document.getElementById('portal-step-confirm').style.display = 'block';
+    document.getElementById('portal-btn-change').style.display = 'inline-block';
+    document.getElementById('portal-btn-confirm').style.display = 'inline-block';
+
+    const modalInner = document.getElementById('portal-upload-modal-inner');
+    if (modalInner) modalInner.scrollTop = 0;
+}
+
+function procesarSubirFactura() {
+    const fileInput = document.getElementById('portal-xml-file');
+    const result = document.getElementById('portal-upload-result');
+    const tipo = document.querySelector('input[name="portal-documento-tipo"]:checked')?.value || 'productos';
+    if (!fileInput?.files?.length) {
+        result.innerHTML = '<span style="color:var(--danger);">Seleccione un XML.</span>';
+        return;
+    }
+    result.textContent = 'Procesando...';
+    portalUploadFile(fileInput.files[0], {
+        documento_tipo: tipo,
+        link_to_factura_id: document.getElementById('portal-link-factura').value || '',
+        modo_ingreso: document.querySelector('input[name="portal-modo"]:checked')?.value || portalDefaultModo,
+        proveedor_modo: 'xml',
+        proveedor_nombre: document.getElementById('portal-prov-nombre')?.value || '',
+        proveedor_rut: document.getElementById('portal-prov-rut')?.value || ''
+    }).then(data => {
+        if (data.success) {
+            const extra = data.data?.resumen?.documento_tipo === 'envio' && !data.data?.resumen?.vinculado_a_factura
+                ? ' (sin asignar)'
+                : '';
+            result.innerHTML = `<span style="color:var(--success);">✓ ${data.data.message}${extra}</span>`;
+            if (portalOnInvoicesPage) {
+                setTimeout(() => { cerrarSubirFactura(); portalLoadInvoices(1); }, 1200);
+            } else {
+                setTimeout(() => location.reload(), 1800);
+            }
+        } else if (data.data?.needs_input) {
+            alert((data.data.gaps || []).map(g => g.message).join('\n') || data.data.message);
+        } else {
+            result.innerHTML = `<span style="color:var(--danger);">${data.data?.message || 'Error'}</span>`;
+        }
+    }).catch(() => { result.innerHTML = '<span style="color:var(--danger);">Error de conexión</span>'; });
+}
+
+function portalSetBulkFiles(fileList) {
+    portalBulkFiles = Array.from(fileList).filter(f => /\.xml$/i.test(f.name));
+    const q = document.getElementById('portal-bulk-queue');
+    const btn = document.getElementById('portal-btn-start-bulk');
+    if (!q) return;
+    q.innerHTML = '';
+    if (!portalBulkFiles.length) {
+        q.style.display = 'none';
+        btn?.setAttribute('disabled', 'disabled');
+        return;
+    }
+    portalBulkFiles.forEach((f, i) => {
+        q.innerHTML += `<div class="bulk-queue-item" data-pidx="${i}"><span>${f.name}</span><span class="bulk-status">Pendiente</span></div>`;
+    });
+    q.style.display = 'block';
+    btn?.removeAttribute('disabled');
+}
+
+async function portalProcessBulk() {
+    if (!portalBulkFiles.length) return;
+    const result = document.getElementById('portal-upload-result');
+    const btn = document.getElementById('portal-btn-start-bulk');
+    btn?.setAttribute('disabled', 'disabled');
+    result.textContent = 'Procesando carga masiva…';
+    let ok = 0, err = 0;
+    for (let i = 0; i < portalBulkFiles.length; i++) {
+        const file = portalBulkFiles[i];
+        const row = document.querySelector(`.bulk-queue-item[data-pidx="${i}"]`);
+        if (row) { row.classList.add('run'); row.querySelector('.bulk-status').textContent = 'Analizando…'; }
+        const preview = await portalPreviewFile(file);
+        if (!preview.success) {
+            if (row) { row.classList.remove('run'); row.classList.add('err'); row.querySelector('.bulk-status').textContent = preview.data?.message || 'Error'; }
+            err++; continue;
+        }
+        const tipo = preview.data.detection?.tipo === 'envio' ? 'envio' : 'productos';
+        if (row) row.querySelector('.bulk-status').textContent = 'Subiendo…';
+        const emisor = preview.data.emisor || {};
+        const upload = await portalUploadFile(file, {
+            documento_tipo: tipo,
+            modo_ingreso: tipo === 'envio' ? 'solo_costos' : portalDefaultModo,
+            proveedor_modo: 'xml',
+            proveedor_nombre: emisor.razon_social || '',
+            proveedor_rut: emisor.rut || '',
+            link_to_factura_id: ''
+        });
+        if (upload.success) {
+            const note = tipo === 'envio' ? ' (sin asignar)' : '';
+            if (row) { row.classList.remove('run'); row.classList.add('ok'); row.querySelector('.bulk-status').textContent = '✓ Folio ' + (upload.data?.resumen?.folio || '') + note; }
+            ok++;
+        } else {
+            if (row) { row.classList.remove('run'); row.classList.add('err'); row.querySelector('.bulk-status').textContent = upload.data?.message || 'Error'; }
+            err++;
+        }
+    }
+    result.innerHTML = `<span style="color:var(--success);">Terminado: ${ok} OK, ${err} error/omitidos.</span>`;
+    btn?.removeAttribute('disabled');
+    if (portalOnInvoicesPage) portalLoadInvoices(1);
+}
+
+function portalLoadInvoices(page) {
+    const tbody = document.getElementById('portal-invoices-list');
+    if (!tbody) return;
+    const body = new URLSearchParams({
+        action: 'riverso_get_invoices_list',
+        nonce: riversoNonce,
+        page: page || 1,
+        estado: document.getElementById('portal-filter-estado')?.value || '',
+        proveedor_id: document.getElementById('portal-filter-proveedor')?.value || '',
+        fecha_desde: document.getElementById('portal-filter-desde')?.value || '',
+        fecha_hasta: document.getElementById('portal-filter-hasta')?.value || ''
+    });
+    fetch(ajaxUrl, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
+        .then(r => r.json())
+        .then(res => {
+            if (!res.success) {
+                tbody.innerHTML = `<tr><td colspan="8">${res.data?.message || 'Error'}</td></tr>`;
+                return;
+            }
+            if (!Array.isArray(res.data.facturas)) {
+                tbody.innerHTML = '<tr><td colspan="8">Error: respuesta inválida del servidor</td></tr>';
+                return;
+            }
+            const tipos = {33:'Factura',34:'F.Exenta',52:'Guía',61:'N.Crédito'};
+            if (!res.data.facturas.length) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;">No hay facturas</td></tr>';
+                return;
+            }
+            tbody.innerHTML = res.data.facturas.map(f => {
+                const isEnvio = f.documento_subtipo === 'envio';
+                const tipoLabel = isEnvio ? '<span style="color:#b45309;font-weight:600;">Flete</span>' : '<span style="color:#15803d;">Productos</span>';
+                const vinculadas = parseInt(f.facturas_vinculadas || 0, 10);
+                const itemsCol = isEnvio
+                    ? (vinculadas > 0 ? `${vinculadas} factura(s)` : 'Sin asignar')
+                    : `${f.items_vinculados}/${f.total_items}` + (parseInt(f.fletes_vinculados) > 0 ? ` · ${f.fletes_vinculados} flete(s)` : '');
+                const estadoLabel = (f.estado || '').replace(/_/g, ' ');
+                const linkBtn = (canProcessInvoices && isEnvio)
+                    ? `<button type="button" class="btn btn-primary btn-sm" style="margin-left:4px;" onclick="portalVincularFlete(${f.id})" title="Vincular a facturas de productos">Vincular</button>`
+                    : '';
+                return `
+                <tr>
+                    <td><strong>${f.folio}</strong></td>
+                    <td>${tipoLabel}</td>
+                    <td class="col-proveedor">${f.proveedor_nombre || '—'}</td>
+                    <td>${f.fecha_emision || ''}</td>
+                    <td style="text-align:right;">$${Number(f.monto_total).toLocaleString('es-CL')}</td>
+                    <td>${itemsCol}</td>
+                    <td><span class="portal-badge portal-badge-${f.estado}">${estadoLabel}</span></td>
+                    <td>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="portalVerFactura(${f.id})">Ver</button>
+                        ${linkBtn}
+                        ${(canDeleteInvoices && f.can_delete) ? `<button type="button" class="btn btn-sm" style="color:#b32d2e;margin-left:4px;" onclick="portalEliminarFactura(${f.id}, '${String(f.folio).replace(/'/g, "\\'")}')" title="Eliminar subida">Eliminar</button>` : ''}
+                    </td>
+                </tr>`;
+            }).join('');
+            const pag = document.getElementById('portal-invoices-pagination');
+            if (pag) pag.textContent = `Página ${res.data.page} de ${res.data.total_pages} (${res.data.total} facturas)`;
+        })
+        .catch(() => {
+            tbody.innerHTML = '<tr><td colspan="8">Error de conexión al cargar facturas</td></tr>';
+        });
+}
+
+function portalRenderInvoiceDetail(f) {
+    portalDetailFacturaId = f.id;
+    document.getElementById('portal-detail-folio').textContent = '#' + f.folio;
+    document.getElementById('portal-detail-proveedor').textContent = f.proveedor_nombre || '';
+    document.getElementById('portal-detail-rut').textContent = f.proveedor_rut || '';
+    document.getElementById('portal-detail-fecha').textContent = f.fecha_emision || '';
+    document.getElementById('portal-detail-total').textContent = '$' + Number(f.monto_total).toLocaleString('es-CL');
+
+    const isEnvio = f.documento_subtipo === 'envio';
+    const shipSection = document.getElementById('portal-detail-shipping-section');
+    const envioSection = document.getElementById('portal-detail-envio-section');
+    shipSection.style.display = 'none';
+    envioSection.style.display = 'none';
+
+    if (isEnvio) {
+        envioSection.style.display = 'block';
+        const vinculadas = f.facturas_productos_vinculadas || [];
+        const linkedEl = document.getElementById('portal-detail-envio-linked');
+        if (vinculadas.length) {
+            linkedEl.innerHTML = '<ul style="margin:0;padding-left:18px;">' + vinculadas.map(fp => `
+                <li>Folio <strong>${fp.folio}</strong> — ${fp.proveedor_nombre || ''} — $${Number(fp.monto_total || 0).toLocaleString('es-CL')}
+                    ${fp.monto_asignado ? `<span style="color:#666;"> (flete: $${Number(fp.monto_asignado).toLocaleString('es-CL')})</span>` : ''}
+                    ${canProcessInvoices ? `<button type="button" class="btn btn-secondary btn-sm portal-btn-unassign-producto" data-productos-id="${fp.id}" style="margin-left:6px;">Desvincular</button>` : ''}
+                </li>`).join('') + '</ul>';
+        } else {
+            linkedEl.innerHTML = '<p style="margin:0;color:#666;">Sin facturas de productos vinculadas.</p>';
+        }
+
+        const target = document.getElementById('portal-detail-envio-target-id');
+        target.innerHTML = '<option value="">— Seleccionar factura de productos —</option>';
+        (f.facturas_productos_disponibles || []).forEach(fp => {
+            if (!vinculadas.some(v => String(v.id) === String(fp.id))) {
+                target.innerHTML += `<option value="${fp.id}">Folio ${fp.folio} — ${fp.proveedor_nombre || ''} — $${Number(fp.monto_total || 0).toLocaleString('es-CL')}</option>`;
+            }
+        });
+        document.getElementById('portal-btn-envio-unassign-all').style.display = (canProcessInvoices && vinculadas.length > 1) ? 'inline-block' : 'none';
+    } else {
+        const fletes = f.fletes_vinculados || [];
+        const pendientes = f.fletes_sin_vincular || [];
+        if (fletes.length || pendientes.length) {
+            shipSection.style.display = 'block';
+            let html = '';
+            if (fletes.length) {
+                html += '<ul style="margin:0;padding-left:18px;">' + fletes.map(fl => `
+                    <li>Folio <strong>${fl.folio}</strong> — ${fl.proveedor_nombre || ''} — $${Number(fl.monto_total || 0).toLocaleString('es-CL')}
+                        ${canProcessInvoices ? `<button type="button" class="btn btn-secondary btn-sm portal-btn-unassign-flete" data-envio-id="${fl.id}" style="margin-left:6px;">Desvincular</button>` : ''}
+                    </li>`).join('') + '</ul>';
+                if (f.costo_envio_vinculado) {
+                    html += `<p style="margin:8px 0 0;color:#666;">Total fletes: <strong>$${Number(f.costo_envio_vinculado).toLocaleString('es-CL')}</strong></p>`;
+                }
+            } else {
+                html = '<p style="margin:0;color:#666;">Sin fletes vinculados.</p>';
+            }
+            document.getElementById('portal-detail-shipping-linked').innerHTML = html;
+
+            const assignWrap = document.getElementById('portal-detail-shipping-assign');
+            const sel = document.getElementById('portal-detail-assign-flete-id');
+            if (pendientes.length && canProcessInvoices) {
+                assignWrap.style.display = 'block';
+                sel.innerHTML = '<option value="">— Seleccionar flete pendiente —</option>' +
+                    pendientes.map(fl => `<option value="${fl.id}">Folio ${fl.folio} — ${fl.proveedor_nombre || ''} — $${Number(fl.monto_total || 0).toLocaleString('es-CL')}</option>`).join('');
+            } else {
+                assignWrap.style.display = 'none';
+            }
+        }
+    }
+
+    document.getElementById('portal-detail-items').innerHTML = (f.items || []).map(it => `
+        <tr>
+            <td>${it.linea || it.numero_linea || ''}</td>
+            <td><code>${it.codigo_proveedor || '—'}</code></td>
+            <td class="col-desc">${it.descripcion || it.nombre || ''}</td>
+            <td>${it.cantidad}</td>
+            <td style="text-align:right;">$${Number(it.precio_unitario).toLocaleString('es-CL')}</td>
+            <td style="text-align:right;">$${Number(it.monto_total).toLocaleString('es-CL')}</td>
+            <td>${it.sku_local || '—'}</td>
+            <td><code>${it.sku_online || '—'}</code></td>
+            <td><span class="portal-badge portal-badge-${it.estado}">${it.estado}</span></td>
+        </tr>
+    `).join('');
+}
+
+function portalReloadInvoiceDetail() {
+    if (!portalDetailFacturaId) return;
+    portalVerFactura(portalDetailFacturaId);
+}
+
+function portalVincularFlete(envioId) {
+    portalVerFactura(envioId);
+    setTimeout(() => {
+        document.getElementById('portal-detail-envio-target-id')?.focus();
+    }, 300);
+}
+
+function portalVerFactura(id) {
+    fetch(ajaxUrl, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({ action: 'riverso_get_invoice', nonce: riversoNonce, factura_id: id })
+    }).then(r => r.json()).then(res => {
+        if (!res.success) { alert(res.data?.message || 'Error'); return; }
+        portalRenderInvoiceDetail(res.data);
+        document.getElementById('portal-detail-modal')?.classList.add('open');
+    });
+}
+
+function portalAssignShipping(facturaProductosId, facturaEnvioId) {
+    return fetch(ajaxUrl, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({
+            action: 'riverso_assign_shipping_invoice',
+            nonce: riversoNonce,
+            factura_productos_id: facturaProductosId,
+            factura_envio_id: facturaEnvioId
+        })
+    }).then(r => r.json());
+}
+
+function portalUnassignShipping(facturaEnvioId, facturaProductosId) {
+    const body = new URLSearchParams({
+        action: 'riverso_unassign_shipping_invoice',
+        nonce: riversoNonce,
+        factura_envio_id: facturaEnvioId
+    });
+    if (facturaProductosId) body.append('factura_productos_id', facturaProductosId);
+    return fetch(ajaxUrl, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body
+    }).then(r => r.json());
+}
+
+document.getElementById('portal-btn-assign-flete')?.addEventListener('click', () => {
+    const envioId = document.getElementById('portal-detail-assign-flete-id')?.value;
+    if (!envioId) { alert('Seleccione un flete'); return; }
+    portalAssignShipping(portalDetailFacturaId, envioId).then(res => {
+        if (res.success) { portalReloadInvoiceDetail(); portalLoadInvoices(1); }
+        else alert(res.data?.message || 'Error al vincular');
+    });
+});
+
+document.getElementById('portal-btn-envio-assign')?.addEventListener('click', () => {
+    const targetId = document.getElementById('portal-detail-envio-target-id')?.value;
+    if (!targetId) { alert('Seleccione una factura de productos'); return; }
+    portalAssignShipping(targetId, portalDetailFacturaId).then(res => {
+        if (res.success) { portalReloadInvoiceDetail(); portalLoadInvoices(1); }
+        else alert(res.data?.message || 'Error al vincular');
+    });
+});
+
+document.getElementById('portal-btn-envio-unassign-all')?.addEventListener('click', () => {
+    if (!confirm('¿Desvincular este flete de TODAS las facturas de productos?')) return;
+    portalUnassignShipping(portalDetailFacturaId).then(res => {
+        if (res.success) { portalReloadInvoiceDetail(); portalLoadInvoices(1); }
+        else alert(res.data?.message || 'Error');
+    });
+});
+
+document.getElementById('portal-detail-modal')?.addEventListener('click', e => {
+    const prodBtn = e.target.closest('.portal-btn-unassign-producto');
+    if (prodBtn) {
+        if (!confirm('¿Desvincular esta factura del flete?')) return;
+        portalUnassignShipping(portalDetailFacturaId, prodBtn.dataset.productosId).then(res => {
+            if (res.success) { portalReloadInvoiceDetail(); portalLoadInvoices(1); }
+            else alert(res.data?.message || 'Error');
+        });
+        return;
+    }
+    const fleteBtn = e.target.closest('.portal-btn-unassign-flete');
+    if (fleteBtn) {
+        if (!confirm('¿Desvincular este flete?')) return;
+        portalUnassignShipping(fleteBtn.dataset.envioId, portalDetailFacturaId).then(res => {
+            if (res.success) { portalReloadInvoiceDetail(); portalLoadInvoices(1); }
+            else alert(res.data?.message || 'Error');
+        });
+    }
+});
+
+function portalEliminarFactura(id, folio) {
+    if (!confirm(`¿Eliminar la factura folio ${folio}?\n\nSe revertirá la subida, ítems, costos y tareas asociadas. Esta acción quedará registrada en auditoría.`)) {
+        return;
+    }
+    fetch(ajaxUrl, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({ action: 'riverso_delete_invoice', nonce: riversoNonce, factura_id: id })
+    }).then(r => r.json()).then(res => {
+        if (res.success) {
+            portalLoadInvoices(1);
+        } else {
+            alert(res.data?.message || 'Error al eliminar');
+        }
+    }).catch(() => alert('Error de conexión'));
+}
+
+(function initPortalInvoicesUi() {
+    const xmlFile = document.getElementById('portal-xml-file');
+    const xmlBulk = document.getElementById('portal-xml-bulk');
+    const dropzone = document.getElementById('portal-dropzone');
+    const bulkDrop = document.getElementById('portal-bulk-dropzone');
+
+    document.getElementById('portal-btn-browse')?.addEventListener('click', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        xmlFile.value = '';
+        xmlFile.click();
+    });
+    dropzone?.addEventListener('click', e => {
+        if (e.target.closest('#portal-btn-browse')) return;
+        e.preventDefault();
+        xmlFile.value = '';
+        xmlFile.click();
+    });
+    document.getElementById('portal-btn-browse-bulk')?.addEventListener('click', e => {
+        e.preventDefault();
+        xmlBulk.value = '';
+        xmlBulk.click();
+    });
+    document.getElementById('portal-btn-start-bulk')?.addEventListener('click', portalProcessBulk);
+
+    xmlFile?.addEventListener('change', function() {
+        if (!this.files?.length) return;
+        document.getElementById('portal-file-name').textContent = 'Analizando: ' + this.files[0].name + '…';
+        document.getElementById('portal-upload-result').textContent = '';
+        portalPreviewFile(this.files[0]).then(data => {
+            if (!data.success) {
+                document.getElementById('portal-file-name').textContent = '';
+                alert(data.data?.message || 'Error al leer XML');
+                return;
+            }
+            document.getElementById('portal-file-name').textContent = 'Archivo: ' + this.files[0].name;
+            portalShowConfirm(data.data);
+        }).catch(() => {
+            document.getElementById('portal-file-name').textContent = '';
+            alert('Error de conexión al analizar XML');
+        });
+    });
+    xmlBulk?.addEventListener('change', function() {
+        if (this.files?.length) portalSetBulkFiles(this.files);
+    });
+
+    function bindDrop(el, onFiles) {
+        if (!el) return;
+        el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('dragover'); });
+        el.addEventListener('dragleave', () => el.classList.remove('dragover'));
+        el.addEventListener('drop', e => {
+            e.preventDefault();
+            el.classList.remove('dragover');
+            if (e.dataTransfer.files?.length) onFiles(e.dataTransfer.files);
+        });
+    }
+    bindDrop(dropzone, files => {
+        if (portalSetInputFiles(xmlFile, files)) {
+            xmlFile.dispatchEvent(new Event('change'));
+        }
+    });
+    bindDrop(bulkDrop, files => portalSetBulkFiles(files));
+
+    if (portalOnInvoicesPage) portalLoadInvoices(1);
+})();
 
 (function() {
     const listEl = document.getElementById('catalog-list');

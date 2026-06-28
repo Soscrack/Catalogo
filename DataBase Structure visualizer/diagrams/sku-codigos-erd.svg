@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 760" font-family="Segoe UI, system-ui, sans-serif">
+  <defs>
+    <marker id="a2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#5eead4"/>
+    </marker>
+    <style>
+      .tbl { fill:#1a2332; stroke:#7c9cff; stroke-width:1.5; }
+      .hdr { fill:#243044; stroke:#7c9cff; stroke-width:1.5; }
+      .title { fill:#e8edf4; font-size:12px; font-weight:600; }
+      .col { fill:#8b9cb3; font-size:10px; }
+      .pk { fill:#5eead4; font-size:10px; font-weight:600; }
+      .rel { stroke:#5eead4; stroke-width:1.2; fill:none; marker-end:url(#a2); }
+      .rel-label { fill:#5eead4; font-size:10px; }
+      .flow-box { fill:#312e81; stroke:#c4b5fd; stroke-width:1.5; }
+      .flow-barras { fill:#422006; stroke:#fbbf24; stroke-width:1.5; }
+      .flow-t { fill:#e8edf4; font-size:11px; font-weight:600; }
+    </style>
+  </defs>
+  <text x="20" y="28" fill="#e8edf4" font-size="18" font-weight="600">SKU local, online, proveedor y codigos de barra</text>
+
+  <rect class="flow-box" x="30" y="44" width="115" height="34"/>
+  <text class="flow-t" x="38" y="65">codigo_proveedor</text>
+  <text fill="#c4b5fd" x="152" y="66">-&gt;</text>
+  <rect class="flow-box" x="170" y="44" width="100" height="34"/>
+  <text class="flow-t" x="182" y="65">sku_mapping</text>
+  <text fill="#c4b5fd" x="278" y="66">-&gt;</text>
+  <rect class="flow-box" x="296" y="44" width="115" height="34"/>
+  <text class="flow-t" x="308" y="65">canonical_sku</text>
+  <text fill="#c4b5fd" x="418" y="66">-&gt;</text>
+  <rect class="flow-barras" x="436" y="44" width="115" height="34"/>
+  <text class="flow-t" x="448" y="65">codigo_barras</text>
+  <text fill="#fbbf24" x="558" y="66">-&gt;</text>
+  <rect class="flow-box" x="576" y="44" width="130" height="34"/>
+  <text class="flow-t" x="588" y="65">WooCommerce</text>
+
+  <rect class="hdr" x="40" y="100" width="210" height="26" rx="6"/>
+  <text class="title" x="52" y="118">riverso_proveedores</text>
+  <rect class="tbl" x="40" y="126" width="210" height="68" rx="6"/>
+  <text class="pk" x="52" y="144">PK id / UK rut</text>
+  <text class="col" x="52" y="160">razon_social</text>
+  <text class="col" x="52" y="176">activo</text>
+
+  <rect class="hdr" x="40" y="220" width="240" height="26" rx="6"/>
+  <text class="title" x="52" y="238">riverso_producto_proveedor</text>
+  <rect class="tbl" x="40" y="246" width="240" height="92" rx="6"/>
+  <text class="pk" x="52" y="264">PK id</text>
+  <text class="col" x="52" y="280">FK producto_base_id</text>
+  <text class="col" x="52" y="296">codigo_proveedor</text>
+  <text class="col" x="52" y="312">codigo_barras_proveedor</text>
+  <text class="col" x="52" y="328">FK proveedor_id</text>
+
+  <rect class="hdr" x="40" y="370" width="210" height="26" rx="6"/>
+  <text class="title" x="52" y="388">riverso_codigos</text>
+  <rect class="tbl" x="40" y="396" width="210" height="92" rx="6"/>
+  <text class="col" x="52" y="414">codigo_proveedor</text>
+  <text class="col" x="52" y="430">sku_local / product_id</text>
+  <text class="col" x="52" y="446">codigo_barras EAN</text>
+  <text class="col" x="52" y="462">FK proveedor_id</text>
+
+  <rect class="hdr" x="340" y="180" width="230" height="26" rx="6"/>
+  <text class="title" x="352" y="198">riverso_producto_base</text>
+  <rect class="tbl" x="340" y="206" width="230" height="108" rx="6"/>
+  <text class="pk" x="352" y="224">PK id</text>
+  <text class="col" x="352" y="240">UK canonical_sku (local)</text>
+  <text class="col" x="352" y="256">FK woocommerce_product_id</text>
+  <text class="col" x="352" y="272">FK woocommerce_variation_id</text>
+  <text class="col" x="352" y="288">nombre_canonico</text>
+
+  <rect class="hdr" x="340" y="350" width="200" height="26" rx="6"/>
+  <text class="title" x="352" y="368">sku_mapping.json</text>
+  <rect class="tbl" x="340" y="376" width="200" height="72" rx="6"/>
+  <text class="col" x="352" y="396">clave: sku_online Mamut</text>
+  <text class="col" x="352" y="412">valor: sku_local</text>
+  <text class="col" x="352" y="428">ej. 04RLHB - 445</text>
+
+  <rect class="hdr" x="340" y="480" width="240" height="26" rx="6"/>
+  <text class="title" x="352" y="498">codigos_barras_*.csv</text>
+  <rect class="tbl" x="340" y="506" width="240" height="88" rx="6"/>
+  <text class="col" x="352" y="524">sku (local numerico)</text>
+  <text class="col" x="352" y="540">barcode (EAN/UPC)</text>
+  <text class="col" x="352" y="556">fecha / fecha_scraping</text>
+  <text class="col" x="352" y="572">ej. 22151 - 20537118030</text>
+
+  <rect class="hdr" x="620" y="180" width="220" height="26" rx="6"/>
+  <text class="title" x="632" y="198">riverso_barcodes</text>
+  <rect class="tbl" x="620" y="206" width="220" height="108" rx="6"/>
+  <text class="pk" x="632" y="224">PK id</text>
+  <text class="col" x="632" y="240">UK barcode</text>
+  <text class="col" x="632" y="256">sku (local)</text>
+  <text class="col" x="632" y="272">FK product_id / variation_id</text>
+  <text class="col" x="632" y="288">barcode_type EAN13</text>
+  <text class="col" x="632" y="304">is_primary / is_active</text>
+
+  <rect class="hdr" x="620" y="360" width="180" height="26" rx="6"/>
+  <text class="title" x="632" y="378">wp_posts</text>
+  <rect class="tbl" x="620" y="386" width="180" height="72" rx="6"/>
+  <text class="col" x="632" y="406">product / variation</text>
+  <text class="col" x="632" y="422">post_parent</text>
+
+  <rect class="hdr" x="620" y="470" width="180" height="26" rx="6"/>
+  <text class="title" x="632" y="488">wp_postmeta</text>
+  <rect class="tbl" x="620" y="496" width="180" height="56" rx="6"/>
+  <text class="col" x="632" y="516">meta_key _sku</text>
+  <text class="col" x="632" y="532">meta_value</text>
+
+  <rect class="hdr" x="880" y="300" width="230" height="26" rx="6"/>
+  <text class="title" x="892" y="318">wc_product_meta_lookup</text>
+  <rect class="tbl" x="880" y="326" width="230" height="72" rx="6"/>
+  <text class="col" x="892" y="346">UK sku indexado</text>
+  <text class="col" x="892" y="362">stock / precio</text>
+
+  <path class="rel" d="M145 194 L145 220"/>
+  <text class="rel-label" x="152" y="210">emite</text>
+  <path class="rel" d="M280 294 L340 250"/>
+  <text class="rel-label" x="290" y="270">codigos</text>
+  <path class="rel" d="M475 260 L620 400"/>
+  <text class="rel-label" x="520" y="330">publicado</text>
+  <path class="rel" d="M475 412 L475 350"/>
+  <text class="rel-label" x="482" y="382">mapea</text>
+  <path class="rel" d="M460 314 L620 260"/>
+  <text class="rel-label" x="500" y="278">identidad</text>
+  <path class="rel" d="M460 550 L460 314"/>
+  <text class="rel-label" x="468" y="440">sku local</text>
+  <path class="rel" d="M580 550 L620 314"/>
+  <text class="rel-label" x="590" y="430">sync POS</text>
+  <path class="rel" d="M800 430 L880 360"/>
+  <text class="rel-label" x="820" y="390">indexado</text>
+  <path class="rel" d="M250 440 L340 520"/>
+  <text class="rel-label" x="260" y="490">legacy</text>
+
+  <rect x="40" y="620" width="1160" height="120" rx="10" fill="#152030" stroke="#2d3f56"/>
+  <text fill="#fbbf24" font-size="12" font-weight="600" x="60" y="648">Codigos de barra</text>
+  <text fill="#8b9cb3" font-size="11" x="60" y="668">CSV Mamut (CodigosBarra/) es fuente operativa del buscador. riverso_barcodes es tabla POS en WordPress.</text>
+  <text fill="#8b9cb3" font-size="11" x="60" y="686">Un SKU local puede tener varios codigos de barra. UK barcode en riverso_barcodes evita duplicados en POS.</text>
+  <text fill="#5eead4" font-size="11" x="60" y="708">Buscador: coincidencia exacta primero por SKU, codigo proveedor o codigo de barras EAN</text>
+</svg>

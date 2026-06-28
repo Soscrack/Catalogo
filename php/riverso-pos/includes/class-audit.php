@@ -36,6 +36,7 @@ class Riverso_POS_Audit {
         
         // Facturas
         'invoice_created'       => 'Factura ingresada',
+        'invoice_deleted'       => 'Factura eliminada (subida revertida)',
         'invoice_processed'     => 'Factura procesada',
         'invoice_approved'      => 'Factura aprobada',
         

@@ -269,6 +269,9 @@ class Riverso_POS_Activator {
         self::create_phase2_governance($prefix);
         self::create_phase2_matching($prefix);
         self::create_phase8_publication($prefix);
+        self::create_phase9_invoice_intake($prefix);
+        self::create_phase10_mamut_sku_repair();
+        self::create_phase11_flete_vinculos($prefix);
         
         // Tabla: Auditoría
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-audit.php';
@@ -298,6 +301,11 @@ class Riverso_POS_Activator {
                 'low_stock_threshold' => 5,
                 'enable_barcode_scanner' => true,
                 'task_auto_assign' => false,
+                'auto_inventory_on_approve' => true,
+                'create_reception_task_on_upload' => true,
+                'prorate_shipping_to_products' => true,
+                'create_link_task_on_upload' => true,
+                'default_intake_mode' => 'recepcion',
             ]
         ];
         
@@ -305,6 +313,19 @@ class Riverso_POS_Activator {
             if (get_option($option) === false) {
                 add_option($option, $value);
             }
+        }
+
+        // Asegurar claves nuevas en instalaciones existentes.
+        $settings = get_option('riverso_pos_settings', []);
+        $settings_changed = false;
+        foreach (['auto_inventory_on_approve', 'create_reception_task_on_upload', 'prorate_shipping_to_products', 'create_link_task_on_upload', 'default_intake_mode'] as $key) {
+            if (!array_key_exists($key, $settings)) {
+                $settings[$key] = $defaults['riverso_pos_settings'][$key];
+                $settings_changed = true;
+            }
+        }
+        if ($settings_changed) {
+            update_option('riverso_pos_settings', $settings);
         }
     }
     
@@ -770,5 +791,110 @@ class Riverso_POS_Activator {
         self::add_index_if_missing($table, 'idx_archived_at', "KEY idx_archived_at (archived_at)");
         self::add_index_if_missing($table, 'idx_publication_stage', "KEY idx_publication_stage (publication_stage)");
         self::add_index_if_missing($table, 'idx_match_estado_online', "KEY idx_match_estado_online (match_estado_online)");
+    }
+
+    /**
+     * Fase 9 - Ingreso XML: envío vs producto, costos landed y lotes.
+     */
+    private static function create_phase9_invoice_intake($prefix) {
+        self::add_column_if_missing("{$prefix}facturas", 'documento_subtipo', "documento_subtipo VARCHAR(20) NOT NULL DEFAULT 'productos'");
+        self::add_column_if_missing("{$prefix}facturas", 'factura_productos_id', "factura_productos_id BIGINT UNSIGNED DEFAULT NULL");
+        self::add_column_if_missing("{$prefix}facturas", 'costo_envio_total', "costo_envio_total DECIMAL(12,2) NOT NULL DEFAULT 0");
+        self::add_column_if_missing("{$prefix}facturas", 'envio_prorrateado', "envio_prorrateado TINYINT(1) NOT NULL DEFAULT 0");
+        self::add_index_if_missing("{$prefix}facturas", 'idx_factura_productos_id', "KEY idx_factura_productos_id (factura_productos_id)");
+        self::add_index_if_missing("{$prefix}facturas", 'idx_documento_subtipo', "KEY idx_documento_subtipo (documento_subtipo)");
+
+        self::add_column_if_missing("{$prefix}factura_items", 'item_tipo', "item_tipo VARCHAR(20) NOT NULL DEFAULT 'producto'");
+        self::add_column_if_missing("{$prefix}factura_items", 'codigo_tipo', "codigo_tipo VARCHAR(20) DEFAULT NULL");
+        self::add_column_if_missing("{$prefix}factura_items", 'sku_local', "sku_local VARCHAR(100) DEFAULT NULL");
+        self::add_column_if_missing("{$prefix}factura_items", 'costo_envio_prorrateado', "costo_envio_prorrateado DECIMAL(12,4) NOT NULL DEFAULT 0");
+        self::add_column_if_missing("{$prefix}factura_items", 'costo_landed_unitario', "costo_landed_unitario DECIMAL(12,4) DEFAULT NULL");
+        self::add_index_if_missing("{$prefix}factura_items", 'idx_item_tipo', "KEY idx_item_tipo (item_tipo)");
+        self::add_index_if_missing("{$prefix}factura_items", 'idx_sku_local', "KEY idx_sku_local (sku_local)");
+
+        self::add_column_if_missing("{$prefix}lotes", 'costo_envio_unitario', "costo_envio_unitario DECIMAL(12,4) NOT NULL DEFAULT 0");
+
+        self::add_column_if_missing("{$prefix}facturas", 'modo_ingreso', "modo_ingreso VARCHAR(20) NOT NULL DEFAULT 'recepcion'");
+        self::add_index_if_missing("{$prefix}facturas", 'idx_modo_ingreso', "KEY idx_modo_ingreso (modo_ingreso)");
+
+        // Historial de costos: permitir registros pendientes de vinculación (sin product_id WC).
+        $cost_table = "{$prefix}cost_history";
+        global $wpdb;
+        $wpdb->query("ALTER TABLE `{$cost_table}` MODIFY COLUMN product_id BIGINT(20) UNSIGNED NULL DEFAULT NULL");
+        self::add_column_if_missing($cost_table, 'descripcion_proveedor', "descripcion_proveedor VARCHAR(255) DEFAULT NULL");
+        self::add_column_if_missing($cost_table, 'costo_producto_unitario', "costo_producto_unitario DECIMAL(12,4) DEFAULT NULL");
+        self::add_column_if_missing($cost_table, 'costo_envio_prorrateado', "costo_envio_prorrateado DECIMAL(12,4) DEFAULT NULL");
+        self::add_column_if_missing($cost_table, 'pendiente_vinculacion', "pendiente_vinculacion TINYINT(1) NOT NULL DEFAULT 0");
+    }
+
+    /**
+     * Fase 11 - Un flete puede vincularse a varias facturas de productos (N:M).
+     */
+    private static function create_phase11_flete_vinculos($prefix) {
+        global $wpdb;
+        $charset_collate = $wpdb->get_charset_collate();
+        $table = "{$prefix}factura_flete_vinculos";
+
+        $sql = "CREATE TABLE IF NOT EXISTS {$table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            factura_envio_id BIGINT UNSIGNED NOT NULL,
+            factura_productos_id BIGINT UNSIGNED NOT NULL,
+            monto_asignado DECIMAL(12,2) NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_by BIGINT UNSIGNED DEFAULT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_envio_productos (factura_envio_id, factura_productos_id),
+            KEY idx_envio (factura_envio_id),
+            KEY idx_productos (factura_productos_id)
+        ) {$charset_collate};";
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        dbDelta($sql);
+
+        // Migrar vínculos legacy (factura_productos_id en factura de flete).
+        $wpdb->query(
+            "INSERT IGNORE INTO {$table} (factura_envio_id, factura_productos_id, monto_asignado, created_at)
+             SELECT f.id, f.factura_productos_id, COALESCE(f.monto_total, 0), f.created_at
+             FROM {$prefix}facturas f
+             WHERE f.documento_subtipo = 'envio'
+               AND f.factura_productos_id IS NOT NULL
+               AND f.factura_productos_id > 0"
+        );
+    }
+
+    /**
+     * Garantiza tabla N:M flete↔facturas (p. ej. si el deploy no bumpió versión).
+     */
+    public static function ensure_flete_vinculos_table() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $table = $prefix . 'factura_flete_vinculos';
+        $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+        if ($exists === $table) {
+            return;
+        }
+        self::create_phase11_flete_vinculos($prefix);
+    }
+
+    /**
+     * Fase 10 - Reparar vínculos SKU online → local Mamut en facturas existentes.
+     */
+    private static function create_phase10_mamut_sku_repair() {
+        $done_version = get_option('riverso_pos_mamut_sku_repair_version', '');
+        if ($done_version === RIVERSO_POS_VERSION) {
+            return;
+        }
+
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-mamut-sku.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/invoices/class-invoice-intake-service.php';
+
+        if (!function_exists('riverso_mamut_online_to_local_sku')) {
+            return;
+        }
+
+        $intake = Riverso_Invoice_Intake_Service::get_instance();
+        $intake->repair_mislinked_invoice_items(['folio' => '737966']);
+        $intake->repair_mislinked_invoice_items();
+
+        update_option('riverso_pos_mamut_sku_repair_version', RIVERSO_POS_VERSION);
     }
 }

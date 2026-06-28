@@ -1,0 +1,72 @@
+erDiagram
+    direction LR
+
+    RIVERSO_PRODUCTO_BASE ||--o{ RIVERSO_PRODUCTO_PROVEEDOR : "tiene codigos"
+    RIVERSO_PROVEEDORES ||--o{ RIVERSO_PRODUCTO_PROVEEDOR : "emite"
+    RIVERSO_PROVEEDORES ||--o{ RIVERSO_CODIGOS : "factura con"
+    RIVERSO_PRODUCTO_BASE ||--o| WP_POSTS : "publicado como"
+    RIVERSO_PRODUCTO_BASE ||--o{ RIVERSO_BARCODES : "tiene EAN"
+    RIVERSO_PRODUCTO_BASE ||--o{ CODIGOS_BARRAS_CSV : "sku en CSV"
+    RIVERSO_CODIGOS }o--o| RIVERSO_PRODUCTO_BASE : "sku_local product_id"
+    CODIGOS_BARRAS_CSV }o--|| RIVERSO_BARCODES : "import/sync"
+    WP_POSTS ||--o| WC_PRODUCT_META_LOOKUP : "sku indexado"
+    WP_POSTMETA }o--|| WP_POSTS : "_sku variacion"
+    SKU_MAPPING }o--|| RIVERSO_PRODUCTO_BASE : "valor canonical_sku"
+    SKU_MAPPING }o--|| WP_POSTS : "clave sku online"
+
+    RIVERSO_PRODUCTO_BASE {
+        bigint id PK
+        string canonical_sku UK "SKU local"
+        bigint woocommerce_product_id FK
+        bigint woocommerce_variation_id FK
+    }
+
+    RIVERSO_BARCODES {
+        bigint id PK
+        string barcode UK "EAN/UPC"
+        string sku "SKU local"
+        bigint product_id FK
+        bigint variation_id FK
+        string barcode_type
+        tinyint is_primary
+    }
+
+    CODIGOS_BARRAS_CSV {
+        string sku PK "SKU local numerico"
+        string barcode "EAN scrapeado"
+        date fecha
+        datetime fecha_scraping
+    }
+
+    RIVERSO_PRODUCTO_PROVEEDOR {
+        bigint id PK
+        string codigo_proveedor
+        string codigo_barras_proveedor
+    }
+
+    RIVERSO_CODIGOS {
+        bigint id PK
+        string codigo_proveedor
+        string sku_local
+        string codigo_barras
+    }
+
+    SKU_MAPPING {
+        string sku_online PK
+        string sku_local
+    }
+
+    WP_POSTS {
+        bigint ID PK
+        string post_type
+    }
+
+    WP_POSTMETA {
+        bigint post_id FK
+        string meta_key "_sku"
+    }
+
+    WC_PRODUCT_META_LOOKUP {
+        bigint product_id PK, FK
+        string sku UK
+    }

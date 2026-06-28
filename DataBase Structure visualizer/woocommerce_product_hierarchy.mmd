@@ -1,0 +1,57 @@
+flowchart TB
+    subgraph core ["Nucleo WordPress"]
+        posts["wp_posts"]
+        postmeta["wp_postmeta"]
+    end
+
+    subgraph tax ["Taxonomias WooCommerce"]
+        terms["wp_terms"]
+        termTax["wp_term_taxonomy"]
+        termRel["wp_term_relationships"]
+        termmeta["wp_termmeta"]
+    end
+
+    subgraph lookup ["Tablas indice WooCommerce"]
+        metaLookup["wc_product_meta_lookup"]
+        attrLookup["wc_product_attributes_lookup"]
+    end
+
+    subgraph types ["Tipos de post en wp_posts"]
+        simple["Producto simple<br/>post_type=product<br/>_product_type=simple"]
+        variable["Producto variable<br/>post_type=product<br/>_product_type=variable"]
+        variation["Variacion<br/>post_type=product_variation<br/>post_parent=ID padre"]
+        attachment["Imagen<br/>post_type=attachment<br/>post_mime_type=image/*"]
+    end
+
+    subgraph taxTypes ["Taxonomias de producto"]
+        cat["product_cat<br/>Categorias jerarquicas"]
+        tag["product_tag<br/>Etiquetas"]
+        paAttr["pa_*<br/>Atributos globales"]
+    end
+
+    posts --> postmeta
+    posts --> termRel
+    termTax --> termRel
+    terms --> termTax
+    terms --> termmeta
+
+    posts --> metaLookup
+    posts --> attrLookup
+    termTax --> attrLookup
+
+    posts --> simple
+    posts --> variable
+    posts --> variation
+    posts --> attachment
+
+    variable -->|"1:N post_parent"| variation
+    variable -->|"set_image_id"| attachment
+    simple --> attachment
+
+    termTax --> cat
+    termTax --> tag
+    termTax --> paAttr
+
+    variable -->|"set_attributes custom"| postmeta
+    variable -->|"set_attributes global"| paAttr
+    variation -->|"set_attributes slug"| postmeta

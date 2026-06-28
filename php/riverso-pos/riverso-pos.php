@@ -3,7 +3,7 @@
  * Plugin Name: Riverso POS
  * Plugin URI: https://riverso.cl
  * Description: Sistema POS/mini-ERP integrado con WooCommerce para gestión de productos, facturas, inventario y tareas operativas.
- * Version: 1.1.9
+ * Version: 1.2.9
  * Author: Riverso
  * Author URI: https://riverso.cl
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constantes del plugin
-define('RIVERSO_POS_VERSION', '1.1.9');
+define('RIVERSO_POS_VERSION', '1.2.9');
 define('RIVERSO_POS_PLUGIN_FILE', __FILE__);
 define('RIVERSO_POS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RIVERSO_POS_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -95,6 +95,7 @@ final class Riverso_POS {
         
         // Helpers
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-mamut-sku.php';
     }
     
     /**

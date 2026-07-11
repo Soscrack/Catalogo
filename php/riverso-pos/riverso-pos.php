@@ -82,20 +82,23 @@ final class Riverso_POS {
      * Incluye archivos necesarios
      */
     private function includes() {
+        // Nuevo loader con autoload + aliases (Fase 1)
+        require_once RIVERSO_POS_PLUGIN_DIR . 'loader.php';
+        
         // Core
-        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-loader.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-activator.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-deactivator.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-admin-menu.php';
-        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-permissions.php';
-        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-audit.php';
-        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-audit-module.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-ajax.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-assets.php';
         
         // Helpers
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-mamut-sku.php';
+        
+        // Aliases de compatibilidad: cargar clases movidas a core/
+        // (permiten que código antiguo siga usando el path antiguo)
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/aliases-core.php';
     }
     
     /**

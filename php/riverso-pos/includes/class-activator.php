@@ -273,9 +273,15 @@ class Riverso_POS_Activator {
         self::create_phase10_mamut_sku_repair();
         self::create_phase11_flete_vinculos($prefix);
         
+        // Tabla: Empleados (Fase 1 - Core infrastructure)
+        self::create_employees_table($prefix, $charset_collate);
+        
         // Tabla: Auditoría
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-audit.php';
         Riverso_POS_Audit::create_table();
+        
+        // Inicializar servicios core
+        self::init_core_services();
         
         update_option('riverso_pos_db_version', RIVERSO_POS_VERSION);
     }
@@ -897,4 +903,82 @@ class Riverso_POS_Activator {
 
         update_option('riverso_pos_mamut_sku_repair_version', RIVERSO_POS_VERSION);
     }
-}
+
+    /**
+     * Fase 1 - Crea tabla de empleados (Infraestructura Core)
+     */
+    private static function create_employees_table($prefix, $charset_collate) {
+        global $wpdb;
+        
+        $table = "{$prefix}empleados";
+        
+        $sql = "CREATE TABLE IF NOT EXISTS {$table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            user_id BIGINT UNSIGNED NOT NULL,
+            rut VARCHAR(20) DEFAULT NULL,
+            nombre VARCHAR(255) DEFAULT NULL,
+            cargo VARCHAR(100) DEFAULT NULL,
+            departamento VARCHAR(100) DEFAULT NULL,
+            supervisor_id BIGINT UNSIGNED DEFAULT NULL,
+            fecha_ingreso DATE DEFAULT NULL,
+            tipo_contrato VARCHAR(50) DEFAULT NULL,
+            jornada VARCHAR(50) DEFAULT NULL,
+            telefono_personal VARCHAR(20) DEFAULT NULL,
+            contacto_emergencia VARCHAR(255) DEFAULT NULL,
+            estado VARCHAR(20) DEFAULT 'activo',
+            notas TEXT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_user_id (user_id),
+            KEY idx_estado (estado),
+            KEY idx_departamento (departamento),
+            FOREIGN KEY (user_id) REFERENCES " . $wpdb->users . "(ID) ON DELETE CASCADE,
+            FOREIGN KEY (supervisor_id) REFERENCES {$table}(id) ON DELETE SET NULL
+        ) {$charset_collate};";
+        
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
+    }
+
+    /**
+     * Inicializa los servicios core (auditoría, eventos, autenticación)
+     */
+    private static function init_core_services() {
+        // Cargar y registrar servicios core
+        require_once RIVERSO_POS_PLUGIN_DIR . 'core/events/class-event-bus.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'core/auth/class-auth-service.php';
+        
+        // Registrar hooks de autenticación
+        $auth_service = Riverso_Auth_Service::get_instance();
+        $auth_service->init();
+        
+        // Opcional: registrar suscriptores iniciales de eventos
+        // (pueden estar en módulos específicos)
+    }
+
+    /**
+     * Helper: Agrega una columna a una tabla si no existe
+     */
+    private static function add_column_if_missing($table, $column, $definition) {
+        global $wpdb;
+        $columns = $wpdb->get_results("SHOW COLUMNS FROM {$table}");
+        $column_names = wp_list_pluck($columns, 'Field');
+        
+        if (!in_array($column, $column_names, true)) {
+            $wpdb->query("ALTER TABLE {$table} ADD COLUMN {$definition}");
+        }
+    }
+
+    /**
+     * Helper: Agrega un índice a una tabla si no existe
+     */
+    private static function add_index_if_missing($table, $index_name, $definition) {
+        global $wpdb;
+        $indexes = $wpdb->get_results("SHOW INDEXES FROM {$table}");
+        $index_names = wp_list_pluck($indexes, 'Key_name');
+        
+        if (!in_array($index_name, $index_names, true)) {
+            $wpdb->query("ALTER TABLE {$table} ADD {$definition}");
+        }
+    }

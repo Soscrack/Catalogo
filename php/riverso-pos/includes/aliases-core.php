@@ -1,10 +1,7 @@
 <?php
 /**
- * Alias de compatibilidad para clases movidas a core/
- * 
- * Permite que código antiguo siga usando los imports originales
- * sin necesidad de cambiar todos los require_once del proyecto.
- * 
+ * Carga forzada de clases core (fuente de verdad) + wrappers legacy.
+ *
  * @package Riverso_POS
  */
 
@@ -12,16 +9,32 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Las clases están en core/ pero se cargan automáticamente vía Riverso_Class_Loader
-// Este archivo simplemente asegura que estén disponibles como si fueran locales
+$riverso_core_requires = [
+    'core/events/class-event-bus.php',
+    'core/audit/class-audit.php',
+    'core/audit/class-audit-module.php',
+    'core/permissions/class-permissions.php',
+    'core/auth/class-auth-service.php',
+    'core/tasks/class-task-service.php',
+    'core/employees/class-employee.php',
+    'catalog/barcodes/class-barcode-model.php',
+    'inventory/movements/class-movement.php',
+];
 
-// Nota: El autoloader ya se encarga, pero dejamos esto documentado
-// para casos donde se necesite forzar una carga explícita.
+foreach ($riverso_core_requires as $rel) {
+    $path = RIVERSO_POS_PLUGIN_DIR . $rel;
+    if (file_exists($path)) {
+        require_once $path;
+    }
+}
 
-// Ejemplos (no necesarios con autoload, pero posibles):
-// require_once RIVERSO_POS_PLUGIN_DIR . 'core/audit/class-audit.php';
-// require_once RIVERSO_POS_PLUGIN_DIR . 'core/permissions/class-permissions.php';
-// require_once RIVERSO_POS_PLUGIN_DIR . 'core/tasks/class-task-module.php';
-// require_once RIVERSO_POS_PLUGIN_DIR . 'core/employees/class-employee-module.php';
-// require_once RIVERSO_POS_PLUGIN_DIR . 'core/auth/class-auth-service.php';
-// require_once RIVERSO_POS_PLUGIN_DIR . 'core/events/class-event-bus.php';
+// Fallback: si core no tiene audit/permissions, usar includes legacy.
+if (!class_exists('Riverso_POS_Audit') && file_exists(RIVERSO_POS_PLUGIN_DIR . 'includes/class-audit.php')) {
+    require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-audit.php';
+}
+if (!class_exists('Riverso_Audit_Module') && file_exists(RIVERSO_POS_PLUGIN_DIR . 'includes/class-audit-module.php')) {
+    require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-audit-module.php';
+}
+if (!class_exists('Riverso_POS_Permissions') && file_exists(RIVERSO_POS_PLUGIN_DIR . 'includes/class-permissions.php')) {
+    require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-permissions.php';
+}

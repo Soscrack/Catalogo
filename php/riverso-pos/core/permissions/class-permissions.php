@@ -557,79 +557,85 @@ class Riverso_POS_Permissions {
      */
     public static function get_accessible_modules($user_id = null) {
         $modules = [];
+        $can = static function ($cap) use ($user_id) {
+            if ($user_id) {
+                return user_can($user_id, $cap);
+            }
+            return current_user_can($cap);
+        };
         
         // Dashboard siempre visible para empleados
-        if (current_user_can('riverso_access_portal')) {
+        if ($can('riverso_access_portal')) {
             $modules['dashboard'] = ['icon' => 'dashboard', 'label' => 'Dashboard'];
         }
         
         // POS
-        if (current_user_can('riverso_use_pos')) {
+        if ($can('riverso_use_pos')) {
             $modules['pos'] = ['icon' => 'cart', 'label' => 'Punto de Venta'];
         }
         
         // Cotizaciones a clientes
-        if (current_user_can('riverso_view_quotes')) {
+        if ($can('riverso_view_quotes')) {
             $modules['customer-quotes'] = ['icon' => 'media-document', 'label' => 'Cotizaciones Clientes'];
         }
         
         // Cotizaciones recibidas (proveedores)
-        if (current_user_can('riverso_view_received_quotes')) {
+        if ($can('riverso_view_received_quotes')) {
             $modules['received-quotes'] = ['icon' => 'download', 'label' => 'Cotizaciones Proveedores'];
         }
         
         // Tareas
-        if (current_user_can('riverso_view_tasks')) {
+        if ($can('riverso_view_tasks')) {
             $modules['tasks'] = ['icon' => 'clipboard', 'label' => 'Tareas'];
         }
 
         // Catálogo MAMUT / publicación
-        if (current_user_can('riverso_review_products') || current_user_can('riverso_publish_products')) {
+        if ($can('riverso_review_products') || $can('riverso_publish_products')) {
             $modules['catalog'] = ['icon' => 'category', 'label' => 'Catálogo'];
         }
         
         // Bodega
-        if (current_user_can('riverso_view_warehouse')) {
+        if ($can('riverso_view_warehouse')) {
             $modules['warehouse'] = ['icon' => 'store', 'label' => 'Bodega'];
         }
         
         // Facturas recibidas
-        if (current_user_can('riverso_view_invoices')) {
+        if ($can('riverso_view_invoices')) {
             $modules['invoices'] = ['icon' => 'media-spreadsheet', 'label' => 'Facturas'];
         }
         
         // Códigos de Barra
-        if (current_user_can('riverso_scan_barcodes') || current_user_can('riverso_assign_barcodes')) {
+        if ($can('riverso_scan_barcodes') || $can('riverso_assign_barcodes')) {
             $modules['barcodes'] = ['icon' => 'barcode', 'label' => 'Códigos de Barra'];
         }
         
         // Códigos Proveedor / SKU Links
-        if (current_user_can('riverso_manage_codes')) {
+        if ($can('riverso_manage_codes')) {
             $modules['codes'] = ['icon' => 'admin-links', 'label' => 'Códigos Proveedor'];
         }
         
         // Proveedores
-        if (current_user_can('riverso_view_suppliers')) {
+        if ($can('riverso_view_suppliers')) {
             $modules['suppliers'] = ['icon' => 'groups', 'label' => 'Proveedores'];
         }
         
         // Historial de Costos
-        if (current_user_can('riverso_view_costs')) {
+        if ($can('riverso_view_costs')) {
             $modules['cost-history'] = ['icon' => 'chart-line', 'label' => 'Historial Costos'];
         }
         
         // Empleados
-        if (current_user_can('riverso_manage_users')) {
+        if ($can('riverso_manage_users')) {
             $modules['employees'] = ['icon' => 'admin-users', 'label' => 'Empleados'];
         }
         
         // Reportes
-        if (current_user_can('riverso_view_reports')) {
+        if ($can('riverso_view_reports')) {
             $modules['reports'] = ['icon' => 'chart-bar', 'label' => 'Reportes'];
         }
         
         // Configuración
-        if (current_user_can('riverso_manage_settings')) {
+        if ($can('riverso_manage_settings')) {
             $modules['settings'] = ['icon' => 'admin-generic', 'label' => 'Configuración'];
         }
         

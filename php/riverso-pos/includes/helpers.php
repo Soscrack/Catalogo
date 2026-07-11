@@ -134,11 +134,21 @@ function riverso_get_task_priorities() {
 }
 
 /**
- * Crea una tarea automáticamente
+ * Crea una tarea automáticamente (fachada unificada).
  */
 function riverso_create_task($tipo, $titulo, $data = []) {
+    if (class_exists('Riverso_Task_Service')) {
+        return Riverso_Task_Service::request($tipo, $titulo, $data);
+    }
+
+    if (class_exists('Riverso_Task_Module')) {
+        return Riverso_Task_Module::get_instance()->create_task(array_merge([
+            'tipo' => $tipo,
+            'titulo' => $titulo,
+        ], $data));
+    }
+
     global $wpdb;
-    
     $insert = array_merge([
         'tipo' => $tipo,
         'titulo' => $titulo,
@@ -146,9 +156,7 @@ function riverso_create_task($tipo, $titulo, $data = []) {
         'prioridad' => 'normal',
         'creado_por' => get_current_user_id(),
     ], $data);
-    
     $wpdb->insert($wpdb->prefix . 'riverso_tareas', $insert);
-    
     return $wpdb->insert_id;
 }
 

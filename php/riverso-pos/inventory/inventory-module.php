@@ -1,9 +1,9 @@
 <?php
 /**
  * Módulo Inventario (Fase 3+)
- * 
+ *
  * Agrupa: stock, warehouse, movements, stock_count, reservations.
- * 
+ *
  * @package Riverso_POS
  */
 
@@ -14,9 +14,32 @@ if (!defined('ABSPATH')) {
 class Riverso_Inventory_Module {
 
     /**
-     * Inicializa el módulo
+     * Carga clases del dominio e inicializa hooks.
      */
     public static function init() {
+        static $booted = false;
+        if ($booted) {
+            return;
+        }
+        $booted = true;
+
+        $base = RIVERSO_POS_PLUGIN_DIR . 'inventory/';
+
+        $files = [
+            'movements/class-movement.php',
+            'stock/class-stock-service.php',
+            'reservations/class-reservation-service.php',
+            'stock_count/class-stock-count-service.php',
+            // warehouse: no recargar la clase — se carga desde modules/warehouse/
+        ];
+
+        foreach ($files as $rel) {
+            $path = $base . $rel;
+            if (file_exists($path)) {
+                require_once $path;
+            }
+        }
+
         // Registrar capabilities
         do_action('riverso_register_capabilities', [
             'riverso_view_stock',
@@ -26,9 +49,22 @@ class Riverso_Inventory_Module {
         ]);
 
         // Suscribirse a eventos
-        riverso_event_subscribe('invoice.approved', [__CLASS__, 'on_invoice_approved'], 10);
-        riverso_event_subscribe('pos.sale.completed', [__CLASS__, 'on_sale_completed'], 10);
-        riverso_event_subscribe('stock_count.approved', [__CLASS__, 'on_count_approved'], 10);
+        if (function_exists('riverso_event_subscribe')) {
+            riverso_event_subscribe('invoice.approved', [__CLASS__, 'on_invoice_approved'], 10);
+            riverso_event_subscribe('pos.sale.completed', [__CLASS__, 'on_sale_completed'], 10);
+            riverso_event_subscribe('stock_count.approved', [__CLASS__, 'on_count_approved'], 10);
+        }
+
+        // Inicializar subservicios
+        if (class_exists('Riverso_Reservation_Service')) {
+            Riverso_Reservation_Service::get_instance()->init();
+        }
+        if (class_exists('Riverso_Stock_Count_Service')) {
+            Riverso_Stock_Count_Service::get_instance()->init();
+        }
+        if (class_exists('Riverso_Warehouse_Module')) {
+            (new Riverso_Warehouse_Module())->init();
+        }
 
         // AJAX
         add_action('wp_ajax_riverso_get_stock', [__CLASS__, 'ajax_get_stock']);
@@ -60,7 +96,7 @@ class Riverso_Inventory_Module {
      * AJAX: obtener stock
      */
     public static function ajax_get_stock() {
-        check_ajax_referer('riverso-nonce', 'nonce');
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
 
         if (!current_user_can('riverso_view_stock')) {
             wp_send_json_error('Sin permisos');
@@ -72,12 +108,20 @@ class Riverso_Inventory_Module {
             wp_send_json_error('ID inválido');
         }
 
+        if (class_exists('Riverso_Stock_Service')) {
+            $svc = Riverso_Stock_Service::get_instance();
+            wp_send_json_success([
+                'balance' => $svc->get_balance($producto_id),
+                'available' => $svc->get_available($producto_id),
+            ]);
+        }
+
         global $wpdb;
         $prefix = $wpdb->prefix;
 
         $stock = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT pu.*, u.nombre as ubicacion_nombre 
+                "SELECT pu.*, u.nombre as ubicacion_nombre
                  FROM {$prefix}riverso_producto_ubicacion pu
                  LEFT JOIN {$prefix}riverso_ubicaciones u ON pu.ubicacion_id = u.id
                  WHERE pu.product_id = %d",
@@ -93,7 +137,7 @@ class Riverso_Inventory_Module {
      * AJAX: ajustar stock
      */
     public static function ajax_adjust_stock() {
-        check_ajax_referer('riverso-nonce', 'nonce');
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
 
         if (!current_user_can('riverso_edit_stock')) {
             wp_send_json_error('Sin permisos');
@@ -105,6 +149,10 @@ class Riverso_Inventory_Module {
 
         if (!$producto_id || $cantidad === 0) {
             wp_send_json_error('Datos inválidos');
+        }
+
+        if (!class_exists('Riverso_Movement')) {
+            wp_send_json_error('Riverso_Movement no disponible');
         }
 
         $movement_id = Riverso_Movement::create(
@@ -125,8 +173,13 @@ class Riverso_Inventory_Module {
      * Crea las tablas del módulo
      */
     public static function create_tables() {
-        // Las tablas ya existen en las migraciones
+        if (class_exists('Riverso_Reservation_Service')) {
+            Riverso_Reservation_Service::create_tables();
+        }
+        if (class_exists('Riverso_Stock_Count_Service')) {
+            Riverso_Stock_Count_Service::create_tables();
+        }
     }
 }
 
-add_action('riverso_init', [__CLASS__, 'init']);
+// Boot explícito desde Riverso_POS::boot_erp_domains() — no auto-hook aquí.

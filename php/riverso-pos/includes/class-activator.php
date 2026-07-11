@@ -274,11 +274,16 @@ class Riverso_POS_Activator {
         self::create_phase11_flete_vinculos($prefix);
         
         // Tabla: Empleados (Fase 1 - Core infrastructure)
-        self::create_employees_table($prefix, $charset_collate);
+        self::ensure_employees_table();
         
         // Tabla: Auditoría
-        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-audit.php';
+        if (!class_exists('Riverso_POS_Audit')) {
+            require_once RIVERSO_POS_PLUGIN_DIR . 'core/audit/class-audit.php';
+        }
         Riverso_POS_Audit::create_table();
+
+        // Fases ERP 10–12 (core/códigos/inventario/OC/sync)
+        self::create_erp_phase_tables($prefix, $charset_collate);
         
         // Inicializar servicios core
         self::init_core_services();
@@ -291,7 +296,14 @@ class Riverso_POS_Activator {
      */
     public static function create_roles() {
         // Usar el método centralizado de la clase de permisos
-        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-permissions.php';
+        if (!class_exists('Riverso_POS_Permissions')) {
+            $perm = RIVERSO_POS_PLUGIN_DIR . 'core/permissions/class-permissions.php';
+            if (file_exists($perm)) {
+                require_once $perm;
+            } else {
+                require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-permissions.php';
+            }
+        }
         Riverso_POS_Permissions::setup_roles();
     }
     
@@ -905,80 +917,255 @@ class Riverso_POS_Activator {
     }
 
     /**
-     * Fase 1 - Crea tabla de empleados (Infraestructura Core)
+     * Asegura tabla de empleados vía módulo (dbDelta compatible).
      */
-    private static function create_employees_table($prefix, $charset_collate) {
+    private static function ensure_employees_table() {
+        $paths = [
+            RIVERSO_POS_PLUGIN_DIR . 'core/employees/class-employee-module.php',
+            RIVERSO_POS_PLUGIN_DIR . 'modules/employees/class-employee-module.php',
+        ];
+        foreach ($paths as $file) {
+            if (file_exists($file)) {
+                require_once $file;
+                break;
+            }
+        }
+        if (class_exists('Riverso_POS_Employee_Module') && method_exists('Riverso_POS_Employee_Module', 'create_table')) {
+            Riverso_POS_Employee_Module::create_table();
+        }
+    }
+
+    /**
+     * Tablas ERP Fases 10–12 (core, códigos, inventario avanzado, OC, sync).
+     */
+    private static function create_erp_phase_tables($prefix, $charset_collate) {
         global $wpdb;
-        
-        $table = "{$prefix}empleados";
-        
-        $sql = "CREATE TABLE IF NOT EXISTS {$table} (
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        // Audit: employee_id + module
+        self::add_column_if_missing("{$prefix}audit_log", 'employee_id', 'employee_id BIGINT UNSIGNED DEFAULT NULL');
+        self::add_column_if_missing("{$prefix}audit_log", 'module', 'module VARCHAR(50) DEFAULT NULL');
+        self::add_index_if_missing("{$prefix}audit_log", 'idx_audit_employee', 'KEY idx_audit_employee (employee_id)');
+        self::add_index_if_missing("{$prefix}audit_log", 'idx_audit_module', 'KEY idx_audit_module (module)');
+
+        // Tareas: employee_id
+        self::add_column_if_missing("{$prefix}tareas", 'employee_id', 'employee_id BIGINT UNSIGNED DEFAULT NULL');
+
+        $sql = "CREATE TABLE {$prefix}tarea_historial (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-            user_id BIGINT UNSIGNED NOT NULL,
-            rut VARCHAR(20) DEFAULT NULL,
-            nombre VARCHAR(255) DEFAULT NULL,
-            cargo VARCHAR(100) DEFAULT NULL,
-            departamento VARCHAR(100) DEFAULT NULL,
-            supervisor_id BIGINT UNSIGNED DEFAULT NULL,
-            fecha_ingreso DATE DEFAULT NULL,
-            tipo_contrato VARCHAR(50) DEFAULT NULL,
-            jornada VARCHAR(50) DEFAULT NULL,
-            telefono_personal VARCHAR(20) DEFAULT NULL,
-            contacto_emergencia VARCHAR(255) DEFAULT NULL,
-            estado VARCHAR(20) DEFAULT 'activo',
-            notas TEXT DEFAULT NULL,
+            tarea_id BIGINT UNSIGNED NOT NULL,
+            estado_anterior VARCHAR(50) DEFAULT NULL,
+            estado_nuevo VARCHAR(50) NOT NULL,
+            cambio_por BIGINT UNSIGNED NOT NULL,
+            cambio_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+            razon TEXT DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_tarea (tarea_id),
+            KEY idx_cambio_en (cambio_en)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}codigo_barra (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            codigo VARCHAR(50) NOT NULL,
+            tipo VARCHAR(20) NOT NULL DEFAULT 'ean13',
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            proveedor_id BIGINT UNSIGNED DEFAULT NULL,
+            cantidad DECIMAL(10,3) NOT NULL DEFAULT 1,
+            unidad_medida VARCHAR(20) NOT NULL DEFAULT 'unidad',
+            envase_id BIGINT UNSIGNED DEFAULT NULL,
+            factor_a_unidad_base DECIMAL(10,3) NOT NULL DEFAULT 1,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            migrado_de_tabla VARCHAR(50) DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
-            UNIQUE KEY ux_user_id (user_id),
-            KEY idx_estado (estado),
-            KEY idx_departamento (departamento),
-            FOREIGN KEY (user_id) REFERENCES " . $wpdb->users . "(ID) ON DELETE CASCADE,
-            FOREIGN KEY (supervisor_id) REFERENCES {$table}(id) ON DELETE SET NULL
-        ) {$charset_collate};";
-        
-        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+            UNIQUE KEY ux_codigo (codigo),
+            KEY idx_producto (producto_base_id),
+            KEY idx_proveedor (proveedor_id),
+            KEY idx_activo (activo)
+        ) $charset_collate;";
         dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}reservas (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            cantidad DECIMAL(12,4) NOT NULL,
+            origen VARCHAR(30) NOT NULL DEFAULT 'pos',
+            referencia_tipo VARCHAR(50) DEFAULT NULL,
+            referencia_id BIGINT UNSIGNED DEFAULT NULL,
+            estado VARCHAR(20) NOT NULL DEFAULT 'activa',
+            usuario_id BIGINT UNSIGNED DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            released_at DATETIME DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_producto_estado (producto_base_id, estado)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}conteos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            tipo VARCHAR(20) NOT NULL DEFAULT 'parcial',
+            ubicacion_id BIGINT UNSIGNED DEFAULT NULL,
+            estado VARCHAR(20) NOT NULL DEFAULT 'abierto',
+            iniciado_por BIGINT UNSIGNED DEFAULT NULL,
+            aprobado_por BIGINT UNSIGNED DEFAULT NULL,
+            iniciado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+            cerrado_en DATETIME DEFAULT NULL,
+            notas TEXT DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_estado (estado)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}conteo_items (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            conteo_id BIGINT UNSIGNED NOT NULL,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            codigo VARCHAR(50) DEFAULT NULL,
+            envase_id BIGINT UNSIGNED DEFAULT NULL,
+            cantidad_teorica DECIMAL(12,4) DEFAULT 0,
+            cantidad_contada DECIMAL(12,4) DEFAULT 0,
+            diferencia DECIMAL(12,4) DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_conteo (conteo_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}ordenes_compra (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            numero VARCHAR(50) DEFAULT NULL,
+            proveedor_id BIGINT UNSIGNED NOT NULL,
+            estado VARCHAR(30) NOT NULL DEFAULT 'borrador',
+            cotizacion_id BIGINT UNSIGNED DEFAULT NULL,
+            total DECIMAL(12,2) DEFAULT 0,
+            notas TEXT DEFAULT NULL,
+            creado_por BIGINT UNSIGNED DEFAULT NULL,
+            enviado_en DATETIME DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_proveedor (proveedor_id),
+            KEY idx_estado (estado)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}orden_compra_items (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            orden_id BIGINT UNSIGNED NOT NULL,
+            producto_base_id BIGINT UNSIGNED DEFAULT NULL,
+            codigo_proveedor VARCHAR(100) DEFAULT NULL,
+            descripcion VARCHAR(255) DEFAULT NULL,
+            cantidad DECIMAL(12,4) NOT NULL DEFAULT 0,
+            cantidad_recibida DECIMAL(12,4) NOT NULL DEFAULT 0,
+            precio_unitario DECIMAL(12,4) DEFAULT 0,
+            PRIMARY KEY (id),
+            KEY idx_orden (orden_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        // Alias de nombre usado por Purchase_Order_Module
+        $sql = "CREATE TABLE {$prefix}ordenes_compra_items (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            orden_id BIGINT UNSIGNED NOT NULL,
+            producto_base_id BIGINT UNSIGNED DEFAULT NULL,
+            producto_proveedor_id BIGINT UNSIGNED DEFAULT NULL,
+            descripcion VARCHAR(255) DEFAULT NULL,
+            cantidad DECIMAL(12,3) NOT NULL DEFAULT 0,
+            cantidad_recibida DECIMAL(12,3) NOT NULL DEFAULT 0,
+            unidad VARCHAR(30) DEFAULT 'unidad',
+            precio_unitario DECIMAL(12,4) DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY orden_id (orden_id),
+            KEY producto_base_id (producto_base_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}woo_sync_log (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            entity_type VARCHAR(50) NOT NULL,
+            entity_id BIGINT UNSIGNED NOT NULL,
+            action VARCHAR(50) NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            woo_product_id BIGINT UNSIGNED DEFAULT NULL,
+            woo_variation_id BIGINT UNSIGNED DEFAULT NULL,
+            error_message TEXT DEFAULT NULL,
+            synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            attempts INT NOT NULL DEFAULT 1,
+            PRIMARY KEY (id),
+            KEY idx_entity (entity_type, entity_id),
+            KEY idx_status (status)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}precio_historial (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            canal VARCHAR(10) NOT NULL DEFAULT 'local',
+            precio_sugerido DECIMAL(12,4) DEFAULT NULL,
+            precio_aprobado DECIMAL(12,4) DEFAULT NULL,
+            precio_online DECIMAL(12,4) DEFAULT NULL,
+            precio_local DECIMAL(12,4) DEFAULT NULL,
+            usuario_id BIGINT UNSIGNED DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_producto_canal (producto_base_id, canal)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        // Columnas útiles en movimientos para kardex ERP
+        self::add_column_if_missing("{$prefix}movimientos", 'producto_base_id', 'producto_base_id BIGINT UNSIGNED DEFAULT NULL');
+        self::add_column_if_missing("{$prefix}movimientos", 'cantidad_neta', 'cantidad_neta DECIMAL(12,4) DEFAULT NULL');
+        self::add_index_if_missing("{$prefix}movimientos", 'idx_producto_base', 'KEY idx_producto_base (producto_base_id)');
+
+        // Migrar códigos legacy → codigo_barra (idempotente)
+        self::migrate_legacy_barcodes($prefix);
     }
 
     /**
-     * Inicializa los servicios core (auditoría, eventos, autenticación)
+     * Copia barcodes/códigos legacy a riverso_codigo_barra sin duplicar.
+     */
+    private static function migrate_legacy_barcodes($prefix) {
+        global $wpdb;
+
+        $wpdb->query(
+            "INSERT IGNORE INTO {$prefix}codigo_barra
+                (codigo, tipo, producto_base_id, cantidad, unidad_medida, factor_a_unidad_base, activo, migrado_de_tabla)
+             SELECT b.ean13, 'ean13', COALESCE(b.product_base_id, 0), 1, 'unidad', 1, 1, 'riverso_barcodes'
+             FROM {$prefix}barcodes b
+             WHERE b.ean13 IS NOT NULL AND b.ean13 <> ''
+               AND NOT EXISTS (
+                   SELECT 1 FROM {$prefix}codigo_barra cb WHERE cb.codigo = b.ean13
+               )"
+        );
+
+        $wpdb->query(
+            "INSERT IGNORE INTO {$prefix}codigo_barra
+                (codigo, tipo, producto_base_id, proveedor_id, cantidad, unidad_medida, factor_a_unidad_base, activo, migrado_de_tabla)
+             SELECT c.codigo_proveedor, 'supplier', COALESCE(c.product_base_id, 0), c.proveedor_id, 1, 'unidad',
+                    COALESCE(c.factor_conversion, 1), COALESCE(c.activo, 1), 'riverso_codigos'
+             FROM {$prefix}codigos c
+             WHERE c.codigo_proveedor IS NOT NULL AND c.codigo_proveedor <> ''
+               AND NOT EXISTS (
+                   SELECT 1 FROM {$prefix}codigo_barra cb WHERE cb.codigo = c.codigo_proveedor
+               )"
+        );
+    }
+
+    /**
+     * Inicializa servicios core (eventos + autenticación auditada).
      */
     private static function init_core_services() {
-        // Cargar y registrar servicios core
-        require_once RIVERSO_POS_PLUGIN_DIR . 'core/events/class-event-bus.php';
-        require_once RIVERSO_POS_PLUGIN_DIR . 'core/auth/class-auth-service.php';
-        
-        // Registrar hooks de autenticación
-        $auth_service = Riverso_Auth_Service::get_instance();
-        $auth_service->init();
-        
-        // Opcional: registrar suscriptores iniciales de eventos
-        // (pueden estar en módulos específicos)
-    }
-
-    /**
-     * Helper: Agrega una columna a una tabla si no existe
-     */
-    private static function add_column_if_missing($table, $column, $definition) {
-        global $wpdb;
-        $columns = $wpdb->get_results("SHOW COLUMNS FROM {$table}");
-        $column_names = wp_list_pluck($columns, 'Field');
-        
-        if (!in_array($column, $column_names, true)) {
-            $wpdb->query("ALTER TABLE {$table} ADD COLUMN {$definition}");
+        if (file_exists(RIVERSO_POS_PLUGIN_DIR . 'core/events/class-event-bus.php')) {
+            require_once RIVERSO_POS_PLUGIN_DIR . 'core/events/class-event-bus.php';
+        }
+        if (file_exists(RIVERSO_POS_PLUGIN_DIR . 'core/auth/class-auth-service.php')) {
+            require_once RIVERSO_POS_PLUGIN_DIR . 'core/auth/class-auth-service.php';
+            if (class_exists('Riverso_Auth_Service')) {
+                Riverso_Auth_Service::get_instance()->init();
+            }
         }
     }
-
-    /**
-     * Helper: Agrega un índice a una tabla si no existe
-     */
-    private static function add_index_if_missing($table, $index_name, $definition) {
-        global $wpdb;
-        $indexes = $wpdb->get_results("SHOW INDEXES FROM {$table}");
-        $index_names = wp_list_pluck($indexes, 'Key_name');
-        
-        if (!in_array($index_name, $index_names, true)) {
-            $wpdb->query("ALTER TABLE {$table} ADD {$definition}");
-        }
-    }
+}

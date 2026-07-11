@@ -32,13 +32,14 @@ class Riverso_Auth_Service {
      * Inicializa los hooks de autenticación
      */
     public function init() {
-        // Auditar login
+        static $booted = false;
+        if ($booted) {
+            return;
+        }
+        $booted = true;
+
         add_action('wp_login', [$this, 'on_login'], 10, 2);
-        
-        // Auditar logout
         add_action('wp_logout', [$this, 'on_logout'], 10, 0);
-        
-        // Auditar cambios de rol
         add_action('set_user_role', [$this, 'on_user_role_changed'], 10, 3);
     }
 
@@ -53,20 +54,22 @@ class Riverso_Auth_Service {
             return;
         }
 
-        $data = [
-            'user_agent' => isset($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field($_SERVER['HTTP_USER_AGENT']) : '',
-            'ip_address' => $this->get_client_ip(),
-        ];
-
-        Riverso_POS_Audit::log('user_login', 'user', $user->ID, [], $user_login, $data);
-
-        // Evento del bus
-        riverso_event_publish('auth.user.login', [
-            'user_id' => $user->ID,
-            'user_login' => $user_login,
-        ], [
-            'user_id' => $user->ID,
+        Riverso_POS_Audit::log('user_login', 'user', $user->ID, [
+            'details' => $user_login,
+            'new_value' => [
+                'user_agent' => isset($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field($_SERVER['HTTP_USER_AGENT']) : '',
+                'ip_address' => $this->get_client_ip(),
+            ],
         ]);
+
+        if (function_exists('riverso_event_publish')) {
+            riverso_event_publish('auth.user.login', [
+                'user_id' => $user->ID,
+                'user_login' => $user_login,
+            ], [
+                'user_id' => $user->ID,
+            ]);
+        }
     }
 
     /**
@@ -83,42 +86,42 @@ class Riverso_Auth_Service {
             return;
         }
 
-        Riverso_POS_Audit::log('user_logout', 'user', $user->ID, [], '', [
-            'ip_address' => $this->get_client_ip(),
+        Riverso_POS_Audit::log('user_logout', 'user', $user->ID, [
+            'details' => 'logout',
+            'new_value' => ['ip_address' => $this->get_client_ip()],
         ]);
 
-        // Evento del bus
-        riverso_event_publish('auth.user.logout', [
-            'user_id' => $user->ID,
-        ], [
-            'user_id' => $user->ID,
-        ]);
+        if (function_exists('riverso_event_publish')) {
+            riverso_event_publish('auth.user.logout', [
+                'user_id' => $user->ID,
+            ], [
+                'user_id' => $user->ID,
+            ]);
+        }
     }
 
     /**
      * Manejador de cambio de rol
-     * 
-     * @param int    $user_id  ID del usuario
-     * @param string $role     Nuevo rol
-     * @param array  $old_roles Roles anteriores
      */
     public function on_user_role_changed($user_id, $role, $old_roles) {
         if (!class_exists('Riverso_POS_Audit')) {
             return;
         }
 
-        $old_role_str = implode(', ', (array) $old_roles);
-        
-        Riverso_POS_Audit::log('role_assigned', 'user', $user_id, $old_role_str, $role, []);
-
-        // Evento del bus
-        riverso_event_publish('auth.role.changed', [
-            'user_id' => $user_id,
-            'new_role' => $role,
-            'old_roles' => $old_roles,
-        ], [
-            'user_id' => $user_id,
+        Riverso_POS_Audit::log('role_assigned', 'user', $user_id, [
+            'old_value' => implode(', ', (array) $old_roles),
+            'new_value' => $role,
         ]);
+
+        if (function_exists('riverso_event_publish')) {
+            riverso_event_publish('auth.role.changed', [
+                'user_id' => $user_id,
+                'new_role' => $role,
+                'old_roles' => $old_roles,
+            ], [
+                'user_id' => $user_id,
+            ]);
+        }
     }
 
     /**

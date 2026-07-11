@@ -17,6 +17,12 @@ class Riverso_Catalog_Module {
      * Inicializa el módulo
      */
     public static function init() {
+        static $booted = false;
+        if ($booted) {
+            return;
+        }
+        $booted = true;
+
         // Registrar capabilities específicas del catálogo
         do_action('riverso_register_capabilities', [
             'riverso_view_products',
@@ -80,7 +86,7 @@ class Riverso_Catalog_Module {
      * AJAX: escanear código
      */
     public static function ajax_scan_barcode() {
-        check_ajax_referer('riverso-nonce', 'nonce');
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
 
         if (!current_user_can('riverso_scan_barcodes')) {
             wp_send_json_error('Sin permisos');
@@ -105,7 +111,7 @@ class Riverso_Catalog_Module {
      * AJAX: obtener producto
      */
     public static function ajax_get_product() {
-        check_ajax_referer('riverso-nonce', 'nonce');
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
 
         if (!current_user_can('riverso_view_products')) {
             wp_send_json_error('Sin permisos');
@@ -139,7 +145,7 @@ class Riverso_Catalog_Module {
      * AJAX: crear producto
      */
     public static function ajax_create_product() {
-        check_ajax_referer('riverso-nonce', 'nonce');
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
 
         if (!current_user_can('riverso_manage_products')) {
             wp_send_json_error('Sin permisos');
@@ -219,5 +225,4 @@ class Riverso_Catalog_Module {
     }
 }
 
-// Inicializar al cargar
-add_action('riverso_init', [Riverso_Catalog_Module::class, 'init']);
+// Boot explícito desde Riverso_POS::boot_erp_domains() — no auto-hook aquí.

@@ -3,7 +3,7 @@
  * Plugin Name: Riverso POS
  * Plugin URI: https://riverso.cl
  * Description: Sistema POS/mini-ERP integrado con WooCommerce para gestión de productos, facturas, inventario y tareas operativas.
- * Version: 1.3.0
+ * Version: 1.4.0
  * Author: Riverso
  * Author URI: https://riverso.cl
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constantes del plugin
-define('RIVERSO_POS_VERSION', '1.3.0');
+define('RIVERSO_POS_VERSION', '1.4.0');
 define('RIVERSO_POS_PLUGIN_FILE', __FILE__);
 define('RIVERSO_POS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RIVERSO_POS_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -206,16 +206,33 @@ final class Riverso_POS {
      * Carga los módulos del plugin
      */
     private function load_modules() {
+        // Bootstrap ERP: inventory / catalog / sync / OC / picking (sin duplicar modules/)
+        $this->boot_erp_domains();
+
         $modules_dir = RIVERSO_POS_PLUGIN_DIR . 'modules/';
         
-        // Lista de módulos a cargar
+        // Lista de módulos a cargar (paths legacy modules/ + core overrides)
         $module_list = [
             'portal'    => ['file' => 'class-portal-module.php', 'class' => 'Riverso_Portal_Module'],
             'invoices'  => ['file' => 'class-invoice-module.php', 'class' => 'Riverso_Invoice_Module'],
-            'tasks'     => ['file' => 'class-task-module.php', 'class' => 'Riverso_Task_Module'],
+            'tasks'     => [
+                'file' => 'class-task-module.php',
+                'class' => 'Riverso_Task_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'core/tasks/class-task-module.php',
+                    RIVERSO_POS_PLUGIN_DIR . 'modules/tasks/class-task-module.php',
+                ],
+            ],
             'warehouse' => ['file' => 'class-warehouse-module.php', 'class' => 'Riverso_Warehouse_Module'],
             'suppliers' => ['file' => 'class-supplier-module.php', 'class' => 'Riverso_POS_Supplier_Module'],
-            'employees' => ['file' => 'class-employee-module.php', 'class' => 'Riverso_POS_Employee_Module'],
+            'employees' => [
+                'file' => 'class-employee-module.php',
+                'class' => 'Riverso_POS_Employee_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'core/employees/class-employee-module.php',
+                    RIVERSO_POS_PLUGIN_DIR . 'modules/employees/class-employee-module.php',
+                ],
+            ],
             'quotes'    => ['file' => 'class-received-quote-module.php', 'class' => 'Riverso_POS_Received_Quote_Module'],
             'costs'     => ['file' => 'class-cost-history-module.php', 'class' => 'Riverso_Cost_History_Module'],
             'codes'     => ['file' => 'class-supplier-links-module.php', 'class' => 'Riverso_Supplier_Links_Module'],
@@ -234,15 +251,24 @@ final class Riverso_POS {
         ];
         
         foreach ($module_list as $module_name => $config) {
-            $module_file = $modules_dir . $module_name . '/' . $config['file'];
+            $module_file = null;
+            if (!empty($config['paths'])) {
+                foreach ($config['paths'] as $candidate) {
+                    if (file_exists($candidate)) {
+                        $module_file = $candidate;
+                        break;
+                    }
+                }
+            } else {
+                $module_file = $modules_dir . $module_name . '/' . $config['file'];
+            }
             
-            if (file_exists($module_file)) {
+            if ($module_file && file_exists($module_file)) {
                 require_once $module_file;
                 
                 $class_name = $config['class'];
                 
                 if (class_exists($class_name)) {
-                    // Usar get_instance() si existe (singleton), sino new
                     if (method_exists($class_name, 'get_instance')) {
                         $module = $class_name::get_instance();
                     } else {
@@ -258,6 +284,64 @@ final class Riverso_POS {
         }
         
         do_action('riverso_pos_modules_loaded', $this->modules);
+    }
+
+    /**
+     * Domains ERP nuevos (Fases 2–6) sin reemplazar modules/ legacy.
+     */
+    private function boot_erp_domains() {
+        $boot = [
+            RIVERSO_POS_PLUGIN_DIR . 'catalog/catalog-module.php',
+            RIVERSO_POS_PLUGIN_DIR . 'inventory/inventory-module.php',
+            RIVERSO_POS_PLUGIN_DIR . 'inventory/stock/class-stock-service.php',
+            RIVERSO_POS_PLUGIN_DIR . 'inventory/reservations/class-reservation-service.php',
+            RIVERSO_POS_PLUGIN_DIR . 'inventory/stock_count/class-stock-count-service.php',
+            RIVERSO_POS_PLUGIN_DIR . 'woocommerce/woocommerce-module.php',
+            RIVERSO_POS_PLUGIN_DIR . 'purchases/purchase_orders/class-purchase-order-module.php',
+            RIVERSO_POS_PLUGIN_DIR . 'purchases/reception/class-reception-service.php',
+            RIVERSO_POS_PLUGIN_DIR . 'logistics/picking/class-picking-module.php',
+            RIVERSO_POS_PLUGIN_DIR . 'settings/class-settings-module.php',
+            RIVERSO_POS_PLUGIN_DIR . 'sales/customers/class-customer-view.php',
+        ];
+
+        foreach ($boot as $file) {
+            if (!file_exists($file)) {
+                continue;
+            }
+            require_once $file;
+        }
+
+        // Inits explícitos (evita double-init de publish/import)
+        if (class_exists('Riverso_Catalog_Module') && method_exists('Riverso_Catalog_Module', 'init')) {
+            Riverso_Catalog_Module::init();
+        }
+        if (class_exists('Riverso_Inventory_Module') && method_exists('Riverso_Inventory_Module', 'init')) {
+            Riverso_Inventory_Module::init();
+        }
+        if (class_exists('Riverso_WooCommerce_Module')) {
+            Riverso_WooCommerce_Module::get_instance()->init();
+        }
+        if (class_exists('Riverso_Purchase_Order_Module')) {
+            $po = method_exists('Riverso_Purchase_Order_Module', 'get_instance')
+                ? Riverso_Purchase_Order_Module::get_instance()
+                : new Riverso_Purchase_Order_Module();
+            if (method_exists($po, 'init')) {
+                $po->init();
+            }
+        }
+        if (class_exists('Riverso_Picking_Module')) {
+            $pk = method_exists('Riverso_Picking_Module', 'get_instance')
+                ? Riverso_Picking_Module::get_instance()
+                : new Riverso_Picking_Module();
+            if (method_exists($pk, 'init')) {
+                $pk->init();
+            }
+        }
+
+        // Auth audit en runtime (además de activator)
+        if (class_exists('Riverso_Auth_Service')) {
+            Riverso_Auth_Service::get_instance()->init();
+        }
     }
     
     /**

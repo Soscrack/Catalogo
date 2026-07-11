@@ -39,7 +39,7 @@ REQUIRED_FILES = [
 ]
 
 REQUIRED_SYMBOLS = [
-    ("riverso-pos.php", "RIVERSO_POS_VERSION", "1.4.0"),
+    ("riverso-pos.php", "RIVERSO_POS_VERSION", "1.4.1"),
     ("riverso-pos.php", "boot_erp_domains", None),
     ("includes/class-activator.php", "create_erp_phase_tables", None),
     ("includes/class-activator.php", "ensure_employees_table", None),

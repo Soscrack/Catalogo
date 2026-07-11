@@ -35,11 +35,13 @@ class Riverso_Reservation_Service {
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
+        // Debe coincidir con create_erp_phase_tables() del activator.
         $sql = "CREATE TABLE {$table} (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             producto_base_id BIGINT UNSIGNED NOT NULL,
             ubicacion_id BIGINT UNSIGNED DEFAULT NULL,
-            cantidad DECIMAL(12,3) NOT NULL DEFAULT 0,
+            cantidad DECIMAL(12,4) NOT NULL DEFAULT 0,
+            origen VARCHAR(30) NOT NULL DEFAULT 'pos',
             referencia_tipo VARCHAR(50) DEFAULT NULL,
             referencia_id BIGINT UNSIGNED DEFAULT NULL,
             estado VARCHAR(20) NOT NULL DEFAULT 'activa',
@@ -48,12 +50,36 @@ class Riverso_Reservation_Service {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             released_at DATETIME DEFAULT NULL,
             PRIMARY KEY (id),
-            KEY producto_base_id (producto_base_id),
-            KEY estado (estado),
-            KEY referencia (referencia_tipo, referencia_id)
+            KEY idx_producto_estado (producto_base_id, estado),
+            KEY idx_ubicacion (ubicacion_id),
+            KEY idx_referencia (referencia_tipo, referencia_id)
         ) {$charset_collate};";
 
         dbDelta($sql);
+    }
+
+    /**
+     * Completa columnas faltantes en installs con schema antiguo.
+     */
+    private static function ensure_schema_columns() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'riverso_reservas';
+        $columns = $wpdb->get_col("SHOW COLUMNS FROM {$table}", 0);
+        if (!is_array($columns)) {
+            return;
+        }
+
+        $needed = [
+            'ubicacion_id' => 'ubicacion_id BIGINT UNSIGNED DEFAULT NULL',
+            'expires_at' => 'expires_at DATETIME DEFAULT NULL',
+            'origen' => "origen VARCHAR(30) NOT NULL DEFAULT 'pos'",
+        ];
+
+        foreach ($needed as $name => $definition) {
+            if (!in_array($name, $columns, true)) {
+                $wpdb->query("ALTER TABLE {$table} ADD COLUMN {$definition}");
+            }
+        }
     }
 
     /**
@@ -88,20 +114,23 @@ class Riverso_Reservation_Service {
             return false;
         }
 
-        $inserted = $wpdb->insert(
-            $table,
-            [
-                'producto_base_id' => $producto_base_id,
-                'ubicacion_id' => isset($meta['ubicacion_id']) ? intval($meta['ubicacion_id']) : null,
-                'cantidad' => $cantidad,
-                'referencia_tipo' => isset($meta['referencia_tipo']) ? sanitize_text_field($meta['referencia_tipo']) : null,
-                'referencia_id' => isset($meta['referencia_id']) ? intval($meta['referencia_id']) : null,
-                'estado' => 'activa',
-                'usuario_id' => get_current_user_id(),
-                'expires_at' => isset($meta['expires_at']) ? sanitize_text_field($meta['expires_at']) : null,
-                'created_at' => current_time('mysql'),
-            ]
-        );
+        $row = [
+            'producto_base_id' => $producto_base_id,
+            'ubicacion_id' => isset($meta['ubicacion_id']) ? intval($meta['ubicacion_id']) : null,
+            'cantidad' => $cantidad,
+            'origen' => isset($meta['origen']) ? sanitize_text_field($meta['origen']) : 'pos',
+            'referencia_tipo' => isset($meta['referencia_tipo']) ? sanitize_text_field($meta['referencia_tipo']) : null,
+            'referencia_id' => isset($meta['referencia_id']) ? intval($meta['referencia_id']) : null,
+            'estado' => 'activa',
+            'usuario_id' => get_current_user_id(),
+            'expires_at' => isset($meta['expires_at']) ? sanitize_text_field($meta['expires_at']) : null,
+            'created_at' => current_time('mysql'),
+        ];
+
+        // Si la tabla aún no tiene columnas nuevas, intentar completar schema.
+        self::ensure_schema_columns();
+
+        $inserted = $wpdb->insert($table, $row);
 
         return $inserted ? (int) $wpdb->insert_id : false;
     }

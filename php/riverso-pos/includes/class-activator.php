@@ -987,21 +987,33 @@ class Riverso_POS_Activator {
         ) $charset_collate;";
         dbDelta($sql);
 
+        // Schema canónico alineado con Riverso_Reservation_Service.
         $sql = "CREATE TABLE {$prefix}reservas (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             producto_base_id BIGINT UNSIGNED NOT NULL,
-            cantidad DECIMAL(12,4) NOT NULL,
+            ubicacion_id BIGINT UNSIGNED DEFAULT NULL,
+            cantidad DECIMAL(12,4) NOT NULL DEFAULT 0,
             origen VARCHAR(30) NOT NULL DEFAULT 'pos',
             referencia_tipo VARCHAR(50) DEFAULT NULL,
             referencia_id BIGINT UNSIGNED DEFAULT NULL,
             estado VARCHAR(20) NOT NULL DEFAULT 'activa',
             usuario_id BIGINT UNSIGNED DEFAULT NULL,
+            expires_at DATETIME DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             released_at DATETIME DEFAULT NULL,
             PRIMARY KEY (id),
-            KEY idx_producto_estado (producto_base_id, estado)
+            KEY idx_producto_estado (producto_base_id, estado),
+            KEY idx_ubicacion (ubicacion_id),
+            KEY idx_referencia (referencia_tipo, referencia_id)
         ) $charset_collate;";
         dbDelta($sql);
+
+        // Migración incremental si la tabla ya existía con schema antiguo.
+        self::add_column_if_missing("{$prefix}reservas", 'ubicacion_id', 'ubicacion_id BIGINT UNSIGNED DEFAULT NULL');
+        self::add_column_if_missing("{$prefix}reservas", 'expires_at', 'expires_at DATETIME DEFAULT NULL');
+        self::add_column_if_missing("{$prefix}reservas", 'origen', "origen VARCHAR(30) NOT NULL DEFAULT 'pos'");
+        self::add_index_if_missing("{$prefix}reservas", 'idx_ubicacion', 'KEY idx_ubicacion (ubicacion_id)');
+        self::add_index_if_missing("{$prefix}reservas", 'idx_referencia', 'KEY idx_referencia (referencia_tipo, referencia_id)');
 
         $sql = "CREATE TABLE {$prefix}conteos (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

@@ -138,7 +138,12 @@ function riverso_get_task_priorities() {
  */
 function riverso_create_task($tipo, $titulo, $data = []) {
     if (class_exists('Riverso_Task_Service')) {
-        return Riverso_Task_Service::request($tipo, $titulo, $data);
+        $result = Riverso_Task_Service::request($tipo, $titulo, $data);
+        // Solo cortar el flujo si la fachada creó (o falló explícitamente) la tarea.
+        // null = módulo no disponible → seguir con fallbacks.
+        if ($result !== null) {
+            return $result;
+        }
     }
 
     if (class_exists('Riverso_Task_Module')) {

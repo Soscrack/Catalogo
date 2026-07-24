@@ -240,13 +240,34 @@ final class Riverso_POS {
             'products'  => ['file' => 'class-product-module.php', 'class' => 'Riverso_Product_Module'],
             'tienda-local' => ['file' => 'class-tienda-local-module.php', 'class' => 'Riverso_Tienda_Local_Module'],
             'labels'    => ['file' => 'class-label-print-module.php', 'class' => 'Riverso_Label_Print_Module'],
-            'matching'  => ['file' => 'class-matching-module.php', 'class' => 'Riverso_Matching_Module'],
-            'pricing'   => ['file' => 'class-pricing-module.php', 'class' => 'Riverso_Pricing_Module'],
+            'matching'  => [
+                'file' => 'class-matching-module.php',
+                'class' => 'Riverso_Matching_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'catalog/matching/class-matching-module.php',
+                    RIVERSO_POS_PLUGIN_DIR . 'modules/matching/class-matching-module.php',
+                ],
+            ],
+            'pricing'   => [
+                'file' => 'class-pricing-module.php',
+                'class' => 'Riverso_Pricing_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'pricing/price_lists/class-pricing-module.php',
+                    RIVERSO_POS_PLUGIN_DIR . 'modules/pricing/class-pricing-module.php',
+                ],
+            ],
             'publish'   => ['file' => 'class-woo-publisher-module.php', 'class' => 'Riverso_Woo_Publisher_Module'],
             'packaging' => ['file' => 'class-packaging-module.php', 'class' => 'Riverso_Packaging_Module'],
             'import'    => ['file' => 'class-mamut-import-module.php', 'class' => 'Riverso_Mamut_Import_Module'],
             'customer-quotes' => ['file' => 'class-customer-quote-module.php', 'class' => 'Riverso_Customer_Quote_Module'],
-            'pos'             => ['file' => 'class-pos-module.php', 'class' => 'Riverso_POS_Module'],
+            'pos'             => [
+                'file' => 'class-pos-module.php',
+                'class' => 'Riverso_POS_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'sales/pos/class-pos-module.php',
+                    RIVERSO_POS_PLUGIN_DIR . 'modules/pos/class-pos-module.php',
+                ],
+            ],
             'reports'         => ['file' => 'class-reports-module.php', 'class' => 'Riverso_Reports_Module'],
         ];
         

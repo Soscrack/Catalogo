@@ -417,7 +417,8 @@ class Riverso_POS_Activator {
 
         $sql = "CREATE TABLE {$prefix}producto_proveedor (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-            producto_base_id BIGINT UNSIGNED NOT NULL,
+            producto_base_id BIGINT UNSIGNED DEFAULT NULL,
+            grupo_id BIGINT UNSIGNED DEFAULT NULL,
             proveedor_id BIGINT UNSIGNED NOT NULL,
             supplier_link_id BIGINT UNSIGNED DEFAULT NULL,
             codigo_proveedor VARCHAR(100) NOT NULL,
@@ -436,6 +437,7 @@ class Riverso_POS_Activator {
             PRIMARY KEY (id),
             UNIQUE KEY ux_proveedor_codigo (proveedor_id, codigo_proveedor),
             KEY idx_producto_base (producto_base_id),
+            KEY idx_grupo_id (grupo_id),
             KEY idx_codigo_barras (codigo_barras_proveedor),
             KEY idx_supplier_link (supplier_link_id),
             KEY idx_activo (activo)
@@ -1134,6 +1136,87 @@ class Riverso_POS_Activator {
 
         // Migrar códigos legacy → codigo_barra (idempotente)
         self::migrate_legacy_barcodes($prefix);
+
+        // Consolidar esquema de familia (phase12)
+        self::consolidate_family_schema($prefix);
+
+        // Agregar soporte para asignación proveedor → familia (phase13)
+        self::add_family_assignment_support($prefix);
+
+        // Integrar tienda_local_productos al dominio producto_base (phase14)
+        self::integrate_local_store_products($prefix);
+    }
+
+    /**
+     * Consolida el esquema de familia: equivalencia_grupo → equivalence_groups (fase 12).
+     * Mantiene equivalence_groups/members como canónico; depreca las tablas de phase11.
+     */
+    private static function consolidate_family_schema($prefix) {
+        global $wpdb;
+
+        // 1. Migrar datos de equivalencia_grupo → equivalence_groups
+        $wpdb->query(
+            "INSERT IGNORE INTO {$prefix}equivalence_groups 
+                (codigo_grupo, nombre, tipo_sustitucion, activo, notas, created_at, updated_at)
+             SELECT 
+                CONCAT('LEGACY_', eg.id),
+                eg.nombre,
+                'compatible',
+                eg.activo,
+                CONCAT('Migrado de phase11 equivalencia_grupo id=', eg.id),
+                eg.created_at,
+                eg.updated_at
+             FROM {$prefix}equivalencia_grupo eg
+             WHERE NOT EXISTS (
+                 SELECT 1 FROM {$prefix}equivalence_groups eg2 
+                 WHERE eg2.codigo_grupo = CONCAT('LEGACY_', eg.id)
+             )"
+        );
+
+        // 2. Migrar datos de equivalencia_miembro → equivalence_members
+        $wpdb->query(
+            "INSERT IGNORE INTO {$prefix}equivalence_members 
+                (grupo_id, producto_base_id, prioridad, es_reemplazo_preferido, activo, created_at, updated_at)
+             SELECT 
+                eg_canon.id,
+                em.producto_base_id,
+                em.prioridad,
+                0,
+                1,
+                em.created_at,
+                NOW()
+             FROM {$prefix}equivalencia_miembro em
+             INNER JOIN {$prefix}equivalencia_grupo eg ON eg.id = em.grupo_id
+             LEFT JOIN {$prefix}equivalence_groups eg_canon ON eg_canon.codigo_grupo = CONCAT('LEGACY_', eg.id)
+             WHERE eg_canon.id IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM {$prefix}equivalence_members em2
+                    WHERE em2.grupo_id = eg_canon.id 
+                        AND em2.producto_base_id = em.producto_base_id
+                )"
+        );
+
+        // 3. Marcar las tablas phase11 como deprecadas (si no existe la columna)
+        $wpdb->query(
+            "ALTER TABLE {$prefix}equivalencia_grupo 
+             ADD COLUMN IF NOT EXISTS deprecated_at DATETIME DEFAULT NULL COMMENT 'Marca de deprecación: phase12+ usa equivalence_groups'"
+        );
+
+        $wpdb->query(
+            "ALTER TABLE {$prefix}equivalencia_miembro 
+             ADD COLUMN IF NOT EXISTS deprecated_at DATETIME DEFAULT NULL COMMENT 'Marca de deprecación: phase12+ usa equivalence_members'"
+        );
+
+        // 4. Marcar filas como deprecadas
+        $wpdb->query(
+            "UPDATE {$prefix}equivalencia_grupo 
+             SET deprecated_at = NOW() 
+             WHERE deprecated_at IS NULL 
+                AND EXISTS (
+                    SELECT 1 FROM {$prefix}equivalence_groups eg2 
+                    WHERE eg2.codigo_grupo = CONCAT('LEGACY_', {$prefix}equivalencia_grupo.id)
+                )"
+        );
     }
 
     /**
@@ -1162,6 +1245,178 @@ class Riverso_POS_Activator {
              WHERE c.codigo_proveedor IS NOT NULL AND c.codigo_proveedor <> ''
                AND NOT EXISTS (
                    SELECT 1 FROM {$prefix}codigo_barra cb WHERE cb.codigo = c.codigo_proveedor
+               )"
+        );
+    }
+
+    /**
+     * Agrega soporte para asignación de proveedor → familia (phase 13).
+     * Permite que producto_proveedor se asigne a un grupo_id (familia) en lugar de producto_base_id.
+     */
+    private static function add_family_assignment_support($prefix) {
+        global $wpdb;
+
+        // 0. producto_base_id debe aceptar NULL para destino familia
+        $wpdb->query(
+            "ALTER TABLE {$prefix}producto_proveedor 
+             MODIFY COLUMN producto_base_id BIGINT UNSIGNED DEFAULT NULL 
+             COMMENT 'FK producto_base; NULL si asignado a familia (grupo_id)'"
+        );
+
+        // 1. Agregar columna grupo_id a producto_proveedor si no existe
+        $wpdb->query(
+            "ALTER TABLE {$prefix}producto_proveedor 
+             ADD COLUMN IF NOT EXISTS grupo_id BIGINT UNSIGNED DEFAULT NULL 
+             COMMENT 'FK a equivalence_groups: si es familia, producto_base_id debe ser NULL' AFTER producto_base_id"
+        );
+
+        // 2. Crear índice en grupo_id
+        $wpdb->query(
+            "ALTER TABLE {$prefix}producto_proveedor 
+             ADD KEY IF NOT EXISTS idx_grupo_id (grupo_id)"
+        );
+
+        // 3. Agregar FK constraint (si no existe)
+        $wpdb->query(
+            "ALTER TABLE {$prefix}producto_proveedor 
+             ADD CONSTRAINT IF NOT EXISTS fk_pp_grupo_id 
+             FOREIGN KEY (grupo_id) REFERENCES {$prefix}equivalence_groups(id) ON DELETE SET NULL"
+        );
+
+        // 4. Agregar columnas de auditoría
+        $wpdb->query(
+            "ALTER TABLE {$prefix}producto_proveedor 
+             ADD COLUMN IF NOT EXISTS assigned_to_family_at DATETIME DEFAULT NULL 
+             COMMENT 'Timestamp de asignación a familia' AFTER grupo_id"
+        );
+
+        $wpdb->query(
+            "ALTER TABLE {$prefix}producto_proveedor 
+             ADD COLUMN IF NOT EXISTS assigned_to_family_by BIGINT UNSIGNED DEFAULT NULL 
+             COMMENT 'user_id que asignó a familia' AFTER assigned_to_family_at"
+        );
+
+        // 5. Agregar CHECK constraint (MySQL 8.0.16+)
+        @$wpdb->query(
+            "ALTER TABLE {$prefix}producto_proveedor 
+             ADD CONSTRAINT chk_producto_o_familia 
+             CHECK (
+                (producto_base_id IS NOT NULL AND grupo_id IS NULL) OR
+                (producto_base_id IS NULL AND grupo_id IS NOT NULL)
+            )"
+        );
+    }
+
+    /**
+     * Integra productos de tienda local legacy (CSV importado) al dominio producto_base.
+     * Vincula tienda_local_productos con producto_base por SKU o código de barra.
+     *
+     * @param string $prefix
+     */
+    private static function integrate_local_store_products($prefix) {
+        global $wpdb;
+
+        // Migración: para cada producto en tienda_local_productos sin vinculación
+        // Intentar matchear con producto_base por SKU exacto o código de barra
+
+        $local_products = $wpdb->get_results(
+            "SELECT tlp.sku, tlp.nombre, tlp.precio, tlp.stock, tlb.barcode 
+             FROM {$prefix}tienda_local_productos tlp
+             LEFT JOIN {$prefix}tienda_local_barcodes tlb ON tlb.sku = tlp.sku
+             WHERE NOT EXISTS (
+                 SELECT 1 FROM {$prefix}producto_base pb 
+                 WHERE pb.canonical_sku = tlp.sku OR pb.canonical_sku LIKE CONCAT('%', tlp.sku, '%')
+             )
+             LIMIT 100"
+        );
+
+        foreach ($local_products as $local_prod) {
+            // Intentar matchear por barcode si existe
+            if ($local_prod->barcode) {
+                $barcode_match = $wpdb->get_row($wpdb->prepare(
+                    "SELECT pb.id FROM {$prefix}producto_base pb
+                     WHERE pb.id IN (
+                         SELECT DISTINCT producto_base_id FROM {$prefix}codigo_barra
+                         WHERE codigo = %s
+                     )
+                     LIMIT 1",
+                    $local_prod->barcode
+                ), ARRAY_A);
+
+                if ($barcode_match) {
+                    // Si matcheó, crear anotación para auditoría
+                    continue; // Ya vinculado
+                }
+            }
+
+            // Si no hay match exacto, crear nuevo producto_base con origen "tienda_local_legacy"
+            $wpdb->insert(
+                "{$prefix}producto_base",
+                [
+                    'canonical_sku' => $local_prod->sku,
+                    'nombre_canonico' => $local_prod->nombre,
+                    'unidad_base' => 'unidad',
+                    'estado' => 'activo',
+                    'created_by_system' => 1,
+                    'requires_human_review' => 1,
+                    'origen_datos' => 'tienda_local_legacy',
+                ],
+                ['%s', '%s', '%s', '%s', '%d', '%d', '%s']
+            );
+
+            if ($wpdb->insert_id) {
+                $pb_id = $wpdb->insert_id;
+
+                // Crear entrada en codigo_barra si existe el barcode local
+                if ($local_prod->barcode) {
+                    $wpdb->insert(
+                        "{$prefix}codigo_barra",
+                        [
+                            'codigo' => $local_prod->barcode,
+                            'tipo' => 'internal',
+                            'producto_base_id' => $pb_id,
+                            'cantidad' => 1,
+                            'unidad_medida' => 'unidad',
+                            'factor_a_unidad_base' => 1,
+                            'activo' => 1,
+                            'migrado_de_tabla' => 'tienda_local_barcodes',
+                        ]
+                    );
+                }
+
+                // Crear precio local si tienda local tenía precio
+                if ($local_prod->precio) {
+                    $wpdb->insert(
+                        "{$prefix}precios",
+                        [
+                            'producto_base_id' => $pb_id,
+                            'canal' => 'local',
+                            'woocommerce_variation_id' => 0,
+                            'p_asignado' => floatval($local_prod->precio),
+                            'estado_aprobacion' => 'aprobado',
+                            'created_by_system' => 1,
+                        ],
+                        ['%d', '%s', '%d', '%f', '%s', '%d']
+                    );
+                }
+            }
+        }
+
+        // Marcar columnas de auditoría en tienda_local_productos
+        $wpdb->query(
+            "ALTER TABLE {$prefix}tienda_local_productos 
+             ADD COLUMN IF NOT EXISTS integrated_at DATETIME DEFAULT NULL COMMENT 'Migración a producto_base'"
+        );
+
+        // Marcar productos integrados
+        $wpdb->query(
+            "UPDATE {$prefix}tienda_local_productos tlp
+             SET integrated_at = NOW()
+             WHERE integrated_at IS NULL
+               AND EXISTS (
+                   SELECT 1 FROM {$prefix}producto_base pb 
+                   WHERE pb.canonical_sku = tlp.sku
+                       OR pb.canonical_sku LIKE CONCAT('%', tlp.sku, '%')
                )"
         );
     }

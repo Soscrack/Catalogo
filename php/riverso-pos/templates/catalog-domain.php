@@ -58,10 +58,37 @@ $nonce = wp_create_nonce('riverso_pos_nonce');
     <table class="wp-list-table widefat fixed striped">
         <thead><tr>
             <th>ID</th><th>Codigo proveedor</th><th>Nombre proveedor</th>
-            <th>Producto base (SKU)</th><th>Estado</th><th>Score</th><th>Origen</th><th>Acciones</th>
+            <th>Destino (producto / familia)</th><th>Estado</th><th>Score</th><th>Origen</th><th>Acciones</th>
         </tr></thead>
         <tbody id="match-tbody"><tr><td colspan="8">Sin datos. Pulsa Actualizar.</td></tr></tbody>
     </table>
+
+    <!-- Panel mínimo: asignar a Producto o Familia -->
+    <div id="match-assign-panel" style="display:none; margin-top:12px; background:#fff; border:1px solid #c3c4c7; padding:12px; max-width:640px;">
+        <h3 style="margin-top:0;">Asignar proveedor #<span id="match-assign-pp-id"></span></h3>
+        <p style="margin:0 0 8px;">Destino: producto local <strong>o</strong> familia (equivalence group).</p>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+            <label><input type="radio" name="match-assign-tipo" value="producto" checked> Producto</label>
+            <label><input type="radio" name="match-assign-tipo" value="familia"> Familia</label>
+        </div>
+        <div id="match-assign-producto-row" style="margin-bottom:8px;">
+            <label>producto_base_id:
+                <input type="number" id="match-assign-producto-id" class="small-text" min="1" placeholder="ID base">
+            </label>
+        </div>
+        <div id="match-assign-familia-row" style="display:none; margin-bottom:8px;">
+            <label>Familia:
+                <select id="match-assign-grupo-id" style="min-width:280px;">
+                    <option value="">Cargando familias...</option>
+                </select>
+            </label>
+        </div>
+        <p>
+            <button type="button" class="button button-primary" id="match-assign-save">Guardar asignación</button>
+            <button type="button" class="button" id="match-assign-cancel">Cancelar</button>
+        </p>
+        <p id="match-assign-status" style="color:#646970;"></p>
+    </div>
 
     <h2 style="margin-top:24px;">Soft match local &harr; online</h2>
     <p>Relaciona producto_base con WooCommerce. AUTO_MATCH y PENDING_REVIEW siempre requieren confirmación humana.</p>
@@ -217,22 +244,105 @@ jQuery(function($){
         }
         $('#match-tbody').html(items.map(it => {
             const estado = it.match_estado || 'UNMATCHED';
+            let destino = '-';
+            if (it.grupo_id) {
+                destino = `Familia: ${it.familia_nombre || '-'} <small>(${it.familia_codigo || '#'+it.grupo_id})</small>`;
+            } else if (it.producto_base_id) {
+                destino = `${it.nombre_canonico || '-'} <small>(${it.canonical_sku || '-'} #${it.producto_base_id})</small>`;
+            }
             return `<tr>
                 <td>${it.id}</td>
                 <td>${it.codigo_proveedor || '-'}</td>
                 <td>${it.nombre_proveedor || '-'}</td>
-                <td>${it.nombre_canonico || '-'} <small>(${it.canonical_sku || '-'})</small></td>
+                <td>${destino}</td>
                 <td>${estado}</td>
-                <td>${it.match_score === null ? '-' : it.match_score}</td>
+                <td>${it.match_score === null || it.match_score === undefined ? '-' : it.match_score}</td>
                 <td>${it.match_origen || '-'}</td>
                 <td>
                     <button class="button button-small match-run" data-id="${it.id}">Re-evaluar</button>
                     <button class="button button-small button-primary match-verify" data-id="${it.id}">Verificar</button>
                     <button class="button button-small match-reject" data-id="${it.id}">Rechazar</button>
+                    <button class="button button-small match-assign" data-id="${it.id}" data-base="${it.producto_base_id || ''}" data-grupo="${it.grupo_id || ''}">Asignar</button>
                 </td>
             </tr>`;
         }).join(''));
     }
+
+    function loadFamilies(){
+        return $.post(ajaxurl, {action:'riverso_matching_list_families', nonce}).then(function(r){
+            if (!r.success) return;
+            const opts = ['<option value="">Seleccionar familia</option>'];
+            (r.data.families || []).forEach(f => {
+                opts.push(`<option value="${f.id}">${f.nombre || f.codigo_grupo} (${f.codigo_grupo || f.id})</option>`);
+            });
+            $('#match-assign-grupo-id').html(opts.join(''));
+        });
+    }
+
+    $(document).on('click', '.match-assign', function(){
+        const ppId = $(this).data('id');
+        const baseId = $(this).data('base') || '';
+        const grupoId = $(this).data('grupo') || '';
+        $('#match-assign-pp-id').text(ppId);
+        $('#match-assign-producto-id').val(baseId);
+        $('#match-assign-status').text('');
+        if (grupoId) {
+            $('input[name="match-assign-tipo"][value="familia"]').prop('checked', true);
+            $('#match-assign-producto-row').hide();
+            $('#match-assign-familia-row').show();
+        } else {
+            $('input[name="match-assign-tipo"][value="producto"]').prop('checked', true);
+            $('#match-assign-producto-row').show();
+            $('#match-assign-familia-row').hide();
+        }
+        loadFamilies().then(function(){
+            if (grupoId) $('#match-assign-grupo-id').val(String(grupoId));
+        });
+        $('#match-assign-panel').show();
+        $('html, body').animate({scrollTop: $('#match-assign-panel').offset().top - 40}, 200);
+    });
+
+    $('input[name="match-assign-tipo"]').on('change', function(){
+        const tipo = $('input[name="match-assign-tipo"]:checked').val();
+        if (tipo === 'familia') {
+            $('#match-assign-producto-row').hide();
+            $('#match-assign-familia-row').show();
+            loadFamilies();
+        } else {
+            $('#match-assign-familia-row').hide();
+            $('#match-assign-producto-row').show();
+        }
+    });
+
+    $('#match-assign-cancel').on('click', function(){
+        $('#match-assign-panel').hide();
+    });
+
+    $('#match-assign-save').on('click', function(){
+        const ppId = parseInt($('#match-assign-pp-id').text(), 10) || 0;
+        const tipo = $('input[name="match-assign-tipo"]:checked').val();
+        if (!ppId) return;
+
+        if (tipo === 'familia') {
+            const grupoId = parseInt($('#match-assign-grupo-id').val(), 10) || 0;
+            if (!grupoId) { alert('Selecciona una familia'); return; }
+            $.post(ajaxurl, {action:'riverso_matching_assign_family', nonce, pp_id: ppId, grupo_id: grupoId}, function(r){
+                if (!r.success){ alert(r.data.message||'Error'); return; }
+                $('#match-assign-status').text('Asignado a familia.');
+                $('#match-assign-panel').hide();
+                loadMatches();
+            });
+        } else {
+            const productoBaseId = parseInt($('#match-assign-producto-id').val(), 10) || 0;
+            if (!productoBaseId) { alert('Indica producto_base_id'); return; }
+            $.post(ajaxurl, {action:'riverso_matching_assign_product', nonce, pp_id: ppId, producto_base_id: productoBaseId}, function(r){
+                if (!r.success){ alert(r.data.message||'Error'); return; }
+                $('#match-assign-status').text('Asignado a producto.');
+                $('#match-assign-panel').hide();
+                loadMatches();
+            });
+        }
+    });
 
     function loadMatches(){
         if (!$('#match-tbody').length) return;

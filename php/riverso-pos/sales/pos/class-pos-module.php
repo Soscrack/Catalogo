@@ -48,6 +48,9 @@ class Riverso_POS_Module {
         add_action('wp_ajax_riverso_pos_close_session', [$this, 'ajax_close_session']);
         add_action('wp_ajax_riverso_pos_get_session_orders', [$this, 'ajax_get_session_orders']);
         add_action('wp_ajax_riverso_pos_apply_discount', [$this, 'ajax_apply_discount']);
+        add_action('wp_ajax_riverso_pos_set_channel', [$this, 'ajax_set_channel']);
+        add_action('wp_ajax_riverso_pos_recalc_family_price', [$this, 'ajax_recalc_family_price']);
+        add_action('wp_ajax_riverso_pos_get_family_price', [$this, 'ajax_get_family_price']);
         add_action('wp_ajax_riverso_pos_void_order', [$this, 'ajax_void_order']);
         add_action('wp_ajax_riverso_pos_get_pending_orders', [$this, 'ajax_get_pending_orders']);
         add_action('wp_ajax_riverso_pos_hold_order', [$this, 'ajax_hold_order']);
@@ -72,6 +75,8 @@ class Riverso_POS_Module {
         $product_id = intval($_POST['product_id'] ?? 0);
         $variation_id = intval($_POST['variation_id'] ?? 0);
         $qty = floatval($_POST['qty'] ?? 1);
+        $channel = sanitize_text_field($_POST['channel'] ?? 'local');
+        $cart_items_json = $_POST['cart_items'] ?? null; // JSON con items del carrito para agregación familiar
 
         if (!$product_id || $qty <= 0) {
             wp_send_json_error(['message' => 'Datos inválidos']);
@@ -86,16 +91,46 @@ class Riverso_POS_Module {
 
         $unit_price = null;
         $local_price = null;
+        $family_qty = $qty; // Por defecto, solo la cantidad de este producto
+
         if ($base_id) {
+            // Calcular cantidad agregada por familia en modo local (desde carrito)
+            if ($channel === 'local' && !empty($cart_items_json)) {
+                $cart_items = json_decode(stripslashes($cart_items_json), true);
+                if (is_array($cart_items)) {
+                    $agg = $this->calculate_family_qty_from_cart($base_id, $cart_items);
+                    // Si hay familia (agg > 0) usar agregación; si no, conservar qty del request
+                    if ($agg > 0) {
+                        $family_qty = $agg;
+                    }
+                }
+            }
+            // Fallback: family_qty explícito desde el cliente
+            if (!empty($_POST['family_qty'])) {
+                $explicit = floatval($_POST['family_qty']);
+                if ($explicit > 0) {
+                    $family_qty = $explicit;
+                }
+            }
+
             $local_row = $pricing->get_local_price($base_id);
             if ($local_row && $local_row['p_asignado'] !== null && $local_row['estado_aprobacion'] === 'aprobado') {
                 $local_price = (float) $local_row['p_asignado'];
                 $unit_price = $local_price;
             }
-            if (class_exists('Riverso_Price_Rules_Module')) {
-                $rp = Riverso_Price_Rules_Module::get_instance()->apply_for_base($base_id, $qty, $local_price);
+
+            // Aplicar regla con cantidad agregada (familia)
+            if ($channel === 'local' && class_exists('Riverso_Price_Rules_Module')) {
+                $rp = Riverso_Price_Rules_Module::get_instance()->apply_for_base($base_id, $family_qty, $local_price);
                 if ($rp !== null) {
                     $unit_price = (float) $rp;
+                }
+            }
+            // En modo online: precio específico sin agregación
+            elseif ($channel === 'online') {
+                $online_row = $pricing->get_online_price($base_id, $variation_id);
+                if ($online_row && $online_row['p_asignado'] !== null && $online_row['estado_aprobacion'] === 'aprobado') {
+                    $unit_price = (float) $online_row['p_asignado'];
                 }
             }
         }
@@ -105,7 +140,64 @@ class Riverso_POS_Module {
             'unit_price' => $unit_price,
             'local_price' => $local_price,
             'qty' => $qty,
+            'family_qty' => $family_qty,
+            'channel' => $channel,
         ]);
+    }
+
+    /**
+     * Calcula cantidad agregada por familia a partir de los items del carrito
+     * 
+     * @param int $base_id ID del producto base
+     * @param array $cart_items Array de items: [{product_id, units_per_pack, cantidad}, ...]
+     * @return float
+     */
+    private function calculate_family_qty_from_cart($base_id, $cart_items) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        // Obtener grupo de equivalencia del base_id
+        $grupo_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT grupo_id FROM {$prefix}equivalence_members WHERE producto_base_id = %d AND activo = 1 LIMIT 1",
+            $base_id
+        ));
+
+        if (!$grupo_id) {
+            // Sin familia, solo retornar 0 (cantidad será la del qty del request)
+            return 0;
+        }
+
+        // Obtener todos los producto_base del grupo
+        $family_bases = $wpdb->get_col($wpdb->prepare(
+            "SELECT producto_base_id FROM {$prefix}equivalence_members WHERE grupo_id = %d AND activo = 1",
+            $grupo_id
+        ));
+
+        if (empty($family_bases)) {
+            return 0;
+        }
+
+        // Sumar unidades en el carrito de productos de la misma familia
+        $total_qty = 0;
+        foreach ($cart_items as $item) {
+            // Resolver base_id de cada item en el carrito
+            if (class_exists('Riverso_Pricing_Module')) {
+                $pricing = Riverso_Pricing_Module::get_instance();
+                $item_base_id = $pricing->get_base_id_by_wc($item['product_id'] ?? 0, $item['variation_id'] ?? 0);
+                
+                if ($item_base_id && in_array($item_base_id, $family_bases)) {
+                    // Cantidad = packs × unidades por envase
+                    $units_per_pack = floatval($item['units_per_pack'] ?? 1);
+                    if ($units_per_pack <= 0) {
+                        $units_per_pack = 1;
+                    }
+                    $qty = floatval($item['cantidad'] ?? $item['quantity'] ?? 1);
+                    $total_qty += $qty * $units_per_pack;
+                }
+            }
+        }
+
+        return $total_qty;
     }
     
     /**
@@ -222,7 +314,25 @@ class Riverso_POS_Module {
             }
         }
         
-        // 2. Buscar por código de barra exacto (tabla propia)
+        // 2. Buscar usando modelo unificado de código de barra (Barcode_Model::resolve)
+        // Si resuelve, devuelve con información de proveedor/envase/cantidad
+        if (count($results) === 0 && class_exists('Riverso_Barcode_Model')) {
+            $unified_results = $this->search_by_unified_barcode($search);
+            if (!empty($unified_results)) {
+                $results = array_merge($results, $unified_results);
+                foreach ($unified_results as $p) {
+                    $found_ids[] = $p['id'];
+                }
+                // Si lo resolvió el modelo unificado, retornar
+                wp_send_json_success([
+                    'products' => $results,
+                    'count' => count($results),
+                    'search' => $search
+                ]);
+            }
+        }
+        
+        // 3. Buscar por código de barra exacto (tabla legacy: fallback)
         $barcode_product = $wpdb->get_row($wpdb->prepare(
             "SELECT product_id, variation_id FROM {$prefix}barcodes 
             WHERE (barcode = %s OR TRIM(LEADING '0' FROM barcode) = %s) AND is_active = 1 
@@ -426,6 +536,78 @@ class Riverso_POS_Module {
     }
     
     /**
+     * Busca productos por código de barra usando el modelo unificado (Barcode_Model::resolve)
+     * Devuelve producto + envase + cantidad + proveedor + precio.
+     * Fallback a método legacy si el modelo unificado no encuentra coincidencia.
+     *
+     * @param string $search Código a buscar
+     * @return array Productos encontrados con información extendida
+     */
+    private function search_by_unified_barcode($search) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $results = [];
+        
+        // Intentar resolver usando Barcode_Model (nuevo modelo unificado)
+        if (class_exists('Riverso_Barcode_Model')) {
+            $barcode_data = Riverso_Barcode_Model::resolve($search);
+            
+            if ($barcode_data && !is_wp_error($barcode_data)) {
+                $producto_base_id = $barcode_data['product_base_id'];
+                $proveedor_id = $barcode_data['supplier_id'];
+                $envase_id = $barcode_data['envase_id'];
+                $cantidad = $barcode_data['cantidad'];
+                $unidad = $barcode_data['unidad_medida'];
+                $factor = $barcode_data['factor_a_unidad_base'];
+                
+                // Obtener el producto_base y su relación a WooCommerce
+                $pb = $wpdb->get_row($wpdb->prepare(
+                    "SELECT id, woocommerce_product_id, woocommerce_variation_id 
+                     FROM {$prefix}producto_base 
+                     WHERE id = %d",
+                    $producto_base_id
+                ), ARRAY_A);
+                
+                if ($pb) {
+                    $wc_id = $pb['woocommerce_variation_id'] ?: $pb['woocommerce_product_id'];
+                    if ($wc_id) {
+                        $product = wc_get_product($wc_id);
+                        if ($product) {
+                            $formatted = $this->format_product_extended($product, null, 'Código de barra unificado');
+                            
+                            // Enriquecer con datos del código de barra
+                            $formatted['barcode_info'] = [
+                                'producto_base_id' => $producto_base_id,
+                                'proveedor_id' => $proveedor_id,
+                                'envase_id' => $envase_id,
+                                'cantidad' => $cantidad,
+                                'unidad_medida' => $unidad,
+                                'factor' => $factor,
+                                'codigo_type' => $barcode_data['type'],
+                            ];
+                            
+                            // Si es un proveedor, traer su nombre
+                            if ($proveedor_id) {
+                                $proveedor = $wpdb->get_var($wpdb->prepare(
+                                    "SELECT razon_social FROM {$prefix}proveedores WHERE id = %d",
+                                    $proveedor_id
+                                ));
+                                $formatted['barcode_info']['proveedor_nombre'] = $proveedor;
+                            }
+                            
+                            $results[] = $formatted;
+                            return $results; // Prioridad: si el modelo unificado lo resuelve, retornar
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Fallback al método legacy si no se resolvió
+        return [];
+    }
+    
+    /**
      * Formatear producto con información extendida
      */
     private function format_product_extended($product, $parent = null, $match_source = '') {
@@ -470,9 +652,11 @@ class Riverso_POS_Module {
         $effective_price = $wc_price;
         $local_price = null;
         $rule_price = null;
+        $online_price = null;
         $producto_base_id = 0;
+        $current_channel = $this->get_current_channel();
 
-        // Precio LOCAL del dominio (p_asignado aprobado) y regla por tramos.
+        // Determinar precio según el canal de venta
         if (class_exists('Riverso_Pricing_Module')) {
             $pricing = Riverso_Pricing_Module::get_instance();
             if ($product->is_type('variation')) {
@@ -482,18 +666,32 @@ class Riverso_POS_Module {
             }
 
             if ($producto_base_id) {
-                $local_row = $pricing->get_local_price($producto_base_id);
-                if ($local_row && $local_row['p_asignado'] !== null && $local_row['estado_aprobacion'] === 'aprobado') {
-                    $local_price = (float) $local_row['p_asignado'];
-                    $effective_price = $local_price;
+                // CANAL ONLINE: precio específico de WooCommerce (canal = 'online')
+                if ($current_channel === 'online') {
+                    $online_row = $pricing->get_online_price($producto_base_id, $product->get_id());
+                    if ($online_row && $online_row['p_asignado'] !== null && $online_row['estado_aprobacion'] === 'aprobado') {
+                        $online_price = (float) $online_row['p_asignado'];
+                        $effective_price = $online_price;
+                    } else {
+                        // Fallback a precio WooCommerce si no hay precio online aprobado
+                        $effective_price = $wc_price;
+                    }
                 }
+                // CANAL LOCAL: precio de referencia + reglas de familia
+                else {
+                    $local_row = $pricing->get_local_price($producto_base_id);
+                    if ($local_row && $local_row['p_asignado'] !== null && $local_row['estado_aprobacion'] === 'aprobado') {
+                        $local_price = (float) $local_row['p_asignado'];
+                        $effective_price = $local_price;
+                    }
 
-                // Precio por regla de tramos (cantidad 1 por defecto).
-                if (class_exists('Riverso_Price_Rules_Module')) {
-                    $rp = Riverso_Price_Rules_Module::get_instance()->apply_for_base($producto_base_id, 1, $local_price);
-                    if ($rp !== null) {
-                        $rule_price = (float) $rp;
-                        $effective_price = $rule_price;
+                    // Precio por regla de tramos (cantidad 1 por defecto).
+                    if (class_exists('Riverso_Price_Rules_Module')) {
+                        $rp = Riverso_Price_Rules_Module::get_instance()->apply_for_base($producto_base_id, 1, $local_price);
+                        if ($rp !== null) {
+                            $rule_price = (float) $rp;
+                            $effective_price = $rule_price;
+                        }
                     }
                 }
             }
@@ -506,7 +704,9 @@ class Riverso_POS_Module {
             'price' => $effective_price,
             'wc_price' => $wc_price,
             'local_price' => $local_price,
+            'online_price' => $online_price,
             'rule_price' => $rule_price,
+            'channel' => $current_channel,
             'producto_base_id' => $producto_base_id,
             'regular_price' => floatval($product->get_regular_price()),
             'sale_price' => $product->get_sale_price() ? floatval($product->get_sale_price()) : null,
@@ -702,7 +902,13 @@ class Riverso_POS_Module {
         $tax_rate = 0.19; // 19% IVA Chile
         
         foreach ($items as $item) {
-            $line_total = floatval($item['price']) * floatval($item['quantity']);
+            $qty = floatval($item['quantity'] ?? $item['cantidad'] ?? 0);
+            $units = floatval($item['units_per_pack'] ?? 1);
+            if ($units <= 0) {
+                $units = 1;
+            }
+            // Precio es unitario; total de línea = precio × packs × uds/envase
+            $line_total = floatval($item['price'] ?? 0) * $qty * $units;
             $subtotal += $line_total;
         }
         
@@ -784,12 +990,18 @@ class Riverso_POS_Module {
             // Agregar productos
             foreach ($items as $item) {
                 $product_id = intval($item['product_id']);
-                $quantity = floatval($item['quantity']);
+                $packs = floatval($item['quantity'] ?? $item['cantidad'] ?? 0);
+                $units_per_pack = floatval($item['units_per_pack'] ?? 1);
+                if ($units_per_pack <= 0) {
+                    $units_per_pack = 1;
+                }
+                // Cantidad vendida en unidades (packs × uds/envase)
+                $quantity = $packs * $units_per_pack;
                 $price = floatval($item['price']);
                 
                 $product = wc_get_product($product_id);
                 
-                if (!$product) {
+                if (!$product || $quantity <= 0) {
                     continue;
                 }
                 
@@ -797,6 +1009,17 @@ class Riverso_POS_Module {
                     'subtotal' => $price * $quantity,
                     'total' => $price * $quantity,
                 ]);
+
+                if ($item_id && !empty($item['barcode_info'])) {
+                    wc_add_order_item_meta($item_id, '_riverso_units_per_pack', $units_per_pack);
+                    wc_add_order_item_meta($item_id, '_riverso_packs', $packs);
+                    if (!empty($item['channel'])) {
+                        wc_add_order_item_meta($item_id, '_riverso_channel', sanitize_text_field($item['channel']));
+                    }
+                    if (!empty($item['producto_base_id'])) {
+                        wc_add_order_item_meta($item_id, '_riverso_producto_base_id', intval($item['producto_base_id']));
+                    }
+                }
                 
                 $subtotal += $price * $quantity;
             }
@@ -1313,5 +1536,214 @@ class Riverso_POS_Module {
             'discount_value' => $discount_value,
             'message' => 'Descuento aplicado'
         ]);
+    }
+
+    /**
+     * AJAX: Cambiar el canal de venta (online/local)
+     * El canal se almacena en la sesión del usuario para persistencia durante la caja.
+     *
+     * @since 1.4.0
+     */
+    public function ajax_set_channel() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('use_riverso_pos')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        $channel = sanitize_text_field($_POST['channel'] ?? 'local');
+
+        // Validar canal
+        if (!in_array($channel, ['online', 'local'], true)) {
+            wp_send_json_error(['message' => 'Canal inválido (debe ser online o local)']);
+        }
+
+        // Guardar en sesión de WordPress (transient temporal)
+        $user_id = get_current_user_id();
+        set_transient("riverso_pos_channel_{$user_id}", $channel, HOUR_IN_SECONDS);
+
+        wp_send_json_success([
+            'channel' => $channel,
+            'message' => 'Canal cambiado a: ' . ($channel === 'online' ? 'Online (WooCommerce)' : 'Local (dominio)'),
+        ]);
+    }
+
+    /**
+     * AJAX: Recalcular precio por cantidad agregada de la familia EN EL CARRITO (no stock).
+     * Alias de riverso_pos_rule_price: acepta cart_items / family_qty / channel.
+     *
+     * @since 1.4.0
+     */
+    public function ajax_recalc_family_price() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('use_riverso_pos') && !current_user_can('riverso_create_orders')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        $producto_base_id = intval($_POST['producto_base_id'] ?? 0);
+        $product_id = intval($_POST['product_id'] ?? 0);
+        $variation_id = intval($_POST['variation_id'] ?? 0);
+        $channel = sanitize_text_field($_POST['channel'] ?? 'local');
+        $family_qty = floatval($_POST['family_qty'] ?? $_POST['qty_added'] ?? $_POST['qty'] ?? 0);
+        $cart_items_json = $_POST['cart_items'] ?? null;
+
+        if (!class_exists('Riverso_Pricing_Module')) {
+            wp_send_json_error(['message' => 'Módulo de precios no disponible']);
+        }
+
+        $pricing = Riverso_Pricing_Module::get_instance();
+
+        // Resolver base_id si no viene directo
+        if (!$producto_base_id && $product_id) {
+            $producto_base_id = (int) $pricing->get_base_id_by_wc($product_id, $variation_id);
+        }
+        if (!$producto_base_id) {
+            wp_send_json_error(['message' => 'Datos inválidos: falta producto_base_id']);
+        }
+
+        // Preferir agregación desde carrito (qty_packs × units_per_pack)
+        if (!empty($cart_items_json)) {
+            $cart_items = json_decode(stripslashes($cart_items_json), true);
+            if (is_array($cart_items)) {
+                $agg = $this->calculate_family_qty_from_cart($producto_base_id, $cart_items);
+                if ($agg > 0) {
+                    $family_qty = $agg;
+                }
+            }
+        }
+
+        if ($family_qty <= 0) {
+            wp_send_json_error(['message' => 'Cantidad de familia inválida']);
+        }
+
+        $unit_price = null;
+        $local_price = null;
+
+        if ($channel === 'online') {
+            $online_row = $pricing->get_online_price($producto_base_id, $variation_id);
+            if ($online_row && $online_row['p_asignado'] !== null && $online_row['estado_aprobacion'] === 'aprobado') {
+                $unit_price = (float) $online_row['p_asignado'];
+            }
+        } else {
+            $local_row = $pricing->get_local_price($producto_base_id);
+            if ($local_row && $local_row['p_asignado'] !== null && $local_row['estado_aprobacion'] === 'aprobado') {
+                $local_price = (float) $local_row['p_asignado'];
+                $unit_price = $local_price;
+            }
+            if (class_exists('Riverso_Price_Rules_Module')) {
+                $rp = Riverso_Price_Rules_Module::get_instance()->apply_for_base(
+                    $producto_base_id,
+                    $family_qty,
+                    $local_price
+                );
+                if ($rp !== null) {
+                    $unit_price = (float) $rp;
+                }
+            }
+        }
+
+        wp_send_json_success([
+            'producto_base_id' => $producto_base_id,
+            'qty_in_family' => $family_qty,
+            'family_qty' => $family_qty,
+            'unit_price' => $unit_price,
+            'price_per_unit' => floatval($unit_price ?? 0),
+            'local_price' => $local_price,
+            'channel' => $channel,
+            'message' => "Precio recalculado: {$family_qty} uds en carrito (familia) → unitario " . ($unit_price ?? 'sin precio'),
+        ]);
+    }
+
+    /**
+     * AJAX: Obtener precio de referencia a nivel familia.
+     * Devuelve el costo máximo, precio de referencia y precio asignado de una familia.
+     *
+     * @since 1.4.0
+     */
+    public function ajax_get_family_price() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('use_riverso_pos')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        $grupo_id = intval($_POST['grupo_id'] ?? 0);
+
+        if (!$grupo_id) {
+            wp_send_json_error(['message' => 'ID de familia inválido']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        // Obtener todos los producto_base del grupo
+        $productos = $wpdb->get_col($wpdb->prepare(
+            "SELECT producto_base_id FROM {$prefix}equivalence_members 
+             WHERE grupo_id = %d AND activo = 1",
+            $grupo_id
+        ));
+
+        if (empty($productos)) {
+            wp_send_json_error(['message' => 'Grupo de equivalencia sin productos']);
+        }
+
+        // Calcular precio de referencia: MAX(costo_unitario) de todos los equivalentes
+        $placeholders = implode(',', array_fill(0, count($productos), '%d'));
+        $max_cost = $wpdb->get_var($wpdb->prepare(
+            "SELECT COALESCE(MAX(l.costo_unitario), 0)
+             FROM {$prefix}lotes l
+             INNER JOIN {$prefix}producto_proveedor pp ON pp.id = l.producto_proveedor_id
+             WHERE pp.producto_base_id IN ($placeholders)
+               AND l.estado = 'disponible'",
+            ...$productos
+        ));
+
+        // Obtener precios aprobados de los miembros
+        $precios = $wpdb->get_results($wpdb->prepare(
+            "SELECT em.producto_base_id, p.p_ref, p.p_asignado, p.estado_aprobacion 
+             FROM {$prefix}equivalence_members em
+             LEFT JOIN {$prefix}precios p ON p.producto_base_id = em.producto_base_id 
+                AND p.canal = 'local'
+             WHERE em.grupo_id = %d AND em.activo = 1",
+            $grupo_id
+        ), ARRAY_A);
+
+        // Calcular promedio de precios asignados
+        $precio_familia = 0;
+        $count_approved = 0;
+        foreach ($precios as $p) {
+            if ($p['estado_aprobacion'] === 'aprobado' && $p['p_asignado']) {
+                $precio_familia += floatval($p['p_asignado']);
+                $count_approved++;
+            }
+        }
+        if ($count_approved > 0) {
+            $precio_familia /= $count_approved;
+        }
+
+        wp_send_json_success([
+            'grupo_id' => $grupo_id,
+            'max_cost' => floatval($max_cost),
+            'precio_familia' => round($precio_familia, 2),
+            'productos_en_grupo' => count($productos),
+            'precios_por_producto' => $precios,
+        ]);
+    }
+
+    /**
+     * Obtener el canal actual de venta para el usuario.
+     *
+     * @return string 'online' o 'local' (por defecto 'local')
+     */
+    private function get_current_channel() {
+        $user_id = get_current_user_id();
+        $channel = get_transient("riverso_pos_channel_{$user_id}");
+
+        if ($channel === false) {
+            $channel = 'local'; // Default
+        }
+
+        return $channel;
     }
 }

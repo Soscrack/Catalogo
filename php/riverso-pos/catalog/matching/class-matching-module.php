@@ -48,6 +48,10 @@ class Riverso_Matching_Module {
         add_action('wp_ajax_riverso_online_matching_run', [$this, 'ajax_online_run']);
         add_action('wp_ajax_riverso_online_matching_run_all', [$this, 'ajax_online_run_all']);
         add_action('wp_ajax_riverso_online_matching_set_state', [$this, 'ajax_online_set_state']);
+        add_action('wp_ajax_riverso_matching_assign_family', [$this, 'ajax_assign_to_family']);
+        add_action('wp_ajax_riverso_matching_assign_product', [$this, 'ajax_assign_to_product']);
+        add_action('wp_ajax_riverso_matching_get_assignment', [$this, 'ajax_get_assignment']);
+        add_action('wp_ajax_riverso_matching_list_families', [$this, 'ajax_list_families']);
     }
 
     /* ===================== Scoring ===================== */
@@ -225,6 +229,16 @@ class Riverso_Matching_Module {
         ), ARRAY_A);
         if (!$pp) {
             return new WP_Error('not_found', 'Producto proveedor no encontrado');
+        }
+
+        // Ya asignado a familia: no recalcular score producto↔base
+        if (!empty($pp['grupo_id']) && empty($pp['producto_base_id'])) {
+            return $pp;
+        }
+
+        // Sin destino producto: no hay relación que evaluar
+        if (empty($pp['producto_base_id'])) {
+            return new WP_Error('unassigned', 'Producto proveedor sin producto_base ni familia');
         }
 
         // Respetar decisiones humanas.
@@ -521,9 +535,12 @@ class Riverso_Matching_Module {
 
         $sql = "SELECT pp.id, pp.codigo_proveedor, pp.codigo_barras_proveedor, pp.nombre_proveedor,
                        pp.match_estado, pp.match_score, pp.match_origen,
-                       pb.id AS producto_base_id, pb.canonical_sku, pb.nombre_canonico
+                       pp.producto_base_id, pp.grupo_id,
+                       pb.canonical_sku, pb.nombre_canonico,
+                       eg.nombre AS familia_nombre, eg.codigo_grupo AS familia_codigo
                 FROM {$prefix}producto_proveedor pp
-                INNER JOIN {$prefix}producto_base pb ON pb.id = pp.producto_base_id
+                LEFT JOIN {$prefix}producto_base pb ON pb.id = pp.producto_base_id
+                LEFT JOIN {$prefix}equivalence_groups eg ON eg.id = pp.grupo_id
                 WHERE {$where}
                 ORDER BY pp.match_score ASC, pp.id DESC
                 LIMIT {$limit}";
@@ -646,5 +663,285 @@ class Riverso_Matching_Module {
             wp_send_json_error(['message' => $result->get_error_message()]);
         }
         wp_send_json_success(['message' => 'Estado online actualizado']);
+    }
+
+    /**
+     * Asigna un producto_proveedor a una familia (grupo_id) en lugar de producto_base.
+     * Mantiene la regla: exactamente uno de (producto_base_id, grupo_id) es NOT NULL.
+     *
+     * @param int $pp_id ID del producto_proveedor
+     * @param int $grupo_id ID del grupo de equivalencia
+     * @return bool|WP_Error
+     */
+    public function assign_to_family($pp_id, $grupo_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $pp_id = absint($pp_id);
+        $grupo_id = absint($grupo_id);
+        $user_id = get_current_user_id();
+
+        // Validar producto_proveedor existe
+        $pp = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, producto_base_id, grupo_id FROM {$prefix}producto_proveedor WHERE id = %d",
+            $pp_id
+        ), ARRAY_A);
+        if (!$pp) {
+            return new WP_Error('not_found', 'Producto proveedor no encontrado');
+        }
+
+        // Validar grupo de equivalencia existe
+        $grupo = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, nombre FROM {$prefix}equivalence_groups WHERE id = %d AND activo = 1",
+            $grupo_id
+        ), ARRAY_A);
+        if (!$grupo) {
+            return new WP_Error('invalid_grupo', 'Grupo de equivalencia no encontrado o inactivo');
+        }
+
+        // Actualizar con SQL explícito: wpdb->update convierte NULL a '' con %s
+        $updated = $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}producto_proveedor SET
+                producto_base_id = NULL,
+                grupo_id = %d,
+                assigned_to_family_at = %s,
+                assigned_to_family_by = %d,
+                match_estado = 'VERIFIED',
+                match_origen = 'family_assignment',
+                matched_at = %s,
+                requires_human_review = 0
+             WHERE id = %d",
+            $grupo_id,
+            current_time('mysql'),
+            $user_id,
+            current_time('mysql'),
+            $pp_id
+        ));
+
+        if ($updated === false) {
+            return new WP_Error('db_error', 'No se pudo asignar a familia: ' . $wpdb->last_error);
+        }
+
+        // Auditoría
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('assign_to_family', 'producto_proveedor', $pp_id, [
+                'old_value' => [
+                    'producto_base_id' => $pp['producto_base_id'],
+                    'grupo_id' => $pp['grupo_id'],
+                ],
+                'new_value' => [
+                    'producto_base_id' => null,
+                    'grupo_id' => $grupo_id,
+                    'familia_nombre' => $grupo['nombre'],
+                ],
+            ]);
+        }
+
+        return true;
+    }
+
+    /**
+     * Asigna un producto_proveedor a un producto_base en lugar de familia.
+     * Mantiene la regla: exactamente uno de (producto_base_id, grupo_id) es NOT NULL.
+     *
+     * @param int $pp_id ID del producto_proveedor
+     * @param int $producto_base_id ID del producto base
+     * @return bool|WP_Error
+     */
+    public function assign_to_product($pp_id, $producto_base_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $pp_id = absint($pp_id);
+        $producto_base_id = absint($producto_base_id);
+        $user_id = get_current_user_id();
+
+        // Validar producto_proveedor existe
+        $pp = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, producto_base_id, grupo_id FROM {$prefix}producto_proveedor WHERE id = %d",
+            $pp_id
+        ), ARRAY_A);
+        if (!$pp) {
+            return new WP_Error('not_found', 'Producto proveedor no encontrado');
+        }
+
+        // Validar producto_base existe
+        $pb = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, canonical_sku, nombre_canonico FROM {$prefix}producto_base WHERE id = %d",
+            $producto_base_id
+        ), ARRAY_A);
+        if (!$pb) {
+            return new WP_Error('invalid_producto', 'Producto base no encontrado');
+        }
+
+        // Actualizar con SQL explícito para NULL en grupo_id
+        $updated = $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}producto_proveedor SET
+                producto_base_id = %d,
+                grupo_id = NULL,
+                assigned_to_family_at = NULL,
+                assigned_to_family_by = NULL,
+                match_estado = 'VERIFIED',
+                match_origen = 'product_assignment',
+                matched_at = %s,
+                requires_human_review = 0
+             WHERE id = %d",
+            $producto_base_id,
+            current_time('mysql'),
+            $pp_id
+        ));
+
+        if ($updated === false) {
+            return new WP_Error('db_error', 'No se pudo asignar a producto: ' . $wpdb->last_error);
+        }
+
+        // Auditoría
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('assign_to_product', 'producto_proveedor', $pp_id, [
+                'old_value' => [
+                    'producto_base_id' => $pp['producto_base_id'],
+                    'grupo_id' => $pp['grupo_id'],
+                ],
+                'new_value' => [
+                    'producto_base_id' => $producto_base_id,
+                    'producto_sku' => $pb['canonical_sku'],
+                    'producto_nombre' => $pb['nombre_canonico'],
+                    'grupo_id' => null,
+                ],
+            ]);
+        }
+
+        return true;
+    }
+
+    /**
+     * Valida que un producto_proveedor tenga exactamente uno de (producto_base_id, grupo_id).
+     * Retorna info sobre el destino (producto o familia).
+     *
+     * @param int $pp_id ID del producto_proveedor
+     * @return array|WP_Error { 'tipo' => 'producto|familia', 'id' => ..., 'nombre' => ... }
+     */
+    public function get_assignment($pp_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $pp_id = absint($pp_id);
+
+        $pp = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, producto_base_id, grupo_id FROM {$prefix}producto_proveedor WHERE id = %d",
+            $pp_id
+        ), ARRAY_A);
+        if (!$pp) {
+            return new WP_Error('not_found', 'Producto proveedor no encontrado');
+        }
+
+        // Validar regla: uno y solo uno
+        $has_product = !empty($pp['producto_base_id']);
+        $has_family = !empty($pp['grupo_id']);
+
+        if (!$has_product && !$has_family) {
+            return new WP_Error('unassigned', 'Producto proveedor sin asignación a producto ni familia');
+        }
+        if ($has_product && $has_family) {
+            return new WP_Error('ambiguous', 'Producto proveedor tiene ambos destinos (bug)');
+        }
+
+        if ($has_product) {
+            $pb = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, canonical_sku, nombre_canonico FROM {$prefix}producto_base WHERE id = %d",
+                $pp['producto_base_id']
+            ), ARRAY_A);
+            return [
+                'tipo' => 'producto',
+                'id' => intval($pp['producto_base_id']),
+                'nombre' => $pb['nombre_canonico'] ?? $pb['canonical_sku'],
+                'sku' => $pb['canonical_sku'],
+            ];
+        } else {
+            $grupo = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, nombre, codigo_grupo FROM {$prefix}equivalence_groups WHERE id = %d",
+                $pp['grupo_id']
+            ), ARRAY_A);
+            return [
+                'tipo' => 'familia',
+                'id' => intval($pp['grupo_id']),
+                'nombre' => $grupo['nombre'],
+                'codigo' => $grupo['codigo_grupo'],
+            ];
+        }
+    }
+
+    /**
+     * AJAX: assign_to_family
+     * Asigna un producto_proveedor a una familia
+     */
+    public function ajax_assign_to_family() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_matching')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $result = $this->assign_to_family(
+            intval($_POST['pp_id'] ?? 0),
+            intval($_POST['grupo_id'] ?? 0)
+        );
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['message' => 'Asignado a familia']);
+    }
+
+    /**
+     * AJAX: assign_to_product
+     * Asigna un producto_proveedor a un producto base
+     */
+    public function ajax_assign_to_product() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_matching')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $result = $this->assign_to_product(
+            intval($_POST['pp_id'] ?? 0),
+            intval($_POST['producto_base_id'] ?? 0)
+        );
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['message' => 'Asignado a producto']);
+    }
+
+    /**
+     * AJAX: get_assignment
+     * Obtiene la asignación actual de un producto_proveedor
+     */
+    public function ajax_get_assignment() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_matching')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $result = $this->get_assignment(intval($_POST['pp_id'] ?? 0));
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['assignment' => $result]);
+    }
+
+    /**
+     * AJAX: lista familias (equivalence_groups) activas para el selector de matching
+     */
+    public function ajax_list_families() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_matching')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $rows = $wpdb->get_results(
+            "SELECT id, codigo_grupo, nombre
+             FROM {$prefix}equivalence_groups
+             WHERE activo = 1
+             ORDER BY nombre ASC
+             LIMIT 500",
+            ARRAY_A
+        );
+
+        wp_send_json_success(['families' => $rows ?: []]);
     }
 }

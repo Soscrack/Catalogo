@@ -470,6 +470,26 @@ class Riverso_Pricing_Module {
     }
 
     /**
+     * Obtener precio ONLINE aprobado de un producto_base para una variación WooCommerce.
+     *
+     * @param int $producto_base_id
+     * @param int $woocommerce_variation_id ID de variación Woo (0 si es producto simple)
+     * @return array|null
+     */
+    public function get_online_price($producto_base_id, $woocommerce_variation_id = 0) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        return $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}precios
+             WHERE producto_base_id = %d AND canal = %s AND woocommerce_variation_id = %d",
+            intval($producto_base_id),
+            self::CANAL_ONLINE,
+            intval($woocommerce_variation_id)
+        ), ARRAY_A);
+    }
+
+    /**
      * Sincroniza el precio ONLINE de un producto_base a WooCommerce vía API
      * (WC_Product::set_regular_price), nunca por SQL directo.
      *

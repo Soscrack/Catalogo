@@ -31,6 +31,14 @@ $active_session = $wpdb->get_row($wpdb->prepare(
             <span class="dashicons dashicons-yes-alt"></span>
             <?php echo esc_html($active_session->register_name); ?> - Abierta
         </span>
+        <!-- Toggle Canal: Local / Online -->
+        <div class="pos-channel-toggle">
+            <label>Canal:</label>
+            <select id="pos-channel-select">
+                <option value="local">Local (Dominio)</option>
+                <option value="online">Online (WooCommerce)</option>
+            </select>
+        </div>
     <?php else: ?>
         <span class="pos-session-badge inactive">
             <span class="dashicons dashicons-warning"></span>
@@ -457,6 +465,39 @@ $active_session = $wpdb->get_row($wpdb->prepare(
 .pos-session-badge.inactive {
     background: #f8d7da;
     color: #721c24;
+}
+
+.pos-channel-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 12px;
+    vertical-align: middle;
+}
+.pos-channel-toggle label {
+    font-weight: 600;
+    margin: 0;
+}
+.pos-channel-toggle select {
+    min-width: 180px;
+}
+.channel-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+.channel-badge.local {
+    background: #e7f3ff;
+    color: #0a4b78;
+}
+.channel-badge.online {
+    background: #f0e6fa;
+    color: #5b2d82;
 }
 
 .tab-content {
@@ -1280,22 +1321,86 @@ jQuery(document).ready(function($) {
     });
     
     function addToCart(product) {
+        const channel = $('#pos-channel-select').val() || 'local';
+        const unitsPerPack = parseFloat(product.barcode_info?.cantidad) || 1;
         const existingIndex = cart.findIndex(item => item.product_id === product.id);
         
         if (existingIndex > -1) {
-            cart[existingIndex].quantity += 1;
+            // Incrementar packs; mantener quantity sincronizado para backend legacy
+            cart[existingIndex].cantidad = (cart[existingIndex].cantidad || cart[existingIndex].quantity || 1) + 1;
+            cart[existingIndex].quantity = cart[existingIndex].cantidad;
+            cart[existingIndex].units_per_pack = cart[existingIndex].units_per_pack || unitsPerPack;
+            cart[existingIndex].channel = channel;
         } else {
             cart.push({
                 product_id: product.id,
+                variation_id: product.parent_id ? 0 : product.id,
                 name: product.name,
+                nombre: product.name,
                 sku: product.sku,
                 price: product.price,
-                quantity: 1
+                quantity: 1,
+                cantidad: 1,
+                units_per_pack: unitsPerPack,
+                producto_base_id: product.producto_base_id || 0,
+                channel: channel,
+                barcode_info: product.barcode_info || {}
             });
         }
         
         renderCart();
+        recalculateFamilyPrices();
         updateTotals();
+    }
+    
+    /**
+     * Recalcular precios de todas las familias en el carrito
+     */
+    function recalculateFamilyPrices() {
+        const channel = $('#pos-channel-select').val() || 'local';
+        
+        // Agrupar items por familia (producto_base_id)
+        const families = {};
+        cart.forEach((item, index) => {
+            const baseId = item.producto_base_id || ('p' + item.product_id);
+            if (!families[baseId]) families[baseId] = [];
+            families[baseId].push({ index, item });
+        });
+        
+        Object.keys(families).forEach(baseId => {
+            const items = families[baseId];
+            let totalQty = 0;
+            items.forEach(({ item }) => {
+                const unitsPerPack = item.units_per_pack || 1;
+                const qty = item.cantidad || item.quantity || 1;
+                totalQty += qty * unitsPerPack;
+            });
+            
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'riverso_pos_rule_price',
+                    nonce: nonce,
+                    product_id: items[0].item.product_id,
+                    variation_id: items[0].item.variation_id || 0,
+                    qty: Math.max(1, totalQty),
+                    family_qty: Math.max(1, totalQty),
+                    channel: channel,
+                    cart_items: JSON.stringify(cart)
+                },
+                success: function(response) {
+                    if (response.success && response.data.unit_price !== null && response.data.unit_price !== undefined) {
+                        items.forEach(({ index }) => {
+                            cart[index].price = parseFloat(response.data.unit_price);
+                            cart[index].channel = channel;
+                        });
+                        renderCart();
+                        updateTotals();
+                    }
+                }
+            });
+        });
     }
     
     function renderCart() {
@@ -1315,17 +1420,26 @@ jQuery(document).ready(function($) {
         let count = 0;
         
         cart.forEach(function(item, index) {
-            const lineTotal = item.price * item.quantity;
-            count += item.quantity;
+            const unitsPerPack = item.units_per_pack || 1;
+            const qty = item.cantidad || item.quantity || 1;
+            const totalUnits = qty * unitsPerPack;
+            const lineTotal = item.price * totalUnits;
+            const channel = item.channel || $('#pos-channel-select').val() || 'local';
+            count += totalUnits;
+            
+            const packLabel = unitsPerPack > 1 ? ` × ${unitsPerPack} uds/envase` : '';
+            const channelBadge = channel === 'online'
+                ? '<span class="channel-badge online">Online</span>'
+                : '<span class="channel-badge local">Local</span>';
             html += `
                 <div class="cart-item" data-index="${index}">
                     <div class="item-info">
-                        <div class="item-name">${item.name}</div>
-                        <div class="item-price">$${formatNumber(item.price)} c/u</div>
+                        <div class="item-name">${item.nombre || item.name} ${channelBadge}</div>
+                        <div class="item-price">$${formatNumber(item.price)} c/u${packLabel}</div>
                     </div>
                     <div class="item-qty">
                         <button type="button" class="button button-small qty-minus">-</button>
-                        <input type="number" value="${item.quantity}" min="1" class="item-qty-input">
+                        <input type="number" value="${qty}" min="1" class="item-qty-input">
                         <button type="button" class="button button-small qty-plus">+</button>
                     </div>
                     <div class="item-total">$${formatNumber(lineTotal)}</div>
@@ -1340,28 +1454,32 @@ jQuery(document).ready(function($) {
     }
     
     // Modificar cantidad
+    function setCartQty(index, qty) {
+        qty = Math.max(1, parseInt(qty, 10) || 1);
+        cart[index].cantidad = qty;
+        cart[index].quantity = qty;
+        renderCart();
+        recalculateFamilyPrices();
+        updateTotals();
+    }
+
     $(document).on('click', '.qty-minus', function() {
         const index = $(this).closest('.cart-item').data('index');
-        if (cart[index].quantity > 1) {
-            cart[index].quantity--;
-            renderCart();
-            updateTotals();
+        const current = cart[index].cantidad || cart[index].quantity || 1;
+        if (current > 1) {
+            setCartQty(index, current - 1);
         }
     });
     
     $(document).on('click', '.qty-plus', function() {
         const index = $(this).closest('.cart-item').data('index');
-        cart[index].quantity++;
-        renderCart();
-        updateTotals();
+        const current = cart[index].cantidad || cart[index].quantity || 1;
+        setCartQty(index, current + 1);
     });
     
     $(document).on('change', '.item-qty-input', function() {
         const index = $(this).closest('.cart-item').data('index');
-        const qty = parseInt($(this).val()) || 1;
-        cart[index].quantity = Math.max(1, qty);
-        renderCart();
-        updateTotals();
+        setCartQty(index, $(this).val());
     });
     
     // Eliminar item
@@ -1369,6 +1487,7 @@ jQuery(document).ready(function($) {
         const index = $(this).closest('.cart-item').data('index');
         cart.splice(index, 1);
         renderCart();
+        recalculateFamilyPrices();
         updateTotals();
     });
     
@@ -1408,6 +1527,29 @@ jQuery(document).ready(function($) {
             }
         });
     }
+    
+    // Toggle canal: Local / Online
+    $('#pos-channel-select').on('change', function() {
+        const channel = $(this).val();
+        
+        // POST para guardar el canal en sesión
+        $.post(ajaxurl, {
+            action: 'riverso_pos_set_channel',
+            nonce: nonce,
+            channel: channel
+        }, function(response) {
+            if (response.success) {
+                // Actualizar canal en todos los items del carrito
+                cart.forEach(item => {
+                    item.channel = channel;
+                });
+                // Recalcular precios según el nuevo canal
+                recalculateFamilyPrices();
+                renderCart();
+                updateTotals();
+            }
+        });
+    });
     
     // Búsqueda de clientes
     $('#pos-customer-search').on('input', function() {
@@ -1769,7 +1911,11 @@ jQuery(document).ready(function($) {
         }
         
         let subtotal = 0;
-        cart.forEach(item => subtotal += item.price * item.quantity);
+        cart.forEach(item => {
+            const packs = item.cantidad || item.quantity || 1;
+            const units = item.units_per_pack || 1;
+            subtotal += item.price * packs * units;
+        });
         
         $.post(ajaxurl, {
             action: 'riverso_pos_hold_order',

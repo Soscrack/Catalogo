@@ -45,9 +45,13 @@ class Riverso_Barcode_Model {
      *     type: string (ean13|supplier|internal)
      * } o false si no existe
      */
-    public static function resolve($code) {
+    public static function resolve($code, $supplier_id = null) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
+        $code = trim((string) $code);
+        if ($code === '') {
+            return false;
+        }
 
         // Intentar en nueva tabla unificada
         $result = $wpdb->get_row(
@@ -62,10 +66,13 @@ class Riverso_Barcode_Model {
                     unidad_medida,
                     envase_id,
                     factor_a_unidad_base,
-                    activo
+                    activo,
+                    estado,
+                    motivo_estado
                 FROM {$prefix}codigo_barra
                 WHERE codigo = %s
                   AND activo = 1
+                  AND estado IN ('verificado', 'en_desuso')
                 LIMIT 1",
                 $code
             ),
@@ -73,21 +80,30 @@ class Riverso_Barcode_Model {
         );
 
         if ($result) {
-            return [
+            return self::format_result([
                 'id' => intval($result['id']),
-                'product_base_id' => intval($result['producto_base_id']),
-                'supplier_id' => $result['proveedor_id'] ? intval($result['proveedor_id']) : null,
-                'cantidad' => floatval($result['cantidad']),
+                'producto_base_id' => intval($result['producto_base_id']),
+                'proveedor_id' => $result['proveedor_id'] ? intval($result['proveedor_id']) : null,
+                'cantidad_unidades' => floatval($result['cantidad']),
                 'unidad_medida' => $result['unidad_medida'],
-                'envase_id' => $result['envase_id'] ? intval($result['envase_id']) : null,
+                'presentacion_id' => $result['envase_id'] ? intval($result['envase_id']) : null,
                 'factor_a_unidad_base' => floatval($result['factor_a_unidad_base']),
-                'type' => $result['tipo'],
+                'tipo' => $result['tipo'],
+                'origen' => 'codigo_barra',
                 'codigo_id' => intval($result['id']),
-            ];
+                'estado' => $result['estado'],
+                'advertencia' => $result['estado'] === 'en_desuso' ? $result['motivo_estado'] : null,
+                'requires_review' => $result['estado'] === 'en_desuso',
+            ]);
+        }
+
+        $internal = self::resolve_internal_ean($code);
+        if ($internal) {
+            return $internal;
         }
 
         // Fallback a legacy (dual-read para compatibilidad)
-        return self::_resolve_legacy($code);
+        return self::_resolve_legacy($code, $supplier_id);
     }
 
     /**
@@ -95,58 +111,162 @@ class Riverso_Barcode_Model {
      * 
      * @private
      */
-    private static function _resolve_legacy($code) {
+    private static function _resolve_legacy($code, $supplier_id = null) {
         global $wpdb;
         $prefix = $wpdb->prefix;
 
-        // Intentar EAN13 legacy
+        // Intentar barcode legacy y traducir la referencia Woo al producto base.
         $barcode = $wpdb->get_row(
             $wpdb->prepare(
-                "SELECT product_id, product_base_id FROM {$prefix}riverso_barcodes WHERE ean13 = %s LIMIT 1",
-                $code
-            ),
-            ARRAY_A
-        );
-
-        if ($barcode && $barcode['product_base_id']) {
-            return [
-                'product_base_id' => intval($barcode['product_base_id']),
-                'supplier_id' => null,
-                'cantidad' => 1,
-                'unidad_medida' => 'unidad',
-                'envase_id' => null,
-                'factor_a_unidad_base' => 1,
-                'type' => 'ean13',
-                'legacy' => true,
-            ];
-        }
-
-        // Intentar código proveedor legacy
-        $supplier_code = $wpdb->get_row(
-            $wpdb->prepare(
-                "SELECT supplier_product_id, product_base_id, proveedor_id 
-                 FROM {$prefix}riverso_codigos 
-                 WHERE codigo_proveedor = %s AND activo = 1 
+                "SELECT b.id, b.product_id, b.variation_id, b.sku,
+                        pb.id AS producto_base_id, pb.unidad_base
+                 FROM {$prefix}riverso_barcodes b
+                 LEFT JOIN {$prefix}riverso_producto_base pb
+                   ON pb.woocommerce_product_id = b.product_id
+                  AND (pb.woocommerce_variation_id = COALESCE(b.variation_id, 0)
+                       OR COALESCE(b.variation_id, 0) = 0)
+                 WHERE b.barcode = %s AND b.is_active = 1
                  LIMIT 1",
                 $code
             ),
             ARRAY_A
         );
 
-        if ($supplier_code && $supplier_code['product_base_id']) {
-            return [
-                'product_base_id' => intval($supplier_code['product_base_id']),
-                'supplier_id' => $supplier_code['proveedor_id'] ? intval($supplier_code['proveedor_id']) : null,
-                'cantidad' => 1,
-                'unidad_medida' => 'unidad',
-                'envase_id' => null,
+        if ($barcode && $barcode['product_base_id']) {
+            return self::format_result([
+                'producto_base_id' => intval($barcode['producto_base_id']),
+                'proveedor_id' => null,
+                'cantidad_unidades' => 1,
+                'unidad_medida' => $barcode['unidad_base'] ?: 'unidad',
+                'presentacion_id' => null,
                 'factor_a_unidad_base' => 1,
-                'type' => 'supplier',
+                'tipo' => 'ean13',
+                'origen' => 'barcodes_legacy',
                 'legacy' => true,
-            ];
+                'codigo_id' => intval($barcode['id']),
+            ]);
+        }
+
+        // Intentar código proveedor legacy
+        $supplier_where = 'codigo_proveedor = %s AND activo = 1';
+        $params = [$code];
+        if ($supplier_id) {
+            $supplier_where .= ' AND proveedor_id = %d';
+            $params[] = intval($supplier_id);
+        }
+        $supplier_codes = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, supplier_product_id, product_base_id, proveedor_id,
+                        factor_conversion, unidad_medida
+                 FROM {$prefix}riverso_codigos
+                 WHERE {$supplier_where}
+                 LIMIT 2",
+                ...$params
+            ),
+            ARRAY_A
+        );
+        $supplier_code = count($supplier_codes) === 1 ? $supplier_codes[0] : null;
+
+        if ($supplier_code && $supplier_code['product_base_id']) {
+            $factor = max(1, floatval($supplier_code['factor_conversion']));
+            return self::format_result([
+                'producto_base_id' => intval($supplier_code['product_base_id']),
+                'proveedor_id' => $supplier_code['proveedor_id'] ? intval($supplier_code['proveedor_id']) : null,
+                'cantidad_unidades' => $factor,
+                'unidad_medida' => 'unidad',
+                'presentacion_id' => null,
+                'factor_a_unidad_base' => $factor,
+                'tipo' => 'supplier',
+                'origen' => 'codigos_legacy',
+                'legacy' => true,
+                'codigo_id' => intval($supplier_code['id']),
+                'requires_review' => $factor === 1.0,
+            ]);
         }
 
         return false;
+    }
+
+    /**
+     * Resuelve bolsas históricas aunque no exista una fila persistida.
+     */
+    private static function resolve_internal_ean($code) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        if (!class_exists('Riverso_EAN13_Generator')) {
+            require_once RIVERSO_POS_PLUGIN_DIR . 'modules/barcodes/class-ean13-generator.php';
+        }
+        $parsed = Riverso_EAN13_Generator::parse($code);
+        if (!$parsed) {
+            return false;
+        }
+
+        $payload = $parsed['payload'];
+        $normalized = ltrim($payload, '0');
+        $normalized = $normalized === '' ? '0' : $normalized;
+        $products = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, canonical_sku, unidad_base
+             FROM {$prefix}producto_base
+             WHERE estado = 'activo' AND (canonical_sku = %s OR canonical_sku = %s)
+             LIMIT 2",
+            $payload,
+            $normalized
+        ), ARRAY_A);
+
+        $product = count($products) === 1 ? $products[0] : null;
+        $origin = 'ean13_legacy_algorithmic';
+
+        if (!$product) {
+            $product = $wpdb->get_row($wpdb->prepare(
+                "SELECT pb.id, pb.canonical_sku, pb.unidad_base
+                 FROM {$prefix}ean_aliases ea
+                 INNER JOIN {$prefix}producto_base pb ON pb.id = ea.producto_base_id
+                 WHERE ea.payload = %s AND ea.activo = 1 AND pb.estado = 'activo'
+                 LIMIT 1",
+                $payload
+            ), ARRAY_A);
+            $origin = 'ean13_alias';
+        }
+
+        if (!$product) {
+            return false;
+        }
+
+        return self::format_result([
+            'producto_base_id' => intval($product['id']),
+            'proveedor_id' => null,
+            'cantidad_unidades' => floatval($parsed['cantidad']),
+            'unidad_medida' => $product['unidad_base'] ?: 'unidad',
+            'presentacion_id' => null,
+            'factor_a_unidad_base' => floatval($parsed['cantidad']),
+            'tipo' => 'internal',
+            'origen' => $origin,
+            'legacy' => $origin === 'ean13_legacy_algorithmic',
+            'requires_review' => false,
+        ]);
+    }
+
+    private static function format_result($data) {
+        $result = array_merge([
+            'producto_base_id' => 0,
+            'proveedor_id' => null,
+            'cantidad_unidades' => 1.0,
+            'unidad_medida' => 'unidad',
+            'presentacion_id' => null,
+            'factor_a_unidad_base' => 1.0,
+            'tipo' => 'internal',
+            'origen' => 'unknown',
+            'requires_review' => false,
+        ], $data);
+
+        // Alias temporales para consumidores existentes.
+        $result['product_base_id'] = $result['producto_base_id'];
+        $result['supplier_id'] = $result['proveedor_id'];
+        $result['cantidad'] = $result['cantidad_unidades'];
+        $result['envase_id'] = $result['presentacion_id'];
+        $result['type'] = $result['tipo'];
+        return $result;
     }
 
     /**
@@ -178,10 +298,15 @@ class Riverso_Barcode_Model {
                 'envase_id' => $envase_id,
                 'factor_a_unidad_base' => $factor_a_unidad_base,
                 'activo' => 1,
+                'estado' => 'verificado',
+                'estado_por' => get_current_user_id() ?: null,
+                'estado_at' => current_time('mysql'),
+                'origen_datos' => 'manual',
                 'created_at' => current_time('mysql'),
             ],
             [
-                '%s', '%s', '%d', '%d', '%f', '%s', '%d', '%f', '%d', '%s'
+                '%s', '%s', '%d', '%d', '%f', '%s', '%d', '%f', '%d',
+                '%s', '%d', '%s', '%s', '%s'
             ]
         );
 
@@ -232,16 +357,59 @@ class Riverso_Barcode_Model {
      * @return bool
      */
     public static function deactivate($codigo_id) {
+        return self::set_status($codigo_id, 'en_desuso', 'Desactivado desde administración.');
+    }
+
+    /**
+     * Cambia el estado conservando la relación para trazabilidad.
+     */
+    public static function set_status($codigo_id, $estado, $motivo = '') {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
+        $allowed = ['propuesto', 'verificado', 'en_desuso', 'rechazado'];
+        if (!in_array($estado, $allowed, true)) {
+            return false;
+        }
 
-        return (bool) $wpdb->update(
+        $previous = $wpdb->get_row($wpdb->prepare(
+            "SELECT estado, motivo_estado FROM {$prefix}codigo_barra WHERE id = %d",
+            $codigo_id
+        ), ARRAY_A);
+        if (!$previous) {
+            return false;
+        }
+
+        $updated = $wpdb->update(
             "{$prefix}codigo_barra",
-            ['activo' => 0],
+            [
+                'estado' => $estado,
+                'activo' => in_array($estado, ['propuesto', 'verificado', 'en_desuso'], true) ? 1 : 0,
+                'motivo_estado' => sanitize_text_field($motivo),
+                'estado_por' => get_current_user_id() ?: null,
+                'estado_at' => current_time('mysql'),
+            ],
             ['id' => $codigo_id],
-            ['%d'],
+            ['%s', '%d', '%s', '%d', '%s'],
             ['%d']
         );
+
+        if ($updated !== false && $previous['estado'] !== $estado) {
+            $wpdb->insert(
+                "{$prefix}codigos_historial",
+                [
+                    'codigo_id' => $codigo_id,
+                    'accion' => 'estado_codigo_barra',
+                    'campo_modificado' => 'estado',
+                    'valor_anterior' => wp_json_encode($previous),
+                    'valor_nuevo' => wp_json_encode(['estado' => $estado, 'motivo' => $motivo]),
+                    'usuario_id' => get_current_user_id() ?: null,
+                    'ip_address' => sanitize_text_field($_SERVER['REMOTE_ADDR'] ?? ''),
+                ],
+                ['%d', '%s', '%s', '%s', '%s', '%d', '%s']
+            );
+        }
+
+        return $updated !== false;
     }
 
     /**

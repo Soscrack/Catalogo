@@ -102,7 +102,7 @@ class Riverso_Packaging_Module {
 
     /* ===================== Envases ===================== */
 
-    public function create_envase($producto_base_id, $cantidad_unidades, $sku_envase = '', $variation_id = 0) {
+    public function create_envase($producto_base_id, $cantidad_unidades, $sku_envase = '', $variation_id = 0, $extra = []) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
@@ -112,13 +112,29 @@ class Riverso_Packaging_Module {
             return new WP_Error('invalid', 'Producto base y cantidad de unidades requeridos');
         }
 
+        $tipo_envase = sanitize_key($extra['tipo_envase'] ?? 'envase');
+        $allowed_types = ['envase', 'caja', 'balde', 'bolsa_fabrica', 'bolsa_interna', 'otro'];
+        if (!in_array($tipo_envase, $allowed_types, true)) {
+            $tipo_envase = 'otro';
+        }
+
         $wpdb->insert("{$prefix}envases", [
             'producto_base_id' => $producto_base_id,
             'sku_envase' => $sku_envase ? sanitize_text_field($sku_envase) : null,
             'woocommerce_variation_id' => intval($variation_id),
             'cantidad_unidades' => $cantidad_unidades,
+            'producto_proveedor_id' => intval($extra['producto_proveedor_id'] ?? 0) ?: null,
+            'proveedor_id' => intval($extra['proveedor_id'] ?? 0) ?: null,
+            'codigo_proveedor' => !empty($extra['codigo_proveedor']) ? sanitize_text_field($extra['codigo_proveedor']) : null,
+            'tipo_envase' => $tipo_envase,
+            'es_vendible' => !empty($extra['es_vendible']) ? 1 : 0,
+            'lleva_stock_propio' => !empty($extra['lleva_stock_propio']) ? 1 : 0,
+            'permite_apertura' => isset($extra['permite_apertura']) ? (!empty($extra['permite_apertura']) ? 1 : 0) : 1,
+            'origen_datos' => sanitize_key($extra['origen_datos'] ?? 'manual'),
+            'requires_human_review' => !empty($extra['requires_human_review']) ? 1 : 0,
+            'review_status' => !empty($extra['requires_human_review']) ? 'pendiente' : 'aprobado',
             'activo' => 1,
-        ], ['%d', '%s', '%d', '%f', '%d']);
+        ], ['%d', '%s', '%d', '%f', '%d', '%d', '%s', '%s', '%d', '%d', '%d', '%s', '%d', '%s', '%d']);
 
         return (int) $wpdb->insert_id;
     }
@@ -148,6 +164,9 @@ class Riverso_Packaging_Module {
         if (!$envase) {
             return new WP_Error('not_found', 'Envase no encontrado');
         }
+        if (isset($envase['permite_apertura']) && empty($envase['permite_apertura'])) {
+            return new WP_Error('not_allowed', 'Esta presentación no permite apertura.');
+        }
 
         $pb = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$prefix}producto_base WHERE id = %d",
@@ -167,10 +186,14 @@ class Riverso_Packaging_Module {
         // Costo unitario: del lote indicado o c_ref local.
         $costo_unitario = null;
         if ($lote_id) {
-            $costo_unitario = $wpdb->get_var($wpdb->prepare(
-                "SELECT costo_unitario FROM {$prefix}lotes WHERE id = %d",
+            $lote = $wpdb->get_row($wpdb->prepare(
+                "SELECT costo_unitario, cantidad_disponible FROM {$prefix}lotes WHERE id = %d",
                 intval($lote_id)
-            ));
+            ), ARRAY_A);
+            if (!$lote || (float) $lote['cantidad_disponible'] < $cantidad_envases) {
+                return new WP_Error('insufficient_closed_stock', 'Stock cerrado insuficiente en el lote seleccionado.');
+            }
+            $costo_unitario = $lote['costo_unitario'];
         }
         if ($costo_unitario === null && class_exists('Riverso_Pricing_Module')) {
             $costo_unitario = Riverso_Pricing_Module::get_instance()->calculate_c_ref_local($pb['id']);
@@ -179,37 +202,61 @@ class Riverso_Packaging_Module {
         $stock_anterior = (float) $pb['stock_abierto'];
         $stock_nuevo = $stock_anterior + $unidades;
 
-        // 1. Aumentar inventario abierto.
-        $wpdb->update(
-            "{$prefix}producto_base",
-            ['stock_abierto' => $stock_nuevo],
-            ['id' => $pb['id']],
-            ['%f'],
-            ['%d']
-        );
-
-        // 2. Descontar stock cerrado (lote si aplica).
-        if ($lote_id) {
-            $wpdb->query($wpdb->prepare(
-                "UPDATE {$prefix}lotes
-                 SET cantidad_disponible = GREATEST(0, cantidad_disponible - %f)
-                 WHERE id = %d",
-                $cantidad_envases,
-                intval($lote_id)
-            ));
-        }
-
-        // 3. Descontar stock cerrado en WooCommerce (envase = variación/producto).
         $wc_id = intval($envase['woocommerce_variation_id']) ?: intval($pb['woocommerce_variation_id']) ?: intval($pb['woocommerce_product_id']);
+        $wc_product = null;
         if ($wc_id && function_exists('wc_get_product')) {
             $wc_product = wc_get_product($wc_id);
             if ($wc_product && $wc_product->managing_stock()) {
-                wc_update_product_stock($wc_product, $cantidad_envases, 'decrease');
+                $closed_stock = $wc_product->get_stock_quantity();
+                if ($closed_stock !== null && (float) $closed_stock < $cantidad_envases) {
+                    return new WP_Error('insufficient_closed_stock', 'Stock cerrado insuficiente en WooCommerce.');
+                }
+            }
+        }
+
+        $wpdb->query('START TRANSACTION');
+
+        // 1. Aumentar inventario abierto.
+        $updated_open = $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}producto_base
+             SET stock_abierto = stock_abierto + %f
+             WHERE id = %d AND stock_abierto = %f",
+            $unidades,
+            $pb['id'],
+            $stock_anterior
+        ));
+        if ($updated_open !== 1) {
+            $wpdb->query('ROLLBACK');
+            return new WP_Error('concurrent_stock_change', 'El stock cambió durante la apertura. Intenta nuevamente.');
+        }
+
+        // 2. Descontar stock cerrado (lote si aplica).
+        if ($lote_id) {
+            $updated_lot = $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}lotes
+                 SET cantidad_disponible = cantidad_disponible - %f
+                 WHERE id = %d AND cantidad_disponible >= %f",
+                $cantidad_envases,
+                intval($lote_id),
+                $cantidad_envases
+            ));
+            if ($updated_lot !== 1) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('concurrent_closed_stock_change', 'El lote cambió durante la apertura.');
+            }
+        }
+
+        // 3. Descontar stock cerrado en WooCommerce (envase = variación/producto).
+        if ($wc_product && $wc_product->managing_stock()) {
+            $wc_stock_result = wc_update_product_stock($wc_product, $cantidad_envases, 'decrease');
+            if ($wc_stock_result === false) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('wc_stock_update_failed', 'No se pudo descontar el stock cerrado en WooCommerce.');
             }
         }
 
         // 4. Registrar apertura.
-        $wpdb->insert("{$prefix}aperturas", [
+        $opened = $wpdb->insert("{$prefix}aperturas", [
             'envase_id' => $envase_id,
             'producto_base_id' => $pb['id'],
             'lote_id' => $lote_id ? intval($lote_id) : null,
@@ -218,10 +265,14 @@ class Riverso_Packaging_Module {
             'costo_unitario' => $costo_unitario !== null ? (float) $costo_unitario : null,
             'usuario_id' => get_current_user_id(),
         ], ['%d', '%d', '%d', '%f', '%f', '%f', '%d']);
+        if (!$opened) {
+            $wpdb->query('ROLLBACK');
+            return new WP_Error('opening_log_failed', 'No se pudo registrar la apertura.');
+        }
         $apertura_id = (int) $wpdb->insert_id;
 
         // 5. Movimiento de inventario (tipo apertura).
-        $wpdb->insert("{$prefix}movimientos", [
+        $movement = $wpdb->insert("{$prefix}movimientos", [
             'product_id' => intval($pb['woocommerce_product_id']),
             'variation_id' => intval($envase['woocommerce_variation_id']) ?: null,
             'lote_id' => $lote_id ? intval($lote_id) : null,
@@ -234,6 +285,12 @@ class Riverso_Packaging_Module {
             'notas' => sprintf('Apertura de %s envase(s) = %s unidades abiertas', $cantidad_envases, $unidades),
             'usuario_id' => get_current_user_id(),
         ]);
+        if (!$movement) {
+            $wpdb->query('ROLLBACK');
+            return new WP_Error('movement_failed', 'No se pudo registrar el movimiento de apertura.');
+        }
+
+        $wpdb->query('COMMIT');
 
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('envase_abierto', 'producto_base', $pb['id'], [
@@ -293,19 +350,28 @@ class Riverso_Packaging_Module {
         $sku_bolsa = $sku_base . '-B' . (int) $cantidad;
         $ean13 = null;
         if (!empty($pb['permite_ean13_personalizado'])) {
-            $ean13 = Riverso_EAN13_Generator::build($sku_base, (int) $cantidad);
+            $ean13 = Riverso_EAN13_Generator::build_for_product($producto_base_id, $cantidad);
+            if (is_wp_error($ean13)) {
+                return $ean13;
+            }
         }
 
-        // Descontar stock abierto.
-        $wpdb->update(
-            "{$prefix}producto_base",
-            ['stock_abierto' => $stock_abierto - $cantidad],
-            ['id' => $producto_base_id],
-            ['%f'],
-            ['%d']
-        );
+        $wpdb->query('START TRANSACTION');
+        $stock_updated = $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}producto_base
+             SET stock_abierto = stock_abierto - %f
+             WHERE id = %d AND stock_abierto >= %f AND stock_abierto = %f",
+            $cantidad,
+            $producto_base_id,
+            $cantidad,
+            $stock_abierto
+        ));
+        if ($stock_updated !== 1) {
+            $wpdb->query('ROLLBACK');
+            return new WP_Error('concurrent_stock_change', 'El stock abierto cambió. Intenta nuevamente.');
+        }
 
-        $wpdb->insert("{$prefix}bolsas", [
+        $bag_inserted = $wpdb->insert("{$prefix}bolsas", [
             'producto_base_id' => $producto_base_id,
             'cantidad' => $cantidad,
             'sku_bolsa' => $sku_bolsa,
@@ -316,7 +382,30 @@ class Riverso_Packaging_Module {
             'created_by_system' => 0,
             'requires_human_review' => 1,
         ], ['%d', '%f', '%s', '%s', '%f', '%s', '%d', '%d', '%d']);
+        if (!$bag_inserted) {
+            $wpdb->query('ROLLBACK');
+            return new WP_Error('bag_insert_failed', 'No se pudo registrar la bolsa.');
+        }
         $bolsa_id = (int) $wpdb->insert_id;
+
+        // Movimiento de salida del stock abierto.
+        $movement = $wpdb->insert("{$prefix}movimientos", [
+            'product_id' => intval($pb['woocommerce_product_id']),
+            'tipo' => 'embolsado',
+            'cantidad' => $cantidad,
+            'stock_anterior' => $stock_abierto,
+            'stock_nuevo' => $stock_abierto - $cantidad,
+            'referencia_tipo' => 'bolsa',
+            'referencia_id' => $bolsa_id,
+            'notas' => 'Generación de bolsa ' . $sku_bolsa,
+            'usuario_id' => get_current_user_id(),
+        ]);
+        if (!$movement) {
+            $wpdb->query('ROLLBACK');
+            return new WP_Error('movement_failed', 'No se pudo registrar el movimiento de embolsado.');
+        }
+
+        $wpdb->query('COMMIT');
 
         // Persistir el EAN13 en barcodes (source=generated) y tarea de verificación.
         if ($ean13 && class_exists('Riverso_Barcode_Module')) {
@@ -330,6 +419,19 @@ class Riverso_Packaging_Module {
             }
         }
 
+        if ($ean13 && class_exists('Riverso_Barcode_Model')) {
+            Riverso_Barcode_Model::create(
+                $ean13,
+                'internal',
+                $producto_base_id,
+                $cantidad,
+                $pb['unidad_base'] ?: 'unidad',
+                null,
+                null,
+                $cantidad
+            );
+        }
+
         if ($ean13 && function_exists('riverso_create_review_task')) {
             riverso_create_review_task(
                 'verificar_etiquetado',
@@ -339,19 +441,6 @@ class Riverso_Packaging_Module {
                 ['prioridad' => 'normal']
             );
         }
-
-        // Movimiento de salida del stock abierto.
-        $wpdb->insert("{$prefix}movimientos", [
-            'product_id' => intval($pb['woocommerce_product_id']),
-            'tipo' => 'embolsado',
-            'cantidad' => $cantidad,
-            'stock_anterior' => $stock_abierto,
-            'stock_nuevo' => $stock_abierto - $cantidad,
-            'referencia_tipo' => 'bolsa',
-            'referencia_id' => $bolsa_id,
-            'notas' => 'Generación de bolsa ' . $sku_bolsa,
-            'usuario_id' => get_current_user_id(),
-        ]);
 
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('bolsa_generada', 'bolsa', $bolsa_id, [
@@ -399,7 +488,16 @@ class Riverso_Packaging_Module {
             intval($_POST['producto_base_id'] ?? 0),
             floatval($_POST['cantidad_unidades'] ?? 0),
             sanitize_text_field($_POST['sku_envase'] ?? ''),
-            intval($_POST['woocommerce_variation_id'] ?? 0)
+            intval($_POST['woocommerce_variation_id'] ?? 0),
+            [
+                'producto_proveedor_id' => intval($_POST['producto_proveedor_id'] ?? 0),
+                'proveedor_id' => intval($_POST['proveedor_id'] ?? 0),
+                'codigo_proveedor' => sanitize_text_field($_POST['codigo_proveedor'] ?? ''),
+                'tipo_envase' => sanitize_key($_POST['tipo_envase'] ?? 'envase'),
+                'es_vendible' => !empty($_POST['es_vendible']),
+                'lleva_stock_propio' => !empty($_POST['lleva_stock_propio']),
+                'permite_apertura' => !isset($_POST['permite_apertura']) || !empty($_POST['permite_apertura']),
+            ]
         );
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);

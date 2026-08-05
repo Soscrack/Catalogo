@@ -223,7 +223,35 @@ class Riverso_Barcode_Module {
             );
         }
 
-        // Sin bolsa registrada: devolver datos parseados del código.
+        // Sin bolsa registrada: resolver algorítmicamente al producto canónico.
+        if (class_exists('Riverso_Barcode_Model')) {
+            $resolved = Riverso_Barcode_Model::resolve($barcode);
+            if ($resolved && !empty($resolved['producto_base_id'])) {
+                $pb = $wpdb->get_row($wpdb->prepare(
+                    "SELECT canonical_sku, nombre_canonico, woocommerce_product_id
+                     FROM {$prefix}producto_base WHERE id = %d",
+                    $resolved['producto_base_id']
+                ), ARRAY_A);
+                $product = $pb && $pb['woocommerce_product_id']
+                    ? wc_get_product($pb['woocommerce_product_id'])
+                    : null;
+                return array(
+                    'source' => $resolved['origen'],
+                    'barcode' => $barcode,
+                    'producto_base_id' => intval($resolved['producto_base_id']),
+                    'product_id' => $product ? $product->get_id() : null,
+                    'variation_id' => null,
+                    'sku' => $pb ? $pb['canonical_sku'] : $internal['sku'],
+                    'name' => ($pb && $pb['nombre_canonico'] ? $pb['nombre_canonico'] : 'Bolsa')
+                        . ' x' . intval($resolved['cantidad_unidades']),
+                    'cantidad' => (float) $resolved['cantidad_unidades'],
+                    'price' => $product ? $product->get_price() : null,
+                    'message' => 'Bolsa interna legacy resuelta sin registro previo',
+                );
+            }
+        }
+
+        // Código válido, pero no existe una relación canónica única.
         return array(
             'source' => 'internal_parsed',
             'barcode' => $barcode,

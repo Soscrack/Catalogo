@@ -42,24 +42,147 @@ class Riverso_EAN13_Generator {
      *
      * @param string|int $sku
      * @param int        $cantidad
-     * @return string EAN13 de 13 dígitos
+     * @return string|WP_Error EAN13 de 13 dígitos o error si no es representable
      */
     public static function build($sku, $cantidad) {
-        $sku_digits = preg_replace('/\D/', '', (string) $sku);
-        if ($sku_digits === '') {
-            $sku_digits = '0';
+        $sku = trim((string) $sku);
+        if (!preg_match('/^\d{1,6}$/', $sku)) {
+            return new WP_Error(
+                'ean_sku_not_representable',
+                'El SKU debe ser numérico y tener como máximo 6 dígitos. No se truncó el valor.'
+            );
         }
-        // 6 dígitos (trunca por la izquierda si excede, rellena con ceros).
-        $sku_digits = substr($sku_digits, -6);
-        $sku_part = str_pad($sku_digits, 6, '0', STR_PAD_LEFT);
 
-        $cantidad = max(0, min(99999, (int) $cantidad));
+        $quantity = self::normalize_quantity($cantidad);
+        if (is_wp_error($quantity)) {
+            return $quantity;
+        }
+
+        return self::build_from_payload(
+            str_pad($sku, 6, '0', STR_PAD_LEFT),
+            $quantity
+        );
+    }
+
+    /**
+     * Genera un EAN para un producto base. Para SKU no representables asigna
+     * un alias estable con payload 1IIIII.
+     *
+     * @param int $producto_base_id
+     * @param int $cantidad
+     * @return string|WP_Error
+     */
+    public static function build_for_product($producto_base_id, $cantidad) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $producto_base_id = intval($producto_base_id);
+
+        $product = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, canonical_sku FROM {$prefix}producto_base WHERE id = %d",
+            $producto_base_id
+        ), ARRAY_A);
+        if (!$product) {
+            return new WP_Error('ean_product_not_found', 'Producto base no encontrado.');
+        }
+
+        if (preg_match('/^\d{1,6}$/', (string) $product['canonical_sku'])) {
+            return self::build($product['canonical_sku'], $cantidad);
+        }
+
+        $quantity = self::normalize_quantity($cantidad);
+        if (is_wp_error($quantity)) {
+            return $quantity;
+        }
+
+        $payload = self::get_or_create_alias_payload($producto_base_id);
+        if (is_wp_error($payload)) {
+            return $payload;
+        }
+
+        return self::build_from_payload($payload, $quantity);
+    }
+
+    private static function build_from_payload($payload, $cantidad) {
         $qty_part = str_pad((string) $cantidad, 5, '0', STR_PAD_LEFT);
-
-        $twelve = self::PREFIX . $sku_part . $qty_part; // 1 + 6 + 5 = 12
+        $twelve = self::PREFIX . $payload . $qty_part;
         $check = self::check_digit($twelve);
-
         return $twelve . $check;
+    }
+
+    private static function normalize_quantity($cantidad) {
+        if (!is_numeric($cantidad) || (float) $cantidad <= 0 || (float) $cantidad > 99999) {
+            return new WP_Error('ean_quantity_out_of_range', 'La cantidad debe estar entre 1 y 99.999.');
+        }
+        if (floor((float) $cantidad) !== (float) $cantidad) {
+            return new WP_Error('ean_quantity_not_integer', 'El EAN interno solo admite cantidades enteras.');
+        }
+        return intval($cantidad);
+    }
+
+    private static function get_or_create_alias_payload($producto_base_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $table = "{$prefix}ean_aliases";
+
+        $payload = $wpdb->get_var($wpdb->prepare(
+            "SELECT payload FROM {$table} WHERE producto_base_id = %d AND activo = 1",
+            $producto_base_id
+        ));
+        if ($payload) {
+            return $payload;
+        }
+
+        $wpdb->insert(
+            $table,
+            [
+                'producto_base_id' => $producto_base_id,
+                'alias_tipo' => '1',
+                'activo' => 1,
+            ],
+            ['%d', '%s', '%d']
+        );
+
+        $alias_id = intval($wpdb->insert_id);
+        if (!$alias_id) {
+            $payload = $wpdb->get_var($wpdb->prepare(
+                "SELECT payload FROM {$table} WHERE producto_base_id = %d AND activo = 1",
+                $producto_base_id
+            ));
+            return $payload ?: new WP_Error('ean_alias_create_failed', 'No se pudo reservar un alias EAN.');
+        }
+
+        $candidate = max(1, $alias_id);
+        while ($candidate <= 99999) {
+            $alias_code = str_pad((string) $candidate, 5, '0', STR_PAD_LEFT);
+            $payload = '1' . $alias_code;
+            $canonical_collision = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}producto_base
+                 WHERE canonical_sku = %s AND id <> %d LIMIT 1",
+                $payload,
+                $producto_base_id
+            ));
+            $alias_collision = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$table} WHERE payload = %s AND id <> %d LIMIT 1",
+                $payload,
+                $alias_id
+            ));
+
+            if (!$canonical_collision && !$alias_collision) {
+                $updated = $wpdb->update(
+                    $table,
+                    ['alias_codigo' => $alias_code, 'payload' => $payload],
+                    ['id' => $alias_id],
+                    ['%s', '%s'],
+                    ['%d']
+                );
+                if ($updated !== false) {
+                    return $payload;
+                }
+            }
+            $candidate++;
+        }
+
+        return new WP_Error('ean_alias_exhausted', 'No quedan alias internos disponibles.');
     }
 
     /**
@@ -92,6 +215,8 @@ class Riverso_EAN13_Generator {
         return [
             'sku' => substr($ean13, 1, 6),
             'cantidad' => (int) substr($ean13, 7, 5),
+            'payload' => substr($ean13, 1, 6),
+            'alias_tipo' => substr($ean13, 1, 1),
         ];
     }
 }

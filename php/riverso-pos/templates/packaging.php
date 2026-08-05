@@ -16,15 +16,28 @@ $nonce = wp_create_nonce('riverso_pos_nonce');
 
     <h2>Envases</h2>
     <table class="wp-list-table widefat fixed striped">
-        <thead><tr><th>ID</th><th>SKU envase</th><th>Unidades/envase</th><th>Variación WC</th><th>Acciones</th></tr></thead>
-        <tbody id="pk-envases-tbody"><tr><td colspan="5">Carga un producto base.</td></tr></tbody>
+        <thead><tr><th>ID</th><th>Presentación</th><th>Código proveedor</th><th>Unidades</th><th>Modo</th><th>Revisión</th><th>Acciones</th></tr></thead>
+        <tbody id="pk-envases-tbody"><tr><td colspan="7">Carga un producto base.</td></tr></tbody>
     </table>
 
     <h3>Nuevo envase</h3>
     <p>
-        SKU envase <input type="text" id="pk-env-sku" class="regular-text">
-        Unidades por envase <input type="number" step="0.01" id="pk-env-units" class="small-text">
+        SKU presentación <input type="text" id="pk-env-sku" class="regular-text">
+        Código proveedor <input type="text" id="pk-env-supplier-code" class="regular-text">
+        Proveedor ID <input type="number" id="pk-env-supplier" class="small-text">
+        Unidades <input type="number" step="0.01" id="pk-env-units" class="small-text">
+        Tipo
+        <select id="pk-env-type">
+            <option value="envase">Envase</option>
+            <option value="caja">Caja</option>
+            <option value="balde">Balde</option>
+            <option value="bolsa_fabrica">Bolsa de fábrica</option>
+            <option value="otro">Otro</option>
+        </select>
         Variación WC <input type="number" id="pk-env-var" class="small-text">
+        <label><input type="checkbox" id="pk-env-sellable"> Vendible cerrada</label>
+        <label><input type="checkbox" id="pk-env-stock"> Stock propio</label>
+        <label><input type="checkbox" id="pk-env-open" checked> Permite apertura</label>
         <button class="button button-primary" id="pk-env-create">Crear envase</button>
     </p>
 
@@ -63,15 +76,17 @@ jQuery(function($){
             const rows = (r.data.envases||[]).map(e => `
                 <tr>
                     <td>${e.id}</td>
-                    <td>${e.sku_envase || '-'}</td>
+                    <td>${e.tipo_envase || 'envase'} · ${e.sku_envase || '-'}</td>
+                    <td>${e.codigo_proveedor || '-'}</td>
                     <td>${e.cantidad_unidades}</td>
-                    <td>${e.woocommerce_variation_id || '-'}</td>
+                    <td>${Number(e.es_vendible) ? 'vendible' : 'solo compra'}${Number(e.lleva_stock_propio) ? ' · stock propio' : ''}</td>
+                    <td>${Number(e.requires_human_review) ? 'pendiente' : (e.review_status || 'aprobado')}</td>
                     <td>
                         <input type="number" step="0.01" value="1" class="small-text pk-open-qty" data-id="${e.id}">
-                        <button class="button button-small pk-open" data-id="${e.id}">Abrir</button>
+                        ${Number(e.permite_apertura) ? `<button class="button button-small pk-open" data-id="${e.id}">Abrir</button>` : 'No abrible'}
                     </td>
                 </tr>`).join('');
-            $('#pk-envases-tbody').html(rows || '<tr><td colspan="5">Sin envases.</td></tr>');
+            $('#pk-envases-tbody').html(rows || '<tr><td colspan="7">Sin envases.</td></tr>');
         });
     }
 
@@ -104,8 +119,14 @@ jQuery(function($){
         $.post(ajaxurl, {action:'riverso_packaging_create_envase', nonce,
             producto_base_id:baseId(),
             sku_envase:$('#pk-env-sku').val(),
+            codigo_proveedor:$('#pk-env-supplier-code').val(),
+            proveedor_id:$('#pk-env-supplier').val(),
+            tipo_envase:$('#pk-env-type').val(),
             cantidad_unidades:$('#pk-env-units').val(),
-            woocommerce_variation_id:$('#pk-env-var').val()
+            woocommerce_variation_id:$('#pk-env-var').val(),
+            es_vendible:$('#pk-env-sellable').is(':checked') ? 1 : 0,
+            lleva_stock_propio:$('#pk-env-stock').is(':checked') ? 1 : 0,
+            permite_apertura:$('#pk-env-open').is(':checked') ? 1 : 0
         }, function(r){
             if (!r.success){ alert(r.data.message||'Error'); return; }
             loadEnvases();

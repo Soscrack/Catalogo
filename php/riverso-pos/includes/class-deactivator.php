@@ -16,6 +16,7 @@ class Riverso_POS_Deactivator {
         // Limpiar tareas programadas
         wp_clear_scheduled_hook('riverso_pos_daily_cleanup');
         wp_clear_scheduled_hook('riverso_pos_sync_stock');
+        wp_clear_scheduled_hook('riverso_pos_catalog_health_scan');
         
         // Flush rewrite rules
         flush_rewrite_rules();

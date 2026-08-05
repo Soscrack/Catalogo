@@ -284,6 +284,7 @@ class Riverso_POS_Activator {
 
         // Fases ERP 10–12 (core/códigos/inventario/OC/sync)
         self::create_erp_phase_tables($prefix, $charset_collate);
+        self::create_phase15_catalog_health($prefix, $charset_collate);
         
         // Inicializar servicios core
         self::init_core_services();
@@ -507,12 +508,12 @@ class Riverso_POS_Activator {
         dbDelta($sql);
 
         // Índices/columnas puente de compatibilidad para tablas existentes.
-        $wpdb->query("ALTER TABLE {$prefix}supplier_product_links ADD COLUMN producto_proveedor_id BIGINT UNSIGNED DEFAULT NULL");
-        $wpdb->query("ALTER TABLE {$prefix}supplier_product_links ADD COLUMN product_base_id BIGINT UNSIGNED DEFAULT NULL");
-        $wpdb->query("ALTER TABLE {$prefix}supplier_product_links ADD KEY idx_producto_proveedor_id (producto_proveedor_id)");
-        $wpdb->query("ALTER TABLE {$prefix}supplier_product_links ADD KEY idx_product_base_id (product_base_id)");
-        $wpdb->query("ALTER TABLE {$prefix}barcodes ADD COLUMN is_active TINYINT(1) DEFAULT 1");
-        $wpdb->query("ALTER TABLE {$prefix}barcodes ADD KEY idx_is_active (is_active)");
+        self::add_column_if_missing("{$prefix}supplier_product_links", 'producto_proveedor_id', 'producto_proveedor_id BIGINT UNSIGNED DEFAULT NULL');
+        self::add_column_if_missing("{$prefix}supplier_product_links", 'product_base_id', 'product_base_id BIGINT UNSIGNED DEFAULT NULL');
+        self::add_index_if_missing("{$prefix}supplier_product_links", 'idx_producto_proveedor_id', 'KEY idx_producto_proveedor_id (producto_proveedor_id)');
+        self::add_index_if_missing("{$prefix}supplier_product_links", 'idx_product_base_id', 'KEY idx_product_base_id (product_base_id)');
+        self::add_column_if_missing("{$prefix}barcodes", 'is_active', 'is_active TINYINT(1) DEFAULT 1');
+        self::add_index_if_missing("{$prefix}barcodes", 'idx_is_active', 'KEY idx_is_active (is_active)');
     }
 
     /**
@@ -701,6 +702,83 @@ class Riverso_POS_Activator {
     }
 
     /**
+     * Fase 15 - Presentaciones, ciclo de vida de códigos y salud del catálogo.
+     *
+     * Amplía tablas existentes de forma compatible y agrega las estructuras
+     * necesarias para EAN internos con alias y detección idempotente de brechas.
+     */
+    private static function create_phase15_catalog_health($prefix, $charset_collate) {
+        global $wpdb;
+
+        $envases = "{$prefix}envases";
+        self::add_column_if_missing($envases, 'producto_proveedor_id', "producto_proveedor_id BIGINT UNSIGNED DEFAULT NULL");
+        self::add_column_if_missing($envases, 'proveedor_id', "proveedor_id BIGINT UNSIGNED DEFAULT NULL");
+        self::add_column_if_missing($envases, 'codigo_proveedor', "codigo_proveedor VARCHAR(100) DEFAULT NULL");
+        self::add_column_if_missing($envases, 'tipo_envase', "tipo_envase VARCHAR(30) NOT NULL DEFAULT 'envase'");
+        self::add_column_if_missing($envases, 'es_vendible', "es_vendible TINYINT(1) NOT NULL DEFAULT 0");
+        self::add_column_if_missing($envases, 'lleva_stock_propio', "lleva_stock_propio TINYINT(1) NOT NULL DEFAULT 0");
+        self::add_column_if_missing($envases, 'permite_apertura', "permite_apertura TINYINT(1) NOT NULL DEFAULT 1");
+        self::add_column_if_missing($envases, 'origen_datos', "origen_datos VARCHAR(50) NOT NULL DEFAULT 'manual'");
+        self::add_column_if_missing($envases, 'requires_human_review', "requires_human_review TINYINT(1) NOT NULL DEFAULT 0");
+        self::add_column_if_missing($envases, 'review_status', "review_status VARCHAR(20) NOT NULL DEFAULT 'aprobado'");
+        self::add_index_if_missing($envases, 'idx_presentacion_proveedor', "KEY idx_presentacion_proveedor (proveedor_id, codigo_proveedor)");
+        self::add_index_if_missing($envases, 'idx_presentacion_review', "KEY idx_presentacion_review (requires_human_review, review_status)");
+
+        $codigos = "{$prefix}codigo_barra";
+        self::add_column_if_missing($codigos, 'estado', "estado VARCHAR(20) NOT NULL DEFAULT 'verificado'");
+        self::add_column_if_missing($codigos, 'motivo_estado', "motivo_estado VARCHAR(255) DEFAULT NULL");
+        self::add_column_if_missing($codigos, 'estado_por', "estado_por BIGINT UNSIGNED DEFAULT NULL");
+        self::add_column_if_missing($codigos, 'estado_at', "estado_at DATETIME DEFAULT NULL");
+        self::add_column_if_missing($codigos, 'origen_datos', "origen_datos VARCHAR(50) NOT NULL DEFAULT 'legacy'");
+        self::add_column_if_missing($codigos, 'requires_human_review', "requires_human_review TINYINT(1) NOT NULL DEFAULT 0");
+        self::add_index_if_missing($codigos, 'idx_codigo_estado', "KEY idx_codigo_estado (estado, activo)");
+
+        $sql = "CREATE TABLE {$prefix}ean_aliases (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            alias_tipo CHAR(1) NOT NULL DEFAULT '1',
+            alias_codigo CHAR(5) DEFAULT NULL,
+            payload CHAR(6) DEFAULT NULL,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_alias_producto (producto_base_id),
+            UNIQUE KEY ux_alias_payload (payload),
+            KEY idx_alias_activo (activo)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}data_gaps (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            regla VARCHAR(100) NOT NULL,
+            entidad_tipo VARCHAR(50) NOT NULL,
+            entidad_id BIGINT UNSIGNED NOT NULL,
+            fingerprint CHAR(64) NOT NULL,
+            severidad VARCHAR(20) NOT NULL DEFAULT 'media',
+            estado VARCHAR(20) NOT NULL DEFAULT 'abierto',
+            detalle_json LONGTEXT DEFAULT NULL,
+            origen VARCHAR(50) NOT NULL DEFAULT 'scanner',
+            detectado_at DATETIME NOT NULL,
+            visto_ultima_vez_at DATETIME NOT NULL,
+            resuelto_at DATETIME DEFAULT NULL,
+            ignorado_hasta DATETIME DEFAULT NULL,
+            tarea_id BIGINT UNSIGNED DEFAULT NULL,
+            scan_token CHAR(36) DEFAULT NULL,
+            notas TEXT DEFAULT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_gap_fingerprint (regla, entidad_tipo, entidad_id, fingerprint),
+            KEY idx_gap_estado_severidad (estado, severidad),
+            KEY idx_gap_regla (regla),
+            KEY idx_gap_tarea (tarea_id),
+            KEY idx_gap_scan_token (scan_token)
+        ) $charset_collate;";
+        dbDelta($sql);
+        self::add_column_if_missing("{$prefix}data_gaps", 'scan_token', 'scan_token CHAR(36) DEFAULT NULL');
+        self::add_index_if_missing("{$prefix}data_gaps", 'idx_gap_scan_token', 'KEY idx_gap_scan_token (scan_token)');
+    }
+
+    /**
      * Agrega una columna a una tabla solo si no existe (idempotente).
      */
     private static function add_column_if_missing($table, $column, $definition) {
@@ -736,6 +814,11 @@ class Riverso_POS_Activator {
         if ((int) $exists === 0) {
             $wpdb->query("ALTER TABLE `{$table}` ADD {$definition}");
         }
+    }
+
+    private static function table_exists($table) {
+        global $wpdb;
+        return $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) === $table;
     }
 
     /**
@@ -1154,6 +1237,11 @@ class Riverso_POS_Activator {
      */
     private static function consolidate_family_schema($prefix) {
         global $wpdb;
+        $legacy_groups = "{$prefix}equivalencia_grupo";
+        $legacy_members = "{$prefix}equivalencia_miembro";
+        if (!self::table_exists($legacy_groups) || !self::table_exists($legacy_members)) {
+            return;
+        }
 
         // 1. Migrar datos de equivalencia_grupo → equivalence_groups
         $wpdb->query(
@@ -1229,21 +1317,27 @@ class Riverso_POS_Activator {
         $wpdb->query(
             "INSERT IGNORE INTO {$prefix}codigo_barra
                 (codigo, tipo, producto_base_id, cantidad, unidad_medida, factor_a_unidad_base, activo, migrado_de_tabla)
-             SELECT b.ean13, 'ean13', COALESCE(b.product_base_id, 0), 1, 'unidad', 1, 1, 'riverso_barcodes'
+             SELECT b.barcode, 'ean13', pb.id, 1, COALESCE(pb.unidad_base, 'unidad'), 1, 1, 'riverso_barcodes'
              FROM {$prefix}barcodes b
-             WHERE b.ean13 IS NOT NULL AND b.ean13 <> ''
+             INNER JOIN {$prefix}producto_base pb
+               ON pb.woocommerce_product_id = b.product_id
+              AND (pb.woocommerce_variation_id = COALESCE(b.variation_id, 0)
+                   OR COALESCE(b.variation_id, 0) = 0)
+             WHERE b.barcode IS NOT NULL AND b.barcode <> ''
                AND NOT EXISTS (
-                   SELECT 1 FROM {$prefix}codigo_barra cb WHERE cb.codigo = b.ean13
+                   SELECT 1 FROM {$prefix}codigo_barra cb WHERE cb.codigo = b.barcode
                )"
         );
 
         $wpdb->query(
             "INSERT IGNORE INTO {$prefix}codigo_barra
                 (codigo, tipo, producto_base_id, proveedor_id, cantidad, unidad_medida, factor_a_unidad_base, activo, migrado_de_tabla)
-             SELECT c.codigo_proveedor, 'supplier', COALESCE(c.product_base_id, 0), c.proveedor_id, 1, 'unidad',
+             SELECT c.codigo_proveedor, 'supplier', c.product_base_id, c.proveedor_id,
+                    COALESCE(c.factor_conversion, 1), COALESCE(c.unidad_medida, 'unidad'),
                     COALESCE(c.factor_conversion, 1), COALESCE(c.activo, 1), 'riverso_codigos'
              FROM {$prefix}codigos c
              WHERE c.codigo_proveedor IS NOT NULL AND c.codigo_proveedor <> ''
+               AND c.product_base_id IS NOT NULL
                AND NOT EXISTS (
                    SELECT 1 FROM {$prefix}codigo_barra cb WHERE cb.codigo = c.codigo_proveedor
                )"
@@ -1277,12 +1371,21 @@ class Riverso_POS_Activator {
              ADD KEY IF NOT EXISTS idx_grupo_id (grupo_id)"
         );
 
-        // 3. Agregar FK constraint (si no existe)
-        $wpdb->query(
-            "ALTER TABLE {$prefix}producto_proveedor 
-             ADD CONSTRAINT IF NOT EXISTS fk_pp_grupo_id 
-             FOREIGN KEY (grupo_id) REFERENCES {$prefix}equivalence_groups(id) ON DELETE SET NULL"
-        );
+        // 3. Agregar FK solo cuando el servidor la soporta y aún no existe.
+        $fk_exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+             WHERE CONSTRAINT_SCHEMA = %s AND TABLE_NAME = %s
+               AND CONSTRAINT_NAME = 'fk_pp_grupo_id'",
+            DB_NAME,
+            "{$prefix}producto_proveedor"
+        ));
+        if (!(int) $fk_exists) {
+            $wpdb->query(
+                "ALTER TABLE {$prefix}producto_proveedor
+                 ADD CONSTRAINT fk_pp_grupo_id
+                 FOREIGN KEY (grupo_id) REFERENCES {$prefix}equivalence_groups(id) ON DELETE SET NULL"
+            );
+        }
 
         // 4. Agregar columnas de auditoría
         $wpdb->query(
@@ -1297,15 +1400,8 @@ class Riverso_POS_Activator {
              COMMENT 'user_id que asignó a familia' AFTER assigned_to_family_at"
         );
 
-        // 5. Agregar CHECK constraint (MySQL 8.0.16+)
-        @$wpdb->query(
-            "ALTER TABLE {$prefix}producto_proveedor 
-             ADD CONSTRAINT chk_producto_o_familia 
-             CHECK (
-                (producto_base_id IS NOT NULL AND grupo_id IS NULL) OR
-                (producto_base_id IS NULL AND grupo_id IS NOT NULL)
-            )"
-        );
+        // La exclusividad producto/familia se valida en la capa de dominio.
+        // MariaDB rechaza este CHECK cuando grupo_id participa en una FK ON DELETE.
     }
 
     /**

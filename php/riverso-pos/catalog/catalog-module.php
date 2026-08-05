@@ -50,6 +50,7 @@ class Riverso_Catalog_Module {
         add_action('wp_ajax_riverso_scan_barcode', [__CLASS__, 'ajax_scan_barcode']);
         add_action('wp_ajax_riverso_get_product', [__CLASS__, 'ajax_get_product']);
         add_action('wp_ajax_riverso_create_product', [__CLASS__, 'ajax_create_product']);
+        add_action('wp_ajax_riverso_set_barcode_status', [__CLASS__, 'ajax_set_barcode_status']);
     }
 
     /**
@@ -188,6 +189,25 @@ class Riverso_Catalog_Module {
         ]);
 
         wp_send_json_success(['product_id' => $product_id]);
+    }
+
+    /**
+     * AJAX: cambia el ciclo de vida de un código sin borrar su historial.
+     */
+    public static function ajax_set_barcode_status() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_codes')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        $codigo_id = intval($_POST['codigo_id'] ?? 0);
+        $estado = sanitize_key($_POST['estado'] ?? '');
+        $motivo = sanitize_text_field($_POST['motivo'] ?? '');
+        if (!$codigo_id || !Riverso_Barcode_Model::set_status($codigo_id, $estado, $motivo)) {
+            wp_send_json_error(['message' => 'No se pudo cambiar el estado del código.']);
+        }
+
+        wp_send_json_success(['codigo_id' => $codigo_id, 'estado' => $estado]);
     }
 
     /**

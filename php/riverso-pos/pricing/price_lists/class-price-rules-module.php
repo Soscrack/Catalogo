@@ -94,6 +94,7 @@ class Riverso_Price_Rules_Module {
         dbDelta($sql);
 
         self::seed_example_rule();
+        self::seed_legacy_screw_rule();
     }
 
     /**
@@ -135,6 +136,47 @@ class Riverso_Price_Rules_Module {
         foreach ($tiers as $t) {
             $t['rule_id'] = $rule_id;
             $wpdb->insert("{$prefix}price_rule_tiers", $t);
+        }
+    }
+
+    /**
+     * Regla propuesta para tornillos legacy. Se crea en borrador y sin
+     * asignaciones para que no altere precios hasta revisión humana.
+     */
+    public static function seed_legacy_screw_rule() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $code = 'TORNILLO-LEGACY';
+
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}price_rules WHERE codigo = %s LIMIT 1",
+            $code
+        ));
+        if ($exists) {
+            return;
+        }
+
+        $wpdb->insert("{$prefix}price_rules", [
+            'codigo' => $code,
+            'nombre' => 'Tornillos legacy: +3 y precio referencia',
+            'version' => 1,
+            'estado' => 'borrador',
+            'created_by_system' => 1,
+            'requires_human_review' => 1,
+        ]);
+        $rule_id = intval($wpdb->insert_id);
+        if (!$rule_id) {
+            return;
+        }
+
+        $tiers = [
+            ['qty_min' => 1, 'qty_max' => 30, 'formula_tipo' => 'suma', 'multiplicador' => null, 'addendo' => 3, 'redondeo' => 'techo_decena', 'total_minimo' => null, 'orden' => 1],
+            ['qty_min' => 31, 'qty_max' => 300, 'formula_tipo' => 'suma', 'multiplicador' => null, 'addendo' => 3, 'redondeo' => 'ninguno', 'total_minimo' => null, 'orden' => 2],
+            ['qty_min' => 301, 'qty_max' => null, 'formula_tipo' => 'multiplicador', 'multiplicador' => 1, 'addendo' => null, 'redondeo' => 'ninguno', 'total_minimo' => null, 'orden' => 3],
+        ];
+        foreach ($tiers as $tier) {
+            $tier['rule_id'] = $rule_id;
+            $wpdb->insert("{$prefix}price_rule_tiers", $tier);
         }
     }
 

@@ -50,6 +50,7 @@ class Riverso_Task_Module {
         'confirmar_relacion_online' => 'Confirmar relación producto local ↔ online',
         'confirmar_estructura_atributos' => 'Confirmar estructura de atributos',
         'autorizar_publicacion' => 'Autorizar publicación',
+        'revisar_calidad_catalogo' => 'Revisar salud del catálogo',
     ];
 
     /**

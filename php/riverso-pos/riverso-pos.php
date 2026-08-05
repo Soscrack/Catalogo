@@ -3,7 +3,7 @@
  * Plugin Name: Riverso POS
  * Plugin URI: https://riverso.cl
  * Description: Sistema POS/mini-ERP integrado con WooCommerce para gestión de productos, facturas, inventario y tareas operativas.
- * Version: 1.4.3
+ * Version: 1.5.4
  * Author: Riverso
  * Author URI: https://riverso.cl
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constantes del plugin
-define('RIVERSO_POS_VERSION', '1.4.3');
+define('RIVERSO_POS_VERSION', '1.5.4');
 define('RIVERSO_POS_PLUGIN_FILE', __FILE__);
 define('RIVERSO_POS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RIVERSO_POS_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -313,6 +313,8 @@ final class Riverso_POS {
     private function boot_erp_domains() {
         $boot = [
             RIVERSO_POS_PLUGIN_DIR . 'catalog/catalog-module.php',
+            RIVERSO_POS_PLUGIN_DIR . 'catalog/health/class-catalog-health-module.php',
+            RIVERSO_POS_PLUGIN_DIR . 'catalog/import/class-presentation-backfill-service.php',
             RIVERSO_POS_PLUGIN_DIR . 'inventory/inventory-module.php',
             RIVERSO_POS_PLUGIN_DIR . 'inventory/stock/class-stock-service.php',
             RIVERSO_POS_PLUGIN_DIR . 'inventory/reservations/class-reservation-service.php',
@@ -335,6 +337,12 @@ final class Riverso_POS {
         // Inits explícitos (evita double-init de publish/import)
         if (class_exists('Riverso_Catalog_Module') && method_exists('Riverso_Catalog_Module', 'init')) {
             Riverso_Catalog_Module::init();
+        }
+        if (class_exists('Riverso_Catalog_Health_Module')) {
+            Riverso_Catalog_Health_Module::get_instance()->init();
+        }
+        if (class_exists('Riverso_Presentation_Backfill_Service')) {
+            Riverso_Presentation_Backfill_Service::register_cli();
         }
         if (class_exists('Riverso_Inventory_Module') && method_exists('Riverso_Inventory_Module', 'init')) {
             Riverso_Inventory_Module::init();

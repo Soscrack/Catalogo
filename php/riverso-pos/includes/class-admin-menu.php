@@ -81,6 +81,15 @@ class Riverso_POS_Admin_Menu {
             [$this, 'render_domain']
         );
 
+        add_submenu_page(
+            'riverso-pos',
+            __('Salud del catálogo', 'riverso-pos'),
+            __('Salud del catálogo', 'riverso-pos'),
+            'riverso_manage_codes',
+            'riverso-pos-catalog-health',
+            [$this, 'render_catalog_health']
+        );
+
         // Productos
         add_submenu_page(
             'riverso-pos',
@@ -309,6 +318,13 @@ class Riverso_POS_Admin_Menu {
     }
 
     /**
+     * Renderiza la bandeja de calidad del catálogo.
+     */
+    public function render_catalog_health() {
+        $this->render_page('catalog-health');
+    }
+
+    /**
      * Renderiza la página de gestión de productos.
      */
     public function render_products() {
@@ -320,8 +336,16 @@ class Riverso_POS_Admin_Menu {
      * Renderiza la página de tareas
      */
     public function render_tasks() {
-        // Cargar módulo de tareas para constantes
-        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/tasks/class-task-module.php';
+        // Preferir core/tasks (canónico). Evitar redeclarar la clase si ya cargó.
+        if (!class_exists('Riverso_Task_Module')) {
+            $core = RIVERSO_POS_PLUGIN_DIR . 'core/tasks/class-task-module.php';
+            $legacy = RIVERSO_POS_PLUGIN_DIR . 'modules/tasks/class-task-module.php';
+            if (file_exists($core)) {
+                require_once $core;
+            } elseif (file_exists($legacy)) {
+                require_once $legacy;
+            }
+        }
         $this->render_page('tasks');
     }
     

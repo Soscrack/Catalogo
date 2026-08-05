@@ -3,14 +3,17 @@
 import paramiko
 import os
 
-# SSH credentials
-HOST = '72.61.37.37'
-USER = 'root'
-PASSWORD = '9.#R/S12yE(4LRSTOMaB'
-WP_PATH = '/var/www/vhosts/riverso.cl/httpdocs'
+# SSH credentials are intentionally read from the environment.
+HOST = os.environ.get('RIVERSO_DEPLOY_HOST', '72.61.37.37')
+USER = os.environ.get('RIVERSO_DEPLOY_USER', 'root')
+PASSWORD = os.environ.get('RIVERSO_DEPLOY_PASSWORD')
+WP_PATH = os.environ.get('RIVERSO_WP_PATH', '/var/www/vhosts/riverso.cl/httpdocs')
 PLUGIN_PATH = f'{WP_PATH}/wp-content/plugins/riverso-pos'
 
 def main():
+    if not PASSWORD:
+        raise RuntimeError('Define RIVERSO_DEPLOY_PASSWORD antes de desplegar.')
+
     # Connect
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -25,15 +28,25 @@ def main():
     print('Upload complete!')
     sftp.close()
 
-    # Extract and setup
+    # Preflight, backup, deploy and migrate. A PHP syntax failure stops before
+    # touching the active plugin; a migration failure restores the backup.
     commands = f'''
+set -e
 cd /tmp
 rm -rf /tmp/riverso-pos-extract 2>/dev/null
 mkdir -p /tmp/riverso-pos-extract
 unzip -o riverso-pos-deploy.zip -d /tmp/riverso-pos-extract
+PHP_BIN=$(ls /opt/plesk/php/*/bin/php 2>/dev/null | sort -V | tail -1)
+test -n "$PHP_BIN"
+
+unzip -Z1 /tmp/riverso-pos-deploy.zip | awk '/[.]php$/ {{print}}' | while IFS= read -r rel; do
+  "$PHP_BIN" -l "/tmp/riverso-pos-extract/$rel" >/dev/null
+done
+echo 'PHP preflight passed'
 
 # Backup current
-cp -r {PLUGIN_PATH} {PLUGIN_PATH}.bak.$(date +%Y%m%d%H%M%S) 2>/dev/null || true
+BACKUP="{PLUGIN_PATH}.bak.$(date +%Y%m%d%H%M%S)"
+cp -a {PLUGIN_PATH} "$BACKUP" 2>/dev/null || true
 
 # Copy files (ZIP contains riverso-pos/ prefix)
 if [ -d /tmp/riverso-pos-extract/riverso-pos ]; then
@@ -49,78 +62,53 @@ rm -rf {PLUGIN_PATH}/riverso-pos 2>/dev/null || true
 chown -R riverso.cl_1xybiw6rlcq:psacln {PLUGIN_PATH}
 chmod -R 755 {PLUGIN_PATH}
 
-# Cleanup
-rm -rf /tmp/riverso-pos-extract /tmp/riverso-pos-deploy.zip
+# Trigger idempotent migrations as the site owner.
+if ! sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
+  require "{WP_PATH}/wp-load.php";
+  Riverso_POS_Activator::update_database();
+  echo get_option("riverso_pos_db_version"), PHP_EOL;
+'; then
+  rm -rf {PLUGIN_PATH}
+  cp -a "$BACKUP" {PLUGIN_PATH}
+  chown -R riverso.cl_1xybiw6rlcq:psacln {PLUGIN_PATH}
+  echo 'Migration failed; backup restored' >&2
+  exit 1
+fi
 
-echo 'Files deployed!'
+VERSION=$(sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
+  require "{WP_PATH}/wp-load.php";
+  echo defined("RIVERSO_POS_VERSION") ? RIVERSO_POS_VERSION : "missing";
+')
+test "$VERSION" = "1.5.4"
+
+sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
+  require "{WP_PATH}/wp-load.php";
+  global $wpdb;
+  foreach (["riverso_data_gaps", "riverso_ean_aliases"] as $suffix) {{
+    $table = $wpdb->prefix . $suffix;
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) !== $table) {{
+      fwrite(STDERR, "Missing table: " . $table . PHP_EOL);
+      exit(1);
+    }}
+  }}
+  echo "schema-ok", PHP_EOL;
+'
+
+# Cleanup only after successful verification.
+rm -rf /tmp/riverso-pos-extract /tmp/riverso-pos-deploy.zip
+echo "Files deployed: $VERSION"
 '''
 
     print('Deploying files...')
-    stdin, stdout, stderr = ssh.exec_command(commands)
+    stdin, stdout, stderr = ssh.exec_command(commands, timeout=300)
     print('Output:', stdout.read().decode())
     err = stderr.read().decode()
     if err:
         print('Stderr:', err)
-
-    # Create POS tables
-    mysql_cmd = '''
-mysql -uwp_hsvmc -p'z7yCU31@7oZ1?ul@' wp_6z3tm -e "
-CREATE TABLE IF NOT EXISTS nExLU_riverso_pos_sessions (
-    id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-    user_id BIGINT(20) UNSIGNED NOT NULL,
-    register_name VARCHAR(100) DEFAULT 'Caja 1',
-    opening_amount DECIMAL(12,2) DEFAULT 0,
-    closing_amount DECIMAL(12,2) DEFAULT NULL,
-    expected_amount DECIMAL(12,2) DEFAULT NULL,
-    difference DECIMAL(12,2) DEFAULT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'open',
-    opened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    closed_at DATETIME DEFAULT NULL,
-    notes TEXT,
-    PRIMARY KEY (id),
-    KEY idx_user (user_id),
-    KEY idx_status (status),
-    KEY idx_opened_at (opened_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
-
-CREATE TABLE IF NOT EXISTS nExLU_riverso_pos_held_orders (
-    id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-    session_id BIGINT(20) UNSIGNED NOT NULL,
-    user_id BIGINT(20) UNSIGNED NOT NULL,
-    customer_id BIGINT(20) UNSIGNED DEFAULT NULL,
-    customer_name VARCHAR(255) DEFAULT NULL,
-    cart_data LONGTEXT NOT NULL,
-    total DECIMAL(12,2) DEFAULT 0,
-    notes TEXT,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    KEY idx_session (session_id),
-    KEY idx_user (user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
-
-CREATE TABLE IF NOT EXISTS nExLU_riverso_pos_payments (
-    id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-    session_id BIGINT(20) UNSIGNED NOT NULL,
-    order_id BIGINT(20) UNSIGNED NOT NULL,
-    payment_method VARCHAR(50) NOT NULL,
-    amount DECIMAL(12,2) NOT NULL,
-    reference VARCHAR(100) DEFAULT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    KEY idx_session (session_id),
-    KEY idx_order (order_id),
-    KEY idx_method (payment_method)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
-"
-
-echo "POS tables created!"
-'''
-    print('Creating POS tables...')
-    stdin, stdout, stderr = ssh.exec_command(mysql_cmd)
-    print('Output:', stdout.read().decode())
-    err = stderr.read().decode()
-    if err:
-        print('Stderr:', err)
+    status = stdout.channel.recv_exit_status()
+    if status != 0:
+        ssh.close()
+        raise RuntimeError(f'Deployment failed with status {status}')
 
     ssh.close()
     print('\nDeployment complete!')

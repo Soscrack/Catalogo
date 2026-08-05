@@ -640,7 +640,7 @@ class Riverso_Invoice_Intake_Service {
             $params[] = (int) $proveedor_id;
         }
 
-        $sql = "SELECT pp.id, pp.codigo_proveedor, pp.proveedor_id, pp.human_product_review,
+        $sql = "SELECT pp.id, pp.codigo_proveedor, pp.proveedor_id, pb.human_product_review,
                        pb.canonical_sku
                 FROM {$prefix}producto_proveedor pp
                 INNER JOIN {$prefix}producto_base pb ON pb.id = pp.producto_base_id

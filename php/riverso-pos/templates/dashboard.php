@@ -48,6 +48,10 @@ $stats_avanzadas = [
     'empleados_total' => $wpdb->get_var("SELECT COUNT(*) FROM {$prefix}empleados WHERE activo = 1") ?: 0,
 ];
 
+$catalog_health = class_exists('Riverso_Catalog_Health_Module')
+    ? Riverso_Catalog_Health_Module::get_summary()
+    : ['total' => 0, 'criticos' => 0, 'coverage' => 100];
+
 // Ventas de los últimos 7 días para gráfico
 $ventas_semana = $wpdb->get_results("
     SELECT DATE(p.post_date) as fecha, 
@@ -192,6 +196,20 @@ $actividad_reciente = $wpdb->get_results("
                 <span class="stat-label"><?php _e('Códigos Sin Vincular', 'riverso-pos'); ?></span>
             </div>
             <a href="<?php echo admin_url('admin.php?page=riverso-pos-codes'); ?>" class="stat-link">Ver</a>
+        </div>
+
+        <div class="riverso-stat-card <?php echo $catalog_health['criticos'] > 0 ? 'alert' : ''; ?>">
+            <div class="stat-icon" style="background: <?php echo $catalog_health['criticos'] > 0 ? '#dc3545' : '#28a745'; ?>;">
+                <span class="dashicons dashicons-search"></span>
+            </div>
+            <div class="stat-content">
+                <span class="stat-number"><?php echo esc_html(number_format_i18n($catalog_health['total'])); ?></span>
+                <span class="stat-label">
+                    <?php _e('Brechas de catálogo', 'riverso-pos'); ?>
+                    <small><?php echo esc_html(number_format_i18n($catalog_health['coverage'], 1)); ?>% cobertura</small>
+                </span>
+            </div>
+            <a href="<?php echo esc_url(admin_url('admin.php?page=riverso-pos-catalog-health')); ?>" class="stat-link">Revisar</a>
         </div>
         <?php endif; ?>
     </div>

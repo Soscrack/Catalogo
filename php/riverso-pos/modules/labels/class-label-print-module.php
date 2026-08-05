@@ -79,6 +79,9 @@ class Riverso_Label_Print_Module {
         // Generar EAN13 si no existe
         if (empty($job['ean13'])) {
             $job['ean13'] = $this->generate_ean13($sku, $cantidad);
+            if (is_wp_error($job['ean13'])) {
+                wp_send_json_error(['message' => $job['ean13']->get_error_message()]);
+            }
         }
 
         wp_send_json_success($job);
@@ -137,13 +140,16 @@ class Riverso_Label_Print_Module {
             return Riverso_EAN13_Generator::build($sku, $cantidad);
         }
 
-        // Fallback: lógica simple si no está disponible
-        $sku_digits = preg_replace('/\D/', '', (string) $sku);
-        if ($sku_digits === '') {
-            $sku_digits = '0';
+        // Fallback seguro: nunca truncar SKU ni cantidades.
+        $sku = trim((string) $sku);
+        if (!preg_match('/^\d{1,6}$/', $sku)) {
+            return new WP_Error('ean_sku_not_representable', 'El SKU no puede representarse en el EAN interno.');
         }
-        $sku_part = str_pad(substr($sku_digits, -6), 6, '0', STR_PAD_LEFT);
-        $qty_part = str_pad((string) min(99999, max(0, $cantidad)), 5, '0', STR_PAD_LEFT);
+        if (!is_numeric($cantidad) || (float) $cantidad <= 0 || (float) $cantidad > 99999 || floor((float) $cantidad) !== (float) $cantidad) {
+            return new WP_Error('ean_quantity_not_representable', 'La cantidad no puede representarse en el EAN interno.');
+        }
+        $sku_part = str_pad($sku, 6, '0', STR_PAD_LEFT);
+        $qty_part = str_pad((string) intval($cantidad), 5, '0', STR_PAD_LEFT);
 
         $twelve = '2' . $sku_part . $qty_part;
         $check = $this->calculate_check_digit($twelve);

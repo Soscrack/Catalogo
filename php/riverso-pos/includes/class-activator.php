@@ -806,6 +806,7 @@ class Riverso_POS_Activator {
         self::add_column_if_missing($table, 'match_origen_online', "match_origen_online VARCHAR(20) DEFAULT NULL");
         self::add_column_if_missing($table, 'matched_online_at', "matched_online_at DATETIME DEFAULT NULL");
         self::add_column_if_missing($table, 'woocommerce_candidate_id', "woocommerce_candidate_id BIGINT UNSIGNED NOT NULL DEFAULT 0");
+        self::add_column_if_missing($table, 'origen_datos', "origen_datos VARCHAR(64) DEFAULT NULL COMMENT 'Fuente: manual, xml, woo, tienda_local_legacy'");
 
         self::add_index_if_missing($table, 'idx_deleted_at', "KEY idx_deleted_at (deleted_at)");
         self::add_index_if_missing($table, 'idx_archived_at', "KEY idx_archived_at (archived_at)");
@@ -1315,6 +1316,18 @@ class Riverso_POS_Activator {
      */
     private static function integrate_local_store_products($prefix) {
         global $wpdb;
+
+        // Asegurar columnas requeridas (prod puede no tenerlas aún)
+        self::add_column_if_missing(
+            "{$prefix}producto_base",
+            'origen_datos',
+            "origen_datos VARCHAR(64) DEFAULT NULL COMMENT 'Fuente: manual, xml, woo, tienda_local_legacy'"
+        );
+        self::add_column_if_missing(
+            "{$prefix}tienda_local_productos",
+            'integrated_at',
+            "integrated_at DATETIME DEFAULT NULL COMMENT 'Migración a producto_base'"
+        );
 
         // Migración: para cada producto en tienda_local_productos sin vinculación
         // Intentar matchear con producto_base por SKU exacto o código de barra

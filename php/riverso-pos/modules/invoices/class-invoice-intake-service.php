@@ -88,9 +88,24 @@ class Riverso_Invoice_Intake_Service {
     }
 
     /**
-     * Detecta si el XML completo es de productos, transportista (envío) o mixto.
+     * Detecta si el XML completo es de productos, transportista (envío), nota de crédito o mixto.
      */
     public function detect_document_type(array $factura_data) {
+        // Detectar si es Nota de Crédito (TipoDTE=61)
+        $tipo_dte = (int) ($factura_data['tipo_dte'] ?? 0);
+        if ($tipo_dte === 61) {
+            return [
+                'tipo' => 'nota_credito',
+                'label' => 'Nota de Crédito',
+                'confianza' => 'alta',
+                'motivo' => 'El documento es una Nota de Crédito (TipoDTE=61). Requiere asociación con factura origen.',
+                'items_producto' => 0,
+                'items_envio' => 0,
+                'items_preview' => [],
+                'tipo_dte' => $tipo_dte,
+            ];
+        }
+
         $items = $factura_data['items'] ?? [];
         $product_count = 0;
         $shipping_count = 0;

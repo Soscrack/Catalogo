@@ -64,7 +64,8 @@ class Riverso_POS_Permissions {
         'riverso_create_invoices'    => 'Ingresar facturas',
         'riverso_process_invoices'   => 'Procesar facturas',
         'riverso_approve_invoices'   => 'Aprobar facturas',
-        
+        'riverso_manage_invoice_payments' => 'Gestionar pagos de facturas',
+
         // === RECEPCIÓN FÍSICA ===
         'riverso_receive_items'      => 'Registrar recepción física',
         'riverso_approve_reception'  => 'Aprobar recepción',

@@ -699,12 +699,13 @@ jQuery(function($) {
         if (this.files.length) setBulkFiles(this.files);
     });
 
-    function uploadOneFile(file, extraFields) {
+    function uploadOneFile(file, extraFields, uploadMode) {
         return new Promise((resolve) => {
             const formData = new FormData();
             formData.append('action', 'riverso_upload_invoice');
             formData.append('nonce', nonce);
             formData.append('xml_file', file);
+            formData.append('upload_mode', uploadMode || 'single');
             Object.entries(extraFields || {}).forEach(([k, v]) => formData.append(k, v ?? ''));
             $.ajax({
                 url: ajaxurl, type: 'POST', data: formData, processData: false, contentType: false,
@@ -749,18 +750,19 @@ jQuery(function($) {
             }
 
             const det = preview.data.detection || {};
-            const tipo = det.tipo === 'envio' ? 'envio' : 'productos';
+            // Detectar tipo: si es nota_credito, mantener ese tipo
+            const tipo = det.tipo === 'nota_credito' ? 'nota_credito' : (det.tipo === 'envio' ? 'envio' : 'productos');
 
             const emisor = preview.data.emisor || {};
             $row.find('.bulk-status').text('Subiendo…');
             const upload = await uploadOneFile(file, {
                 documento_tipo: tipo,
-                modo_ingreso: tipo === 'envio' ? 'solo_costos' : ($('input[name="modo_ingreso"]:checked').val() || '<?php echo esc_js($default_intake_mode); ?>'),
+                modo_ingreso: tipo === 'nota_credito' ? 'solo_costos' : (tipo === 'envio' ? 'solo_costos' : ($('input[name="modo_ingreso"]:checked').val() || '<?php echo esc_js($default_intake_mode); ?>')),
                 proveedor_modo: 'xml',
                 proveedor_nombre: emisor.razon_social || '',
                 proveedor_rut: emisor.rut || '',
                 link_to_factura_id: ''
-            });
+            }, 'bulk');
 
             if (upload.success) {
                 $row.removeClass('run').addClass('ok');
@@ -1034,6 +1036,7 @@ jQuery(function($) {
         formData.append('action', 'riverso_upload_invoice');
         formData.append('nonce', nonce);
         formData.append('documento_tipo', tipo);
+        formData.append('upload_mode', 'single');
         formData.append('modo_ingreso', $('input[name="modo_ingreso"]:checked').val() || 'recepcion');
         formData.append('link_to_factura_id', $('#link-factura-productos-id').val() || '');
         formData.append('xml_file', fileInput[0].files[0]);

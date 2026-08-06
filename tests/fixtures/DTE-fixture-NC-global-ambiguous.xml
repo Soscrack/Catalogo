@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<DTE xmlns="http://www.sii.cl/SiiDte" version="1.0">
+	<Documento ID="FIXTURE20260102T61F00002">
+		<Encabezado>
+			<IdDoc>
+				<TipoDTE>61</TipoDTE>
+				<Folio>00002</Folio>
+				<FchEmis>2026-01-20</FchEmis>
+			</IdDoc>
+			<Emisor>
+				<RUTEmisor>76399999-K</RUTEmisor>
+				<RznSoc>PROVEEDOR FIXTURE S.A.</RznSoc>
+				<GiroEmis>DISTRIBUIDOR</GiroEmis>
+				<Acteco>611000</Acteco>
+			</Emisor>
+			<Receptor>
+				<RUTRecep>76443852-3</RUTRecep>
+				<CdgIntRecep>TEST001</CdgIntRecep>
+				<RznSocRecep>COMERCIALIZADORA TEST</RznSocRecep>
+				<GiroRecep>COMERCIO</GiroRecep>
+				<DirRecep>CALLE PRINCIPAL 100</DirRecep>
+				<CmnaRecep>SANTIAGO</CmnaRecep>
+				<CiudadRecep>SANTIAGO</CiudadRecep>
+			</Receptor>
+			<Totales>
+				<MntNeto>50000</MntNeto>
+				<TasaIVA>19.00</TasaIVA>
+				<IVA>9500</IVA>
+				<IVAProp>9500</IVAProp>
+				<MntTotal>59500</MntTotal>
+			</Totales>
+		</Encabezado>
+		<Detalle>
+			<NroLinDet>1</NroLinDet>
+			<NmbItem>AJUSTE GENERAL</NmbItem>
+			<MontoItem>50000</MontoItem>
+		</Detalle>
+		<Referencia>
+			<NroLinRef>1</NroLinRef>
+			<TpoDocRef>33</TpoDocRef>
+			<IndGlobal>1</IndGlobal>
+			<FolioRef>0</FolioRef>
+			<FchRef>2026-01-20</FchRef>
+			<CodRef>3</CodRef>
+		</Referencia>
+	</Documento>
+</DTE>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<DTE xmlns="http://www.sii.cl/SiiDte" version="1.0">
+	<Documento ID="FIXTURE20260101T33F12345">
+		<Encabezado>
+			<IdDoc>
+				<TipoDTE>33</TipoDTE>
+				<Folio>12345</Folio>
+				<FchEmis>2025-12-01</FchEmis>
+			</IdDoc>
+			<Emisor>
+				<RUTEmisor>76399999-K</RUTEmisor>
+				<RznSoc>PROVEEDOR FIXTURE S.A.</RznSoc>
+				<GiroEmis>DISTRIBUIDOR</GiroEmis>
+				<Acteco>611000</Acteco>
+			</Emisor>
+			<Receptor>
+				<RUTRecep>76443852-3</RUTRecep>
+				<CdgIntRecep>TEST001</CdgIntRecep>
+				<RznSocRecep>COMERCIALIZADORA TEST</RznSocRecep>
+				<GiroRecep>COMERCIO</GiroRecep>
+				<DirRecep>CALLE PRINCIPAL 100</DirRecep>
+				<CmnaRecep>SANTIAGO</CmnaRecep>
+				<CiudadRecep>SANTIAGO</CiudadRecep>
+			</Receptor>
+			<Totales>
+				<MntNeto>500000</MntNeto>
+				<TasaIVA>19.00</TasaIVA>
+				<IVA>95000</IVA>
+				<IVAProp>95000</IVAProp>
+				<MntTotal>595000</MntTotal>
+			</Totales>
+		</Encabezado>
+		<Detalle>
+			<NroLinDet>1</NroLinDet>
+			<CdgItem>
+				<TpoCodigo>INT1</TpoCodigo>
+				<VlrCodigo>PROD-001</VlrCodigo>
+			</CdgItem>
+			<NmbItem>PRODUCTO DE PRUEBA</NmbItem>
+			<QtyItem>10</QtyItem>
+			<UnmdItem>UN</UnmdItem>
+			<PrcItem>50000</PrcItem>
+			<MontoItem>500000</MontoItem>
+		</Detalle>
+	</Documento>
+</DTE>

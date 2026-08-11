@@ -795,6 +795,23 @@ class Riverso_Woo_Publisher_Module {
         return $this->get_catalog_product($product_id);
     }
 
+    /**
+     * Guarda/actualiza los atributos de un producto variable.
+     * Soporta cambios en nombres, opciones, visible y variation.
+     *
+     * @param int $product_id ID del producto variable (padre)
+     * @param array $attributes_data Array con estructura:
+     *        {
+     *          'Nominal': ['value1', 'value2'],
+     *          'Material': ['acero', 'inox'],
+     *          'custom_attr': {
+     *            'options': ['a', 'b'],
+     *            'visible': true,
+     *            'variation': false
+     *          }
+     *        }
+     * @return array|WP_Error
+     */
     public function save_catalog_attributes($product_id, $attributes_data) {
         $product_id = absint($product_id);
         $product = wc_get_product($product_id);
@@ -808,21 +825,50 @@ class Riverso_Woo_Publisher_Module {
 
         $current = $product->get_attributes();
         $updated = [];
+        
         foreach ($current as $key => $attr) {
             $name = $attr->get_name();
+            
+            // Preservar atributos globales (pa_*) sin cambios
             if (strpos($name, 'pa_') === 0) {
                 $updated[] = $attr;
                 continue;
             }
+            
+            // Buscar por nombre de atributo exacto
             $plain = $name;
-            if (isset($attributes_data[$plain]) && is_array($attributes_data[$plain])) {
-                $options = array_values(array_filter(array_unique(array_map('trim', $attributes_data[$plain]))));
+            
+            if (isset($attributes_data[$plain])) {
+                $data = $attributes_data[$plain];
                 $new_attr = new WC_Product_Attribute();
                 $new_attr->set_id($attr->get_id());
                 $new_attr->set_name($name);
+                
+                // Parsear datos que pueden ser array simple o array con estructura
+                if (is_array($data)) {
+                    if (isset($data['options'])) {
+                        // Formato: { 'options': [...], 'visible': bool, 'variation': bool }
+                        $options = $data['options'];
+                        $visible = isset($data['visible']) ? (bool) $data['visible'] : $attr->get_visible();
+                        $variation = isset($data['variation']) ? (bool) $data['variation'] : $attr->get_variation();
+                    } else {
+                        // Formato simple: array de valores directamente
+                        $options = $data;
+                        $visible = $attr->get_visible();
+                        $variation = $attr->get_variation();
+                    }
+                } else {
+                    continue; // Saltar si no es array
+                }
+                
+                $options = array_values(array_filter(array_unique(array_map('trim', (array) $options))));
+                if (empty($options)) {
+                    continue; // Saltar si no hay opciones válidas
+                }
+                
                 $new_attr->set_options($options);
-                $new_attr->set_visible($attr->get_visible());
-                $new_attr->set_variation($attr->get_variation());
+                $new_attr->set_visible($visible);
+                $new_attr->set_variation($variation);
                 $updated[] = $new_attr;
             } else {
                 $updated[] = $attr;
@@ -831,6 +877,8 @@ class Riverso_Woo_Publisher_Module {
 
         $product->set_attributes($updated);
         $product->save();
+        
+        // Sincronizar datos de lookup (precios, stock, atributos)
         WC_Product_Variable::sync($product_id);
         wc_delete_product_transients($product_id);
 
@@ -927,48 +975,161 @@ class Riverso_Woo_Publisher_Module {
     }
 
     private function build_attributes($items) {
-        $nominal = [];
-        $largo = [];
-        $combined = [];
-        $envase = [];
-        $acabado = [];
+        // Colectores para cada atributo conocido
+        $attribute_values = [
+            'nominal' => [],
+            'largo' => [],
+            'grosor' => [],
+            'material' => [],
+            'acabado' => [],
+            'envase' => [],
+            'medida' => [],
+            'tamaño' => [],
+            'marca' => [],
+            'entre_caras' => [],
+            'punta_torx' => [],
+        ];
+        
+        $combined_nominal_largo = [];
         $first_variation = [];
 
+        // Recopilar todos los valores de atributos de todas las variantes
         foreach ($items as $entry) {
             $map = $this->attributes_to_map($entry['attributes'] ?? []);
+            
+            // Valores informativos
             if (!empty($map['nominal'])) {
-                $nominal[] = $map['nominal'];
+                $attribute_values['nominal'][] = $map['nominal'];
             }
             if (!empty($map['largo'])) {
-                $largo[] = $map['largo'];
+                $attribute_values['largo'][] = $map['largo'];
             }
+            if (!empty($map['grosor'])) {
+                $attribute_values['grosor'][] = $map['grosor'];
+            }
+            if (!empty($map['material'])) {
+                $attribute_values['material'][] = $map['material'];
+            }
+            if (!empty($map['acabado'])) {
+                $attribute_values['acabado'][] = $map['acabado'];
+            }
+            if (!empty($map['marca'])) {
+                $attribute_values['marca'][] = $map['marca'];
+            }
+            if (!empty($map['entre_caras'])) {
+                $attribute_values['entre_caras'][] = $map['entre_caras'];
+            }
+            if (!empty($map['punta_torx'])) {
+                $attribute_values['punta_torx'][] = $map['punta_torx'];
+            }
+            
+            // Atributos de variación
+            if (!empty($map['envase'])) {
+                $attribute_values['envase'][] = $map['envase'];
+                $first_variation['envase'] = $first_variation['envase'] ?? $map['envase'];
+            }
+            
+            // Combinación nominal x largo (generador principal de variaciones)
             $combo = $this->combined_nominal_largo($map);
             if ($combo !== '') {
-                $combined[] = $combo;
-                if (!$first_variation) {
+                $combined_nominal_largo[] = $combo;
+                if (!$first_variation || !isset($first_variation['nominal-x-largo'])) {
                     $first_variation['nominal-x-largo'] = $combo;
                 }
             }
-            if (!empty($map['envase'])) {
-                $envase[] = $map['envase'];
-                $first_variation['envase'] = $first_variation['envase'] ?? $map['envase'];
+            
+            // Medida y tamaño como atributos de variación alternativos
+            if (!empty($map['medida'])) {
+                $attribute_values['medida'][] = $map['medida'];
+                if (!isset($first_variation['medida'])) {
+                    $first_variation['medida'] = $map['medida'];
+                }
             }
-            if (!empty($map['acabado'])) {
-                $acabado[] = $map['acabado'];
-                $first_variation['acabado'] = $first_variation['acabado'] ?? $map['acabado'];
+            if (!empty($map['tamaño'])) {
+                $attribute_values['tamaño'][] = $map['tamaño'];
+                if (!isset($first_variation['tamaño'])) {
+                    $first_variation['tamaño'] = $map['tamaño'];
+                }
             }
         }
 
+        // Construir lista de atributos WC con decisión dinámica visible/variation
         $attributes = [];
-        $attributes[] = $this->wc_attribute('Nominal', array_unique($nominal), true, false);
-        $attributes[] = $this->wc_attribute('Largo', array_unique($largo), true, false);
-        $attributes[] = $this->wc_attribute('Nominal X Largo', array_unique($combined), false, true);
-        if ($envase) {
-            $attributes[] = $this->wc_attribute('Envase', array_unique($envase), true, true);
+        
+        // Atributos informativos (visible=true, variation=false) - siempre se incluyen si hay valores
+        if (!empty($attribute_values['nominal'])) {
+            $attributes[] = $this->wc_attribute('Nominal', $attribute_values['nominal'], true, false);
         }
-        if ($acabado) {
-            $attributes[] = $this->wc_attribute('Acabado', array_unique($acabado), true, true);
+        if (!empty($attribute_values['largo'])) {
+            $attributes[] = $this->wc_attribute('Largo', $attribute_values['largo'], true, false);
         }
+        if (!empty($attribute_values['grosor'])) {
+            $attributes[] = $this->wc_attribute('Grosor', $attribute_values['grosor'], true, false);
+        }
+        if (!empty($attribute_values['entre_caras'])) {
+            $attributes[] = $this->wc_attribute('Entre Caras', $attribute_values['entre_caras'], true, false);
+        }
+        if (!empty($attribute_values['punta_torx'])) {
+            $attributes[] = $this->wc_attribute('Punta Torx', $attribute_values['punta_torx'], true, false);
+        }
+        
+        // Atributo combinado nominal x largo (visible=false, variation=true)
+        // Este es el principal generador de variaciones
+        if (!empty($combined_nominal_largo)) {
+            $attributes[] = $this->wc_attribute('Nominal X Largo', $combined_nominal_largo, false, true);
+        }
+        
+        // Atributos de variación (visible=true/false, variation=true) - solo si hay múltiples valores
+        // Decidir dinámicamente si es variación o no según la cantidad de valores únicos
+        if (!empty($attribute_values['material'])) {
+            $unique_material = array_unique($attribute_values['material']);
+            if (count($unique_material) > 1) {
+                // Múltiples materiales: es generador de variación
+                $attributes[] = $this->wc_attribute('Material', $unique_material, true, true);
+            } else {
+                // Un solo material: solo informativo
+                $attributes[] = $this->wc_attribute('Material', $unique_material, true, false);
+            }
+        }
+        
+        if (!empty($attribute_values['acabado'])) {
+            $unique_acabado = array_unique($attribute_values['acabado']);
+            if (count($unique_acabado) > 1) {
+                $attributes[] = $this->wc_attribute('Acabado', $unique_acabado, true, true);
+            } else {
+                $attributes[] = $this->wc_attribute('Acabado', $unique_acabado, true, false);
+            }
+        }
+        
+        if (!empty($attribute_values['envase'])) {
+            $unique_envase = array_unique($attribute_values['envase']);
+            if (count($unique_envase) > 1) {
+                $attributes[] = $this->wc_attribute('Envase', $unique_envase, true, true);
+            } else {
+                $attributes[] = $this->wc_attribute('Envase', $unique_envase, true, false);
+            }
+        }
+        
+        if (!empty($attribute_values['medida'])) {
+            $unique_medida = array_unique($attribute_values['medida']);
+            if (count($unique_medida) > 1) {
+                $attributes[] = $this->wc_attribute('Medida', $unique_medida, true, true);
+            } else {
+                $attributes[] = $this->wc_attribute('Medida', $unique_medida, true, false);
+            }
+        }
+        
+        if (!empty($attribute_values['tamaño'])) {
+            $unique_tamaño = array_unique($attribute_values['tamaño']);
+            if (count($unique_tamaño) > 1) {
+                $attributes[] = $this->wc_attribute('Tamaño', $unique_tamaño, true, true);
+            } else {
+                $attributes[] = $this->wc_attribute('Tamaño', $unique_tamaño, true, false);
+            }
+        }
+        
+        // Nota: Marca se almacena como meta custom, no como atributo WC
+        // Se gestiona en save_catalog_attributes() y otras funciones
 
         return [
             'wc_attributes' => array_filter($attributes),
@@ -992,16 +1153,34 @@ class Riverso_Woo_Publisher_Module {
 
     private function variation_attributes($map) {
         $attrs = [];
+        
+        // Atributo combinado nominal x largo (principal generador de variaciones)
         $combo = $this->combined_nominal_largo($map);
         if ($combo !== '') {
             $attrs['nominal-x-largo'] = $combo;
         }
+        
+        // Atributos de variación adicionales
         if (!empty($map['envase'])) {
             $attrs['envase'] = $map['envase'];
         }
+        
         if (!empty($map['acabado'])) {
             $attrs['acabado'] = $map['acabado'];
         }
+        
+        if (!empty($map['material'])) {
+            $attrs['material'] = $map['material'];
+        }
+        
+        if (!empty($map['medida'])) {
+            $attrs['medida'] = $map['medida'];
+        }
+        
+        if (!empty($map['tamaño'])) {
+            $attrs['tamaño'] = $map['tamaño'];
+        }
+        
         return $attrs;
     }
 
@@ -1016,10 +1195,45 @@ class Riverso_Woo_Publisher_Module {
         $out = [];
         foreach ($attributes as $attr) {
             $key = strtolower(trim($attr['name'] ?? ''));
-            $key = $key === 'acabado' ? 'acabado' : $key;
-            if ($key !== '') {
-                $out[$key] = trim((string) ($attr['value'] ?? ''));
+            $value = trim((string) ($attr['value'] ?? ''));
+            
+            if ($value === '') {
+                continue;
             }
+            
+            // Normalizar nombres de atributos a clave canonica
+            // Soporta variaciones tipograficas (p.ej. "Acabado", "acabado", "ACABADO")
+            $aliases = [
+                'nominal' => 'nominal',
+                'diametro' => 'nominal',  // Alias: diametro se mapea a nominal
+                'diameter' => 'nominal',
+                'largo' => 'largo',
+                'length' => 'largo',
+                'grosor' => 'grosor',
+                'thickness' => 'grosor',
+                'material' => 'material',
+                'acabado' => 'acabado',
+                'finish' => 'acabado',
+                'envase' => 'envase',
+                'packaging' => 'envase',
+                'medida' => 'medida',
+                'size' => 'medida',
+                'tamaño' => 'tamaño',
+                'marca' => 'marca',
+                'brand' => 'marca',
+                'entre_caras' => 'entre_caras',
+                'entre caras' => 'entre_caras',
+                'punta_torx' => 'punta_torx',
+                'punta torx' => 'punta_torx',
+                'torx' => 'punta_torx',
+            ];
+            
+            $canonical_key = $aliases[$key] ?? $key;
+            if ($canonical_key !== '' && $canonical_key !== $key) {
+                $key = $canonical_key;
+            }
+            
+            $out[$key] = $value;
         }
         return $out;
     }
@@ -2323,5 +2537,195 @@ class Riverso_Woo_Publisher_Module {
             wp_send_json_error(['message' => $result->get_error_message()]);
         }
         wp_send_json_success(['message' => $message, 'result' => $result]);
+    }
+
+    /**
+     * Crear producto simple WooCommerce desde producto base local
+     */
+    public function create_woo_simple_from_base($product_base_id, $name, $sku, $status = 'private') {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $product_base_id = absint($product_base_id);
+        if (!$product_base_id) {
+            return new WP_Error('invalid_id', 'ID de producto base inválido');
+        }
+
+        $product_base = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}producto_base WHERE id = %d",
+            $product_base_id
+        ), ARRAY_A);
+
+        if (!$product_base) {
+            return new WP_Error('not_found', 'Producto base no encontrado');
+        }
+
+        $product = new WC_Product_Simple();
+        $product->set_name($name);
+        $product->set_sku($sku);
+        $product->set_status($status);
+        $product->set_description('Producto creado desde Riverso POS. Requiere revisión antes de publicación.');
+        $product_id = $product->save();
+
+        if (!$product_id) {
+            return new WP_Error('save_failed', 'No se pudo guardar producto WooCommerce');
+        }
+
+        // Vincular al producto base
+        $wpdb->update(
+            "{$prefix}producto_base",
+            [
+                'woocommerce_product_id' => $product_id,
+                'publication_stage' => 'computer_created',
+                'updated_at' => current_time('mysql'),
+            ],
+            ['id' => $product_base_id],
+            ['%d', '%s', '%s'],
+            ['%d']
+        );
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log_import('product_created_simple', 'producto_base', $product_base_id, [
+                'new_value' => [
+                    'woocommerce_product_id' => $product_id,
+                    'type' => 'simple',
+                    'status' => $status,
+                ],
+                'details' => 'Producto simple creado desde Riverso Hub',
+            ]);
+        }
+
+        return [
+            'product_id' => $product_id,
+            'type' => 'simple',
+            'status' => $status,
+        ];
+    }
+
+    /**
+     * Crear producto variable WooCommerce desde producto base local
+     */
+    public function create_woo_variable_from_base($product_base_id, $name, $sku, $nominal = '', $largo = '', $status = 'private') {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $product_base_id = absint($product_base_id);
+        if (!$product_base_id) {
+            return new WP_Error('invalid_id', 'ID de producto base inválido');
+        }
+
+        $product_base = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}producto_base WHERE id = %d",
+            $product_base_id
+        ), ARRAY_A);
+
+        if (!$product_base) {
+            return new WP_Error('not_found', 'Producto base no encontrado');
+        }
+
+        $product = new WC_Product_Variable();
+        $product->set_name($name);
+        $product->set_status($status);
+        $product->set_description('Producto variable creado desde Riverso POS. Requiere revisión antes de publicación.');
+
+        // Crear atributos para la variación
+        $attributes = [];
+        
+        if (!empty($nominal) && !empty($largo)) {
+            // Crear atributo combinado Nominal x Largo
+            $attr_name = 'Nominal x Largo';
+            $attributes[] = new WC_Product_Attribute();
+            $attributes[0]->set_id(0);
+            $attributes[0]->set_name($attr_name);
+            $attributes[0]->set_options([]);
+            $attributes[0]->set_visible(false);
+            $attributes[0]->set_variation(true);
+        } elseif (!empty($nominal)) {
+            $attr = new WC_Product_Attribute();
+            $attr->set_id(0);
+            $attr->set_name('Nominal');
+            $attr->set_options([]);
+            $attr->set_visible(false);
+            $attr->set_variation(true);
+            $attributes[] = $attr;
+        } elseif (!empty($largo)) {
+            $attr = new WC_Product_Attribute();
+            $attr->set_id(0);
+            $attr->set_name('Largo');
+            $attr->set_options([]);
+            $attr->set_visible(false);
+            $attr->set_variation(true);
+            $attributes[] = $attr;
+        }
+
+        if (!empty($attributes)) {
+            $product->set_attributes($attributes);
+        }
+
+        $product_id = $product->save();
+
+        if (!$product_id) {
+            return new WP_Error('save_failed', 'No se pudo guardar producto variable WooCommerce');
+        }
+
+        // Crear una variación con los atributos si los hay
+        $variation_id = 0;
+        if (!empty($nominal) || !empty($largo)) {
+            $variation = new WC_Product_Variation();
+            $variation->set_parent_id($product_id);
+            $variation->set_status('publish');
+            $variation->set_sku($sku);
+
+            $var_attrs = [];
+            if (!empty($nominal) && !empty($largo)) {
+                $var_attrs['nominal-x-largo'] = "{$nominal} x {$largo}";
+            } elseif (!empty($nominal)) {
+                $var_attrs['nominal'] = $nominal;
+            } elseif (!empty($largo)) {
+                $var_attrs['largo'] = $largo;
+            }
+
+            if (!empty($var_attrs)) {
+                $variation->set_attributes($var_attrs);
+            }
+
+            $variation_id = $variation->save();
+        }
+
+        // Vincular al producto base
+        $wpdb->update(
+            "{$prefix}producto_base",
+            [
+                'woocommerce_product_id' => $product_id,
+                'woocommerce_variation_id' => $variation_id > 0 ? $variation_id : null,
+                'publication_stage' => 'computer_created',
+                'updated_at' => current_time('mysql'),
+            ],
+            ['id' => $product_base_id],
+            ['%d', '%d', '%s', '%s'],
+            ['%d']
+        );
+
+        WC_Product_Variable::sync($product_id);
+        wc_delete_product_transients($product_id);
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log_import('product_created_variable', 'producto_base', $product_base_id, [
+                'new_value' => [
+                    'woocommerce_product_id' => $product_id,
+                    'woocommerce_variation_id' => $variation_id,
+                    'type' => 'variable',
+                    'status' => $status,
+                ],
+                'details' => 'Producto variable creado desde Riverso Hub',
+            ]);
+        }
+
+        return [
+            'product_id' => $product_id,
+            'variation_id' => $variation_id,
+            'type' => 'variable',
+            'status' => $status,
+        ];
     }
 }

@@ -35,6 +35,38 @@ class Riverso_Product_Module {
         add_action('wp_ajax_riverso_products_restore', [$this, 'ajax_restore']);
         add_action('wp_ajax_riverso_products_soft_delete', [$this, 'ajax_soft_delete']);
         add_action('wp_ajax_riverso_products_approve_gate', [$this, 'ajax_approve_gate']);
+        add_action('wp_ajax_riverso_products_search_code', [$this, 'ajax_search_code']);
+        add_action('wp_ajax_riverso_products_link_supplier', [$this, 'ajax_link_supplier']);
+        add_action('wp_ajax_riverso_products_search_woo', [$this, 'ajax_search_woo']);
+        add_action('wp_ajax_riverso_products_set_online', [$this, 'ajax_set_online']);
+        add_action('wp_ajax_riverso_products_get_barcodes', [$this, 'ajax_get_barcodes']);
+        add_action('wp_ajax_riverso_products_add_barcode', [$this, 'ajax_add_barcode']);
+        add_action('wp_ajax_riverso_products_remove_barcode', [$this, 'ajax_remove_barcode']);
+        add_action('wp_ajax_riverso_products_get_tasks', [$this, 'ajax_get_tasks']);
+        add_action('wp_ajax_riverso_products_create_online', [$this, 'ajax_create_online']);
+    }
+
+    private function get_completeness_category($product) {
+        $has_local = !empty($product['canonical_sku']) && !empty($product['nombre_canonico']);
+        $has_online = !empty($product['woocommerce_product_id']) || 
+                     (!empty($product['match_estado_online']) && $product['match_estado_online'] === 'CONFIRMED');
+        $has_codigo = (int) ($product['proveedores_count'] ?? 0) > 0;
+        $is_published = !empty($product['publication_stage']) && 
+                       in_array($product['publication_stage'], ['approved_for_publication', 'published'], true);
+
+        if (!$has_local && $has_online) {
+            return $is_published ? 'solo_online_publicado' : 'solo_online';
+        }
+        if ($has_local && !$has_online) {
+            return 'falta_online';
+        }
+        if ($has_online && !$has_codigo) {
+            return 'falta_codigo';
+        }
+        if ($has_local && $has_online && $has_codigo) {
+            return $is_published ? 'publicado' : 'completo';
+        }
+        return 'incompleto';
     }
 
     public function list_products($args = []) {
@@ -43,6 +75,8 @@ class Riverso_Product_Module {
 
         $status = sanitize_text_field($args['status'] ?? 'active');
         $search = sanitize_text_field($args['search'] ?? '');
+        $completeness = sanitize_text_field($args['completeness'] ?? 'todos');
+        $offset = intval($args['offset'] ?? 0);
         $limit = min(200, max(1, intval($args['limit'] ?? 50)));
 
         $where = [];
@@ -58,25 +92,86 @@ class Riverso_Product_Module {
 
         if ($search !== '') {
             $like = '%' . $wpdb->esc_like($search) . '%';
-            $where[] = '(pb.canonical_sku LIKE %s OR pb.nombre_canonico LIKE %s)';
+            $where[] = '(pb.canonical_sku LIKE %s OR pb.nombre_canonico LIKE %s OR pp.codigo_proveedor LIKE %s OR cb.codigo LIKE %s)';
+            $params[] = $like;
+            $params[] = $like;
             $params[] = $like;
             $params[] = $like;
         }
 
         $where_sql = implode(' AND ', $where);
+        
+        // Agregar filtro de completeness si corresponde
+        $having = '';
+        if ($completeness !== '' && $completeness !== 'todos') {
+            // Usar CASE WHEN para determinar la categoría y filtrar en HAVING
+            $having = $this->get_completeness_having_clause($completeness);
+        }
+
         $sql = "SELECT pb.*,
                        COUNT(DISTINCT pp.id) AS proveedores_count,
-                       COUNT(DISTINCT em.id) AS equivalencias_count
+                       COUNT(DISTINCT em.id) AS equivalencias_count,
+                       GROUP_CONCAT(DISTINCT pp.codigo_proveedor SEPARATOR ', ') AS codigos_proveedor
                 FROM {$prefix}producto_base pb
                 LEFT JOIN {$prefix}producto_proveedor pp ON pp.producto_base_id = pb.id AND pp.activo = 1
                 LEFT JOIN {$prefix}equivalence_members em ON em.producto_base_id = pb.id AND em.activo = 1
+                LEFT JOIN {$prefix}codigo_barra cb ON cb.producto_base_id = pb.id
                 WHERE {$where_sql}
                 GROUP BY pb.id
+                {$having}
                 ORDER BY pb.updated_at DESC, pb.id DESC
-                LIMIT %d";
+                LIMIT %d OFFSET %d";
         $params[] = $limit;
+        $params[] = $offset;
 
-        return $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
+        $results = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
+        
+        // Calcular completeness_category y total
+        foreach ($results as &$item) {
+            $item['completeness_category'] = $this->get_completeness_category($item);
+        }
+
+        // Obtener total sin LIMIT/OFFSET para paginación
+        $count_sql = "SELECT COUNT(DISTINCT pb.id) as total
+                      FROM {$prefix}producto_base pb
+                      LEFT JOIN {$prefix}producto_proveedor pp ON pp.producto_base_id = pb.id AND pp.activo = 1
+                      LEFT JOIN {$prefix}equivalence_members em ON em.producto_base_id = pb.id AND em.activo = 1
+                      LEFT JOIN {$prefix}codigo_barra cb ON cb.producto_base_id = pb.id
+                      WHERE {$where_sql}
+                      {$having}";
+        $total = (int) $wpdb->get_var($wpdb->prepare($count_sql, $params));
+
+        return [
+            'items' => array_values($results),
+            'total' => $total,
+            'offset' => $offset,
+            'limit' => $limit,
+            'pages' => ceil($total / $limit),
+        ];
+    }
+
+    /**
+     * Genera cláusula HAVING para filtro de completeness
+     */
+    private function get_completeness_having_clause($completeness) {
+        switch ($completeness) {
+            case 'completo':
+                return "HAVING MAX(CASE WHEN pb.canonical_sku != '' AND pb.nombre_canonico != '' AND pb.woocommerce_product_id IS NOT NULL AND COUNT(DISTINCT pp.id) > 0 THEN 1 ELSE 0 END) = 1";
+            case 'publicado':
+                return "HAVING MAX(CASE WHEN pb.canonical_sku != '' AND pb.nombre_canonico != '' AND pb.woocommerce_product_id IS NOT NULL AND COUNT(DISTINCT pp.id) > 0 AND pb.publication_stage IN ('approved_for_publication', 'published') THEN 1 ELSE 0 END) = 1";
+            case 'falta_online':
+                return "HAVING MAX(CASE WHEN pb.canonical_sku != '' AND pb.nombre_canonico != '' AND pb.woocommerce_product_id IS NULL THEN 1 ELSE 0 END) = 1";
+            case 'falta_codigo':
+                return "HAVING MAX(CASE WHEN pb.canonical_sku != '' AND pb.nombre_canonico != '' AND pb.woocommerce_product_id IS NOT NULL AND COUNT(DISTINCT pp.id) = 0 THEN 1 ELSE 0 END) = 1";
+            case 'solo_online':
+                return "HAVING MAX(CASE WHEN (pb.canonical_sku = '' OR pb.nombre_canonico = '') AND pb.woocommerce_product_id IS NOT NULL THEN 1 ELSE 0 END) = 1";
+            case 'solo_online_publicado':
+                return "HAVING MAX(CASE WHEN (pb.canonical_sku = '' OR pb.nombre_canonico = '') AND pb.woocommerce_product_id IS NOT NULL AND pb.publication_stage IN ('approved_for_publication', 'published') THEN 1 ELSE 0 END) = 1";
+            case 'incompleto':
+                return "HAVING MAX(CASE WHEN (pb.canonical_sku = '' OR pb.nombre_canonico = '') THEN 1 ELSE 0 END) = 1";
+            default:
+                return '';
+        }
     }
 
     public function get_product($id) {
@@ -101,7 +196,38 @@ class Riverso_Product_Module {
             $id
         ), ARRAY_A);
 
+        $product['barcodes'] = $this->get_product_barcodes($id);
+        $product['tasks'] = $this->get_product_tasks($id);
+        $product['completeness_category'] = $this->get_completeness_category($product);
+        $product['proveedores_count'] = count($product['proveedores']);
+
         return $product;
+    }
+
+    private function get_product_barcodes($product_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        
+        $barcodes = [];
+        if (class_exists('Riverso_Barcode_Model')) {
+            $barcodes = Riverso_Barcode_Model::get_by_product($product_id);
+        }
+        return is_array($barcodes) ? $barcodes : [];
+    }
+
+    private function get_product_tasks($product_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT id, tipo, titulo, estado, prioridad, fecha_limite
+             FROM {$prefix}tareas
+             WHERE referencia_tipo = 'producto_base' AND referencia_id = %d
+             AND estado IN ('pendiente', 'asignado')
+             ORDER BY prioridad DESC, id DESC
+             LIMIT 10",
+            $product_id
+        ), ARRAY_A) ?: [];
     }
 
     public function save_product($data) {
@@ -162,7 +288,10 @@ class Riverso_Product_Module {
             ]);
         }
 
-        return $this->get_product($id);
+        $product = $this->get_product($id);
+        $this->trigger_counterpart_tasks($id);
+
+        return $product;
     }
 
     public function set_lifecycle($id, $action) {
@@ -248,13 +377,14 @@ class Riverso_Product_Module {
         if (!current_user_can('riverso_view_products')) {
             wp_send_json_error(['message' => 'Sin permisos'], 403);
         }
-        wp_send_json_success([
-            'items' => $this->list_products([
-                'status' => sanitize_text_field($_POST['status'] ?? 'active'),
-                'search' => sanitize_text_field($_POST['search'] ?? ''),
-                'limit' => intval($_POST['limit'] ?? 50),
-            ]),
+        $result = $this->list_products([
+            'status' => sanitize_text_field($_POST['status'] ?? 'active'),
+            'search' => sanitize_text_field($_POST['search'] ?? ''),
+            'completeness' => sanitize_text_field($_POST['completeness'] ?? 'todos'),
+            'offset' => intval($_POST['offset'] ?? 0),
+            'limit' => intval($_POST['limit'] ?? 50),
         ]);
+        wp_send_json_success($result);
     }
 
     public function ajax_get() {
@@ -317,5 +447,383 @@ class Riverso_Product_Module {
             wp_send_json_error(['message' => $result->get_error_message()]);
         }
         wp_send_json_success(['message' => $message, 'item' => $result]);
+    }
+
+    public function ajax_search_code() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        $code = sanitize_text_field($_POST['code'] ?? '');
+        if (empty($code)) {
+            wp_send_json_error(['message' => 'Código requerido']);
+        }
+
+        if (!class_exists('Riverso_Supplier_Links_Module')) {
+            wp_send_json_error(['message' => 'Módulo de proveedores no disponible']);
+        }
+
+        $links = Riverso_Supplier_Links_Module::get_instance()->lookup_by_code($code);
+        wp_send_json_success([
+            'results' => is_array($links) ? $links : (is_wp_error($links) ? [] : [$links]),
+        ]);
+    }
+
+    public function ajax_link_supplier() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $product_id = absint($_POST['product_id'] ?? 0);
+        $supplier_code = sanitize_text_field($_POST['supplier_code'] ?? '');
+        $supplier_id = absint($_POST['supplier_id'] ?? 0);
+        $audit_reason = sanitize_textarea_field($_POST['audit_reason'] ?? '');
+
+        if (!$product_id || !$supplier_code || !$supplier_id) {
+            wp_send_json_error(['message' => 'Parámetros inválidos']);
+        }
+
+        if (!class_exists('Riverso_Supplier_Links_Module')) {
+            wp_send_json_error(['message' => 'Módulo de proveedores no disponible']);
+        }
+
+        $result = Riverso_Supplier_Links_Module::get_instance()->create_link([
+            'proveedor_id' => $supplier_id,
+            'codigo_proveedor' => $supplier_code,
+            'producto_base_id' => $product_id,
+            'audit_reason' => $audit_reason,
+        ]);
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+
+        $this->close_counterpart_task($product_id, 'relacionar_producto_proveedor');
+        $product = $this->get_product($product_id);
+        $this->trigger_counterpart_tasks($product_id);
+
+        wp_send_json_success(['message' => 'Código proveedor vinculado', 'item' => $product]);
+    }
+
+    public function ajax_search_woo() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        $search = sanitize_text_field($_POST['s'] ?? '');
+        if (strlen($search) < 2) {
+            wp_send_json_success(['results' => []]);
+        }
+
+        if (!function_exists('wc_get_products')) {
+            wp_send_json_success(['results' => []]);
+        }
+
+        $products = wc_get_products([
+            's' => $search,
+            'limit' => 20,
+            'return' => 'objects',
+        ]);
+
+        $results = [];
+        foreach ($products as $wc_product) {
+            $results[] = [
+                'id' => $wc_product->get_id(),
+                'name' => $wc_product->get_name(),
+                'sku' => $wc_product->get_sku(),
+                'type' => $wc_product->get_type(),
+            ];
+        }
+
+        wp_send_json_success(['results' => $results]);
+    }
+
+    public function ajax_set_online() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $product_id = absint($_POST['product_id'] ?? 0);
+        $woo_id = absint($_POST['woo_id'] ?? 0);
+
+        if (!$product_id || !$woo_id) {
+            wp_send_json_error(['message' => 'Parámetros inválidos']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $result = $wpdb->update(
+            "{$prefix}producto_base",
+            [
+                'woocommerce_product_id' => $woo_id,
+                'match_estado_online' => 'CONFIRMED',
+                'updated_at' => current_time('mysql'),
+            ],
+            ['id' => $product_id],
+            ['%d', '%s', '%s'],
+            ['%d']
+        );
+
+        if ($result === false) {
+            wp_send_json_error(['message' => $wpdb->last_error ?: 'Error guardando vínculo Woo']);
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('product_online_linked', 'producto_base', $product_id, [
+                'actor_type' => 'human',
+                'woocommerce_product_id' => $woo_id,
+            ]);
+        }
+
+        $this->close_counterpart_task($product_id, 'crear_contraparte_online');
+        $product = $this->get_product($product_id);
+        $this->trigger_counterpart_tasks($product_id);
+
+        wp_send_json_success(['message' => 'Producto online vinculado', 'item' => $product]);
+    }
+
+    public function ajax_get_barcodes() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $product_id = absint($_POST['product_id'] ?? 0);
+        if (!$product_id) {
+            wp_send_json_error(['message' => 'ID de producto requerido']);
+        }
+
+        $barcodes = $this->get_product_barcodes($product_id);
+        wp_send_json_success(['barcodes' => $barcodes]);
+    }
+
+    public function ajax_add_barcode() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $product_id = absint($_POST['product_id'] ?? 0);
+        $barcode = sanitize_text_field($_POST['barcode'] ?? '');
+        $audit_reason = sanitize_textarea_field($_POST['audit_reason'] ?? '');
+
+        if (!$product_id || !$barcode) {
+            wp_send_json_error(['message' => 'Parámetros inválidos']);
+        }
+
+        if (!class_exists('Riverso_Barcode_Model')) {
+            wp_send_json_error(['message' => 'Módulo de barcodes no disponible']);
+        }
+
+        $result = Riverso_Barcode_Model::create($barcode, 'ean13', $product_id, 1, 'unidad');
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('barcode_assigned', 'codigo_barra', (int) ($result['id'] ?? 0), [
+                'actor_type' => 'human',
+                'producto_base_id' => $product_id,
+                'codigo' => $barcode,
+                'razon' => $audit_reason,
+            ]);
+        }
+
+        wp_send_json_success(['message' => 'Código de barra agregado', 'barcode' => $result]);
+    }
+
+    public function ajax_remove_barcode() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $product_id = absint($_POST['product_id'] ?? 0);
+        $barcode_code = sanitize_text_field($_POST['barcode'] ?? '');
+        $audit_reason = sanitize_textarea_field($_POST['audit_reason'] ?? '');
+
+        if (!$product_id || !$barcode_code) {
+            wp_send_json_error(['message' => 'Parámetros inválidos']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $barcode = $wpdb->get_row($wpdb->prepare(
+            "SELECT id FROM {$prefix}codigo_barra WHERE codigo = %s AND producto_base_id = %d",
+            $barcode_code,
+            $product_id
+        ));
+
+        if (!$barcode) {
+            wp_send_json_error(['message' => 'Código de barra no encontrado']);
+        }
+
+        $result = $wpdb->update(
+            "{$prefix}codigo_barra",
+            [
+                'estado' => 'en_desuso',
+                'motivo_estado' => $audit_reason ?: 'Removido por usuario',
+            ],
+            ['id' => (int) $barcode->id],
+            ['%s', '%s'],
+            ['%d']
+        );
+
+        if ($result === false) {
+            wp_send_json_error(['message' => 'Error removiendo código de barra']);
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('barcode_removed', 'codigo_barra', (int) $barcode->id, [
+                'actor_type' => 'human',
+                'producto_base_id' => $product_id,
+                'codigo' => $barcode_code,
+                'razon' => $audit_reason,
+            ]);
+        }
+
+        wp_send_json_success(['message' => 'Código de barra marcado como en desuso']);
+    }
+
+    public function ajax_get_tasks() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $product_id = absint($_POST['product_id'] ?? 0);
+        if (!$product_id) {
+            wp_send_json_error(['message' => 'ID de producto requerido']);
+        }
+
+        $tasks = $this->get_product_tasks($product_id);
+        wp_send_json_success(['tasks' => $tasks]);
+    }
+
+    /**
+     * Disparar tareas de contraparte cuando se crea/actualiza un producto
+     */
+    public function trigger_counterpart_tasks($product_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $product = $this->get_product($product_id);
+        if (!$product) {
+            return;
+        }
+
+        $has_local = !empty($product['canonical_sku']) && !empty($product['nombre_canonico']);
+        $has_online = !empty($product['woocommerce_product_id']) || 
+                     (!empty($product['match_estado_online']) && $product['match_estado_online'] === 'CONFIRMED');
+        $has_codigo = (int) ($product['proveedores_count'] ?? 0) > 0;
+        $match_online_unmatched = !empty($product['match_estado_online']) && $product['match_estado_online'] === 'UNMATCHED';
+
+        if (class_exists('Riverso_Task_Module')) {
+            $task_module = Riverso_Task_Module::get_instance();
+
+            // Si es local sin online confirmada, crear tarea
+            if ($has_local && !$has_online && $match_online_unmatched) {
+                $task_module->create_review_task(
+                    'crear_contraparte_online',
+                    sprintf('Crear o asignar contraparte online para "%s"', $product['nombre_canonico']),
+                    'producto_base',
+                    $product_id,
+                    [
+                        'descripcion' => sprintf(
+                            'Producto local "%s" (SKU %s) sin vínculo WooCommerce. Crear nuevo producto online o asignar uno existente.',
+                            $product['nombre_canonico'],
+                            $product['canonical_sku']
+                        ),
+                        'prioridad' => 'normal',
+                    ]
+                );
+            }
+
+            // Si es local+online sin código, crear tarea
+            if ($has_local && $has_online && !$has_codigo) {
+                $task_module->create_review_task(
+                    'relacionar_producto_proveedor',
+                    sprintf('Asignar código proveedor a "%s"', $product['nombre_canonico']),
+                    'producto_base',
+                    $product_id,
+                    [
+                        'descripcion' => sprintf(
+                            'Producto "%s" (SKU %s) ya tiene contraparte online, pero falta código proveedor.',
+                            $product['nombre_canonico'],
+                            $product['canonical_sku']
+                        ),
+                        'prioridad' => 'normal',
+                    ]
+                );
+            }
+        }
+    }
+
+    /**
+     * Cerrar/marcar tareas completadas al vincular
+     */
+    public function close_counterpart_task($product_id, $task_tipo) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $wpdb->update(
+            "{$prefix}tareas",
+            ['estado' => 'completada'],
+            [
+                'referencia_tipo' => 'producto_base',
+                'referencia_id' => (int) $product_id,
+                'tipo' => $task_tipo,
+            ],
+            ['%s'],
+            ['%s', '%d', '%s']
+        );
+    }
+
+    public function ajax_create_online() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $product_id = absint($_POST['product_id'] ?? 0);
+        $product_type = sanitize_text_field($_POST['product_type'] ?? 'simple');
+        $woo_name = sanitize_text_field($_POST['woo_name'] ?? '');
+        $woo_sku = sanitize_text_field($_POST['woo_sku'] ?? '');
+
+        if (!$product_id || !$woo_name || !$woo_sku) {
+            wp_send_json_error(['message' => 'Datos incompletos']);
+        }
+
+        if (!class_exists('Riverso_Woo_Publisher_Module')) {
+            wp_send_json_error(['message' => 'Módulo publisher no disponible']);
+        }
+
+        $publisher = Riverso_Woo_Publisher_Module::get_instance();
+        
+        if ($product_type === 'variable') {
+            $nominal = sanitize_text_field($_POST['nominal'] ?? '');
+            $largo = sanitize_text_field($_POST['largo'] ?? '');
+            $result = $publisher->create_woo_variable_from_base($product_id, $woo_name, $woo_sku, $nominal, $largo);
+        } else {
+            $result = $publisher->create_woo_simple_from_base($product_id, $woo_name, $woo_sku);
+        }
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+
+        // Cerrar tarea de crear contraparte
+        $this->close_counterpart_task($product_id, 'crear_contraparte_online');
+
+        // Disparar tareas de relacionar proveedor si corresponde
+        $this->trigger_counterpart_tasks($product_id);
+
+        // Obtener producto actualizado
+        $updated_product = $this->get_product($product_id);
+
+        wp_send_json_success([
+            'message' => 'Producto WooCommerce creado',
+            'item' => $updated_product,
+            'result' => $result,
+        ]);
     }
 }

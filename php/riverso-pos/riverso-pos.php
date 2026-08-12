@@ -3,7 +3,7 @@
  * Plugin Name: Riverso POS
  * Plugin URI: https://riverso.cl
  * Description: Sistema POS/mini-ERP integrado con WooCommerce para gestión de productos, facturas, inventario y tareas operativas.
- * Version: 1.5.7
+ * Version: 1.5.8
  * Author: Riverso
  * Author URI: https://riverso.cl
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constantes del plugin
-define('RIVERSO_POS_VERSION', '1.5.15');
+define('RIVERSO_POS_VERSION', '1.5.22');
 define('RIVERSO_POS_PLUGIN_FILE', __FILE__);
 define('RIVERSO_POS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RIVERSO_POS_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -135,8 +135,13 @@ final class Riverso_POS {
      */
     public function login_redirect($redirect_to, $requested_redirect_to, $user) {
         if (!is_wp_error($user) && $user instanceof WP_User) {
-            // Si es empleado interno, redirigir al portal
+            // Si es empleado interno, redirigir al portal (respetar deep link pedido)
             if (Riverso_POS_Permissions::is_employee($user->ID)) {
+                $requested = $requested_redirect_to ?: $redirect_to;
+                $path = is_string($requested) ? wp_parse_url($requested, PHP_URL_PATH) : '';
+                if (is_string($path) && strpos($path, '/interno') === 0) {
+                    return $requested;
+                }
                 return home_url('/interno/');
             }
         }
@@ -151,7 +156,17 @@ final class Riverso_POS {
         $uri = $_SERVER['REQUEST_URI'] ?? '';
         if (strpos($uri, '/interno') !== false) {
             if (!is_user_logged_in()) {
-                wp_redirect(wp_login_url(home_url('/interno/')));
+                // Conservar /interno/catalog/ (u otra subruta) tras el login
+                $path = wp_parse_url($uri, PHP_URL_PATH);
+                if (!is_string($path) || strpos($path, '/interno') !== 0) {
+                    $path = '/interno/';
+                }
+                $query = wp_parse_url($uri, PHP_URL_QUERY);
+                $target = home_url($path);
+                if (!empty($query)) {
+                    $target .= (strpos($target, '?') === false ? '?' : '&') . $query;
+                }
+                wp_redirect(wp_login_url($target));
                 exit;
             }
             if (!Riverso_POS_Permissions::is_employee()) {

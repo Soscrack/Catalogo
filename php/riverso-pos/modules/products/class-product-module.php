@@ -50,7 +50,13 @@ class Riverso_Product_Module {
         add_action('wp_ajax_riverso_products_search_catalog', [$this, 'ajax_search_catalog_products']);
         add_action('wp_ajax_riverso_products_set_local_price', [$this, 'ajax_set_local_price']);
         add_action('wp_ajax_riverso_products_set_online_price', [$this, 'ajax_set_online_price']);
-    }
+        add_action('wp_ajax_riverso_products_get_product_categories', [$this, 'ajax_get_product_categories']);
+        add_action('wp_ajax_riverso_products_set_product_categories', [$this, 'ajax_set_product_categories']);
+		add_action('wp_ajax_riverso_products_get_category_tree', [$this, 'ajax_get_category_tree']);
+		add_action('wp_ajax_riverso_products_set_image', [$this, 'ajax_set_image']);
+		add_action('wp_ajax_riverso_products_create_category', [$this, 'ajax_create_category']);
+		add_action('wp_ajax_riverso_products_rename_category', [$this, 'ajax_rename_category']);
+	}
 
     private function get_completeness_category($product) {
         $has_local = !empty($product['canonical_sku']) && !empty($product['nombre_canonico']);
@@ -335,6 +341,28 @@ class Riverso_Product_Module {
             $id
         ), ARRAY_A) ?: null;
 
+        // Enriquecer con imagen (Fase 7)
+        $product['imagen_id'] = (int) ($product['imagen_id'] ?? 0);
+        $product['imagen_url'] = '';
+        $product['imagen_full'] = '';
+        if ($product['imagen_id'] > 0) {
+            $product['imagen_url'] = wp_get_attachment_image_url($product['imagen_id'], 'thumbnail');
+            $product['imagen_full'] = wp_get_attachment_image_url($product['imagen_id'], 'full');
+        }
+
+        // Enriquecer con regla de precio (Fase 9)
+        $product['regla_precio'] = null;
+        if (class_exists('Riverso_Price_Rules_Module')) {
+            $regla = Riverso_Price_Rules_Module::get_instance()->resolve_rule_for_base($id);
+            if ($regla) {
+                $product['regla_precio'] = [
+                    'id' => $regla['id'] ?? null,
+                    'nombre' => $regla['nombre'] ?? 'Sin nombre',
+                    'origen' => $regla['origen'] ?? 'producto'
+                ];
+            }
+        }
+
         return $product;
     }
 
@@ -512,20 +540,21 @@ class Riverso_Product_Module {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         
-        $tasks = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, tipo, titulo, estado, prioridad, fecha_limite, referencia_tipo, referencia_id
-             FROM {$prefix}tareas
-             WHERE referencia_tipo = 'producto_base' AND referencia_id = %d
-             AND estado IN ('pendiente', 'asignado')
-             ORDER BY prioridad DESC, id DESC
-             LIMIT 10",
-            $product_id
-        ), ARRAY_A) ?: [];
+		$tasks = $wpdb->get_results($wpdb->prepare(
+			"SELECT id, tipo, titulo, estado, prioridad, fecha_limite, referencia_tipo, referencia_id, datos_extra
+			 FROM {$prefix}tareas
+			 WHERE referencia_tipo = 'producto_base' AND referencia_id = %d
+			 AND estado IN ('pendiente', 'asignado')
+			 ORDER BY prioridad DESC, id DESC
+			 LIMIT 10",
+			$product_id
+		), ARRAY_A) ?: [];
 
-        // Agregar target_url para cada tarea
-        foreach ($tasks as &$task) {
-            $task['target_url'] = riverso_resolve_task_target($task);
-        }
+		// Agregar target_url y decodificar datos_extra para cada tarea
+		foreach ($tasks as &$task) {
+			$task['datos_extra'] = json_decode( $task['datos_extra'] ?? '{}', true );
+			$task['target_url'] = riverso_resolve_task_target($task);
+		}
         
         return $tasks;
     }
@@ -1849,9 +1878,9 @@ class Riverso_Product_Module {
      * AJAX: Guardar precio local (p_asignado) de un producto.
      */
     public function ajax_set_local_price() {
-        check_ajax_referer('riverso_nonce', 'nonce');
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
         
-        if (!current_user_can('riverso_manage_prices')) {
+        if (!current_user_can('riverso_manage_prices') && !current_user_can('riverso_manage_products')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
         }
 
@@ -1886,9 +1915,9 @@ class Riverso_Product_Module {
      * AJAX: Guardar precio online (p_asignado) de un producto/variación WooCommerce.
      */
     public function ajax_set_online_price() {
-        check_ajax_referer('riverso_nonce', 'nonce');
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
         
-        if (!current_user_can('riverso_manage_prices')) {
+        if (!current_user_can('riverso_manage_prices') && !current_user_can('riverso_manage_products')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
         }
 
@@ -1950,8 +1979,11 @@ class Riverso_Product_Module {
                 ))));
             }
 
-            if ($product && method_exists($product, 'set_price')) {
-                $product->set_price($p_asignado);
+            if ($product && method_exists($product, 'set_regular_price')) {
+                $product->set_regular_price((string) $p_asignado);
+                if (!$product->get_sale_price()) {
+                    $product->set_price((string) $p_asignado);
+                }
                 $product->save();
             }
         }
@@ -1963,4 +1995,212 @@ class Riverso_Product_Module {
         ), ARRAY_A);
         wp_send_json_success(['item' => $precio_actualizado]);
     }
+
+    // ============= FASE 6: CATEGORÍAS ONLINE =============
+    
+    /**
+     * AJAX: Obtener categorías actuales de un producto WooCommerce
+     */
+    public function ajax_get_product_categories() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        
+        if (!current_user_can('riverso_view_products')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $woo_id = absint($_POST['woocommerce_product_id'] ?? 0);
+        if (!$woo_id) {
+            wp_send_json_error(['message' => 'woocommerce_product_id requerido']);
+        }
+
+        $product = wc_get_product($woo_id);
+        if (!$product) {
+            wp_send_json_error(['message' => 'Producto WooCommerce no encontrado']);
+        }
+
+        $current_cats = wp_get_post_terms($woo_id, 'product_cat', ['fields' => 'ids']);
+        wp_send_json_success(['current_categories' => $current_cats ?: []]);
+    }
+
+    /**
+     * AJAX: Asignar categorías a un producto WooCommerce
+     */
+    public function ajax_set_product_categories() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $woo_id = absint($_POST['woocommerce_product_id'] ?? 0);
+        $cat_ids = array_map('absint', (array) ($_POST['category_ids'] ?? []));
+
+        if (!$woo_id) {
+            wp_send_json_error(['message' => 'woocommerce_product_id requerido']);
+        }
+
+        wp_set_object_terms($woo_id, $cat_ids, 'product_cat');
+
+        wp_send_json_success(['message' => 'Categorías asignadas exitosamente']);
+    }
+
+    /**
+     * AJAX: Obtener árbol jerárquico de categorías WooCommerce
+     */
+    public function ajax_get_category_tree() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        
+        if (!current_user_can('riverso_view_products')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $parent_id = absint($_POST['parent_id'] ?? 0);
+
+        $args = [
+            'taxonomy' => 'product_cat',
+            'parent' => $parent_id,
+            'hide_empty' => false,
+            'orderby' => 'name',
+            'order' => 'ASC',
+        ];
+
+        $categories = get_terms($args);
+
+        if (is_wp_error($categories)) {
+            wp_send_json_error(['message' => $categories->get_error_message()]);
+        }
+
+        // Construir árbol con hijos
+        $tree = array_map(function($cat) {
+            $children_terms = get_terms([
+                'taxonomy' => 'product_cat',
+                'parent' => $cat->term_id,
+                'hide_empty' => false,
+            ]);
+
+            return [
+                'id' => $cat->term_id,
+                'name' => $cat->name,
+                'count' => $cat->count,
+                'children' => !is_wp_error($children_terms) ? array_map(function($child) {
+                    return [
+                        'id' => $child->term_id,
+                        'name' => $child->name,
+                        'count' => $child->count,
+                        'children' => []
+                    ];
+                }, $children_terms) : []
+            ];
+        }, $categories);
+
+        wp_send_json_success(['tree' => $tree]);
+    }
+
+    // ============= FASE 7: IMAGEN LOCAL (MEDIA PICKER) =============
+
+    /**
+     * AJAX: Asignar imagen a un producto local
+     */
+    public function ajax_set_image() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $producto_id = absint($_POST['producto_id'] ?? 0);
+        $imagen_id = absint($_POST['imagen_id'] ?? 0);
+
+        if (!$producto_id) {
+            wp_send_json_error(['message' => 'producto_id requerido']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        // Verificar que el producto existe
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}producto_base WHERE id = %d",
+            $producto_id
+        ));
+
+        if (!$exists) {
+            wp_send_json_error(['message' => 'Producto no encontrado']);
+        }
+
+        // Actualizar imagen_id
+        $wpdb->update(
+            "{$prefix}producto_base",
+            ['imagen_id' => $imagen_id ?: null],
+            ['id' => $producto_id],
+            ['%d'],
+            ['%d']
+        );
+
+        // Obtener la URL de la imagen si existe
+        $imagen_url = '';
+        $imagen_full = '';
+        if ($imagen_id > 0) {
+            $imagen_url = wp_get_attachment_image_url($imagen_id, 'thumbnail');
+            $imagen_full = wp_get_attachment_image_url($imagen_id, 'full');
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('product_image_set', 'producto_base', $producto_id, [
+                'imagen_id' => $imagen_id,
+            ]);
+        }
+
+		wp_send_json_success([
+			'message' => 'Imagen actualizada exitosamente',
+			'imagen_id' => $imagen_id,
+			'imagen_url' => $imagen_url,
+			'imagen_full' => $imagen_full,
+		]);
+	}
+
+	public function ajax_create_category() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$name = sanitize_text_field($_POST['name'] ?? '');
+		$parent_id = absint($_POST['parent_id'] ?? 0);
+
+		if (empty($name)) {
+			wp_send_json_error(['message' => 'Nombre de categoría requerido'], 400);
+		}
+
+		$term = wp_insert_term($name, 'product_cat', ['parent' => $parent_id]);
+
+		if (is_wp_error($term)) {
+			wp_send_json_error(['message' => $term->get_error_message()], 400);
+		}
+
+		wp_send_json_success(['term_id' => $term['term_id'], 'name' => $name, 'parent' => $parent_id]);
+	}
+
+	public function ajax_rename_category() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$term_id = absint($_POST['term_id'] ?? 0);
+		$name = sanitize_text_field($_POST['name'] ?? '');
+
+		if ($term_id <= 0 || empty($name)) {
+			wp_send_json_error(['message' => 'Parámetros inválidos'], 400);
+		}
+
+		$result = wp_update_term($term_id, 'product_cat', ['name' => $name]);
+
+		if (is_wp_error($result)) {
+			wp_send_json_error(['message' => $result->get_error_message()], 400);
+		}
+
+		wp_send_json_success(['term_id' => $term_id, 'name' => $name]);
+	}
 }
+

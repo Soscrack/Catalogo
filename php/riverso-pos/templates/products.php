@@ -93,7 +93,10 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
 
     <div id="product-detail-panel" style="display:none; margin-top:18px; background:#fff; border:1px solid #ccd0d4; padding:14px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <h2 id="detail-title" style="margin:0;">Detalle del producto</h2>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <h2 id="detail-title" style="margin:0;">Detalle del producto</h2>
+                <span id="detail-alerts-badge" style="display:none; background:#dc3545; color:white; border-radius:12px; padding:4px 10px; font-weight:bold; font-size:13px; white-space:nowrap;">⚠️ 0 campos</span>
+            </div>
             <div style="display:flex; gap:8px;">
                 <button class="button button-primary" id="detail-edit-btn" style="display:none;">✎ Editar</button>
                 <button class="button button-primary" id="detail-save-btn" style="display:none; background:#28a745;">✓ Guardar</button>
@@ -109,6 +112,7 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
                 <a href="#" class="detail-tab" data-tab="suppliers" title="Asignar códigos de proveedores">Códigos <span class="dashicons dashicons-editor-help" style="font-size:14px; margin-left:2px; cursor:pointer;" title="Códigos de proveedores para comprar este producto"></span></a>
                 <a href="#" class="detail-tab" data-tab="barcodes" title="Gestionar códigos EAN13">Barcodes <span class="dashicons dashicons-editor-help" style="font-size:14px; margin-left:2px; cursor:pointer;" title="Códigos de barra del producto"></span></a>
                 <a href="#" class="detail-tab" data-tab="tasks" title="Tareas pendientes">Tasks <span class="dashicons dashicons-editor-help" style="font-size:14px; margin-left:2px; cursor:pointer;" title="Tareas automáticas para completar el producto"></span></a>
+                <a href="#" class="detail-tab" data-tab="families" title="Gestionar familias de productos">Familias <span class="dashicons dashicons-editor-help" style="font-size:14px; margin-left:2px; cursor:pointer;" title="Familias y grupos de equivalencia"></span></a>
             </div>
         </div>
 
@@ -199,6 +203,14 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
                         </div>
                     </td>
                 </tr>
+                <!-- FASE 9: REGLA DE PRECIO VISIBLE -->
+                <tr>
+                    <th>Regla de Precio</th>
+                    <td>
+                        <span id="regla-display">-</span>
+                        <small id="regla-origen" style="color:#666; display:none;"></small>
+                    </td>
+                </tr>
                 <tr>
                     <th>Familia</th>
                     <td>
@@ -213,6 +225,18 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
                             </select>
                             <button class="button button-primary" id="familia-save-btn">Asignar familia</button>
                             <button class="button" id="familia-cancel-btn">Cancelar</button>
+                        </div>
+                    </td>
+                </tr>
+                <!-- FASE 7: IMAGEN LOCAL -->
+                <tr>
+                    <th>Imagen Local</th>
+                    <td>
+                        <div id="local-image-view">
+                            <img id="local-image-thumb" src="" style="max-width:120px; max-height:120px; display:none; border-radius:4px; margin-bottom:8px; border:1px solid #ddd;">
+                            <br>
+                            <button class="button" id="local-image-select">📷 Seleccionar imagen</button>
+                            <button class="button" id="local-image-clear" style="display:none;">Quitar imagen</button>
                         </div>
                     </td>
                 </tr>
@@ -270,6 +294,43 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
             <p>
                 <button class="button button-primary" id="online-create-btn" style="display:none;">Crear nuevo producto WooCommerce</button>
             </p>
+
+            <!-- FASE 6: CATEGORÍAS ONLINE -->
+			<hr style="margin:16px 0;">
+			<h4>Categorías WooCommerce (Fase 6)</h4>
+			
+			<div id="online-categories-suggested-banner" style="display:none; background:#e7f3ff; border-left:4px solid #2196F3; padding:12px; margin-bottom:12px; border-radius:4px;">
+				<strong>Sugerido por catálogo Mamut:</strong>
+				<span id="online-categories-suggested-text"></span>
+			</div>
+			
+			<div id="online-categories-tree" style="border:1px solid #ddd; padding:12px; border-radius:4px; background:#fafafa; max-height:400px; overflow-y:auto; margin-bottom:12px;">
+				<p style="color:#666; text-align:center;">Cargando categorías...</p>
+			</div>
+			
+			<div style="margin-bottom:12px;">
+				<button class="button button-primary" id="online-categories-save" style="display:none;">Guardar categorías</button>
+				<button class="button button-secondary" id="online-categories-add-new" style="margin-left:6px;">+ Nueva categoría</button>
+			</div>
+			
+			<div id="online-categories-add-form" style="display:none; background:#f9f9f9; border:1px solid #ddd; padding:12px; border-radius:4px; margin-bottom:12px;">
+				<label for="online-categories-new-name" style="display:block; margin-bottom:6px;">Nombre de la categoría:</label>
+				<input type="text" id="online-categories-new-name" placeholder="Ej. Herramientas" style="width:100%; padding:6px; box-sizing:border-box; margin-bottom:6px;">
+				<label for="online-categories-new-parent" style="display:block; margin-bottom:6px;">Categoría padre:</label>
+				<select id="online-categories-new-parent" style="width:100%; padding:6px; box-sizing:border-box; margin-bottom:6px;">
+					<option value="0">Sin padre (categoría raíz)</option>
+				</select>
+				<button class="button button-primary" id="online-categories-create-btn" style="margin-right:6px;">Crear</button>
+				<button class="button" id="online-categories-cancel-btn">Cancelar</button>
+			</div>
+			
+			<div id="online-categories-task-panel" style="display:none; background:#fff3cd; border-left:4px solid #ffc107; padding:12px; border-radius:4px; margin-bottom:12px;">
+				<strong>Tarea pendiente:</strong> Validar categoría
+				<div style="margin-top:8px; font-size:12px; color:#666;">
+					<span id="online-categories-task-suggested"></span>
+				</div>
+				<button class="button button-success" id="online-categories-accept-task" style="margin-top:8px;">Aceptar categorías y completar tarea</button>
+			</div>
         </div>
 
         <!-- TAB: CÓDIGOS PROVEEDOR -->
@@ -357,6 +418,45 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
         <div class="detail-tab-content" id="tab-tasks" style="display:none;">
             <div id="tasks-list" style="margin-top:12px;"></div>
             <p id="tasks-empty" style="color:#666;">Sin tareas activas.</p>
+        </div>
+
+        <!-- TAB: FAMILIAS (Fase 5) -->
+        <div class="detail-tab-content" id="tab-families" style="display:none;">
+            <div style="margin-bottom:12px;">
+                <button class="button button-primary" id="family-create-btn">+ Nueva familia</button>
+            </div>
+
+            <div id="family-create-form" style="display:none; margin-bottom:12px; padding:12px; background:#f9f9f9; border:1px solid #ddd; border-radius:4px;">
+                <h4 style="margin-top:0;">Crear Nueva Familia</h4>
+                <table class="form-table">
+                    <tr>
+                        <th><label for="family-codigo">Código Único</label></th>
+                        <td><input type="text" id="family-codigo" class="regular-text" placeholder="ej. FAM001"></td>
+                    </tr>
+                    <tr>
+                        <th><label for="family-nombre">Nombre</label></th>
+                        <td><input type="text" id="family-nombre" class="regular-text" placeholder="ej. Bebidas Refrescantes"></td>
+                    </tr>
+                    <tr>
+                        <th><label for="family-tipo">Tipo de Sustitución</label></th>
+                        <td>
+                            <select id="family-tipo" class="regular-text">
+                                <option value="compatible">Compatible</option>
+                                <option value="sustituto">Sustituto</option>
+                                <option value="preferido">Preferido</option>
+                            </select>
+                        </td>
+                    </tr>
+                </table>
+                <p>
+                    <button class="button button-primary" id="family-save-btn">Crear familia</button>
+                    <button class="button" id="family-cancel-btn">Cancelar</button>
+                </p>
+            </div>
+
+            <div id="family-tree" style="max-height:600px; overflow-y:auto; border:1px solid #ddd; border-radius:4px; padding:12px; background:#fafafa;">
+                <p style="color:#666; text-align:center;">Cargando familias...</p>
+            </div>
         </div>
     </div>
     <!-- HELP PANEL: COMPLETITUD -->
@@ -796,6 +896,35 @@ jQuery(function($){
             $('#familia-display').html(`<strong>${esc(fam.nombre)}</strong> <small style="color:#666;">(${esc(fam.tipo_sustitucion)})</small>`);
         } else {
             $('#familia-display').html('<span style="color:#999;">Sin familia</span>');
+        }
+        
+        // Imagen (Fase 7)
+        if (product.imagen_id && product.imagen_url) {
+            $('#local-image-thumb').attr('src', product.imagen_url).show();
+            $('#local-image-clear').show();
+        } else {
+            $('#local-image-thumb').hide();
+            $('#local-image-clear').hide();
+        }
+        
+        // Calcular alertas de campos faltantes (Fase 8)
+        calculateFieldAlerts(product);
+        
+        // Mostrar regla de precio (Fase 9)
+        if (product.regla_precio && product.regla_precio.id) {
+            const regla = product.regla_precio;
+            const origen = regla.origen || 'producto';
+            const originLabel = {
+                'producto': 'Regla directa',
+                'familia': 'Regla de familia',
+                'categoria': 'Regla de categoría'
+            }[origen] || origen;
+            
+            $('#regla-display').html(`<a href="${esc(admin_url)}admin.php?page=riverso-pos-price-rules&id=${regla.id}" target="_blank"><strong>${esc(regla.nombre)}</strong></a>`);
+            $('#regla-origen').text(`(${originLabel})`).show();
+        } else {
+            $('#regla-display').text('Sin regla asignada');
+            $('#regla-origen').hide();
         }
         
         // Mostrar botones edit/save/cancel
@@ -2219,5 +2348,560 @@ jQuery(function($){
     });
 
     load();
+
+    // ============= FASE 5: FAMILIAS =============
+    function loadFamilyTree() {
+        $.post(ajaxurl, {
+            action: 'riverso_families_tree',
+            nonce
+        }, function(r) {
+            if (!r.success) {
+                $('#family-tree').html(`<p style="color:#dc3545;">Error: ${esc(r.data.message || 'Error desconocido')}</p>`);
+                return;
+            }
+            renderFamilyTree(r.data.tree || []);
+        });
+    }
+
+    function renderFamilyTree(families) {
+        if (families.length === 0) {
+            $('#family-tree').html('<p style="color:#666; text-align:center;">Sin familias registradas</p>');
+            return;
+        }
+
+        let html = '';
+        families.forEach(family => {
+            const membersList = (family.children || []).map(m => {
+                const badge = m.es_reemplazo_preferido ? '<span style="background:#28a745;color:white;padding:2px 6px;border-radius:3px;font-size:11px;margin-left:8px;">Preferido</span>' : '';
+                return `<div style="margin-left:30px; padding:6px; background:#fff; border:1px solid #e5e5e5; border-radius:3px; margin-bottom:6px;">
+                    <strong>${esc(m.nombre_canonico || '-')}</strong> <small style="color:#666;">(${esc(m.canonical_sku || '-')})</small>${badge}
+                    <button class="button button-small" data-action="remove-member" data-member-id="${m.id}" style="margin-left:8px; float:right;">Quitar</button>
+                </div>`;
+            }).join('');
+
+            html += `<div style="margin-bottom:12px; padding:12px; background:#fff; border:1px solid #ddd; border-radius:4px;">
+                <div style="cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+                    <span onclick="$(this).closest('.familia-card').find('.familia-members').toggle(); $(this).find('.familia-chevron').text($(this).closest('.familia-card').find('.familia-members').is(':visible') ? '▼' : '▸');" style="user-select:none; flex:1;">
+                        <span class="familia-chevron">▸</span> <strong>${esc(family.nombre)}</strong> <small style="color:#666;">(${family.children ? family.children.length : 0} miembros)</small>
+                    </span>
+                </div>
+                <div class="familia-members" style="display:none; margin-top:8px;">
+                    ${membersList}
+                    <button class="button button-small" data-action="add-member-form" data-family-id="${family.id}" style="margin-top:8px;">+ Agregar miembro</button>
+                </div>
+            </div>`;
+        }).forEach(div => { html += div; });
+
+        $('#family-tree').html(html);
+    }
+
+    // Click: crear familia
+    $('#family-create-btn').on('click', function() {
+        $('#family-create-form').toggle();
+        if ($('#family-create-form').is(':visible')) {
+            $('#family-codigo').focus();
+        }
+    });
+
+    // Click: cancelar creación de familia
+    $('#family-cancel-btn').on('click', function() {
+        $('#family-create-form').hide();
+        $('#family-codigo').val('');
+        $('#family-nombre').val('');
+        $('#family-tipo').val('compatible');
+    });
+
+    // Click: guardar familia
+    $('#family-save-btn').on('click', function() {
+        const codigo = $('#family-codigo').val().trim();
+        const nombre = $('#family-nombre').val().trim();
+        const tipo = $('#family-tipo').val();
+
+        if (!codigo || !nombre) {
+            alert('Por favor ingresa código y nombre');
+            return;
+        }
+
+        $.post(ajaxurl, {
+            action: 'riverso_families_create',
+            nonce,
+            codigo_grupo: codigo,
+            nombre: nombre,
+            tipo_sustitucion: tipo
+        }, function(r) {
+            if (!r.success) {
+                alert('Error: ' + r.data.message);
+                return;
+            }
+            alert('Familia creada exitosamente');
+            $('#family-create-form').hide();
+            $('#family-codigo').val('');
+            $('#family-nombre').val('');
+            $('#family-tipo').val('compatible');
+            loadFamilyTree();
+        });
+    });
+
+    // Click: quitar miembro
+    $(document).on('click', '[data-action="remove-member"]', function() {
+        if (!confirm('¿Quitar este miembro de la familia?')) return;
+        const memberId = $(this).data('member-id');
+        
+        $.post(ajaxurl, {
+            action: 'riverso_families_remove_member',
+            nonce,
+            member_id: memberId
+        }, function(r) {
+            if (!r.success) {
+                alert('Error: ' + r.data.message);
+                return;
+            }
+            loadFamilyTree();
+        });
+    });
+
+    // Evento: cuando se cambia al tab de familias, cargar árbol
+    $(document).on('click', '.detail-tab[data-tab="families"]', function() {
+        loadFamilyTree();
+    });
+
+    // ============= FASE 6: CATEGORÍAS ONLINE =============
+	function loadCategoryTree(wooId) {
+		if (!wooId) {
+			$('#online-categories-tree').html('<p style="color:#999;">Sin producto WooCommerce asignado</p>');
+			$('#online-categories-suggested-banner').hide();
+			$('#online-categories-task-panel').hide();
+			return;
+		}
+
+		// Buscar tarea de validar_categoria
+		const catTask = (currentProduct.tasks || []).find(t => t.tipo === 'validar_categoria' && t.estado !== 'completada');
+		const suggestedCat = catTask ? catTask.datos_extra : null;
+
+		// Mostrar banner si hay categoría sugerida
+		if (suggestedCat && suggestedCat.categoria) {
+			let suggestedText = suggestedCat.categoria;
+			if (suggestedCat.subcategoria) {
+				suggestedText += ' > ' + suggestedCat.subcategoria;
+			}
+			$('#online-categories-suggested-text').text(suggestedText);
+			$('#online-categories-suggested-banner').show();
+		} else {
+			$('#online-categories-suggested-banner').hide();
+		}
+
+		// Mostrar panel de tarea si existe
+		if (catTask) {
+			let suggestedText = suggestedCat.categoria || 'Sin categoría';
+			if (suggestedCat.subcategoria) {
+				suggestedText += ' > ' + suggestedCat.subcategoria;
+			}
+			$('#online-categories-task-suggested').text('Categoría sugerida: ' + suggestedText);
+			$('#online-categories-task-panel').data('task_id', catTask.id).show();
+		} else {
+			$('#online-categories-task-panel').hide();
+		}
+
+		$.post(ajaxurl, {
+			action: 'riverso_products_get_category_tree',
+			nonce,
+			parent_id: 0
+		}, function(r) {
+			if (!r.success) {
+				$('#online-categories-tree').html(`<p style="color:#dc3545;">Error: ${esc(r.data.message || 'Error desconocido')}</p>`);
+				return;
+			}
+
+			// Obtener categorías actuales del producto
+			$.post(ajaxurl, {
+				action: 'riverso_products_get_product_categories',
+				nonce,
+				woocommerce_product_id: wooId
+			}, function(r2) {
+				const currentCats = r2.success ? r2.data.current_categories : [];
+				renderCategoryTreeWithCheckboxes(r.data.tree || [], currentCats, suggestedCat);
+				$('#online-categories-save').show();
+
+				// Rellenar dropdown de padre
+				populateCategoryParentDropdown(r.data.tree || []);
+			});
+		});
+	}
+
+	function renderCategoryTreeWithCheckboxes(categories, selectedIds, suggestedCat, indent = 0) {
+		if (!categories || categories.length === 0) {
+			$('#online-categories-tree').html('<p style="color:#666;">Sin categorías disponibles</p>');
+			return;
+		}
+
+		let html = '';
+		const renderTree = (cats, level) => {
+			return cats.map(cat => {
+				const checked = selectedIds.includes(cat.id) ? 'checked' : '';
+				let isSuggested = false;
+				let badge = '';
+
+				// Verificar si coincide con la categoría sugerida
+				if (suggestedCat) {
+					const catNameLower = cat.name.toLowerCase().trim();
+					const suggestedCatLower = (suggestedCat.categoria || '').toLowerCase().trim();
+					const suggestedSubLower = (suggestedCat.subcategoria || '').toLowerCase().trim();
+
+					if (catNameLower === suggestedCatLower || catNameLower === suggestedSubLower) {
+						isSuggested = true;
+						badge = ' <span style="background:#28a745; color:white; font-size:11px; padding:2px 6px; border-radius:3px; margin-left:6px;">Sugerido</span>';
+					}
+				}
+
+				const shouldBeChecked = checked || (isSuggested && !checked);
+				const childrenHtml = cat.children && cat.children.length > 0 
+					? renderTree(cat.children, level + 1)
+					: '';
+				
+				return `<div style="margin-left:${level * 20}px; margin-bottom:8px;">
+					<label style="display:flex; align-items:center; user-select:none;">
+						<input type="checkbox" class="category-checkbox" value="${cat.id}" ${shouldBeChecked ? 'checked' : ''} data-category-id="${cat.id}">
+						<span style="margin-left:6px;">${esc(cat.name)}${badge} <small style="color:#999;">(${cat.count})</small>
+							<button type="button" class="category-edit-btn" data-term-id="${cat.id}" style="margin-left:6px; font-size:11px; padding:2px 6px; background:#f0f0f0; border:1px solid #ccc; cursor:pointer;">Editar</button>
+						</span>
+					</label>
+					${childrenHtml}
+				</div>`;
+			}).join('');
+		};
+
+		html = renderTree(categories, 0);
+		$('#online-categories-tree').html(html || '<p style="color:#666;">Sin categorías</p>');
+	}
+
+	function populateCategoryParentDropdown(categories) {
+		const parentSelect = $('#online-categories-new-parent');
+		parentSelect.find('option:not(:first)').remove();
+
+		const addCategories = (cats) => {
+			cats.forEach(cat => {
+				parentSelect.append(`<option value="${cat.id}">${esc(cat.name)}</option>`);
+				if (cat.children && cat.children.length > 0) {
+					addCategories(cat.children);
+				}
+			});
+		};
+
+		addCategories(categories);
+	}
+
+    // Click: guardar categorías
+    $('#online-categories-save').on('click', function() {
+        if (!currentProduct || !currentProduct.woocommerce_product_id) {
+            alert('Sin producto WooCommerce');
+            return;
+        }
+
+        const selectedCats = [];
+        $('#online-categories-tree .category-checkbox:checked').each(function() {
+            selectedCats.push(parseInt($(this).val()));
+        });
+
+        $.post(ajaxurl, {
+            action: 'riverso_products_set_product_categories',
+            nonce,
+            woocommerce_product_id: currentProduct.woocommerce_product_id,
+            category_ids: selectedCats
+        }, function(r) {
+            if (!r.success) {
+                alert('Error: ' + r.data.message);
+                return;
+            }
+            alert('Categorías guardadas exitosamente');
+        });
+	});
+
+	// ============= EDICIÓN DE CATEGORÍAS =============
+
+	// Click: mostrar formulario de nueva categoría
+	$('#online-categories-add-new').on('click', function() {
+		$('#online-categories-add-form').toggle();
+	});
+
+	// Click: cancelar formulario
+	$('#online-categories-cancel-btn').on('click', function() {
+		$('#online-categories-add-form').hide();
+		$('#online-categories-new-name').val('');
+	});
+
+	// Click: crear nueva categoría
+	$('#online-categories-create-btn').on('click', function() {
+		const name = $('#online-categories-new-name').val().trim();
+		const parent_id = absint($('#online-categories-new-parent').val());
+
+		if (!name) {
+			alert('Ingrese el nombre de la categoría');
+			return;
+		}
+
+		$.post(ajaxurl, {
+			action: 'riverso_products_create_category',
+			nonce: riverso_pos_nonce,
+			name: name,
+			parent_id: parent_id
+		}, function(r) {
+			if (!r.success) {
+				alert('Error: ' + r.data.message);
+				return;
+			}
+			alert('Categoría creada exitosamente');
+			$('#online-categories-new-name').val('');
+			$('#online-categories-add-form').hide();
+			// Recargar árbol
+			if (currentProduct && currentProduct.woocommerce_product_id) {
+				loadCategoryTree(currentProduct.woocommerce_product_id);
+			}
+		});
+	});
+
+	// Click: editar categoría (renombrar)
+	$(document).on('click', '.category-edit-btn', function(e) {
+		e.preventDefault();
+		const term_id = $(this).data('term_id');
+		const currentName = $(this).closest('label').find('span').first().text().split(' ')[0]; // Obtener nombre actual
+
+		const newName = prompt('Nuevo nombre para la categoría:', currentName);
+		if (!newName || newName === currentName) {
+			return;
+		}
+
+		$.post(ajaxurl, {
+			action: 'riverso_products_rename_category',
+			nonce: riverso_pos_nonce,
+			term_id: term_id,
+			name: newName
+		}, function(r) {
+			if (!r.success) {
+				alert('Error: ' + r.data.message);
+				return;
+			}
+			alert('Categoría actualizada exitosamente');
+			// Recargar árbol
+			if (currentProduct && currentProduct.woocommerce_product_id) {
+				loadCategoryTree(currentProduct.woocommerce_product_id);
+			}
+		});
+	});
+
+	// ============= ACEPTAR TAREA DE CATEGORÍA =============
+
+	// Click: aceptar categorías y completar tarea
+	$('#online-categories-accept-task').on('click', function() {
+		const taskId = $('#online-categories-task-panel').data('task_id');
+		if (!taskId || !currentProduct) {
+			alert('Error: datos incompletos');
+			return;
+		}
+
+		// 1. Guardar categorías seleccionadas
+		const selectedCats = [];
+		$('#online-categories-tree .category-checkbox:checked').each(function() {
+			selectedCats.push(parseInt($(this).val()));
+		});
+
+		$.post(ajaxurl, {
+			action: 'riverso_products_set_product_categories',
+			nonce: riverso_pos_nonce,
+			woocommerce_product_id: currentProduct.woocommerce_product_id,
+			category_ids: selectedCats
+		}, function(r) {
+			if (!r.success) {
+				alert('Error al guardar categorías: ' + r.data.message);
+				return;
+			}
+
+			// 2. Completar tarea
+			const catNames = $('#online-categories-tree .category-checkbox:checked').map(function() {
+				return $(this).closest('label').find('span').first().text();
+			}).get().join(', ');
+
+			$.post(ajaxurl, {
+				action: 'riverso_complete_task',
+				nonce: riverso_pos_nonce,
+				task_id: taskId,
+				notas_completado: 'Categorías aceptadas desde Hub: ' + catNames
+			}, function(r2) {
+				if (!r2.success) {
+					alert('Error al completar tarea: ' + r2.data.message);
+					return;
+				}
+
+				alert('¡Categorías aceptadas y tarea completada exitosamente!');
+				$('#online-categories-task-panel').hide();
+				// Refrescar datos del producto
+				showDetail(currentProduct.id);
+			});
+		});
+	});
+
+	// Evento: cuando se cambia al tab online después de que hay woo_id, cargar categorías
+    $(document).on('click', '.detail-tab[data-tab="online"]', function() {
+        if (currentProduct && currentProduct.woocommerce_product_id) {
+            loadCategoryTree(currentProduct.woocommerce_product_id);
+        }
+    });
+
+    // ============= FASE 7: IMAGEN LOCAL (MEDIA PICKER) =============
+    
+    // Click: seleccionar imagen
+    $('#local-image-select').on('click', function(e) {
+        e.preventDefault();
+        
+        if (!wp.media) {
+            alert('Media Library no disponible');
+            return;
+        }
+        
+        const frame = wp.media({
+            title: 'Seleccionar imagen del producto',
+            button: { text: 'Usar imagen' },
+            multiple: false,
+            library: {
+                type: 'image'
+            }
+        });
+        
+        frame.on('select', function() {
+            const attachment = frame.state().get('selection').first().toJSON();
+            
+            if (!attachment.id) {
+                alert('No se seleccionó una imagen válida');
+                return;
+            }
+            
+            $.post(ajaxurl, {
+                action: 'riverso_products_set_image',
+                nonce,
+                producto_id: currentProduct.id,
+                imagen_id: attachment.id
+            }, function(r) {
+                if (!r.success) {
+                    alert('Error: ' + r.data.message);
+                    return;
+                }
+                
+                currentProduct.imagen_id = attachment.id;
+                currentProduct.imagen_url = r.data.imagen_url;
+                currentProduct.imagen_full = r.data.imagen_full;
+                
+                $('#local-image-thumb').attr('src', currentProduct.imagen_url).show();
+                $('#local-image-clear').show();
+                alert('Imagen guardada exitosamente');
+            });
+        });
+        
+        frame.open();
+    });
+    
+    // Click: quitar imagen
+    $('#local-image-clear').on('click', function(e) {
+        e.preventDefault();
+        
+        if (!confirm('¿Quitar la imagen del producto?')) return;
+        
+        $.post(ajaxurl, {
+            action: 'riverso_products_set_image',
+            nonce,
+            producto_id: currentProduct.id,
+            imagen_id: 0
+        }, function(r) {
+            if (!r.success) {
+                alert('Error: ' + r.data.message);
+                return;
+            }
+            
+            currentProduct.imagen_id = 0;
+            currentProduct.imagen_url = '';
+            currentProduct.imagen_full = '';
+            
+            $('#local-image-thumb').hide();
+            $('#local-image-clear').hide();
+            alert('Imagen removida');
+        });
+    });
+
+    // ============= FASE 8: INDICADORES DE EXCLAMACIÓN =============
+    
+    function calculateFieldAlerts(product) {
+        const alerts = [];
+        
+        // SKU Local vacío
+        if (!product.canonical_sku) {
+            alerts.push({
+                field: 'SKU Local',
+                icon: '❌',
+                action: 'edit-sku'
+            });
+        }
+        
+        // Sin precio local asignado
+        if (!product.precio_local || !product.precio_local.p_asignado) {
+            alerts.push({
+                field: 'Precio Local',
+                icon: '⚠️',
+                action: 'tab-local'
+            });
+        }
+        
+        // Sin familia
+        if (!product.familia) {
+            alerts.push({
+                field: 'Familia',
+                icon: '👥',
+                action: 'tab-local'
+            });
+        }
+        
+        // Sin imagen
+        if (!product.imagen_id) {
+            alerts.push({
+                field: 'Imagen Local',
+                icon: '📷',
+                action: 'tab-local'
+            });
+        }
+        
+        // Sin código proveedor
+        if ((product.proveedores_count || 0) === 0) {
+            alerts.push({
+                field: 'Código Proveedor',
+                icon: '📦',
+                action: 'tab-suppliers'
+            });
+        }
+        
+        // Sin barcode EAN-13 si tiene WooCommerce
+        if (product.woocommerce_product_id) {
+            const hasEan = product.barcodes && product.barcodes.some(b => b.tipo === 'ean13');
+            if (!hasEan) {
+                alerts.push({
+                    field: 'Barcode EAN-13',
+                    icon: '📊',
+                    action: 'tab-barcodes'
+                });
+            }
+            
+            // Sin categorías
+            alerts.push({
+                field: 'Categorías Online',
+                icon: '📂',
+                action: 'tab-online'
+            });
+        }
+        
+        // Mostrar badge con contador
+        if (alerts.length > 0) {
+            $('#detail-alerts-badge').html(`⚠️ ${alerts.length} campos`).show();
+        } else {
+            $('#detail-alerts-badge').hide();
+        }
+        
+        return alerts;
+    }
 });
 </script>

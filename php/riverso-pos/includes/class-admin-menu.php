@@ -100,6 +100,16 @@ class Riverso_POS_Admin_Menu {
             [$this, 'render_products']
         );
         
+        // Categorías y Familias
+        add_submenu_page(
+            'riverso-pos',
+            __('Categorías y Familias', 'riverso-pos'),
+            __('Categorías y Familias', 'riverso-pos'),
+            'riverso_manage_products',
+            'riverso-pos-categories',
+            [$this, 'render_categories']
+        );
+        
         // Tareas
         add_submenu_page(
             'riverso-pos',
@@ -330,6 +340,15 @@ class Riverso_POS_Admin_Menu {
     public function render_products() {
         require_once RIVERSO_POS_PLUGIN_DIR . 'modules/products/class-product-module.php';
         $this->render_page('products');
+    }
+    
+    /**
+     * Renderiza la página de categorías y familias.
+     */
+    public function render_categories() {
+        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/products/class-product-module.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/families/class-family-module.php';
+        $this->render_page('categories-families');
     }
     
     /**

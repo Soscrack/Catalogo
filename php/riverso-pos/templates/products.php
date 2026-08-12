@@ -95,7 +95,12 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <div style="display:flex; align-items:center; gap:12px;">
                 <h2 id="detail-title" style="margin:0;">Detalle del producto</h2>
-                <span id="detail-alerts-badge" style="display:none; background:#dc3545; color:white; border-radius:12px; padding:4px 10px; font-weight:bold; font-size:13px; white-space:nowrap;">⚠️ 0 campos</span>
+                <span id="detail-alerts-badge" style="display:none; background:#dc3545; color:white; border-radius:12px; padding:4px 10px; font-weight:bold; font-size:13px; white-space:nowrap; cursor:pointer; position:relative;">
+                    ⚠️ 0 campos
+                    <div id="detail-alerts-tooltip" class="alerts-tooltip" style="display:none; position:absolute; top:100%; right:0; background:#333; color:white; padding:10px; border-radius:6px; min-width:220px; z-index:100; box-shadow:0 4px 12px rgba(0,0,0,0.3); margin-top:4px;">
+                        <!-- Se puebla dinámicamente -->
+                    </div>
+                </span>
             </div>
             <div style="display:flex; gap:8px;">
                 <button class="button button-primary" id="detail-edit-btn" style="display:none;">✎ Editar</button>
@@ -666,6 +671,28 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
 .woo-result-item:hover, .supplier-result-item:hover {
     background: #f5f5f5;
 }
+#detail-alerts-badge:hover .alerts-tooltip {
+    display: block !important;
+}
+.alerts-tooltip-item {
+    padding: 6px 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+}
+.alerts-tooltip-item:hover {
+    text-decoration: underline;
+    color: #ffeb3b;
+}
+.field-warning-inline {
+    color: #dc3545;
+    margin-left: 6px;
+    cursor: help;
+    font-size: 14px;
+    font-weight: bold;
+}
 </style>
 
 <script>
@@ -909,6 +936,9 @@ jQuery(function($){
         
         // Calcular alertas de campos faltantes (Fase 8)
         calculateFieldAlerts(product);
+        
+        // Mostrar iconos de warning inline en campos vacíos
+        showFieldWarningIcons(product);
         
         // Mostrar regla de precio (Fase 9)
         if (product.regla_precio && product.regla_precio.id) {
@@ -1281,9 +1311,10 @@ jQuery(function($){
     // Evento: boton para editar SKU local desde tarea
     $(document).on('click', '.task-edit-local', function(e){
         e.preventDefault();
-        // Abrir editor y hacer focus en SKU Local
+        // Ir al tab Local, abrir editor y hacer focus en SKU Local
+        $('[data-tab="local"].detail-tab').trigger('click');
         enterEditMode();
-        setTimeout(() => $('#local-sku-edit').focus(), 100);
+        setTimeout(() => $('#local-sku-edit').focus().select(), 100);
     });
 
     // Evento: abrir URL externa de tarea en nueva ventana
@@ -2034,6 +2065,28 @@ jQuery(function($){
         $('html, body').animate({scrollTop: $('#tab-' + tab).offset().top - 40}, 300);
     });
 
+    // Evento: click en items del tooltip de alertas
+    $(document).on('click', '.alerts-tooltip-item', function(){
+        const action = $(this).data('alert-action');
+        if (action === 'edit-sku') {
+            // Cambiar al tab local y entrar en modo edición
+            $('.detail-tab').removeClass('active');
+            $('[data-tab="local"]').addClass('active');
+            $('.detail-tab-content').hide();
+            $('#tab-local').show();
+            enterEditMode();
+            $('#local-sku-edit').focus();
+        } else if (action && action.startsWith('tab-')) {
+            // Cambiar al tab especificado
+            const tab = action.replace('tab-', '');
+            $('.detail-tab').removeClass('active');
+            $('[data-tab="' + tab + '"]').addClass('active');
+            $('.detail-tab-content').hide();
+            $('#tab-' + tab).show();
+            $('html, body').animate({scrollTop: $('#tab-' + tab).offset().top - 40}, 300);
+        }
+    });
+
     // Evento: cambiar tipo de barcode (mostrar/ocultar selector de proveedor)
     $(document).on('change', '#barcode-type', function(){
         const tipo = $(this).val();
@@ -2348,6 +2401,40 @@ jQuery(function($){
     });
 
     load();
+
+    // Deep link desde tareas: ?action=detail&id=X&tab=local&edit=1
+    (function openDeepLinkFromTask() {
+        const params = new URLSearchParams(window.location.search);
+        const action = params.get('action');
+        const id = parseInt(params.get('id') || '0', 10);
+        const tab = params.get('tab') || '';
+        const edit = params.get('edit') === '1';
+
+        if (action !== 'detail' || !id) {
+            return;
+        }
+
+        $.post(ajaxurl, {
+            action: 'riverso_products_get',
+            nonce,
+            id: id
+        }, function(r) {
+            if (!r.success) {
+                return;
+            }
+            showDetail(r.data.item);
+
+            setTimeout(function() {
+                const targetTab = tab || 'local';
+                $('[data-tab="' + targetTab + '"].detail-tab').trigger('click');
+
+                if (edit && canManage) {
+                    enterEditMode();
+                    setTimeout(() => $('#local-sku-edit').focus().select(), 100);
+                }
+            }, 150);
+        });
+    })();
 
     // ============= FASE 5: FAMILIAS =============
     function loadFamilyTree() {
@@ -2894,14 +2981,61 @@ jQuery(function($){
             });
         }
         
-        // Mostrar badge con contador
+        // Mostrar badge con contador y tooltip
         if (alerts.length > 0) {
             $('#detail-alerts-badge').html(`⚠️ ${alerts.length} campos`).show();
+            
+            // Llenar el tooltip
+            let tooltipHtml = alerts.map(a =>
+                `<div class="alerts-tooltip-item" data-alert-action="${esc(a.action)}">
+                    <span>${a.icon}</span> ${esc(a.field)}
+                </div>`
+            ).join('');
+            $('#detail-alerts-tooltip').html(tooltipHtml);
         } else {
             $('#detail-alerts-badge').hide();
+            $('#detail-alerts-tooltip').html('');
         }
         
         return alerts;
+    }
+
+    function showFieldWarningIcons(product) {
+        // Limpiar warnings previos
+        $('.field-warning-inline').remove();
+        
+        // SKU Local vacío
+        if (!product.canonical_sku) {
+            $('#local-sku-view').after('<span class="field-warning-inline" title="Falta SKU Local">⚠️</span>');
+        }
+        
+        // Precio Local vacío
+        if (!product.precio_local || !product.precio_local.p_asignado) {
+            $('#local-precio-view').after('<span class="field-warning-inline" title="Falta Precio Local">⚠️</span>');
+        }
+        
+        // Familia vacía
+        if (!product.familia) {
+            $('#familia-display').after('<span class="field-warning-inline" title="Falta Familia">⚠️</span>');
+        }
+        
+        // Imagen vacía
+        if (!product.imagen_id) {
+            $('#local-image-select-btn').after('<span class="field-warning-inline" title="Falta Imagen">⚠️</span>');
+        }
+        
+        // Código proveedor
+        if ((product.proveedores_count || 0) === 0) {
+            // Este warning aparecerá en el tab de Suppliers cuando se cargue
+        }
+        
+        // Barcode EAN-13 (si tiene WooCommerce)
+        if (product.woocommerce_product_id) {
+            const hasEan = product.barcodes && product.barcodes.some(b => b.tipo === 'ean13');
+            if (!hasEan) {
+                // Este warning aparecerá en el tab de Barcodes cuando se cargue
+            }
+        }
     }
 });
 </script>

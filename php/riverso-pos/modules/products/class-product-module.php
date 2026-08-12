@@ -56,6 +56,9 @@ class Riverso_Product_Module {
 		add_action('wp_ajax_riverso_products_set_image', [$this, 'ajax_set_image']);
 		add_action('wp_ajax_riverso_products_create_category', [$this, 'ajax_create_category']);
 		add_action('wp_ajax_riverso_products_rename_category', [$this, 'ajax_rename_category']);
+		add_action('wp_ajax_riverso_products_category_impact', [$this, 'ajax_category_impact']);
+		add_action('wp_ajax_riverso_products_move_category', [$this, 'ajax_move_category']);
+		add_action('wp_ajax_riverso_products_delete_category', [$this, 'ajax_delete_category']);
 	}
 
     private function get_completeness_category($product) {
@@ -2045,7 +2048,7 @@ class Riverso_Product_Module {
     }
 
     /**
-     * AJAX: Obtener árbol jerárquico de categorías WooCommerce
+     * AJAX: Obtener árbol jerárquico de categorías WooCommerce (recursivo completo)
      */
     public function ajax_get_category_tree() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
@@ -2056,44 +2059,52 @@ class Riverso_Product_Module {
 
         $parent_id = absint($_POST['parent_id'] ?? 0);
 
-        $args = [
+        $categories = get_terms([
             'taxonomy' => 'product_cat',
             'parent' => $parent_id,
             'hide_empty' => false,
             'orderby' => 'name',
             'order' => 'ASC',
-        ];
-
-        $categories = get_terms($args);
+        ]);
 
         if (is_wp_error($categories)) {
             wp_send_json_error(['message' => $categories->get_error_message()]);
         }
 
-        // Construir árbol con hijos
+        // Construir árbol recursivo
         $tree = array_map(function($cat) {
-            $children_terms = get_terms([
-                'taxonomy' => 'product_cat',
-                'parent' => $cat->term_id,
-                'hide_empty' => false,
-            ]);
-
-            return [
-                'id' => $cat->term_id,
-                'name' => $cat->name,
-                'count' => $cat->count,
-                'children' => !is_wp_error($children_terms) ? array_map(function($child) {
-                    return [
-                        'id' => $child->term_id,
-                        'name' => $child->name,
-                        'count' => $child->count,
-                        'children' => []
-                    ];
-                }, $children_terms) : []
-            ];
+            return $this->build_category_tree_recursive($cat);
         }, $categories);
 
         wp_send_json_success(['tree' => $tree]);
+    }
+
+    /**
+     * Construye el árbol de categorías de forma recursiva
+     */
+    private function build_category_tree_recursive($cat) {
+        $children_terms = get_terms([
+            'taxonomy' => 'product_cat',
+            'parent' => $cat->term_id,
+            'hide_empty' => false,
+            'orderby' => 'name',
+            'order' => 'ASC',
+        ]);
+
+        $children = [];
+        if (!is_wp_error($children_terms) && !empty($children_terms)) {
+            $children = array_map(function($child) {
+                return $this->build_category_tree_recursive($child);
+            }, $children_terms);
+        }
+
+        return [
+            'id' => $cat->term_id,
+            'name' => $cat->name,
+            'parent' => $cat->parent,
+            'count' => $cat->count,
+            'children' => $children
+        ];
     }
 
     // ============= FASE 7: IMAGEN LOCAL (MEDIA PICKER) =============
@@ -2201,6 +2212,126 @@ class Riverso_Product_Module {
 		}
 
 		wp_send_json_success(['term_id' => $term_id, 'name' => $name]);
+	}
+
+	/**
+	 * AJAX: Obtener impacto de cambios en una categoría (productos afectados)
+	 */
+	public function ajax_category_impact() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$term_id = absint($_POST['term_id'] ?? 0);
+		if ($term_id <= 0) {
+			wp_send_json_error(['message' => 'ID de categoría requerido'], 400);
+		}
+
+		// Contar productos directos en esta categoría
+		$direct_products = intval(get_term($term_id, 'product_cat')->count ?? 0);
+
+		// Obtener hijos
+		$children = get_terms([
+			'taxonomy' => 'product_cat',
+			'parent' => $term_id,
+			'hide_empty' => false,
+			'fields' => 'ids',
+		]);
+		$children_count = !is_wp_error($children) ? count($children) : 0;
+
+		// Contar productos en toda la rama (recursivo)
+		$all_affected = $this->count_products_in_category_tree($term_id);
+
+		wp_send_json_success([
+			'direct_products' => $direct_products,
+			'children_count' => $children_count,
+			'total_products' => $all_affected
+		]);
+	}
+
+	/**
+	 * Cuenta recursivamente productos en una categoría y sus subcategorías
+	 */
+	private function count_products_in_category_tree($term_id) {
+		$count = get_term($term_id, 'product_cat')->count ?? 0;
+
+		$children = get_terms([
+			'taxonomy' => 'product_cat',
+			'parent' => $term_id,
+			'hide_empty' => false,
+			'fields' => 'ids',
+		]);
+
+		if (!is_wp_error($children) && !empty($children)) {
+			foreach ($children as $child_id) {
+				$count += $this->count_products_in_category_tree($child_id);
+			}
+		}
+
+		return intval($count);
+	}
+
+	/**
+	 * AJAX: Mover una categoría a un nuevo padre (cambiar nivel)
+	 */
+	public function ajax_move_category() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$term_id = absint($_POST['term_id'] ?? 0);
+		$new_parent_id = absint($_POST['new_parent_id'] ?? 0);
+
+		if ($term_id <= 0) {
+			wp_send_json_error(['message' => 'ID de categoría requerido'], 400);
+		}
+
+		// Evitar crear ciclos: no permitir que sea padre de sí mismo
+		if ($term_id === $new_parent_id) {
+			wp_send_json_error(['message' => 'No se puede mover una categoría a sí misma'], 400);
+		}
+
+		$result = wp_update_term($term_id, 'product_cat', ['parent' => $new_parent_id]);
+
+		if (is_wp_error($result)) {
+			wp_send_json_error(['message' => $result->get_error_message()], 400);
+		}
+
+		wp_send_json_success(['term_id' => $term_id, 'new_parent_id' => $new_parent_id]);
+	}
+
+	/**
+	 * AJAX: Eliminar una categoría
+	 */
+	public function ajax_delete_category() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$term_id = absint($_POST['term_id'] ?? 0);
+		if ($term_id <= 0) {
+			wp_send_json_error(['message' => 'ID de categoría requerido'], 400);
+		}
+
+		// Opción: reasignar productos a una categoría padre, o simplemente eliminar la relación
+		$reassign_to = absint($_POST['reassign_to'] ?? 0);
+
+		$result = wp_delete_term($term_id, 'product_cat', [
+			'reassign' => $reassign_to > 0 ? $reassign_to : 0
+		]);
+
+		if (is_wp_error($result)) {
+			wp_send_json_error(['message' => $result->get_error_message()], 400);
+		}
+
+		if ($result === false) {
+			wp_send_json_error(['message' => 'No se pudo eliminar la categoría'], 400);
+		}
+
+		wp_send_json_success(['term_id' => $term_id, 'message' => 'Categoría eliminada correctamente']);
 	}
 }
 

@@ -94,7 +94,12 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
     <div id="product-detail-panel" style="display:none; margin-top:18px; background:#fff; border:1px solid #ccd0d4; padding:14px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <h2 id="detail-title" style="margin:0;">Detalle del producto</h2>
-            <button class="button" id="detail-close">Cerrar</button>
+            <div style="display:flex; gap:8px;">
+                <button class="button button-primary" id="detail-edit-btn" style="display:none;">✎ Editar</button>
+                <button class="button button-primary" id="detail-save-btn" style="display:none; background:#28a745;">✓ Guardar</button>
+                <button class="button" id="detail-cancel-btn" style="display:none;">✕ Cancelar</button>
+                <button class="button" id="detail-close">Cerrar</button>
+            </div>
         </div>
 
         <div style="border-bottom:1px solid #ddd; margin-bottom:12px;">
@@ -110,11 +115,107 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
         <!-- TAB: LOCAL -->
         <div class="detail-tab-content" id="tab-local">
             <table class="form-table">
-                <tr><th>SKU Local</th><td><code id="local-sku">-</code></td></tr>
-                <tr><th>Nombre</th><td id="local-name">-</td></tr>
-                <tr><th>Unidad base</th><td id="local-unit">-</td></tr>
+                <tr>
+                    <th>SKU Local</th>
+                    <td>
+                        <code id="local-sku-view">-</code>
+                        <input type="text" id="local-sku-edit" class="regular-text" style="display:none;">
+                    </td>
+                </tr>
+                <tr>
+                    <th>Nombre</th>
+                    <td>
+                        <span id="local-name-view">-</span>
+                        <input type="text" id="local-name-edit" class="regular-text" style="display:none;">
+                    </td>
+                </tr>
+                <tr>
+                    <th>Unidad base</th>
+                    <td>
+                        <span id="local-unit-view">-</span>
+                        <select id="local-unit-edit" class="regular-text" style="display:none;">
+                            <option value="unidad">Unidad</option>
+                            <option value="caja">Caja</option>
+                            <option value="docena">Docena</option>
+                            <option value="kilogramo">Kilogramo</option>
+                            <option value="litro">Litro</option>
+                            <option value="metro">Metro</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Permite decimal</th>
+                    <td>
+                        <span id="local-decimal-view">-</span>
+                        <input type="checkbox" id="local-decimal-edit" style="display:none;">
+                    </td>
+                </tr>
+                <tr>
+                    <th>Permite EAN-13 personalizado</th>
+                    <td>
+                        <span id="local-ean-view">-</span>
+                        <input type="checkbox" id="local-ean-edit" style="display:none;">
+                    </td>
+                </tr>
+                <tr>
+                    <th>Stock abierto habilitado</th>
+                    <td>
+                        <span id="local-stock-view">-</span>
+                        <input type="checkbox" id="local-stock-edit" style="display:none;">
+                    </td>
+                </tr>
                 <tr><th>Origen</th><td id="local-origen">-</td></tr>
                 <tr><th>Estado</th><td id="local-estado">-</td></tr>
+                <tr>
+                    <th>Precio Local</th>
+                    <td>
+                        <div id="local-precio-view">-</div>
+                        <div id="local-precio-edit" style="display:none; background:#f9f9f9; padding:10px; border-radius:4px;">
+                            <table style="width:100%; margin-bottom:8px;">
+                                <tr>
+                                    <td style="width:30%;"><strong>Costo Ref:</strong></td>
+                                    <td><span id="precio-c-ref">-</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Precio Ref:</strong></td>
+                                    <td><span id="precio-p-ref">-</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Factor Min:</strong></td>
+                                    <td><span id="precio-factor-min">-</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Margen:</strong></td>
+                                    <td><span id="precio-margen" style="color:green;">✓ Correcto</span></td>
+                                </tr>
+                                <tr>
+                                    <td colspan="2">
+                                        <label><strong>Precio Asignado:</strong></label><br>
+                                        <input type="number" id="precio-p-asignado" class="regular-text" step="0.01" min="0" placeholder="0.00">
+                                        <button class="button button-primary" id="precio-save-btn" style="margin-top:8px;">Guardar precio</button>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Familia</th>
+                    <td>
+                        <div id="local-familia-view">
+                            <span id="familia-display">-</span>
+                            <button class="button button-small" id="familia-edit-toggle" style="margin-left:8px;">Editar familia</button>
+                        </div>
+                        <div id="local-familia-edit" style="display:none; background:#f9f9f9; padding:10px; border-radius:4px;">
+                            <label><strong>Seleccionar familia:</strong></label><br>
+                            <select id="familia-select" class="regular-text" style="width:100%; padding:6px; margin:6px 0;">
+                                <option value="">— Sin familia —</option>
+                            </select>
+                            <button class="button button-primary" id="familia-save-btn">Asignar familia</button>
+                            <button class="button" id="familia-cancel-btn">Cancelar</button>
+                        </div>
+                    </td>
+                </tr>
             </table>
         </div>
 
@@ -124,6 +225,30 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
                 <strong>⚠️ Falta código proveedor</strong>
                 <p style="margin:6px 0 0 0; font-size:13px;">Este producto tiene contraparte WooCommerce pero no tiene código proveedor asignado.</p>
                 <button class="button button-primary" id="online-assign-code-btn" style="margin-top:8px;">Asignar código ahora</button>
+            </div>
+
+            <!-- Detalles del producto online (atributos, padre, hermanos) -->
+            <div id="online-details" style="margin-bottom:20px; padding:12px; background:#fafafa; border-radius:4px;"></div>
+
+            <div id="online-price-editor" style="display:none; margin:12px 0; padding:12px; background:#f0f7ff; border:1px solid #0073aa; border-radius:4px;">
+                <h4>Editar Precio Online</h4>
+                <table style="width:100%; margin-bottom:12px;">
+                    <tr>
+                        <td style="width:40%;"><strong>Precio Actual (WooCommerce):</strong></td>
+                        <td><span id="online-price-current">$0.00</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Nuevo Precio:</strong></td>
+                        <td>
+                            <input type="number" id="online-price-new" class="regular-text" step="0.01" min="0" placeholder="0.00">
+                        </td>
+                    </tr>
+                </table>
+                <label><input type="checkbox" id="online-sync-to-woo" checked> Sincronizar precio a WooCommerce</label>
+                <div style="margin-top:12px;">
+                    <button class="button button-primary" id="online-price-save">Guardar precio</button>
+                    <button class="button" id="online-price-cancel">Cancelar</button>
+                </div>
             </div>
 
             <p>Vincular o crear contraparte WooCommerce.</p>
@@ -168,10 +293,61 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
 
         <!-- TAB: BARCODES -->
         <div class="detail-tab-content" id="tab-barcodes" style="display:none;">
-            <p>Agregar códigos de barra EAN13 y gestionar legacy.</p>
-            <div style="margin:12px 0;">
-                <input type="text" id="barcode-new" class="regular-text" placeholder="Código EAN13">
-                <textarea id="barcode-audit-reason" class="large-text" rows="2" placeholder="Motivo auditoría (opcional)"></textarea>
+            <p>Agregar códigos de barra y gestionar por tipo.</p>
+            <div style="margin:12px 0; padding:12px; background:#f9f9f9; border-radius:4px;">
+                <h4>Nuevo código de barra</h4>
+                
+                <div style="margin-bottom:12px;">
+                    <label><strong>Tipo de código:</strong></label><br>
+                    <select id="barcode-type" style="width:100%; padding:6px;">
+                        <option value="ean13">EAN-13</option>
+                        <option value="supplier">Código de Proveedor</option>
+                        <option value="internal">Interno</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom:12px;">
+                    <label><strong>Código:</strong></label><br>
+                    <input type="text" id="barcode-new" class="regular-text" placeholder="Ingrese código de barra">
+                </div>
+
+                <div id="barcode-supplier-section" style="display:none; margin-bottom:12px;">
+                    <label><strong>Proveedor (si aplica):</strong></label><br>
+                    <select id="barcode-proveedor" style="width:100%; padding:6px;">
+                        <option value="">— Seleccione proveedor —</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom:12px;">
+                    <label><strong>Cantidad:</strong></label><br>
+                    <input type="number" id="barcode-cantidad" class="regular-text" placeholder="1" step="0.01" value="1">
+                </div>
+
+                <div style="margin-bottom:12px;">
+                    <label><strong>Unidad:</strong></label><br>
+                    <select id="barcode-unidad" style="width:100%; padding:6px;">
+                        <option value="unidad">Unidad</option>
+                        <option value="caja">Caja</option>
+                        <option value="pallet">Pallet</option>
+                        <option value="kg">Kilogramo</option>
+                        <option value="lt">Litro</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom:12px;">
+                    <label><strong>Origen:</strong></label><br>
+                    <select id="barcode-origen" style="width:100%; padding:6px;">
+                        <option value="manual">Manual</option>
+                        <option value="proveedor">Proveedor</option>
+                        <option value="import">Importado</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom:12px;">
+                    <label><strong>Motivo (opcional):</strong></label><br>
+                    <textarea id="barcode-audit-reason" class="large-text" rows="2" placeholder="Motivo auditoría o comentario"></textarea>
+                </div>
+
                 <button class="button button-primary" id="barcode-add-btn">Agregar código de barra</button>
             </div>
             <div id="barcodes-list" style="margin-top:12px;"></div>
@@ -407,6 +583,38 @@ jQuery(function($){
 
     function esc(v){ return $('<div>').text(v === null || v === undefined ? '' : v).html(); }
 
+    // Funciones de edicion de producto
+    let editModeActive = false;
+
+    function enterEditMode() {
+        editModeActive = true;
+        
+        // Mostrar/ocultar elementos del tab Local
+        $('#local-sku-view, #local-name-view, #local-unit-view, #local-decimal-view, #local-ean-view, #local-stock-view').hide();
+        $('#local-sku-edit, #local-name-edit, #local-unit-edit, #local-decimal-edit, #local-ean-edit, #local-stock-edit').show();
+        
+        // Cambiar botones
+        $('#detail-edit-btn').hide();
+        $('#detail-save-btn').show();
+        $('#detail-cancel-btn').show();
+        
+        // Focus en SKU Local
+        $('#local-sku-edit').focus();
+    }
+
+    function exitEditMode() {
+        editModeActive = false;
+        
+        // Mostrar/ocultar elementos del tab Local
+        $('#local-sku-view, #local-name-view, #local-unit-view, #local-decimal-view, #local-ean-view, #local-stock-view').show();
+        $('#local-sku-edit, #local-name-edit, #local-unit-edit, #local-decimal-edit, #local-ean-edit, #local-stock-edit').hide();
+        
+        // Cambiar botones
+        $('#detail-edit-btn').show();
+        $('#detail-save-btn').hide();
+        $('#detail-cancel-btn').hide();
+    }
+
     function completenessLabel(cat) {
         const labels = {
             'completo': 'Producto Completo',
@@ -537,18 +745,73 @@ jQuery(function($){
         currentProduct = product;
         $('#detail-title').text(`Producto: ${product.nombre_canonico} (SKU Local: ${product.canonical_sku || '—'})`);
         
-        // Local tab
-        $('#local-sku').text(product.canonical_sku);
-        $('#local-name').text(product.nombre_canonico);
-        $('#local-unit').text(product.unidad_base);
+        // Local tab -- poblar para VIEW y EDIT
+        $('#local-sku-view').text(product.canonical_sku || '-');
+        $('#local-sku-edit').val(product.canonical_sku || '');
+        
+        $('#local-name-view').text(product.nombre_canonico);
+        $('#local-name-edit').val(product.nombre_canonico);
+        
+        $('#local-unit-view').text(product.unidad_base || 'unidad');
+        $('#local-unit-edit').val(product.unidad_base || 'unidad');
+        
+        $('#local-decimal-view').text(product.permite_decimal ? 'Sí' : 'No');
+        $('#local-decimal-edit').prop('checked', !!product.permite_decimal);
+        
+        $('#local-ean-view').text(product.permite_ean13_personalizado ? 'Sí' : 'No');
+        $('#local-ean-edit').prop('checked', !!product.permite_ean13_personalizado);
+        
+        $('#local-stock-view').text(product.stock_abierto_habilitado ? 'Sí' : 'No');
+        $('#local-stock-edit').prop('checked', !!product.stock_abierto_habilitado);
+        
         $('#local-origen').text(product.origen_datos || 'manual');
         $('#local-estado').text(product.estado);
+        
+        // Precio local
+        if (product.precio_local) {
+            const precio = product.precio_local;
+            const c_ref = precio.c_ref ? parseFloat(precio.c_ref) : 0;
+            const p_ref = precio.p_ref ? parseFloat(precio.p_ref) : 0;
+            const p_asignado = precio.p_asignado ? parseFloat(precio.p_asignado) : 0;
+            const factor_min = precio.factor_minimo ? parseFloat(precio.factor_minimo) : 1.30;
+            const alerta = precio.alerta_margen ? 1 : 0;
+            
+            let priceHtml = `<div style="background:#f9f9f9; padding:10px; border-radius:4px; margin-bottom:8px;">
+                <table style="width:100%; margin-bottom:8px;">
+                    <tr><td><strong>Costo Ref:</strong></td><td>$${c_ref.toFixed(2)}</td></tr>
+                    <tr><td><strong>Precio Ref:</strong></td><td>$${p_ref.toFixed(2)}</td></tr>
+                    <tr><td><strong>Precio Asignado:</strong></td><td style="${alerta ? 'color:red;font-weight:bold;' : ''}">$${p_asignado.toFixed(2)}</td></tr>
+                    ${alerta ? '<tr><td colspan="2" style="color:red;font-weight:bold;">⚠️ Alerta de margen</td></tr>' : ''}
+                </table>
+                <button class="button button-small" id="precio-edit-toggle" data-precio-id="${precio.id}">Editar precio</button>
+            </div>`;
+            $('#local-precio-view').html(priceHtml);
+        } else {
+            $('#local-precio-view').html('<span style="color:#999;">Sin precio asignado</span>');
+        }
+        
+        // Familia
+        if (product.familia) {
+            const fam = product.familia;
+            $('#familia-display').html(`<strong>${esc(fam.nombre)}</strong> <small style="color:#666;">(${esc(fam.tipo_sustitucion)})</small>`);
+        } else {
+            $('#familia-display').html('<span style="color:#999;">Sin familia</span>');
+        }
+        
+        // Mostrar botones edit/save/cancel
+        $('#detail-edit-btn').show();
+        $('#detail-save-btn').hide();
+        $('#detail-cancel-btn').hide();
+        exitEditMode();  // Asegurar que estamos en modo view
 
         // Online tab
         $('#online-woo-id').text(product.woocommerce_product_id || '-');
         $('#online-match-estado').text(product.match_estado_online || 'UNMATCHED');
         $('#woo-selected-id').val('');
         $('#woo-selected-display').text('');
+        
+        // Renderizar detalles online (atributos, padre, hermanos)
+        renderOnlineDetails(product.online_details || null);
         
         // Mostrar/ocultar banner de falta código
         const hasOnline = !!product.woocommerce_product_id;
@@ -600,11 +863,17 @@ jQuery(function($){
         if (suppliers.length > 0) {
             html += '<h4 style="margin-top:0;">Códigos asignados:</h4>';
             suppliers.forEach(s => {
+                const fuente = s.fuente_display || 'Manual';
+                const badgeColor = fuente.includes('Catálogo') ? '#0073aa' : fuente.includes('Facturación') ? '#ff6b35' : '#666';
+                const barcodeProveedor = s.codigo_barras_proveedor ? `<br><small style="color:#999;">Barcode Proveedor: <code>${esc(s.codigo_barras_proveedor)}</code></small>` : '';
+                
                 html += `<div class="supplier-code-item">
                     <div>
                         <strong>${esc(s.codigo_proveedor)}</strong> 
-                        (${esc(s.proveedor_nombre || 'Proveedor')})<br>
-                        <small>${esc(s.nombre_proveedor || '')}</small>
+                        <span style="background:${badgeColor}; color:white; padding:2px 8px; border-radius:3px; font-size:11px; margin-left:8px;">${esc(fuente)}</span><br>
+                        <small>${esc(s.proveedor_nombre || 'Proveedor')}</small><br>
+                        <small style="color:#999;">${esc(s.nombre_proveedor || '')}</small>
+                        ${barcodeProveedor}
                     </div>
                 </div>`;
             });
@@ -615,33 +884,232 @@ jQuery(function($){
     function renderBarcodes(barcodes) {
         let html = '';
         if (barcodes && barcodes.length > 0) {
-            html += '<h4 style="margin-top:0;">Códigos activos:</h4>';
+            // Agrupar por tipo
+            const byType = {
+                ean13: [],
+                supplier: [],
+                internal: [],
+            };
+            
             barcodes.forEach(b => {
-                html += `<div class="barcode-item">
-                    <code>${esc(b.codigo)}</code> 
-                    <button class="button button-small barcode-remove" data-barcode="${esc(b.codigo)}">Desactivar</button>
-                </div>`;
+                const tipo = b.tipo || 'ean13';
+                if (!byType[tipo]) byType[tipo] = [];
+                byType[tipo].push(b);
             });
+
+            // Renderizar cada grupo
+            if (byType.ean13.length > 0) {
+                html += '<h5>EAN-13</h5>';
+                byType.ean13.forEach(b => {
+                    const detalles = [];
+                    if (b.cantidad && b.cantidad !== 1) detalles.push(`Cantidad: ${b.cantidad} ${b.unidad_medida || 'unidad'}`);
+                    if (b.origen_datos) detalles.push(`Origen: ${b.origen_datos}`);
+                    const detallesHtml = detalles.length > 0 ? `<br><small style="color:#999;">${detalles.join(' | ')}</small>` : '';
+                    
+                    html += `<div class="barcode-item" style="margin-bottom:8px;">
+                        <code>${esc(b.codigo)}</code>
+                        <span style="background:#0073aa; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-left:8px;">EAN-13</span>
+                        ${detallesHtml}
+                        <br><button class="button button-small barcode-remove" data-barcode="${esc(b.codigo)}" style="margin-top:4px;">Desactivar</button>
+                    </div>`;
+                });
+            }
+
+            if (byType.supplier.length > 0) {
+                html += '<h5 style="margin-top:16px;">Códigos de Proveedor</h5>';
+                byType.supplier.forEach(b => {
+                    const proveedor = b.proveedor_nombre ? ` (${b.proveedor_nombre})` : '';
+                    const detalles = [];
+                    if (b.cantidad && b.cantidad !== 1) detalles.push(`Cantidad: ${b.cantidad}`);
+                    if (b.envase_id) detalles.push(`Envase: ${b.envase_id}`);
+                    if (b.origen_datos) detalles.push(`Origen: ${b.origen_datos}`);
+                    const detallesHtml = detalles.length > 0 ? `<br><small style="color:#999;">${detalles.join(' | ')}</small>` : '';
+                    
+                    html += `<div class="barcode-item" style="margin-bottom:8px;">
+                        <code>${esc(b.codigo)}</code>
+                        <span style="background:#ff6b35; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-left:8px;">Proveedor</span>
+                        <br><small>${esc(proveedor)}</small>
+                        ${detallesHtml}
+                        <br><button class="button button-small barcode-remove" data-barcode="${esc(b.codigo)}" style="margin-top:4px;">Desactivar</button>
+                    </div>`;
+                });
+            }
+
+            if (byType.internal.length > 0) {
+                html += '<h5 style="margin-top:16px;">Códigos Internos</h5>';
+                byType.internal.forEach(b => {
+                    const detalles = [];
+                    if (b.cantidad && b.cantidad !== 1) detalles.push(`Cantidad: ${b.cantidad}`);
+                    if (b.envase_id) detalles.push(`Envase: ${b.envase_id}`);
+                    const detallesHtml = detalles.length > 0 ? `<br><small style="color:#999;">${detalles.join(' | ')}</small>` : '';
+                    
+                    html += `<div class="barcode-item" style="margin-bottom:8px;">
+                        <code>${esc(b.codigo)}</code>
+                        <span style="background:#666; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-left:8px;">Interno</span>
+                        ${detallesHtml}
+                        <br><button class="button button-small barcode-remove" data-barcode="${esc(b.codigo)}" style="margin-top:4px;">Desactivar</button>
+                    </div>`;
+                });
+            }
         }
         $('#barcodes-list').html(html || '<p style="color:#666;">Sin códigos de barra.</p>');
     }
 
+    function renderOnlineDetails(onlineDetails) {
+        if (!onlineDetails) {
+            $('#online-details').html('<p style="color:#999;">Sin información online.</p>');
+            return;
+        }
+
+        let html = '';
+
+        // Seccion: Identidad Online
+        html += `<div style="margin-bottom:20px;">
+            <h5>Identidad Online</h5>
+            <table style="width:100%; border-collapse:collapse;">
+                <tr>
+                    <td style="padding:6px; border-bottom:1px solid #eee;"><strong>Tipo:</strong></td>
+                    <td style="padding:6px; border-bottom:1px solid #eee;">${esc(onlineDetails.type || 'N/A')}</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px; border-bottom:1px solid #eee;"><strong>Nombre:</strong></td>
+                    <td style="padding:6px; border-bottom:1px solid #eee;">${esc(onlineDetails.name || '')}</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px; border-bottom:1px solid #eee;"><strong>SKU Online:</strong></td>
+                    <td style="padding:6px; border-bottom:1px solid #eee;"><code>${esc(onlineDetails.sku || '-')}</code></td>
+                </tr>
+                <tr>
+                    <td style="padding:6px; border-bottom:1px solid #eee;"><strong>Estado:</strong></td>
+                    <td style="padding:6px; border-bottom:1px solid #eee;">${esc(onlineDetails.status || 'N/A')}</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px; border-bottom:1px solid #eee;"><strong>Precio:</strong></td>
+                    <td style="padding:6px; border-bottom:1px solid #eee;">
+                        <span id="online-price-display">$${(onlineDetails.price || 0).toFixed(2)}</span>
+                        <button class="button button-small" id="online-price-edit-btn" style="margin-left:8px;">Editar</button>
+                    </td>
+                </tr>
+            </table>
+        </div>`;
+
+        // Seccion: Atributos (si tiene)
+        if (onlineDetails.attributes && onlineDetails.attributes.length > 0) {
+            html += '<div style="margin-bottom:20px;" data-section="attributes">';
+            html += '<h5>Atributos de Variación</h5>';
+            
+            if (onlineDetails.type === 'variation') {
+                // Variacion actual: mostrar sus atributos
+                html += '<ul style="margin:0; padding-left:20px;">';
+                onlineDetails.attributes.forEach(attr => {
+                    html += `<li>${esc(attr.name)}: <strong>${esc(attr.value)}</strong></li>`;
+                });
+                html += '</ul>';
+            } else if (onlineDetails.type === 'variable') {
+                // Padre variable: mostrar opciones de atributos
+                html += '<ul style="margin:0; padding-left:20px;">';
+                onlineDetails.attributes.forEach(attr => {
+                    const options = (attr.options || []).join(', ');
+                    html += `<li>${esc(attr.name)}: <small>${esc(options)}</small></li>`;
+                });
+                html += '</ul>';
+            }
+            
+            html += '</div>';
+        }
+
+        // Seccion: Padre (si es variacion)
+        if (onlineDetails.parent) {
+            html += `<div style="margin-bottom:20px; padding:12px; background:#f5f5f5; border-left:4px solid #0073aa;">
+                <h5 style="margin-top:0;">Producto Padre</h5>
+                <p style="margin:4px 0;"><strong>${esc(onlineDetails.parent.name)}</strong></p>
+                <p style="margin:4px 0; color:#666;"><code>${esc(onlineDetails.parent.sku || 'Sin SKU')}</code></p>
+                <button class="button button-small" style="margin-top:6px;" onclick="openParentDetail('${onlineDetails.parent.id}')">Ver detalles del padre</button>
+            </div>`;
+        }
+
+        // Seccion: Hermanos (si es variacion)
+        if (onlineDetails.siblings && onlineDetails.siblings.length > 0) {
+            html += '<div style="margin-bottom:20px;">';
+            html += '<h5>Variaciones Hermanas</h5>';
+            html += '<div style="border:1px solid #ddd; border-radius:4px; max-height:300px; overflow-y:auto;">';
+            
+            onlineDetails.siblings.forEach(sibling => {
+                const skuBadgeClass = sibling.has_local_sku ? 'style="background:#28a745; color:white;"' : 'style="background:#ccc; color:#333;"';
+                const skuBadgeText = sibling.has_local_sku ? 'SKU Local: ' + esc(sibling.sku_local) : 'Sin SKU Local';
+                
+                html += `<div style="padding:10px; border-bottom:1px solid #eee; cursor:pointer; transition:background 0.2s;" onclick="openVariationDetail(${sibling.producto_base_id})" onmouseover="this.style.background='#f9f9f9'" onmouseout="this.style.background='white'">
+                    <strong>${esc(sibling.name)}</strong><br>
+                    <small style="color:#666;">${esc(sibling.attributes_text)}</small><br>
+                    <small style="color:#999;">SKU Online: <code>${esc(sibling.sku_online || '-')}</code></small><br>
+                    <span ${skuBadgeClass}>${skuBadgeText}</span>
+                </div>`;
+            });
+            
+            html += '</div>';
+            html += '</div>';
+        }
+
+        $('#online-details').html(html);
+    }
+
+    function openParentDetail(parentId) {
+        // Función placeholder para abrir detalle del padre (futuro)
+        alert('Abrir detalle del padre Woo ID ' + parentId);
+    }
+
+    function openVariationDetail(baseId) {
+        // Cargar detalle de la variacion hermana
+        if (baseId > 0) {
+            $.post(ajaxurl, {
+                action: 'riverso_products_get',
+                nonce,
+                id: baseId
+            }, function(r) {
+                if (r.success) {
+                    showDetail(r.data.item);
+                }
+            });
+        }
+    }
     function renderTasks(tasks) {
+        // Mapeo de tipo de tarea -> accion en UI
+        const taskActionMap = {
+            'crear_contraparte_online': { button: 'Ir a Online', tab: 'online' },
+            'crear_contraparte_local': { button: 'Asignar SKU Local', action: 'editLocal' },
+            'relacionar_producto_proveedor': { button: 'Ir a Códigos', tab: 'suppliers' },
+            'confirmar_relacion_online': { button: 'Ir a Online', tab: 'online' },
+            'confirmar_estructura_atributos': { button: 'Ver Atributos', tab: 'online', scroll: 'attributes' },
+            'barcode_faltante': { button: 'Ir a Barcodes', tab: 'barcodes' },
+            'codigo_faltante': { button: 'Ir a Códigos', tab: 'suppliers' },
+            'autorizar_publicacion': { button: 'Autorizar', tab: 'online' },
+            'validar_categoria': { button: 'Ver Online', tab: 'online' },
+        };
+
         let html = '';
         if (tasks && tasks.length > 0) {
             html = tasks.map(t => {
-                let goToBtn = '';
-                // Agregar botón "Ir" para navegación
-                if (t.tipo === 'crear_contraparte_online') {
-                    goToBtn = '<button class="button button-small task-goto" data-tab="online">Ir a Online</button>';
-                } else if (t.tipo === 'relacionar_producto_proveedor') {
-                    goToBtn = '<button class="button button-small task-goto" data-tab="suppliers">Ir a Códigos</button>';
+                let actionHtml = '';
+                const action = taskActionMap[t.tipo];
+                
+                if (action) {
+                    if (action.tab) {
+                        // Accion interna: cambiar tab
+                        actionHtml = `<button class="button button-small task-goto" data-tab="${action.tab}" data-scroll="${action.scroll || ''}">${action.button}</button>`;
+                    } else if (action.action === 'editLocal') {
+                        // Accion especial: activar editor con foco en SKU
+                        actionHtml = '<button class="button button-small task-edit-local">Asignar SKU Local</button>';
+                    }
+                } else if (t.target_url) {
+                    // URL externa resuelta por backend
+                    actionHtml = `<button class="button button-small task-open-external" data-url="${esc(t.target_url)}">Abrir →</button>`;
                 }
+                
                 return `
                 <div class="task-item">
                     <strong>${esc(t.titulo)}</strong>
                     <br><small>${esc(t.tipo)} | ${esc(t.estado)} | Prioridad: ${esc(t.prioridad)}</small>
-                    ${goToBtn ? '<div style="margin-top:6px;">' + goToBtn + '</div>' : ''}
+                    ${actionHtml ? '<div style="margin-top:6px;">' + actionHtml + '</div>' : ''}
                 </div>
             `}).join('');
             $('#tasks-empty').hide();
@@ -659,6 +1127,307 @@ jQuery(function($){
         $(this).addClass('active');
         $('.detail-tab-content').hide();
         $('#tab-' + tab).show();
+    });
+
+    // Evento: botones de navegacion de tareas (cambiar tab interno)
+    $(document).on('click', '.task-goto', function(e){
+        e.preventDefault();
+        const tab = $(this).data('tab');
+        const scroll = $(this).data('scroll') || '';
+        
+        // Simular click en la pestaña correspondiente
+        $('[data-tab="' + tab + '"].detail-tab').trigger('click');
+        
+        // Si hay scroll, hacer scroll al elemento (opcional delay para animacion)
+        if (scroll) {
+            setTimeout(() => {
+                const element = $('#tab-' + tab + ' [data-section="' + scroll + '"]');
+                if (element.length) {
+                    $('#tab-' + tab).scrollTop(element.offset().top - $('#tab-' + tab).offset().top);
+                }
+            }, 100);
+        }
+    });
+
+    // Evento: boton para editar SKU local desde tarea
+    $(document).on('click', '.task-edit-local', function(e){
+        e.preventDefault();
+        // Abrir editor y hacer focus en SKU Local
+        enterEditMode();
+        setTimeout(() => $('#local-sku-edit').focus(), 100);
+    });
+
+    // Evento: abrir URL externa de tarea en nueva ventana
+    $(document).on('click', '.task-open-external', function(e){
+        e.preventDefault();
+        const url = $(this).data('url');
+        if (url) {
+            window.open(url, '_blank');
+        }
+    });
+
+    // EVENTOS DE EDICION DEL PANEL DE DETALLE
+
+    // Boton Editar
+    $('#detail-edit-btn').on('click', function(e){
+        e.preventDefault();
+        enterEditMode();
+    });
+
+    // Boton Guardar
+    $('#detail-save-btn').on('click', function(e){
+        e.preventDefault();
+        
+        if (!currentProduct) return;
+        
+        const newData = {
+            id: currentProduct.id,
+            canonical_sku: $('#local-sku-edit').val(),
+            nombre_canonico: $('#local-name-edit').val(),
+            unidad_base: $('#local-unit-edit').val(),
+            permite_decimal: $('#local-decimal-edit').is(':checked') ? 1 : 0,
+            permite_ean13_personalizado: $('#local-ean-edit').is(':checked') ? 1 : 0,
+            stock_abierto_habilitado: $('#local-stock-edit').is(':checked') ? 1 : 0,
+        };
+        
+        const postData = {
+            action: 'riverso_products_save',
+            nonce: nonce
+        };
+        
+        // Combinar datos
+        $.extend(postData, newData);
+        
+        $.post(ajaxurl, postData, function(r){
+            if (!r.success) {
+                alert('Error al guardar: ' + (r.data.message || 'Error desconocido'));
+                return;
+            }
+            
+            alert(r.data.message);
+            exitEditMode();
+            showDetail(r.data.item);
+            load(); // Recargar lista para actualizar completitud, etc.
+        });
+    });
+
+    // Boton Cancelar
+    $('#detail-cancel-btn').on('click', function(e){
+        e.preventDefault();
+        if (currentProduct) {
+            exitEditMode();
+            // Revertir valores del formulario
+            showDetail(currentProduct);
+        }
+    });
+
+    // Evento: editar precio local
+    $(document).on('click', '#precio-edit-toggle', function(e){
+        e.preventDefault();
+        if (!currentProduct || !currentProduct.precio_local) return;
+        
+        const precio = currentProduct.precio_local;
+        $('#precio-c-ref').text('$' + (precio.c_ref ? parseFloat(precio.c_ref).toFixed(2) : '0.00'));
+        $('#precio-p-ref').text('$' + (precio.p_ref ? parseFloat(precio.p_ref).toFixed(2) : '0.00'));
+        $('#precio-factor-min').text(precio.factor_minimo ? parseFloat(precio.factor_minimo).toFixed(2) : '1.30');
+        $('#precio-p-asignado').val(precio.p_asignado ? parseFloat(precio.p_asignado).toFixed(2) : '');
+        
+        // Mostrar el editor
+        $('#local-precio-view').hide();
+        $('#local-precio-edit').show();
+        $('#precio-p-asignado').data('precio-id', precio.id).focus();
+    });
+
+    // Evento: guardar precio local
+    $('#precio-save-btn').on('click', function(e){
+        e.preventDefault();
+        if (!currentProduct || !currentProduct.precio_local) return;
+        
+        const precio_id = currentProduct.precio_local.id;
+        const p_asignado = $('#precio-p-asignado').val();
+        
+        if (!p_asignado || isNaN(p_asignado)) {
+            alert('Ingrese un precio válido');
+            return;
+        }
+        
+        $.post(ajaxurl, {
+            action: 'riverso_products_set_local_price',
+            nonce,
+            precio_id: precio_id,
+            p_asignado: parseFloat(p_asignado)
+        }, function(r){
+            if (!r.success) {
+                alert('Error al guardar: ' + (r.data.message || 'Error desconocido'));
+                return;
+            }
+            alert('Precio actualizado');
+            
+            // Actualizar el precio en el producto actual
+            currentProduct.precio_local = r.data.item;
+            
+            // Ocultar editor y mostrar vista actualizada
+            $('#local-precio-edit').hide();
+            $('#local-precio-view').show();
+            showDetail(currentProduct);
+        });
+    });
+
+    // Evento: editar precio online
+    $(document).on('click', '#online-price-edit-btn', function(e){
+        e.preventDefault();
+        if (!currentProduct || !currentProduct.online_details) return;
+        
+        const price = currentProduct.online_details.price ? parseFloat(currentProduct.online_details.price).toFixed(2) : '0.00';
+        $('#online-price-current').text('$' + price);
+        $('#online-price-new').val(price);
+        
+        $('#online-details').hide();
+        $('#online-price-editor').show();
+        $('#online-price-new').focus();
+    });
+
+    // Evento: cancelar edición precio online
+    $('#online-price-cancel').on('click', function(e){
+        e.preventDefault();
+        $('#online-price-editor').hide();
+        $('#online-details').show();
+    });
+
+    // Evento: guardar precio online
+    $('#online-price-save').on('click', function(e){
+        e.preventDefault();
+        if (!currentProduct) return;
+        
+        const p_asignado = $('#online-price-new').val();
+        const sync_to_woo = $('#online-sync-to-woo').is(':checked');
+        
+        if (!p_asignado || isNaN(p_asignado)) {
+            alert('Ingrese un precio válido');
+            return;
+        }
+        
+        const var_id = currentProduct.woocommerce_variation_id ? parseInt(currentProduct.woocommerce_variation_id) : 0;
+        
+        $.post(ajaxurl, {
+            action: 'riverso_products_set_online_price',
+            nonce,
+            producto_base_id: currentProduct.id,
+            woocommerce_variation_id: var_id,
+            p_asignado: parseFloat(p_asignado),
+            sync_to_woo: sync_to_woo ? 1 : 0
+        }, function(r){
+            if (!r.success) {
+                alert('Error al guardar: ' + (r.data.message || 'Error desconocido'));
+                return;
+            }
+            alert('Precio online actualizado');
+            
+            // Actualizar el precio en el producto actual
+            if (currentProduct.online_details) {
+                currentProduct.online_details.price = parseFloat(p_asignado);
+            }
+            currentProduct.precio_online = r.data.item;
+            
+            // Ocultar editor y mostrar vista actualizada
+            $('#online-price-editor').hide();
+            $('#online-details').show();
+            showDetail(currentProduct);
+        });
+    });
+
+    // Evento: editar familia
+    $(document).on('click', '#familia-edit-toggle', function(e){
+        e.preventDefault();
+        
+        // Cargar lista de familias
+        $.post(ajaxurl, {
+            action: 'riverso_families_list',
+            nonce
+        }, function(r){
+            if (!r.success) {
+                alert('Error al cargar familias');
+                return;
+            }
+            
+            const options = r.data.families.map(f => 
+                `<option value="${f.id}">${esc(f.nombre)} (${esc(f.tipo_sustitucion)})</option>`
+            ).join('');
+            
+            $('#familia-select').html('<option value="">— Sin familia —</option>' + options);
+            
+            // Seleccionar familia actual si existe
+            if (currentProduct.familia) {
+                $('#familia-select').val(currentProduct.familia.id);
+            }
+            
+            // Mostrar editor
+            $('#local-familia-view').hide();
+            $('#local-familia-edit').show();
+        });
+    });
+
+    // Evento: cancelar edición familia
+    $('#familia-cancel-btn').on('click', function(e){
+        e.preventDefault();
+        $('#local-familia-edit').hide();
+        $('#local-familia-view').show();
+    });
+
+    // Evento: guardar familia
+    $('#familia-save-btn').on('click', function(e){
+        e.preventDefault();
+        if (!currentProduct) return;
+        
+        const grupo_id = $('#familia-select').val();
+        if (!grupo_id) {
+            // Remover de familia actual (sin implementar para ahora)
+            alert('Funcionalidad de remover familia en desarrollo');
+            return;
+        }
+        
+        $.post(ajaxurl, {
+            action: 'riverso_families_add_member',
+            nonce,
+            grupo_id: parseInt(grupo_id),
+            producto_base_id: currentProduct.id,
+            prioridad: 100,
+            es_preferido: 0
+        }, function(r){
+            if (!r.success) {
+                // Si error es "ya es miembro", cargar producto para actualizar
+                if (r.data.message && r.data.message.includes('ya es miembro')) {
+                    $.post(ajaxurl, {
+                        action: 'riverso_products_get',
+                        nonce,
+                        id: currentProduct.id
+                    }, function(r2){
+                        if (r2.success) {
+                            currentProduct = r2.data.item;
+                            showDetail(currentProduct);
+                            alert('Familia ya asignada');
+                        }
+                    });
+                } else {
+                    alert('Error al asignar familia: ' + (r.data.message || 'Error desconocido'));
+                }
+                return;
+            }
+            
+            alert('Familia asignada');
+            
+            // Recargar producto para actualizar
+            $.post(ajaxurl, {
+                action: 'riverso_products_get',
+                nonce,
+                id: currentProduct.id
+            }, function(r2){
+                if (r2.success) {
+                    currentProduct = r2.data.item;
+                    showDetail(currentProduct);
+                }
+            });
+        });
     });
 
     // Evento: mostrar ayuda de completitud
@@ -1136,10 +1905,33 @@ jQuery(function($){
         $('html, body').animate({scrollTop: $('#tab-' + tab).offset().top - 40}, 300);
     });
 
+    // Evento: cambiar tipo de barcode (mostrar/ocultar selector de proveedor)
+    $(document).on('change', '#barcode-type', function(){
+        const tipo = $(this).val();
+        if (tipo === 'supplier') {
+            $('#barcode-supplier-section').show();
+            // Poblar select de proveedores del producto actual
+            if (currentProduct && currentProduct.proveedores) {
+                let options = '<option value="">— Seleccione proveedor —</option>';
+                currentProduct.proveedores.forEach(p => {
+                    options += `<option value="${p.proveedor_id || p.id}">${esc(p.proveedor_nombre || 'Proveedor')}</option>`;
+                });
+                $('#barcode-proveedor').html(options);
+            }
+        } else {
+            $('#barcode-supplier-section').hide();
+        }
+    });
+
     // Evento: agregar barcode
     $('#barcode-add-btn').on('click', function(){
         const productId = currentProduct.id;
         const barcode = $('#barcode-new').val();
+        const tipo = $('#barcode-type').val() || 'ean13';
+        const proveedorId = $('#barcode-proveedor').val() || 0;
+        const cantidad = $('#barcode-cantidad').val() || 1;
+        const unidad = $('#barcode-unidad').val() || 'unidad';
+        const origen = $('#barcode-origen').val() || 'manual';
         const reason = $('#barcode-audit-reason').val();
 
         if (!barcode) {
@@ -1152,6 +1944,11 @@ jQuery(function($){
             nonce,
             product_id: productId,
             barcode: barcode,
+            tipo: tipo,
+            proveedor_id: proveedorId,
+            cantidad: cantidad,
+            unidad_medida: unidad,
+            origen_datos: origen,
             audit_reason: reason
         }, function(r){
             if (!r.success) {
@@ -1161,6 +1958,7 @@ jQuery(function($){
             alert(r.data.message);
             $('#barcode-new').val('');
             $('#barcode-audit-reason').val('');
+            $('#barcode-type').val('ean13').trigger('change');
             showDetail(r.data.item);
         });
     });

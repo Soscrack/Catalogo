@@ -48,6 +48,8 @@ class Riverso_Product_Module {
         add_action('wp_ajax_riverso_products_get_variable_attributes', [$this, 'ajax_get_variable_attributes']);
         add_action('wp_ajax_riverso_products_get_variable_parent_details', [$this, 'ajax_get_variable_parent_details']);
         add_action('wp_ajax_riverso_products_search_catalog', [$this, 'ajax_search_catalog_products']);
+        add_action('wp_ajax_riverso_products_set_local_price', [$this, 'ajax_set_local_price']);
+        add_action('wp_ajax_riverso_products_set_online_price', [$this, 'ajax_set_online_price']);
     }
 
     private function get_completeness_category($product) {
@@ -285,20 +287,203 @@ class Riverso_Product_Module {
         }
 
         $product['proveedores'] = $wpdb->get_results($wpdb->prepare(
-            "SELECT pp.*, p.nombre AS proveedor_nombre
+            "SELECT pp.*, p.nombre AS proveedor_nombre, c.nombre AS catalogo_nombre
              FROM {$prefix}producto_proveedor pp
              LEFT JOIN {$prefix}proveedores p ON p.id = pp.proveedor_id
+             LEFT JOIN {$prefix}catalogos c ON c.id = pp.catalogo_id
              WHERE pp.producto_base_id = %d
              ORDER BY pp.es_preferido DESC, pp.id DESC",
             $id
         ), ARRAY_A);
+
+        // Enriquecer cada proveedor con fuente_display
+        foreach ($product['proveedores'] as &$prov) {
+            $prov['fuente_display'] = $this->get_supplier_source_label($prov);
+        }
 
         $product['barcodes'] = $this->get_product_barcodes($id);
         $product['tasks'] = $this->get_product_tasks($id);
         $product['completeness_category'] = $this->get_completeness_category($product);
         $product['proveedores_count'] = count($product['proveedores']);
 
+        // Enriquecer con detalles de producto online (si tiene WooCommerce ID)
+        $product['online_details'] = $this->get_online_details($product);
+        
+        // Enriquecer con precio local
+        if (class_exists('Riverso_Pricing_Module')) {
+            $product['precio_local'] = Riverso_Pricing_Module::get_instance()->get_local_price($id);
+            
+            // Enriquecer con precio online si tiene variación o producto Woo
+            $var_id = (int) ($product['woocommerce_variation_id'] ?? 0);
+            if ($product['woocommerce_product_id'] || $var_id) {
+                $product['precio_online'] = Riverso_Pricing_Module::get_instance()->get_online_price($id, $var_id);
+            } else {
+                $product['precio_online'] = null;
+            }
+        } else {
+            $product['precio_local'] = null;
+            $product['precio_online'] = null;
+        }
+        
+        // Enriquecer con familia (equivalence group)
+        $product['familia'] = $wpdb->get_row($wpdb->prepare(
+            "SELECT eg.id, eg.codigo_grupo, eg.nombre, eg.tipo_sustitucion
+             FROM {$prefix}equivalence_groups eg
+             INNER JOIN {$prefix}equivalence_members em ON em.grupo_id = eg.id
+             WHERE em.producto_base_id = %d AND em.activo = 1 AND eg.activo = 1
+             LIMIT 1",
+            $id
+        ), ARRAY_A) ?: null;
+
         return $product;
+    }
+
+    /**
+     * Calcula la etiqueta de fuente para un código proveedor
+     */
+    private function get_supplier_source_label($proveedor) {
+        if (!empty($proveedor['catalogo_id']) && !empty($proveedor['catalogo_nombre'])) {
+            return 'Catálogo: ' . $proveedor['catalogo_nombre'];
+        }
+        
+        $origen = $proveedor['origen_datos'] ?? 'manual';
+        switch ($origen) {
+            case 'factura_intake':
+                return 'Facturación';
+            case 'mamut_import':
+                return 'Catálogo Mamut';
+            case 'manual':
+                return 'Manual';
+            default:
+                return ucfirst(str_replace('_', ' ', $origen));
+        }
+    }
+
+    /**
+     * Obtiene detalles del producto online (WooCommerce)
+     */
+    private function get_online_details($product) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        
+        $woo_id = (int) ($product['woocommerce_product_id'] ?? 0);
+        $var_id = (int) ($product['woocommerce_variation_id'] ?? 0);
+        
+        if (!$woo_id) {
+            return null;
+        }
+        
+        $details = [
+            'type' => null,
+            'name' => null,
+            'sku' => null,
+            'status' => null,
+            'price' => null,
+            'attributes' => [],
+            'parent' => null,
+            'siblings' => [],
+        ];
+        
+        // Buscar el producto Woo (puede ser padre o variacion)
+        if ($var_id > 0) {
+            $woo_product = wc_get_product($var_id);
+        } else {
+            $woo_product = wc_get_product($woo_id);
+        }
+        
+        if (!$woo_product) {
+            return $details;
+        }
+        
+        $details['type'] = $woo_product->get_type();
+        $details['name'] = $woo_product->get_name();
+        $details['sku'] = $woo_product->get_sku();
+        $details['status'] = $woo_product->get_status();
+        $details['price'] = (float) $woo_product->get_price();
+        
+        // Si es variacion, obtener atributos y padre
+        if ($woo_product->is_type('variation')) {
+            $details['type'] = 'variation';
+            $parent_id = (int) $woo_product->get_parent_id();
+            $parent = wc_get_product($parent_id);
+            
+            if ($parent) {
+                // Atributos de la variacion
+                foreach ($woo_product->get_attributes() as $slug => $value) {
+                    $label = wc_attribute_label($slug);
+                    $details['attributes'][] = [
+                        'name' => $label,
+                        'slug' => $slug,
+                        'value' => $value,
+                    ];
+                }
+                
+                // Datos del padre
+                $details['parent'] = [
+                    'id' => $parent_id,
+                    'name' => $parent->get_name(),
+                    'sku' => $parent->get_sku(),
+                ];
+                
+                // Hermanos (otras variaciones del padre)
+                $details['siblings'] = [];
+                foreach ($parent->get_children() as $sibling_id) {
+                    if ($sibling_id === $var_id) {
+                        continue; // Skip self
+                    }
+                    
+                    $sibling = wc_get_product($sibling_id);
+                    if (!$sibling) {
+                        continue;
+                    }
+                    
+                    // Buscar producto_base del hermano
+                    $sibling_pb = $wpdb->get_row($wpdb->prepare(
+                        "SELECT id, canonical_sku, nombre_canonico FROM {$prefix}producto_base WHERE woocommerce_variation_id = %d LIMIT 1",
+                        $sibling_id
+                    ), ARRAY_A);
+                    
+                    $sibling_attrs = [];
+                    foreach ($sibling->get_attributes() as $slug => $value) {
+                        $sibling_attrs[] = wc_attribute_label($slug) . ': ' . $value;
+                    }
+                    
+                    $details['siblings'][] = [
+                        'variation_id' => $sibling_id,
+                        'name' => $sibling->get_name(),
+                        'sku_online' => $sibling->get_sku(),
+                        'attributes_text' => implode(', ', $sibling_attrs),
+                        'sku_local' => $sibling_pb['canonical_sku'] ?? '',
+                        'has_local_sku' => !empty($sibling_pb['canonical_sku']),
+                        'producto_base_id' => (int) ($sibling_pb['id'] ?? 0),
+                    ];
+                }
+            }
+        } elseif ($woo_product->is_type('variable')) {
+            // Es un producto padre variable
+            $details['type'] = 'variable';
+            
+            // Atributos de variacion
+            foreach ($woo_product->get_attributes() as $attr) {
+                if ($attr->get_variation()) {
+                    $label = $attr->get_name();
+                    $options = $attr->get_options();
+                    if ($attr->is_taxonomy()) {
+                        $options = array_map(function ($term_id) {
+                            $term = get_term($term_id);
+                            return ($term && !is_wp_error($term)) ? $term->name : (string) $term_id;
+                        }, $options);
+                    }
+                    
+                    $details['attributes'][] = [
+                        'name' => $label,
+                        'options' => array_values($options),
+                    ];
+                }
+            }
+        }
+        
+        return $details;
     }
 
     private function get_product_barcodes($product_id) {
@@ -308,6 +493,17 @@ class Riverso_Product_Module {
         $barcodes = [];
         if (class_exists('Riverso_Barcode_Model')) {
             $barcodes = Riverso_Barcode_Model::get_by_product($product_id);
+            
+            // Enriquecer con nombre de proveedor si aplica
+            foreach ($barcodes as &$barcode) {
+                if (!empty($barcode['proveedor_id'])) {
+                    $proveedor = $wpdb->get_row($wpdb->prepare(
+                        "SELECT nombre FROM {$prefix}proveedores WHERE id = %d",
+                        (int) $barcode['proveedor_id']
+                    ), ARRAY_A);
+                    $barcode['proveedor_nombre'] = $proveedor['nombre'] ?? '';
+                }
+            }
         }
         return is_array($barcodes) ? $barcodes : [];
     }
@@ -316,8 +512,8 @@ class Riverso_Product_Module {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         
-        return $wpdb->get_results($wpdb->prepare(
-            "SELECT id, tipo, titulo, estado, prioridad, fecha_limite
+        $tasks = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, tipo, titulo, estado, prioridad, fecha_limite, referencia_tipo, referencia_id
              FROM {$prefix}tareas
              WHERE referencia_tipo = 'producto_base' AND referencia_id = %d
              AND estado IN ('pendiente', 'asignado')
@@ -325,6 +521,13 @@ class Riverso_Product_Module {
              LIMIT 10",
             $product_id
         ), ARRAY_A) ?: [];
+
+        // Agregar target_url para cada tarea
+        foreach ($tasks as &$task) {
+            $task['target_url'] = riverso_resolve_task_target($task);
+        }
+        
+        return $tasks;
     }
 
     public function save_product($data) {
@@ -702,6 +905,12 @@ class Riverso_Product_Module {
         $product_id = absint($_POST['product_id'] ?? 0);
         $barcode = sanitize_text_field($_POST['barcode'] ?? '');
         $audit_reason = sanitize_textarea_field($_POST['audit_reason'] ?? '');
+        $tipo = sanitize_text_field($_POST['tipo'] ?? 'ean13');
+        $proveedor_id = absint($_POST['proveedor_id'] ?? 0);
+        $cantidad = floatval($_POST['cantidad'] ?? 1);
+        $unidad_medida = sanitize_text_field($_POST['unidad_medida'] ?? 'unidad');
+        $envase_id = absint($_POST['envase_id'] ?? 0);
+        $origen_datos = sanitize_text_field($_POST['origen_datos'] ?? 'manual');
 
         if (!$product_id || !$barcode) {
             wp_send_json_error(['message' => 'Parámetros inválidos']);
@@ -711,22 +920,53 @@ class Riverso_Product_Module {
             wp_send_json_error(['message' => 'Módulo de barcodes no disponible']);
         }
 
-        $result = Riverso_Barcode_Model::create($barcode, 'ean13', $product_id, 1, 'unidad');
+        $allowed_tipos = ['ean13', 'supplier', 'internal'];
+        if (!in_array($tipo, $allowed_tipos, true)) {
+            $tipo = 'ean13';
+        }
 
-        if (is_wp_error($result)) {
-            wp_send_json_error(['message' => $result->get_error_message()]);
+        $barcode_id = Riverso_Barcode_Model::create(
+            $barcode,
+            $tipo,
+            $product_id,
+            $cantidad > 0 ? $cantidad : 1,
+            $unidad_medida ?: 'unidad',
+            $proveedor_id > 0 ? $proveedor_id : null,
+            $envase_id > 0 ? $envase_id : null
+        );
+
+        if (!$barcode_id) {
+            wp_send_json_error(['message' => 'No se pudo crear el código de barra']);
+        }
+
+        // Persistir origen_datos si difiere del default del modelo
+        if ($origen_datos && $origen_datos !== 'manual') {
+            global $wpdb;
+            $wpdb->update(
+                $wpdb->prefix . 'riverso_codigo_barra',
+                ['origen_datos' => $origen_datos],
+                ['id' => (int) $barcode_id],
+                ['%s'],
+                ['%d']
+            );
         }
 
         if (class_exists('Riverso_POS_Audit')) {
-            Riverso_POS_Audit::log('barcode_assigned', 'codigo_barra', (int) ($result['id'] ?? 0), [
+            Riverso_POS_Audit::log('barcode_assigned', 'codigo_barra', (int) $barcode_id, [
                 'actor_type' => 'human',
                 'producto_base_id' => $product_id,
                 'codigo' => $barcode,
+                'tipo' => $tipo,
                 'razon' => $audit_reason,
             ]);
         }
 
-        wp_send_json_success(['message' => 'Código de barra agregado', 'barcode' => $result]);
+        $item = $this->get_product($product_id);
+        wp_send_json_success([
+            'message' => 'Código de barra agregado',
+            'barcode_id' => (int) $barcode_id,
+            'item' => $item,
+        ]);
     }
 
     public function ajax_remove_barcode() {
@@ -1603,5 +1843,124 @@ class Riverso_Product_Module {
         }
 
         wp_send_json_success(['products' => array_slice($results, 0, $limit)]);
+    }
+
+    /**
+     * AJAX: Guardar precio local (p_asignado) de un producto.
+     */
+    public function ajax_set_local_price() {
+        check_ajax_referer('riverso_nonce', 'nonce');
+        
+        if (!current_user_can('riverso_manage_prices')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $precio_id = absint($_POST['precio_id'] ?? 0);
+        $p_asignado = floatval($_POST['p_asignado'] ?? 0);
+
+        if (!$precio_id) {
+            wp_send_json_error(['message' => 'precio_id requerido']);
+        }
+
+        if (!class_exists('Riverso_Pricing_Module')) {
+            wp_send_json_error(['message' => 'Módulo de precios no disponible']);
+        }
+
+        $result = Riverso_Pricing_Module::get_instance()->set_assigned_price($precio_id, $p_asignado);
+        
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+
+        // Retornar el precio actualizado
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $precio_actualizado = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}precios WHERE id = %d",
+            $precio_id
+        ), ARRAY_A);
+        wp_send_json_success(['item' => $precio_actualizado]);
+    }
+
+    /**
+     * AJAX: Guardar precio online (p_asignado) de un producto/variación WooCommerce.
+     */
+    public function ajax_set_online_price() {
+        check_ajax_referer('riverso_nonce', 'nonce');
+        
+        if (!current_user_can('riverso_manage_prices')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $producto_base_id = absint($_POST['producto_base_id'] ?? 0);
+        $woocommerce_variation_id = absint($_POST['woocommerce_variation_id'] ?? 0);
+        $p_asignado = floatval($_POST['p_asignado'] ?? 0);
+        $sync_to_woo = !empty($_POST['sync_to_woo']);
+
+        if (!$producto_base_id) {
+            wp_send_json_error(['message' => 'producto_base_id requerido']);
+        }
+
+        if (!class_exists('Riverso_Pricing_Module')) {
+            wp_send_json_error(['message' => 'Módulo de precios no disponible']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        
+        // Obtener o crear el registro de precio online
+        $precio = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}precios WHERE producto_base_id = %d AND canal = %s AND woocommerce_variation_id = %d",
+            $producto_base_id,
+            'online',
+            $woocommerce_variation_id
+        ), ARRAY_A);
+
+        if (!$precio) {
+            // Crear nuevo registro
+            $wpdb->insert(
+                "{$prefix}precios",
+                [
+                    'producto_base_id' => $producto_base_id,
+                    'canal' => 'online',
+                    'woocommerce_variation_id' => $woocommerce_variation_id,
+                    'p_asignado' => $p_asignado,
+                    'created_by_system' => 0,
+                ],
+                ['%d', '%s', '%d', '%f', '%d']
+            );
+            $precio_id = $wpdb->insert_id;
+        } else {
+            $precio_id = $precio['id'];
+            // Actualizar precio existente
+            $result = Riverso_Pricing_Module::get_instance()->set_assigned_price($precio_id, $p_asignado);
+            if (is_wp_error($result)) {
+                wp_send_json_error(['message' => $result->get_error_message()]);
+            }
+        }
+
+        // Sincronizar a WooCommerce si se solicita
+        if ($sync_to_woo) {
+            if ($woocommerce_variation_id > 0) {
+                $product = wc_get_product($woocommerce_variation_id);
+            } else {
+                $product = wc_get_product(intval($wpdb->get_var($wpdb->prepare(
+                    "SELECT woocommerce_product_id FROM {$prefix}producto_base WHERE id = %d",
+                    $producto_base_id
+                ))));
+            }
+
+            if ($product && method_exists($product, 'set_price')) {
+                $product->set_price($p_asignado);
+                $product->save();
+            }
+        }
+
+        // Retornar el precio actualizado
+        $precio_actualizado = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}precios WHERE id = %d",
+            $precio_id
+        ), ARRAY_A);
+        wp_send_json_success(['item' => $precio_actualizado]);
     }
 }

@@ -235,11 +235,13 @@ function riverso_set_setting($key, $value) {
  * Resuelve la URL de destino de una tarea basada en su tipo de referencia.
  *
  * Mapea referencia_tipo -> URL para shortcuts "Ir a la tarea".
+ * Prioriza el Hub de Productos (admin.php?page=riverso-pos-products) para producto_base.
  *
  * @param array $task Fila de tarea con campos: id, tipo, referencia_tipo, referencia_id, datos_extra
  * @return string|null URL de destino o null si no resolvible
  */
 function riverso_resolve_task_target($task) {
+    global $wpdb;
     $tipo = $task['referencia_tipo'] ?? null;
     $id = $task['referencia_id'] ?? null;
 
@@ -248,11 +250,26 @@ function riverso_resolve_task_target($task) {
     }
 
     switch ($tipo) {
+        case 'producto_base':
+            // Deep link al Hub de Productos (admin) con action=detail
+            return add_query_arg(['action' => 'detail', 'id' => (int) $id], admin_url('admin.php?page=riverso-pos-products'));
+
         case 'producto_proveedor':
+            // Portal MAMUT con tab codigos
             return add_query_arg('pp', (int) $id, home_url('/interno/catalog/')) . '#codigos';
 
-        case 'producto_base':
-            return add_query_arg('base', (int) $id, home_url('/interno/catalog/'));
+        case 'producto':
+        case 'product':
+            // Resolver WooCommerce product_id -> producto_base_id
+            $pb_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$wpdb->prefix}riverso_producto_base WHERE woocommerce_product_id = %d OR woocommerce_variation_id = %d LIMIT 1",
+                (int) $id,
+                (int) $id
+            ));
+            if ($pb_id) {
+                return add_query_arg(['action' => 'detail', 'id' => (int) $pb_id], admin_url('admin.php?page=riverso-pos-products'));
+            }
+            return null;
 
         case 'factura_item':
             return add_query_arg('factura_item', (int) $id, admin_url('admin.php?page=riverso-pos-codes'));

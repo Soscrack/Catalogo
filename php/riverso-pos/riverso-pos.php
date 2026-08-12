@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constantes del plugin
-define('RIVERSO_POS_VERSION', '1.5.13');
+define('RIVERSO_POS_VERSION', '1.5.15');
 define('RIVERSO_POS_PLUGIN_FILE', __FILE__);
 define('RIVERSO_POS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RIVERSO_POS_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -239,6 +239,7 @@ final class Riverso_POS {
             'barcodes'  => ['file' => 'class-barcode-module.php', 'class' => 'Riverso_Barcode_Module'],
             'catalogs'  => ['file' => 'class-catalog-module.php', 'class' => 'Riverso_Supplier_Catalogs_Module'],
             'products'  => ['file' => 'class-product-module.php', 'class' => 'Riverso_Product_Module'],
+            'families'  => ['file' => 'class-family-module.php', 'class' => 'Riverso_Family_Module'],
             'tienda-local' => ['file' => 'class-tienda-local-module.php', 'class' => 'Riverso_Tienda_Local_Module'],
             'labels'    => ['file' => 'class-label-print-module.php', 'class' => 'Riverso_Label_Print_Module'],
             'matching'  => [

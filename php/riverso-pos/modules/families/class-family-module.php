@@ -38,7 +38,7 @@ class Riverso_Family_Module {
     public function ajax_list_families() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         
-        if (!current_user_can('riverso_view_products')) {
+        if (!current_user_can('riverso_view_families')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
         }
 
@@ -65,7 +65,7 @@ class Riverso_Family_Module {
     public function ajax_get_family() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         
-        if (!current_user_can('riverso_view_products')) {
+        if (!current_user_can('riverso_view_families')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
         }
 
@@ -106,7 +106,7 @@ class Riverso_Family_Module {
     public function ajax_create_family() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         
-        if (!current_user_can('riverso_manage_products')) {
+        if (!current_user_can('riverso_manage_families')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
         }
 
@@ -165,7 +165,7 @@ class Riverso_Family_Module {
     public function ajax_update_family() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         
-        if (!current_user_can('riverso_manage_products')) {
+        if (!current_user_can('riverso_manage_families')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
         }
 
@@ -211,7 +211,7 @@ class Riverso_Family_Module {
     public function ajax_add_member() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         
-        if (!current_user_can('riverso_manage_products')) {
+        if (!current_user_can('riverso_manage_families')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
         }
 
@@ -276,7 +276,7 @@ class Riverso_Family_Module {
     public function ajax_remove_member() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         
-        if (!current_user_can('riverso_manage_products')) {
+        if (!current_user_can('riverso_manage_families')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
         }
 
@@ -310,7 +310,7 @@ class Riverso_Family_Module {
     public function ajax_family_tree() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         
-        if (!current_user_can('riverso_view_products')) {
+        if (!current_user_can('riverso_view_families')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
         }
 

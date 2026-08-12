@@ -1201,6 +1201,14 @@ $tareas = $wpdb->get_results($wpdb->prepare(
             </div>
         </div>
 
+        <?php elseif ($current_page === 'products'): ?>
+        <!-- Productos (Hub) -->
+        <?php include RIVERSO_POS_PLUGIN_DIR . 'templates/portal/portal-products.php'; ?>
+
+        <?php elseif ($current_page === 'categories'): ?>
+        <!-- Categorías y Familias -->
+        <?php include RIVERSO_POS_PLUGIN_DIR . 'templates/portal/portal-categories.php'; ?>
+
         <?php elseif ($current_page === 'reports'): ?>
         <!-- Reportes -->
         <div class="content-section">

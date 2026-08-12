@@ -59,6 +59,16 @@ class Riverso_Product_Module {
 		add_action('wp_ajax_riverso_products_category_impact', [$this, 'ajax_category_impact']);
 		add_action('wp_ajax_riverso_products_move_category', [$this, 'ajax_move_category']);
 		add_action('wp_ajax_riverso_products_delete_category', [$this, 'ajax_delete_category']);
+		add_action('wp_ajax_riverso_products_update', [$this, 'ajax_update']);
+		add_action('wp_ajax_riverso_products_get_catalogs', [$this, 'ajax_get_catalogs']);
+		add_action('wp_ajax_riverso_products_upload_image', [$this, 'ajax_upload_image']);
+		add_action('wp_ajax_riverso_products_complete_task', [$this, 'ajax_complete_task']);
+		add_action('wp_ajax_riverso_products_set_family', [$this, 'ajax_set_family']);
+		add_action('wp_ajax_riverso_products_search_supplier_codes', [$this, 'ajax_search_supplier_codes']);
+		add_action('wp_ajax_riverso_products_assign_supplier_code', [$this, 'ajax_assign_supplier_code']);
+		add_action('wp_ajax_riverso_products_remove_supplier_code', [$this, 'ajax_remove_supplier_code']);
+		add_action('wp_ajax_riverso_products_link_woo', [$this, 'ajax_link_woo']);
+		add_action('wp_ajax_riverso_products_create_woo', [$this, 'ajax_create_woo']);
 	}
 
     private function get_completeness_category($product) {
@@ -785,6 +795,9 @@ class Riverso_Product_Module {
 
     public function ajax_search_code() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
         $code = sanitize_text_field($_POST['code'] ?? '');
         if (empty($code)) {
             wp_send_json_error(['message' => 'Código requerido']);
@@ -839,6 +852,9 @@ class Riverso_Product_Module {
 
     public function ajax_search_woo() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
         $search = sanitize_text_field($_POST['s'] ?? '');
         if (strlen($search) < 2) {
             wp_send_json_success(['results' => []]);
@@ -1898,15 +1914,30 @@ class Riverso_Product_Module {
             wp_send_json_error(['message' => 'Módulo de precios no disponible']);
         }
 
+        // Obtener precio anterior para auditoría
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $precio_anterior = $wpdb->get_var($wpdb->prepare(
+            "SELECT p_asignado FROM {$prefix}precios WHERE id = %d",
+            $precio_id
+        ));
+
         $result = Riverso_Pricing_Module::get_instance()->set_assigned_price($precio_id, $p_asignado);
         
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
         }
 
+        // Auditar cambio de precio local
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('price_changed', 'precio', $precio_id, [
+                'old_value' => $precio_anterior,
+                'new_value' => $p_asignado,
+                'details' => 'Precio Local actualizado',
+            ]);
+        }
+
         // Retornar el precio actualizado
-        global $wpdb;
-        $prefix = $wpdb->prefix . 'riverso_';
         $precio_actualizado = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$prefix}precios WHERE id = %d",
             $precio_id
@@ -1991,6 +2022,15 @@ class Riverso_Product_Module {
             }
         }
 
+        // Auditar cambio de precio online
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('price_changed', 'precio', $precio_id, [
+                'old_value' => $precio ? $precio['p_asignado'] : null,
+                'new_value' => $p_asignado,
+                'details' => 'Precio Online actualizado' . ($sync_to_woo ? ' + sincronizado a WooCommerce' : ''),
+            ]);
+        }
+
         // Retornar el precio actualizado
         $precio_actualizado = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$prefix}precios WHERE id = %d",
@@ -2007,7 +2047,7 @@ class Riverso_Product_Module {
     public function ajax_get_product_categories() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         
-        if (!current_user_can('riverso_view_products')) {
+        if (!current_user_can('riverso_view_categories')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
         }
 
@@ -2031,7 +2071,7 @@ class Riverso_Product_Module {
     public function ajax_set_product_categories() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         
-        if (!current_user_can('riverso_manage_products')) {
+        if (!current_user_can('riverso_manage_categories')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
         }
 
@@ -2042,7 +2082,18 @@ class Riverso_Product_Module {
             wp_send_json_error(['message' => 'woocommerce_product_id requerido']);
         }
 
+        // Obtener categorías anteriores para auditoría
+        $old_cats = wp_get_post_terms($woo_id, 'product_cat', ['fields' => 'ids']);
+
         wp_set_object_terms($woo_id, $cat_ids, 'product_cat');
+
+        // Auditar cambio de categorías
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('product_categories_updated', 'product', $woo_id, [
+                'old_value' => $old_cats,
+                'new_value' => $cat_ids,
+            ]);
+        }
 
         wp_send_json_success(['message' => 'Categorías asignadas exitosamente']);
     }
@@ -2053,7 +2104,7 @@ class Riverso_Product_Module {
     public function ajax_get_category_tree() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         
-        if (!current_user_can('riverso_view_products')) {
+        if (!current_user_can('riverso_view_categories')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
         }
 
@@ -2172,7 +2223,7 @@ class Riverso_Product_Module {
 
 	public function ajax_create_category() {
 		check_ajax_referer('riverso_pos_nonce', 'nonce');
-		if (!current_user_can('riverso_manage_products')) {
+		if (!current_user_can('riverso_manage_categories')) {
 			wp_send_json_error(['message' => 'Sin permisos'], 403);
 		}
 
@@ -2189,12 +2240,20 @@ class Riverso_Product_Module {
 			wp_send_json_error(['message' => $term->get_error_message()], 400);
 		}
 
+		// Auditar creación de categoría
+		if (class_exists('Riverso_POS_Audit')) {
+			Riverso_POS_Audit::log('category_created', 'product_cat', $term['term_id'], [
+				'entity_name' => $name,
+				'parent_id' => $parent_id,
+			]);
+		}
+
 		wp_send_json_success(['term_id' => $term['term_id'], 'name' => $name, 'parent' => $parent_id]);
 	}
 
 	public function ajax_rename_category() {
 		check_ajax_referer('riverso_pos_nonce', 'nonce');
-		if (!current_user_can('riverso_manage_products')) {
+		if (!current_user_can('riverso_manage_categories')) {
 			wp_send_json_error(['message' => 'Sin permisos'], 403);
 		}
 
@@ -2205,10 +2264,23 @@ class Riverso_Product_Module {
 			wp_send_json_error(['message' => 'Parámetros inválidos'], 400);
 		}
 
+		// Obtener nombre anterior para auditoría
+		$term = get_term($term_id, 'product_cat');
+		$old_name = $term ? $term->name : '';
+
 		$result = wp_update_term($term_id, 'product_cat', ['name' => $name]);
 
 		if (is_wp_error($result)) {
 			wp_send_json_error(['message' => $result->get_error_message()], 400);
+		}
+
+		// Auditar cambio de nombre de categoría
+		if (class_exists('Riverso_POS_Audit')) {
+			Riverso_POS_Audit::log('category_renamed', 'product_cat', $term_id, [
+				'old_value' => $old_name,
+				'new_value' => $name,
+				'entity_name' => $name,
+			]);
 		}
 
 		wp_send_json_success(['term_id' => $term_id, 'name' => $name]);
@@ -2219,7 +2291,7 @@ class Riverso_Product_Module {
 	 */
 	public function ajax_category_impact() {
 		check_ajax_referer('riverso_pos_nonce', 'nonce');
-		if (!current_user_can('riverso_manage_products')) {
+		if (!current_user_can('riverso_manage_categories')) {
 			wp_send_json_error(['message' => 'Sin permisos'], 403);
 		}
 
@@ -2277,7 +2349,7 @@ class Riverso_Product_Module {
 	 */
 	public function ajax_move_category() {
 		check_ajax_referer('riverso_pos_nonce', 'nonce');
-		if (!current_user_can('riverso_manage_products')) {
+		if (!current_user_can('riverso_manage_categories')) {
 			wp_send_json_error(['message' => 'Sin permisos'], 403);
 		}
 
@@ -2293,10 +2365,23 @@ class Riverso_Product_Module {
 			wp_send_json_error(['message' => 'No se puede mover una categoría a sí misma'], 400);
 		}
 
+		// Obtener padre anterior para auditoría
+		$term = get_term($term_id, 'product_cat');
+		$old_parent_id = $term ? $term->parent : 0;
+
 		$result = wp_update_term($term_id, 'product_cat', ['parent' => $new_parent_id]);
 
 		if (is_wp_error($result)) {
 			wp_send_json_error(['message' => $result->get_error_message()], 400);
+		}
+
+		// Auditar movimiento de categoría
+		if (class_exists('Riverso_POS_Audit')) {
+			Riverso_POS_Audit::log('category_moved', 'product_cat', $term_id, [
+				'old_value' => $old_parent_id,
+				'new_value' => $new_parent_id,
+				'entity_name' => $term ? $term->name : '',
+			]);
 		}
 
 		wp_send_json_success(['term_id' => $term_id, 'new_parent_id' => $new_parent_id]);
@@ -2307,7 +2392,7 @@ class Riverso_Product_Module {
 	 */
 	public function ajax_delete_category() {
 		check_ajax_referer('riverso_pos_nonce', 'nonce');
-		if (!current_user_can('riverso_manage_products')) {
+		if (!current_user_can('riverso_manage_categories')) {
 			wp_send_json_error(['message' => 'Sin permisos'], 403);
 		}
 
@@ -2315,6 +2400,10 @@ class Riverso_Product_Module {
 		if ($term_id <= 0) {
 			wp_send_json_error(['message' => 'ID de categoría requerido'], 400);
 		}
+
+		// Obtener nombre de la categoría antes de eliminarla
+		$term = get_term($term_id, 'product_cat');
+		$term_name = $term ? $term->name : '';
 
 		// Opción: reasignar productos a una categoría padre, o simplemente eliminar la relación
 		$reassign_to = absint($_POST['reassign_to'] ?? 0);
@@ -2331,7 +2420,354 @@ class Riverso_Product_Module {
 			wp_send_json_error(['message' => 'No se pudo eliminar la categoría'], 400);
 		}
 
+		// Auditar eliminación de categoría
+		if (class_exists('Riverso_POS_Audit')) {
+			Riverso_POS_Audit::log('category_deleted', 'product_cat', $term_id, [
+				'entity_name' => $term_name,
+				'reassign_to' => $reassign_to,
+			]);
+		}
+
 		wp_send_json_success(['term_id' => $term_id, 'message' => 'Categoría eliminada correctamente']);
+	}
+
+	/**
+	 * AJAX: Actualizar producto (editar SKU, nombre, unidad, flags)
+	 */
+	public function ajax_update() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		global $wpdb;
+		$product_id = absint($_POST['producto_id'] ?? 0);
+		if ($product_id <= 0) {
+			wp_send_json_error(['message' => 'ID de producto requerido'], 400);
+		}
+
+		$sku = sanitize_text_field($_POST['canonical_sku'] ?? '');
+		$nombre = sanitize_text_field($_POST['nombre_canonico'] ?? '');
+		$unidad = sanitize_text_field($_POST['unidad_base'] ?? 'unidad');
+		$decimal = isset($_POST['permite_decimal']) ? (int)$_POST['permite_decimal'] : 0;
+		$ean = isset($_POST['permite_ean13']) ? (int)$_POST['permite_ean13'] : 1;
+		$stock = isset($_POST['stock_abierto']) ? (int)$_POST['stock_abierto'] : 0;
+
+		$result = $wpdb->update(
+			$wpdb->prefix . 'riverso_producto_base',
+			[
+				'canonical_sku' => $sku,
+				'nombre_canonico' => $nombre,
+				'unidad_base' => $unidad,
+				'permite_decimal' => $decimal,
+				'permite_ean13' => $ean,
+				'stock_abierto' => $stock,
+			],
+			['id' => $product_id],
+			['%s', '%s', '%s', '%d', '%d', '%d'],
+			['%d']
+		);
+
+		if ($result === false) {
+			wp_send_json_error(['message' => 'Error al actualizar'], 500);
+		}
+
+		wp_send_json_success(['id' => $product_id]);
+	}
+
+	/**
+	 * AJAX: Obtener lista de catálogos
+	 */
+	public function ajax_get_catalogs() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		
+		global $wpdb;
+		$catalogs = $wpdb->get_results(
+			"SELECT DISTINCT catalog_name as name FROM {$wpdb->prefix}riverso_producto_proveedor WHERE catalog_name IS NOT NULL ORDER BY catalog_name",
+			ARRAY_A
+		);
+
+		wp_send_json_success(['catalogs' => $catalogs ?: []]);
+	}
+
+	/**
+	 * AJAX: Subir imagen de producto
+	 */
+	public function ajax_upload_image() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		if (empty($_FILES['file'])) {
+			wp_send_json_error(['message' => 'No se cargó archivo'], 400);
+		}
+
+		$product_id = absint($_POST['producto_id'] ?? 0);
+		if ($product_id <= 0) {
+			wp_send_json_error(['message' => 'ID de producto requerido'], 400);
+		}
+
+		$file = $_FILES['file'];
+		$allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+		
+		if (!in_array($file['type'], $allowed)) {
+			wp_send_json_error(['message' => 'Tipo de archivo no permitido'], 400);
+		}
+
+		$upload = wp_handle_upload($file, ['test_form' => false]);
+		if (isset($upload['error'])) {
+			wp_send_json_error(['message' => $upload['error']], 400);
+		}
+
+		global $wpdb;
+		$wpdb->update(
+			$wpdb->prefix . 'riverso_producto_base',
+			['imagen_local_url' => $upload['url']],
+			['id' => $product_id],
+			['%s'],
+			['%d']
+		);
+
+		wp_send_json_success(['url' => $upload['url']]);
+	}
+
+	/**
+	 * AJAX: Completar tarea
+	 */
+	public function ajax_complete_task() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$task_id = absint($_POST['tarea_id'] ?? 0);
+		if ($task_id <= 0) {
+			wp_send_json_error(['message' => 'ID de tarea requerido'], 400);
+		}
+
+		global $wpdb;
+		$result = $wpdb->update(
+			$wpdb->prefix . 'riverso_tareas',
+			['estado' => 'completada', 'completada_en' => current_time('mysql')],
+			['id' => $task_id],
+			['%s', '%s'],
+			['%d']
+		);
+
+		if ($result === false) {
+			wp_send_json_error(['message' => 'Error al completar tarea'], 500);
+		}
+
+		wp_send_json_success(['tarea_id' => $task_id]);
+	}
+
+	/**
+	 * AJAX: Asignar familia a producto
+	 */
+	public function ajax_set_family() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$product_id = absint($_POST['producto_id'] ?? 0);
+		$familia_id = isset($_POST['familia_id']) ? absint($_POST['familia_id']) : 0;
+
+		if ($product_id <= 0) {
+			wp_send_json_error(['message' => 'ID de producto requerido'], 400);
+		}
+
+		global $wpdb;
+		$result = $wpdb->update(
+			$wpdb->prefix . 'riverso_producto_base',
+			['equivalence_group_id' => $familia_id ?: null],
+			['id' => $product_id],
+			['%d'],
+			['%d']
+		);
+
+		if ($result === false) {
+			wp_send_json_error(['message' => 'Error al asignar familia'], 500);
+		}
+
+		wp_send_json_success(['product_id' => $product_id, 'familia_id' => $familia_id]);
+	}
+
+	/**
+	 * AJAX: Buscar códigos proveedor
+	 */
+	public function ajax_search_supplier_codes() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+		$search = sanitize_text_field($_POST['search'] ?? '');
+		$limit = min(20, max(1, absint($_POST['limit'] ?? 10)));
+
+		if (strlen($search) < 2) {
+			wp_send_json_success(['codes' => []]);
+		}
+
+		global $wpdb;
+		$codes = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT DISTINCT id, proveedor, codigo FROM {$wpdb->prefix}riverso_equivalence_members 
+				WHERE codigo LIKE %s LIMIT %d",
+				'%' . $wpdb->esc_like($search) . '%',
+				$limit
+			),
+			ARRAY_A
+		);
+
+		wp_send_json_success(['codes' => $codes ?: []]);
+	}
+
+	/**
+	 * AJAX: Asignar código proveedor a producto
+	 */
+	public function ajax_assign_supplier_code() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$product_id = absint($_POST['producto_id'] ?? 0);
+		$supplier_id = absint($_POST['supplier_id'] ?? 0);
+		$supplier_code = sanitize_text_field($_POST['supplier_code'] ?? '');
+		$reason = sanitize_textarea_field($_POST['audit_reason'] ?? '');
+
+		if ($product_id <= 0 || $supplier_id <= 0 || empty($supplier_code)) {
+			wp_send_json_error(['message' => 'Parámetros inválidos'], 400);
+		}
+
+		global $wpdb;
+		
+		// Insert into equivalence relationship
+		$result = $wpdb->insert(
+			$wpdb->prefix . 'riverso_product_suppliers',
+			[
+				'producto_id' => $product_id,
+				'supplier_id' => $supplier_id,
+				'supplier_code' => $supplier_code,
+				'created_at' => current_time('mysql'),
+			],
+			['%d', '%d', '%s', '%s']
+		);
+
+		if ($result === false) {
+			wp_send_json_error(['message' => 'Error al asignar código'], 500);
+		}
+
+		// Audit log
+		if (class_exists('Riverso_POS_Audit')) {
+			Riverso_POS_Audit::log('supplier_code_assigned', 'producto_base', $product_id, [
+				'supplier_id' => $supplier_id,
+				'supplier_code' => $supplier_code,
+				'reason' => $reason,
+			]);
+		}
+
+		wp_send_json_success(['product_id' => $product_id]);
+	}
+
+	/**
+	 * AJAX: Remover código proveedor
+	 */
+	public function ajax_remove_supplier_code() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$code_id = absint($_POST['codigo_id'] ?? 0);
+		if ($code_id <= 0) {
+			wp_send_json_error(['message' => 'ID de código requerido'], 400);
+		}
+
+		global $wpdb;
+		$result = $wpdb->delete(
+			$wpdb->prefix . 'riverso_product_suppliers',
+			['id' => $code_id],
+			['%d']
+		);
+
+		if ($result === false) {
+			wp_send_json_error(['message' => 'Error al eliminar'], 500);
+		}
+
+		wp_send_json_success(['codigo_id' => $code_id]);
+	}
+
+	/**
+	 * AJAX: Vincular producto WooCommerce existente
+	 */
+	public function ajax_link_woo() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$product_id = absint($_POST['producto_id'] ?? 0);
+		$woo_id = absint($_POST['woo_id'] ?? 0);
+
+		if ($product_id <= 0 || $woo_id <= 0) {
+			wp_send_json_error(['message' => 'Parámetros inválidos'], 400);
+		}
+
+		global $wpdb;
+		$result = $wpdb->update(
+			$wpdb->prefix . 'riverso_producto_base',
+			['woocommerce_product_id' => $woo_id],
+			['id' => $product_id],
+			['%d'],
+			['%d']
+		);
+
+		if ($result === false) {
+			wp_send_json_error(['message' => 'Error al vincular'], 500);
+		}
+
+		wp_send_json_success(['product_id' => $product_id, 'woo_id' => $woo_id]);
+	}
+
+	/**
+	 * AJAX: Crear nuevo producto WooCommerce
+	 */
+	public function ajax_create_woo() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$product_id = absint($_POST['producto_id'] ?? 0);
+		$nombre = sanitize_text_field($_POST['nombre'] ?? '');
+
+		if ($product_id <= 0 || empty($nombre)) {
+			wp_send_json_error(['message' => 'Parámetros inválidos'], 400);
+		}
+
+		if (!class_exists('WooCommerce')) {
+			wp_send_json_error(['message' => 'WooCommerce no está instalado'], 500);
+		}
+
+		$woo_product = new WC_Product_Simple();
+		$woo_product->set_name($nombre);
+		$woo_product->set_status('draft');
+		$woo_id = $woo_product->save();
+
+		if (!$woo_id) {
+			wp_send_json_error(['message' => 'Error al crear producto en WooCommerce'], 500);
+		}
+
+		global $wpdb;
+		$wpdb->update(
+			$wpdb->prefix . 'riverso_producto_base',
+			['woocommerce_product_id' => $woo_id],
+			['id' => $product_id],
+			['%d'],
+			['%d']
+		);
+
+		wp_send_json_success(['product_id' => $product_id, 'woo_id' => $woo_id]);
 	}
 }
 

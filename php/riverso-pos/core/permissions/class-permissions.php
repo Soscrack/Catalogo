@@ -31,6 +31,10 @@ class Riverso_POS_Permissions {
         'riverso_manage_products'    => 'Gestionar productos',
         'riverso_edit_products'      => 'Editar productos',
         'riverso_edit_skus'          => 'Editar SKUs internos',
+        'riverso_view_categories'    => 'Ver árbol de categorías',
+        'riverso_manage_categories'  => 'Crear, editar, mover y eliminar categorías',
+        'riverso_view_families'      => 'Ver familias y miembros',
+        'riverso_manage_families'    => 'Crear, editar y eliminar familias',
         
         // === STOCK / BODEGA ===
         'riverso_view_stock'         => 'Ver stock',
@@ -130,6 +134,10 @@ class Riverso_POS_Permissions {
             'riverso_manage_products',
             'riverso_edit_products',
             'riverso_edit_skus',
+            'riverso_view_categories',
+            'riverso_manage_categories',
+            'riverso_view_families',
+            'riverso_manage_families',
         ],
         'Stock / Bodega' => [
             'riverso_view_stock',
@@ -230,6 +238,8 @@ class Riverso_POS_Permissions {
             'capabilities' => [
                 'riverso_access_portal',
                 'riverso_view_products',
+                'riverso_view_categories',
+                'riverso_view_families',
                 'riverso_view_stock',
                 'riverso_view_warehouse',
                 'riverso_use_pos',
@@ -254,6 +264,8 @@ class Riverso_POS_Permissions {
             'capabilities' => [
                 'riverso_access_portal',
                 'riverso_view_products',
+                'riverso_view_categories',
+                'riverso_view_families',
                 'riverso_view_stock',
                 'riverso_view_warehouse',
                 'riverso_edit_warehouse',
@@ -275,6 +287,8 @@ class Riverso_POS_Permissions {
             'capabilities' => [
                 'riverso_access_portal',
                 'riverso_view_products',
+                'riverso_view_categories',
+                'riverso_view_families',
                 'riverso_view_stock',
                 'riverso_view_received_quotes',
                 'riverso_create_received_quotes',
@@ -323,6 +337,10 @@ class Riverso_POS_Permissions {
                 'riverso_manage_products',
                 'riverso_edit_products',
                 'riverso_edit_skus',
+                'riverso_view_categories',
+                'riverso_manage_categories',
+                'riverso_view_families',
+                'riverso_manage_families',
                 'riverso_view_stock',
                 'riverso_edit_stock',
                 'riverso_view_warehouse',
@@ -593,6 +611,16 @@ class Riverso_POS_Permissions {
         // Catálogo MAMUT / publicación
         if ($can('riverso_review_products') || $can('riverso_publish_products')) {
             $modules['catalog'] = ['icon' => 'category', 'label' => 'Catálogo'];
+        }
+        
+        // Productos (Hub)
+        if ($can('riverso_view_products')) {
+            $modules['products'] = ['icon' => 'archive', 'label' => 'Productos'];
+        }
+        
+        // Categorías y Familias
+        if ($can('riverso_view_categories')) {
+            $modules['categories'] = ['icon' => 'category', 'label' => 'Categorías'];
         }
         
         // Bodega

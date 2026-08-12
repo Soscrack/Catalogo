@@ -300,6 +300,7 @@ class Riverso_POS_Activator {
         self::create_phase17_invoice_item_costs($prefix);
         self::create_phase18_catalogs($prefix, $charset_collate);
         self::create_phase19_clear_catalog_as_local_sku($prefix);
+        self::create_phase20_hub_v2_images($prefix);
         
         // Inicializar servicios core
         self::init_core_services();
@@ -2020,6 +2021,38 @@ class Riverso_POS_Activator {
                 0,
                 'info',
                 "Fase 19: cleared≈{$cleared} candidates=" . count($candidates ?: []) . " tasks={$tasks_created}"
+            );
+        }
+    }
+
+    /**
+     * Fase 20: Hub v2 - Agregar campo imagen_id para media picker
+     */
+    private static function create_phase20_hub_v2_images($prefix) {
+        global $wpdb;
+        
+        self::add_column_if_missing(
+            "{$prefix}producto_base",
+            'imagen_id',
+            "imagen_id BIGINT UNSIGNED DEFAULT NULL COMMENT 'ID de attachment (imagen) de WordPress'"
+        );
+        
+        // Crear índice si no existe
+        $index_name = 'idx_imagen_id';
+        $table = "{$prefix}producto_base";
+        $indexes = $wpdb->get_results("SHOW INDEX FROM {$table} WHERE Key_name = '{$index_name}'");
+        
+        if (empty($indexes)) {
+            $wpdb->query("ALTER TABLE {$table} ADD KEY {$index_name} (imagen_id)");
+        }
+        
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log(
+                'schema.phase20_hub_v2_images',
+                'producto_base',
+                0,
+                'info',
+                'Fase 20: Agregado campo imagen_id para media picker'
             );
         }
     }

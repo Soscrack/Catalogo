@@ -64,6 +64,41 @@ if (!$can_manage) {
                 </div>
             </div>
         </div>
+
+        <!-- Modal de mover rama -->
+        <div id="category-move-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+            <div style="background:white; padding:20px; border-radius:6px; max-width:450px; width:90%;">
+                <h3>Mover rama</h3>
+                <p id="category-move-label" style="color:#666; margin-bottom:12px;"></p>
+                <div id="category-move-impact" style="background:#fff3cd; border-left:4px solid #ffc107; padding:10px; border-radius:4px; margin-bottom:12px; display:none;"></div>
+                <label style="display:block; margin-bottom:16px;">
+                    <strong>Nuevo padre:</strong><br>
+                    <select id="category-move-parent" style="width:100%; padding:6px; box-sizing:border-box;">
+                        <option value="0">Sin padre (raíz)</option>
+                    </select>
+                </label>
+                <div style="display:flex; gap:8px; justify-content:flex-end;">
+                    <button class="button" id="category-move-cancel">Cancelar</button>
+                    <button class="button button-primary" id="category-move-confirm">Mover</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal elegir hermano (bajar nivel) -->
+        <div id="category-sibling-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+            <div style="background:white; padding:20px; border-radius:6px; max-width:450px; width:90%;">
+                <h3>Bajar nivel</h3>
+                <p id="category-sibling-label" style="color:#666; margin-bottom:12px;"></p>
+                <label style="display:block; margin-bottom:16px;">
+                    <strong>Convertir en hijo de:</strong><br>
+                    <select id="category-sibling-parent" style="width:100%; padding:6px; box-sizing:border-box;"></select>
+                </label>
+                <div style="display:flex; gap:8px; justify-content:flex-end;">
+                    <button class="button" id="category-sibling-cancel">Cancelar</button>
+                    <button class="button button-primary" id="category-sibling-confirm">Bajar</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- TAB: Familias -->
@@ -97,30 +132,70 @@ if (!$can_manage) {
     font-weight: bold;
 }
 .category-tree-item {
-    padding: 8px;
-    border-left: 2px solid #ddd;
-    margin-left: 20px;
-    margin-bottom: 4px;
+    padding: 10px;
+    border-left: 3px solid #ccc;
+    margin-left: 16px;
+    margin-bottom: 6px;
     background: white;
-    border-radius: 3px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background-color 0.15s, box-shadow 0.15s;
+}
+.category-tree-item:hover {
+    background-color: #f0f7ff;
+    box-shadow: 0 1px 4px rgba(34, 113, 177, 0.1);
+}
+.category-tree-item.root {
+    margin-left: 0;
+    border-left: 4px solid #2271b1;
+    background: #f5f5f5;
+    font-weight: bold;
+}
+.category-tree-item.root:hover {
+    background-color: #e8f1f9;
+}
+.category-tree-name {
+    flex: 1;
     display: flex;
     align-items: center;
     gap: 8px;
 }
-.category-tree-item.root {
-    margin-left: 0;
-    border-left: none;
-    background: #f5f5f5;
-    font-weight: bold;
+.category-tree-count {
+    font-size: 12px;
+    color: #666;
+    white-space: nowrap;
 }
 .category-tree-actions {
     display: flex;
-    gap: 4px;
+    gap: 2px;
     margin-left: auto;
+    flex-shrink: 0;
 }
 .category-tree-actions button {
-    padding: 4px 8px;
-    font-size: 12px;
+    padding: 6px 8px;
+    font-size: 13px;
+    border: 1px solid #ddd;
+    background: white;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.2s;
+    min-width: 30px;
+    text-align: center;
+}
+.category-tree-actions button:hover:not(:disabled) {
+    background: #e7f3ff;
+    border-color: #2271b1;
+    color: #2271b1;
+}
+.category-tree-actions button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    color: #999;
+}
+.category-tree-actions button[title] {
+    position: relative;
 }
 .family-item {
     padding: 12px;
@@ -141,10 +216,10 @@ if (!$can_manage) {
     background-color: #c82333;
     border-color: #c82333;
 }
-#category-modal, #category-delete-modal {
+#category-modal, #category-delete-modal, #category-move-modal, #category-sibling-modal {
     display: none !important;
 }
-#category-modal.show, #category-delete-modal.show {
+#category-modal.show, #category-delete-modal.show, #category-move-modal.show, #category-sibling-modal.show {
     display: flex !important;
 }
 </style>
@@ -155,6 +230,8 @@ jQuery(function($) {
     let categoriesTree = [];
     let familiesList = [];
     let pendingDeleteCategory = null;
+    let pendingMoveCategory = null;
+    let pendingSiblingMove = null;
 
     function esc(v) { return $('<div>').text(v === null || v === undefined ? '' : v).html(); }
 
@@ -196,22 +273,31 @@ jQuery(function($) {
         }
 
         let html = '';
-        cats.forEach(cat => {
+        cats.forEach((cat, idx) => {
             const isRoot = cat.parent === 0 || !cat.parent;
-            const padding = isRoot ? 0 : indent * 20;
-            html += `<div class="category-tree-item ${isRoot ? 'root' : ''}" style="margin-left:${padding}px;" data-term-id="${cat.id}">
-                <span style="flex:1;">${esc(cat.name)}</span>
+            const padding = isRoot ? 0 : indent * 16;
+            const canMoveUp = !isRoot;
+            // Bajar = hijo de un hermano del mismo nivel (anterior o, si es el primero, el siguiente)
+            const canMoveDown = cats.length > 1;
+            const productCount = cat.count || 0;
+            
+            html += `<div class="category-tree-item ${isRoot ? 'root' : ''}" style="margin-left:${padding}px;" data-term-id="${cat.id}" data-parent-id="${cat.parent || 0}">
+                <div class="category-tree-name">
+                    <span>${esc(cat.name)}</span>
+                    <span class="category-tree-count" title="Productos directos">(${productCount})</span>
+                </div>
                 <div class="category-tree-actions">
-                    <button class="button button-small category-add-child" data-parent-id="${cat.id}">+</button>
-                    <button class="button button-small category-rename" data-term-id="${cat.id}">✎</button>
-                    <button class="button button-small category-delete" data-term-id="${cat.id}">🗑</button>
+                    <button class="button button-small category-add-child" data-parent-id="${cat.id}" title="Agregar subcategoría">+</button>
+                    <button class="button button-small category-rename" data-term-id="${cat.id}" title="Renombrar">✎</button>
+                    <button class="button button-small category-move-up" data-term-id="${cat.id}" ${!canMoveUp ? 'disabled' : ''} title="Subir nivel (hermano del padre)">↑</button>
+                    <button class="button button-small category-move-down" data-term-id="${cat.id}" ${!canMoveDown ? 'disabled' : ''} title="Bajar nivel (hijo del hermano anterior)">↓</button>
+                    <button class="button button-small category-move-branch" data-term-id="${cat.id}" title="Mover rama a otro padre">⇄</button>
+                    <button class="button button-small category-delete" data-term-id="${cat.id}" title="Eliminar">🗑</button>
                 </div>
             </div>`;
             
-            // Renderizar hijos recursivamente
             if (cat.children && cat.children.length > 0) {
-                const childHtml = renderCategoriesTreeRecursive(cat.children, indent + 1);
-                html += childHtml;
+                html += renderCategoriesTreeRecursive(cat.children, indent + 1);
             }
         });
 
@@ -224,14 +310,24 @@ jQuery(function($) {
 
     function renderCategoriesTreeRecursive(cats, indent) {
         let html = '';
-        cats.forEach(cat => {
-            const padding = indent * 20;
-            html += `<div class="category-tree-item" style="margin-left:${padding}px;" data-term-id="${cat.id}">
-                <span style="flex:1;">${esc(cat.name)}</span>
+        cats.forEach((cat, idx) => {
+            const padding = indent * 16;
+            const canMoveUp = true;
+            const canMoveDown = cats.length > 1;
+            const productCount = cat.count || 0;
+            
+            html += `<div class="category-tree-item" style="margin-left:${padding}px;" data-term-id="${cat.id}" data-parent-id="${cat.parent || 0}">
+                <div class="category-tree-name">
+                    <span>${esc(cat.name)}</span>
+                    <span class="category-tree-count" title="Productos directos">(${productCount})</span>
+                </div>
                 <div class="category-tree-actions">
-                    <button class="button button-small category-add-child" data-parent-id="${cat.id}">+</button>
-                    <button class="button button-small category-rename" data-term-id="${cat.id}">✎</button>
-                    <button class="button button-small category-delete" data-term-id="${cat.id}">🗑</button>
+                    <button class="button button-small category-add-child" data-parent-id="${cat.id}" title="Agregar subcategoría">+</button>
+                    <button class="button button-small category-rename" data-term-id="${cat.id}" title="Renombrar">✎</button>
+                    <button class="button button-small category-move-up" data-term-id="${cat.id}" ${!canMoveUp ? 'disabled' : ''} title="Subir nivel (hermano del padre)">↑</button>
+                    <button class="button button-small category-move-down" data-term-id="${cat.id}" ${!canMoveDown ? 'disabled' : ''} title="Bajar nivel (hijo del hermano anterior)">↓</button>
+                    <button class="button button-small category-move-branch" data-term-id="${cat.id}" title="Mover rama a otro padre">⇄</button>
+                    <button class="button button-small category-delete" data-term-id="${cat.id}" title="Eliminar">🗑</button>
                 </div>
             </div>`;
             
@@ -243,18 +339,17 @@ jQuery(function($) {
     }
 
     function attachCategoryEventListeners() {
-        // Agregar hijo
-        $(document).on('click', '.category-add-child', function(e) {
+        $(document).off('click.catTree');
+
+        $(document).on('click.catTree', '.category-add-child', function(e) {
             e.preventDefault();
-            const parentId = $(this).data('parent-id');
-            openCategoryModal(parentId);
+            openCategoryModal($(this).data('parent-id'));
         });
 
-        // Renombrar
-        $(document).on('click', '.category-rename', function(e) {
+        $(document).on('click.catTree', '.category-rename', function(e) {
             e.preventDefault();
             const termId = $(this).data('term-id');
-            const currentName = $(this).closest('.category-tree-item').find('span:first').text();
+            const currentName = $(this).closest('.category-tree-item').find('.category-tree-name span:first').text();
             const newName = prompt('Nuevo nombre de categoría:', currentName);
             if (newName && newName.trim()) {
                 $.post(ajaxurl, {
@@ -272,34 +367,187 @@ jQuery(function($) {
             }
         });
 
-        // Eliminar
-        $(document).on('click', '.category-delete', function(e) {
+        $(document).on('click.catTree', '.category-move-up', function(e) {
             e.preventDefault();
+            if ($(this).is(':disabled')) return;
             const termId = $(this).data('term-id');
-            openDeleteCategoryModal(termId);
+            const info = findNodeAndParent(categoriesTree, termId);
+            if (!info || !info.parent) {
+                alert('Esta categoría ya está en el nivel superior');
+                return;
+            }
+            // Subir = pasar a ser hermano del padre (nuevo padre = abuelo)
+            const newParentId = Number(info.parent.parent) || 0;
+            moveCategory(termId, newParentId);
+        });
+
+        $(document).on('click.catTree', '.category-move-down', function(e) {
+            e.preventDefault();
+            if ($(this).is(':disabled')) return;
+            const termId = Number($(this).data('term-id'));
+            const siblings = findSiblings(categoriesTree, termId);
+            if (!siblings || siblings.length < 2) {
+                alert('No hay un hermano del mismo nivel bajo el cual anidar');
+                return;
+            }
+            const candidates = siblings.filter(c => Number(c.id) !== termId);
+            if (candidates.length === 0) {
+                alert('No hay un hermano del mismo nivel bajo el cual anidar');
+                return;
+            }
+            // Un solo hermano: bajar directo. Varios: preguntar cuál.
+            if (candidates.length === 1) {
+                moveCategory(termId, candidates[0].id);
+                return;
+            }
+            openSiblingPickModal(termId, candidates);
+        });
+
+        $(document).on('click.catTree', '.category-move-branch', function(e) {
+            e.preventDefault();
+            openMoveCategoryModal($(this).data('term-id'));
+        });
+
+        $(document).on('click.catTree', '.category-delete', function(e) {
+            e.preventDefault();
+            openDeleteCategoryModal($(this).data('term-id'));
         });
     }
 
     function openCategoryModal(parentId = 0) {
         $('#category-modal-name').val('');
-        $('#category-modal-parent').val(parentId);
         populateCategoryParentDropdown('#category-modal-parent');
+        $('#category-modal-parent').val(String(parentId || 0));
         $('#category-modal').addClass('show');
+        $('#category-modal-name').focus();
     }
 
-    function populateCategoryParentDropdown(selector) {
-        // Generar opciones a partir de categoriesTree
+    function collectDescendantIds(node) {
+        const ids = [node.id];
+        (node.children || []).forEach(child => {
+            ids.push(...collectDescendantIds(child));
+        });
+        return ids;
+    }
+
+    function populateCategoryParentDropdown(selector, excludeIds = []) {
+        const exclude = new Set((excludeIds || []).map(id => Number(id)));
         let options = '<option value="0">Sin padre (raíz)</option>';
-        function addOptions(cats) {
+        function addOptions(cats, depth) {
             cats.forEach(cat => {
-                options += `<option value="${cat.id}">${esc(cat.name)}</option>`;
+                if (exclude.has(Number(cat.id))) return;
+                const indent = '\u00A0'.repeat(depth * 2);
+                options += `<option value="${cat.id}">${indent}${esc(cat.name)}</option>`;
                 if (cat.children && cat.children.length > 0) {
-                    addOptions(cat.children);
+                    addOptions(cat.children, depth + 1);
                 }
             });
         }
-        addOptions(categoriesTree);
+        addOptions(categoriesTree, 0);
         $(selector).html(options);
+    }
+
+    // Funciones auxiliares para navegación del árbol
+    function findNodeAndParent(tree, termId, parent = null) {
+        const targetId = Number(termId);
+        for (const cat of tree) {
+            if (Number(cat.id) === targetId) return { node: cat, parent: parent };
+            if (cat.children && cat.children.length > 0) {
+                const found = findNodeAndParent(cat.children, termId, cat);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
+
+    function findSiblings(tree, termId) {
+        const targetId = Number(termId);
+        for (const cat of tree) {
+            if (Number(cat.id) === targetId) return tree;
+            if (cat.children && cat.children.length > 0) {
+                const found = findSiblings(cat.children, termId);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
+
+    function moveCategory(termId, newParentId) {
+        $.post(ajaxurl, {
+            action: 'riverso_products_category_impact',
+            nonce: nonce,
+            term_id: termId
+        }, function(r) {
+            if (!r.success) return;
+            const data = r.data;
+            const msg = `Al mover esta categoría:\n- ${data.direct_products} productos directos se verán afectados\n- ${data.children_count} subcategorías se moverán junto con ella\n- Total: ${data.total_products} productos\n\n¿Continuar?`;
+            
+            if (!confirm(msg)) return;
+            
+            $.post(ajaxurl, {
+                action: 'riverso_products_move_category',
+                nonce: nonce,
+                term_id: termId,
+                new_parent_id: newParentId
+            }, function(r) {
+                if (r.success) {
+                    loadCategories();
+                } else {
+                    alert('Error: ' + (r.data?.message || 'No se pudo mover'));
+                }
+            });
+        });
+    }
+
+    function openMoveCategoryModal(termId) {
+        const info = findNodeAndParent(categoriesTree, termId);
+        if (!info || !info.node) {
+            alert('Categoría no encontrada');
+            return;
+        }
+        pendingMoveCategory = Number(termId);
+        const currentParentId = info.parent ? Number(info.parent.id) : 0;
+        const excludeIds = collectDescendantIds(info.node);
+
+        $('#category-move-label').text('Moviendo: ' + info.node.name + ' (y toda su rama)');
+        $('#category-move-impact').hide().empty();
+        populateCategoryParentDropdown('#category-move-parent', excludeIds);
+        $('#category-move-parent').val(String(currentParentId));
+
+        $.post(ajaxurl, {
+            action: 'riverso_products_category_impact',
+            nonce: nonce,
+            term_id: termId
+        }, function(r) {
+            if (r.success) {
+                const data = r.data;
+                $('#category-move-impact').html(
+                    `<strong>Impacto:</strong> ${data.direct_products} productos directos, ${data.children_count} subcategorías, ${data.total_products} productos en total.`
+                ).show();
+            }
+        });
+
+        $('#category-move-modal').addClass('show');
+    }
+
+    function openSiblingPickModal(termId, candidates) {
+        const info = findNodeAndParent(categoriesTree, termId);
+        const name = info && info.node ? info.node.name : ('#' + termId);
+        pendingSiblingMove = Number(termId);
+
+        // Preferir hermano anterior como opción preseleccionada
+        const siblings = findSiblings(categoriesTree, termId) || [];
+        const idx = siblings.findIndex(c => Number(c.id) === Number(termId));
+        const preferredId = idx > 0 ? Number(siblings[idx - 1].id) : Number(candidates[0].id);
+
+        let options = '';
+        candidates.forEach(c => {
+            options += `<option value="${c.id}">${esc(c.name)}</option>`;
+        });
+        $('#category-sibling-parent').html(options);
+        $('#category-sibling-parent').val(String(preferredId));
+        $('#category-sibling-label').text('Bajar "' + name + '" como hijo de un hermano del mismo nivel:');
+        $('#category-sibling-modal').addClass('show');
     }
 
     $('#categories-add-root').on('click', function() {
@@ -312,7 +560,7 @@ jQuery(function($) {
 
     $('#category-modal-save').on('click', function() {
         const name = $('#category-modal-name').val().trim();
-        const parentId = parseInt($('#category-modal-parent').val() || 0);
+        const parentId = parseInt($('#category-modal-parent').val() || 0, 10);
         if (!name) {
             alert('El nombre es requerido');
             return;
@@ -330,6 +578,49 @@ jQuery(function($) {
                 alert('Error: ' + (r.data?.message || 'No se pudo crear'));
             }
         });
+    });
+
+    $('#category-move-cancel').on('click', function() {
+        $('#category-move-modal').removeClass('show');
+        pendingMoveCategory = null;
+    });
+
+    $('#category-move-confirm').on('click', function() {
+        if (!pendingMoveCategory) return;
+        const newParentId = parseInt($('#category-move-parent').val() || 0, 10);
+        const termId = pendingMoveCategory;
+        $.post(ajaxurl, {
+            action: 'riverso_products_move_category',
+            nonce: nonce,
+            term_id: termId,
+            new_parent_id: newParentId
+        }, function(r) {
+            if (r.success) {
+                $('#category-move-modal').removeClass('show');
+                pendingMoveCategory = null;
+                loadCategories();
+            } else {
+                alert('Error: ' + (r.data?.message || 'No se pudo mover'));
+            }
+        });
+    });
+
+    $('#category-sibling-cancel').on('click', function() {
+        $('#category-sibling-modal').removeClass('show');
+        pendingSiblingMove = null;
+    });
+
+    $('#category-sibling-confirm').on('click', function() {
+        if (!pendingSiblingMove) return;
+        const termId = pendingSiblingMove;
+        const newParentId = parseInt($('#category-sibling-parent').val() || 0, 10);
+        if (!newParentId) {
+            alert('Selecciona un hermano');
+            return;
+        }
+        $('#category-sibling-modal').removeClass('show');
+        pendingSiblingMove = null;
+        moveCategory(termId, newParentId);
     });
 
     function openDeleteCategoryModal(termId) {

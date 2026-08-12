@@ -249,10 +249,23 @@ function riverso_resolve_task_target($task) {
         return null;
     }
 
+    $task_tipo = $task['tipo'] ?? '';
+
     switch ($tipo) {
         case 'producto_base':
             // Deep link al Hub de Productos (admin) con action=detail
-            return add_query_arg(['action' => 'detail', 'id' => (int) $id], admin_url('admin.php?page=riverso-pos-products'));
+            $args = ['action' => 'detail', 'id' => (int) $id];
+            if ($task_tipo === 'crear_contraparte_local') {
+                $args['tab'] = 'local';
+                $args['edit'] = '1';
+            } elseif (in_array($task_tipo, ['validar_categoria', 'crear_contraparte_online', 'confirmar_relacion_online', 'autorizar_publicacion'], true)) {
+                $args['tab'] = 'online';
+            } elseif (in_array($task_tipo, ['relacionar_producto_proveedor', 'codigo_faltante'], true)) {
+                $args['tab'] = 'suppliers';
+            } elseif ($task_tipo === 'barcode_faltante') {
+                $args['tab'] = 'barcodes';
+            }
+            return add_query_arg($args, admin_url('admin.php?page=riverso-pos-products'));
 
         case 'producto_proveedor':
             // Portal MAMUT con tab codigos
@@ -267,7 +280,12 @@ function riverso_resolve_task_target($task) {
                 (int) $id
             ));
             if ($pb_id) {
-                return add_query_arg(['action' => 'detail', 'id' => (int) $pb_id], admin_url('admin.php?page=riverso-pos-products'));
+                $args = ['action' => 'detail', 'id' => (int) $pb_id];
+                if ($task_tipo === 'crear_contraparte_local') {
+                    $args['tab'] = 'local';
+                    $args['edit'] = '1';
+                }
+                return add_query_arg($args, admin_url('admin.php?page=riverso-pos-products'));
             }
             return null;
 

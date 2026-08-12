@@ -57,7 +57,17 @@ class Riverso_Portal_Module {
         if ($portal_page) {
             // Verificar que el usuario esté logueado y sea empleado
             if (!is_user_logged_in()) {
-                wp_redirect(wp_login_url(home_url('/' . self::PORTAL_SLUG . '/')));
+                $uri = $_SERVER['REQUEST_URI'] ?? ('/' . self::PORTAL_SLUG . '/');
+                $path = wp_parse_url($uri, PHP_URL_PATH);
+                if (!is_string($path) || strpos($path, '/' . self::PORTAL_SLUG) !== 0) {
+                    $path = '/' . self::PORTAL_SLUG . '/';
+                }
+                $query = wp_parse_url($uri, PHP_URL_QUERY);
+                $target = home_url($path);
+                if (!empty($query)) {
+                    $target .= (strpos($target, '?') === false ? '?' : '&') . $query;
+                }
+                wp_redirect(wp_login_url($target));
                 exit;
             }
             

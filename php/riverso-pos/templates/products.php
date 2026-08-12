@@ -96,8 +96,14 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
             <div style="display:flex; align-items:center; gap:12px;">
                 <h2 id="detail-title" style="margin:0;">Detalle del producto</h2>
                 <span id="detail-alerts-badge" style="display:none; background:#dc3545; color:white; border-radius:12px; padding:4px 10px; font-weight:bold; font-size:13px; white-space:nowrap; cursor:pointer; position:relative;">
-                    ⚠️ 0 campos
-                    <div id="detail-alerts-tooltip" class="alerts-tooltip" style="display:none; position:absolute; top:100%; right:0; background:#333; color:white; padding:10px; border-radius:6px; min-width:220px; z-index:100; box-shadow:0 4px 12px rgba(0,0,0,0.3); margin-top:4px;">
+                    <span id="detail-alerts-badge-text">⚠️ 0 campos</span>
+                    <div id="detail-alerts-tooltip" class="alerts-tooltip">
+                        <!-- Se puebla dinámicamente -->
+                    </div>
+                </span>
+                <span id="detail-tasks-badge" style="display:none; background:#e67e22; color:white; border-radius:12px; padding:4px 10px; font-weight:bold; font-size:13px; white-space:nowrap; cursor:pointer; position:relative; margin-left:8px;">
+                    <span id="detail-tasks-badge-text">📋 0 tareas</span>
+                    <div id="detail-tasks-tooltip" class="alerts-tooltip">
                         <!-- Se puebla dinámicamente -->
                     </div>
                 </span>
@@ -674,6 +680,25 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
 #detail-alerts-badge:hover .alerts-tooltip {
     display: block !important;
 }
+#detail-tasks-badge:hover .alerts-tooltip {
+    display: block !important;
+}
+.alerts-tooltip {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: #333;
+    color: white;
+    padding: 10px;
+    border-radius: 6px;
+    min-width: 220px;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    margin-top: 4px;
+    white-space: normal;
+    font-weight: normal;
+}
 .alerts-tooltip-item {
     padding: 6px 0;
     cursor: pointer;
@@ -939,6 +964,9 @@ jQuery(function($){
         
         // Mostrar iconos de warning inline en campos vacíos
         showFieldWarningIcons(product);
+        
+        // Mostrar badge de tareas pendientes
+        calculatePendingTasks(product);
         
         // Mostrar regla de precio (Fase 9)
         if (product.regla_precio && product.regla_precio.id) {
@@ -2973,19 +3001,22 @@ jQuery(function($){
                 });
             }
             
-            // Sin categorías
-            alerts.push({
-                field: 'Categorías Online',
-                icon: '📂',
-                action: 'tab-online'
-            });
+            // Sin categorías (solo si tenemos dato explícito vacío)
+            if (Array.isArray(product.current_categories) && product.current_categories.length === 0) {
+                alerts.push({
+                    field: 'Categorías Online',
+                    icon: '📂',
+                    action: 'tab-online'
+                });
+            }
         }
         
         // Mostrar badge con contador y tooltip
         if (alerts.length > 0) {
-            $('#detail-alerts-badge').html(`⚠️ ${alerts.length} campos`).show();
+            $('#detail-alerts-badge-text').text(`⚠️ ${alerts.length} campos`);
+            $('#detail-alerts-badge').show();
             
-            // Llenar el tooltip
+            // Llenar el tooltip (sin destruir el contenedor)
             let tooltipHtml = alerts.map(a =>
                 `<div class="alerts-tooltip-item" data-alert-action="${esc(a.action)}">
                     <span>${a.icon}</span> ${esc(a.field)}
@@ -2998,6 +3029,25 @@ jQuery(function($){
         }
         
         return alerts;
+    }
+
+    function calculatePendingTasks(product) {
+        const tasks = (product.tasks || []).filter(t => t.estado !== 'completada');
+        
+        if (tasks.length > 0) {
+            $('#detail-tasks-badge-text').text('📋 ' + tasks.length + ' tarea' + (tasks.length > 1 ? 's' : ''));
+            $('#detail-tasks-badge').show();
+            
+            let html = tasks.map(t => 
+                `<div class="alerts-tooltip-item task-tooltip-goto" data-task-tipo="${esc(t.tipo)}">
+                    <span>📌</span> ${esc(t.titulo)}
+                </div>`
+            ).join('');
+            $('#detail-tasks-tooltip').html(html);
+        } else {
+            $('#detail-tasks-badge').hide();
+            $('#detail-tasks-tooltip').html('');
+        }
     }
 
     function showFieldWarningIcons(product) {
@@ -3037,5 +3087,10 @@ jQuery(function($){
             }
         }
     }
+
+    // Event listener para navegar a Tasks tab desde el tooltip de tareas
+    $(document).on('click', '.task-tooltip-goto', function() {
+        $('.detail-tab[data-tab="tasks"]').click();
+    });
 });
 </script>

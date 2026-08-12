@@ -650,7 +650,27 @@ class Riverso_Woo_Publisher_Module {
         $params = [];
         if ($search !== '') {
             $like = '%' . $wpdb->esc_like($search) . '%';
-            $where .= ' AND (p.post_title LIKE %s OR pb.canonical_sku LIKE %s)';
+            // Nombre, SKU Local (canonical_sku), SKU Catálogo (codigo_proveedor) y SKU Woo de variación.
+            $where .= ' AND (
+                p.post_title LIKE %s
+                OR pb.canonical_sku LIKE %s
+                OR pb.nombre_canonico LIKE %s
+                OR EXISTS (
+                    SELECT 1 FROM ' . $prefix . 'producto_proveedor pp
+                    WHERE pp.producto_base_id = pb.id
+                      AND pp.activo = 1
+                      AND pp.codigo_proveedor LIKE %s
+                )
+                OR EXISTS (
+                    SELECT 1 FROM ' . $wpdb->postmeta . ' pm
+                    WHERE pm.post_id = pb.woocommerce_variation_id
+                      AND pm.meta_key = \'_sku\'
+                      AND pm.meta_value LIKE %s
+                )
+            )';
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
             $params[] = $like;
             $params[] = $like;
         }

@@ -1175,7 +1175,7 @@ $tareas = $wpdb->get_results($wpdb->prepare(
         <div class="content-section">
             <div class="section-header">
                 <h2 class="section-title">Catálogo MAMUT</h2>
-                <input type="text" id="catalog-search" placeholder="Buscar producto..." style="padding:8px 12px;border:1px solid var(--border);border-radius:4px;min-width:240px;">
+                <input type="text" id="catalog-search" placeholder="Buscar por SKU catálogo, SKU local o nombre..." style="padding:8px 12px;border:1px solid var(--border);border-radius:4px;min-width:320px;">
             </div>
             <div class="section-body">
                 <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:20px;align-items:start;">

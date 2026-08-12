@@ -36,7 +36,7 @@ class Riverso_Family_Module {
      * AJAX: Listar todas las familias activas con conteo de miembros.
      */
     public function ajax_list_families() {
-        check_ajax_referer('riverso_nonce', 'nonce');
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
         
         if (!current_user_can('riverso_view_products')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
@@ -63,7 +63,7 @@ class Riverso_Family_Module {
      * AJAX: Obtener detalle de una familia con sus miembros.
      */
     public function ajax_get_family() {
-        check_ajax_referer('riverso_nonce', 'nonce');
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
         
         if (!current_user_can('riverso_view_products')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
@@ -104,7 +104,7 @@ class Riverso_Family_Module {
      * AJAX: Crear nueva familia.
      */
     public function ajax_create_family() {
-        check_ajax_referer('riverso_nonce', 'nonce');
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
         
         if (!current_user_can('riverso_manage_products')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
@@ -163,7 +163,7 @@ class Riverso_Family_Module {
      * AJAX: Actualizar familia existente.
      */
     public function ajax_update_family() {
-        check_ajax_referer('riverso_nonce', 'nonce');
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
         
         if (!current_user_can('riverso_manage_products')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
@@ -209,7 +209,7 @@ class Riverso_Family_Module {
      * AJAX: Agregar miembro a familia.
      */
     public function ajax_add_member() {
-        check_ajax_referer('riverso_nonce', 'nonce');
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
         
         if (!current_user_can('riverso_manage_products')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
@@ -274,7 +274,7 @@ class Riverso_Family_Module {
      * AJAX: Quitar miembro de familia.
      */
     public function ajax_remove_member() {
-        check_ajax_referer('riverso_nonce', 'nonce');
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
         
         if (!current_user_can('riverso_manage_products')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);
@@ -308,7 +308,7 @@ class Riverso_Family_Module {
      * AJAX: Obtener árbol de familias con sus miembros.
      */
     public function ajax_family_tree() {
-        check_ajax_referer('riverso_nonce', 'nonce');
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
         
         if (!current_user_can('riverso_view_products')) {
             wp_send_json_error(['message' => 'Permiso denegado'], 403);

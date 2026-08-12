@@ -2199,7 +2199,7 @@ class Riverso_Woo_Publisher_Module {
             ]);
         }
 
-        // Cerrar tarea asociada si existe.
+        // Cerrar tareas asociadas (legado + nuevo tipo)
         $pp_id = $wpdb->get_var($wpdb->prepare(
             "SELECT id FROM {$prefix}producto_proveedor
              WHERE producto_base_id = %d AND activo = 1 ORDER BY id ASC LIMIT 1",
@@ -2208,6 +2208,7 @@ class Riverso_Woo_Publisher_Module {
         if ($pp_id) {
             $this->close_related_task('relacionar_producto_proveedor', 'producto_proveedor', (int) $pp_id);
         }
+        $this->close_related_task('crear_contraparte_local', 'producto_base', $base_id);
 
         return [
             'id' => $base_id,
@@ -2238,8 +2239,7 @@ class Riverso_Woo_Publisher_Module {
     }
 
     /**
-     * Genera tareas de relacion SKU local para productos_base MAMUT sin SKU local.
-     * Se ejecuta como CLI o como helper.
+     * Genera tareas de asignación de SKU Local para bases de catálogo sin local real.
      */
     public function enqueue_local_sku_tasks() {
         global $wpdb;
@@ -2250,9 +2250,12 @@ class Riverso_Woo_Publisher_Module {
                     pp.id AS pp_id, pp.codigo_proveedor
              FROM {$prefix}producto_base pb
              INNER JOIN {$prefix}producto_proveedor pp ON pp.producto_base_id = pb.id
-             WHERE pb.canonical_sku = pp.codigo_proveedor
-               AND pb.deleted_at IS NULL
-               AND pp.activo = 1
+             WHERE pb.deleted_at IS NULL
+               AND (
+                    pb.canonical_sku IS NULL
+                    OR pb.canonical_sku = ''
+                    OR pb.canonical_sku = pp.codigo_proveedor
+               )
              GROUP BY pb.id, pp.id
              ORDER BY pb.id ASC",
             ARRAY_A
@@ -2261,19 +2264,26 @@ class Riverso_Woo_Publisher_Module {
         $created = 0;
         foreach ($bases as $row) {
             if (function_exists('riverso_create_review_task')) {
+                $codigo = $row['codigo_proveedor'];
                 riverso_create_review_task(
-                    'relacionar_producto_proveedor',
+                    'crear_contraparte_local',
                     sprintf(
-                        'Asignar SKU local para código %s (producto %d)',
-                        esc_html($row['codigo_proveedor']),
-                        $row['woocommerce_product_id']
+                        'Asignar SKU Local para código catálogo %s (base #%d)',
+                        $codigo,
+                        (int) $row['id']
                     ),
-                    'producto_proveedor',
-                    (int) $row['pp_id'],
+                    'producto_base',
+                    (int) $row['id'],
                     [
-                        'product_id' => (int) $row['woocommerce_product_id'],
-                        'base_id' => (int) $row['id'],
-                        'codigo_proveedor' => $row['codigo_proveedor'],
+                        'prioridad' => 'normal',
+                        'datos_extra' => [
+                            'product_id' => (int) $row['woocommerce_product_id'],
+                            'base_id' => (int) $row['id'],
+                            'pp_id' => (int) $row['pp_id'],
+                            'codigo_proveedor' => $codigo,
+                            'codigo_catalogo' => $codigo,
+                            'origen' => 'enqueue_local_sku_tasks',
+                        ],
                     ]
                 );
                 $created++;

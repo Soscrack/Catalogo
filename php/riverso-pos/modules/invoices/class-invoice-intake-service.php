@@ -36,6 +36,229 @@ class Riverso_Invoice_Intake_Service {
     }
 
     /**
+     * Determina si DscItem es descripción legible o datos técnicos del emisor.
+     * Ej. Andina: "000000000000006337|000000000000000000|..."
+     */
+    public function is_technical_item_description($descripcion) {
+        $text = trim((string) $descripcion);
+        if ($text === '') {
+            return true;
+        }
+        if (strpos($text, '|') !== false) {
+            return true;
+        }
+        // Sin letras: solo dígitos/símbolos (códigos internos)
+        if (!preg_match('/\p{L}/u', $text)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * ¿NmbItem parece código de proveedor (p.ej. "0617000400") y no etiqueta humana?
+     */
+    public function looks_like_product_code($text) {
+        $text = trim((string) $text);
+        if ($text === '') {
+            return false;
+        }
+        // Sin letras: solo dígitos/símbolos
+        if (!preg_match('/\p{L}/u', $text)) {
+            return true;
+        }
+        // Token corto sin espacios (SKU / código interno)
+        if (!preg_match('/\s/', $text)
+            && strlen($text) <= 40
+            && preg_match('/^[A-Z0-9][A-Z0-9.\-\/_]{2,}$/i', $text)
+        ) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Normaliza nombre/descripción de línea DTE.
+     * Si NmbItem es código y DscItem es legible (guías Wurth), usa la descripción como nombre.
+     *
+     * @return array{nombre:string,descripcion:string}
+     */
+    public function normalize_item_labels($nombre, $descripcion = '') {
+        $nombre = trim((string) $nombre);
+        $descripcion = trim((string) $descripcion);
+        // Guía/Wurth: NmbItem = código, DscItem = nombre legible
+        if ($this->looks_like_product_code($nombre)
+            && $descripcion !== ''
+            && !$this->is_technical_item_description($descripcion)
+            && preg_match('/\p{L}/u', $descripcion)
+        ) {
+            return [
+                'nombre' => $descripcion,
+                'descripcion' => $descripcion,
+            ];
+        }
+        if ($nombre === '') {
+            $nombre = $descripcion !== '' && !$this->is_technical_item_description($descripcion)
+                ? $descripcion
+                : 'Item sin descripción';
+        }
+        if ($descripcion === '' || $this->is_technical_item_description($descripcion)) {
+            $descripcion = $nombre;
+        }
+        return [
+            'nombre' => $nombre,
+            'descripcion' => $descripcion,
+        ];
+    }
+
+    /**
+     * Extrae montos técnicos del DscItem estilo Andina:
+     * precio|impuesto_especifico|bruto_aprox|...
+     *
+     * @return array{impuesto_especifico:?float}|null
+     */
+    public function parse_technical_dsc_amounts($descripcion) {
+        $text = trim((string) $descripcion);
+        if ($text === '' || strpos($text, '|') === false) {
+            return null;
+        }
+        $parts = explode('|', $text);
+        if (count($parts) < 2) {
+            return null;
+        }
+        return [
+            'precio_ref' => (float) $parts[0],
+            'impuesto_especifico' => (float) $parts[1],
+            'bruto_ref' => isset($parts[2]) ? (float) $parts[2] : null,
+        ];
+    }
+
+    /**
+     * Calcula costos neto/bruto base y final de una línea DTE.
+     *
+     * - costo_neto_base: Qty × Prc (antes de descuentos/recargos)
+     * - costo_neto_final: MontoItem (después de descuentos/recargos)
+     * - bruto: neto × (1+IVA/100) + impuesto específico de la línea
+     *
+     * @param array $item Keys: cantidad, precio, monto, descuento_*, recargo_*, impuesto_especifico_*
+     * @param float $tasa_iva
+     * @return array
+     */
+    public function compute_item_cost_breakdown(array $item, $tasa_iva = 19.0) {
+        $qty = (float) ($item['cantidad'] ?? 0);
+        $precio = (float) ($item['precio'] ?? $item['precio_unitario'] ?? 0);
+        $monto = (float) ($item['monto'] ?? $item['monto_total'] ?? 0);
+        $tasa_iva = (float) $tasa_iva;
+        if ($tasa_iva <= 0) {
+            $tasa_iva = 19.0;
+        }
+
+        $descuento_pct = isset($item['descuento_porcentaje']) && $item['descuento_porcentaje'] !== '' && $item['descuento_porcentaje'] !== null
+            ? (float) $item['descuento_porcentaje']
+            : (isset($item['descuento_pct']) ? (float) $item['descuento_pct'] : null);
+        $descuento_monto = isset($item['descuento_monto']) && $item['descuento_monto'] !== '' && $item['descuento_monto'] !== null
+            ? (float) $item['descuento_monto']
+            : null;
+        $recargo_pct = isset($item['recargo_porcentaje']) && $item['recargo_porcentaje'] !== '' && $item['recargo_porcentaje'] !== null
+            ? (float) $item['recargo_porcentaje']
+            : (isset($item['recargo_pct']) ? (float) $item['recargo_pct'] : null);
+        $recargo_monto = isset($item['recargo_monto']) && $item['recargo_monto'] !== '' && $item['recargo_monto'] !== null
+            ? (float) $item['recargo_monto']
+            : null;
+
+        $neto_base = round($qty * $precio, 4);
+        if ($descuento_monto === null && $descuento_pct !== null && $descuento_pct > 0) {
+            $descuento_monto = round($neto_base * $descuento_pct / 100, 0);
+        }
+        $descuento_monto = (float) ($descuento_monto ?? 0);
+
+        $neto_post_dsc = round($neto_base - $descuento_monto, 4);
+        if ($recargo_monto === null && $recargo_pct !== null && $recargo_pct > 0) {
+            $recargo_monto = round($neto_post_dsc * $recargo_pct / 100, 0);
+        }
+        $recargo_monto = (float) ($recargo_monto ?? 0);
+
+        $neto_final = $monto > 0
+            ? round($monto, 4)
+            : round($neto_post_dsc + $recargo_monto, 4);
+
+        $esp_monto = isset($item['impuesto_especifico_monto']) && $item['impuesto_especifico_monto'] !== '' && $item['impuesto_especifico_monto'] !== null
+            ? (float) $item['impuesto_especifico_monto']
+            : null;
+        $esp_tasa = isset($item['impuesto_especifico_tasa']) && $item['impuesto_especifico_tasa'] !== '' && $item['impuesto_especifico_tasa'] !== null
+            ? (float) $item['impuesto_especifico_tasa']
+            : null;
+
+        // Impuesto específico SII suele aplicar sobre neto post-descuento (antes de recargo)
+        if ($esp_monto === null && $esp_tasa !== null && $esp_tasa > 0) {
+            $esp_monto = round($neto_post_dsc * $esp_tasa / 100, 0);
+        }
+        $esp_monto = (float) ($esp_monto ?? 0);
+
+        // Bruto = neto + IVA redondeado (CLP) + impuesto específico
+        $esp_base = ($esp_tasa !== null && $esp_tasa > 0)
+            ? round($neto_base * $esp_tasa / 100, 0)
+            : $esp_monto;
+        $iva_base = round($neto_base * $tasa_iva / 100, 0);
+        $iva_final = round($neto_final * $tasa_iva / 100, 0);
+        $bruto_base = round($neto_base + $iva_base + $esp_base, 4);
+        $bruto_final = round($neto_final + $iva_final + $esp_monto, 4);
+
+        $unit_final = $qty > 0 ? round($neto_final / $qty, 4) : $precio;
+
+        return [
+            'descuento_porcentaje' => $descuento_pct,
+            'descuento_monto' => $descuento_monto > 0 || $descuento_pct ? $descuento_monto : null,
+            'recargo_porcentaje' => $recargo_pct,
+            'recargo_monto' => $recargo_monto > 0 || $recargo_pct ? $recargo_monto : null,
+            'impuesto_especifico_tasa' => $esp_tasa,
+            'impuesto_especifico_monto' => $esp_monto > 0 || ($esp_tasa !== null && $esp_tasa > 0) ? $esp_monto : null,
+            'costo_neto_base' => $neto_base,
+            'costo_bruto_base' => $bruto_base,
+            'costo_neto_final' => $neto_final,
+            'costo_bruto_final' => $bruto_final,
+            'costo_unitario_neto_final' => $unit_final,
+            'tasa_iva' => $tasa_iva,
+        ];
+    }
+
+    /**
+     * Enriquece ítems parseados con descuentos/recargos/costos usando totales del DTE.
+     */
+    public function enrich_factura_items_costs(array &$factura_data) {
+        $tasa_iva = (float) ($factura_data['totales']['tasa_iva'] ?? 19);
+        $impuestos = $factura_data['totales']['impuestos_adicionales'] ?? [];
+        $tasas_por_codigo = [];
+        foreach ((array) $impuestos as $imp) {
+            $tipo = (string) ($imp['tipo_imp'] ?? '');
+            if ($tipo !== '') {
+                $tasas_por_codigo[$tipo] = (float) ($imp['tasa_imp'] ?? 0);
+            }
+        }
+
+        foreach ($factura_data['items'] as &$item) {
+            $cod_imp = isset($item['cod_imp_adic']) ? (string) $item['cod_imp_adic'] : '';
+            if ($cod_imp !== '' && empty($item['impuesto_especifico_tasa']) && isset($tasas_por_codigo[$cod_imp])) {
+                $item['impuesto_especifico_tasa'] = $tasas_por_codigo[$cod_imp];
+            }
+
+            // Andina: impuesto específico embebido en DscItem técnico
+            if (empty($item['impuesto_especifico_monto'])) {
+                $raw_dsc = $item['descripcion_raw'] ?? $item['descripcion'] ?? '';
+                $parsed = $this->parse_technical_dsc_amounts($raw_dsc);
+                if ($parsed && ($parsed['impuesto_especifico'] ?? 0) > 0) {
+                    $item['impuesto_especifico_monto'] = $parsed['impuesto_especifico'];
+                }
+            }
+
+            $costs = $this->compute_item_cost_breakdown($item, $tasa_iva);
+            $item = array_merge($item, $costs);
+        }
+        unset($item);
+
+        return $factura_data;
+    }
+
+    /**
      * Determina si una línea del DTE corresponde a costo de envío/flete.
      */
     public function is_shipping_line($nombre, $descripcion = '') {
@@ -50,21 +273,74 @@ class Riverso_Invoice_Intake_Service {
     }
 
     /**
-     * Clasifica ítems del XML parseado como producto o envío.
+     * Palabras clave para gastos operacionales (servicios / no inventariables).
+     */
+    public function get_expense_keywords() {
+        $custom = riverso_get_setting('expense_keywords', []);
+        $defaults = [
+            'luz', 'electricidad', 'electrico', 'eléctrico', 'energia', 'energía',
+            'agua potable', 'consumo de agua', 'servicio de agua', 'agua',
+            'gas natural', 'consumo de gas', 'servicio de gas',
+            'arriendo', 'arrendamiento', 'canon de arriendo',
+            'internet', 'telefonia', 'telefonía', 'telefono', 'teléfono',
+            'aseo', 'recoleccion de basura', 'recolección de basura',
+            'patente comercial', 'permiso municipal', 'contribuciones',
+            'seguro', 'prima de seguro', 'mantencion', 'mantención', 'mantenimiento',
+            'servicio basico', 'servicio básico', 'servicios basicos', 'servicios básicos',
+            'cge', 'enel', 'chilectra', 'saesa', 'frontel',
+            'essbio', 'essal', 'aguas andinas', 'esval', 'metrogas', 'gasco',
+            'entel', 'movistar', 'vtr', 'claro', 'gtd', 'wom',
+        ];
+        return array_unique(array_merge($defaults, array_filter((array) $custom)));
+    }
+
+    /**
+     * Determina si una línea parece gasto operacional (no se vende / sin SKU).
+     */
+    public function is_expense_line($nombre, $descripcion = '') {
+        $text = mb_strtolower(trim($nombre . ' ' . $descripcion));
+        foreach ($this->get_expense_keywords() as $keyword) {
+            $keyword = mb_strtolower(trim($keyword));
+            if ($keyword !== '' && strpos($text, $keyword) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Palabras clave en emisor/giro que sugieren factura de gasto operacional.
+     */
+    public function get_expense_emisor_keywords() {
+        return [
+            'electricidad', 'electrico', 'eléctrico', 'energia', 'energía',
+            'sanitari', 'agua potabl', 'aguas ', 'gas natural', 'distribuidora de gas',
+            'telecomunic', 'internet', 'telefonia', 'telefonía',
+            'aseo', 'reciclaje', 'arrendamiento', 'inmobiliaria',
+            'cge', 'enel', 'chilectra', 'essbio', 'essal', 'aguas andinas',
+            'metrogas', 'gasco', 'entel', 'movistar', 'vtr', 'claro',
+        ];
+    }
+
+    /**
+     * Clasifica ítems del XML parseado como producto, envío o gasto.
      */
     public function classify_factura_items(array &$factura_data) {
         $shipping_total = 0.0;
         $product_count = 0;
+        $expense_count = 0;
 
         foreach ($factura_data['items'] as &$item) {
-            $item['item_tipo'] = $this->is_shipping_line(
-                $item['nombre'] ?? '',
-                $item['descripcion'] ?? ''
-            ) ? 'envio' : 'producto';
-
-            if ($item['item_tipo'] === 'envio') {
+            $nombre = $item['nombre'] ?? '';
+            $descripcion = $item['descripcion'] ?? '';
+            if ($this->is_shipping_line($nombre, $descripcion)) {
+                $item['item_tipo'] = 'envio';
                 $shipping_total += (float) ($item['monto'] ?? 0);
+            } elseif ($this->is_expense_line($nombre, $descripcion)) {
+                $item['item_tipo'] = 'gasto';
+                $expense_count++;
             } else {
+                $item['item_tipo'] = 'producto';
                 $product_count++;
             }
         }
@@ -72,7 +348,22 @@ class Riverso_Invoice_Intake_Service {
 
         $factura_data['costo_envio_inline'] = $shipping_total;
         $factura_data['items_producto'] = $product_count;
+        $factura_data['items_gasto'] = $expense_count;
 
+        return $factura_data;
+    }
+
+    /**
+     * Fuerza todas las líneas como gasto (documento marcado como gastos operacionales).
+     */
+    public function force_expense_items(array &$factura_data) {
+        foreach ($factura_data['items'] as &$item) {
+            $item['item_tipo'] = 'gasto';
+        }
+        unset($item);
+        $factura_data['costo_envio_inline'] = 0;
+        $factura_data['items_producto'] = 0;
+        $factura_data['items_gasto'] = count($factura_data['items'] ?? []);
         return $factura_data;
     }
 
@@ -88,10 +379,49 @@ class Riverso_Invoice_Intake_Service {
     }
 
     /**
-     * Detecta si el XML completo es de productos, transportista (envío), nota de crédito o mixto.
+     * Detecta si el XML completo es de productos, transportista (envío), guía, gastos, NC o mixto.
      */
     public function detect_document_type(array $factura_data) {
-        // Detectar si es Nota de Crédito (TipoDTE=61)
+        $items = $factura_data['items'] ?? [];
+        $product_count = 0;
+        $shipping_count = 0;
+        $expense_count = 0;
+        $items_preview = [];
+
+        foreach ($items as $item) {
+            $nombre = trim((string) ($item['nombre'] ?? ''));
+            $descripcion = trim((string) ($item['descripcion'] ?? ''));
+            $labels = $this->normalize_item_labels($nombre, $descripcion);
+            $nombre = $labels['nombre'];
+            $descripcion = $labels['descripcion'];
+            if (!empty($item['item_tipo'])) {
+                $tipo = $item['item_tipo'];
+            } elseif ($this->is_shipping_line($nombre, $descripcion)) {
+                $tipo = 'envio';
+            } elseif ($this->is_expense_line($nombre, $descripcion)) {
+                $tipo = 'gasto';
+            } else {
+                $tipo = 'producto';
+            }
+
+            if ($tipo === 'envio') {
+                $shipping_count++;
+            } elseif ($tipo === 'gasto') {
+                $expense_count++;
+            } else {
+                $product_count++;
+            }
+
+            $items_preview[] = [
+                'linea' => $item['numero'] ?? 0,
+                'nombre' => $nombre,
+                'descripcion' => $descripcion,
+                'tipo' => $tipo,
+                'cantidad' => $item['cantidad'] ?? 0,
+                'monto' => $item['monto'] ?? 0,
+            ];
+        }
+
         $tipo_dte = (int) ($factura_data['tipo_dte'] ?? 0);
         if ($tipo_dte === 61) {
             return [
@@ -99,36 +429,26 @@ class Riverso_Invoice_Intake_Service {
                 'label' => 'Nota de Crédito',
                 'confianza' => 'alta',
                 'motivo' => 'El documento es una Nota de Crédito (TipoDTE=61). Requiere asociación con factura origen.',
-                'items_producto' => 0,
-                'items_envio' => 0,
-                'items_preview' => [],
+                'items_producto' => $product_count,
+                'items_envio' => $shipping_count,
+                'items_gasto' => $expense_count,
+                'items_preview' => $items_preview,
                 'tipo_dte' => $tipo_dte,
             ];
         }
 
-        $items = $factura_data['items'] ?? [];
-        $product_count = 0;
-        $shipping_count = 0;
-        $items_preview = [];
-
-        foreach ($items as $item) {
-            $tipo = $item['item_tipo'] ?? ($this->is_shipping_line(
-                $item['nombre'] ?? '',
-                $item['descripcion'] ?? ''
-            ) ? 'envio' : 'producto');
-
-            if ($tipo === 'envio') {
-                $shipping_count++;
-            } else {
-                $product_count++;
-            }
-
-            $items_preview[] = [
-                'linea' => $item['numero'] ?? 0,
-                'nombre' => $item['nombre'] ?? '',
-                'tipo' => $tipo,
-                'cantidad' => $item['cantidad'] ?? 0,
-                'monto' => $item['monto'] ?? 0,
+        // Guía de despacho (TipoDTE=52): códigos + costos, sin inventario
+        if ($tipo_dte === 52) {
+            return [
+                'tipo' => 'guia_despacho',
+                'label' => 'Guía de despacho',
+                'confianza' => 'alta',
+                'motivo' => 'El documento es una Guía de Despacho (TipoDTE=52). Se registran códigos y costos sin actualizar bodega.',
+                'items_producto' => $product_count,
+                'items_envio' => $shipping_count,
+                'items_gasto' => $expense_count,
+                'items_preview' => $items_preview,
+                'tipo_dte' => $tipo_dte,
             ];
         }
 
@@ -143,6 +463,13 @@ class Riverso_Invoice_Intake_Service {
                 break;
             }
         }
+        $emisor_is_expense = false;
+        foreach ($this->get_expense_emisor_keywords() as $keyword) {
+            if (strpos($emisor_text, mb_strtolower($keyword)) !== false) {
+                $emisor_is_expense = true;
+                break;
+            }
+        }
 
         if ($product_count === 0 && $shipping_count > 0) {
             return [
@@ -152,6 +479,7 @@ class Riverso_Invoice_Intake_Service {
                 'motivo' => 'Todas las líneas del XML corresponden a flete o envío.',
                 'items_producto' => $product_count,
                 'items_envio' => $shipping_count,
+                'items_gasto' => $expense_count,
                 'emisor_es_transportista' => $emisor_is_carrier,
                 'items_preview' => $items_preview,
             ];
@@ -165,12 +493,13 @@ class Riverso_Invoice_Intake_Service {
                 'motivo' => "El XML incluye {$product_count} línea(s) de producto y {$shipping_count} de envío/flete.",
                 'items_producto' => $product_count,
                 'items_envio' => $shipping_count,
+                'items_gasto' => $expense_count,
                 'emisor_es_transportista' => $emisor_is_carrier,
                 'items_preview' => $items_preview,
             ];
         }
 
-        if ($emisor_is_carrier && $product_count === 0) {
+        if ($emisor_is_carrier && $product_count === 0 && $expense_count === 0) {
             return [
                 'tipo' => 'envio',
                 'label' => 'Transportista / flete',
@@ -178,7 +507,51 @@ class Riverso_Invoice_Intake_Service {
                 'motivo' => 'El emisor del DTE parece ser una empresa de transporte o logística.',
                 'items_producto' => $product_count,
                 'items_envio' => $shipping_count,
+                'items_gasto' => $expense_count,
                 'emisor_es_transportista' => true,
+                'items_preview' => $items_preview,
+            ];
+        }
+
+        $total_lines = $product_count + $shipping_count + $expense_count;
+        if ($expense_count > 0 && $product_count === 0 && $shipping_count === 0) {
+            return [
+                'tipo' => 'gastos',
+                'label' => 'Gastos operacionales',
+                'confianza' => 'alta',
+                'motivo' => 'Las líneas parecen servicios o gastos (luz, agua, arriendo, etc.): no se agregan como productos ni SKU.',
+                'items_producto' => $product_count,
+                'items_envio' => $shipping_count,
+                'items_gasto' => $expense_count,
+                'emisor_es_gasto' => $emisor_is_expense,
+                'items_preview' => $items_preview,
+            ];
+        }
+
+        if ($emisor_is_expense && $product_count === 0) {
+            return [
+                'tipo' => 'gastos',
+                'label' => 'Gastos operacionales',
+                'confianza' => 'media',
+                'motivo' => 'El emisor parece un proveedor de servicios básicos u operacionales (sin inventario).',
+                'items_producto' => $product_count,
+                'items_envio' => $shipping_count,
+                'items_gasto' => $expense_count,
+                'emisor_es_gasto' => true,
+                'items_preview' => $items_preview,
+            ];
+        }
+
+        if ($expense_count > 0 && $expense_count >= $product_count && $total_lines > 0) {
+            return [
+                'tipo' => 'gastos',
+                'label' => 'Gastos operacionales',
+                'confianza' => 'media',
+                'motivo' => "Predominan líneas de gasto operacional ({$expense_count} de {$total_lines}). Confirme si no debe inventariarse.",
+                'items_producto' => $product_count,
+                'items_envio' => $shipping_count,
+                'items_gasto' => $expense_count,
+                'emisor_es_gasto' => $emisor_is_expense,
                 'items_preview' => $items_preview,
             ];
         }
@@ -192,6 +565,7 @@ class Riverso_Invoice_Intake_Service {
                 : "Se detectaron {$product_count} línea(s) de producto.",
             'items_producto' => $product_count,
             'items_envio' => $shipping_count,
+            'items_gasto' => $expense_count,
             'emisor_es_transportista' => $emisor_is_carrier,
             'items_preview' => $items_preview,
         ];
@@ -345,7 +719,7 @@ class Riverso_Invoice_Intake_Service {
         if (!isset($item->linea)) {
             $item->linea = $item->numero_linea ?? 0;
         }
-        if (empty($item->descripcion)) {
+        if (empty($item->descripcion) || $this->is_technical_item_description($item->descripcion ?? '')) {
             $item->descripcion = $item->nombre ?? '';
         }
         if (empty($item->nombre)) {
@@ -1439,7 +1813,10 @@ class Riverso_Invoice_Intake_Service {
             if ($qty <= 0) {
                 $qty = 1;
             }
-            $landed_unit = (float) ($item->costo_landed_unitario ?: $item->precio_unitario);
+            $product_unit = (!empty($item->costo_neto_final) && $qty > 0)
+                ? round(((float) $item->costo_neto_final) / $qty, 4)
+                : (float) $item->precio_unitario;
+            $landed_unit = (float) ($item->costo_landed_unitario ?: $product_unit);
             $landed_total = $landed_unit * $qty;
             if ($landed_total <= 0) {
                 continue;
@@ -1472,7 +1849,7 @@ class Riverso_Invoice_Intake_Service {
                 'descripcion_proveedor' => $item->descripcion,
                 'cost' => $landed_total,
                 'quantity' => $qty,
-                'costo_producto_unitario' => (float) $item->precio_unitario,
+                'costo_producto_unitario' => $product_unit,
                 'costo_envio_prorrateado' => (float) ($item->costo_envio_prorrateado ?? 0),
                 'document_date' => $factura->fecha_emision,
                 'notes' => $product_id
@@ -1561,7 +1938,7 @@ class Riverso_Invoice_Intake_Service {
         ), ARRAY_A);
 
         foreach ($items as $item) {
-            if (($item['item_tipo'] ?? 'producto') === 'envio') {
+            if (in_array(($item['item_tipo'] ?? 'producto'), ['envio', 'gasto'], true)) {
                 continue;
             }
             $codigos = [];
@@ -1613,7 +1990,7 @@ class Riverso_Invoice_Intake_Service {
      */
     public function after_invoice_saved($factura_id, $proveedor_id, array $items, $modo_ingreso = 'recepcion') {
         foreach ($items as $item) {
-            if (($item['item_tipo'] ?? 'producto') === 'envio') {
+            if (in_array(($item['item_tipo'] ?? 'producto'), ['envio', 'gasto'], true)) {
                 continue;
             }
 

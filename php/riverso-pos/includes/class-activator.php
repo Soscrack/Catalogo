@@ -129,6 +129,8 @@ class Riverso_POS_Activator {
             monto_neto DECIMAL(12,2) DEFAULT 0,
             monto_iva DECIMAL(12,2) DEFAULT 0,
             monto_total DECIMAL(12,2) DEFAULT 0,
+            tasa_iva DECIMAL(8,4) DEFAULT NULL,
+            impuestos_adicionales LONGTEXT DEFAULT NULL,
             estado VARCHAR(20) DEFAULT 'pendiente',
             xml_path VARCHAR(255) DEFAULT NULL,
             xml_hash VARCHAR(64) DEFAULT NULL,
@@ -158,8 +160,17 @@ class Riverso_POS_Activator {
             cantidad DECIMAL(12,4) NOT NULL,
             unidad VARCHAR(20) DEFAULT NULL,
             precio_unitario DECIMAL(12,4) DEFAULT 0,
-            descuento_porcentaje DECIMAL(5,2) DEFAULT NULL,
-            descuento_monto DECIMAL(12,2) DEFAULT NULL,
+            descuento_porcentaje DECIMAL(8,4) DEFAULT NULL,
+            descuento_monto DECIMAL(12,4) DEFAULT NULL,
+            recargo_porcentaje DECIMAL(8,4) DEFAULT NULL,
+            recargo_monto DECIMAL(12,4) DEFAULT NULL,
+            cod_imp_adic VARCHAR(10) DEFAULT NULL,
+            impuesto_especifico_tasa DECIMAL(8,4) DEFAULT NULL,
+            impuesto_especifico_monto DECIMAL(12,4) DEFAULT NULL,
+            costo_neto_base DECIMAL(12,4) DEFAULT NULL,
+            costo_bruto_base DECIMAL(12,4) DEFAULT NULL,
+            costo_neto_final DECIMAL(12,4) DEFAULT NULL,
+            costo_bruto_final DECIMAL(12,4) DEFAULT NULL,
             monto_total DECIMAL(12,2) DEFAULT 0,
             codigo_id BIGINT UNSIGNED DEFAULT NULL,
             product_id BIGINT UNSIGNED DEFAULT NULL,
@@ -286,6 +297,9 @@ class Riverso_POS_Activator {
         self::create_erp_phase_tables($prefix, $charset_collate);
         self::create_phase15_catalog_health($prefix, $charset_collate);
         self::create_phase16_invoice_credit_notes($prefix, $charset_collate);
+        self::create_phase17_invoice_item_costs($prefix);
+        self::create_phase18_catalogs($prefix, $charset_collate);
+        self::create_phase19_clear_catalog_as_local_sku($prefix);
         
         // Inicializar servicios core
         self::init_core_services();
@@ -423,6 +437,7 @@ class Riverso_POS_Activator {
             grupo_id BIGINT UNSIGNED DEFAULT NULL,
             proveedor_id BIGINT UNSIGNED NOT NULL,
             supplier_link_id BIGINT UNSIGNED DEFAULT NULL,
+            catalogo_id BIGINT UNSIGNED DEFAULT NULL,
             codigo_proveedor VARCHAR(100) NOT NULL,
             codigo_barras_proveedor VARCHAR(50) DEFAULT NULL,
             nombre_proveedor VARCHAR(255) DEFAULT NULL,
@@ -440,6 +455,7 @@ class Riverso_POS_Activator {
             UNIQUE KEY ux_proveedor_codigo (proveedor_id, codigo_proveedor),
             KEY idx_producto_base (producto_base_id),
             KEY idx_grupo_id (grupo_id),
+            KEY idx_catalogo (catalogo_id),
             KEY idx_codigo_barras (codigo_barras_proveedor),
             KEY idx_supplier_link (supplier_link_id),
             KEY idx_activo (activo)
@@ -1564,29 +1580,29 @@ class Riverso_POS_Activator {
 
         // Agregar columna estado_pago a riverso_facturas
         self::add_column_if_missing(
-            "{$prefix}riverso_facturas",
+            "{$prefix}facturas",
             'estado_pago',
             "estado_pago VARCHAR(50) DEFAULT 'no_pagada' COMMENT 'Estado de pago (no_pagada, parcialmente_pagada, pagada, cancelada)'"
         );
         self::add_index_if_missing(
-            "{$prefix}riverso_facturas",
+            "{$prefix}facturas",
             'idx_estado_pago',
             "KEY idx_estado_pago (estado_pago)"
         );
 
         // Agregar columnas de recepción faltantes
         self::add_column_if_missing(
-            "{$prefix}riverso_facturas",
+            "{$prefix}facturas",
             'reception_started_at',
             "reception_started_at DATETIME DEFAULT NULL COMMENT 'Timestamp de inicio de recepción'"
         );
         self::add_column_if_missing(
-            "{$prefix}riverso_facturas",
+            "{$prefix}facturas",
             'reception_completed_at',
             "reception_completed_at DATETIME DEFAULT NULL COMMENT 'Timestamp de fin de recepción'"
         );
         self::add_column_if_missing(
-            "{$prefix}riverso_facturas",
+            "{$prefix}facturas",
             'approved_at',
             "approved_at DATETIME DEFAULT NULL COMMENT 'Timestamp de aprobación'"
         );
@@ -1616,11 +1632,7 @@ class Riverso_POS_Activator {
             KEY idx_factura_id (factura_id),
             KEY idx_factura_origen (factura_origen_id),
             KEY idx_estado_resolucion (estado_resolucion),
-            KEY idx_estado_reversa (estado_reversa_inventario),
-            CONSTRAINT fk_ref_factura FOREIGN KEY (factura_id) 
-                REFERENCES {$prefix}riverso_facturas (id) ON DELETE CASCADE,
-            CONSTRAINT fk_ref_factura_origen FOREIGN KEY (factura_origen_id) 
-                REFERENCES {$prefix}riverso_facturas (id) ON DELETE SET NULL
+            KEY idx_estado_reversa (estado_reversa_inventario)
         ) $charset_collate;";
         dbDelta($sql);
 
@@ -1664,11 +1676,7 @@ class Riverso_POS_Activator {
             PRIMARY KEY (id),
             UNIQUE KEY ux_pago_factura (pago_id, factura_id),
             KEY idx_pago_id (pago_id),
-            KEY idx_factura_id (factura_id),
-            CONSTRAINT fk_pago_doc_pago FOREIGN KEY (pago_id) 
-                REFERENCES {$prefix}factura_pagos (id) ON DELETE CASCADE,
-            CONSTRAINT fk_pago_doc_factura FOREIGN KEY (factura_id) 
-                REFERENCES {$prefix}riverso_facturas (id) ON DELETE CASCADE
+            KEY idx_factura_id (factura_id)
         ) $charset_collate;";
         dbDelta($sql);
 
@@ -1690,11 +1698,7 @@ class Riverso_POS_Activator {
             KEY idx_referencia_id (referencia_id),
             KEY idx_factura_id (factura_id),
             KEY idx_movimiento_id (movimiento_id),
-            KEY idx_estado (estado),
-            CONSTRAINT fk_reversa_referencia FOREIGN KEY (referencia_id) 
-                REFERENCES {$prefix}factura_referencias (id) ON DELETE CASCADE,
-            CONSTRAINT fk_reversa_factura FOREIGN KEY (factura_id) 
-                REFERENCES {$prefix}riverso_facturas (id) ON DELETE CASCADE
+            KEY idx_estado (estado)
         ) $charset_collate;";
         dbDelta($sql);
 
@@ -1706,6 +1710,316 @@ class Riverso_POS_Activator {
                 0,
                 'info',
                 'Fase 16: Agregado soporte para notas de crédito, referencias DTE, pagos agrupados y reversas de inventario'
+            );
+        }
+    }
+
+    /**
+     * Fase 17: Descuentos/recargos/impuestos específicos y costos neto/bruto base/final en ítems.
+     */
+    private static function create_phase17_invoice_item_costs($prefix) {
+        global $wpdb;
+
+        self::add_column_if_missing(
+            "{$prefix}facturas",
+            'tasa_iva',
+            "tasa_iva DECIMAL(8,4) DEFAULT NULL COMMENT 'TasaIVA del DTE'"
+        );
+        self::add_column_if_missing(
+            "{$prefix}facturas",
+            'impuestos_adicionales',
+            "impuestos_adicionales LONGTEXT DEFAULT NULL COMMENT 'JSON ImptoReten del DTE'"
+        );
+
+        $items = "{$prefix}factura_items";
+        self::add_column_if_missing($items, 'descuento_porcentaje', "descuento_porcentaje DECIMAL(8,4) DEFAULT NULL");
+        self::add_column_if_missing($items, 'descuento_monto', "descuento_monto DECIMAL(12,4) DEFAULT NULL");
+        self::add_column_if_missing($items, 'recargo_porcentaje', "recargo_porcentaje DECIMAL(8,4) DEFAULT NULL");
+        self::add_column_if_missing($items, 'recargo_monto', "recargo_monto DECIMAL(12,4) DEFAULT NULL");
+        self::add_column_if_missing($items, 'cod_imp_adic', "cod_imp_adic VARCHAR(10) DEFAULT NULL COMMENT 'CodImpAdic SII'");
+        self::add_column_if_missing($items, 'impuesto_especifico_tasa', "impuesto_especifico_tasa DECIMAL(8,4) DEFAULT NULL");
+        self::add_column_if_missing($items, 'impuesto_especifico_monto', "impuesto_especifico_monto DECIMAL(12,4) DEFAULT NULL");
+        self::add_column_if_missing($items, 'costo_neto_base', "costo_neto_base DECIMAL(12,4) DEFAULT NULL COMMENT 'Neto antes de descuentos/recargos'");
+        self::add_column_if_missing($items, 'costo_bruto_base', "costo_bruto_base DECIMAL(12,4) DEFAULT NULL COMMENT 'Bruto antes de descuentos/recargos'");
+        self::add_column_if_missing($items, 'costo_neto_final', "costo_neto_final DECIMAL(12,4) DEFAULT NULL COMMENT 'Neto después de descuentos/recargos'");
+        self::add_column_if_missing($items, 'costo_bruto_final', "costo_bruto_final DECIMAL(12,4) DEFAULT NULL COMMENT 'Bruto después de descuentos/recargos + imp. específico'");
+
+        // Backfill documentos ya guardados (sin XML): base = qty*precio, final = monto_total
+        $facturas = "{$prefix}facturas";
+        $wpdb->query(
+            "UPDATE {$items} fi
+             LEFT JOIN {$facturas} f ON f.id = fi.factura_id
+             SET
+                fi.costo_neto_base = COALESCE(fi.costo_neto_base, ROUND(fi.cantidad * fi.precio_unitario, 4)),
+                fi.costo_neto_final = COALESCE(fi.costo_neto_final, ROUND(fi.monto_total, 4)),
+                fi.costo_bruto_base = COALESCE(
+                    fi.costo_bruto_base,
+                    ROUND(
+                        (fi.cantidad * fi.precio_unitario) * (1 + COALESCE(f.tasa_iva, 19) / 100)
+                        + COALESCE(fi.impuesto_especifico_monto, 0),
+                        4
+                    )
+                ),
+                fi.costo_bruto_final = COALESCE(
+                    fi.costo_bruto_final,
+                    ROUND(
+                        fi.monto_total * (1 + COALESCE(f.tasa_iva, 19) / 100)
+                        + COALESCE(fi.impuesto_especifico_monto, 0),
+                        4
+                    )
+                )
+             WHERE fi.costo_neto_final IS NULL
+                OR fi.costo_neto_base IS NULL
+                OR fi.costo_bruto_final IS NULL
+                OR fi.costo_bruto_base IS NULL"
+        );
+
+        // Inferir descuento_monto residual si solo hay diferencia base vs monto y no hay recargo guardado
+        $wpdb->query(
+            "UPDATE {$items}
+             SET descuento_monto = ROUND((cantidad * precio_unitario) - monto_total, 4)
+             WHERE descuento_monto IS NULL
+               AND (recargo_monto IS NULL OR recargo_monto = 0)
+               AND monto_total IS NOT NULL
+               AND (cantidad * precio_unitario) > monto_total + 0.009"
+        );
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log(
+                'schema.phase17_invoice_item_costs',
+                'factura_items',
+                0,
+                'info',
+                'Fase 17: Columnas de descuentos/recargos/impuestos específicos y costos neto/bruto base/final + backfill'
+            );
+        }
+    }
+
+    /**
+     * Fase 18: Catálogos de proveedores como entidad de primer nivel
+     */
+    private static function create_phase18_catalogs($prefix, $charset_collate) {
+        global $wpdb;
+
+        $sql = "CREATE TABLE {$prefix}catalogos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            proveedor_id BIGINT UNSIGNED NOT NULL,
+            nombre VARCHAR(100) NOT NULL,
+            alias VARCHAR(50) DEFAULT NULL,
+            version VARCHAR(20) DEFAULT NULL,
+            archivo_origen VARCHAR(255) DEFAULT NULL,
+            total_productos INT DEFAULT 0,
+            activo TINYINT(1) DEFAULT 1,
+            fecha_vigencia_desde DATE DEFAULT NULL,
+            fecha_vigencia_hasta DATE DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_alias_version (alias, version),
+            KEY idx_proveedor (proveedor_id),
+            KEY idx_activo (activo)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        // Agregar columna a producto_proveedor si no existe
+        self::add_column_if_missing(
+            "{$prefix}producto_proveedor",
+            'catalogo_id',
+            "catalogo_id BIGINT UNSIGNED DEFAULT NULL"
+        );
+        self::add_index_if_missing(
+            "{$prefix}producto_proveedor",
+            'idx_catalogo',
+            "KEY idx_catalogo (catalogo_id)"
+        );
+
+        // Backfill: crear catálogo MAMUT y vincular todos los producto_proveedor existentes
+        $mamut = $wpdb->get_row(
+            "SELECT id FROM {$prefix}proveedores WHERE nombre = 'MAMUT' OR rut = 'MAMUT' LIMIT 1"
+        );
+
+        if (!$mamut) {
+            // Si no existe el proveedor MAMUT, crearlo
+            $wpdb->insert(
+                "{$prefix}proveedores",
+                [
+                    'rut' => 'MAMUT',
+                    'nombre' => 'MAMUT',
+                    'activo' => 1,
+                    'created_at' => current_time('mysql'),
+                ],
+                ['%s', '%s', '%d', '%s']
+            );
+            $mamut_id = $wpdb->insert_id;
+        } else {
+            $mamut_id = $mamut->id;
+        }
+
+        // Crear catálogo MAMUT 2025 si no existe (también por alias, por si proveedor_id diverge)
+        $existing_catalog = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT id, proveedor_id FROM {$prefix}catalogos
+                 WHERE (proveedor_id = %d AND alias = %s) OR (alias = %s AND version = %s)
+                 ORDER BY id ASC LIMIT 1",
+                $mamut_id,
+                'mamut',
+                'mamut',
+                '2025'
+            )
+        );
+
+        if (!$existing_catalog) {
+            $wpdb->insert(
+                "{$prefix}catalogos",
+                [
+                    'proveedor_id' => $mamut_id,
+                    'nombre' => 'Catálogo Mamut 2025',
+                    'alias' => 'mamut',
+                    'version' => '2025',
+                    'total_productos' => 0,
+                    'activo' => 1,
+                    'created_at' => current_time('mysql'),
+                ],
+                ['%d', '%s', '%s', '%s', '%d', '%d', '%s']
+            );
+            $catalog_id = (int) $wpdb->insert_id;
+        } else {
+            $catalog_id = (int) $existing_catalog->id;
+            // Alinear proveedor_id del catálogo con el proveedor MAMUT canónico
+            if ((int) $existing_catalog->proveedor_id !== (int) $mamut_id) {
+                $wpdb->update(
+                    "{$prefix}catalogos",
+                    ['proveedor_id' => $mamut_id],
+                    ['id' => $catalog_id],
+                    ['%d'],
+                    ['%d']
+                );
+            }
+        }
+
+        // Siempre backfill: el filtro Hub/padre usa pp.catalogo_id; si el catálogo
+        // ya existía en un deploy previo, el backfill anterior se saltaba y quedaba vacío.
+        if ($catalog_id > 0) {
+            $wpdb->query(
+                $wpdb->prepare(
+                    "UPDATE {$prefix}producto_proveedor
+                     SET catalogo_id = %d
+                     WHERE catalogo_id IS NULL
+                       AND proveedor_id = %d",
+                    $catalog_id,
+                    $mamut_id
+                )
+            );
+
+            // Mamut histórico: muchos PP quedaron con activo=0 y el Hub los excluía.
+            $wpdb->query(
+                $wpdb->prepare(
+                    "UPDATE {$prefix}producto_proveedor
+                     SET activo = 1
+                     WHERE catalogo_id = %d AND activo = 0",
+                    $catalog_id
+                )
+            );
+
+            $total = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$prefix}producto_proveedor WHERE catalogo_id = %d",
+                    $catalog_id
+                )
+            );
+            $wpdb->update(
+                "{$prefix}catalogos",
+                ['total_productos' => $total],
+                ['id' => $catalog_id],
+                ['%d'],
+                ['%d']
+            );
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log(
+                'schema.phase18_catalogs',
+                'catalogos',
+                $catalog_id ?: 0,
+                'info',
+                'Fase 18: catalogos + backfill idempotente catalogo_id MAMUT (total=' . ($total ?? 0) . ')'
+            );
+        }
+    }
+
+    /**
+     * Fase 19: El código de catálogo/proveedor no es SKU Local.
+     * Vacía canonical_sku cuando coincide con codigo_proveedor (import Mamut histórico)
+     * y genera tareas crear_contraparte_local.
+     */
+    private static function create_phase19_clear_catalog_as_local_sku($prefix) {
+        global $wpdb;
+
+        $cleared = (int) $wpdb->query(
+            "UPDATE {$prefix}producto_base pb
+             INNER JOIN {$prefix}producto_proveedor pp
+                ON pp.producto_base_id = pb.id
+               AND pp.catalogo_id IS NOT NULL
+               AND pp.catalogo_id > 0
+             SET pb.canonical_sku = NULL,
+                 pb.updated_at = NOW()
+             WHERE pb.deleted_at IS NULL
+               AND pb.canonical_sku IS NOT NULL
+               AND pb.canonical_sku != ''
+               AND pb.canonical_sku = pp.codigo_proveedor"
+        );
+
+        $candidates = $wpdb->get_results(
+            "SELECT DISTINCT pb.id, pp.codigo_proveedor, pp.id AS pp_id
+             FROM {$prefix}producto_base pb
+             INNER JOIN {$prefix}producto_proveedor pp ON pp.producto_base_id = pb.id
+             WHERE pb.deleted_at IS NULL
+               AND (
+                    pb.canonical_sku IS NULL
+                    OR pb.canonical_sku = ''
+                    OR pb.canonical_sku = pp.codigo_proveedor
+               )
+             ORDER BY pb.id ASC
+             LIMIT 6000",
+            ARRAY_A
+        );
+
+        $tasks_created = 0;
+        foreach ($candidates ?: [] as $row) {
+            if (!function_exists('riverso_create_review_task')) {
+                break;
+            }
+            $tid = riverso_create_review_task(
+                'crear_contraparte_local',
+                sprintf(
+                    'Asignar SKU Local para código catálogo %s (base #%d)',
+                    $row['codigo_proveedor'],
+                    (int) $row['id']
+                ),
+                'producto_base',
+                (int) $row['id'],
+                [
+                    'prioridad' => 'normal',
+                    'datos_extra' => [
+                        'base_id' => (int) $row['id'],
+                        'pp_id' => (int) $row['pp_id'],
+                        'codigo_proveedor' => $row['codigo_proveedor'],
+                        'codigo_catalogo' => $row['codigo_proveedor'],
+                        'origen' => 'phase19_backfill',
+                    ],
+                ]
+            );
+            if ($tid) {
+                $tasks_created++;
+            }
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log(
+                'schema.phase19_clear_catalog_as_local_sku',
+                'producto_base',
+                0,
+                'info',
+                "Fase 19: cleared≈{$cleared} candidates=" . count($candidates ?: []) . " tasks={$tasks_created}"
             );
         }
     }

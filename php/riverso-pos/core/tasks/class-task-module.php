@@ -48,6 +48,8 @@ class Riverso_Task_Module {
         'aprobar_lista_precios' => 'Aprobar lista de precios',
         'relacionar_producto_proveedor' => 'Relacionar producto proveedor',
         'confirmar_relacion_online' => 'Confirmar relación producto local ↔ online',
+        'crear_contraparte_online' => 'Crear o asignar contraparte online',
+        'crear_contraparte_local' => 'Crear o asignar contraparte local',
         'confirmar_estructura_atributos' => 'Confirmar estructura de atributos',
         'autorizar_publicacion' => 'Autorizar publicación',
         'revisar_calidad_catalogo' => 'Revisar salud del catálogo',

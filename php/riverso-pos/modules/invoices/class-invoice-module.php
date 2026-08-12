@@ -74,6 +74,8 @@ class Riverso_Invoice_Module {
         add_action('wp_ajax_riverso_get_payment_ticket', [$this, 'ajax_get_payment_ticket']);
         add_action('wp_ajax_riverso_preview_payment_total', [$this, 'ajax_preview_payment_total']);
         add_action('wp_ajax_riverso_download_payment_comprobante', [$this, 'ajax_download_payment_comprobante']);
+        add_action('wp_ajax_riverso_search_invoice_folios', [$this, 'ajax_search_invoice_folios']);
+        add_action('wp_ajax_riverso_link_credit_note_origin', [$this, 'ajax_link_credit_note_origin']);
     }
 
     /**
@@ -187,14 +189,26 @@ class Riverso_Invoice_Module {
                 'neto' => (float) ($totales->MntNeto ?? 0),
                 'iva' => (float) ($totales->IVA ?? 0),
                 'total' => (float) ($totales->MntTotal ?? 0),
+                'tasa_iva' => (float) ($totales->TasaIVA ?? 19),
+                'impuestos_adicionales' => [],
             ],
             'items' => [],
+            'referencias' => [],
         ];
 
-        // Extraer items
+        if (isset($totales->ImptoReten)) {
+            foreach ($totales->ImptoReten as $imp) {
+                $factura['totales']['impuestos_adicionales'][] = [
+                    'tipo_imp' => (int) ($imp->TipoImp ?? 0),
+                    'tasa_imp' => (float) ($imp->TasaImp ?? 0),
+                    'monto_imp' => (float) ($imp->MontoImp ?? 0),
+                ];
+            }
+        }
+
+        // Extraer items (SimpleXML: foreach sobre Detalle itera todos los hermanos)
         if (isset($doc->Detalle)) {
-            $detalles = is_array($doc->Detalle) ? $doc->Detalle : [$doc->Detalle];
-            foreach ($detalles as $detalle) {
+            foreach ($doc->Detalle as $detalle) {
                 // Monto es obligatorio; si no existe, saltar
                 $monto = (float) ($detalle->MontoItem ?? 0);
                 if ($monto == 0) {
@@ -209,21 +223,32 @@ class Riverso_Invoice_Module {
                     $precio = $monto / $cantidad;
                 }
 
+                $dsc_raw = (string) ($detalle->DscItem ?? '');
+                $labels = $this->intake()->normalize_item_labels(
+                    (string) ($detalle->NmbItem ?? ''),
+                    $dsc_raw
+                );
+
                 $item = [
                     'numero' => (int) ($detalle->NroLinDet ?? 1),
-                    'nombre' => (string) ($detalle->NmbItem ?? 'Item sin descripción'),
-                    'descripcion' => (string) ($detalle->DscItem ?? ''),
+                    'nombre' => $labels['nombre'],
+                    'descripcion' => $labels['descripcion'],
+                    'descripcion_raw' => $dsc_raw,
                     'cantidad' => $cantidad,
                     'unidad' => (string) ($detalle->UnmdItem ?? 'UN'),
                     'precio' => $precio,
                     'monto' => $monto,
+                    'descuento_porcentaje' => isset($detalle->DescuentoPct) ? (float) $detalle->DescuentoPct : null,
+                    'descuento_monto' => isset($detalle->DescuentoMonto) ? (float) $detalle->DescuentoMonto : null,
+                    'recargo_porcentaje' => isset($detalle->RecargoPct) ? (float) $detalle->RecargoPct : null,
+                    'recargo_monto' => isset($detalle->RecargoMonto) ? (float) $detalle->RecargoMonto : null,
+                    'cod_imp_adic' => isset($detalle->CodImpAdic) ? (string) $detalle->CodImpAdic : null,
                     'codigos' => [],
                 ];
 
                 // Extraer códigos del item (puede no haber)
                 if (isset($detalle->CdgItem)) {
-                    $codigos = is_array($detalle->CdgItem) ? $detalle->CdgItem : [$detalle->CdgItem];
-                    foreach ($codigos as $codigo) {
+                    foreach ($detalle->CdgItem as $codigo) {
                         $item['codigos'][] = [
                             'tipo' => (string) ($codigo->TpoCodigo ?? 'INT1'),
                             'valor' => (string) ($codigo->VlrCodigo ?? ''),
@@ -237,9 +262,7 @@ class Riverso_Invoice_Module {
 
         // Extraer referencias (para notas de crédito y débito)
         if (isset($doc->Referencia)) {
-            // Puede haber múltiples Referencia
-            $referencias = is_array($doc->Referencia) ? $doc->Referencia : [$doc->Referencia];
-            foreach ($referencias as $ref) {
+            foreach ($doc->Referencia as $ref) {
                 $factura['referencias'][] = [
                     'numero_linea' => (int) ($ref->NroLinRef ?? 1),
                     'tipo_doc_ref' => (int) ($ref->TpoDocRef ?? 0),
@@ -253,6 +276,7 @@ class Riverso_Invoice_Module {
         }
 
         $this->intake()->classify_factura_items($factura);
+        $this->intake()->enrich_factura_items_costs($factura);
 
         return $factura;
     }
@@ -313,49 +337,35 @@ class Riverso_Invoice_Module {
         // Detectar si es Nota de Crédito (TipoDTE=61)
         $is_credit_note = $this->credit_notes()->is_credit_note($factura_data['tipo_dte'] ?? 0);
         
-        // Si es NC, validar que tenga referencia y intentar resolver automáticamente la factura origen
+        // Resolver factura origen (automática, manual o pendiente — nunca bloquea el guardado)
         if ($is_credit_note) {
             $cn_options = [];
-            
-            // Intentar resolver automáticamente
             $resolucion = $this->credit_notes()->resolve_origen_factura(
                 $factura_data,
                 $factura_data['emisor']['rut'] ?? '',
                 'automatica'
             );
-            
-            if ($resolucion['estado'] !== 'resuelta_automatica') {
-                // No se resolvió automáticamente: requiere entrada manual
-                $gaps = [];
-                if (empty($options['factura_origen_id'])) {
-                    $gaps[] = [
-                        'type' => 'credit_note',
-                        'field' => 'factura_origen_id',
-                        'label' => 'Factura Origen',
-                        'message' => $resolucion['mensaje'],
-                        'candidatos' => $resolucion['candidatos'] ?? [],
-                        'resolucion_estado' => $resolucion['estado'],
-                    ];
-                }
-                
-                if (!empty($gaps)) {
-                    return new WP_Error('missing_data', 'Falta información para nota de crédito', [
-                        'needs_input' => true,
-                        'gaps' => $gaps,
-                        'es_nota_credito' => true,
-                    ]);
-                }
-                
-                $cn_options['factura_origen_id_manual'] = intval($options['factura_origen_id'] ?? 0);
+            $factura_origen_manual = intval($options['factura_origen_id'] ?? 0);
+
+            if ($factura_origen_manual > 0) {
+                $cn_options['factura_origen_id'] = $factura_origen_manual;
+                $cn_options['estado_resolucion'] = 'resuelta_manual';
+            } elseif ($resolucion['estado'] === 'resuelta_automatica' && !empty($resolucion['factura_id'])) {
+                $cn_options['factura_origen_id'] = (int) $resolucion['factura_id'];
+                $cn_options['estado_resolucion'] = 'resuelta_automatica';
             } else {
-                $cn_options['factura_origen_id_automatica'] = $resolucion['factura_id'];
+                $cn_options['factura_origen_id'] = 0;
+                $cn_options['estado_resolucion'] = $resolucion['estado'] === 'ambigua' ? 'ambigua' : 'pendiente';
+                $cn_options['resolucion_mensaje'] = $resolucion['mensaje'] ?? '';
             }
-            
-            // Guardar options de NC para uso posterior
+            $cn_options['resolucion'] = $resolucion;
             $options['_credit_note_options'] = $cn_options;
         }
 
         $this->intake()->classify_factura_items($factura_data);
+        if (empty($factura_data['items'][0]['costo_neto_final'] ?? null)) {
+            $this->intake()->enrich_factura_items_costs($factura_data);
+        }
 
         $force_subtipo = sanitize_text_field($options['documento_subtipo'] ?? '');
         $link_to_factura_id = intval($options['link_to_factura_id'] ?? 0);
@@ -364,16 +374,37 @@ class Riverso_Invoice_Module {
             $modo_ingreso = 'recepcion';
         }
 
+        $is_guia_despacho = ((int) ($factura_data['tipo_dte'] ?? 0) === 52)
+            || $force_subtipo === 'guia_despacho';
+
         // Si es Nota de Crédito (TipoDTE=61), forzar subtipo
         if ($is_credit_note) {
             $documento_subtipo = 'nota_credito';
             $modo_ingreso = 'solo_costos'; // Las NC siempre son solo costos
+        } elseif ($is_guia_despacho) {
+            // Guía de despacho (TipoDTE=52): códigos + costos, sin bodega
+            $documento_subtipo = 'guia_despacho';
+            $modo_ingreso = 'solo_costos';
         } else {
             $product_items = array_filter($factura_data['items'], function ($item) {
-                return ($item['item_tipo'] ?? 'producto') !== 'envio';
+                return !in_array(($item['item_tipo'] ?? 'producto'), ['envio', 'gasto'], true);
             });
-            $all_shipping = count($product_items) === 0 && !empty($factura_data['items']);
+            $all_shipping = count($product_items) === 0 && !empty($factura_data['items'])
+                && count(array_filter($factura_data['items'], function ($item) {
+                    return ($item['item_tipo'] ?? '') === 'envio';
+                })) === count($factura_data['items']);
             $documento_subtipo = $force_subtipo ?: ($all_shipping ? 'envio' : 'productos');
+            if (!in_array($documento_subtipo, ['productos', 'envio', 'nota_credito', 'gastos', 'guia_despacho'], true)) {
+                $documento_subtipo = 'productos';
+            }
+        }
+
+        if ($documento_subtipo === 'gastos') {
+            $this->intake()->force_expense_items($factura_data);
+            $modo_ingreso = 'solo_costos';
+        }
+        if ($documento_subtipo === 'guia_despacho') {
+            $modo_ingreso = 'solo_costos';
         }
 
         $gaps = $this->detect_intake_gaps($factura_data, array_merge($options, [
@@ -413,12 +444,20 @@ class Riverso_Invoice_Module {
 
         // Determinar estado inicial según tipo de documento
         if ($documento_subtipo === 'nota_credito') {
-            $estado_inicial = 'recibido'; // NC sin recepción física
+            $cn_opts = $options['_credit_note_options'] ?? [];
+            $estado_inicial = !empty($cn_opts['factura_origen_id']) ? 'recibido' : 'sin_vincular';
         } elseif ($documento_subtipo === 'envio') {
             $estado_inicial = 'sin_vincular';
+        } elseif ($documento_subtipo === 'gastos') {
+            $estado_inicial = 'procesado';
         } else {
             $estado_inicial = 'recibido';
         }
+
+        $tasa_iva = (float) ($factura_data['totales']['tasa_iva'] ?? 19);
+        $impuestos_json = !empty($factura_data['totales']['impuestos_adicionales'])
+            ? wp_json_encode($factura_data['totales']['impuestos_adicionales'])
+            : null;
 
         // Insertar factura
         $result = $wpdb->insert(
@@ -433,6 +472,8 @@ class Riverso_Invoice_Module {
                 'monto_neto' => $factura_data['totales']['neto'],
                 'monto_iva' => $factura_data['totales']['iva'],
                 'monto_total' => $factura_data['totales']['total'],
+                'tasa_iva' => $tasa_iva,
+                'impuestos_adicionales' => $impuestos_json,
                 'items_total' => count($factura_data['items']),
                 'estado' => $estado_inicial,
                 'procesado_por' => get_current_user_id(),
@@ -440,9 +481,11 @@ class Riverso_Invoice_Module {
                 'documento_subtipo' => $documento_subtipo,
                 'factura_productos_id' => null,
                 'costo_envio_total' => $documento_subtipo === 'envio' ? 0 : $costo_envio_inline,
-                'modo_ingreso' => $documento_subtipo === 'productos' ? $modo_ingreso : 'solo_costos',
+                'modo_ingreso' => in_array($documento_subtipo, ['productos', 'guia_despacho'], true)
+                    ? ($documento_subtipo === 'guia_despacho' ? 'solo_costos' : $modo_ingreso)
+                    : 'solo_costos',
             ],
-            ['%d', '%s', '%d', '%s', '%s', '%s', '%f', '%f', '%f', '%d', '%s', '%d', '%s', '%s', '%d', '%f', '%s']
+            ['%d', '%s', '%d', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%d', '%s', '%d', '%s', '%s', '%d', '%f', '%s']
         );
 
         if (!$result) {
@@ -454,6 +497,9 @@ class Riverso_Invoice_Module {
         // Insertar items
         foreach ($factura_data['items'] as $item) {
             $item_tipo = $item['item_tipo'] ?? 'producto';
+            if ($documento_subtipo === 'gastos') {
+                $item_tipo = 'gasto';
+            }
             $codigo_proveedor = '';
             $codigo_tipo = 'INT1';
             foreach ($item['codigos'] as $codigo) {
@@ -466,6 +512,7 @@ class Riverso_Invoice_Module {
 
             $codigo_local = null;
             $product_id = null;
+            // Gastos operacionales: no mapear a productos ni asignar SKU
             if ($item_tipo === 'producto' && $codigo_proveedor) {
                 $mapping = $this->intake()->lookup_product_mapping(
                     $proveedor_id,
@@ -480,7 +527,22 @@ class Riverso_Invoice_Module {
             }
 
             $item_nombre = trim($item['nombre'] ?? '') ?: trim($item['descripcion'] ?? '') ?: 'Sin descripción';
-            $item_descripcion = trim($item['descripcion'] ?? '') ?: $item_nombre;
+            $labels = $this->intake()->normalize_item_labels($item_nombre, $item['descripcion'] ?? '');
+            $item_nombre = $labels['nombre'];
+            $item_descripcion = $labels['descripcion'];
+
+            if ($item_tipo === 'envio') {
+                $item_estado = 'envio';
+            } elseif ($item_tipo === 'gasto') {
+                $item_estado = 'gasto';
+            } else {
+                $item_estado = $codigo_local ? 'vinculado' : 'pendiente';
+            }
+
+            $costs = $this->intake()->compute_item_cost_breakdown($item, $tasa_iva);
+            $landed_unit = $item_tipo === 'producto'
+                ? ($costs['costo_unitario_neto_final'] ?? $item['precio'])
+                : null;
 
             $wpdb->insert(
                 "{$prefix}factura_items",
@@ -494,51 +556,69 @@ class Riverso_Invoice_Module {
                     'cantidad' => $item['cantidad'],
                     'unidad' => $item['unidad'],
                     'precio_unitario' => $item['precio'],
+                    'descuento_porcentaje' => $costs['descuento_porcentaje'],
+                    'descuento_monto' => $costs['descuento_monto'],
+                    'recargo_porcentaje' => $costs['recargo_porcentaje'],
+                    'recargo_monto' => $costs['recargo_monto'],
+                    'cod_imp_adic' => $item['cod_imp_adic'] ?? null,
+                    'impuesto_especifico_tasa' => $costs['impuesto_especifico_tasa'],
+                    'impuesto_especifico_monto' => $costs['impuesto_especifico_monto'],
+                    'costo_neto_base' => $costs['costo_neto_base'],
+                    'costo_bruto_base' => $costs['costo_bruto_base'],
+                    'costo_neto_final' => $costs['costo_neto_final'],
+                    'costo_bruto_final' => $costs['costo_bruto_final'],
                     'monto_total' => $item['monto'],
                     'product_id' => $product_id,
                     'sku_local' => $codigo_local,
-                    'estado' => ($item_tipo === 'envio') ? 'envio' : ($codigo_local ? 'vinculado' : 'pendiente'),
+                    'estado' => $item_estado,
                     'item_tipo' => $item_tipo,
-                    'costo_landed_unitario' => $item_tipo === 'producto' ? $item['precio'] : null,
+                    'costo_landed_unitario' => $landed_unit,
                 ],
-                ['%d', '%d', '%s', '%s', '%s', '%s', '%f', '%s', '%f', '%f', '%d', '%s', '%s', '%s', '%f']
+                [
+                    '%d', '%d', '%s', '%s', '%s', '%s', '%f', '%s', '%f',
+                    '%f', '%f', '%f', '%f', '%s', '%f', '%f',
+                    '%f', '%f', '%f', '%f', '%f',
+                    '%d', '%s', '%s', '%s', '%f',
+                ]
             );
         }
 
-        // Si es Nota de Crédito, vincularla con su factura origen
+        // Si es Nota de Crédito, registrar referencia (vinculada o pendiente de folio)
+        $cn_link_meta = null;
         if ($is_credit_note) {
             $cn_options = $options['_credit_note_options'] ?? [];
-            $factura_origen_id = $cn_options['factura_origen_id_automatica'] ?? $cn_options['factura_origen_id_manual'] ?? 0;
-            
-            if ($factura_origen_id > 0) {
-                $reversa_inventario = isset($options['reversa_inventario']) ? $options['reversa_inventario'] : false;
-                $referencias = $factura_data['referencias'] ?? [];
-                $referencia = !empty($referencias) ? $referencias[0] : [];
-                
-                $link_result = $this->credit_notes()->link_credit_note(
-                    $factura_id,
-                    $factura_origen_id,
-                    $referencia,
-                    [
-                        'user_id' => get_current_user_id(),
-                        'reversa_inventario' => $reversa_inventario,
-                    ]
-                );
-                
-                if (is_wp_error($link_result)) {
-                    // No revertimos la factura; solo registramos la advertencia
-                    // La NC se guardó pero sin referencia vinculada
-                    return new WP_Error('warning', 'NC guardada pero no se pudo vincular con factura origen: ' . $link_result->get_error_message(), [
-                        'factura_id' => $factura_id,
-                        'error_detalles' => $link_result->get_error_data(),
-                    ]);
-                }
+            $factura_origen_id = intval($cn_options['factura_origen_id'] ?? 0);
+            $referencias = $factura_data['referencias'] ?? [];
+            $referencia = !empty($referencias) ? $referencias[0] : [
+                'tipo_doc_ref' => 33,
+                'folio_ref' => '0',
+            ];
+
+            $cn_link_meta = $this->credit_notes()->register_reference(
+                $factura_id,
+                $referencia,
+                $factura_origen_id > 0 ? $factura_origen_id : null,
+                [
+                    'user_id' => get_current_user_id(),
+                    'reversa_inventario' => !empty($options['reversa_inventario']),
+                    'estado_resolucion' => $cn_options['estado_resolucion'] ?? ($factura_origen_id ? 'resuelta_manual' : 'pendiente'),
+                    'notas' => $cn_options['resolucion_mensaje'] ?? '',
+                ]
+            );
+
+            if (is_wp_error($cn_link_meta)) {
+                // NC ya guardada: no revertir; devolver advertencia con ID
+                return new WP_Error('warning', 'NC guardada pero no se pudo registrar la referencia: ' . $cn_link_meta->get_error_message(), [
+                    'factura_id' => $factura_id,
+                    'error_detalles' => $cn_link_meta->get_error_data(),
+                ]);
             }
         }
 
         if ($documento_subtipo === 'nota_credito') {
             // Las NC no generan recepción ni lotes por defecto
-            // Solo se registran como documentos de referencia
+        } elseif ($documento_subtipo === 'gastos') {
+            // Gastos operacionales: solo registro documental, sin productos/SKU/bodega
         } elseif ($link_to_factura_id && $documento_subtipo === 'envio') {
             $link_result = $this->intake()->link_shipping_invoice($link_to_factura_id, $factura_id);
             if (is_wp_error($link_result)) {
@@ -546,8 +626,14 @@ class Riverso_Invoice_Module {
                 $wpdb->delete("{$prefix}facturas", ['id' => $factura_id], ['%d']);
                 return $link_result;
             }
-        } elseif ($documento_subtipo === 'productos') {
-            $this->intake()->after_invoice_saved($factura_id, $proveedor_id, $factura_data['items'], $modo_ingreso);
+        } elseif (in_array($documento_subtipo, ['productos', 'guia_despacho'], true)) {
+            // Productos o guía: códigos + costos; guía siempre sin bodega (solo_costos)
+            $this->intake()->after_invoice_saved(
+                $factura_id,
+                $proveedor_id,
+                $factura_data['items'],
+                $documento_subtipo === 'guia_despacho' ? 'solo_costos' : $modo_ingreso
+            );
         }
 
         // Actualizar estado de factura según items (solo productos)
@@ -564,7 +650,9 @@ class Riverso_Invoice_Module {
                     'tipo_dte' => $factura_data['tipo_dte'],
                     'proveedor_id' => $proveedor_id,
                     'documento_subtipo' => $documento_subtipo,
-                    'modo_ingreso' => $documento_subtipo === 'productos' ? $modo_ingreso : 'solo_costos',
+                    'modo_ingreso' => in_array($documento_subtipo, ['productos', 'guia_despacho'], true)
+                        ? ($documento_subtipo === 'guia_despacho' ? 'solo_costos' : $modo_ingreso)
+                        : 'solo_costos',
                     'monto_total' => $factura_data['totales']['total'],
                 ],
                 sprintf('Factura folio %s ingresada por XML', $folio)
@@ -827,6 +915,26 @@ class Riverso_Invoice_Module {
             ));
         }
 
+        // Las NC no recalculan estado por ítems; respetan recibido / sin_vincular
+        if ($factura && ($factura->documento_subtipo ?? '') === 'nota_credito') {
+            return $wpdb->get_var($wpdb->prepare(
+                "SELECT estado FROM {$prefix}facturas WHERE id = %d",
+                (int) $factura_id
+            ));
+        }
+
+        // Gastos operacionales quedan procesados (sin flujo de SKU)
+        if ($factura && ($factura->documento_subtipo ?? '') === 'gastos') {
+            $wpdb->update(
+                "{$prefix}facturas",
+                ['estado' => 'procesado'],
+                ['id' => (int) $factura_id],
+                ['%s'],
+                ['%d']
+            );
+            return 'procesado';
+        }
+
         $stats = $wpdb->get_row($wpdb->prepare(
             "SELECT 
                 COUNT(*) as total,
@@ -872,11 +980,12 @@ class Riverso_Invoice_Module {
         }
 
         $documento_tipo = sanitize_text_field($_POST['documento_tipo'] ?? 'productos');
-        if (!in_array($documento_tipo, ['productos', 'envio'], true)) {
+        if (!in_array($documento_tipo, ['productos', 'envio', 'nota_credito', 'gastos', 'guia_despacho'], true)) {
             $documento_tipo = 'productos';
         }
 
         $link_to_factura_id = intval($_POST['link_to_factura_id'] ?? 0);
+        $factura_origen_id = intval($_POST['factura_origen_id'] ?? 0);
         
         // Detectar si es carga masiva
         $upload_mode = sanitize_text_field($_POST['upload_mode'] ?? 'single');
@@ -886,13 +995,15 @@ class Riverso_Invoice_Module {
         $default_modo = $is_bulk ? 'solo_costos' : riverso_get_setting('default_intake_mode', 'recepcion');
         $modo_ingreso = sanitize_text_field($_POST['modo_ingreso'] ?? $default_modo);
         
-        // Forzar solo_costos para envíos
-        if ($documento_tipo === 'envio') {
+        // Forzar solo_costos para envíos, NC, gastos y guías de despacho
+        if (in_array($documento_tipo, ['envio', 'nota_credito', 'gastos', 'guia_despacho'], true)) {
             $modo_ingreso = 'solo_costos';
         }
 
         $save_options = [
             'link_to_factura_id' => $documento_tipo === 'envio' ? $link_to_factura_id : 0,
+            'factura_origen_id' => $documento_tipo === 'nota_credito' ? $factura_origen_id : 0,
+            'reversa_inventario' => $documento_tipo === 'nota_credito' && !empty($_POST['reversa_inventario']),
             'documento_subtipo' => $documento_tipo,
             'modo_ingreso' => $modo_ingreso,
             'proveedor_modo' => sanitize_text_field($_POST['proveedor_modo'] ?? 'xml'),
@@ -954,10 +1065,25 @@ class Riverso_Invoice_Module {
             'vinculado_a_factura' => $documento_tipo === 'envio' ? $link_to_factura_id : null,
         ];
 
+        if ($documento_tipo === 'nota_credito') {
+            global $wpdb;
+            $prefix = $wpdb->prefix . 'riverso_';
+            $ref = $wpdb->get_row($wpdb->prepare(
+                "SELECT folio_ref, factura_origen_id, estado_resolucion, notas
+                 FROM {$prefix}factura_referencias WHERE factura_id = %d ORDER BY id DESC LIMIT 1",
+                $factura_id
+            ));
+            $resumen['nc_folio_ref'] = $ref->folio_ref ?? ($factura['referencias'][0]['folio_ref'] ?? '');
+            $resumen['nc_factura_origen_id'] = $ref ? (int) $ref->factura_origen_id : 0;
+            $resumen['nc_estado_resolucion'] = $ref->estado_resolucion ?? 'pendiente';
+            $resumen['nc_pendiente'] = empty($resumen['nc_factura_origen_id']);
+            $resumen['vinculado_a_factura'] = $resumen['nc_factura_origen_id'] ?: null;
+        }
+
         if ($modo_ingreso === 'solo_costos' || $documento_tipo === 'envio') {
             global $wpdb;
             $prefix = $wpdb->prefix . 'riverso_';
-            if ($documento_tipo === 'productos') {
+            if (in_array($documento_tipo, ['productos', 'guia_despacho'], true)) {
                 $resumen['costos_registrados'] = (int) $wpdb->get_var($wpdb->prepare(
                     "SELECT COUNT(*) FROM {$prefix}cost_history
                      WHERE source_type = 'invoice' AND source_document_id = %d AND pendiente_vinculacion = 0",
@@ -977,14 +1103,26 @@ class Riverso_Invoice_Module {
             }
         }
 
-        $message = $documento_tipo === 'envio'
-            ? ($link_to_factura_id
+        if ($documento_tipo === 'nota_credito') {
+            if (!empty($resumen['nc_pendiente'])) {
+                $folio_ref = $resumen['nc_folio_ref'] ?: '—';
+                $message = "Nota de crédito registrada — pendiente del folio origen {$folio_ref}";
+            } else {
+                $message = 'Nota de crédito registrada y vinculada a factura origen';
+            }
+        } elseif ($documento_tipo === 'envio') {
+            $message = $link_to_factura_id
                 ? 'Flete de transportista registrado y vinculado'
-                : 'Flete registrado — pendiente de asignar a factura de productos')
-            : ($modo_ingreso === 'solo_costos'
+                : 'Flete registrado — pendiente de asignar a factura de productos';
+        } elseif ($documento_tipo === 'gastos') {
+            $message = 'Gasto operacional registrado (sin productos ni SKU)';
+        } elseif ($documento_tipo === 'guia_despacho') {
+            $message = 'Guía de despacho registrada — códigos y costos (sin inventario)';
+        } else {
+            $message = $modo_ingreso === 'solo_costos'
                 ? 'Costos y códigos registrados (sin actualizar bodega)'
-                : 'Factura procesada correctamente');
-
+                : 'Factura procesada correctamente';
+        }
         wp_send_json_success([
             'message' => $message,
             'factura_id' => $factura_id,
@@ -1043,6 +1181,38 @@ class Riverso_Invoice_Module {
             ARRAY_A
         );
 
+        $referencias = $factura['referencias'] ?? [];
+        $credit_note_resolution = null;
+        $facturas_origen = [];
+        if ((int) ($factura['tipo_dte'] ?? 0) === 61 || ($detection['tipo'] ?? '') === 'nota_credito') {
+            $credit_note_resolution = $this->credit_notes()->resolve_origen_factura(
+                $factura,
+                $factura['emisor']['rut'] ?? '',
+                'automatica'
+            );
+            $rut_emisor = sanitize_text_field($factura['emisor']['rut'] ?? '');
+            $facturas_origen = $wpdb->get_results($wpdb->prepare(
+                "SELECT f.id, f.tipo_dte, f.folio, f.fecha_emision, f.monto_total, f.estado,
+                        f.documento_subtipo, p.nombre AS proveedor_nombre
+                 FROM {$prefix}facturas f
+                 LEFT JOIN {$prefix}proveedores p ON p.id = f.proveedor_id
+                 WHERE f.rut_emisor = %s
+                   AND f.tipo_dte IN (33, 34, 52)
+                   AND (f.documento_subtipo IS NULL OR f.documento_subtipo IN ('productos', 'envio'))
+                 ORDER BY f.fecha_emision DESC, f.id DESC
+                 LIMIT 60",
+                $rut_emisor
+            ), ARRAY_A);
+        }
+
+        $preview_subtipo = $detection['tipo'] === 'nota_credito'
+            ? 'nota_credito'
+            : ($detection['tipo'] === 'envio'
+                ? 'envio'
+                : ($detection['tipo'] === 'gastos'
+                    ? 'gastos'
+                    : ($detection['tipo'] === 'guia_despacho' ? 'guia_despacho' : 'productos')));
+
         wp_send_json_success([
             'emisor' => $factura['emisor'],
             'folio' => $factura['folio'],
@@ -1058,9 +1228,12 @@ class Riverso_Invoice_Module {
             'proveedor_existente' => $existing,
             'proveedores' => $suppliers,
             'facturas_productos' => $facturas_productos,
+            'referencias' => $referencias,
+            'credit_note_resolution' => $credit_note_resolution,
+            'facturas_origen' => $facturas_origen,
             'rut_limpio' => $rut,
             'missing_gaps' => $this->detect_intake_gaps($factura, [
-                'documento_subtipo' => $detection['tipo'] === 'envio' ? 'envio' : 'productos',
+                'documento_subtipo' => $preview_subtipo,
             ]),
         ]);
     }
@@ -1226,6 +1399,28 @@ class Riverso_Invoice_Module {
              LIMIT 100",
             ARRAY_A
         );
+
+        // Referencias de nota de crédito (esta factura como NC o como origen)
+        $factura['credit_note_refs'] = $wpdb->get_results($wpdb->prepare(
+            "SELECT r.*, fo.folio AS folio_origen, fo.tipo_dte AS tipo_dte_origen,
+                    fo.documento_subtipo AS subtipo_origen, fo.monto_total AS monto_origen,
+                    po.nombre AS proveedor_origen
+             FROM {$prefix}factura_referencias r
+             LEFT JOIN {$prefix}facturas fo ON fo.id = r.factura_origen_id
+             LEFT JOIN {$prefix}proveedores po ON po.id = fo.proveedor_id
+             WHERE r.factura_id = %d
+             ORDER BY r.id DESC",
+            (int) $factura_id
+        ), ARRAY_A);
+
+        $factura['notas_credito_aplicadas'] = $wpdb->get_results($wpdb->prepare(
+            "SELECT r.*, nc.folio AS folio_nc, nc.monto_total AS monto_nc, nc.fecha_emision
+             FROM {$prefix}factura_referencias r
+             INNER JOIN {$prefix}facturas nc ON nc.id = r.factura_id AND nc.tipo_dte = 61
+             WHERE r.factura_origen_id = %d
+             ORDER BY r.id DESC",
+            (int) $factura_id
+        ), ARRAY_A);
 
         wp_send_json_success($factura);
     }
@@ -2195,7 +2390,7 @@ class Riverso_Invoice_Module {
         foreach ($factura_ids as $fid) {
             $saldo = $cn_service->calculate_saldo_efectivo($fid);
             $f = $wpdb->get_row($wpdb->prepare(
-                "SELECT tipo_dte, folio FROM {$prefix}riverso_facturas WHERE id = %d",
+                "SELECT tipo_dte, folio FROM {$prefix}facturas WHERE id = %d",
                 $fid
             ));
             if ($f) {
@@ -2252,5 +2447,86 @@ class Riverso_Invoice_Module {
         header('Content-Length: ' . filesize($file_path));
         readfile($file_path);
         exit;
+    }
+
+    /**
+     * AJAX: Buscar folios de facturas de productos o flete para vincular NC.
+     */
+    public function ajax_search_invoice_folios() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!$this->user_can_intake_invoices() && !current_user_can('riverso_view_invoices')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        $q = sanitize_text_field($_POST['q'] ?? '');
+        $rut_emisor = sanitize_text_field($_POST['rut_emisor'] ?? '');
+        $exclude_id = intval($_POST['exclude_id'] ?? 0);
+
+        if (strlen($q) < 1) {
+            wp_send_json_success(['results' => []]);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $like = '%' . $wpdb->esc_like($q) . '%';
+
+        $where = [
+            "(f.documento_subtipo IN ('productos', 'envio') OR f.documento_subtipo IS NULL)",
+            'f.tipo_dte <> 61',
+            "f.estado NOT IN ('rejected', 'archived')",
+            '(f.folio LIKE %s OR CAST(f.folio AS CHAR) LIKE %s OR p.nombre LIKE %s OR p.rut LIKE %s OR f.rut_emisor LIKE %s)',
+        ];
+        $params = [$like, $like, $like, $like, $like];
+
+        if ($rut_emisor !== '') {
+            $where[] = 'f.rut_emisor = %s';
+            $params[] = $rut_emisor;
+        }
+        if ($exclude_id > 0) {
+            $where[] = 'f.id <> %d';
+            $params[] = $exclude_id;
+        }
+
+        $where_sql = implode(' AND ', $where);
+        $sql = "SELECT f.id, f.folio, f.tipo_dte, f.fecha_emision, f.monto_total, f.estado,
+                       COALESCE(f.documento_subtipo, 'productos') AS documento_subtipo,
+                       f.rut_emisor, p.nombre AS proveedor_nombre
+                FROM {$prefix}facturas f
+                LEFT JOIN {$prefix}proveedores p ON p.id = f.proveedor_id
+                WHERE {$where_sql}
+                ORDER BY
+                    CASE WHEN CAST(f.folio AS CHAR) = %s THEN 0 WHEN CAST(f.folio AS CHAR) LIKE %s THEN 1 ELSE 2 END,
+                    f.fecha_emision DESC, f.id DESC
+                LIMIT 25";
+        $params[] = $q;
+        $params[] = $wpdb->esc_like($q) . '%';
+
+        $results = $wpdb->get_results($wpdb->prepare($sql, ...$params), ARRAY_A);
+        wp_send_json_success(['results' => $results ?: []]);
+    }
+
+    /**
+     * AJAX: Vincular NC existente a folio de productos/flete.
+     */
+    public function ajax_link_credit_note_origin() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!$this->user_can_intake_invoices()) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        $nc_id = intval($_POST['factura_nc_id'] ?? 0);
+        $origen_id = intval($_POST['factura_origen_id'] ?? 0);
+
+        $result = $this->credit_notes()->assign_origen_to_credit_note($nc_id, $origen_id, [
+            'user_id' => get_current_user_id(),
+        ]);
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+
+        wp_send_json_success($result);
     }
 }

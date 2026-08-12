@@ -403,10 +403,15 @@ class ReviewFormatter:
 
     def _add_woocommerce_attributes(self, review_df: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Agrega atributos al formato WooCommerce.
+        Agrega atributos al formato WooCommerce con soporte para 6 slots.
+        
+        Implementa la regla MAMUT:
+        - Si existen 'diametro' y 'largo' separados, combinarlos en 'Nominal X Largo' (oculto, variacion)
+        - 'Diámetro' y 'Largo' se muestran como informativos (visible, no variacion)
+        - Otros atributos (Material, Acabado, etc.) usan slots disponibles
         
         Para producto VARIABLE (padre):
-        - Valor(es) del atributo = TODOS los valores posibles separados por coma
+        - Valor(es) del atributo = TODOS los valores posibles separados por |
         
         Para VARIATION (hijo):
         - Valor(es) del atributo = UN solo valor específico de esa variación
@@ -416,7 +421,7 @@ class ReviewFormatter:
             df: DataFrame original con atributos
         
         Returns:
-            DataFrame con atributos en formato WooCommerce
+            DataFrame con atributos en formato WooCommerce (6 slots)
         """
         # Identificar columnas de atributos extraídos
         attr_cols = [col for col in df.columns if col.startswith('Atributo_')
@@ -425,6 +430,7 @@ class ReviewFormatter:
         # Mapeo de nombres internos a nombres WooCommerce
         attr_mapping = {
             'diametro': 'Diámetro',
+            'nominal': 'Nominal',
             'largo': 'Largo',
             'grosor': 'Grosor',
             'material': 'Material',
@@ -435,28 +441,82 @@ class ReviewFormatter:
             'tamaño': 'Tamaño'
         }
         
-        # Inicializar columnas de atributos WooCommerce (hasta 3)
-        for i in range(1, 4):
+        # Inicializar columnas de atributos WooCommerce (hasta 6 slots)
+        for i in range(1, 7):
             review_df[f'Nombre del atributo {i}'] = ''
             review_df[f'Valor(es) del atributo {i}'] = ''
             review_df[f'Atributo visible {i}'] = 1
             review_df[f'Atributo global {i}'] = 0  # 0 = no global (específico del producto)
         
-        # Llenar atributos
-        attr_index = 1
-        for col in attr_cols[:3]:
-            attr_name_short = col.replace('Atributo_', '')
-            attr_label = attr_mapping.get(attr_name_short.lower(), attr_name_short.capitalize())
-            
-            # Asignar nombre del atributo
-            review_df[f'Nombre del atributo {attr_index}'] = attr_label
-            
-            # Asignar valores
-            review_df[f'Valor(es) del atributo {attr_index}'] = df[col].fillna('')
-            
-            attr_index += 1
-            if attr_index > 3:
+        # Detectar si existe diámetro/nominal y largo para aplicar la regla NxL
+        has_diametro = any('diametro' in col.lower() or 'nominal' in col.lower() for col in attr_cols)
+        has_largo = any('largo' in col.lower() for col in attr_cols)
+        
+        # Mapear atributos a slots manteniendo orden lógico
+        slot_index = 1
+        processed_cols = set()
+        
+        # Slot 1 y 2: Nominal/Diámetro y Largo (informativos)
+        for col in attr_cols:
+            short_name = col.replace('Atributo_', '').lower()
+            if short_name in ['diametro', 'nominal'] and col not in processed_cols:
+                review_df[f'Nombre del atributo {slot_index}'] = 'Nominal'
+                review_df[f'Valor(es) del atributo {slot_index}'] = df[col].fillna('')
+                review_df[f'Atributo visible {slot_index}'] = 1  # Visible
+                review_df[f'Atributo global {slot_index}'] = 0
+                processed_cols.add(col)
+                slot_index += 1
                 break
+        
+        for col in attr_cols:
+            short_name = col.replace('Atributo_', '').lower()
+            if short_name == 'largo' and col not in processed_cols:
+                review_df[f'Nombre del atributo {slot_index}'] = 'Largo'
+                review_df[f'Valor(es) del atributo {slot_index}'] = df[col].fillna('')
+                review_df[f'Atributo visible {slot_index}'] = 1  # Visible
+                review_df[f'Atributo global {slot_index}'] = 0
+                processed_cols.add(col)
+                slot_index += 1
+                break
+        
+        # Slot especial: Nominal X Largo (solo si hay nominal y largo en el grupo variable)
+        if has_diametro and has_largo and 'variable' in df['Tipo'].values:
+            review_df[f'Nombre del atributo {slot_index}'] = 'Nominal X Largo'
+            # Combinar diámetro y largo para variaciones
+            combined_values = []
+            for idx in review_df.index:
+                nominal_val = ''
+                largo_val = ''
+                for col in attr_cols:
+                    short_name = col.replace('Atributo_', '').lower()
+                    if short_name in ['diametro', 'nominal']:
+                        nominal_val = str(df.loc[idx, col]).strip() if idx < len(df) else ''
+                    elif short_name == 'largo':
+                        largo_val = str(df.loc[idx, col]).strip() if idx < len(df) else ''
+                combo = f"{nominal_val} x {largo_val}".strip()
+                combined_values.append(combo if combo and combo != ' x ' else '')
+            
+            review_df[f'Valor(es) del atributo {slot_index}'] = combined_values
+            review_df[f'Atributo visible {slot_index}'] = 0  # NO visible (oculto)
+            review_df[f'Atributo global {slot_index}'] = 0
+            slot_index += 1
+        
+        # Slots restantes: otros atributos (grosor, material, acabado, medida, tamaño)
+        attr_order = ['grosor', 'material', 'acabado', 'medida', 'tamaño', 'marca']
+        for attr_short in attr_order:
+            if slot_index > 6:
+                break
+            for col in attr_cols:
+                short_name = col.replace('Atributo_', '').lower()
+                if short_name == attr_short and col not in processed_cols:
+                    attr_label = attr_mapping.get(attr_short, attr_short.capitalize())
+                    review_df[f'Nombre del atributo {slot_index}'] = attr_label
+                    review_df[f'Valor(es) del atributo {slot_index}'] = df[col].fillna('')
+                    review_df[f'Atributo visible {slot_index}'] = 1
+                    review_df[f'Atributo global {slot_index}'] = 0
+                    processed_cols.add(col)
+                    slot_index += 1
+                    break
         
         return review_df
 

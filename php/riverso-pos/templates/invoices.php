@@ -29,7 +29,7 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
             <option value="parcial">Parcial</option>
             <option value="procesado">Procesado</option>
             <option value="rechazado">Rechazado</option>
-            <option value="sin_vincular">Flete sin asignar</option>
+            <option value="sin_vincular">Sin vincular (flete / NC)</option>
             <option value="vinculado">Flete vinculado</option>
         </select>
         
@@ -63,7 +63,26 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
                 <th style="width: 100px;">Fecha</th>
                 <th style="width: 120px;">Total</th>
                 <th style="width: 100px;">Items</th>
-                <th style="width: 100px;">Estado</th>
+                <th style="width: 120px;" class="col-estado-help">
+                    Estado
+                    <button type="button" class="estado-help-btn" id="btn-estado-help" aria-expanded="false" aria-controls="estado-help-panel" title="Qué significa cada estado">
+                        <span class="dashicons dashicons-editor-help" aria-hidden="true"></span>
+                        <span class="screen-reader-text">Ayuda: estados de factura</span>
+                    </button>
+                    <div id="estado-help-panel" class="estado-help-panel" hidden>
+                        <p class="estado-help-title">Estados del documento</p>
+                        <ul>
+                            <li><strong>Recibido</strong> — XML cargado; aún sin vincular ítems a productos (o NC ya asociada a su origen).</li>
+                            <li><strong>Parcial</strong> — Algunos ítems vinculados; faltan otros por asociar o rechazar.</li>
+                            <li><strong>Procesado</strong> — Todos los ítems quedan vinculados o rechazados.</li>
+                            <li><strong>Rechazado</strong> — Documento descartado / no se procesa.</li>
+                            <li><strong>Sin vincular</strong> / <strong>NC sin folio</strong> — Flete o nota de crédito pendiente de asociar a su factura origen.</li>
+                            <li><strong>Vinculado</strong> / <strong>Vinculada</strong> — Flete o NC ya ligada a la factura de productos correspondiente.</li>
+                            <li><strong>Procesado</strong> (gastos) — Gasto operacional registrado; no requiere SKU ni inventario.</li>
+                            <li><strong>Recibido / Parcial / Procesado</strong> (guía) — Guía de despacho: códigos y costos sin bodega.</li>
+                        </ul>
+                    </div>
+                </th>
                 <th style="width: 120px;">Acciones</th>
             </tr>
         </thead>
@@ -161,9 +180,23 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
                         <input type="radio" name="documento_tipo" value="productos">
                         <span id="label-tipo-productos">Factura de productos</span>
                     </label>
-                    <label style="display:block;margin-bottom:12px;">
+                    <label style="display:block;margin-bottom:6px;">
                         <input type="radio" name="documento_tipo" value="envio">
                         <span id="label-tipo-envio">Factura de transportista / flete</span>
+                    </label>
+                    <label style="display:block;margin-bottom:6px;">
+                        <input type="radio" name="documento_tipo" value="nota_credito">
+                        <span id="label-tipo-nc">Nota de crédito</span>
+                    </label>
+                    <label style="display:block;margin-bottom:6px;">
+                        <input type="radio" name="documento_tipo" value="guia_despacho">
+                        <span id="label-tipo-guia">Guía de despacho</span>
+                        <em class="description" style="display:block;margin:2px 0 0 22px;">TipoDTE 52 — registra códigos proveedor y costos, sin inventario</em>
+                    </label>
+                    <label style="display:block;margin-bottom:12px;">
+                        <input type="radio" name="documento_tipo" value="gastos">
+                        <span id="label-tipo-gastos">Gastos operacionales</span>
+                        <em class="description" style="display:block;margin:2px 0 0 22px;">Servicios / ítems que no se venden (luz, agua, etc.) — sin productos ni SKU</em>
                     </label>
 
                     <div id="link-factura-wrap" style="display:none;margin-bottom:14px;padding:10px;background:#fff8e5;border-radius:4px;">
@@ -171,6 +204,27 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
                         <select id="link-factura-productos-id" style="width:100%;margin-top:6px;">
                             <option value="">— Dejar sin asignar por ahora —</option>
                         </select>
+                    </div>
+
+                    <div id="credit-note-section" style="display:none;margin-bottom:14px;padding:12px;background:#f0f6fc;border-radius:6px;border-left:4px solid #2271b1;">
+                        <h3 style="margin:0 0 8px;">Asociación de Nota de Crédito</h3>
+                        <p id="credit-note-ref-info" class="description" style="margin-bottom:8px;"></p>
+                        <p id="credit-note-resolution-msg" class="description" style="margin-bottom:10px;"></p>
+                        <label style="display:block;margin-bottom:6px;">
+                            <strong>Vincular a folio de productos o flete</strong>
+                        </label>
+                        <div class="folio-search-wrap" style="position:relative;max-width:520px;">
+                            <input type="text" id="credit-note-folio-search" class="regular-text" style="width:100%;"
+                                   placeholder="Buscar por folio, proveedor o RUT…" autocomplete="off">
+                            <input type="hidden" id="credit-note-origin-factura-id" value="">
+                            <div id="credit-note-folio-results" class="folio-search-results" style="display:none;"></div>
+                        </div>
+                        <p id="credit-note-selected-label" class="description" style="margin-top:6px;">Sin vincular — se guardará pendiente del folio.</p>
+                        <button type="button" class="button button-small" id="credit-note-clear-origin" style="display:none;margin-top:4px;">Quitar vínculo / dejar pendiente</button>
+                        <label style="display:block;margin-top:10px;">
+                            <input type="checkbox" id="credit-note-reversa-inventario">
+                            Aplicar reversa de inventario (opcional)
+                        </label>
                     </div>
 
                     <div id="opciones-productos-wrap">
@@ -292,21 +346,42 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
                 <div id="detail-envio-linked-info" style="margin-top:10px;display:none;"></div>
                 <button type="button" class="button" id="btn-envio-unassign" style="margin-top:8px;display:none;">Desvincular todas</button>
             </div>
+
+            <div id="detail-credit-note-section" style="display:none;margin-bottom:16px;padding:12px;background:#eef6ff;border-radius:6px;border-left:4px solid #2271b1;">
+                <h3 style="margin:0 0 8px;">Nota de crédito — vínculo a folio</h3>
+                <div id="detail-nc-current" class="description" style="margin-bottom:10px;"></div>
+                <label style="display:block;margin-bottom:6px;"><strong>Buscar folio de productos o flete</strong></label>
+                <div class="folio-search-wrap" style="position:relative;max-width:520px;">
+                    <input type="text" id="detail-nc-folio-search" class="regular-text" style="width:100%;"
+                           placeholder="Buscar por folio, proveedor o RUT…" autocomplete="off">
+                    <input type="hidden" id="detail-nc-origen-id" value="">
+                    <div id="detail-nc-folio-results" class="folio-search-results" style="display:none;"></div>
+                </div>
+                <p id="detail-nc-selected-label" class="description" style="margin-top:6px;"></p>
+                <button type="button" class="button button-primary" id="btn-detail-nc-link" style="margin-top:8px;">Vincular a folio seleccionado</button>
+            </div>
             
-            <h3>Items</h3>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0 8px;">
+                <h3 style="margin:0;">Items</h3>
+                <label style="margin:0;white-space:nowrap;font-size:12px;">
+                    <input type="checkbox" id="toggle-precio-decimales">
+                    Precio unitario con decimales <em>(hasta 3)</em>
+                </label>
+            </div>
             <table class="wp-list-table widefat striped riverso-items-table">
                 <thead>
                     <tr>
                         <th style="width: 40px;">#</th>
-                        <th style="width: 120px;">Código Prov.</th>
+                        <th style="width: 100px;">Código Prov.</th>
                         <th class="col-desc">Descripción</th>
-                        <th style="width: 60px;">Cant.</th>
-                        <th style="width: 100px;">Precio</th>
-                        <th style="width: 100px;">Total</th>
-                        <th style="width: 120px;">SKU Local</th>
-                        <th style="width: 100px;">SKU Online</th>
-                        <th style="width: 100px;">Estado</th>
-                        <th style="width: 80px;">Acción</th>
+                        <th style="width: 50px;">Cant.</th>
+                        <th style="width: 90px;">Precio</th>
+                        <th style="width: 70px;">Dsc/Rec</th>
+                        <th style="width: 90px;">Neto final</th>
+                        <th style="width: 90px;">Bruto final</th>
+                        <th style="width: 110px;">SKU Local</th>
+                        <th style="width: 90px;">Estado</th>
+                        <th style="width: 70px;">Acción</th>
                     </tr>
                 </thead>
                 <tbody id="detail-items">
@@ -370,6 +445,39 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
 #upload-xml-preview {
     max-height: 280px;
     overflow-y: auto;
+}
+
+.folio-search-results {
+    position: absolute;
+    z-index: 20;
+    left: 0;
+    right: 0;
+    top: 100%;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    max-height: 220px;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,.12);
+}
+.folio-search-results .folio-result-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 10px;
+    border: 0;
+    background: #fff;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f1;
+    font-size: 13px;
+}
+.folio-search-results .folio-result-item:hover {
+    background: #f0f6fc;
+}
+.folio-search-results .folio-result-empty {
+    padding: 10px;
+    color: #666;
+    font-size: 13px;
 }
 
 .riverso-modal-header {
@@ -455,6 +563,89 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
     color: #2e7d32;
 }
 
+.col-estado-help {
+    position: relative;
+    white-space: nowrap;
+}
+
+.estado-help-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin: 0 0 0 2px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #646970;
+    cursor: help;
+    vertical-align: middle;
+    line-height: 1;
+}
+
+.estado-help-btn .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
+.estado-help-btn:hover,
+.estado-help-btn[aria-expanded="true"] {
+    color: #2271b1;
+}
+
+.estado-help-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 20;
+    width: 320px;
+    max-width: min(320px, 90vw);
+    padding: 12px 14px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    text-align: left;
+    white-space: normal;
+    font-weight: 400;
+    text-transform: none;
+    color: #1d2327;
+}
+
+.estado-help-panel[hidden] {
+    display: none !important;
+}
+
+.estado-help-title {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.estado-help-panel ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.estado-help-panel li {
+    margin: 0 0 8px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #50575e;
+}
+
+.estado-help-panel li:last-child {
+    margin-bottom: 0;
+}
+
+.estado-help-panel strong {
+    color: #1d2327;
+}
+
 .status-badge {
     display: inline-block;
     padding: 3px 8px;
@@ -471,6 +662,7 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
 .status-pendiente { background: #fafafa; color: #666; }
 .status-vinculado { background: #e8f5e9; color: #2e7d32; }
 .status-sin_vincular { background: #fff3e0; color: #e65100; }
+.status-gasto { background: #f3e8ff; color: #6b21a8; }
 
 .link-sku-input {
     display: flex;
@@ -493,6 +685,19 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
 jQuery(function($) {
     const nonce = '<?php echo wp_create_nonce('riverso_pos_nonce'); ?>';
     const canDeleteInvoices = <?php echo (current_user_can('riverso_process_invoices') || current_user_can('riverso_create_invoices')) ? 'true' : 'false'; ?>;
+
+    $('#btn-estado-help').on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const open = $(this).attr('aria-expanded') === 'true';
+        $(this).attr('aria-expanded', open ? 'false' : 'true');
+        $('#estado-help-panel').prop('hidden', open);
+    });
+    $(document).on('click.estadoHelp', function(e) {
+        if ($(e.target).closest('.col-estado-help').length) return;
+        $('#btn-estado-help').attr('aria-expanded', 'false');
+        $('#estado-help-panel').prop('hidden', true);
+    });
     
     // Cargar facturas
     function loadInvoices(page = 1) {
@@ -533,15 +738,32 @@ jQuery(function($) {
                    </button>`
                 : '';
             const isEnvio = f.documento_subtipo === 'envio';
-            const tipoLabel = isEnvio
-                ? '<span style="color:#b45309;font-weight:600;">Flete</span>'
-                : '<span style="color:#15803d;">Productos</span>';
+            const isNc = f.documento_subtipo === 'nota_credito' || Number(f.tipo_dte) === 61;
+            const isGuia = f.documento_subtipo === 'guia_despacho' || Number(f.tipo_dte) === 52;
+            const isGastos = f.documento_subtipo === 'gastos';
+            const tipoLabel = isNc
+                ? '<span style="color:#1d4ed8;font-weight:600;">N. Crédito</span>'
+                : (isEnvio
+                    ? '<span style="color:#b45309;font-weight:600;">Flete</span>'
+                    : (isGuia
+                        ? '<span style="color:#0e7490;font-weight:600;">Guía</span>'
+                        : (isGastos
+                            ? '<span style="color:#6b21a8;font-weight:600;">Gastos</span>'
+                            : '<span style="color:#15803d;">Productos</span>')));
             const vinculadas = parseInt(f.facturas_vinculadas || 0, 10);
-            const itemsCol = isEnvio
-                ? (vinculadas > 0 ? `${vinculadas} factura(s)` : 'Sin asignar')
-                : `${f.items_vinculados}/${f.total_items}` +
-                  (parseInt(f.fletes_vinculados) > 0 ? ` · ${f.fletes_vinculados} flete(s)` : '');
-            const estadoLabel = (f.estado || '').replace(/_/g, ' ');
+            const itemsCol = isNc
+                ? (f.estado === 'sin_vincular' ? 'Folio origen pendiente' : 'Vinculada')
+                : (isEnvio
+                    ? (vinculadas > 0 ? `${vinculadas} factura(s)` : 'Sin asignar')
+                    : (isGastos
+                        ? 'Sin inventario'
+                        : (isGuia
+                            ? `${f.items_vinculados}/${f.total_items} · Solo costos`
+                            : `${f.items_vinculados}/${f.total_items}` +
+                              (parseInt(f.fletes_vinculados) > 0 ? ` · ${f.fletes_vinculados} flete(s)` : ''))));
+            const estadoLabel = isNc && f.estado === 'sin_vincular'
+                ? 'NC sin folio'
+                : (f.estado || '').replace(/_/g, ' ');
             const linkBtn = isEnvio
                 ? `<button class="button button-small button-primary btn-view-invoice" data-id="${f.id}" title="Vincular a facturas de productos">Vincular</button>`
                 : '';
@@ -750,14 +972,19 @@ jQuery(function($) {
             }
 
             const det = preview.data.detection || {};
-            // Detectar tipo: si es nota_credito, mantener ese tipo
-            const tipo = det.tipo === 'nota_credito' ? 'nota_credito' : (det.tipo === 'envio' ? 'envio' : 'productos');
+            // Detectar tipo: NC / flete / guía / gastos / productos
+            const tipo = det.tipo === 'nota_credito' ? 'nota_credito'
+                : (det.tipo === 'envio' ? 'envio'
+                    : (det.tipo === 'guia_despacho' ? 'guia_despacho'
+                        : (det.tipo === 'gastos' ? 'gastos' : 'productos')));
 
             const emisor = preview.data.emisor || {};
             $row.find('.bulk-status').text('Subiendo…');
             const upload = await uploadOneFile(file, {
                 documento_tipo: tipo,
-                modo_ingreso: tipo === 'nota_credito' ? 'solo_costos' : (tipo === 'envio' ? 'solo_costos' : ($('input[name="modo_ingreso"]:checked').val() || '<?php echo esc_js($default_intake_mode); ?>')),
+                modo_ingreso: (tipo === 'nota_credito' || tipo === 'envio' || tipo === 'gastos' || tipo === 'guia_despacho')
+                    ? 'solo_costos'
+                    : ($('input[name="modo_ingreso"]:checked').val() || '<?php echo esc_js($default_intake_mode); ?>'),
                 proveedor_modo: 'xml',
                 proveedor_nombre: emisor.razon_social || '',
                 proveedor_rut: emisor.rut || '',
@@ -766,7 +993,9 @@ jQuery(function($) {
 
             if (upload.success) {
                 $row.removeClass('run').addClass('ok');
-                const note = tipo === 'envio' ? ' (sin asignar)' : '';
+                const note = tipo === 'envio' ? ' (sin asignar)'
+                    : (tipo === 'gastos' ? ' (gasto)'
+                        : (tipo === 'guia_despacho' ? ' (guía)' : ''));
                 $row.find('.bulk-status').text('✓ Folio ' + (upload.data?.resumen?.folio || '') + note);
                 ok++;
             } else {
@@ -816,9 +1045,144 @@ jQuery(function($) {
     function updateTipoUi() {
         const tipo = $('input[name="documento_tipo"]:checked').val();
         const isEnvio = tipo === 'envio';
+        const isNc = tipo === 'nota_credito';
+        const isGuia = tipo === 'guia_despacho';
+        const isGastos = tipo === 'gastos';
         $('#link-factura-wrap').toggle(isEnvio);
-        $('#opciones-productos-wrap').toggle(!isEnvio);
+        $('#credit-note-section').toggle(isNc);
+        $('#opciones-productos-wrap').toggle(!isEnvio && !isNc && !isGastos && !isGuia);
     }
+
+    function formatFolioResultLabel(f) {
+        const sub = f.documento_subtipo === 'envio' ? 'Flete' : 'Productos';
+        return `Folio ${f.folio} · ${sub} · T${f.tipo_dte} · $${Number(f.monto_total || 0).toLocaleString('es-CL')} · ${f.proveedor_nombre || f.rut_emisor || ''}`;
+    }
+
+    function setCreditNoteOrigin(f) {
+        if (!f || !f.id) {
+            $('#credit-note-origin-factura-id').val('');
+            $('#credit-note-folio-search').val('');
+            $('#credit-note-selected-label').text('Sin vincular — se guardará pendiente del folio.');
+            $('#credit-note-clear-origin').hide();
+            return;
+        }
+        $('#credit-note-origin-factura-id').val(String(f.id));
+        $('#credit-note-folio-search').val(`Folio ${f.folio}`);
+        $('#credit-note-selected-label').html('Seleccionada: <strong>' + formatFolioResultLabel(f) + '</strong>');
+        $('#credit-note-clear-origin').show();
+        $('#credit-note-folio-results').hide().empty();
+    }
+
+    function bindFolioSearcher($input, $results, $hidden, opts) {
+        let timer = null;
+        const options = opts || {};
+        $input.off('input.folioSearch focus.folioSearch').on('input.folioSearch focus.folioSearch', function() {
+            const q = $(this).val().trim();
+            clearTimeout(timer);
+            if (q.length < 1) {
+                $results.hide().empty();
+                return;
+            }
+            timer = setTimeout(function() {
+                $.post(ajaxurl, {
+                    action: 'riverso_search_invoice_folios',
+                    nonce: nonce,
+                    q: q,
+                    rut_emisor: options.rutEmisor || '',
+                    exclude_id: options.excludeId || 0,
+                    tipos: options.tipos || 'productos,envio'
+                }, function(res) {
+                    if (!res.success) {
+                        $results.html('<div class="folio-result-empty">Error al buscar</div>').show();
+                        return;
+                    }
+                    const rows = res.data.results || [];
+                    if (!rows.length) {
+                        $results.html('<div class="folio-result-empty">Sin resultados para "' + q + '"</div>').show();
+                        return;
+                    }
+                    $results.empty();
+                    rows.forEach(function(f) {
+                        const $btn = $('<button type="button" class="folio-result-item"></button>')
+                            .text(formatFolioResultLabel(f))
+                            .on('click', function() {
+                                if (typeof options.onSelect === 'function') {
+                                    options.onSelect(f);
+                                } else {
+                                    $hidden.val(String(f.id));
+                                    $input.val('Folio ' + f.folio);
+                                    $results.hide().empty();
+                                }
+                            });
+                        $results.append($btn);
+                    });
+                    $results.show();
+                });
+            }, 250);
+        });
+        $(document).off('click.folioSearchClose').on('click.folioSearchClose', function(e) {
+            if (!$(e.target).closest('.folio-search-wrap').length) {
+                $('.folio-search-results').hide();
+            }
+        });
+    }
+
+    function fillCreditNoteSection(d) {
+        const refs = d.referencias || [];
+        const ref = refs[0] || {};
+        const folioRef = String(ref.folio_ref ?? '');
+        const tipoRef = ref.tipo_doc_ref || '—';
+        const resol = d.credit_note_resolution || {};
+
+        if (folioRef && folioRef !== '0') {
+            $('#credit-note-ref-info').html(
+                `Referencia XML: tipo <strong>${tipoRef}</strong>, folio <strong>${folioRef}</strong>` +
+                (ref.razon_ref ? ` · ${ref.razon_ref}` : '')
+            );
+        } else {
+            $('#credit-note-ref-info').html(
+                'La NC no trae un folio de referencia usable (FolioRef=0 o vacío). Puede asociarla manualmente o dejarla pendiente.'
+            );
+        }
+
+        let msg = resol.mensaje || '';
+        if (resol.estado === 'pendiente' && folioRef && folioRef !== '0') {
+            msg = `No está en el sistema el folio origen <strong>${folioRef}</strong>. Búsquelo o déjelo pendiente hasta subirlo.`;
+        } else if (resol.estado === 'resuelta_automatica') {
+            msg = resol.mensaje || 'Factura origen encontrada automáticamente.';
+        } else if (resol.estado === 'ambigua') {
+            msg = resol.mensaje || 'Hay varias coincidencias; busque y seleccione la factura correcta.';
+        }
+        $('#credit-note-resolution-msg').html(msg);
+
+        setCreditNoteOrigin(null);
+        const origenes = d.facturas_origen || [];
+        if (resol.factura_id) {
+            const match = origenes.find(f => String(f.id) === String(resol.factura_id));
+            if (match) {
+                setCreditNoteOrigin(match);
+            } else {
+                setCreditNoteOrigin({ id: resol.factura_id, folio: folioRef || resol.factura_id, documento_subtipo: 'productos', tipo_dte: tipoRef, monto_total: 0 });
+            }
+        } else if (folioRef && folioRef !== '0') {
+            $('#credit-note-folio-search').val(folioRef);
+        }
+
+        bindFolioSearcher(
+            $('#credit-note-folio-search'),
+            $('#credit-note-folio-results'),
+            $('#credit-note-origin-factura-id'),
+            {
+                rutEmisor: d.emisor?.rut || '',
+                onSelect: setCreditNoteOrigin
+            }
+        );
+        $('#credit-note-reversa-inventario').prop('checked', false);
+    }
+
+    $('#credit-note-clear-origin').on('click', function() {
+        setCreditNoteOrigin(null);
+    });
 
     $('input[name="documento_tipo"]').on('change', updateTipoUi);
 
@@ -852,18 +1216,28 @@ jQuery(function($) {
             $tbody.append('<tr><td colspan="4" style="text-align:center;color:#666;">Sin líneas de detalle en el XML</td></tr>');
         } else {
             items.slice(0, 15).forEach(it => {
-                const badge = it.tipo === 'envio'
-                    ? '<span style="color:#b45309;">Flete</span>'
-                    : '<span style="color:#15803d;">Producto</span>';
+                let badge;
+                if (it.tipo === 'envio') {
+                    badge = '<span style="color:#b45309;">Flete</span>';
+                } else if (it.tipo === 'gasto' || tipoSugerido === 'gastos') {
+                    badge = '<span style="color:#6b21a8;">Gasto</span>';
+                } else if (Number(d.tipo_dte) === 61 || tipoSugerido === 'nota_credito') {
+                    badge = '<span style="color:#1d4ed8;">NC</span>';
+                } else if (Number(d.tipo_dte) === 52 || tipoSugerido === 'guia_despacho') {
+                    badge = '<span style="color:#0e7490;">Guía</span>';
+                } else {
+                    badge = '<span style="color:#15803d;">Producto</span>';
+                }
+                const desc = (it.nombre || it.descripcion || '—').toString();
                 $tbody.append(`<tr>
                     <td>${it.linea}</td>
-                    <td>${it.nombre}</td>
+                    <td class="col-desc">${$('<div>').text(desc).html()}</td>
                     <td>${badge}</td>
                     <td style="text-align:right;">$${Number(it.monto || 0).toLocaleString('es-CL')}</td>
                 </tr>`);
             });
             if (items.length > 15) {
-                $tbody.append(`<tr><td colspan="4" style="text-align:center;color:#666;">… y ${items.length - 15} líneas más</td></tr>`);
+                $tbody.append(`<tr><td colspan="4" style="text-align:center;color:#666;">… y ${items.length > 15 ? items.length - 15 : 0} líneas más</td></tr>`);
             }
         }
 
@@ -879,6 +1253,9 @@ jQuery(function($) {
             $('input[name="documento_tipo"][value="productos"]').prop('checked', true);
         }
         updateTipoUi();
+        if (tipoSugerido === 'nota_credito' || Number(d.tipo_dte) === 61) {
+            fillCreditNoteSection(d);
+        }
 
         const $link = $('#link-factura-productos-id').empty()
             .append('<option value="">— Dejar sin asignar por ahora —</option>');
@@ -1037,8 +1414,14 @@ jQuery(function($) {
         formData.append('nonce', nonce);
         formData.append('documento_tipo', tipo);
         formData.append('upload_mode', 'single');
-        formData.append('modo_ingreso', $('input[name="modo_ingreso"]:checked').val() || 'recepcion');
+        formData.append('modo_ingreso', (tipo === 'nota_credito' || tipo === 'envio' || tipo === 'gastos' || tipo === 'guia_despacho')
+            ? 'solo_costos'
+            : ($('input[name="modo_ingreso"]:checked').val() || 'recepcion'));
         formData.append('link_to_factura_id', $('#link-factura-productos-id').val() || '');
+        formData.append('factura_origen_id', tipo === 'nota_credito' ? ($('#credit-note-origin-factura-id').val() || '') : '');
+        if (tipo === 'nota_credito' && $('#credit-note-reversa-inventario').is(':checked')) {
+            formData.append('reversa_inventario', '1');
+        }
         formData.append('xml_file', fileInput[0].files[0]);
         appendProveedorFields(formData);
         
@@ -1061,9 +1444,20 @@ jQuery(function($) {
                                     ? '<br>✓ Flete vinculado a factura de productos'
                                     : '<br>⏳ Flete guardado sin asignar — vincúlelo desde el detalle')
                                 : ''}
+                            ${response.data.resumen.documento_tipo === 'nota_credito'
+                                ? (response.data.resumen.nc_pendiente
+                                    ? `<br>⏳ Pendiente del folio origen <strong>${response.data.resumen.nc_folio_ref || '—'}</strong> — súbalo o vincúlelo después`
+                                    : '<br>✓ Vinculada a factura origen')
+                                : ''}
+                            ${response.data.resumen.documento_tipo === 'gastos'
+                                ? '<br>✓ Registrado como gasto operacional (sin productos ni SKU)'
+                                : ''}
+                            ${response.data.resumen.documento_tipo === 'guia_despacho'
+                                ? '<br>✓ Guía de despacho: códigos y costos (sin inventario)'
+                                : ''}
                             ${response.data.resumen.items ? '<br>Productos: ' + response.data.resumen.items : ''}
                             ${response.data.resumen.items_envio ? ' · Líneas flete: ' + response.data.resumen.items_envio : ''}
-                            ${response.data.modo_ingreso === 'solo_costos' && response.data.resumen.documento_tipo !== 'envio' ? `<br>Costos: ${response.data.resumen.costos_registrados || 0} · Pendientes: ${response.data.resumen.costos_pendientes || 0}` : ''}
+                            ${response.data.modo_ingreso === 'solo_costos' && response.data.resumen.documento_tipo !== 'envio' && response.data.resumen.documento_tipo !== 'nota_credito' && response.data.resumen.documento_tipo !== 'gastos' ? `<br>Costos: ${response.data.resumen.costos_registrados || 0} · Pendientes: ${response.data.resumen.costos_pendientes || 0}` : ''}
                         </div>
                     `);
                     loadInvoices(1);
@@ -1125,23 +1519,133 @@ jQuery(function($) {
     });
     
     let currentDetailFacturaId = null;
+    let currentDetailFactura = null;
+    let showPrecioDecimales = false;
+
+    /** Precio unitario: entero, o hasta 3 decimales (sin ceros finales). */
+    function formatUnitPrice(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return '—';
+        if (!showPrecioDecimales) {
+            return '$' + Math.round(n).toLocaleString('es-CL');
+        }
+        const rounded = Math.round(n * 1000) / 1000;
+        const fixed = rounded.toFixed(3).replace(/\.?0+$/, '');
+        const parts = fixed.split('.');
+        const intPart = Number(parts[0]).toLocaleString('es-CL');
+        return parts.length > 1 ? ('$' + intPart + ',' + parts[1]) : ('$' + intPart);
+    }
+
+    function renderDetailItems(factura) {
+        const isGastos = factura.documento_subtipo === 'gastos';
+        const tbody = $('#detail-items');
+        tbody.empty();
+
+        (factura.items || []).forEach(function(item) {
+            const isGastoItem = isGastos || item.item_tipo === 'gasto' || item.estado === 'gasto';
+            const skuCell = isGastoItem
+                ? '<span class="description">N/A (gasto)</span>'
+                : (item.sku_local ||
+                    `<div class="link-sku-input">
+                        <input type="text" class="sku-input" placeholder="SKU local">
+                        <button class="button button-small btn-link-sku" data-item="${item.id}">OK</button>
+                    </div>`);
+            const actionsCell = (isGastoItem || item.estado === 'vinculado')
+                ? ''
+                : `<button class="button button-small btn-reject-item" data-item="${item.id}" title="Rechazar">
+                        <span class="dashicons dashicons-no"></span>
+                   </button>`;
+            const dsc = Number(item.descuento_monto || 0);
+            const rec = Number(item.recargo_monto || 0);
+            const dscRec = (dsc || rec)
+                ? `-${dsc.toLocaleString('es-CL')}${rec ? ' / +' + rec.toLocaleString('es-CL') : ''}`
+                : '—';
+            const netoFinal = Number(item.costo_neto_final != null ? item.costo_neto_final : item.monto_total || 0);
+            const brutoFinal = Number(item.costo_bruto_final != null ? item.costo_bruto_final : Math.round(netoFinal * 1.19));
+            const row = $('<tr>');
+            row.html(`
+                <td>${item.linea || item.numero_linea || ''}</td>
+                <td><code>${item.codigo_proveedor || '-'}</code></td>
+                <td class="col-desc">${item.nombre || item.descripcion || '—'}${item.impuesto_especifico_monto ? '<br><span class="description">Imp.esp: $' + Number(item.impuesto_especifico_monto).toLocaleString('es-CL') + '</span>' : ''}</td>
+                <td style="text-align: right;">${item.cantidad}</td>
+                <td style="text-align: right;" class="col-precio-unit">${formatUnitPrice(item.precio_unitario)}</td>
+                <td style="text-align: right;font-size:11px;">${dscRec}</td>
+                <td style="text-align: right;">$${Math.round(netoFinal).toLocaleString('es-CL')}</td>
+                <td style="text-align: right;">$${Math.round(brutoFinal).toLocaleString('es-CL')}</td>
+                <td>${skuCell}</td>
+                <td><span class="status-badge status-${item.estado}">${item.estado}</span></td>
+                <td>${actionsCell}</td>
+            `);
+            tbody.append(row);
+        });
+    }
+
+    $('#toggle-precio-decimales').on('change', function() {
+        showPrecioDecimales = $(this).is(':checked');
+        if (currentDetailFactura) {
+            renderDetailItems(currentDetailFactura);
+        }
+    });
 
     function showInvoiceDetail(factura) {
         currentDetailFacturaId = factura.id;
-        $('#detail-folio').text('#' + factura.folio);
+        currentDetailFactura = factura;
+        const isEnvio = factura.documento_subtipo === 'envio';
+        const isNc = factura.documento_subtipo === 'nota_credito' || Number(factura.tipo_dte) === 61;
+        const isGuia = factura.documento_subtipo === 'guia_despacho' || Number(factura.tipo_dte) === 52;
+        const isGastos = factura.documento_subtipo === 'gastos';
+
+        $('#detail-folio').text('#' + factura.folio + (isGuia ? ' · Guía (solo costos)' : (isGastos ? ' · Gastos' : '')));
         $('#detail-proveedor').text(factura.proveedor_nombre);
         $('#detail-rut').text(factura.proveedor_rut);
         $('#detail-fecha').text(factura.fecha_emision);
         $('#detail-total').text('$' + parseInt(factura.monto_total).toLocaleString('es-CL'));
+        $('#toggle-precio-decimales').prop('checked', showPrecioDecimales);
 
-        const isEnvio = factura.documento_subtipo === 'envio';
         const $shippingSection = $('#detail-shipping-section');
         const $envioSection = $('#detail-envio-assign-section');
+        const $ncSection = $('#detail-credit-note-section');
 
         $shippingSection.hide();
         $envioSection.hide();
+        $ncSection.hide();
 
-        if (isEnvio) {
+        if (isNc) {
+            $ncSection.show();
+            const refs = factura.credit_note_refs || [];
+            const ref = refs[0];
+            if (ref && ref.factura_origen_id) {
+                const sub = ref.subtipo_origen === 'envio' ? 'Flete' : 'Productos';
+                $('#detail-nc-current').html(
+                    `Vinculada a <strong>${sub} folio ${ref.folio_origen}</strong>` +
+                    ` · $${Number(ref.monto_origen || 0).toLocaleString('es-CL')}` +
+                    (ref.proveedor_origen ? ` · ${ref.proveedor_origen}` : '') +
+                    ` <span class="description">(${ref.estado_resolucion || ''})</span>`
+                );
+            } else {
+                const folioPend = ref?.folio_ref && ref.folio_ref !== '0' ? ref.folio_ref : '—';
+                $('#detail-nc-current').html(
+                    `Pendiente de vínculo. Folio referencia XML: <strong>${folioPend}</strong>. Busque una factura de productos o un flete.`
+                );
+            }
+            $('#detail-nc-origen-id').val('');
+            $('#detail-nc-folio-search').val('');
+            $('#detail-nc-selected-label').text('');
+            bindFolioSearcher(
+                $('#detail-nc-folio-search'),
+                $('#detail-nc-folio-results'),
+                $('#detail-nc-origen-id'),
+                {
+                    excludeId: factura.id,
+                    onSelect: function(f) {
+                        $('#detail-nc-origen-id').val(String(f.id));
+                        $('#detail-nc-folio-search').val('Folio ' + f.folio);
+                        $('#detail-nc-selected-label').html('Seleccionada: <strong>' + formatFolioResultLabel(f) + '</strong>');
+                        $('#detail-nc-folio-results').hide().empty();
+                    }
+                }
+            );
+        } else if (isEnvio) {
             $envioSection.show();
             const vinculadas = factura.facturas_productos_vinculadas || [];
             const $target = $('#detail-envio-target-id').empty()
@@ -1204,38 +1708,8 @@ jQuery(function($) {
                 }
             }
         }
-        
-        const tbody = $('#detail-items');
-        tbody.empty();
-        
-        factura.items.forEach(function(item) {
-            const row = $('<tr>');
-            row.html(`
-                <td>${item.linea}</td>
-                <td><code>${item.codigo_proveedor || '-'}</code></td>
-                <td class="col-desc">${item.descripcion}</td>
-                <td style="text-align: right;">${item.cantidad}</td>
-                <td style="text-align: right;">$${parseInt(item.precio_unitario).toLocaleString('es-CL')}</td>
-                <td style="text-align: right;">$${parseInt(item.monto_total).toLocaleString('es-CL')}</td>
-                <td>${item.sku_local ||
-                    `<div class="link-sku-input">
-                        <input type="text" class="sku-input" placeholder="SKU local">
-                        <button class="button button-small btn-link-sku" data-item="${item.id}">OK</button>
-                    </div>`
-                }</td>
-                <td><code style="color:#666;">${item.sku_online || '—'}</code></td>
-                <td><span class="status-badge status-${item.estado}">${item.estado}</span></td>
-                <td>
-                    ${item.estado === 'vinculado' ? '' : 
-                        `<button class="button button-small btn-reject-item" data-item="${item.id}" title="Rechazar">
-                            <span class="dashicons dashicons-no"></span>
-                        </button>`
-                    }
-                </td>
-            `);
-            tbody.append(row);
-        });
-        
+
+        renderDetailItems(factura);
         $('#modal-invoice-detail').css('display', 'flex');
     }
 
@@ -1249,6 +1723,27 @@ jQuery(function($) {
             if (response.success) showInvoiceDetail(response.data);
         });
     }
+
+    $('#btn-detail-nc-link').on('click', function() {
+        const origenId = $('#detail-nc-origen-id').val();
+        if (!origenId) {
+            alert('Busque y seleccione un folio de productos o flete');
+            return;
+        }
+        $.post(ajaxurl, {
+            action: 'riverso_link_credit_note_origin',
+            nonce: nonce,
+            factura_nc_id: currentDetailFacturaId,
+            factura_origen_id: origenId
+        }, function(res) {
+            if (res.success) {
+                reloadInvoiceDetail();
+                loadInvoices();
+            } else {
+                alert(res.data?.message || 'Error al vincular NC');
+            }
+        });
+    });
 
     $('#btn-assign-flete').on('click', function() {
         const envioId = $('#detail-assign-flete-id').val();

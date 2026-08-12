@@ -2413,7 +2413,7 @@ class Riverso_Woo_Publisher_Module {
             ]);
         }
 
-        // Cerrar tarea asociada si existe.
+        // Cerrar tareas asociadas (legado + nuevo tipo)
         $pp_id = $wpdb->get_var($wpdb->prepare(
             "SELECT id FROM {$prefix}producto_proveedor
              WHERE producto_base_id = %d AND activo = 1 ORDER BY id ASC LIMIT 1",
@@ -2422,6 +2422,7 @@ class Riverso_Woo_Publisher_Module {
         if ($pp_id) {
             $this->close_related_task('relacionar_producto_proveedor', 'producto_proveedor', (int) $pp_id);
         }
+        $this->close_related_task('crear_contraparte_local', 'producto_base', $base_id);
 
         return [
             'id' => $base_id,
@@ -2452,8 +2453,8 @@ class Riverso_Woo_Publisher_Module {
     }
 
     /**
-     * Genera tareas de relacion SKU local para productos_base MAMUT sin SKU local.
-     * Se ejecuta como CLI o como helper.
+     * Genera tareas de asignación de SKU Local para bases de catálogo sin local real.
+     * Incluye: Local vacío, o Local = código proveedor/catálogo (dato histórico incorrecto).
      */
     public function enqueue_local_sku_tasks() {
         global $wpdb;
@@ -2464,9 +2465,12 @@ class Riverso_Woo_Publisher_Module {
                     pp.id AS pp_id, pp.codigo_proveedor
              FROM {$prefix}producto_base pb
              INNER JOIN {$prefix}producto_proveedor pp ON pp.producto_base_id = pb.id
-             WHERE pb.canonical_sku = pp.codigo_proveedor
-               AND pb.deleted_at IS NULL
-               AND pp.activo = 1
+             WHERE pb.deleted_at IS NULL
+               AND (
+                    pb.canonical_sku IS NULL
+                    OR pb.canonical_sku = ''
+                    OR pb.canonical_sku = pp.codigo_proveedor
+               )
              GROUP BY pb.id, pp.id
              ORDER BY pb.id ASC",
             ARRAY_A
@@ -2475,19 +2479,26 @@ class Riverso_Woo_Publisher_Module {
         $created = 0;
         foreach ($bases as $row) {
             if (function_exists('riverso_create_review_task')) {
+                $codigo = $row['codigo_proveedor'];
                 riverso_create_review_task(
-                    'relacionar_producto_proveedor',
+                    'crear_contraparte_local',
                     sprintf(
-                        'Asignar SKU local para código %s (producto %d)',
-                        esc_html($row['codigo_proveedor']),
-                        $row['woocommerce_product_id']
+                        'Asignar SKU Local para código catálogo %s (base #%d)',
+                        $codigo,
+                        (int) $row['id']
                     ),
-                    'producto_proveedor',
-                    (int) $row['pp_id'],
+                    'producto_base',
+                    (int) $row['id'],
                     [
-                        'product_id' => (int) $row['woocommerce_product_id'],
-                        'base_id' => (int) $row['id'],
-                        'codigo_proveedor' => $row['codigo_proveedor'],
+                        'prioridad' => 'normal',
+                        'datos_extra' => [
+                            'product_id' => (int) $row['woocommerce_product_id'],
+                            'base_id' => (int) $row['id'],
+                            'pp_id' => (int) $row['pp_id'],
+                            'codigo_proveedor' => $codigo,
+                            'codigo_catalogo' => $codigo,
+                            'origen' => 'enqueue_local_sku_tasks',
+                        ],
                     ]
                 );
                 $created++;
@@ -2605,7 +2616,7 @@ class Riverso_Woo_Publisher_Module {
     /**
      * Crear producto variable WooCommerce desde producto base local
      */
-    public function create_woo_variable_from_base($product_base_id, $name, $sku, $nominal = '', $largo = '', $status = 'private') {
+    public function create_woo_variable_from_base($product_base_id, $name, $sku, $attributes = [], $status = 'private') {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
@@ -2628,38 +2639,67 @@ class Riverso_Woo_Publisher_Module {
         $product->set_status($status);
         $product->set_description('Producto variable creado desde Riverso POS. Requiere revisión antes de publicación.');
 
-        // Crear atributos para la variación
-        $attributes = [];
-        
-        if (!empty($nominal) && !empty($largo)) {
-            // Crear atributo combinado Nominal x Largo
-            $attr_name = 'Nominal x Largo';
-            $attributes[] = new WC_Product_Attribute();
-            $attributes[0]->set_id(0);
-            $attributes[0]->set_name($attr_name);
-            $attributes[0]->set_options([]);
-            $attributes[0]->set_visible(false);
-            $attributes[0]->set_variation(true);
-        } elseif (!empty($nominal)) {
-            $attr = new WC_Product_Attribute();
-            $attr->set_id(0);
-            $attr->set_name('Nominal');
-            $attr->set_options([]);
-            $attr->set_visible(false);
-            $attr->set_variation(true);
-            $attributes[] = $attr;
-        } elseif (!empty($largo)) {
-            $attr = new WC_Product_Attribute();
-            $attr->set_id(0);
-            $attr->set_name('Largo');
-            $attr->set_options([]);
-            $attr->set_visible(false);
-            $attr->set_variation(true);
-            $attributes[] = $attr;
+        // Normalizar atributos si es heredado (nominal/largo strings)
+        if (is_string($attributes) || (is_array($attributes) && isset($attributes['nominal']))) {
+            // Modo heredado: convert nominal/largo parameters (para BC)
+            $nominal = is_array($attributes) ? $attributes['nominal'] ?? '' : ($attributes ?? '');
+            $largo = is_array($attributes) ? $attributes['largo'] ?? '' : '';
+            $attributes = [];
+            if (!empty($nominal) || !empty($largo)) {
+                if (!empty($nominal) && !empty($largo)) {
+                    $attributes[] = [
+                        'name' => 'Nominal X Largo',
+                        'value' => "{$nominal} x {$largo}",
+                        'variation' => true,
+                        'visible' => false
+                    ];
+                } elseif (!empty($nominal)) {
+                    $attributes[] = [
+                        'name' => 'Nominal',
+                        'value' => $nominal,
+                        'variation' => true,
+                        'visible' => false
+                    ];
+                } elseif (!empty($largo)) {
+                    $attributes[] = [
+                        'name' => 'Largo',
+                        'value' => $largo,
+                        'variation' => true,
+                        'visible' => false
+                    ];
+                }
+            }
         }
 
-        if (!empty($attributes)) {
-            $product->set_attributes($attributes);
+        // Construir atributos WC con opciones del valor inicial
+        $wc_attributes = [];
+        $first_variation = [];
+
+        if (is_array($attributes) && !empty($attributes)) {
+            foreach ($attributes as $attr) {
+                $attr_name = sanitize_text_field($attr['name'] ?? '');
+                $attr_value = sanitize_text_field($attr['value'] ?? '');
+                $variation = !empty($attr['variation']);
+                $visible = !empty($attr['visible']);
+
+                if ($attr_name && $attr_value) {
+                    $wc_attr = new WC_Product_Attribute();
+                    $wc_attr->set_id(0);
+                    $wc_attr->set_name($attr_name);
+                    $wc_attr->set_options([$attr_value]); // Importante: array con el valor
+                    $wc_attr->set_visible($visible);
+                    $wc_attr->set_variation($variation);
+                    $wc_attributes[] = $wc_attr;
+
+                    if ($variation) {
+                        $first_variation[sanitize_title($attr_name)] = $attr_value;
+                    }
+                }
+            }
+        }
+
+        if (!empty($wc_attributes)) {
+            $product->set_attributes($wc_attributes);
         }
 
         $product_id = $product->save();
@@ -2668,27 +2708,14 @@ class Riverso_Woo_Publisher_Module {
             return new WP_Error('save_failed', 'No se pudo guardar producto variable WooCommerce');
         }
 
-        // Crear una variación con los atributos si los hay
+        // Crear una variación solo si hay al menos un atributo con variation=true
         $variation_id = 0;
-        if (!empty($nominal) || !empty($largo)) {
+        if (!empty($first_variation)) {
             $variation = new WC_Product_Variation();
             $variation->set_parent_id($product_id);
             $variation->set_status('publish');
             $variation->set_sku($sku);
-
-            $var_attrs = [];
-            if (!empty($nominal) && !empty($largo)) {
-                $var_attrs['nominal-x-largo'] = "{$nominal} x {$largo}";
-            } elseif (!empty($nominal)) {
-                $var_attrs['nominal'] = $nominal;
-            } elseif (!empty($largo)) {
-                $var_attrs['largo'] = $largo;
-            }
-
-            if (!empty($var_attrs)) {
-                $variation->set_attributes($var_attrs);
-            }
-
+            $variation->set_attributes($first_variation);
             $variation_id = $variation->save();
         }
 
@@ -2716,6 +2743,7 @@ class Riverso_Woo_Publisher_Module {
                     'woocommerce_variation_id' => $variation_id,
                     'type' => 'variable',
                     'status' => $status,
+                    'attributes_count' => count($wc_attributes),
                 ],
                 'details' => 'Producto variable creado desde Riverso Hub',
             ]);
@@ -2726,6 +2754,94 @@ class Riverso_Woo_Publisher_Module {
             'variation_id' => $variation_id,
             'type' => 'variable',
             'status' => $status,
+        ];
+    }
+
+    /**
+     * Asignar producto base como hijo de un padre variable existente
+     */
+    public function attach_base_to_variable_parent($product_base_id, $parent_id, $sku, $mode = 'create') {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $product_base_id = absint($product_base_id);
+        $parent_id = absint($parent_id);
+
+        if (!$product_base_id || !$parent_id) {
+            return new WP_Error('invalid_params', 'Parámetros inválidos');
+        }
+
+        // Validar que exista el producto base
+        $product_base = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}producto_base WHERE id = %d",
+            $product_base_id
+        ), ARRAY_A);
+
+        if (!$product_base) {
+            return new WP_Error('not_found', 'Producto base no encontrado');
+        }
+
+        // Validar que el padre es variable
+        $parent_product = wc_get_product($parent_id);
+        if (!$parent_product || $parent_product->get_type() !== 'variable') {
+            return new WP_Error('invalid_parent', 'Padre no es un producto variable');
+        }
+
+        $variation_id = 0;
+
+        if ($mode === 'link') {
+            // Buscar variación existente con los mismos atributos
+            // Por ahora, error si no encuentra coincidencia
+            return new WP_Error('no_match', 'No se encontró variación coincidente. Usa modo "crear" para crear una nueva.');
+        } else {
+            // Modo 'create': crear nueva variación
+            $variation = new WC_Product_Variation();
+            $variation->set_parent_id($parent_id);
+            $variation->set_status('publish');
+            $variation->set_sku($sku);
+            
+            // No asignamos atributos específicos aquí, solo SKU
+            // El usuario debe completarlos después si es necesario
+            $variation_id = $variation->save();
+
+            if (!$variation_id) {
+                return new WP_Error('save_failed', 'No se pudo crear la variación');
+            }
+        }
+
+        // Vincular al producto base
+        $wpdb->update(
+            "{$prefix}producto_base",
+            [
+                'woocommerce_product_id' => $parent_id,
+                'woocommerce_variation_id' => $variation_id,
+                'publication_stage' => 'computer_created',
+                'updated_at' => current_time('mysql'),
+            ],
+            ['id' => $product_base_id],
+            ['%d', '%d', '%s', '%s'],
+            ['%d']
+        );
+
+        WC_Product_Variable::sync($parent_id);
+        wc_delete_product_transients($parent_id);
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log_import('product_attached_to_parent', 'producto_base', $product_base_id, [
+                'new_value' => [
+                    'woocommerce_product_id' => $parent_id,
+                    'woocommerce_variation_id' => $variation_id,
+                    'mode' => $mode,
+                ],
+                'details' => 'Producto base asignado como hijo a padre variable existente',
+            ]);
+        }
+
+        return [
+            'product_id' => $parent_id,
+            'variation_id' => $variation_id,
+            'type' => 'variation',
+            'mode' => $mode,
         ];
     }
 }

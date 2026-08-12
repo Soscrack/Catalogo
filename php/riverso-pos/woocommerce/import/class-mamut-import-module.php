@@ -144,18 +144,34 @@ class Riverso_Mamut_Import_Module {
     }
 
     /**
-     * Asegura un producto_base para un SKU MAMUT.
+     * Asegura un producto_base para un código de catálogo MAMUT.
+     * El código Mamut NO es SKU Local.
      *
      * @param string $sku
      * @param string $nombre
-     * @return array [id, created]
+     * @param int    $supplier_id
+     * @return array|WP_Error [id, created]
      */
-    private function ensure_base($sku, $nombre) {
+    private function ensure_base($sku, $nombre, $supplier_id = 0) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
+        $supplier_id = absint($supplier_id);
+
+        if ($supplier_id > 0) {
+            $id = $wpdb->get_var($wpdb->prepare(
+                "SELECT producto_base_id FROM {$prefix}producto_proveedor
+                 WHERE proveedor_id = %d AND codigo_proveedor = %s AND producto_base_id IS NOT NULL
+                 LIMIT 1",
+                $supplier_id,
+                $sku
+            ));
+            if ($id) {
+                return ['id' => intval($id), 'created' => false];
+            }
+        }
 
         $id = $wpdb->get_var($wpdb->prepare(
-            "SELECT id FROM {$prefix}producto_base WHERE canonical_sku = %s LIMIT 1",
+            "SELECT id FROM {$prefix}producto_base WHERE canonical_sku = %s AND deleted_at IS NULL LIMIT 1",
             $sku
         ));
         if ($id) {
@@ -165,21 +181,38 @@ class Riverso_Mamut_Import_Module {
         $inserted = $wpdb->insert("{$prefix}producto_base", [
             'woocommerce_product_id' => null,
             'woocommerce_variation_id' => null,
-            'canonical_sku' => $sku,
-            'nombre_canonico' => $nombre ?: $sku,
+            'nombre_canonico' => $nombre ?: ('Mamut ' . $sku),
             'unidad_base' => 'unidad',
             'permite_ean13_personalizado' => 1,
             'estado' => 'activo',
             'created_by_system' => 1,
             'requires_human_review' => 1,
             'review_status' => 'pendiente',
-        ], ['%d', '%d', '%s', '%s', '%s', '%d', '%s', '%d', '%d', '%s']);
+        ], ['%d', '%d', '%s', '%s', '%d', '%s', '%d', '%d', '%s']);
 
         if ($inserted === false) {
-            return new WP_Error('base_insert_failed', 'No se pudo crear producto_base para SKU ' . $sku . ': ' . $wpdb->last_error);
+            return new WP_Error('base_insert_failed', 'No se pudo crear producto_base para código ' . $sku . ': ' . $wpdb->last_error);
         }
 
-        return ['id' => (int) $wpdb->insert_id, 'created' => true];
+        $base_id = (int) $wpdb->insert_id;
+        if (function_exists('riverso_create_review_task')) {
+            riverso_create_review_task(
+                'crear_contraparte_local',
+                'Asignar SKU Local para código catálogo ' . $sku,
+                'producto_base',
+                $base_id,
+                [
+                    'prioridad' => 'normal',
+                    'datos_extra' => [
+                        'codigo_catalogo' => $sku,
+                        'codigo_proveedor' => $sku,
+                        'origen' => 'mamut_import',
+                    ],
+                ]
+            );
+        }
+
+        return ['id' => $base_id, 'created' => true];
     }
 
     /**
@@ -251,7 +284,7 @@ class Riverso_Mamut_Import_Module {
             }
             $nombre = $nombre ?: $sku;
 
-            $base = $this->ensure_base($sku, $nombre);
+            $base = $this->ensure_base($sku, $nombre, $supplier_id);
             if (is_wp_error($base)) {
                 return $base;
             }

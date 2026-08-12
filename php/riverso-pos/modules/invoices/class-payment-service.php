@@ -142,7 +142,7 @@ class Riverso_Payment_Service {
         
         $facturas = $wpdb->get_results(
             "SELECT id, tipo_dte, folio, monto_total 
-             FROM {$prefix}riverso_facturas 
+             FROM {$prefix}facturas 
              WHERE id IN ({$factura_ids_placeholders})",
             array_merge([], $factura_ids_safe)
         );
@@ -235,7 +235,7 @@ class Riverso_Payment_Service {
         // Actualizar estado_pago en facturas
         foreach ($factura_ids_safe as $fid) {
             $wpdb->update(
-                "{$prefix}riverso_facturas",
+                "{$prefix}facturas",
                 ['estado_pago' => 'pagada'],
                 ['id' => $fid],
                 ['%s'],
@@ -316,7 +316,7 @@ class Riverso_Payment_Service {
 
         foreach ((array) $factura_ids as $fid) {
             $wpdb->update(
-                "{$prefix}riverso_facturas",
+                "{$prefix}facturas",
                 ['estado_pago' => 'no_pagada'],
                 ['id' => intval($fid)],
                 ['%s'],
@@ -366,7 +366,7 @@ class Riverso_Payment_Service {
         $documentos = $wpdb->get_results(
             "SELECT fpd.*, f.tipo_dte, f.folio, f.rut_emisor
              FROM {$prefix}factura_pago_documentos fpd
-             JOIN {$prefix}riverso_facturas f ON f.id = fpd.factura_id
+             JOIN {$prefix}facturas f ON f.id = fpd.factura_id
              WHERE fpd.pago_id = %d",
             $pago_id
         );

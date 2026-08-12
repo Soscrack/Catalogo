@@ -16,6 +16,10 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
             <option value="archived">Archivados</option>
             <option value="deleted">Eliminados</option>
         </select>
+        <select id="products-catalog">
+            <option value="">Catálogo: Todos</option>
+            <!-- Se llenan dinámicamente -->
+        </select>
         <select id="products-completeness">
             <option value="todos">Completitud: Todos</option>
             <option value="completo">Completitud: Completo</option>
@@ -26,7 +30,10 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
             <option value="solo_online_publicado">Completitud: Solo Online Publicado</option>
             <option value="incompleto">Completitud: Incompleto</option>
         </select>
-        <input type="text" id="products-search" class="regular-text" placeholder="SKU, nombre, código proveedor o barcode">
+        <span style="position:relative; display:inline-block;">
+            <input type="text" id="products-search" class="regular-text" placeholder="SKU Local, Online, código proveedor/catálogo, nombre o barcode" autocomplete="off">
+            <div id="products-search-suggestions" style="display:none; position:absolute; left:0; top:100%; z-index:100; background:#fff; border:1px solid #c3c4c7; box-shadow:0 2px 8px rgba(0,0,0,.1); max-height:220px; overflow-y:auto; min-width:100%; width:max-content;"></div>
+        </span>
         <button class="button" id="products-reload">Actualizar</button>
         <?php if ($can_manage): ?>
             <button class="button button-primary" id="products-new">Nuevo producto local</button>
@@ -41,19 +48,21 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
     <table class="wp-list-table widefat fixed striped">
         <thead>
             <tr>
-                <th style="width:8%">ID</th>
-                <th style="width:12%">SKU</th>
-                <th style="width:20%">Nombre</th>
-                <th style="width:15%">
+                <th style="width:6%">ID</th>
+                <th style="width:11%">SKU Local</th>
+                <th style="width:11%">SKU Online</th>
+                <th style="width:18%">Nombre</th>
+                <th style="width:12%">
                     Completitud 
                     <span class="dashicons dashicons-editor-help" id="completeness-col-help" style="cursor:pointer; color:#2271b1;" title="Ver ayuda"></span>
                 </th>
-                <th style="width:12%">Códigos</th>
-                <th style="width:10%">Woo</th>
-                <th style="width:13%">Acciones</th>
+                <th style="width:11%">Código Proveedor</th>
+                <th style="width:11%">Código Catálogo</th>
+                <th style="width:8%">Woo</th>
+                <th style="width:12%">Acciones</th>
             </tr>
         </thead>
-        <tbody id="products-tbody"><tr><td colspan="7">Cargando...</td></tr></tbody>
+        <tbody id="products-tbody"><tr><td colspan="9">Cargando...</td></tr></tbody>
     </table>
 
     <div style="margin-top:12px; display:flex; gap:8px; justify-content:center;">
@@ -67,7 +76,7 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
         <h2 id="product-editor-title">Producto</h2>
         <input type="hidden" id="product-id">
         <table class="form-table">
-            <tr><th>SKU canónico</th><td><input type="text" id="product-sku" class="regular-text"></td></tr>
+            <tr><th>SKU Local</th><td><input type="text" id="product-sku" class="regular-text"></td></tr>
             <tr><th>Nombre</th><td><input type="text" id="product-name" class="large-text"></td></tr>
             <tr><th>Unidad base</th><td><input type="text" id="product-unit" class="regular-text" value="unidad"></td></tr>
             <tr><th>Flags</th><td>
@@ -101,7 +110,7 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
         <!-- TAB: LOCAL -->
         <div class="detail-tab-content" id="tab-local">
             <table class="form-table">
-                <tr><th>SKU</th><td><code id="local-sku">-</code></td></tr>
+                <tr><th>SKU Local</th><td><code id="local-sku">-</code></td></tr>
                 <tr><th>Nombre</th><td id="local-name">-</td></tr>
                 <tr><th>Unidad base</th><td id="local-unit">-</td></tr>
                 <tr><th>Origen</th><td id="local-origen">-</td></tr>
@@ -213,20 +222,51 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
                 <tr>
                     <th>
                         Tipo de producto
-                        <span class="dashicons dashicons-editor-help" style="cursor:pointer; color:#2271b1; font-size:16px;" title="Simple: sin variantes. Variable: con variantes de Nominal y/o Largo"></span>
+                        <span class="dashicons dashicons-editor-help" style="cursor:pointer; color:#2271b1; font-size:16px;" title="Simple: sin variantes. Variable: con variantes. Asignar a padre: crear como hijo de un padre existente"></span>
                     </th>
                     <td>
                         <label><input type="radio" name="create-type" value="simple" checked> Producto Simple (sin variantes)</label><br>
-                        <label><input type="radio" name="create-type" value="variable"> Producto Variable (con Nominal x Largo)</label>
+                        <label><input type="radio" name="create-type" value="variable"> Producto Variable nuevo (crea padre + hijos)</label><br>
+                        <label><input type="radio" name="create-type" value="child"> Asignar a padre variable existente</label>
                     </td>
                 </tr>
                 <tr><th>Nombre</th><td><input type="text" id="create-name" class="large-text"></td></tr>
                 <tr><th>SKU</th><td><input type="text" id="create-sku" class="regular-text"></td></tr>
-                <tr id="create-variable-attrs" style="display:none;">
+                <tr id="create-variable-section" style="display:none;">
                     <th colspan="2">
                         <h4 style="margin:0 0 8px 0;">Atributos de variación (opcional)</h4>
-                        <label>Nominal: <input type="text" id="create-nominal" class="regular-text" placeholder="p.ej. 10mm"></label><br>
-                        <label>Largo: <input type="text" id="create-largo" class="regular-text" placeholder="p.ej. 100cm"></label>
+                        <div id="create-attributes-list" style="margin-bottom:12px; max-height:200px; overflow-y:auto; border:1px solid #ddd; border-radius:2px; padding:8px;">
+                            <!-- Se populan dinámicamente -->
+                        </div>
+                        <button class="button" id="create-attr-add" type="button">+ Agregar atributo</button>
+                    </th>
+                </tr>
+                <tr id="create-child-section" style="display:none;">
+                    <th colspan="2">
+                        <h4 style="margin:0 0 8px 0;">Buscar padre variable</h4>
+                        <select id="create-parent-catalog" style="margin-bottom:8px; width:100%;">
+                            <option value="">Catálogo: Todos</option>
+                        </select>
+                        <input type="text" id="create-parent-search" class="large-text" placeholder="Buscar por nombre o SKU de hijo (Local / Online / Catálogo)..." style="margin-bottom:8px;">
+                        <div id="create-parent-suggestions" style="border:1px solid #ddd; border-radius:2px; max-height:150px; overflow-y:auto; margin-bottom:8px; padding:0;"></div>
+                        <input type="hidden" id="create-parent-id">
+                        <div id="create-parent-selected" style="padding:8px; background:#f0f8ff; border:1px solid #2271b1; border-radius:2px; margin-bottom:8px; display:none;"></div>
+                        <fieldset style="border:1px solid #ddd; border-radius:2px; padding:8px; margin-bottom:8px;">
+                            <legend style="padding:0 8px; font-weight:bold;">Después de asignar padre</legend>
+                            <label style="display:block; margin-bottom:6px;">
+                                <input type="radio" name="create-attach-mode" value="create" checked> Crear nueva variación
+                            </label>
+                            <label style="display:block;">
+                                <input type="radio" name="create-attach-mode" value="link"> Vincular si existe variación coincidente
+                            </label>
+                        </fieldset>
+                        <div id="create-parent-attrs" style="background:#f9f9f9; padding:8px; border-radius:2px; display:none;">
+                            <h5 style="margin:0 0 8px 0;">Atributos del padre</h5>
+                            <div id="create-parent-attrs-list" style="font-size:13px;"><!-- poblado dinámicamente --></div>
+                            <h5 style="margin:12px 0 8px 0;">Hijos / variaciones</h5>
+                            <div id="create-parent-children-summary" style="font-size:12px; color:#555; margin-bottom:6px;"></div>
+                            <div id="create-parent-children-list" style="font-size:13px; max-height:240px; overflow-y:auto; border:1px solid #e5e5e5; background:#fff;"></div>
+                        </div>
                     </th>
                 </tr>
             </table>
@@ -380,9 +420,18 @@ jQuery(function($){
         return labels[cat] || cat;
     }
 
+    function renderSkuCell(value, label) {
+        const v = (value || '').toString().trim();
+        if (!v) {
+            return `<span style="color:#999;" title="${esc(label)}">—</span>`;
+        }
+        const parts = v.split(',').map(s => s.trim()).filter(Boolean).slice(0, 2);
+        return `<code title="${esc(label)}: ${esc(parts.join(', '))}">${esc(parts.join(', '))}</code>`;
+    }
+
     function render(items){
         if (!items || !items.length){
-            $('#products-tbody').html('<tr><td colspan="7">Sin productos.</td></tr>');
+            $('#products-tbody').html('<tr><td colspan="9">Sin productos.</td></tr>');
             updatePagination();
             return;
         }
@@ -398,21 +447,26 @@ jQuery(function($){
             }
             const cat = it.completeness_category || 'incompleto';
             const wooId = parseInt(it.woocommerce_product_id || 0) ? it.woocommerce_product_id : '-';
-            let codigos = it.codigos_proveedor ? it.codigos_proveedor.split(',').slice(0,2).join(',') : '-';
-            
-            // Agregar badge "Falta código" clicable si corresponde
+            const skuLocal = it.sku_local || it.canonical_sku || '';
+            const skuOnline = it.sku_online || '';
+            let codigoProv = renderSkuCell(it.codigos_proveedor, 'Código Proveedor');
+            let codigoCat = renderSkuCell(it.codigos_catalogo, 'Código Catálogo');
+
             const hasOnline = !!it.woocommerce_product_id;
             const hasCode = parseInt(it.proveedores_count || 0) > 0;
             if (hasOnline && !hasCode && cat === 'falta_codigo') {
-                codigos = `<span class="completeness-badge falta_codigo" style="cursor:pointer; padding:4px 8px; display:inline-block;" data-product-id="${it.id}" title="Ir a Códigos">Falta código</span>`;
+                codigoProv = `<span class="completeness-badge falta_codigo" style="cursor:pointer; padding:4px 8px; display:inline-block;" data-product-id="${it.id}" title="Ir a Códigos">Falta código</span>`;
+                codigoCat = `<span style="color:#999;">—</span>`;
             }
 
             return `<tr>
                 <td>${it.id}</td>
-                <td><code>${esc(it.canonical_sku || '-')}</code></td>
+                <td>${renderSkuCell(skuLocal, 'SKU Local')}</td>
+                <td>${renderSkuCell(skuOnline, 'SKU Online')}</td>
                 <td>${esc(it.nombre_canonico || '-')}</td>
                 <td><span class="completeness-badge ${cat}">${completenessLabel(cat)}</span></td>
-                <td>${codigos}</td>
+                <td>${codigoProv}</td>
+                <td>${codigoCat}</td>
                 <td>${wooId}</td>
                 <td>${actions}</td>
             </tr>`;
@@ -443,18 +497,19 @@ jQuery(function($){
     }
 
     function load(){
-        $('#products-tbody').html('<tr><td colspan="7">Cargando...</td></tr>');
+        $('#products-tbody').html('<tr><td colspan="9">Cargando...</td></tr>');
         $.post(ajaxurl, {
             action: 'riverso_products_list',
             nonce,
             status: $('#products-status').val(),
             search: $('#products-search').val(),
             completeness: $('#products-completeness').val(),
+            catalog_id: $('#products-catalog').val(),
             offset: currentOffset,
             limit: currentLimit
         }, function(r){
             if (!r.success){ 
-                $('#products-tbody').html('<tr><td colspan="7">Error cargando.</td></tr>'); 
+                $('#products-tbody').html('<tr><td colspan="9">Error cargando.</td></tr>'); 
                 return; 
             }
             currentTotal = r.data.total || 0;
@@ -480,7 +535,7 @@ jQuery(function($){
 
     function showDetail(product) {
         currentProduct = product;
-        $('#detail-title').text(`Producto: ${product.nombre_canonico} (SKU ${product.canonical_sku})`);
+        $('#detail-title').text(`Producto: ${product.nombre_canonico} (SKU Local: ${product.canonical_sku || '—'})`);
         
         // Local tab
         $('#local-sku').text(product.canonical_sku);
@@ -750,11 +805,215 @@ jQuery(function($){
 
     // Evento: cambiar tipo de producto
     $(document).on('change', 'input[name="create-type"]', function(){
-        if ($(this).val() === 'variable') {
-            $('#create-variable-attrs').show();
+        const type = $(this).val();
+        
+        if (type === 'variable') {
+            $('#create-variable-section').show();
+            $('#create-child-section').hide();
+            // Si no hay atributos, mostrar sugerencia de Nominal x Largo
+            if ($('#create-attributes-list').children().length === 0) {
+                addCreateAttribute('Nominal', '', false, true);
+                addCreateAttribute('Largo', '', false, true);
+            }
+        } else if (type === 'child') {
+            $('#create-variable-section').hide();
+            $('#create-child-section').show();
+            // Cargar sugerencias de padres
+            loadParentSuggestions();
         } else {
-            $('#create-variable-attrs').hide();
+            $('#create-variable-section').hide();
+            $('#create-child-section').hide();
         }
+    });
+
+    // Cargar sugerencias de padres variables
+    let parentSearchTimeout = null;
+    function loadParentSuggestions(){
+        const searchTerm = $('#create-parent-search').val() || currentProduct.nombre_canonico || '';
+        
+        clearTimeout(parentSearchTimeout);
+        parentSearchTimeout = setTimeout(function(){
+            if (searchTerm.length < 1) {
+                $('#create-parent-suggestions').empty();
+                return;
+            }
+            
+            $.post(ajaxurl, {
+                action: 'riverso_products_suggest_variable_parents',
+                nonce,
+                search: searchTerm,
+                catalog_id: $('#create-parent-catalog').val() || 0
+            }, function(r){
+                if (!r.success) {
+                    $('#create-parent-suggestions').html('<div style="padding:8px; color:#999;">Sin sugerencias</div>');
+                    return;
+                }
+                
+                const suggestions = r.data.suggestions || [];
+                if (suggestions.length === 0) {
+                    $('#create-parent-suggestions').html('<div style="padding:8px; color:#999;">Sin coincidencias</div>');
+                    return;
+                }
+                
+                let html = '';
+                suggestions.forEach(parent => {
+                    const childCount = parent.child_count || 0;
+                    const catalogo = parent.catalogo || 'Sin catálogo';
+                    const codigoCat = parent.codigo_catalogo ? ` | Códigos hijos: ${esc(parent.codigo_catalogo)}` : '';
+                    const hint = parent.match_hint ? `<br><small style="color:#2271b1;">${esc(parent.match_hint)}</small>` : '';
+                    const skuBits = [];
+                    if (parent.sku_local) skuBits.push(`SKU Local: ${esc(parent.sku_local)}`);
+                    if (parent.sku_online) skuBits.push(`SKU Online: ${esc(parent.sku_online)}`);
+                    if (!skuBits.length && parent.sku) skuBits.push(`SKU: ${esc(parent.sku)}`);
+                    html += `<div class="parent-suggestion" data-id="${parent.id}" style="padding:8px; border-bottom:1px solid #e5e5e5; cursor:pointer;">
+                        <div>
+                            <strong>${esc(parent.name)}</strong>${hint}<br>
+                            <small style="color:#666;">ID: ${parent.id} | ${skuBits.join(' | ') || 'Sin SKU'} | ${childCount} hijo(s) | Catálogo: ${esc(catalogo)}${codigoCat}</small>
+                        </div>
+                    </div>`;
+                });
+                $('#create-parent-suggestions').html(html);
+            });
+        }, 300);
+    }
+
+    // Buscar padres al escribir o cambiar catálogo
+    $(document).on('keyup', '#create-parent-search', function(){
+        loadParentSuggestions();
+    });
+    $(document).on('change', '#create-parent-catalog', function(){
+        loadParentSuggestions();
+    });
+
+    // Seleccionar padre
+    $(document).on('click', '.parent-suggestion', function(){
+        const parentId = $(this).data('id');
+        const parentName = $(this).find('strong').text();
+        const parentSku = $(this).find('small').text().match(/SKU: ([^\s|]+)/)?.[1] || '';
+        
+        $('#create-parent-id').val(parentId);
+        $('#create-parent-selected').html(`<strong>Padre seleccionado:</strong> ${esc(parentName)} (${esc(parentSku)})`).show();
+        $('#create-parent-suggestions').empty();
+        
+        // Cargar atributos del padre
+        loadParentAttributes(parentId);
+    });
+
+    // Cargar atributos + hijos del padre
+    function loadParentAttributes(parentId){
+        $('#create-parent-attrs-list').html('<em>Cargando…</em>');
+        $('#create-parent-children-list').html('');
+        $('#create-parent-children-summary').text('');
+        $('#create-parent-attrs').show();
+
+        $.post(ajaxurl, {
+            action: 'riverso_products_get_variable_parent_details',
+            nonce,
+            parent_id: parentId
+        }, function(r){
+            if (!r.success) {
+                $('#create-parent-attrs').hide();
+                return;
+            }
+
+            const attrs = r.data.attributes || [];
+            const children = r.data.children || [];
+            const parent = r.data.parent || {};
+
+            let attrHtml = '';
+            if (attrs.length === 0) {
+                attrHtml = '<em style="color:#999;">Sin atributos de variación</em>';
+            } else {
+                attrs.forEach(attr => {
+                    attrHtml += `<div style="margin-bottom:6px;"><strong>${esc(attr.name)}</strong>: ${(attr.options || []).map(o => esc(String(o))).join(', ')}</div>`;
+                });
+            }
+            $('#create-parent-attrs-list').html(attrHtml);
+
+            const withLocal = parent.with_local_sku || 0;
+            const withoutLocal = parent.without_local_sku || 0;
+            $('#create-parent-children-summary').text(
+                `${children.length} hijo(s): ${withLocal} con SKU Local · ${withoutLocal} sin SKU Local`
+            );
+
+            if (children.length === 0) {
+                $('#create-parent-children-list').html('<div style="padding:8px; color:#999;">Sin variaciones</div>');
+                return;
+            }
+
+            let childHtml = '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+            childHtml += '<thead><tr style="background:#f0f0f1; text-align:left;">'
+                + '<th style="padding:6px; border-bottom:1px solid #ddd;">Atributos</th>'
+                + '<th style="padding:6px; border-bottom:1px solid #ddd;">SKUs</th>'
+                + '<th style="padding:6px; border-bottom:1px solid #ddd;">Local</th>'
+                + '</tr></thead><tbody>';
+
+            children.forEach(ch => {
+                const badge = ch.has_local_sku
+                    ? '<span style="background:#28a745;color:#fff;padding:2px 6px;border-radius:2px;font-size:11px;">Con SKU Local</span>'
+                    : '<span style="background:#dc3545;color:#fff;padding:2px 6px;border-radius:2px;font-size:11px;">Sin SKU Local</span>';
+
+                const skuTags = (ch.sku_labels || []).map(lab => {
+                    let bg = '#6c757d', fg = '#fff';
+                    if (lab.type === 'local') { bg = '#0d6efd'; }
+                    else if (lab.type === 'online') { bg = '#6f42c1'; }
+                    else if (lab.type === 'catalogo') { bg = '#fd7e14'; }
+                    else if (lab.type === 'otro') { bg = '#adb5bd'; fg = '#333'; }
+                    const val = lab.value ? `: ${esc(lab.value)}` : '';
+                    const cat = lab.catalogo ? ` (${esc(lab.catalogo)})` : '';
+                    return `<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 6px;border-radius:2px;background:${bg};color:${fg};font-size:11px;">${esc(lab.label)}${val}${cat}</span>`;
+                }).join('');
+
+                childHtml += `<tr style="border-bottom:1px solid #eee;">
+                    <td style="padding:6px; vertical-align:top;">
+                        <div><strong>#${ch.variation_id}</strong></div>
+                        <div style="color:#555;">${esc(ch.attributes_text || 'Sin atributos')}</div>
+                    </td>
+                    <td style="padding:6px; vertical-align:top;">${skuTags || '<em style="color:#999;">—</em>'}</td>
+                    <td style="padding:6px; vertical-align:top; white-space:nowrap;">${badge}</td>
+                </tr>`;
+            });
+            childHtml += '</tbody></table>';
+            $('#create-parent-children-list').html(childHtml);
+        });
+    }
+
+    // Agregar atributo dinámico
+    function addCreateAttribute(name = '', value = '', visible = false, variation = false){
+        const id = 'attr-' + Date.now() + Math.random().toString(36).substr(2, 9);
+        const html = `
+            <div class="create-attribute-row" id="${id}" style="padding:8px; margin-bottom:6px; background:#f9f9f9; border:1px solid #e5e5e5; border-radius:2px; display:flex; gap:8px; align-items:flex-start;">
+                <div style="flex:1;">
+                    <input type="text" class="attr-name regular-text" placeholder="Nombre" value="${esc(name)}" style="width:100%; margin-bottom:4px;">
+                    <input type="text" class="attr-value regular-text" placeholder="Valor" value="${esc(value)}" style="width:100%;">
+                </div>
+                <div style="display:flex; gap:4px; flex-direction:column; white-space:nowrap;">
+                    <label style="margin:0; font-size:12px; display:flex; gap:2px; align-items:center;">
+                        <input type="checkbox" class="attr-variation" ${variation ? 'checked' : ''}>
+                        Usa para hijos
+                    </label>
+                    <label style="margin:0; font-size:12px; display:flex; gap:2px; align-items:center;">
+                        <input type="checkbox" class="attr-visible" ${visible ? 'checked' : ''}>
+                        Visible
+                    </label>
+                    <button class="button button-small attr-remove" type="button" data-id="${id}" style="margin-top:4px;">Quitar</button>
+                </div>
+            </div>
+        `;
+        $('#create-attributes-list').append(html);
+    }
+
+    // Botón Agregar atributo
+    $(document).on('click', '#create-attr-add', function(e){
+        e.preventDefault();
+        addCreateAttribute('', '', false, true);
+    });
+
+    // Botón Quitar atributo
+    $(document).on('click', '.attr-remove', function(e){
+        e.preventDefault();
+        const id = $(this).data('id');
+        $('#' + id).remove();
     });
 
     // Evento: crear producto online
@@ -769,6 +1028,14 @@ jQuery(function($){
             return;
         }
 
+        if (productType === 'child') {
+            const parentId = $('#create-parent-id').val();
+            if (!parentId) {
+                alert('Debes seleccionar un padre variable');
+                return;
+            }
+        }
+
         const data = {
             action: 'riverso_products_create_online',
             nonce,
@@ -779,8 +1046,33 @@ jQuery(function($){
         };
 
         if (productType === 'variable') {
-            data.nominal = $('#create-nominal').val();
-            data.largo = $('#create-largo').val();
+            // Recolectar atributos del editor
+            const attributes = [];
+            $('#create-attributes-list').find('.create-attribute-row').each(function(){
+                const attrName = $(this).find('.attr-name').val();
+                const attrValue = $(this).find('.attr-value').val();
+                const variation = $(this).find('.attr-variation').is(':checked');
+                const visible = $(this).find('.attr-visible').is(':checked');
+                
+                if (attrName && attrValue) {
+                    attributes.push({
+                        name: attrName,
+                        value: attrValue,
+                        variation: variation,
+                        visible: visible
+                    });
+                }
+            });
+            
+            if (attributes.length === 0) {
+                // Permitir crear variable sin atributos (solo padre)
+                data.attributes = [];
+            } else {
+                data.attributes = attributes;
+            }
+        } else if (productType === 'child') {
+            data.parent_id = $('#create-parent-id').val();
+            data.attach_mode = $('input[name="create-attach-mode"]:checked').val();
         }
 
         $.post(ajaxurl, data, function(r){
@@ -789,10 +1081,40 @@ jQuery(function($){
                 return;
             }
             alert(r.data.message);
-            $('#create-online-modal').removeClass('show');
+            closeCreateModal();
             showDetail(r.data.item);
             load();
         });
+    });
+
+    // Función para cerrar modal
+    function closeCreateModal(){
+        $('#create-online-modal').removeClass('show');
+        $('#create-name').val('');
+        $('#create-sku').val('');
+        $('#create-nominal').val('');
+        $('#create-largo').val('');
+        $('input[name="create-type"][value="simple"]').prop('checked', true);
+        $('#create-variable-attrs').hide();
+    }
+
+    // Evento: cerrar modal (botón Cancelar)
+    $('#create-online-cancel').on('click', function(){
+        closeCreateModal();
+    });
+
+    // Cerrar al hacer click en el overlay (no en el contenido del modal)
+    $('#create-online-modal').on('click', function(e){
+        if ($(e.target).attr('id') === 'create-online-modal') {
+            closeCreateModal();
+        }
+    });
+
+    // Cerrar con ESC
+    $(document).on('keydown', function(e){
+        if (e.key === 'Escape' && $('#create-online-modal').hasClass('show')) {
+            closeCreateModal();
+        }
     });
 
     // Evento: ir a tab códigos desde banner
@@ -988,8 +1310,97 @@ jQuery(function($){
         });
     });
 
+    function loadCatalogs() {
+        $.post(ajaxurl, {
+            action: 'riverso_catalogs_list',
+            nonce
+        }, function(r){
+            if (!r.success) return;
+            const catalogs = r.data.catalogs || [];
+            ['#products-catalog', '#create-parent-catalog'].forEach(sel => {
+                const $el = $(sel);
+                if (!$el.length) return;
+                const currentVal = $el.val();
+                $el.find('option:not(:first)').remove();
+                catalogs.forEach(cat => {
+                    $el.append(`<option value="${cat.id}">${esc(cat.nombre)}</option>`);
+                });
+                if (currentVal) $el.val(currentVal);
+            });
+        });
+    }
+
+    let catalogSuggestTimeout = null;
+    function loadCatalogSearchSuggestions() {
+        const term = ($('#products-search').val() || '').trim();
+        const catalogId = $('#products-catalog').val() || 0;
+        const $box = $('#products-search-suggestions');
+        if (term.length < 1) {
+            $box.hide().empty();
+            return;
+        }
+        clearTimeout(catalogSuggestTimeout);
+        catalogSuggestTimeout = setTimeout(function(){
+            $.post(ajaxurl, {
+                action: 'riverso_products_search_catalog',
+                nonce,
+                search: term,
+                catalog_id: catalogId,
+                limit: 10
+            }, function(r){
+                if (!r.success) {
+                    $box.hide().empty();
+                    return;
+                }
+                const products = r.data.products || [];
+                if (!products.length) {
+                    $box.html('<div style="padding:8px;color:#666;">Sin sugerencias de catálogo</div>').show();
+                    return;
+                }
+                let html = '';
+                products.forEach(p => {
+                    const baseId = p.producto_base_id || 0;
+                    const codigo = p.codigo_proveedor || '';
+                    const label = `SKU catálogo: ${esc(codigo)}`;
+                    const nombre = p.nombre_proveedor ? esc(p.nombre_proveedor) : '';
+                    const sku = p.canonical_sku ? ` | Local: ${esc(p.canonical_sku)}` : '';
+                    const cat = p.catalogo_nombre ? ` | ${esc(p.catalogo_nombre)}` : '';
+                    html += `<div class="catalog-search-suggestion" data-base-id="${baseId}" data-codigo="${esc(codigo)}" style="padding:8px;border-bottom:1px solid #eee;cursor:pointer;">
+                        <strong>${label}</strong>${nombre ? `<br>${nombre}` : ''}<br><small style="color:#666;">${sku}${cat}</small>
+                    </div>`;
+                });
+                $box.html(html).show();
+            });
+        }, 300);
+    }
+
+    $(document).on('click', '.catalog-search-suggestion', function(){
+        const baseId = parseInt($(this).data('base-id') || 0, 10);
+        const codigo = String($(this).data('codigo') || '');
+        $('#products-search-suggestions').hide().empty();
+        if (codigo) {
+            $('#products-search').val(codigo);
+            currentOffset = 0;
+            load();
+        }
+        if (baseId > 0) {
+            $.post(ajaxurl, { action: 'riverso_products_get', nonce, id: baseId }, function(r){
+                if (r.success && r.data.item) {
+                    showDetail(r.data.item);
+                }
+            });
+        }
+    });
+
+    $(document).on('click', function(e){
+        if (!$(e.target).closest('#products-search, #products-search-suggestions').length) {
+            $('#products-search-suggestions').hide();
+        }
+    });
+
     // Iniciar
-    $('#products-reload, #products-status, #products-completeness').on('click change', function(){
+    loadCatalogs();
+    $('#products-reload, #products-status, #products-completeness, #products-catalog').on('click change', function(){
         currentOffset = 0;
         load();
     });
@@ -998,6 +1409,7 @@ jQuery(function($){
         currentOffset = 0;
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(load, 300);
+        loadCatalogSearchSuggestions();
     });
 
     $('#products-prev').on('click', function(){

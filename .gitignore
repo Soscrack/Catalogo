@@ -44,3 +44,6 @@ Thumbs.db
 data/catalogo_mamut_2025_spatial.json
 /XML
 prompts/.env
+.env
+.env.deploy
+.env.local

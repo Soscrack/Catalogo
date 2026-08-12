@@ -44,6 +44,10 @@ class Riverso_Product_Module {
         add_action('wp_ajax_riverso_products_remove_barcode', [$this, 'ajax_remove_barcode']);
         add_action('wp_ajax_riverso_products_get_tasks', [$this, 'ajax_get_tasks']);
         add_action('wp_ajax_riverso_products_create_online', [$this, 'ajax_create_online']);
+        add_action('wp_ajax_riverso_products_suggest_variable_parents', [$this, 'ajax_suggest_variable_parents']);
+        add_action('wp_ajax_riverso_products_get_variable_attributes', [$this, 'ajax_get_variable_attributes']);
+        add_action('wp_ajax_riverso_products_get_variable_parent_details', [$this, 'ajax_get_variable_parent_details']);
+        add_action('wp_ajax_riverso_products_search_catalog', [$this, 'ajax_search_catalog_products']);
     }
 
     private function get_completeness_category($product) {
@@ -76,6 +80,7 @@ class Riverso_Product_Module {
         $status = sanitize_text_field($args['status'] ?? 'active');
         $search = sanitize_text_field($args['search'] ?? '');
         $completeness = sanitize_text_field($args['completeness'] ?? 'todos');
+        $catalog_id = absint($args['catalog_id'] ?? 0);
         $offset = intval($args['offset'] ?? 0);
         $limit = min(200, max(1, intval($args['limit'] ?? 50)));
 
@@ -90,9 +95,38 @@ class Riverso_Product_Module {
             $where[] = 'pb.archived_at IS NULL AND pb.deleted_at IS NULL';
         }
 
+        // JOIN proveedor: con catálogo forzar INNER (sin exigir activo=1:
+        // en Mamut histórico muchos PP vienen con activo=0 y el filtro quedaba vacío).
+        if ($catalog_id > 0) {
+            $pp_join = $wpdb->prepare(
+                "INNER JOIN {$prefix}producto_proveedor pp ON pp.producto_base_id = pb.id AND pp.catalogo_id = %d",
+                $catalog_id
+            );
+        } else {
+            $pp_join = "LEFT JOIN {$prefix}producto_proveedor pp ON pp.producto_base_id = pb.id AND pp.activo = 1";
+        }
+
         if ($search !== '') {
             $like = '%' . $wpdb->esc_like($search) . '%';
-            $where[] = '(pb.canonical_sku LIKE %s OR pb.nombre_canonico LIKE %s OR pp.codigo_proveedor LIKE %s OR cb.codigo LIKE %s)';
+            $prefix_like = $wpdb->esc_like($search) . '%';
+            $sku_compact = preg_replace('/[^A-Za-z0-9]/', '', $search);
+            $sku_compact_like = $sku_compact !== ''
+                ? '%' . $wpdb->esc_like($sku_compact) . '%'
+                : $like;
+
+            // Prioriza SKU de catálogo (codigo_proveedor) + nombre catálogo + SKU local
+            $where[] = '(
+                pp.codigo_proveedor LIKE %s
+                OR pp.codigo_proveedor LIKE %s
+                OR REPLACE(REPLACE(REPLACE(pp.codigo_proveedor, "-", ""), " ", ""), "/", "") LIKE %s
+                OR pp.nombre_proveedor LIKE %s
+                OR pb.canonical_sku LIKE %s
+                OR pb.nombre_canonico LIKE %s
+                OR cb.codigo LIKE %s
+            )';
+            $params[] = $like;
+            $params[] = $prefix_like;
+            $params[] = $sku_compact_like;
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
@@ -100,45 +134,88 @@ class Riverso_Product_Module {
         }
 
         $where_sql = implode(' AND ', $where);
-        
-        // Agregar filtro de completeness si corresponde
+
         $having = '';
         if ($completeness !== '' && $completeness !== 'todos') {
-            // Usar CASE WHEN para determinar la categoría y filtrar en HAVING
             $having = $this->get_completeness_having_clause($completeness);
+        }
+
+        $order_sql = 'ORDER BY pb.updated_at DESC, pb.id DESC';
+        if ($search !== '') {
+            $order_sql = $wpdb->prepare(
+                "ORDER BY
+                    CASE
+                        WHEN pp.codigo_proveedor = %s THEN 0
+                        WHEN pp.codigo_proveedor LIKE %s THEN 1
+                        WHEN pp.codigo_proveedor LIKE %s THEN 2
+                        WHEN pp.nombre_proveedor LIKE %s THEN 3
+                        ELSE 4
+                    END ASC,
+                    pb.updated_at DESC, pb.id DESC",
+                $search,
+                $wpdb->esc_like($search) . '%',
+                '%' . $wpdb->esc_like($search) . '%',
+                '%' . $wpdb->esc_like($search) . '%'
+            );
         }
 
         $sql = "SELECT pb.*,
                        COUNT(DISTINCT pp.id) AS proveedores_count,
                        COUNT(DISTINCT em.id) AS equivalencias_count,
-                       GROUP_CONCAT(DISTINCT pp.codigo_proveedor SEPARATOR ', ') AS codigos_proveedor
+                       GROUP_CONCAT(DISTINCT pp.codigo_proveedor SEPARATOR ', ') AS codigos_proveedor,
+                       GROUP_CONCAT(DISTINCT CASE
+                           WHEN pp.catalogo_id IS NOT NULL AND pp.catalogo_id > 0
+                           THEN pp.codigo_proveedor
+                           ELSE NULL
+                       END SEPARATOR ', ') AS codigos_catalogo
                 FROM {$prefix}producto_base pb
-                LEFT JOIN {$prefix}producto_proveedor pp ON pp.producto_base_id = pb.id AND pp.activo = 1
+                {$pp_join}
                 LEFT JOIN {$prefix}equivalence_members em ON em.producto_base_id = pb.id AND em.activo = 1
                 LEFT JOIN {$prefix}codigo_barra cb ON cb.producto_base_id = pb.id
                 WHERE {$where_sql}
                 GROUP BY pb.id
                 {$having}
-                ORDER BY pb.updated_at DESC, pb.id DESC
+                {$order_sql}
                 LIMIT %d OFFSET %d";
-        $params[] = $limit;
-        $params[] = $offset;
 
-        $results = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
-        
-        // Calcular completeness_category y total
-        foreach ($results as &$item) {
-            $item['completeness_category'] = $this->get_completeness_category($item);
+        $query_params = $params;
+        $query_params[] = $limit;
+        $query_params[] = $offset;
+
+        $results = $wpdb->get_results($wpdb->prepare($sql, $query_params), ARRAY_A);
+        if (!is_array($results)) {
+            $results = [];
         }
 
-        // Obtener total sin LIMIT/OFFSET para paginación
-        $count_sql = "SELECT COUNT(DISTINCT pb.id) as total
-                      FROM {$prefix}producto_base pb
-                      LEFT JOIN {$prefix}producto_proveedor pp ON pp.producto_base_id = pb.id AND pp.activo = 1
-                      LEFT JOIN {$prefix}equivalence_members em ON em.producto_base_id = pb.id AND em.activo = 1
-                      LEFT JOIN {$prefix}codigo_barra cb ON cb.producto_base_id = pb.id
-                      WHERE {$where_sql}
-                      {$having}";
+        foreach ($results as &$item) {
+            $item['sku_local'] = (string) ($item['canonical_sku'] ?? '');
+            $item['sku_online'] = $this->resolve_online_sku($item);
+            $item['codigos_proveedor'] = (string) ($item['codigos_proveedor'] ?? '');
+            $item['codigos_catalogo'] = (string) ($item['codigos_catalogo'] ?? '');
+            $item['completeness_category'] = $this->get_completeness_category($item);
+        }
+        unset($item);
+
+        if ($having !== '') {
+            $count_sql = "SELECT COUNT(*) FROM (
+                SELECT pb.id
+                FROM {$prefix}producto_base pb
+                {$pp_join}
+                LEFT JOIN {$prefix}equivalence_members em ON em.producto_base_id = pb.id AND em.activo = 1
+                LEFT JOIN {$prefix}codigo_barra cb ON cb.producto_base_id = pb.id
+                WHERE {$where_sql}
+                GROUP BY pb.id
+                {$having}
+            ) AS filtered";
+        } else {
+            $count_sql = "SELECT COUNT(DISTINCT pb.id) as total
+                          FROM {$prefix}producto_base pb
+                          {$pp_join}
+                          LEFT JOIN {$prefix}equivalence_members em ON em.producto_base_id = pb.id AND em.activo = 1
+                          LEFT JOIN {$prefix}codigo_barra cb ON cb.producto_base_id = pb.id
+                          WHERE {$where_sql}";
+        }
+
         $total = (int) $wpdb->get_var($wpdb->prepare($count_sql, $params));
 
         return [
@@ -146,8 +223,28 @@ class Riverso_Product_Module {
             'total' => $total,
             'offset' => $offset,
             'limit' => $limit,
-            'pages' => ceil($total / $limit),
+            'pages' => $limit > 0 ? (int) ceil($total / $limit) : 0,
         ];
+    }
+
+    /**
+     * SKU Online (WooCommerce) a partir de product_id / variation_id locales.
+     */
+    private function resolve_online_sku(array $item) {
+        if (!function_exists('wc_get_product')) {
+            return '';
+        }
+        $variation_id = (int) ($item['woocommerce_variation_id'] ?? 0);
+        $product_id = (int) ($item['woocommerce_product_id'] ?? 0);
+        $woo_id = $variation_id > 0 ? $variation_id : $product_id;
+        if ($woo_id <= 0) {
+            return '';
+        }
+        $product = wc_get_product($woo_id);
+        if (!$product) {
+            return '';
+        }
+        return (string) ($product->get_sku() ?: '');
     }
 
     /**
@@ -156,19 +253,19 @@ class Riverso_Product_Module {
     private function get_completeness_having_clause($completeness) {
         switch ($completeness) {
             case 'completo':
-                return "HAVING MAX(CASE WHEN pb.canonical_sku != '' AND pb.nombre_canonico != '' AND pb.woocommerce_product_id IS NOT NULL AND COUNT(DISTINCT pp.id) > 0 THEN 1 ELSE 0 END) = 1";
+                return "HAVING MAX(pb.canonical_sku) != '' AND MAX(pb.nombre_canonico) != '' AND MAX(pb.woocommerce_product_id) IS NOT NULL AND COUNT(DISTINCT pp.id) > 0";
             case 'publicado':
-                return "HAVING MAX(CASE WHEN pb.canonical_sku != '' AND pb.nombre_canonico != '' AND pb.woocommerce_product_id IS NOT NULL AND COUNT(DISTINCT pp.id) > 0 AND pb.publication_stage IN ('approved_for_publication', 'published') THEN 1 ELSE 0 END) = 1";
+                return "HAVING MAX(pb.canonical_sku) != '' AND MAX(pb.nombre_canonico) != '' AND MAX(pb.woocommerce_product_id) IS NOT NULL AND COUNT(DISTINCT pp.id) > 0 AND MAX(pb.publication_stage) IN ('approved_for_publication', 'published')";
             case 'falta_online':
-                return "HAVING MAX(CASE WHEN pb.canonical_sku != '' AND pb.nombre_canonico != '' AND pb.woocommerce_product_id IS NULL THEN 1 ELSE 0 END) = 1";
+                return "HAVING MAX(pb.canonical_sku) != '' AND MAX(pb.nombre_canonico) != '' AND MAX(pb.woocommerce_product_id) IS NULL";
             case 'falta_codigo':
-                return "HAVING MAX(CASE WHEN pb.canonical_sku != '' AND pb.nombre_canonico != '' AND pb.woocommerce_product_id IS NOT NULL AND COUNT(DISTINCT pp.id) = 0 THEN 1 ELSE 0 END) = 1";
+                return "HAVING MAX(pb.canonical_sku) != '' AND MAX(pb.nombre_canonico) != '' AND MAX(pb.woocommerce_product_id) IS NOT NULL AND COUNT(DISTINCT pp.id) = 0";
             case 'solo_online':
-                return "HAVING MAX(CASE WHEN (pb.canonical_sku = '' OR pb.nombre_canonico = '') AND pb.woocommerce_product_id IS NOT NULL THEN 1 ELSE 0 END) = 1";
+                return "HAVING (MAX(pb.canonical_sku) = '' OR MAX(pb.nombre_canonico) = '') AND MAX(pb.woocommerce_product_id) IS NOT NULL";
             case 'solo_online_publicado':
-                return "HAVING MAX(CASE WHEN (pb.canonical_sku = '' OR pb.nombre_canonico = '') AND pb.woocommerce_product_id IS NOT NULL AND pb.publication_stage IN ('approved_for_publication', 'published') THEN 1 ELSE 0 END) = 1";
+                return "HAVING (MAX(pb.canonical_sku) = '' OR MAX(pb.nombre_canonico) = '') AND MAX(pb.woocommerce_product_id) IS NOT NULL AND MAX(pb.publication_stage) IN ('approved_for_publication', 'published')";
             case 'incompleto':
-                return "HAVING MAX(CASE WHEN (pb.canonical_sku = '' OR pb.nombre_canonico = '') THEN 1 ELSE 0 END) = 1";
+                return "HAVING (MAX(pb.canonical_sku) = '' OR MAX(pb.nombre_canonico) = '')";
             default:
                 return '';
         }
@@ -252,7 +349,8 @@ class Riverso_Product_Module {
         ];
 
         if ($payload['canonical_sku'] === '') {
-            return new WP_Error('missing_sku', 'SKU canónico requerido');
+            // Permitir vacío: productos de catálogo pendientes de SKU Local
+            $payload['canonical_sku'] = null;
         }
         if ($payload['nombre_canonico'] === '') {
             return new WP_Error('missing_name', 'Nombre canónico requerido');
@@ -381,6 +479,7 @@ class Riverso_Product_Module {
             'status' => sanitize_text_field($_POST['status'] ?? 'active'),
             'search' => sanitize_text_field($_POST['search'] ?? ''),
             'completeness' => sanitize_text_field($_POST['completeness'] ?? 'todos'),
+            'catalog_id' => absint($_POST['catalog_id'] ?? 0),
             'offset' => intval($_POST['offset'] ?? 0),
             'limit' => intval($_POST['limit'] ?? 50),
         ]);
@@ -800,9 +899,22 @@ class Riverso_Product_Module {
         $publisher = Riverso_Woo_Publisher_Module::get_instance();
         
         if ($product_type === 'variable') {
-            $nominal = sanitize_text_field($_POST['nominal'] ?? '');
-            $largo = sanitize_text_field($_POST['largo'] ?? '');
-            $result = $publisher->create_woo_variable_from_base($product_id, $woo_name, $woo_sku, $nominal, $largo);
+            // Atributos dinámicos desde el array JSON
+            $attributes = isset($_POST['attributes']) ? json_decode(stripslashes($_POST['attributes']), true) : [];
+            if (!is_array($attributes)) {
+                $attributes = [];
+            }
+            $result = $publisher->create_woo_variable_from_base($product_id, $woo_name, $woo_sku, $attributes);
+        } elseif ($product_type === 'child') {
+            // Asignar como hijo a un padre existente
+            $parent_id = absint($_POST['parent_id'] ?? 0);
+            $attach_mode = sanitize_text_field($_POST['attach_mode'] ?? 'create');
+            
+            if (!$parent_id) {
+                wp_send_json_error(['message' => 'Padre variable no especificado']);
+            }
+            
+            $result = $publisher->attach_base_to_variable_parent($product_id, $parent_id, $woo_sku, $attach_mode);
         } else {
             $result = $publisher->create_woo_simple_from_base($product_id, $woo_name, $woo_sku);
         }
@@ -825,5 +937,671 @@ class Riverso_Product_Module {
             'item' => $updated_product,
             'result' => $result,
         ]);
+    }
+
+    /**
+     * Resuelve el ID WooCommerce del padre variable a partir de un producto_base
+     * (puede ser el padre mismo o un hijo/variación).
+     *
+     * @param object $pb Fila producto_base (woocommerce_product_id, woocommerce_variation_id)
+     * @return int
+     */
+    private function resolve_variable_parent_id($pb) {
+        if (!$pb) {
+            return 0;
+        }
+
+        $variation_id = (int) ($pb->woocommerce_variation_id ?? 0);
+        if ($variation_id > 0) {
+            $variation = wc_get_product($variation_id);
+            if ($variation && $variation->is_type('variation')) {
+                return (int) $variation->get_parent_id();
+            }
+        }
+
+        $product_id = (int) ($pb->woocommerce_product_id ?? 0);
+        if ($product_id > 0) {
+            $product = wc_get_product($product_id);
+            if (!$product) {
+                return 0;
+            }
+            if ($product->is_type('variable')) {
+                return $product_id;
+            }
+            if ($product->is_type('variation')) {
+                return (int) $product->get_parent_id();
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Enriquece una sugerencia de padre variable con metadatos locales.
+     */
+    private function build_parent_suggestion($parent_id, $match_hint = '', $source = 'local') {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $product = wc_get_product($parent_id);
+        if (!$product || !$product->is_type('variable')) {
+            return null;
+        }
+
+        $child_ids = array_map('intval', $product->get_children() ?: []);
+        $lookup_ids = array_values(array_unique(array_filter(array_merge([$parent_id], $child_ids))));
+        $in = implode(',', $lookup_ids);
+
+        $meta = $wpdb->get_row(
+            "SELECT
+                MAX(CASE WHEN pb.woocommerce_product_id = {$parent_id}
+                    AND (pb.woocommerce_variation_id IS NULL OR pb.woocommerce_variation_id = 0)
+                    THEN pb.canonical_sku END) AS canonical_sku,
+                GROUP_CONCAT(DISTINCT pp.codigo_proveedor SEPARATOR ', ') AS codigos,
+                MAX(c.nombre) AS catalogo_nombre
+             FROM {$prefix}producto_base pb
+             LEFT JOIN {$prefix}producto_proveedor pp
+                ON pp.producto_base_id = pb.id
+             LEFT JOIN {$prefix}catalogos c ON c.id = pp.catalogo_id
+             WHERE pb.deleted_at IS NULL
+               AND (
+                    pb.woocommerce_product_id = {$parent_id}
+                    OR pb.woocommerce_variation_id IN ({$in})
+               )"
+        );
+
+        return [
+            'id' => (int) $parent_id,
+            'name' => $product->get_name(),
+            'sku' => $product->get_sku() ?: ($meta->canonical_sku ?? ''),
+            'sku_online' => $product->get_sku() ?: '',
+            'sku_local' => $meta->canonical_sku ?? '',
+            'child_count' => count($child_ids),
+            'catalogo' => $meta->catalogo_nombre ?? 'Sin catálogo',
+            'codigo_catalogo' => $meta->codigos ?? '',
+            'match_hint' => $match_hint,
+            'source' => $source,
+        ];
+    }
+
+    /**
+     * AJAX: Sugerir padres variables (por nombre y por SKU de hijos / catálogo)
+     */
+    public function ajax_suggest_variable_parents() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $search = sanitize_text_field($_POST['search'] ?? '');
+        $catalog_id = absint($_POST['catalog_id'] ?? 0);
+
+        if (strlen($search) < 1) {
+            wp_send_json_success(['suggestions' => []]);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $like = '%' . $wpdb->esc_like($search) . '%';
+        $sku_compact = preg_replace('/[^A-Za-z0-9]/', '', $search);
+        $sku_compact_like = $sku_compact !== ''
+            ? '%' . $wpdb->esc_like($sku_compact) . '%'
+            : $like;
+
+        $suggestions_by_id = [];
+
+        // 1) Buscar por hijos / catálogo: codigo_proveedor, nombre proveedor, SKU local, nombre
+        $where = [
+            'pb.deleted_at IS NULL',
+            '(
+                pp.codigo_proveedor LIKE %s
+                OR REPLACE(REPLACE(REPLACE(pp.codigo_proveedor, "-", ""), " ", ""), "/", "") LIKE %s
+                OR pp.nombre_proveedor LIKE %s
+                OR pb.canonical_sku LIKE %s
+                OR pb.nombre_canonico LIKE %s
+            )',
+        ];
+        $params = [$like, $sku_compact_like, $like, $like, $like];
+
+        if ($catalog_id > 0) {
+            $where[] = 'pp.catalogo_id = %d';
+            $params[] = $catalog_id;
+        }
+
+        $pp_activo_sql = ($catalog_id > 0) ? '1=1' : 'pp.activo = 1';
+
+        $where_sql = implode(' AND ', $where);
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT pb.id, pb.nombre_canonico, pb.canonical_sku,
+                        pb.woocommerce_product_id, pb.woocommerce_variation_id,
+                        pp.codigo_proveedor, pp.nombre_proveedor,
+                        c.nombre AS catalogo_nombre
+                 FROM {$prefix}producto_base pb
+                 INNER JOIN {$prefix}producto_proveedor pp
+                    ON pp.producto_base_id = pb.id AND {$pp_activo_sql}
+                 LEFT JOIN {$prefix}catalogos c ON c.id = pp.catalogo_id
+                 WHERE {$where_sql}
+                 ORDER BY
+                    CASE
+                        WHEN pp.codigo_proveedor = %s THEN 0
+                        WHEN pp.codigo_proveedor LIKE %s THEN 1
+                        ELSE 2
+                    END ASC
+                 LIMIT 80",
+                array_merge($params, [$search, $wpdb->esc_like($search) . '%'])
+            )
+        );
+
+        foreach ($rows ?: [] as $row) {
+            $parent_id = $this->resolve_variable_parent_id($row);
+            if ($parent_id <= 0 || isset($suggestions_by_id[$parent_id])) {
+                continue;
+            }
+
+            $hint_parts = [];
+            if (!empty($row->codigo_proveedor) && stripos((string) $row->codigo_proveedor, $search) !== false) {
+                $hint_parts[] = 'SKU Catálogo hijo: ' . $row->codigo_proveedor;
+            } elseif (!empty($row->canonical_sku) && stripos((string) $row->canonical_sku, $search) !== false) {
+                $hint_parts[] = 'SKU Local hijo: ' . $row->canonical_sku;
+            } elseif (!empty($row->nombre_proveedor) && stripos((string) $row->nombre_proveedor, $search) !== false) {
+                $hint_parts[] = 'Nombre catálogo: ' . $row->nombre_proveedor;
+            } else {
+                $hint_parts[] = 'Coincide en familia';
+            }
+
+            $suggestion = $this->build_parent_suggestion($parent_id, implode(' | ', $hint_parts), 'local_child');
+            if ($suggestion) {
+                if ($catalog_id > 0 && empty($suggestion['codigo_catalogo']) && !empty($row->codigo_proveedor)) {
+                    $suggestion['codigo_catalogo'] = $row->codigo_proveedor;
+                    $suggestion['catalogo'] = $row->catalogo_nombre ?: $suggestion['catalogo'];
+                }
+                $suggestions_by_id[$parent_id] = $suggestion;
+            }
+
+            if (count($suggestions_by_id) >= 10) {
+                break;
+            }
+        }
+
+        // 2) Ampliar: padres Woo cuyo nombre/SKU coincide, con hijos en el catálogo filtrado
+        if (count($suggestions_by_id) < 10) {
+            $woo_product_ids = wc_get_products([
+                'type' => 'variable',
+                'status' => ['publish', 'draft', 'private'],
+                's' => $search,
+                'limit' => 20,
+                'return' => 'ids',
+            ]);
+
+            foreach ($woo_product_ids as $pid) {
+                if (isset($suggestions_by_id[$pid])) {
+                    continue;
+                }
+
+                if ($catalog_id > 0) {
+                    $product = wc_get_product($pid);
+                    if (!$product) {
+                        continue;
+                    }
+                    $ids = array_map('intval', array_merge([$pid], $product->get_children() ?: []));
+                    $ids = array_filter($ids);
+                    if (!$ids) {
+                        continue;
+                    }
+                    $in = implode(',', $ids);
+                    $in_catalog = (int) $wpdb->get_var(
+                        $wpdb->prepare(
+                            "SELECT COUNT(*)
+                             FROM {$prefix}producto_base pb
+                             INNER JOIN {$prefix}producto_proveedor pp
+                                ON pp.producto_base_id = pb.id AND pp.catalogo_id = %d
+                             WHERE pb.deleted_at IS NULL
+                               AND (
+                                    pb.woocommerce_product_id IN ({$in})
+                                    OR pb.woocommerce_variation_id IN ({$in})
+                               )",
+                            $catalog_id
+                        )
+                    );
+                    if ($in_catalog < 1) {
+                        continue;
+                    }
+                }
+
+                $suggestion = $this->build_parent_suggestion(
+                    (int) $pid,
+                    $catalog_id > 0 ? 'Nombre padre + familia en catálogo' : 'Búsqueda WooCommerce',
+                    'woocommerce'
+                );
+                if ($suggestion) {
+                    $suggestions_by_id[$pid] = $suggestion;
+                }
+                if (count($suggestions_by_id) >= 10) {
+                    break;
+                }
+            }
+        }
+
+        wp_send_json_success(['suggestions' => array_values($suggestions_by_id)]);
+    }
+
+    /**
+     * AJAX: Obtener atributos de variación de un padre
+     */
+    public function ajax_get_variable_attributes() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $parent_id = absint($_POST['parent_id'] ?? 0);
+        if (!$parent_id) {
+            wp_send_json_error(['message' => 'ID de padre no válido']);
+        }
+
+        $product = wc_get_product($parent_id);
+        if (!$product || $product->get_type() !== 'variable') {
+            wp_send_json_error(['message' => 'Producto no es variable']);
+        }
+
+        $attributes = [];
+        foreach ($product->get_attributes() as $attr) {
+            if ($attr->get_variation()) {
+                $attributes[] = [
+                    'name' => $attr->get_name(),
+                    'options' => $attr->get_options(),
+                ];
+            }
+        }
+
+        wp_send_json_success(['attributes' => $attributes]);
+    }
+
+    /**
+     * AJAX: Detalle de padre variable: atributos + hijos con SKU Local/Online/Catálogo
+     */
+    public function ajax_get_variable_parent_details() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $parent_id = absint($_POST['parent_id'] ?? 0);
+        if (!$parent_id) {
+            wp_send_json_error(['message' => 'ID de padre no válido']);
+        }
+
+        $product = wc_get_product($parent_id);
+        if (!$product || !$product->is_type('variable')) {
+            wp_send_json_error(['message' => 'Producto no es variable']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $attributes = [];
+        foreach ($product->get_attributes() as $attr) {
+            if ($attr->get_variation()) {
+                $label = $attr->get_name();
+                if (strpos($label, 'pa_') === 0) {
+                    $tax = $attr->get_taxonomy_object();
+                    $label = $tax && !empty($tax->attribute_label) ? $tax->attribute_label : $label;
+                }
+                $options = $attr->get_options();
+                if ($attr->is_taxonomy()) {
+                    $options = array_map(function ($term_id) {
+                        $term = get_term($term_id);
+                        return ($term && !is_wp_error($term)) ? $term->name : (string) $term_id;
+                    }, $options);
+                }
+                $attributes[] = [
+                    'name' => $label,
+                    'slug' => $attr->get_name(),
+                    'options' => array_values($options),
+                ];
+            }
+        }
+
+        $child_ids = $product->get_children();
+        $children = [];
+
+        foreach ($child_ids as $variation_id) {
+            $variation = wc_get_product($variation_id);
+            if (!$variation) {
+                continue;
+            }
+
+            $var_attrs = [];
+            foreach ($variation->get_attributes() as $slug => $value) {
+                $label = $slug;
+                if (strpos($slug, 'pa_') === 0) {
+                    $tax = get_taxonomy($slug);
+                    $label = ($tax && !empty($tax->labels->singular_name))
+                        ? $tax->labels->singular_name
+                        : wc_attribute_label($slug);
+                    if ($value) {
+                        $term = get_term_by('slug', $value, $slug);
+                        $value = ($term && !is_wp_error($term)) ? $term->name : $value;
+                    }
+                } else {
+                    $label = wc_attribute_label($slug, $product);
+                }
+                $var_attrs[] = [
+                    'name' => $label,
+                    'slug' => $slug,
+                    'value' => $value,
+                ];
+            }
+
+            $pb = $wpdb->get_row(
+                $wpdb->prepare(
+                    "SELECT id, canonical_sku, nombre_canonico, woocommerce_product_id, woocommerce_variation_id
+                     FROM {$prefix}producto_base
+                     WHERE deleted_at IS NULL
+                       AND (
+                            woocommerce_variation_id = %d
+                            OR (woocommerce_product_id = %d AND (woocommerce_variation_id IS NULL OR woocommerce_variation_id = 0))
+                       )
+                     ORDER BY CASE WHEN woocommerce_variation_id = %d THEN 0 ELSE 1 END
+                     LIMIT 1",
+                    $variation_id,
+                    $variation_id,
+                    $variation_id
+                )
+            );
+
+            // Fallback: match por SKU online = canonical_sku
+            if (!$pb) {
+                $woo_sku = $variation->get_sku();
+                if ($woo_sku !== '') {
+                    $pb = $wpdb->get_row(
+                        $wpdb->prepare(
+                            "SELECT id, canonical_sku, nombre_canonico, woocommerce_product_id, woocommerce_variation_id
+                             FROM {$prefix}producto_base
+                             WHERE deleted_at IS NULL AND canonical_sku = %s
+                             LIMIT 1",
+                            $woo_sku
+                        )
+                    );
+                }
+            }
+
+            $catalog_codes = [];
+            $sku_local = '';
+            $producto_base_id = null;
+            if ($pb) {
+                $producto_base_id = (int) $pb->id;
+                $sku_local = (string) ($pb->canonical_sku ?? '');
+                $pp_rows = $wpdb->get_results(
+                    $wpdb->prepare(
+                        "SELECT pp.codigo_proveedor, pp.nombre_proveedor, c.nombre AS catalogo_nombre
+                         FROM {$prefix}producto_proveedor pp
+                         LEFT JOIN {$prefix}catalogos c ON c.id = pp.catalogo_id
+                         WHERE pp.producto_base_id = %d
+                         ORDER BY pp.id ASC",
+                        $producto_base_id
+                    )
+                );
+                foreach ($pp_rows ?: [] as $pp) {
+                    if ($pp->codigo_proveedor === null || $pp->codigo_proveedor === '') {
+                        continue;
+                    }
+                    $catalog_codes[] = [
+                        'codigo' => $pp->codigo_proveedor,
+                        'nombre' => $pp->nombre_proveedor ?: '',
+                        'catalogo' => $pp->catalogo_nombre ?: '',
+                    ];
+                }
+            }
+
+            $sku_online = (string) ($variation->get_sku() ?: '');
+            $sku_labels = [];
+            if ($sku_local !== '') {
+                $sku_labels[] = [
+                    'type' => 'local',
+                    'label' => 'SKU Local',
+                    'value' => $sku_local,
+                ];
+            }
+            if ($sku_online !== '') {
+                $sku_labels[] = [
+                    'type' => 'online',
+                    'label' => 'SKU Online',
+                    'value' => $sku_online,
+                ];
+            }
+            foreach ($catalog_codes as $cc) {
+                $sku_labels[] = [
+                    'type' => 'catalogo',
+                    'label' => 'SKU Catálogo',
+                    'value' => $cc['codigo'],
+                    'catalogo' => $cc['catalogo'],
+                ];
+            }
+            if (empty($sku_labels)) {
+                $sku_labels[] = [
+                    'type' => 'otro',
+                    'label' => 'Sin SKU',
+                    'value' => '',
+                ];
+            }
+
+            $children[] = [
+                'variation_id' => (int) $variation_id,
+                'name' => $variation->get_name(),
+                'attributes' => $var_attrs,
+                'attributes_text' => implode(' · ', array_map(function ($a) {
+                    return $a['name'] . ': ' . $a['value'];
+                }, $var_attrs)),
+                'sku_local' => $sku_local,
+                'sku_online' => $sku_online,
+                'sku_catalogo' => array_map(function ($c) {
+                    return $c['codigo'];
+                }, $catalog_codes),
+                'sku_labels' => $sku_labels,
+                'has_local_sku' => $sku_local !== '',
+                'producto_base_id' => $producto_base_id,
+                'status' => $variation->get_status(),
+            ];
+        }
+
+        // Orden: primero sin SKU local, luego con SKU local
+        usort($children, function ($a, $b) {
+            if ($a['has_local_sku'] === $b['has_local_sku']) {
+                return strcmp($a['attributes_text'], $b['attributes_text']);
+            }
+            return $a['has_local_sku'] ? 1 : -1;
+        });
+
+        $with_local = count(array_filter($children, function ($c) {
+            return $c['has_local_sku'];
+        }));
+
+        wp_send_json_success([
+            'parent' => [
+                'id' => (int) $parent_id,
+                'name' => $product->get_name(),
+                'sku_online' => $product->get_sku() ?: '',
+                'child_count' => count($children),
+                'with_local_sku' => $with_local,
+                'without_local_sku' => count($children) - $with_local,
+            ],
+            'attributes' => $attributes,
+            'children' => $children,
+        ]);
+    }
+
+    /**
+     * AJAX: Buscar productos dentro de un catálogo con sugerencias fuzzy.
+     * Prioriza SKU de catálogo (codigo_proveedor) y nombres parecidos.
+     */
+    public function ajax_search_catalog_products() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $catalog_id = absint($_POST['catalog_id'] ?? 0);
+        $search = sanitize_text_field($_POST['search'] ?? '');
+        $limit = min(20, max(1, absint($_POST['limit'] ?? 10)));
+
+        if (strlen($search) < 1) {
+            wp_send_json_success(['products' => []]);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $like = '%' . $wpdb->esc_like($search) . '%';
+        $prefix_like = $wpdb->esc_like($search) . '%';
+        $sku_compact = preg_replace('/[^A-Za-z0-9]/', '', $search);
+        $sku_compact_like = $sku_compact !== ''
+            ? '%' . $wpdb->esc_like($sku_compact) . '%'
+            : $like;
+
+        $where = [
+            '(
+                pp.codigo_proveedor LIKE %s
+                OR pp.codigo_proveedor LIKE %s
+                OR REPLACE(REPLACE(REPLACE(pp.codigo_proveedor, "-", ""), " ", ""), "/", "") LIKE %s
+                OR pp.nombre_proveedor LIKE %s
+                OR pb.canonical_sku LIKE %s
+            )',
+        ];
+        $params = [$like, $prefix_like, $sku_compact_like, $like, $like];
+
+        if ($catalog_id > 0) {
+            $where[] = 'pp.catalogo_id = %d';
+            $params[] = $catalog_id;
+        } else {
+            $where[] = 'pp.activo = 1';
+        }
+
+        $where_sql = implode(' AND ', $where);
+        $fetch_limit = max($limit * 5, 40);
+        $query_params = array_merge($params, [$search, $prefix_like, $sku_compact_like, $fetch_limit]);
+
+        $results = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT pp.id, pp.codigo_proveedor, pp.nombre_proveedor,
+                        pb.id as producto_base_id, pb.canonical_sku,
+                        c.nombre as catalogo_nombre
+                 FROM {$prefix}producto_proveedor pp
+                 LEFT JOIN {$prefix}producto_base pb ON pb.id = pp.producto_base_id
+                 LEFT JOIN {$prefix}catalogos c ON c.id = pp.catalogo_id
+                 WHERE {$where_sql}
+                 ORDER BY
+                    CASE
+                        WHEN pp.codigo_proveedor = %s THEN 0
+                        WHEN pp.codigo_proveedor LIKE %s THEN 1
+                        WHEN REPLACE(REPLACE(REPLACE(pp.codigo_proveedor, '-', ''), ' ', ''), '/', '') LIKE %s THEN 2
+                        ELSE 3
+                    END ASC,
+                    pp.codigo_proveedor ASC
+                 LIMIT %d",
+                $query_params
+            )
+        );
+
+        if (!is_array($results)) {
+            $results = [];
+        }
+
+        if (count($results) < $limit) {
+            $extra_clauses = [];
+            $extra_params = [];
+
+            $tokens = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
+            if (count($tokens) > 1) {
+                foreach ($tokens as $token) {
+                    if (strlen($token) < 2) {
+                        continue;
+                    }
+                    $tlike = '%' . $wpdb->esc_like($token) . '%';
+                    $extra_clauses[] = '(pp.codigo_proveedor LIKE %s OR pp.nombre_proveedor LIKE %s)';
+                    $extra_params[] = $tlike;
+                    $extra_params[] = $tlike;
+                }
+            }
+
+            if (strlen($sku_compact) >= 2) {
+                $short = substr($sku_compact, 0, min(4, strlen($sku_compact)));
+                $extra_clauses[] = 'REPLACE(REPLACE(REPLACE(pp.codigo_proveedor, "-", ""), " ", ""), "/", "") LIKE %s';
+                $extra_params[] = $wpdb->esc_like($short) . '%';
+            }
+
+            if ($extra_clauses) {
+                $extra_where = ['(' . implode(' OR ', $extra_clauses) . ')'];
+                if ($catalog_id > 0) {
+                    $extra_where[] = 'pp.catalogo_id = %d';
+                    $extra_params[] = $catalog_id;
+                } else {
+                    $extra_where[] = 'pp.activo = 1';
+                }
+                $extra_params[] = $fetch_limit;
+                $extra = $wpdb->get_results(
+                    $wpdb->prepare(
+                        "SELECT pp.id, pp.codigo_proveedor, pp.nombre_proveedor,
+                                pb.id as producto_base_id, pb.canonical_sku,
+                                c.nombre as catalogo_nombre
+                         FROM {$prefix}producto_proveedor pp
+                         LEFT JOIN {$prefix}producto_base pb ON pb.id = pp.producto_base_id
+                         LEFT JOIN {$prefix}catalogos c ON c.id = pp.catalogo_id
+                         WHERE " . implode(' AND ', $extra_where) . "
+                         LIMIT %d",
+                        $extra_params
+                    )
+                );
+                $seen = [];
+                foreach ($results as $row) {
+                    $seen[(int) $row->id] = true;
+                }
+                foreach ((array) $extra as $row) {
+                    if (empty($seen[(int) $row->id])) {
+                        $results[] = $row;
+                    }
+                }
+            }
+        }
+
+        if ($results) {
+            $search_lower = strtolower($search);
+            $compact_lower = strtolower($sku_compact);
+            usort($results, function ($a, $b) use ($search_lower, $compact_lower) {
+                $score = function ($row) use ($search_lower, $compact_lower) {
+                    $code = strtolower((string) ($row->codigo_proveedor ?? ''));
+                    $name = strtolower((string) ($row->nombre_proveedor ?? ''));
+                    $code_compact = preg_replace('/[^a-z0-9]/', '', $code);
+                    $s = 0;
+                    if ($code === $search_lower) {
+                        $s += 10000;
+                    }
+                    if ($compact_lower !== '' && $code_compact === $compact_lower) {
+                        $s += 8000;
+                    }
+                    if (strpos($code, $search_lower) === 0) {
+                        $s += 5000;
+                    }
+                    if ($compact_lower !== '' && strpos($code_compact, $compact_lower) === 0) {
+                        $s += 4000;
+                    }
+                    if (strpos($code, $search_lower) !== false) {
+                        $s += 2000;
+                    }
+                    similar_text($search_lower, $code, $pct_code);
+                    similar_text($search_lower, $name, $pct_name);
+                    $s += (int) ($pct_code * 100);
+                    $s += (int) ($pct_name * 40);
+                    if ($compact_lower !== '') {
+                        similar_text($compact_lower, $code_compact, $pct_compact);
+                        $s += (int) ($pct_compact * 80);
+                    }
+                    return $s;
+                };
+                return $score($b) <=> $score($a);
+            });
+        }
+
+        wp_send_json_success(['products' => array_slice($results, 0, $limit)]);
     }
 }

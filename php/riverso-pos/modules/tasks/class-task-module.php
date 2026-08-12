@@ -1,7 +1,7 @@
 <?php
 /**
  * Compat shim: la implementación canónica vive en core/tasks.
- *
+ * 
  * @package Riverso_POS
  */
 

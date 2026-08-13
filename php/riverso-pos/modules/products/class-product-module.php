@@ -69,6 +69,10 @@ class Riverso_Product_Module {
 		add_action('wp_ajax_riverso_products_remove_supplier_code', [$this, 'ajax_remove_supplier_code']);
 		add_action('wp_ajax_riverso_products_link_woo', [$this, 'ajax_link_woo']);
 		add_action('wp_ajax_riverso_products_create_woo', [$this, 'ajax_create_woo']);
+		add_action('wp_ajax_riverso_products_create_online_standalone', [$this, 'ajax_create_online']);
+		add_action('wp_ajax_riverso_products_link_online', [$this, 'ajax_link_online_standalone']);
+		add_action('wp_ajax_riverso_products_evaluate_online', [$this, 'ajax_evaluate_online_merge']);
+		add_action('wp_ajax_riverso_products_get_woo_categories', [$this, 'ajax_get_woo_categories']);
 	}
 
     private function get_completeness_category($product) {
@@ -870,13 +874,43 @@ class Riverso_Product_Module {
             'return' => 'objects',
         ]);
 
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
         $results = [];
         foreach ($products as $wc_product) {
+            $wc_id = $wc_product->get_id();
+            $parent_id = 0;
+            
+            // Si es variación, obtener el padre
+            if ($wc_product->is_type('variation')) {
+                $parent_id = $wc_product->get_parent_id();
+            } elseif ($wc_product->is_type('variable')) {
+                $parent_id = 0; // No tiene padre, es variable
+            }
+
+            // Buscar si ya tiene Local vinculado
+            $linked_local = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, canonical_sku FROM {$prefix}producto_base 
+                 WHERE (woocommerce_product_id = %d AND woocommerce_variation_id = %d)
+                 OR (woocommerce_product_id = %d AND woocommerce_variation_id = 0)",
+                $parent_id > 0 ? $parent_id : $wc_id,
+                $parent_id > 0 ? $wc_id : 0,
+                $wc_id
+            ), ARRAY_A);
+
             $results[] = [
-                'id' => $wc_product->get_id(),
+                'id' => $wc_id,
+                'parent_id' => $parent_id,
                 'name' => $wc_product->get_name(),
                 'sku' => $wc_product->get_sku(),
                 'type' => $wc_product->get_type(),
+                'status' => $wc_product->get_status(),
+                'price' => $wc_product->get_price(),
+                'linked_local' => $linked_local ? [
+                    'id' => $linked_local['id'],
+                    'sku' => $linked_local['canonical_sku'],
+                ] : null,
             ];
         }
 
@@ -899,15 +933,56 @@ class Riverso_Product_Module {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
+        // Obtener el producto base actual para auditoría
+        $pb = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}producto_base WHERE id = %d",
+            $product_id
+        ), ARRAY_A);
+
+        if (!$pb) {
+            wp_send_json_error(['message' => 'Producto base no encontrado']);
+        }
+
+        // Resolver el producto Woo para determinar si es variación o simple/padre
+        $woo_product = wc_get_product($woo_id);
+        if (!$woo_product) {
+            wp_send_json_error(['message' => 'Producto WooCommerce no encontrado']);
+        }
+
+        // Split padre / variación (como en matching CONFIRMED)
+        $product_id_to_save = $woo_product->is_type('variation') ? $woo_product->get_parent_id() : $woo_id;
+        $variation_id_to_save = $woo_product->is_type('variation') ? $woo_id : 0;
+
+        // Verificar constraint: ux_wc_ref (no duplicar el mismo par WC)
+        $existing = $wpdb->get_row($wpdb->prepare(
+            "SELECT id FROM {$prefix}producto_base 
+             WHERE (woocommerce_product_id = %d AND woocommerce_variation_id = %d)
+             AND id != %d",
+            $product_id_to_save,
+            $variation_id_to_save,
+            $product_id
+        ));
+
+        if ($existing) {
+            wp_send_json_error([
+                'message' => 'Este producto WooCommerce ya está vinculado a otro producto local',
+                'conflict' => true,
+            ]);
+        }
+
+        // Actualizar con padre/variación correctos
         $result = $wpdb->update(
             "{$prefix}producto_base",
             [
-                'woocommerce_product_id' => $woo_id,
+                'woocommerce_product_id' => $product_id_to_save,
+                'woocommerce_variation_id' => $variation_id_to_save,
                 'match_estado_online' => 'CONFIRMED',
+                'match_origen_online' => 'human',
+                'matched_online_at' => current_time('mysql'),
                 'updated_at' => current_time('mysql'),
             ],
             ['id' => $product_id],
-            ['%d', '%s', '%s'],
+            ['%d', '%d', '%s', '%s', '%s', '%s'],
             ['%d']
         );
 
@@ -915,10 +990,18 @@ class Riverso_Product_Module {
             wp_send_json_error(['message' => $wpdb->last_error ?: 'Error guardando vínculo Woo']);
         }
 
+        // Auditoría completa
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('product_online_linked', 'producto_base', $product_id, [
                 'actor_type' => 'human',
-                'woocommerce_product_id' => $woo_id,
+                'old_value' => [
+                    'woocommerce_product_id' => $pb['woocommerce_product_id'] ?? null,
+                    'woocommerce_variation_id' => $pb['woocommerce_variation_id'] ?? null,
+                ],
+                'new_value' => [
+                    'woocommerce_product_id' => $product_id_to_save,
+                    'woocommerce_variation_id' => $variation_id_to_save,
+                ],
             ]);
         }
 
@@ -1175,9 +1258,12 @@ class Riverso_Product_Module {
         $product_type = sanitize_text_field($_POST['product_type'] ?? 'simple');
         $woo_name = sanitize_text_field($_POST['woo_name'] ?? '');
         $woo_sku = sanitize_text_field($_POST['woo_sku'] ?? '');
+        $woo_price = floatval($_POST['woo_price'] ?? 0);
+        $woo_categories = isset($_POST['woo_categories']) ? json_decode(stripslashes($_POST['woo_categories']), true) : [];
+        $local_id = absint($_POST['local_id'] ?? 0);
 
-        if (!$product_id || !$woo_name || !$woo_sku) {
-            wp_send_json_error(['message' => 'Datos incompletos']);
+        if (!$woo_name || !$woo_sku) {
+            wp_send_json_error(['message' => 'Nombre y SKU son requeridos']);
         }
 
         if (!class_exists('Riverso_Woo_Publisher_Module')) {
@@ -1186,15 +1272,43 @@ class Riverso_Product_Module {
 
         $publisher = Riverso_Woo_Publisher_Module::get_instance();
         
+        // Si no hay product_id pero hay local_id, usar el local
+        if (!$product_id && $local_id) {
+            $product_id = $local_id;
+        }
+
+        // Si tampoco hay local_id, crear uno mínimo (solo si sin Local)
+        if (!$product_id) {
+            global $wpdb;
+            $prefix = $wpdb->prefix . 'riverso_';
+            
+            // Crear producto_base mínimo
+            $result = $wpdb->insert(
+                "{$prefix}producto_base",
+                [
+                    'nombre_canonico' => $woo_name,
+                    'canonical_sku' => $woo_sku,
+                    'created_at' => current_time('mysql'),
+                    'updated_at' => current_time('mysql'),
+                ],
+                ['%s', '%s', '%s', '%s']
+            );
+
+            if (!$result) {
+                wp_send_json_error(['message' => 'Error creando producto base']);
+            }
+
+            $product_id = $wpdb->insert_id;
+        }
+
+        // Crear el producto WooCommerce
         if ($product_type === 'variable') {
-            // Atributos dinámicos desde el array JSON
             $attributes = isset($_POST['attributes']) ? json_decode(stripslashes($_POST['attributes']), true) : [];
             if (!is_array($attributes)) {
                 $attributes = [];
             }
-            $result = $publisher->create_woo_variable_from_base($product_id, $woo_name, $woo_sku, $attributes);
+            $result = $publisher->create_woo_variable_from_base($product_id, $woo_name, $woo_sku, $attributes, $woo_price, $woo_categories);
         } elseif ($product_type === 'child') {
-            // Asignar como hijo a un padre existente
             $parent_id = absint($_POST['parent_id'] ?? 0);
             $attach_mode = sanitize_text_field($_POST['attach_mode'] ?? 'create');
             
@@ -1202,9 +1316,9 @@ class Riverso_Product_Module {
                 wp_send_json_error(['message' => 'Padre variable no especificado']);
             }
             
-            $result = $publisher->attach_base_to_variable_parent($product_id, $parent_id, $woo_sku, $attach_mode);
+            $result = $publisher->attach_base_to_variable_parent($product_id, $parent_id, $woo_sku, $attach_mode, $woo_price);
         } else {
-            $result = $publisher->create_woo_simple_from_base($product_id, $woo_name, $woo_sku);
+            $result = $publisher->create_woo_simple_from_base($product_id, $woo_name, $woo_sku, $woo_price, $woo_categories);
         }
 
         if (is_wp_error($result)) {
@@ -2698,7 +2812,8 @@ class Riverso_Product_Module {
 	}
 
 	/**
-	 * AJAX: Vincular producto WooCommerce existente
+	 * AJAX: Vincular producto WooCommerce existente (legacy del portal)
+	 * Delegado a ajax_set_online para usar la lógica correcta de padre/variación
 	 */
 	public function ajax_link_woo() {
 		check_ajax_referer('riverso_pos_nonce', 'nonce');
@@ -2713,26 +2828,231 @@ class Riverso_Product_Module {
 			wp_send_json_error(['message' => 'Parámetros inválidos'], 400);
 		}
 
-		global $wpdb;
-		$result = $wpdb->update(
-			$wpdb->prefix . 'riverso_producto_base',
-			['woocommerce_product_id' => $woo_id],
-			['id' => $product_id],
-			['%d'],
-			['%d']
-		);
-
-		if ($result === false) {
-			wp_send_json_error(['message' => 'Error al vincular'], 500);
-		}
-
-		wp_send_json_success(['product_id' => $product_id, 'woo_id' => $woo_id]);
+		// Delegar a ajax_set_online con los parámetros renombrados
+		$_POST['product_id'] = $product_id;
+		$_POST['woo_id'] = $woo_id;
+		return $this->ajax_set_online();
 	}
 
 	/**
-	 * AJAX: Crear nuevo producto WooCommerce
+	 * AJAX: Evaluar merge de producto online (preview sin escribir)
+	 * Detecta conflictos: SKU duplicado, Woo ya asignado, variación coincidente
 	 */
-	public function ajax_create_woo() {
+	public function ajax_evaluate_online_merge() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$woo_id = absint($_POST['woo_id'] ?? 0);
+		$woo_sku = sanitize_text_field($_POST['woo_sku'] ?? '');
+		$local_id = absint($_POST['local_id'] ?? 0);
+		$product_type = sanitize_text_field($_POST['product_type'] ?? 'simple');
+
+		if (!$woo_id && !$woo_sku) {
+			wp_send_json_error(['message' => 'Debe proporcionar WooCommerce ID o SKU']);
+		}
+
+		global $wpdb;
+		$prefix = $wpdb->prefix . 'riverso_';
+
+		$warnings = [];
+
+		if ($woo_id) {
+			// Obtener el producto Woo
+			$woo_product = wc_get_product($woo_id);
+			if (!$woo_product) {
+				wp_send_json_error(['message' => 'Producto WooCommerce no encontrado']);
+			}
+
+			// Resolver parent/variation
+			$woo_product_id = $woo_product->is_type('variation') ? $woo_product->get_parent_id() : $woo_id;
+			$woo_variation_id = $woo_product->is_type('variation') ? $woo_id : 0;
+
+			// Buscar si ya tiene Local vinculado
+			$existing_link = $wpdb->get_row($wpdb->prepare(
+				"SELECT id, nombre_canonico, canonical_sku FROM {$prefix}producto_base 
+				 WHERE (woocommerce_product_id = %d AND woocommerce_variation_id = %d)
+				 AND id != %d",
+				$woo_product_id,
+				$woo_variation_id,
+				$local_id ?: 0
+			), ARRAY_A);
+
+			if ($existing_link) {
+				$warnings[] = [
+					'type' => 'woo_already_linked',
+					'message' => sprintf('Este producto Woo ya está vinculado a "%s" (SKU: %s). ¿Deseas reemplazar el vínculo?', 
+						$existing_link['nombre_canonico'], $existing_link['canonical_sku']),
+					'severity' => 'warning',
+				];
+			}
+
+			// Si es variación, verificar si hay variación coincidente por SKU
+			if ($product_type === 'child') {
+				$sku = $woo_product->get_sku();
+				if ($sku) {
+					$dup_sku = $wpdb->get_row($wpdb->prepare(
+						"SELECT id, nombre_canonico FROM {$prefix}producto_base 
+						 WHERE canonical_sku = %s AND id != %d",
+						$sku,
+						$local_id ?: 0
+					), ARRAY_A);
+
+					if ($dup_sku) {
+						$warnings[] = [
+							'type' => 'sku_duplicate',
+							'message' => sprintf('SKU "%s" ya existe en producto local "%s". ¿Deseas vincular ese producto?', 
+								$sku, $dup_sku['nombre_canonico']),
+							'severity' => 'info',
+						];
+					}
+				}
+			}
+		}
+
+		// Si se está vinculando a un local que ya tiene otro Woo
+		if ($local_id) {
+			$current_local = $wpdb->get_row($wpdb->prepare(
+				"SELECT woocommerce_product_id, woocommerce_variation_id FROM {$prefix}producto_base WHERE id = %d",
+				$local_id
+			), ARRAY_A);
+
+			if ($current_local && ($current_local['woocommerce_product_id'] || $current_local['woocommerce_variation_id'])) {
+				$warnings[] = [
+					'type' => 'local_already_has_woo',
+					'message' => sprintf('Este producto local ya está vinculado a WooCommerce (ID: %d, Variación: %d). ¿Deseas reemplazarlo?', 
+						$current_local['woocommerce_product_id'], $current_local['woocommerce_variation_id']),
+					'severity' => 'warning',
+				];
+			}
+		}
+
+		wp_send_json_success(['warnings' => $warnings, 'has_warnings' => !empty($warnings)]);
+	}
+
+	/**
+	 * AJAX: Obtener árbol de categorías WooCommerce con nivel de profundidad
+	 */
+	public function ajax_get_woo_categories() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$args = [
+			'taxonomy' => 'product_cat',
+			'orderby' => 'name',
+			'order' => 'ASC',
+			'hide_empty' => false,
+		];
+
+		$categories = get_terms($args);
+
+		if (is_wp_error($categories)) {
+			wp_send_json_success(['categories' => []]);
+		}
+
+		// Construir árbol con nivel de profundidad
+		$tree = [];
+		foreach ($categories as $cat) {
+			$level = 0;
+			$parent_id = $cat->parent;
+			while ($parent_id > 0) {
+				$level++;
+				$parent = get_term($parent_id, 'product_cat');
+				if ($parent) {
+					$parent_id = $parent->parent;
+				} else {
+					break;
+				}
+			}
+
+			$tree[] = [
+				'id' => $cat->term_id,
+				'name' => $cat->name,
+				'level' => $level,
+				'parent' => $cat->parent,
+			];
+		}
+
+		// Ordenar por nombre pero mantener nivel
+		usort($tree, function($a, $b) {
+			if ($a['level'] === $b['level']) {
+				return strcmp($a['name'], $b['name']);
+			}
+			return $a['level'] - $b['level'];
+		});
+
+		wp_send_json_success(['categories' => $tree]);
+	}
+
+	/**
+	 * AJAX: Vincular producto WooCommerce (sin Local previo - wizard standalone)
+	 * Puede crear producto_base mínimo si es necesario.
+	 */
+	public function ajax_link_online_standalone() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$woo_id = absint($_POST['woo_id'] ?? 0);
+		$local_id = absint($_POST['local_id'] ?? 0);
+
+		if (!$woo_id) {
+			wp_send_json_error(['message' => 'Producto WooCommerce no especificado']);
+		}
+
+		global $wpdb;
+		$prefix = $wpdb->prefix . 'riverso_';
+
+		// Resolver el producto WooCommerce
+		$woo_product = wc_get_product($woo_id);
+		if (!$woo_product) {
+			wp_send_json_error(['message' => 'Producto WooCommerce no encontrado']);
+		}
+
+		$product_id = $local_id;
+
+		// Si no hay local_id pero el Woo tiene uno vinculado, usar ese
+		if (!$product_id) {
+			$linked = $wpdb->get_row($wpdb->prepare(
+				"SELECT id FROM {$prefix}producto_base 
+				 WHERE woocommerce_product_id = %d OR woocommerce_variation_id = %d",
+				$woo_id,
+				$woo_id
+			), ARRAY_A);
+			if ($linked) {
+				$product_id = $linked['id'];
+			}
+		}
+
+		// Si aún no hay product_id, crear uno mínimo
+		if (!$product_id) {
+			$result = $wpdb->insert(
+				"{$prefix}producto_base",
+				[
+					'nombre_canonico' => $woo_product->get_name(),
+					'canonical_sku' => $woo_product->get_sku() ?: 'SKU-' . uniqid(),
+					'created_at' => current_time('mysql'),
+					'updated_at' => current_time('mysql'),
+				],
+				['%s', '%s', '%s', '%s']
+			);
+
+			if (!$result) {
+				wp_send_json_error(['message' => 'Error creando producto base']);
+			}
+
+			$product_id = $wpdb->insert_id;
+		}
+
+		// Usar ajax_set_online para hacer el vínculo con padre/variación correcto
+		$_POST['product_id'] = $product_id;
+		$_POST['woo_id'] = $woo_id;
+		return $this->ajax_set_online();
+	}
 		check_ajax_referer('riverso_pos_nonce', 'nonce');
 		if (!current_user_can('riverso_manage_products')) {
 			wp_send_json_error(['message' => 'Sin permisos'], 403);

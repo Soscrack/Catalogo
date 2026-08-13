@@ -2573,7 +2573,7 @@ class Riverso_Woo_Publisher_Module {
     /**
      * Crear producto simple WooCommerce desde producto base local
      */
-    public function create_woo_simple_from_base($product_base_id, $name, $sku, $status = 'private') {
+    public function create_woo_simple_from_base($product_base_id, $name, $sku, $price = 0, $categories = [], $status = 'private') {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
@@ -2596,6 +2596,17 @@ class Riverso_Woo_Publisher_Module {
         $product->set_sku($sku);
         $product->set_status($status);
         $product->set_description('Producto creado desde Riverso POS. Requiere revisión antes de publicación.');
+        
+        // Agregar precio si se proporciona
+        if ($price > 0) {
+            $product->set_regular_price($price);
+        }
+        
+        // Agregar categorías si se proporcionan
+        if (!empty($categories)) {
+            $product->set_category_ids($categories);
+        }
+        
         $product_id = $product->save();
 
         if (!$product_id) {
@@ -2621,6 +2632,8 @@ class Riverso_Woo_Publisher_Module {
                     'woocommerce_product_id' => $product_id,
                     'type' => 'simple',
                     'status' => $status,
+                    'price' => $price,
+                    'categories' => $categories,
                 ],
                 'details' => 'Producto simple creado desde Riverso Hub',
             ]);
@@ -2636,7 +2649,7 @@ class Riverso_Woo_Publisher_Module {
     /**
      * Crear producto variable WooCommerce desde producto base local
      */
-    public function create_woo_variable_from_base($product_base_id, $name, $sku, $attributes = [], $status = 'private') {
+    public function create_woo_variable_from_base($product_base_id, $name, $sku, $attributes = [], $price = 0, $categories = [], $status = 'private') {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
@@ -2722,6 +2735,11 @@ class Riverso_Woo_Publisher_Module {
             $product->set_attributes($wc_attributes);
         }
 
+        // Agregar categorías al padre variable
+        if (!empty($categories)) {
+            $product->set_category_ids($categories);
+        }
+
         $product_id = $product->save();
 
         if (!$product_id) {
@@ -2736,6 +2754,12 @@ class Riverso_Woo_Publisher_Module {
             $variation->set_status('publish');
             $variation->set_sku($sku);
             $variation->set_attributes($first_variation);
+            
+            // Agregar precio a la variación si se proporciona
+            if ($price > 0) {
+                $variation->set_regular_price($price);
+            }
+            
             $variation_id = $variation->save();
         }
 
@@ -2779,8 +2803,10 @@ class Riverso_Woo_Publisher_Module {
 
     /**
      * Asignar producto base como hijo de un padre variable existente
+     * Mode 'create': crea nueva variación
+     * Mode 'link': busca variación existente por SKU o atributos (si se pasan)
      */
-    public function attach_base_to_variable_parent($product_base_id, $parent_id, $sku, $mode = 'create') {
+    public function attach_base_to_variable_parent($product_base_id, $parent_id, $sku, $mode = 'create', $price = 0, $attributes = []) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
@@ -2810,22 +2836,108 @@ class Riverso_Woo_Publisher_Module {
         $variation_id = 0;
 
         if ($mode === 'link') {
-            // Buscar variación existente con los mismos atributos
-            // Por ahora, error si no encuentra coincidencia
-            return new WP_Error('no_match', 'No se encontró variación coincidente. Usa modo "crear" para crear una nueva.');
+            // Buscar variación existente por SKU primero
+            if ($sku) {
+                $existing_variation = $wpdb->get_row($wpdb->prepare(
+                    "SELECT ID FROM {$wpdb->posts} 
+                    WHERE post_parent = %d AND post_type = 'product_variation' 
+                    AND ID IN (
+                        SELECT post_id FROM {$wpdb->postmeta} 
+                        WHERE meta_key = '_sku' AND meta_value = %s
+                    )
+                    LIMIT 1",
+                    $parent_id,
+                    $sku
+                ), ARRAY_A);
+
+                if ($existing_variation) {
+                    $variation_id = $existing_variation['ID'];
+                }
+            }
+
+            // Si no encuentra por SKU, buscar por atributos (si se proporcionan)
+            if (!$variation_id && !empty($attributes)) {
+                $variations = $parent_product->get_children();
+                foreach ($variations as $var_id) {
+                    $var = wc_get_product($var_id);
+                    if ($var && $var->get_type() === 'variation') {
+                        $var_attrs = $var->get_attributes();
+                        $match = true;
+                        foreach ($attributes as $attr_name => $attr_value) {
+                            if (!isset($var_attrs[$attr_name]) || $var_attrs[$attr_name] !== $attr_value) {
+                                $match = false;
+                                break;
+                            }
+                        }
+                        if ($match) {
+                            $variation_id = $var_id;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Si no encuentra coincidencia, error claro
+            if (!$variation_id) {
+                return new WP_Error('no_match', 'No se encontró variación coincidente. Verifica SKU o atributos.');
+            }
         } else {
             // Modo 'create': crear nueva variación
-            $variation = new WC_Product_Variation();
-            $variation->set_parent_id($parent_id);
-            $variation->set_status('publish');
-            $variation->set_sku($sku);
-            
-            // No asignamos atributos específicos aquí, solo SKU
-            // El usuario debe completarlos después si es necesario
-            $variation_id = $variation->save();
+            // Verificar que no exista ya una variación con el mismo SKU
+            if ($sku) {
+                $dup_sku = $wpdb->get_row($wpdb->prepare(
+                    "SELECT ID FROM {$wpdb->posts} 
+                    WHERE post_parent = %d AND post_type = 'product_variation' 
+                    AND ID IN (
+                        SELECT post_id FROM {$wpdb->postmeta} 
+                        WHERE meta_key = '_sku' AND meta_value = %s
+                    )
+                    LIMIT 1",
+                    $parent_id,
+                    $sku
+                ), ARRAY_A);
 
-            if (!$variation_id) {
-                return new WP_Error('save_failed', 'No se pudo crear la variación');
+                if ($dup_sku) {
+                    // Ya existe una variación con ese SKU, vincular en lugar de crear
+                    $variation_id = $dup_sku['ID'];
+                } else {
+                    // Crear nueva variación
+                    $variation = new WC_Product_Variation();
+                    $variation->set_parent_id($parent_id);
+                    $variation->set_status('publish');
+                    $variation->set_sku($sku);
+                    
+                    // Agregar precio si se proporciona
+                    if ($price > 0) {
+                        $variation->set_regular_price($price);
+                    }
+                    
+                    // Agregar atributos si se proporcionan
+                    if (!empty($attributes)) {
+                        $variation->set_attributes($attributes);
+                    }
+                    
+                    $variation_id = $variation->save();
+
+                    if (!$variation_id) {
+                        return new WP_Error('save_failed', 'No se pudo crear la variación');
+                    }
+                }
+            } else {
+                // Sin SKU, crear variación vacía
+                $variation = new WC_Product_Variation();
+                $variation->set_parent_id($parent_id);
+                $variation->set_status('publish');
+                
+                if ($price > 0) {
+                    $variation->set_regular_price($price);
+                }
+                
+                $variation_id = $variation->save();
+
+                if (!$variation_id) {
+                    return new WP_Error('save_failed', 'No se pudo crear la variación');
+                }
             }
         }
 
@@ -2852,6 +2964,7 @@ class Riverso_Woo_Publisher_Module {
                     'woocommerce_product_id' => $parent_id,
                     'woocommerce_variation_id' => $variation_id,
                     'mode' => $mode,
+                    'price' => $price,
                 ],
                 'details' => 'Producto base asignado como hijo a padre variable existente',
             ]);

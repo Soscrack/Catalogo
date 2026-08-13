@@ -37,6 +37,7 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
         <button class="button" id="products-reload">Actualizar</button>
         <?php if ($can_manage): ?>
             <button class="button button-primary" id="products-new">Nuevo producto local</button>
+            <button class="button button-secondary" id="products-new-online">Crear/Vincular online</button>
         <?php endif; ?>
     </div>
 
@@ -509,73 +510,121 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
         <button class="button" id="help-close" style="margin-top:8px;">Cerrar</button>
     </div>
 
-    <!-- MODAL: CREAR PRODUCTO ONLINE -->
-    <div id="create-online-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; display:flex; align-items:center; justify-content:center;">
-        <div style="background:#fff; border-radius:4px; padding:20px; max-width:500px; width:90%;">
-            <h2 style="margin-top:0;">Crear producto WooCommerce</h2>
-            <p style="color:#666;">Selecciona el tipo de producto que deseas crear.</p>
+    <!-- MODAL: CREAR / VINCULAR PRODUCTO ONLINE (WIZARD) -->
+    <div id="create-online-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+        <div style="background:#fff; border-radius:4px; padding:20px; max-width:600px; width:90%; max-height:90vh; overflow-y:auto;">
+            <h2 style="margin-top:0; margin-bottom:15px;">Crear / Vincular Producto Online</h2>
 
-            <div style="background:#f0f8ff; border:1px solid #2271b1; border-radius:3px; padding:10px; margin:12px 0; font-size:12px; color:#333;">
-                <strong>Nota:</strong> El producto se creará en estado borrador. Requiere revisión humana y aprobación antes de ser publicado en el sitio.
+            <!-- Pestañas del wizard -->
+            <div style="border-bottom:2px solid #e0e0e0; margin-bottom:20px; display:flex; gap:15px;">
+                <button class="wizard-tab active" data-tab="create" style="background:none; border:none; border-bottom:3px solid #2271b1; padding:10px 0; color:#2271b1; font-weight:bold; cursor:pointer;">Crear nuevo</button>
+                <button class="wizard-tab" data-tab="link" style="background:none; border:none; border-bottom:3px solid transparent; padding:10px 0; color:#666; cursor:pointer;">Vincular existente</button>
             </div>
 
-            <table class="form-table">
-                <tr>
-                    <th>
-                        Tipo de producto
-                        <span class="dashicons dashicons-editor-help" style="cursor:pointer; color:#2271b1; font-size:16px;" title="Simple: sin variantes. Variable: con variantes. Asignar a padre: crear como hijo de un padre existente"></span>
-                    </th>
-                    <td>
-                        <label><input type="radio" name="create-type" value="simple" checked> Producto Simple (sin variantes)</label><br>
-                        <label><input type="radio" name="create-type" value="variable"> Producto Variable nuevo (crea padre + hijos)</label><br>
-                        <label><input type="radio" name="create-type" value="child"> Asignar a padre variable existente</label>
-                    </td>
-                </tr>
-                <tr><th>Nombre</th><td><input type="text" id="create-name" class="large-text"></td></tr>
-                <tr><th>SKU</th><td><input type="text" id="create-sku" class="regular-text"></td></tr>
-                <tr id="create-variable-section" style="display:none;">
-                    <th colspan="2">
-                        <h4 style="margin:0 0 8px 0;">Atributos de variación (opcional)</h4>
-                        <div id="create-attributes-list" style="margin-bottom:12px; max-height:200px; overflow-y:auto; border:1px solid #ddd; border-radius:2px; padding:8px;">
-                            <!-- Se populan dinámicamente -->
-                        </div>
-                        <button class="button" id="create-attr-add" type="button">+ Agregar atributo</button>
-                    </th>
-                </tr>
-                <tr id="create-child-section" style="display:none;">
-                    <th colspan="2">
-                        <h4 style="margin:0 0 8px 0;">Buscar padre variable</h4>
-                        <select id="create-parent-catalog" style="margin-bottom:8px; width:100%;">
-                            <option value="">Catálogo: Todos</option>
-                        </select>
-                        <input type="text" id="create-parent-search" class="large-text" placeholder="Buscar por nombre o SKU de hijo (Local / Online / Catálogo)..." style="margin-bottom:8px;">
-                        <div id="create-parent-suggestions" style="border:1px solid #ddd; border-radius:2px; max-height:150px; overflow-y:auto; margin-bottom:8px; padding:0;"></div>
-                        <input type="hidden" id="create-parent-id">
-                        <div id="create-parent-selected" style="padding:8px; background:#f0f8ff; border:1px solid #2271b1; border-radius:2px; margin-bottom:8px; display:none;"></div>
-                        <fieldset style="border:1px solid #ddd; border-radius:2px; padding:8px; margin-bottom:8px;">
-                            <legend style="padding:0 8px; font-weight:bold;">Después de asignar padre</legend>
-                            <label style="display:block; margin-bottom:6px;">
-                                <input type="radio" name="create-attach-mode" value="create" checked> Crear nueva variación
-                            </label>
-                            <label style="display:block;">
-                                <input type="radio" name="create-attach-mode" value="link"> Vincular si existe variación coincidente
-                            </label>
-                        </fieldset>
-                        <div id="create-parent-attrs" style="background:#f9f9f9; padding:8px; border-radius:2px; display:none;">
-                            <h5 style="margin:0 0 8px 0;">Atributos del padre</h5>
-                            <div id="create-parent-attrs-list" style="font-size:13px;"><!-- poblado dinámicamente --></div>
-                            <h5 style="margin:12px 0 8px 0;">Hijos / variaciones</h5>
-                            <div id="create-parent-children-summary" style="font-size:12px; color:#555; margin-bottom:6px;"></div>
-                            <div id="create-parent-children-list" style="font-size:13px; max-height:240px; overflow-y:auto; border:1px solid #e5e5e5; background:#fff;"></div>
-                        </div>
-                    </th>
-                </tr>
-            </table>
+            <!-- TAB: Crear nuevo -->
+            <div class="wizard-tab-content active" data-tab="create" style="display:none;">
+                <table class="form-table">
+                    <tr>
+                        <th>
+                            Tipo de producto
+                            <span class="dashicons dashicons-editor-help" style="cursor:pointer; color:#2271b1; font-size:16px;" title="Simple: sin variantes. Variable: con variantes. Asignar a padre: crear como hijo de un padre existente"></span>
+                        </th>
+                        <td>
+                            <label><input type="radio" name="create-type" value="simple" checked> Producto Simple</label><br>
+                            <label><input type="radio" name="create-type" value="variable"> Producto Variable</label><br>
+                            <label><input type="radio" name="create-type" value="child"> Asignar a padre variable existente</label>
+                        </td>
+                    </tr>
+                    <tr><th>Nombre</th><td><input type="text" id="create-name" class="large-text" required></td></tr>
+                    <tr><th>SKU Online</th><td><input type="text" id="create-sku" class="regular-text" required></td></tr>
+                    <tr><th>Precio</th><td><input type="number" id="create-price" class="regular-text" step="0.01" min="0" placeholder="0.00"></td></tr>
+                    
+                    <!-- Variable: Atributos -->
+                    <tr id="create-variable-section" style="display:none;">
+                        <th colspan="2">
+                            <h4 style="margin:0 0 8px 0;">Atributos de variación (opcional)</h4>
+                            <div id="create-attributes-list" style="margin-bottom:12px; max-height:200px; overflow-y:auto; border:1px solid #ddd; border-radius:2px; padding:8px;"></div>
+                            <button class="button" id="create-attr-add" type="button">+ Agregar atributo</button>
+                        </th>
+                    </tr>
+                    
+                    <!-- Child: Padre variable -->
+                    <tr id="create-child-section" style="display:none;">
+                        <th colspan="2">
+                            <h4 style="margin:0 0 8px 0;">Buscar padre variable</h4>
+                            <select id="create-parent-catalog" style="margin-bottom:8px; width:100%;">
+                                <option value="">Catálogo: Todos</option>
+                            </select>
+                            <input type="text" id="create-parent-search" class="large-text" placeholder="Buscar por nombre o SKU..." style="margin-bottom:8px;">
+                            <div id="create-parent-suggestions" style="border:1px solid #ddd; border-radius:2px; max-height:150px; overflow-y:auto; margin-bottom:8px; padding:0;"></div>
+                            <input type="hidden" id="create-parent-id">
+                            <div id="create-parent-selected" style="padding:8px; background:#f0f8ff; border:1px solid #2271b1; border-radius:2px; margin-bottom:8px; display:none;"></div>
+                            <fieldset style="border:1px solid #ddd; border-radius:2px; padding:8px; margin-bottom:8px;">
+                                <legend style="padding:0 8px; font-weight:bold;">Modo de asignación</legend>
+                                <label style="display:block; margin-bottom:6px;">
+                                    <input type="radio" name="create-attach-mode" value="create" checked> Crear nueva variación
+                                </label>
+                                <label style="display:block;">
+                                    <input type="radio" name="create-attach-mode" value="link"> Vincular si existe coincidente
+                                </label>
+                            </fieldset>
+                            <div id="create-parent-attrs" style="background:#f9f9f9; padding:8px; border-radius:2px; display:none; font-size:13px;">
+                                <h5 style="margin:0 0 8px 0;">Atributos del padre y hijos</h5>
+                                <div id="create-parent-detail" style="max-height:200px; overflow-y:auto;"></div>
+                            </div>
+                        </th>
+                    </tr>
 
-            <p>
-                <button class="button button-primary" id="create-online-submit">Crear producto</button>
+                    <!-- Categorías (aplica a todos) -->
+                    <tr id="create-categories-row">
+                        <th colspan="2">
+                            <h4 style="margin:0 0 8px 0;">Categorías WooCommerce (opcional)</h4>
+                            <div style="border:1px solid #ddd; border-radius:4px; padding:8px; max-height:150px; overflow-y:auto; background:#f9f9f9;">
+                                <div id="create-categories-list" style="font-size:13px;"></div>
+                            </div>
+                        </th>
+                    </tr>
+                </table>
+
+                <!-- Bloque Producto Local (opcional) -->
+                <div style="background:#f5f5f5; border:1px solid #e0e0e0; border-radius:4px; padding:12px; margin:15px 0;">
+                    <h4 style="margin:0 0 10px 0;">Vincular a Producto Local (opcional)</h4>
+                    <p style="margin:0 0 8px 0; color:#666; font-size:13px;">Si deseas asociar este producto a un Local existente, búscalo aquí.</p>
+                    <input type="text" id="create-local-search" class="large-text" placeholder="Buscar por SKU local, nombre o código proveedor..." style="margin-bottom:8px;">
+                    <div id="create-local-suggestions" style="border:1px solid #ddd; border-radius:2px; max-height:150px; overflow-y:auto; margin-bottom:8px; padding:0; background:#fff;"></div>
+                    <input type="hidden" id="create-local-id">
+                    <div id="create-local-selected" style="padding:8px; background:#f0f8ff; border:1px solid #2271b1; border-radius:2px; display:none; font-size:13px;"></div>
+                </div>
+            </div>
+
+            <!-- TAB: Vincular existente -->
+            <div class="wizard-tab-content" data-tab="link" style="display:none;">
+                <h4>Buscar Producto WooCommerce Existente</h4>
+                <input type="text" id="link-woo-search" class="large-text" placeholder="Buscar por nombre, SKU o tipo..." style="margin-bottom:8px;">
+                <div id="link-woo-results" style="border:1px solid #ddd; border-radius:2px; max-height:250px; overflow-y:auto; margin-bottom:12px; padding:0; background:#fff;"></div>
+                <input type="hidden" id="link-woo-selected-id">
+                <div id="link-woo-selected" style="padding:12px; background:#f0f8ff; border:1px solid #2271b1; border-radius:2px; margin-bottom:12px; display:none; font-size:13px;"></div>
+
+                <div id="link-woo-merge-warnings" style="display:none; background:#fff3cd; border:1px solid #ffb800; border-radius:4px; padding:12px; margin-bottom:12px;">
+                    <h5 style="margin:0 0 8px 0; color:#856404;">Advertencias de merge</h5>
+                    <ul id="link-woo-warnings-list" style="margin:0; padding-left:20px; font-size:13px;"></ul>
+                </div>
+
+                <!-- Bloque Producto Local (opcional) -->
+                <div style="background:#f5f5f5; border:1px solid #e0e0e0; border-radius:4px; padding:12px; margin:15px 0;">
+                    <h4 style="margin:0 0 10px 0;">Vincular a Producto Local (opcional)</h4>
+                    <input type="text" id="link-local-search" class="large-text" placeholder="Buscar por SKU local, nombre o código..." style="margin-bottom:8px;">
+                    <div id="link-local-suggestions" style="border:1px solid #ddd; border-radius:2px; max-height:150px; overflow-y:auto; margin-bottom:8px; padding:0; background:#fff;"></div>
+                    <input type="hidden" id="link-local-id">
+                    <div id="link-local-selected" style="padding:8px; background:#f0f8ff; border:1px solid #2271b1; border-radius:2px; display:none; font-size:13px;"></div>
+                </div>
+            </div>
+
+            <!-- Botones -->
+            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px; border-top:1px solid #e0e0e0; padding-top:15px;">
                 <button class="button" id="create-online-cancel">Cancelar</button>
-            </p>
+                <button class="button button-primary" id="create-online-submit">Guardar</button>
+            </div>
         </div>
     </div>
 
@@ -2260,12 +2309,305 @@ jQuery(function($){
         });
     });
 
-    // Evento: nuevo producto
-    $('#products-new').on('click', function(){
-        resetEditor();
-        $('#product-editor-title').text('Nuevo producto local');
-        $('#product-editor').show();
+    // Evento: nuevo producto online (wizard)
+    $('#products-new-online').on('click', function(){
+        resetOnlineWizard();
+        $('#create-online-modal').addClass('show').css('display', 'flex');
     });
+
+    // Pestaña del wizard: cambiar tab
+    $('.wizard-tab').on('click', function(){
+        const tab = $(this).data('tab');
+        $('.wizard-tab').removeClass('active').css({'border-bottom-color': 'transparent', 'color': '#666', 'font-weight': 'normal'});
+        $(this).addClass('active').css({'border-bottom-color': '#2271b1', 'color': '#2271b1', 'font-weight': 'bold'});
+        $('.wizard-tab-content').css('display', 'none');
+        $('.wizard-tab-content[data-tab="' + tab + '"]').css('display', 'block');
+    });
+
+    function resetOnlineWizard() {
+        $('input[name="create-type"]').val(['simple']);
+        $('#create-name').val('');
+        $('#create-sku').val('');
+        $('#create-price').val('');
+        $('#create-parent-id').val('');
+        $('#create-parent-selected').hide();
+        $('#create-local-id').val('');
+        $('#create-local-selected').hide();
+        $('#link-woo-selected-id').val('');
+        $('#link-woo-selected').hide();
+        $('#link-local-id').val('');
+        $('#link-local-selected').hide();
+        $('#link-woo-merge-warnings').hide();
+        $('#link-woo-warnings-list').html('');
+        
+        // Cargar categorías WooCommerce
+        loadWooCategories();
+    }
+    
+    function loadWooCategories() {
+        $.post(ajaxurl, {
+            action: 'riverso_products_get_woo_categories',
+            nonce
+        }, function(r){
+            if (r.success) {
+                const categories = r.data.categories || [];
+                let html = '';
+                categories.forEach(cat => {
+                    const indent = '&nbsp;&nbsp;'.repeat(cat.level);
+                    html += '<label style="display:block; padding:4px 0; margin:2px 0;">'
+                        + '<input type="checkbox" class="woo-cat-checkbox" value="' + cat.id + '" data-name="' + esc(cat.name) + '">'
+                        + ' ' + indent + esc(cat.name)
+                        + '</label>';
+                });
+                $('#create-categories-list').html(html || '<div style="color:#999;">Sin categorías</div>');
+            }
+        });
+    }
+
+    // Evento: cerrar wizard
+    $('#create-online-cancel').on('click', function(){
+        $('#create-online-modal').removeClass('show').css('display', 'none');
+        resetOnlineWizard();
+    });
+
+    // Cerrar modal al hacer click en el overlay
+    $('#create-online-modal').on('click', function(e){
+        if ($(e.target).attr('id') === 'create-online-modal') {
+            $(this).removeClass('show').css('display', 'none');
+            resetOnlineWizard();
+        }
+    });
+
+    // TAB CREAR: cambio de tipo (simple/variable/child)
+    $('input[name="create-type"]').on('change', function(){
+        const type = $(this).val();
+        $('#create-variable-section').hide();
+        $('#create-child-section').hide();
+        if (type === 'variable') {
+            $('#create-variable-section').show();
+        } else if (type === 'child') {
+            $('#create-child-section').show();
+        }
+    });
+
+    // TAB CREAR: buscar Producto Local
+    $('#create-local-search').on('keyup', function(e){
+        const search = $(this).val().trim();
+        if (search.length < 2) {
+            $('#create-local-suggestions').html('');
+            return;
+        }
+        $.post(ajaxurl, {
+            action: 'riverso_products_list',
+            nonce,
+            search: search,
+            limit: 10,
+            status: 'active'
+        }, function(r){
+            if (r.success) {
+                const items = r.data.items || [];
+                let html = '';
+                items.forEach(item => {
+                    const display = esc(item.canonical_sku || '') + ' - ' + esc(item.nombre_canonico || '');
+                    html += '<div style="padding:8px; border-bottom:1px solid #eee; cursor:pointer; font-size:13px;" class="create-local-option" data-id="' + item.id + '" data-display="' + esc(display) + '">' + display + '</div>';
+                });
+                $('#create-local-suggestions').html(html || '<div style="padding:8px; color:#999;">Sin resultados</div>');
+            }
+        });
+    });
+
+    $(document).on('click', '.create-local-option', function(){
+        const id = $(this).data('id');
+        const display = $(this).data('display');
+        $('#create-local-id').val(id);
+        $('#create-local-selected').html(display).show();
+        $('#create-local-suggestions').html('');
+        $('#create-local-search').val('');
+    });
+
+    // TAB VINCULAR: buscar Woo existente
+    $('#link-woo-search').on('keyup', function(e){
+        const search = $(this).val().trim();
+        if (search.length < 2) {
+            $('#link-woo-results').html('');
+            return;
+        }
+        $.post(ajaxurl, {
+            action: 'riverso_products_search_woo',
+            nonce,
+            s: search,
+            limit: 20
+        }, function(r){
+            if (r.success) {
+                const results = r.data.results || [];
+                let html = '';
+                results.forEach(prod => {
+                    const type_label = {'simple': 'Simple', 'variable': 'Variable', 'variation': 'Variación'}[prod.type] || prod.type;
+                    html += '<div style="padding:10px; border-bottom:1px solid #eee; cursor:pointer; font-size:13px;" class="link-woo-result" data-id="' + prod.id + '" data-parent="' + (prod.parent_id || '') + '" data-type="' + prod.type + '" data-name="' + esc(prod.name) + '" data-sku="' + esc(prod.sku) + '">'
+                        + '<strong>' + esc(prod.name) + '</strong><br>'
+                        + '<small style="color:#666;">SKU: ' + esc(prod.sku || '(sin SKU)') + ' | Tipo: ' + type_label + '</small>'
+                        + '</div>';
+                });
+                $('#link-woo-results').html(html || '<div style="padding:10px; color:#999;">Sin resultados</div>');
+            }
+        });
+    });
+
+    $(document).on('click', '.link-woo-result', function(){
+        const id = $(this).data('id');
+        const name = $(this).data('name');
+        const sku = $(this).data('sku');
+        const type = $(this).data('type');
+        $('#link-woo-selected-id').val(id);
+        $('#link-woo-selected').html(`<strong>${esc(name)}</strong><br><small style="color:#666;">SKU: ${esc(sku || '(sin SKU)')} | Tipo: ${type}</small>`).show();
+        $('#link-woo-results').html('');
+        $('#link-woo-search').val('');
+        
+        // Evaluar posibles conflictos de merge
+        $.post(ajaxurl, {
+            action: 'riverso_products_evaluate_online',
+            nonce,
+            woo_id: id,
+            woo_sku: sku,
+            local_id: parseInt($('#link-local-id').val() || 0),
+            product_type: 'simple'
+        }, function(r){
+            if (r.success && r.data.warnings && r.data.warnings.length) {
+                let html = '';
+                r.data.warnings.forEach(w => {
+                    const icon = w.severity === 'warning' ? '⚠️' : 'ℹ️';
+                    html += `<li style="margin-bottom:6px;"><strong>${icon}</strong> ${esc(w.message)}</li>`;
+                });
+                $('#link-woo-warnings-list').html(html);
+                $('#link-woo-merge-warnings').show();
+            } else {
+                $('#link-woo-merge-warnings').hide();
+            }
+        });
+    });
+
+    // TAB VINCULAR: buscar Producto Local
+    $('#link-local-search').on('keyup', function(e){
+        const search = $(this).val().trim();
+        if (search.length < 2) {
+            $('#link-local-suggestions').html('');
+            return;
+        }
+        $.post(ajaxurl, {
+            action: 'riverso_products_list',
+            nonce,
+            search: search,
+            limit: 10
+        }, function(r){
+            if (r.success) {
+                const items = r.data.items || [];
+                let html = '';
+                items.forEach(item => {
+                    const display = esc(item.canonical_sku || '') + ' - ' + esc(item.nombre_canonico || '');
+                    html += '<div style="padding:8px; border-bottom:1px solid #eee; cursor:pointer; font-size:13px;" class="link-local-option" data-id="' + item.id + '" data-display="' + esc(display) + '">' + display + '</div>';
+                });
+                $('#link-local-suggestions').html(html || '<div style="padding:8px; color:#999;">Sin resultados</div>');
+            }
+        });
+    });
+
+    $(document).on('click', '.link-local-option', function(){
+        const id = $(this).data('id');
+        const display = $(this).data('display');
+        $('#link-local-id').val(id);
+        $('#link-local-selected').html(display).show();
+        $('#link-local-suggestions').html('');
+        $('#link-local-search').val('');
+    });
+
+    // Evento: guardar (crear o vincular)
+    $('#create-online-submit').on('click', function(){
+        const activeTab = $('.wizard-tab-content:visible').data('tab');
+        if (activeTab === 'create') {
+            handleCreateOnlineProduct();
+        } else if (activeTab === 'link') {
+            handleLinkOnlineProduct();
+        }
+    });
+
+    function handleCreateOnlineProduct() {
+        const type = $('input[name="create-type"]:checked').val();
+        const name = $('#create-name').val().trim();
+        const sku = $('#create-sku').val().trim();
+        const price = parseFloat($('#create-price').val() || 0);
+        const local_id = parseInt($('#create-local-id').val() || 0);
+        
+        // Recopilar categorías seleccionadas
+        const categories = [];
+        $('.woo-cat-checkbox:checked').each(function(){
+            categories.push(parseInt($(this).val()));
+        });
+
+        if (!name || !sku) {
+            alert('Por favor completa Nombre y SKU');
+            return;
+        }
+
+        const payload = {
+            action: 'riverso_products_create_online_standalone',
+            nonce,
+            product_type: type,
+            woo_name: name,
+            woo_sku: sku,
+            woo_price: price,
+            local_id: local_id,
+            woo_categories: JSON.stringify(categories),
+        };
+
+        $.post(ajaxurl, payload, function(r){
+            if (!r.success) {
+                alert('Error: ' + r.data.message);
+                return;
+            }
+            alert('Producto creado exitosamente');
+            $('#create-online-modal').removeClass('show').css('display', 'none');
+            resetOnlineWizard();
+            loadProducts(0);
+        });
+    }
+
+    function handleLinkOnlineProduct() {
+        const woo_id = parseInt($('#link-woo-selected-id').val() || 0);
+        const local_id = parseInt($('#link-local-id').val() || 0);
+
+        if (!woo_id) {
+            alert('Por favor selecciona un producto WooCommerce');
+            return;
+        }
+
+        // Mostrar confirmación si hay warnings
+        const hasWarnings = $('#link-woo-merge-warnings').is(':visible');
+        if (hasWarnings) {
+            const confirmMsg = 'Se detectaron advertencias de merge (mostradas arriba). ¿Deseas continuar?';
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+        }
+
+        const payload = {
+            action: 'riverso_products_link_online',
+            nonce,
+            woo_id: woo_id,
+            local_id: local_id,
+        };
+
+        $.post(ajaxurl, payload, function(r){
+            if (!r.success) {
+                alert('Error: ' + r.data.message);
+                return;
+            }
+            alert('Producto vinculado exitosamente');
+            $('#create-online-modal').removeClass('show').css('display', 'none');
+            resetOnlineWizard();
+            loadProducts(0);
+        });
+    }
+
 
     // Evento: guardar producto
     $('#product-save').on('click', function(){

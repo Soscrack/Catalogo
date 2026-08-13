@@ -22,8 +22,10 @@ if (!$can_manage) {
         <h2>Árbol de Categorías WooCommerce</h2>
         <p style="color:#666; margin-bottom:16px;">Edita la estructura de categorías de tu tienda. Puedes crear, renombrar, mover y eliminar categorías. Los cambios se aplicarán automáticamente a los productos.</p>
         
-        <div style="margin-bottom:12px;">
+        <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">
             <button class="button button-primary" id="categories-add-root">+ Categoría Raíz</button>
+            <button class="button" id="categories-expand-all">Expandir todo</button>
+            <button class="button" id="categories-collapse-all">Colapsar todo</button>
         </div>
 
         <div id="categories-tree" style="border:1px solid #ddd; padding:12px; border-radius:4px; background:#fafafa; max-height:600px; overflow-y:auto; margin-bottom:16px;">
@@ -197,6 +199,28 @@ if (!$can_manage) {
 .category-tree-actions button[title] {
     position: relative;
 }
+.cat-mgmt-node { margin-bottom: 4px; }
+.cat-mgmt-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.cat-branch-toggle {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: #fff;
+    cursor: pointer;
+    padding: 0;
+    font-size: 10px;
+    line-height: 20px;
+    color: #555;
+}
+.cat-branch-toggle:hover { background: #f0f0f0; }
+.cat-branch-spacer { width: 22px; flex-shrink: 0; display: inline-block; }
+.cat-mgmt-children { margin-left: 0; }
 .family-item {
     padding: 12px;
     border: 1px solid #ddd;
@@ -269,77 +293,77 @@ jQuery(function($) {
             if (indent === 0) {
                 $('#categories-tree').html('<p style="color:#999; text-align:center;">Sin categorías</p>');
             }
-            return;
+            return '';
         }
 
-        let html = '';
-        cats.forEach((cat, idx) => {
-            const isRoot = cat.parent === 0 || !cat.parent;
-            const padding = isRoot ? 0 : indent * 16;
-            const canMoveUp = !isRoot;
-            // Bajar = hijo de un hermano del mismo nivel (anterior o, si es el primero, el siguiente)
-            const canMoveDown = cats.length > 1;
-            const productCount = cat.count || 0;
-            
-            html += `<div class="category-tree-item ${isRoot ? 'root' : ''}" style="margin-left:${padding}px;" data-term-id="${cat.id}" data-parent-id="${cat.parent || 0}">
-                <div class="category-tree-name">
-                    <span>${esc(cat.name)}</span>
-                    <span class="category-tree-count" title="Productos directos">(${productCount})</span>
-                </div>
-                <div class="category-tree-actions">
-                    <button class="button button-small category-add-child" data-parent-id="${cat.id}" title="Agregar subcategoría">+</button>
-                    <button class="button button-small category-rename" data-term-id="${cat.id}" title="Renombrar">✎</button>
-                    <button class="button button-small category-move-up" data-term-id="${cat.id}" ${!canMoveUp ? 'disabled' : ''} title="Subir nivel (hermano del padre)">↑</button>
-                    <button class="button button-small category-move-down" data-term-id="${cat.id}" ${!canMoveDown ? 'disabled' : ''} title="Bajar nivel (hijo del hermano anterior)">↓</button>
-                    <button class="button button-small category-move-branch" data-term-id="${cat.id}" title="Mover rama a otro padre">⇄</button>
-                    <button class="button button-small category-delete" data-term-id="${cat.id}" title="Eliminar">🗑</button>
-                </div>
-            </div>`;
-            
-            if (cat.children && cat.children.length > 0) {
-                html += renderCategoriesTreeRecursive(cat.children, indent + 1);
-            }
-        });
+        const renderNode = (catList, level) => {
+            let html = '';
+            catList.forEach((cat) => {
+                const isRoot = level === 0;
+                const padding = level * 16;
+                const canMoveUp = !isRoot;
+                const canMoveDown = catList.length > 1;
+                const productCount = cat.count || 0;
+                const hasChildren = !!(cat.children && cat.children.length > 0);
+                // Por defecto colapsado en gestión de categorías
+                const isExpanded = false;
+                const toggleHtml = hasChildren
+                    ? `<button type="button" class="cat-branch-toggle" aria-expanded="false" title="Mostrar rama">▶</button>`
+                    : '<span class="cat-branch-spacer"></span>';
+
+                html += `<div class="cat-mgmt-node" data-term-id="${cat.id}">
+                    <div class="cat-mgmt-row">
+                        ${toggleHtml}
+                        <div class="category-tree-item ${isRoot ? 'root' : ''}" style="margin-left:${padding}px; flex:1;" data-term-id="${cat.id}" data-parent-id="${cat.parent || 0}">
+                            <div class="category-tree-name">
+                                <span>${esc(cat.name)}</span>
+                                <span class="category-tree-count" title="Productos directos">(${productCount})</span>
+                            </div>
+                            <div class="category-tree-actions">
+                                <button class="button button-small category-add-child" data-parent-id="${cat.id}" title="Agregar subcategoría">+</button>
+                                <button class="button button-small category-rename" data-term-id="${cat.id}" title="Renombrar">✎</button>
+                                <button class="button button-small category-move-up" data-term-id="${cat.id}" ${!canMoveUp ? 'disabled' : ''} title="Subir nivel (hermano del padre)">↑</button>
+                                <button class="button button-small category-move-down" data-term-id="${cat.id}" ${!canMoveDown ? 'disabled' : ''} title="Bajar nivel (hijo del hermano anterior)">↓</button>
+                                <button class="button button-small category-move-branch" data-term-id="${cat.id}" title="Mover rama a otro padre">⇄</button>
+                                <button class="button button-small category-delete" data-term-id="${cat.id}" title="Eliminar">🗑</button>
+                            </div>
+                        </div>
+                    </div>
+                    ${hasChildren ? `<div class="cat-mgmt-children" style="display:none;">${renderNode(cat.children, level + 1)}</div>` : ''}
+                </div>`;
+            });
+            return html;
+        };
 
         if (indent === 0) {
-            $('#categories-tree').html(html);
+            $('#categories-tree').html(renderNode(cats, 0));
             attachCategoryEventListeners();
+            return;
         }
-        return html;
+        return renderNode(cats, indent);
     }
 
     function renderCategoriesTreeRecursive(cats, indent) {
-        let html = '';
-        cats.forEach((cat, idx) => {
-            const padding = indent * 16;
-            const canMoveUp = true;
-            const canMoveDown = cats.length > 1;
-            const productCount = cat.count || 0;
-            
-            html += `<div class="category-tree-item" style="margin-left:${padding}px;" data-term-id="${cat.id}" data-parent-id="${cat.parent || 0}">
-                <div class="category-tree-name">
-                    <span>${esc(cat.name)}</span>
-                    <span class="category-tree-count" title="Productos directos">(${productCount})</span>
-                </div>
-                <div class="category-tree-actions">
-                    <button class="button button-small category-add-child" data-parent-id="${cat.id}" title="Agregar subcategoría">+</button>
-                    <button class="button button-small category-rename" data-term-id="${cat.id}" title="Renombrar">✎</button>
-                    <button class="button button-small category-move-up" data-term-id="${cat.id}" ${!canMoveUp ? 'disabled' : ''} title="Subir nivel (hermano del padre)">↑</button>
-                    <button class="button button-small category-move-down" data-term-id="${cat.id}" ${!canMoveDown ? 'disabled' : ''} title="Bajar nivel (hijo del hermano anterior)">↓</button>
-                    <button class="button button-small category-move-branch" data-term-id="${cat.id}" title="Mover rama a otro padre">⇄</button>
-                    <button class="button button-small category-delete" data-term-id="${cat.id}" title="Eliminar">🗑</button>
-                </div>
-            </div>`;
-            
-            if (cat.children && cat.children.length > 0) {
-                html += renderCategoriesTreeRecursive(cat.children, indent + 1);
-            }
-        });
-        return html;
+        return '';
     }
 
     function attachCategoryEventListeners() {
         $(document).off('click.catTree');
+
+        $(document).on('click.catTree', '.cat-branch-toggle', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const $btn = $(this);
+            const $children = $btn.closest('.cat-mgmt-node').children('.cat-mgmt-children');
+            const open = $children.is(':visible');
+            if (open) {
+                $children.hide();
+                $btn.attr('aria-expanded', 'false').attr('title', 'Mostrar rama').text('▶');
+            } else {
+                $children.show();
+                $btn.attr('aria-expanded', 'true').attr('title', 'Ocultar rama').text('▼');
+            }
+        });
 
         $(document).on('click.catTree', '.category-add-child', function(e) {
             e.preventDefault();
@@ -552,6 +576,16 @@ jQuery(function($) {
 
     $('#categories-add-root').on('click', function() {
         openCategoryModal(0);
+    });
+
+    $('#categories-expand-all').on('click', function() {
+        $('#categories-tree .cat-mgmt-children').show();
+        $('#categories-tree .cat-branch-toggle').attr('aria-expanded', 'true').attr('title', 'Ocultar rama').text('▼');
+    });
+
+    $('#categories-collapse-all').on('click', function() {
+        $('#categories-tree .cat-mgmt-children').hide();
+        $('#categories-tree .cat-branch-toggle').attr('aria-expanded', 'false').attr('title', 'Mostrar rama').text('▶');
     });
 
     $('#category-modal-cancel').on('click', function() {

@@ -127,7 +127,7 @@ VERSION=$(sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   require "{WP_PATH}/wp-load.php";
   echo defined("RIVERSO_POS_VERSION") ? RIVERSO_POS_VERSION : "missing";
 ')
-test "$VERSION" = "1.5.31"
+test "$VERSION" = "1.5.36"
 
 sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   require "{WP_PATH}/wp-load.php";

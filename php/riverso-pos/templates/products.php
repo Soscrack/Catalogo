@@ -315,9 +315,23 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
 				<span id="online-categories-suggested-text"></span>
 			</div>
 			
+			<div style="margin-bottom:8px; display:flex; gap:8px; align-items:center;">
+				<button type="button" class="button button-small" id="online-categories-expand-all">Expandir todo</button>
+				<button type="button" class="button button-small" id="online-categories-collapse-all">Colapsar todo</button>
+			</div>
 			<div id="online-categories-tree" style="border:1px solid #ddd; padding:12px; border-radius:4px; background:#fafafa; max-height:400px; overflow-y:auto; margin-bottom:12px;">
 				<p style="color:#666; text-align:center;">Cargando categorías...</p>
 			</div>
+			<style>
+				#online-categories-tree .cat-tree-row { display:flex; align-items:center; gap:4px; margin-bottom:6px; }
+				#online-categories-tree .cat-branch-toggle {
+					width:20px; height:20px; flex-shrink:0; border:1px solid #ccc; border-radius:3px;
+					background:#fff; cursor:pointer; padding:0; font-size:10px; line-height:18px; color:#555;
+				}
+				#online-categories-tree .cat-branch-toggle:hover { background:#f0f0f0; }
+				#online-categories-tree .cat-branch-spacer { width:20px; flex-shrink:0; display:inline-block; }
+				#online-categories-tree .cat-tree-row label { display:flex; align-items:center; user-select:none; margin:0; flex:1; }
+			</style>
 			
 			<div style="margin-bottom:12px;">
 				<button class="button button-primary" id="online-categories-save" style="display:none;">Guardar categorías</button>
@@ -2643,50 +2657,81 @@ jQuery(function($){
 		});
 	}
 
+	function collectCategoryExpandIds(categories, selectedIds, suggestedCat) {
+		const selected = new Set((selectedIds || []).map(id => parseInt(id, 10)).filter(id => id > 0));
+		const expandIds = new Set();
+		const sugCat = ((suggestedCat && suggestedCat.categoria) || '').toLowerCase().trim();
+		const sugSub = ((suggestedCat && suggestedCat.subcategoria) || '').toLowerCase().trim();
+
+		const walk = (cats, ancestors) => {
+			(cats || []).forEach(cat => {
+				const id = parseInt(cat.id, 10);
+				const nameLower = (cat.name || '').toLowerCase().trim();
+				const isSelected = selected.has(id);
+				const isSuggested = !!(sugCat && (nameLower === sugCat || (sugSub && nameLower === sugSub)));
+				if (isSelected || isSuggested) {
+					ancestors.forEach(aid => expandIds.add(aid));
+				}
+				if (cat.children && cat.children.length) {
+					walk(cat.children, ancestors.concat([id]));
+				}
+			});
+		};
+		walk(categories, []);
+		return expandIds;
+	}
+
 	function renderCategoryTreeWithCheckboxes(categories, selectedIds, suggestedCat, indent = 0) {
 		if (!categories || categories.length === 0) {
 			$('#online-categories-tree').html('<p style="color:#666;">Sin categorías disponibles</p>');
 			return;
 		}
 
-		let html = '';
+		const selected = (selectedIds || []).map(id => parseInt(id, 10));
+		const expandIds = collectCategoryExpandIds(categories, selected, suggestedCat);
+
 		const renderTree = (cats, level) => {
 			return cats.map(cat => {
-				const checked = selectedIds.includes(cat.id) ? 'checked' : '';
+				const catId = parseInt(cat.id, 10);
+				const checked = selected.includes(catId);
 				let isSuggested = false;
 				let badge = '';
 
-				// Verificar si coincide con la categoría sugerida
 				if (suggestedCat) {
-					const catNameLower = cat.name.toLowerCase().trim();
+					const catNameLower = (cat.name || '').toLowerCase().trim();
 					const suggestedCatLower = (suggestedCat.categoria || '').toLowerCase().trim();
 					const suggestedSubLower = (suggestedCat.subcategoria || '').toLowerCase().trim();
 
-					if (catNameLower === suggestedCatLower || catNameLower === suggestedSubLower) {
+					if (catNameLower === suggestedCatLower || (suggestedSubLower && catNameLower === suggestedSubLower)) {
 						isSuggested = true;
 						badge = ' <span style="background:#28a745; color:white; font-size:11px; padding:2px 6px; border-radius:3px; margin-left:6px;">Sugerido</span>';
 					}
 				}
 
-				const shouldBeChecked = checked || (isSuggested && !checked);
-				const childrenHtml = cat.children && cat.children.length > 0 
-					? renderTree(cat.children, level + 1)
-					: '';
-				
-				return `<div style="margin-left:${level * 20}px; margin-bottom:8px;">
-					<label style="display:flex; align-items:center; user-select:none;">
-						<input type="checkbox" class="category-checkbox" value="${cat.id}" ${shouldBeChecked ? 'checked' : ''} data-category-id="${cat.id}">
-						<span style="margin-left:6px;">${esc(cat.name)}${badge} <small style="color:#999;">(${cat.count})</small>
-							<button type="button" class="category-edit-btn" data-term-id="${cat.id}" style="margin-left:6px; font-size:11px; padding:2px 6px; background:#f0f0f0; border:1px solid #ccc; cursor:pointer;">Editar</button>
-						</span>
-					</label>
-					${childrenHtml}
+				const shouldBeChecked = checked || isSuggested;
+				const hasChildren = !!(cat.children && cat.children.length > 0);
+				const isExpanded = hasChildren && expandIds.has(catId);
+				const childrenHtml = hasChildren ? renderTree(cat.children, level + 1) : '';
+				const toggleHtml = hasChildren
+					? `<button type="button" class="cat-branch-toggle" aria-expanded="${isExpanded ? 'true' : 'false'}" title="${isExpanded ? 'Ocultar rama' : 'Mostrar rama'}">${isExpanded ? '▼' : '▶'}</button>`
+					: '<span class="cat-branch-spacer"></span>';
+
+				return `<div class="cat-tree-node" data-term-id="${catId}">
+					<div class="cat-tree-row" style="margin-left:${level * 16}px;">
+						${toggleHtml}
+						<label>
+							<input type="checkbox" class="category-checkbox" value="${catId}" ${shouldBeChecked ? 'checked' : ''} data-category-id="${catId}">
+							<span style="margin-left:6px;">${esc(cat.name)}${badge} <small style="color:#999;">(${cat.count || 0})</small>
+								<button type="button" class="category-edit-btn" data-term-id="${catId}" style="margin-left:6px; font-size:11px; padding:2px 6px; background:#f0f0f0; border:1px solid #ccc; cursor:pointer;">Editar</button>
+							</span>
+						</label>
+					</div>
+					${hasChildren ? `<div class="cat-children" style="display:${isExpanded ? 'block' : 'none'};">${childrenHtml}</div>` : ''}
 				</div>`;
 			}).join('');
 		};
 
-		html = renderTree(categories, 0);
-		$('#online-categories-tree').html(html || '<p style="color:#666;">Sin categorías</p>');
+		$('#online-categories-tree').html(renderTree(categories, 0) || '<p style="color:#666;">Sin categorías</p>');
 	}
 
 	function populateCategoryParentDropdown(categories) {
@@ -2772,6 +2817,32 @@ jQuery(function($){
 				loadCategoryTree(currentProduct.woocommerce_product_id);
 			}
 		});
+	});
+
+	// Click: expandir / colapsar rama de categorías
+	$(document).on('click', '#online-categories-tree .cat-branch-toggle', function(e) {
+		e.preventDefault();
+		e.stopPropagation();
+		const $btn = $(this);
+		const $children = $btn.closest('.cat-tree-node').children('.cat-children');
+		const open = $children.is(':visible');
+		if (open) {
+			$children.hide();
+			$btn.attr('aria-expanded', 'false').attr('title', 'Mostrar rama').text('▶');
+		} else {
+			$children.show();
+			$btn.attr('aria-expanded', 'true').attr('title', 'Ocultar rama').text('▼');
+		}
+	});
+
+	$('#online-categories-expand-all').on('click', function() {
+		$('#online-categories-tree .cat-children').show();
+		$('#online-categories-tree .cat-branch-toggle').attr('aria-expanded', 'true').attr('title', 'Ocultar rama').text('▼');
+	});
+
+	$('#online-categories-collapse-all').on('click', function() {
+		$('#online-categories-tree .cat-children').hide();
+		$('#online-categories-tree .cat-branch-toggle').attr('aria-expanded', 'false').attr('title', 'Mostrar rama').text('▶');
 	});
 
 	// Click: editar categoría (renombrar)

@@ -27,16 +27,21 @@ $can_manage_families = current_user_can('riverso_manage_families');
         .cat-tab-content { display: none; }
         .cat-tab-content.active { display: block; }
         .cat-tree { background: white; border-radius: 4px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .cat-node { margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 3px; display: flex; justify-content: space-between; align-items: center; }
+        .cat-mgmt-node { margin-bottom: 4px; }
+        .cat-mgmt-row { display: flex; align-items: center; gap: 6px; }
+        .cat-node { margin: 0; padding: 8px; background: #f9f9f9; border-radius: 3px; display: flex; justify-content: space-between; align-items: center; flex: 1; }
         .cat-node-name { flex: 1; }
         .cat-node-actions { display: flex; gap: 5px; }
+        .cat-branch-toggle {
+            width: 22px; height: 22px; flex-shrink: 0; border: 1px solid #ccc; border-radius: 3px;
+            background: #fff; cursor: pointer; padding: 0; font-size: 10px; line-height: 20px; color: #555;
+        }
+        .cat-branch-toggle:hover { background: #f0f0f0; }
+        .cat-branch-spacer { width: 22px; flex-shrink: 0; display: inline-block; }
         .btn-tiny { padding: 4px 8px; background: #2196f3; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px; }
         .btn-tiny:hover { background: #1976d2; }
         .btn-tiny.danger { background: #d32f2f; }
         .btn-tiny.danger:hover { background: #b71c1c; }
-        .cat-indent-1 { margin-left: 20px; }
-        .cat-indent-2 { margin-left: 40px; }
-        .cat-indent-3 { margin-left: 60px; }
         .family-list { display: grid; gap: 15px; }
         .family-card { background: white; padding: 15px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .family-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -49,18 +54,20 @@ $can_manage_families = current_user_can('riverso_manage_families');
         <h2 style="margin: 0 0 15px 0;">Categorías y Familias</h2>
 
         <div class="cat-tabs">
-            <button class="active" data-tab="categories">🏷️ Categorías</button>
-            <button data-tab="families">👥 Familias</button>
+            <button class="active" data-tab="categories">Categorías</button>
+            <button data-tab="families">Familias</button>
         </div>
 
         <!-- TAB: CATEGORÍAS -->
         <div class="cat-tab-content active" data-tab="categories">
             <div class="cat-tree">
-                <?php if ($can_manage_categories): ?>
-                <div style="margin-bottom: 15px;">
+                <div style="margin-bottom: 15px; display: flex; gap: 8px; flex-wrap: wrap;">
+                    <?php if ($can_manage_categories): ?>
                     <button class="btn-tiny" id="btn-cat-create" style="background: #28a745;">+ Nueva Categoría Raíz</button>
+                    <?php endif; ?>
+                    <button class="btn-tiny" id="btn-cat-expand-all" style="background: #666;">Expandir todo</button>
+                    <button class="btn-tiny" id="btn-cat-collapse-all" style="background: #666;">Colapsar todo</button>
                 </div>
-                <?php endif; ?>
                 <div id="categories-tree" style="min-height: 100px;">
                     <p style="color: #999; text-align: center; padding: 20px;">Cargando categorías...</p>
                 </div>
@@ -94,7 +101,6 @@ jQuery(function($) {
         return $.post(ajaxUrl, { action, nonce, ...data });
     }
 
-    // Load categories tree
     function loadCategories() {
         post('riverso_products_get_category_tree').done(function(r) {
             if (!r.success) {
@@ -102,31 +108,37 @@ jQuery(function($) {
                 return;
             }
 
-            const renderTree = (cats, indent = 0) => {
+            const renderTree = (cats, level) => {
                 let html = '';
                 (cats || []).forEach(cat => {
-                    const indentClass = 'cat-indent-' + Math.min(indent, 3);
-                    html += '<div class="cat-node ' + indentClass + '">';
+                    const hasChildren = !!(cat.children && cat.children.length);
+                    const toggleHtml = hasChildren
+                        ? '<button type="button" class="cat-branch-toggle" aria-expanded="false" title="Mostrar rama">▶</button>'
+                        : '<span class="cat-branch-spacer"></span>';
+
+                    html += '<div class="cat-mgmt-node" data-term-id="' + cat.id + '">';
+                    html += '<div class="cat-mgmt-row">';
+                    html += toggleHtml;
+                    html += '<div class="cat-node" style="margin-left:' + (level * 12) + 'px;">';
                     html += '<div class="cat-node-name">' + esc(cat.name) + ' <small style="color: #999;">(' + (cat.count || 0) + ')</small></div>';
                     html += '<div class="cat-node-actions">';
                     if (canManageCategories) {
                         html += '<button class="btn-tiny" onclick="window.portalCat.renameCategory(' + cat.id + ')">Renombrar</button>';
                         html += '<button class="btn-tiny danger" onclick="window.portalCat.deleteCategory(' + cat.id + ')">Eliminar</button>';
                     }
-                    html += '</div>';
-                    html += '</div>';
-                    if (cat.children && cat.children.length) {
-                        html += renderTree(cat.children, indent + 1);
+                    html += '</div></div></div>';
+                    if (hasChildren) {
+                        html += '<div class="cat-mgmt-children" style="display:none;">' + renderTree(cat.children, level + 1) + '</div>';
                     }
+                    html += '</div>';
                 });
                 return html;
             };
 
-            $('#categories-tree').html(renderTree(r.data.tree || []));
+            $('#categories-tree').html(renderTree(r.data.tree || [], 0) || '<p style="color:#999;text-align:center;padding:20px;">Sin categorías</p>');
         });
     }
 
-    // Load families
     function loadFamilies() {
         post('riverso_families_list').done(function(r) {
             if (!r.success) {
@@ -159,7 +171,6 @@ jQuery(function($) {
         });
     }
 
-    // Tab switching
     $('.cat-tabs button').click(function(e) {
         e.preventDefault();
         const tab = $(this).data('tab');
@@ -175,10 +186,33 @@ jQuery(function($) {
         }
     });
 
-    // Initial load
+    $(document).on('click', '#categories-tree .cat-branch-toggle', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const $btn = $(this);
+        const $children = $btn.closest('.cat-mgmt-node').children('.cat-mgmt-children');
+        const open = $children.is(':visible');
+        if (open) {
+            $children.hide();
+            $btn.attr('aria-expanded', 'false').attr('title', 'Mostrar rama').text('▶');
+        } else {
+            $children.show();
+            $btn.attr('aria-expanded', 'true').attr('title', 'Ocultar rama').text('▼');
+        }
+    });
+
+    $('#btn-cat-expand-all').click(function() {
+        $('#categories-tree .cat-mgmt-children').show();
+        $('#categories-tree .cat-branch-toggle').attr('aria-expanded', 'true').attr('title', 'Ocultar rama').text('▼');
+    });
+
+    $('#btn-cat-collapse-all').click(function() {
+        $('#categories-tree .cat-mgmt-children').hide();
+        $('#categories-tree .cat-branch-toggle').attr('aria-expanded', 'false').attr('title', 'Mostrar rama').text('▶');
+    });
+
     loadCategories();
 
-    // Global actions
     window.portalCat = {
         renameCategory: function(catId) {
             const newName = prompt('Nuevo nombre de categoría:');
@@ -208,7 +242,6 @@ jQuery(function($) {
         }
     };
 
-    // Create buttons
     $('#btn-cat-create').click(() => {
         const name = prompt('Nombre de la nueva categoría:');
         if (name) {

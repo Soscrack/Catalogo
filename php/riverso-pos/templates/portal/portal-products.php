@@ -42,14 +42,15 @@ $can_manage_families = current_user_can('riverso_manage_families');
         .products-table tr:hover { background: #fafafa; }
         .products-table code { background: #f0f0f0; padding: 2px 4px; border-radius: 2px; font-size: 12px; }
         
-        /* Badges */
+        /* Badges (mismas clases/colores que wp-admin Hub) */
         .completeness-badge { display: inline-block; padding: 4px 8px; border-radius: 3px; font-size: 12px; font-weight: bold; white-space: nowrap; }
-        .badge-completo { background: #28a745; color: white; }
-        .badge-publicado { background: #007bff; color: white; }
-        .badge-falta-online { background: #ffc107; color: #333; }
-        .badge-falta-codigo { background: #fd7e14; color: white; }
-        .badge-solo-online { background: #6f42c1; color: white; }
-        .badge-incompleto { background: #dc3545; color: white; }
+        .completeness-badge.completo { background: #28a745; color: white; }
+        .completeness-badge.publicado { background: #007bff; color: white; }
+        .completeness-badge.falta_online { background: #ffc107; color: #333; }
+        .completeness-badge.falta_codigo { background: #fd7e14; color: white; }
+        .completeness-badge.solo_online { background: #6f42c1; color: white; }
+        .completeness-badge.solo_online_publicado { background: #17a2b8; color: white; }
+        .completeness-badge.incompleto { background: #dc3545; color: white; }
         
         /* Buttons */
         .btn-small { padding: 6px 10px; background: #2196f3; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 13px; }
@@ -75,9 +76,49 @@ $can_manage_families = current_user_can('riverso_manage_families');
         .detail-title h3 { margin: 0; font-size: 18px; }
         .detail-badge { background: #dc3545; color: white; border-radius: 12px; padding: 4px 10px; font-weight: bold; font-size: 13px; white-space: nowrap; cursor: pointer; position: relative; }
         .detail-badge.tasks { background: #e67e22; }
-        .badge-tooltip { display: none; position: absolute; top: 100%; left: 0; background: #333; color: white; padding: 8px 12px; border-radius: 3px; font-size: 12px; z-index: 1000; margin-top: 5px; min-width: 200px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-        .detail-badge:hover .badge-tooltip { display: block; }
-        .detail-badge.tasks:hover .badge-tooltip { color: white; }
+        .badge-tooltip {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: #333;
+            color: white;
+            padding: 12px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            z-index: 2000;
+            margin-top: 0;
+            padding-top: 14px;
+            min-width: 240px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            white-space: normal;
+            font-weight: normal;
+            pointer-events: auto;
+        }
+        .badge-tooltip::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 0;
+            right: 0;
+            height: 14px;
+        }
+        .detail-badge:hover .badge-tooltip,
+        .detail-badge.is-open .badge-tooltip { display: block; }
+        .alerts-tooltip-item { padding: 6px 0; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 13px; color: white; }
+        .alerts-tooltip-item:hover { text-decoration: underline; color: #ffeb3b; }
+        .field-warning-inline { color: #dc3545; margin-left: 6px; cursor: help; font-size: 14px; font-weight: bold; vertical-align: middle; }
+        .task-item { margin-bottom: 12px; padding: 12px; background: #f9f9f9; border-radius: 4px; border-left: 4px solid #ffc107; }
+        .category-edit-btn { margin-left: 6px; font-size: 11px; padding: 2px 6px; background: #f0f0f0; border: 1px solid #ccc; cursor: pointer; border-radius: 3px; }
+        .category-edit-btn:hover { background: #e0e0e0; }
+        #online-categories-tree .cat-tree-row { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+        #online-categories-tree .cat-branch-toggle {
+            width: 20px; height: 20px; flex-shrink: 0; border: 1px solid #ccc; border-radius: 3px;
+            background: #fff; cursor: pointer; padding: 0; font-size: 10px; line-height: 18px; color: #555;
+        }
+        #online-categories-tree .cat-branch-toggle:hover { background: #f0f0f0; }
+        #online-categories-tree .cat-branch-spacer { width: 20px; flex-shrink: 0; display: inline-block; }
+        #online-categories-tree .cat-tree-row label { display: flex; align-items: center; user-select: none; margin: 0; flex: 1; cursor: pointer; }
         
         .detail-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
         
@@ -351,6 +392,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
                             <img id="local-image-thumb" src="" style="max-width: 120px; max-height: 120px; display: none; border-radius: 4px; margin-bottom: 8px; border: 1px solid #ddd;">
                             <br>
                             <button class="btn-small" id="local-image-select">📷 Seleccionar imagen</button>
+                            <span id="local-image-select-btn" style="display:none;"></span>
                             <button class="btn-small danger" id="local-image-clear" style="display: none;">Quitar imagen</button>
                         </div>
                         <div id="local-image-edit" style="display: none;">
@@ -373,6 +415,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
             <div id="online-missing-code-banner" class="info-box warning" style="display: none;">
                 <strong>⚠️ Falta código proveedor</strong>
                 <p style="margin: 6px 0 0 0;">Este producto tiene contraparte WooCommerce pero no tiene código proveedor asignado.</p>
+                <button class="btn-small" id="online-assign-code-btn" style="margin-top: 8px;">Asignar código ahora</button>
             </div>
 
             <div id="online-details" style="margin-bottom: 20px; padding: 12px; background: #fafafa; border-radius: 4px;"></div>
@@ -424,6 +467,10 @@ $can_manage_families = current_user_can('riverso_manage_families');
                 <span id="online-categories-suggested-text"></span>
             </div>
             
+            <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center;">
+                <button type="button" class="btn-small" id="online-categories-expand-all">Expandir todo</button>
+                <button type="button" class="btn-small" id="online-categories-collapse-all">Colapsar todo</button>
+            </div>
             <div id="online-categories-tree" style="border: 1px solid #ddd; padding: 12px; border-radius: 4px; background: #fafafa; max-height: 400px; overflow-y: auto; margin-bottom: 12px;">
                 <p style="color: #666; text-align: center;">Cargando categorías...</p>
             </div>
@@ -455,6 +502,10 @@ $can_manage_families = current_user_can('riverso_manage_families');
 
         <!-- TAB: CÓDIGOS PROVEEDOR -->
         <div class="detail-tab-content" data-tab-content="suppliers">
+            <div id="suppliers-missing-banner" class="info-box warning" style="display: none;">
+                <strong>⚠️ Falta código proveedor</strong>
+                <p style="margin: 6px 0 0 0;">Asigna al menos un código proveedor para completar el producto.</p>
+            </div>
             <p>Buscar y asignar códigos proveedor.</p>
             <div style="margin: 12px 0;">
                 <input type="text" id="supplier-code-search" placeholder="Código proveedor (p.ej. 123456)">
@@ -474,6 +525,10 @@ $can_manage_families = current_user_can('riverso_manage_families');
 
         <!-- TAB: BARCODES -->
         <div class="detail-tab-content" data-tab-content="barcodes">
+            <div id="barcodes-missing-banner" class="info-box warning" style="display: none;">
+                <strong>⚠️ Falta Barcode EAN-13</strong>
+                <p style="margin: 6px 0 0 0;">El producto online no tiene un código EAN-13 asociado.</p>
+            </div>
             <p>Agregar códigos de barra y gestionar por tipo.</p>
             <div style="margin: 12px 0; padding: 12px; background: #f9f9f9; border-radius: 4px;">
                 <h4>Nuevo código de barra</h4>
@@ -635,20 +690,44 @@ jQuery(function($) {
         return '$' + parseFloat(val || 0).toFixed(2);
     }
 
+    function completenessLabel(cat) {
+        const labels = {
+            'completo': 'Producto Completo',
+            'publicado': 'Producto Publicado',
+            'falta_online': 'Falta Online',
+            'falta_codigo': 'Falta Código',
+            'solo_online': 'Solo Online',
+            'solo_online_publicado': 'Solo Online Publicado',
+            'incompleto': 'Incompleto'
+        };
+        return labels[cat] || cat;
+    }
+
+    function renderSkuCell(value, label) {
+        const v = (value || '').toString().trim();
+        if (!v) {
+            return `<span style="color:#999;" title="${esc(label)}">—</span>`;
+        }
+        const parts = v.split(',').map(s => s.trim()).filter(Boolean).slice(0, 2);
+        return `<code title="${esc(label)}: ${esc(parts.join(', '))}">${esc(parts.join(', '))}</code>`;
+    }
+
     function loadCatalogs() {
-        post('riverso_products_get_catalogs', {}).done(function(r) {
-            if (r.success && r.data.catalogs) {
-                const select = $('#products-catalog');
-                r.data.catalogs.forEach(cat => {
-                    select.append(`<option value="${esc(cat.name)}">${esc(cat.name)}</option>`);
-                });
-            }
+        post('riverso_catalogs_list', {}).done(function(r) {
+            if (!r.success) return;
+            const select = $('#products-catalog');
+            const currentVal = select.val();
+            select.find('option:not(:first)').remove();
+            (r.data.catalogs || []).forEach(cat => {
+                select.append(`<option value="${cat.id}">${esc(cat.nombre)}</option>`);
+            });
+            if (currentVal) select.val(currentVal);
         });
     }
 
     function loadProducts(offset = 0) {
         const status = $('#products-status').val();
-        const catalog = $('#products-catalog').val();
+        const catalogId = $('#products-catalog').val() || 0;
         const completeness = $('#products-completeness').val();
         const search = $('#products-search').val();
 
@@ -656,60 +735,73 @@ jQuery(function($) {
             offset: offset || 0,
             limit: LIMIT,
             status: status,
-            catalog: catalog,
+            catalog_id: catalogId,
             completeness: completeness,
             search: search || ''
         }).done(function(r) {
             if (!r.success) {
-                $('#products-tbody').html('<tr><td colspan="9" style="color: #d32f2f; padding: 20px; text-align: center;">Error: ' + esc(r.data.message) + '</td></tr>');
+                $('#products-tbody').html('<tr><td colspan="9" style="color: #d32f2f; padding: 20px; text-align: center;">Error: ' + esc((r.data && r.data.message) || 'cargando') + '</td></tr>');
                 return;
             }
 
             const products = r.data.items || [];
             totalCount = r.data.total || 0;
+            const pages = r.data.pages || 0;
+            currentOffset = offset || 0;
             let html = '';
             
             if (products.length === 0) {
-                html = '<tr><td colspan="9" style="text-align: center; color: #999; padding: 40px;">No hay productos</td></tr>';
+                html = '<tr><td colspan="9" style="text-align: center; color: #999; padding: 40px;">Sin productos.</td></tr>';
             } else {
                 products.forEach(p => {
-                    const completenessClass = 'badge-' + (p.completitud || 'incompleto').replace(/\s+/g, '-').toLowerCase();
+                    const cat = p.completeness_category || 'incompleto';
+                    const wooId = parseInt(p.woocommerce_product_id || 0) ? p.woocommerce_product_id : '-';
+                    const skuLocal = p.sku_local || p.canonical_sku || '';
+                    const skuOnline = p.sku_online || '';
+                    let codigoProv = renderSkuCell(p.codigos_proveedor, 'Código Proveedor');
+                    let codigoCat = renderSkuCell(p.codigos_catalogo, 'Código Catálogo');
+
+                    const hasOnline = !!p.woocommerce_product_id;
+                    const hasCode = parseInt(p.proveedores_count || 0) > 0;
+                    if (hasOnline && !hasCode && cat === 'falta_codigo') {
+                        codigoProv = `<span class="completeness-badge falta_codigo" style="cursor:pointer; padding:4px 8px; display:inline-block;" data-product-id="${p.id}" title="Ir a Códigos">Falta código</span>`;
+                        codigoCat = `<span style="color:#999;">—</span>`;
+                    }
+
                     html += `<tr>
-                        <td><code>${esc(p.id)}</code></td>
-                        <td><code>${esc(p.canonical_sku || '-')}</code></td>
-                        <td><code>${esc(p.woo_sku || '-')}</code></td>
+                        <td>${p.id}</td>
+                        <td>${renderSkuCell(skuLocal, 'SKU Local')}</td>
+                        <td>${renderSkuCell(skuOnline, 'SKU Online')}</td>
                         <td>${esc(p.nombre_canonico || '-')}</td>
-                        <td><span class="completeness-badge ${completenessClass}">${esc(p.completitud || 'Incompleto')}</span></td>
-                        <td><code>${esc(p.codigo_proveedor || '-')}</code></td>
-                        <td><code>${esc(p.codigo_catalogo || '-')}</code></td>
-                        <td>${esc(p.woocommerce_product_id ? '✓' : '✕')}</td>
+                        <td><span class="completeness-badge ${cat}">${completenessLabel(cat)}</span></td>
+                        <td>${codigoProv}</td>
+                        <td>${codigoCat}</td>
+                        <td>${wooId}</td>
                         <td><button class="btn-small" onclick="window.portalProducts.openDetail(${p.id})">Ver</button></td>
                     </tr>`;
                 });
             }
             
             $('#products-tbody').html(html);
-            currentOffset = offset || 0;
 
-            // Update counter and pagination
-            const showing = products.length;
-            const start = offset + 1;
-            const end = offset + showing;
-            $('#products-counter').text(`Mostrando ${showing} de ${totalCount}`);
-            $('#products-page-info').text(`Página ${Math.floor(offset / LIMIT) + 1}`);
+            const showing = Math.min(LIMIT, totalCount - currentOffset);
+            const startItem = totalCount === 0 ? 0 : currentOffset + 1;
+            const endItem = currentOffset + Math.max(0, showing);
+            $('#products-counter').text(`Mostrando ${startItem} a ${endItem} de ${totalCount}`);
+            $('#products-page-info').text(`Página ${Math.floor(currentOffset / LIMIT) + 1} de ${pages || 1}`);
             
-            $('#products-prev').toggle(offset > 0).off('click').on('click', () => loadProducts(Math.max(0, offset - LIMIT)));
-            $('#products-next').toggle(offset + LIMIT < totalCount).off('click').on('click', () => loadProducts(offset + LIMIT));
+            $('#products-prev').toggle(currentOffset > 0).off('click').on('click', () => loadProducts(Math.max(0, currentOffset - LIMIT)));
+            $('#products-next').toggle(currentOffset + LIMIT < totalCount).off('click').on('click', () => loadProducts(currentOffset + LIMIT));
         });
     }
 
     function openDetail(productId) {
-        post('riverso_products_get', { producto_id: productId }).done(function(r) {
+        post('riverso_products_get', { id: productId }).done(function(r) {
             if (!r.success) {
-                alert('Error: ' + r.data.message);
+                alert('Error: ' + ((r.data && r.data.message) || 'desconocido'));
                 return;
             }
-            currentProduct = r.data.product;
+            currentProduct = r.data.item || r.data.product;
             isEditMode = false;
             renderDetail();
             $('#product-detail-panel').show();
@@ -717,41 +809,64 @@ jQuery(function($) {
         });
     }
 
+    function switchDetailTab(tab) {
+        $('.detail-tab').removeClass('active');
+        $(`.detail-tab[data-tab="${tab}"]`).addClass('active');
+        $('.detail-tab-content').removeClass('active');
+        $(`.detail-tab-content[data-tab-content="${tab}"]`).addClass('active');
+        const $panel = $(`.detail-tab-content[data-tab-content="${tab}"]`);
+        if ($panel.length) {
+            $('html, body').animate({ scrollTop: $panel.offset().top - 80 }, 200);
+        }
+    }
+
     function renderDetail() {
         const p = currentProduct;
-        $('#detail-title').text('Detalle: ' + (p.nombre_canonico || p.canonical_sku || 'Sin nombre'));
-
-        // Badges
-        calculateFieldAlerts(p);
-        calculatePendingTasks(p);
+        $('#detail-title').text(`Producto: ${p.nombre_canonico || 'Sin nombre'} (SKU Local: ${p.canonical_sku || '—'})`);
 
         // Tab: Local
         $('#local-sku-view').text(p.canonical_sku || '-');
+        $('#local-sku-edit').val(p.canonical_sku || '');
         $('#local-name-view').text(p.nombre_canonico || '-');
-        $('#local-unit-view').text(p.unidad_base || '-');
-        $('#local-decimal-view').html(p.permite_decimal ? '<span style="color: #28a745;">✓ Sí</span>' : '<span style="color: #999;">✕ No</span>');
-        $('#local-ean-view').html(p.permite_ean13 ? '<span style="color: #28a745;">✓ Sí</span>' : '<span style="color: #999;">✕ No</span>');
-        $('#local-stock-view').html(p.stock_abierto ? '<span style="color: #28a745;">✓ Habilitado</span>' : '<span style="color: #999;">✕ Deshabilitado</span>');
-        $('#local-origen').text(p.origen || '-');
+        $('#local-name-edit').val(p.nombre_canonico || '');
+        $('#local-unit-view').text(p.unidad_base || 'unidad');
+        $('#local-unit-edit').val(p.unidad_base || 'unidad');
+        $('#local-decimal-view').text(p.permite_decimal ? 'Sí' : 'No');
+        $('#local-decimal-edit').prop('checked', !!parseInt(p.permite_decimal || 0));
+        $('#local-ean-view').text((p.permite_ean13_personalizado || p.permite_ean13) ? 'Sí' : 'No');
+        $('#local-ean-edit').prop('checked', !!(p.permite_ean13_personalizado || p.permite_ean13));
+        $('#local-stock-view').text((p.stock_abierto_habilitado || p.stock_abierto) ? 'Sí' : 'No');
+        $('#local-stock-edit').prop('checked', !!(p.stock_abierto_habilitado || p.stock_abierto));
+        $('#local-origen').text(p.origen_datos || p.origen || 'manual');
         $('#local-estado').text(p.estado || '-');
 
-        // Precio Local
-        if (p.precio) {
-            const priceText = `${formatMoney(p.precio.precio_asignado)} (Ref: ${formatMoney(p.precio.precio_ref)}, Costo: ${formatMoney(p.precio.costo_ref)})`;
-            $('#local-precio-view').html(priceText);
-            $('#precio-c-ref').text(formatMoney(p.precio.costo_ref));
-            $('#precio-p-ref').text(formatMoney(p.precio.precio_ref));
-            $('#precio-factor-min').text((p.precio.factor_min || 0).toFixed(2));
-            $('#precio-p-asignado').val(p.precio.precio_asignado || 0);
+        // Precio Local (campo API: precio_local)
+        const precio = p.precio_local || p.precio || null;
+        if (precio) {
+            const c_ref = parseFloat(precio.c_ref || precio.costo_ref || 0);
+            const p_ref = parseFloat(precio.p_ref || precio.precio_ref || 0);
+            const p_asignado = parseFloat(precio.p_asignado || precio.precio_asignado || 0);
+            const factor_min = parseFloat(precio.factor_minimo || precio.factor_min || 1.30);
+            const alerta = !!precio.alerta_margen;
+            $('#local-precio-view').html(`
+                <div>Costo Ref: ${formatMoney(c_ref)} | Precio Ref: ${formatMoney(p_ref)} | Asignado: <strong style="${alerta ? 'color:red;' : ''}">${formatMoney(p_asignado)}</strong></div>
+            `);
+            $('#precio-c-ref').text(formatMoney(c_ref));
+            $('#precio-p-ref').text(formatMoney(p_ref));
+            $('#precio-factor-min').text(factor_min.toFixed(2));
+            $('#precio-margen').html(alerta ? '<span style="color:red;">⚠️ Alerta margen</span>' : '<span style="color:green;">✓ Correcto</span>');
+            $('#precio-p-asignado').val(p_asignado || 0);
         } else {
-            $('#local-precio-view').html('-');
+            $('#local-precio-view').html('<span style="color:#999;">Sin precio asignado</span>');
         }
 
         // Regla de Precio
-        if (p.regla_precio) {
+        if (p.regla_precio && (p.regla_precio.nombre || p.regla_precio.id)) {
             $('#regla-display').text(p.regla_precio.nombre || '-');
             if (p.regla_precio.origen) {
                 $('#regla-origen').text(`(${p.regla_precio.origen})`).show();
+            } else {
+                $('#regla-origen').hide();
             }
         } else {
             $('#regla-display').text('-');
@@ -759,11 +874,19 @@ jQuery(function($) {
         }
 
         // Familia
-        $('#familia-display').text(p.familia ? p.familia.nombre : 'Sin familia');
+        if (p.familia) {
+            $('#familia-display').html(`<strong>${esc(p.familia.nombre)}</strong> <small style="color:#666;">(${esc(p.familia.tipo_sustitucion || p.familia.codigo_grupo || '')})</small>`);
+        } else {
+            $('#familia-display').html('<span style="color:#999;">Sin familia</span>');
+        }
         loadFamiliesDropdown();
 
         // Imagen Local
-        if (p.imagen_local_url) {
+        if (p.imagen_id && p.imagen_url) {
+            $('#local-image-thumb').attr('src', p.imagen_url).show();
+            $('#local-image-clear').show();
+            $('#local-image-url').val(p.imagen_full || p.imagen_url || '');
+        } else if (p.imagen_local_url) {
             $('#local-image-thumb').attr('src', p.imagen_local_url).show();
             $('#local-image-clear').show();
             $('#local-image-url').val(p.imagen_local_url);
@@ -776,22 +899,30 @@ jQuery(function($) {
         // Tab: Online
         $('#online-woo-id').text(p.woocommerce_product_id || '-');
         $('#online-match-estado').text(p.match_estado_online || 'UNMATCHED');
-        if (!p.codigo_proveedor && p.woocommerce_product_id) {
+        const hasCode = parseInt(p.proveedores_count || 0) > 0 || (p.proveedores && p.proveedores.length > 0);
+        if (!hasCode && p.woocommerce_product_id) {
             $('#online-missing-code-banner').show();
         } else {
             $('#online-missing-code-banner').hide();
         }
+        $('#suppliers-missing-banner').toggle(!hasCode);
+        const hasEan = p.barcodes && p.barcodes.some(b => b.tipo === 'ean13');
+        $('#barcodes-missing-banner').toggle(!!p.woocommerce_product_id && !hasEan);
+
+        // Badges + warnings inline (análogo wp-admin)
+        calculateFieldAlerts(p);
+        showFieldWarningIcons(p);
+        calculatePendingTasks(p);
 
         renderOnlineDetails(p);
-        loadCategoryTree(p);
+        loadCategoryTree(p.woocommerce_product_id);
         renderSupplierCodes(p);
         renderBarcodes(p);
-        renderTasks(p);
+        renderTasks(p.tasks || []);
         if (canManageFamilies) {
             loadFamilyTree(p);
         }
 
-        // Edit/View mode buttons
         if (canManage) {
             $('#btn-detail-edit').show();
             $('#btn-detail-save').hide();
@@ -799,63 +930,239 @@ jQuery(function($) {
         }
 
         exitEditMode();
+        // Reaplicar warnings tras exitEditMode (limpia/oculta nodos)
+        showFieldWarningIcons(p);
     }
 
-    function calculateFieldAlerts(p) {
+    function calculateFieldAlerts(product) {
         const alerts = [];
-        if (!p.canonical_sku) alerts.push('SKU Local');
-        if (!p.nombre_canonico) alerts.push('Nombre');
-        if (!p.codigo_proveedor) alerts.push('Código Proveedor');
-        
+
+        if (!product.canonical_sku) {
+            alerts.push({ field: 'SKU Local', icon: '❌', action: 'edit-sku' });
+        }
+        if (!product.precio_local || !product.precio_local.p_asignado) {
+            alerts.push({ field: 'Precio Local', icon: '⚠️', action: 'tab-local' });
+        }
+        if (!product.familia) {
+            alerts.push({ field: 'Familia', icon: '👥', action: 'tab-local' });
+        }
+        if (!product.imagen_id) {
+            alerts.push({ field: 'Imagen Local', icon: '📷', action: 'tab-local' });
+        }
+        if ((product.proveedores_count || 0) === 0) {
+            alerts.push({ field: 'Código Proveedor', icon: '📦', action: 'tab-suppliers' });
+        }
+        if (product.woocommerce_product_id) {
+            const hasEan = product.barcodes && product.barcodes.some(b => b.tipo === 'ean13');
+            if (!hasEan) {
+                alerts.push({ field: 'Barcode EAN-13', icon: '📊', action: 'tab-barcodes' });
+            }
+            if (Array.isArray(product.current_categories) && product.current_categories.length === 0) {
+                alerts.push({ field: 'Categorías Online', icon: '📂', action: 'tab-online' });
+            }
+        }
+
         if (alerts.length > 0) {
+            $('#detail-alerts-badge-text').text(`⚠️ ${alerts.length} campos`);
             $('#detail-alerts-badge').show();
-            $('#detail-alerts-badge-text').text(`⚠️ ${alerts.length} campo${alerts.length > 1 ? 's' : ''}`);
-            let tooltipHTML = '<ul style="margin: 0; padding-left: 20px;">';
-            alerts.forEach(a => {
-                tooltipHTML += `<li style="margin: 4px 0; font-size: 12px;">${esc(a)}</li>`;
-            });
-            tooltipHTML += '</ul>';
-            $('#detail-alerts-tooltip').html(tooltipHTML);
+            $('#detail-alerts-tooltip').html(alerts.map(a =>
+                `<div class="alerts-tooltip-item" data-alert-action="${esc(a.action)}">
+                    <span>${a.icon}</span> ${esc(a.field)}
+                </div>`
+            ).join(''));
         } else {
             $('#detail-alerts-badge').hide();
+            $('#detail-alerts-tooltip').html('');
+        }
+        return alerts;
+    }
+
+    function calculatePendingTasks(product) {
+        const tasks = (product.tasks || []).filter(t => t.estado !== 'completada');
+        if (tasks.length > 0) {
+            $('#detail-tasks-badge-text').text('📋 ' + tasks.length + ' tarea' + (tasks.length > 1 ? 's' : ''));
+            $('#detail-tasks-badge').show();
+            $('#detail-tasks-tooltip').html(tasks.map(t =>
+                `<div class="alerts-tooltip-item task-tooltip-goto" data-task-tipo="${esc(t.tipo)}">
+                    <span>📌</span> ${esc(t.titulo)}
+                </div>`
+            ).join(''));
+        } else {
+            $('#detail-tasks-badge').hide();
+            $('#detail-tasks-tooltip').html('');
         }
     }
 
-    function calculatePendingTasks(p) {
-        const tasks = (p.tasks || []).filter(t => t.estado !== 'completada');
-        if (tasks.length > 0) {
-            $('#detail-tasks-badge').show();
-            $('#detail-tasks-badge-text').text(`📋 ${tasks.length} tarea${tasks.length > 1 ? 's' : ''}`);
-            let tooltipHTML = '<ul style="margin: 0; padding-left: 20px;">';
-            tasks.forEach(t => {
-                tooltipHTML += `<li style="margin: 4px 0; font-size: 12px;"><strong>${esc(t.titulo)}</strong><br><small style="color: #ccc;">${esc(t.tipo)}</small></li>`;
-            });
-            tooltipHTML += '</ul>';
-            $('#detail-tasks-tooltip').html(tooltipHTML);
-        } else {
-            $('#detail-tasks-badge').hide();
+    function showFieldWarningIcons(product) {
+        $('.field-warning-inline').remove();
+
+        if (!product.canonical_sku) {
+            $('#local-sku-view').after('<span class="field-warning-inline" title="Falta SKU Local">⚠️</span>');
+        }
+        if (!product.precio_local || !product.precio_local.p_asignado) {
+            $('#local-precio-view').after('<span class="field-warning-inline" title="Falta Precio Local">⚠️</span>');
+        }
+        if (!product.familia) {
+            $('#familia-display').after('<span class="field-warning-inline" title="Falta Familia">⚠️</span>');
+        }
+        if (!product.imagen_id) {
+            $('#local-image-select').after('<span class="field-warning-inline" title="Falta Imagen">⚠️</span>');
+        }
+        if ((product.proveedores_count || 0) === 0) {
+            $('#suppliers-list').before('<span class="field-warning-inline suppliers-warn" title="Falta Código Proveedor" style="display:block;margin-bottom:8px;">⚠️ Falta código proveedor</span>');
+        }
+        if (product.woocommerce_product_id) {
+            const hasEan = product.barcodes && product.barcodes.some(b => b.tipo === 'ean13');
+            if (!hasEan) {
+                $('#barcodes-list').before('<span class="field-warning-inline barcodes-warn" title="Falta EAN-13" style="display:block;margin-bottom:8px;">⚠️ Falta Barcode EAN-13</span>');
+            }
         }
     }
 
     function renderOnlineDetails(p) {
-        let html = '';
-        if (p.woocommerce_product_id) {
-            html += `<strong>ID WooCommerce:</strong> ${esc(p.woocommerce_product_id)}<br>`;
-            html += `<strong>Estado Match:</strong> ${esc(p.match_estado_online || 'UNMATCHED')}<br>`;
-            if (p.woo_attributes) {
-                html += `<strong>Atributos:</strong> ${esc(p.woo_attributes)}<br>`;
+        if (!p.woocommerce_product_id && !p.woocommerce_variation_id) {
+            $('#online-details').html('<em style="color:#999;">Sin producto WooCommerce asociado. Use el formulario de búsqueda/creación para vincular.</em>');
+            if (canManage) {
+                $('#online-create-btn').show();
             }
-            if (p.woo_price) {
-                html += `<strong>Precio WooCommerce:</strong> ${formatMoney(p.woo_price)}<br>`;
+            return;
+        }
+
+        const d = p.online_details || null;
+        if (!d) {
+            let html = `<strong>ID WooCommerce:</strong> ${esc(p.woocommerce_product_id || '-')}<br>`;
+            html += `<strong>Estado Match:</strong> ${esc(p.match_estado_online || 'UNMATCHED')}<br>`;
+            if (p.precio_online && p.precio_online.p_asignado != null) {
+                html += `<strong>Precio Online:</strong> ${formatMoney(p.precio_online.p_asignado)}`;
                 if (canManage) {
-                    html += `<button class="btn-small" onclick="window.portalProducts.editOnlinePrice()">✎ Editar precio</button>`;
-                    $('#online-price-current').text(formatMoney(p.woo_price));
+                    html += ` <button class="btn-small" id="btn-edit-online-price" style="margin-left:8px;">✎ Editar</button>`;
+                    $('#online-price-current').text(formatMoney(p.precio_online.p_asignado));
                 }
             }
-        } else {
-            html = '<em style="color: #999;">Sin producto WooCommerce asociado. Use el formulario de búsqueda/creación para vincular.</em>';
+            $('#online-details').html(html);
+            $('#btn-edit-online-price').off('click').on('click', () => $('#online-price-editor').show());
+            return;
         }
+
+        const price = (d.price != null && d.price !== '')
+            ? parseFloat(d.price)
+            : (p.precio_online && p.precio_online.p_asignado != null ? parseFloat(p.precio_online.p_asignado) : 0);
+        const priceSafe = isNaN(price) ? 0 : price;
+
+        let html = '';
+
+        // Identidad Online
+        html += `<div style="margin-bottom:20px;">
+            <h4 style="margin:0 0 10px 0;">Identidad Online</h4>
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                <tr>
+                    <td style="padding:6px; border-bottom:1px solid #eee; width:140px;"><strong>Tipo:</strong></td>
+                    <td style="padding:6px; border-bottom:1px solid #eee;">${esc(d.type || 'N/A')}</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px; border-bottom:1px solid #eee;"><strong>Nombre:</strong></td>
+                    <td style="padding:6px; border-bottom:1px solid #eee;">${esc(d.name || '')}</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px; border-bottom:1px solid #eee;"><strong>SKU Online:</strong></td>
+                    <td style="padding:6px; border-bottom:1px solid #eee;"><code>${esc(d.sku || '-')}</code></td>
+                </tr>
+                <tr>
+                    <td style="padding:6px; border-bottom:1px solid #eee;"><strong>Estado:</strong></td>
+                    <td style="padding:6px; border-bottom:1px solid #eee;">${esc(d.status || 'N/A')}</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px; border-bottom:1px solid #eee;"><strong>Match:</strong></td>
+                    <td style="padding:6px; border-bottom:1px solid #eee;">${esc(p.match_estado_online || 'UNMATCHED')}</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px; border-bottom:1px solid #eee;"><strong>Woo ID:</strong></td>
+                    <td style="padding:6px; border-bottom:1px solid #eee;">${esc(p.woocommerce_variation_id || p.woocommerce_product_id || '-')}</td>
+                </tr>
+                <tr>
+                    <td style="padding:6px; border-bottom:1px solid #eee;"><strong>Precio:</strong></td>
+                    <td style="padding:6px; border-bottom:1px solid #eee;">
+                        <span id="online-price-display">${formatMoney(priceSafe)}</span>
+                        ${canManage ? '<button class="btn-small" id="btn-edit-online-price" style="margin-left:8px;">Editar</button>' : ''}
+                    </td>
+                </tr>
+            </table>
+        </div>`;
+
+        // Atributos de Variación
+        if (d.attributes && d.attributes.length > 0) {
+            html += '<div style="margin-bottom:20px;">';
+            html += '<h4 style="margin:0 0 10px 0;">Atributos de Variación</h4>';
+            if (d.type === 'variation') {
+                html += '<ul style="margin:0; padding-left:20px;">';
+                d.attributes.forEach(attr => {
+                    html += `<li>${esc(attr.name)}: <strong>${esc(attr.value)}</strong></li>`;
+                });
+                html += '</ul>';
+            } else if (d.type === 'variable') {
+                html += '<ul style="margin:0; padding-left:20px;">';
+                d.attributes.forEach(attr => {
+                    const options = (attr.options || []).join(', ');
+                    html += `<li>${esc(attr.name)}: <small>${esc(options)}</small></li>`;
+                });
+                html += '</ul>';
+            } else {
+                html += '<ul style="margin:0; padding-left:20px;">';
+                d.attributes.forEach(attr => {
+                    if (attr.value != null) {
+                        html += `<li>${esc(attr.name)}: <strong>${esc(attr.value)}</strong></li>`;
+                    } else if (attr.options) {
+                        html += `<li>${esc(attr.name)}: <small>${esc((attr.options || []).join(', '))}</small></li>`;
+                    }
+                });
+                html += '</ul>';
+            }
+            html += '</div>';
+        }
+
+        // Producto Padre (si es variación)
+        if (d.parent) {
+            html += `<div style="margin-bottom:20px; padding:12px; background:#f5f5f5; border-left:4px solid #0073aa; border-radius:0 4px 4px 0;">
+                <h4 style="margin:0 0 8px 0;">Producto Padre</h4>
+                <p style="margin:4px 0;"><strong>${esc(d.parent.name)}</strong></p>
+                <p style="margin:4px 0; color:#666;"><code>${esc(d.parent.sku || 'Sin SKU')}</code> · Woo ID ${esc(d.parent.id)}</p>
+            </div>`;
+        }
+
+        // Variaciones Hermanas
+        if (d.siblings && d.siblings.length > 0) {
+            html += '<div style="margin-bottom:20px;">';
+            html += '<h4 style="margin:0 0 10px 0;">Variaciones Hermanas</h4>';
+            html += '<div style="border:1px solid #ddd; border-radius:4px; max-height:300px; overflow-y:auto; background:#fff;">';
+            d.siblings.forEach(sibling => {
+                const hasLocal = !!sibling.has_local_sku;
+                const badgeBg = hasLocal ? '#28a745' : '#ccc';
+                const badgeColor = hasLocal ? '#fff' : '#333';
+                const badgeText = hasLocal ? ('SKU Local: ' + esc(sibling.sku_local)) : 'Sin SKU Local';
+                const clickable = sibling.producto_base_id > 0;
+                const cursor = clickable ? 'pointer' : 'default';
+                const clickAttr = clickable
+                    ? `onclick="window.portalProducts.openSibling(${sibling.producto_base_id})"`
+                    : '';
+
+                html += `<div class="sibling-row" ${clickAttr} onmouseover="this.style.background='#f9f9f9'" onmouseout="this.style.background='white'" style="padding:10px; border-bottom:1px solid #eee; cursor:${cursor};">
+                    <strong>${esc(sibling.name)}</strong><br>
+                    <small style="color:#666;">${esc(sibling.attributes_text || '')}</small><br>
+                    <small style="color:#999;">SKU Online: <code>${esc(sibling.sku_online || '-')}</code></small><br>
+                    <span style="display:inline-block;margin-top:4px;padding:2px 8px;border-radius:3px;font-size:11px;background:${badgeBg};color:${badgeColor};">${badgeText}</span>
+                </div>`;
+            });
+            html += '</div></div>';
+        }
+
         $('#online-details').html(html);
+        $('#online-price-current').text(formatMoney(priceSafe));
+        $('#btn-edit-online-price').off('click').on('click', () => $('#online-price-editor').show());
+    }
+
+    function openSiblingProduct(baseId) {
+        if (!baseId || baseId <= 0) return;
+        openDetail(baseId);
     }
 
     function searchWooProducts() {
@@ -865,87 +1172,178 @@ jQuery(function($) {
             return;
         }
 
-        post('riverso_products_search_woo', { search: query, limit: 10 }).done(function(r) {
-            if (r.success && r.data.products) {
+        post('riverso_products_search_woo', { s: query, limit: 10 }).done(function(r) {
+            if (r.success) {
+                const products = r.data.results || r.data.products || [];
                 let html = '';
-                r.data.products.forEach(prod => {
-                    html += `<div style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px;" onclick="window.portalProducts.selectWooProduct(${prod.id}, '${esc(prod.name)}')">
-                        <strong>${esc(prod.name)}</strong><br>
-                        <small style="color: #666;">ID: ${prod.id} | SKU: ${esc(prod.sku)}</small>
+                products.forEach(prod => {
+                    const name = prod.name || prod.nombre || '';
+                    const sku = prod.sku || '';
+                    html += `<div style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px;" class="woo-result-item" data-id="${prod.id}" data-name="${esc(name)}">
+                        <strong>${esc(name)}</strong><br>
+                        <small style="color: #666;">ID: ${prod.id} | SKU: ${esc(sku)}</small>
                     </div>`;
                 });
-                $('#woo-results').html(html).show();
+                $('#woo-results').html(html || '<div style="padding:10px;color:#999;">Sin resultados</div>').show();
             }
         });
     }
 
-    function loadCategoryTree(p) {
-        if (!p.woocommerce_product_id) {
-            $('#online-categories-tree').html('<p style="color: #999;">Primero vincule un producto WooCommerce.</p>');
+    function loadCategoryTree(wooId) {
+        if (!wooId) {
+            $('#online-categories-tree').html('<p style="color:#999;">Sin producto WooCommerce asignado</p>');
+            $('#online-categories-suggested-banner').hide();
+            $('#online-categories-task-panel').hide();
+            $('#online-categories-save').hide();
             return;
         }
 
-        post('riverso_products_get_category_tree', { producto_id: p.id }).done(function(r) {
-            if (r.success) {
-                let html = renderCategoryTreeWithCheckboxes(r.data.categories || [], p.categorias_asignadas || []);
-                $('#online-categories-tree').html(html || '<p style="color: #999;">Sin categorías disponibles</p>');
+        const catTask = ((currentProduct && currentProduct.tasks) || []).find(t => t.tipo === 'validar_categoria' && t.estado !== 'completada');
+        const suggestedCat = catTask ? (catTask.datos_extra || null) : null;
 
-                // Check suggested categories
-                if (p.categorias_sugeridas) {
-                    $('#online-categories-suggested-banner').show();
-                    $('#online-categories-suggested-text').text(esc(p.categorias_sugeridas.join(', ')));
-                } else {
-                    $('#online-categories-suggested-banner').hide();
-                }
-
-                // Show task panel if there's a pending task
-                if (p.tasks && p.tasks.some(t => t.tipo === 'validar_categoria' && t.estado !== 'completada')) {
-                    $('#online-categories-task-panel').show();
-                    $('#online-categories-accept-task').off('click').on('click', function() {
-                        const task = p.tasks.find(t => t.tipo === 'validar_categoria' && t.estado !== 'completada');
-                        if (task) {
-                            post('riverso_products_complete_task', { tarea_id: task.id }).done(function(r) {
-                                if (r.success) {
-                                    alert('Tarea completada');
-                                    openDetail(p.id);
-                                }
-                            });
-                        }
-                    });
-                } else {
-                    $('#online-categories-task-panel').hide();
-                }
+        if (suggestedCat && suggestedCat.categoria) {
+            let suggestedText = suggestedCat.categoria;
+            if (suggestedCat.subcategoria) {
+                suggestedText += ' > ' + suggestedCat.subcategoria;
             }
+            $('#online-categories-suggested-text').text(suggestedText);
+            $('#online-categories-suggested-banner').show();
+        } else {
+            $('#online-categories-suggested-banner').hide();
+        }
+
+        if (catTask) {
+            let suggestedText = (suggestedCat && suggestedCat.categoria) ? suggestedCat.categoria : 'Sin categoría';
+            if (suggestedCat && suggestedCat.subcategoria) {
+                suggestedText += ' > ' + suggestedCat.subcategoria;
+            }
+            $('#online-categories-task-suggested').text('Categoría sugerida: ' + suggestedText);
+            $('#online-categories-task-panel').data('task_id', catTask.id).show();
+        } else {
+            $('#online-categories-task-panel').hide();
+        }
+
+        $('#online-categories-tree').html('<p style="color:#666; text-align:center;">Cargando categorías...</p>');
+
+        post('riverso_products_get_category_tree', { parent_id: 0 }).done(function(r) {
+            if (!r.success) {
+                $('#online-categories-tree').html('<p style="color:#dc3545;">Error: ' + esc((r.data && r.data.message) || 'desconocido') + '</p>');
+                return;
+            }
+
+            post('riverso_products_get_product_categories', {
+                woocommerce_product_id: wooId
+            }).done(function(r2) {
+                const currentCats = r2.success ? (r2.data.current_categories || []) : [];
+                renderCategoryTreeWithCheckboxes(r.data.tree || [], currentCats, suggestedCat);
+                $('#online-categories-save').show();
+                populateCategoryParentDropdown(r.data.tree || []);
+            });
         });
     }
 
-    function renderCategoryTreeWithCheckboxes(categories, assigned) {
-        if (!categories || categories.length === 0) return '';
-        let html = '<div style="font-size: 13px;">';
-        categories.forEach(cat => {
-            const isChecked = assigned && assigned.includes(cat.id);
-            html += `<div class="tree-item">
-                <label style="margin: 0; display: flex; align-items: center; cursor: pointer;">
-                    <input type="checkbox" class="tree-checkbox category-checkbox" data-category-id="${cat.id}" ${isChecked ? 'checked' : ''}>
-                    <span>${esc(cat.name)}</span>
-                </label>`;
-            if (cat.children && cat.children.length > 0) {
-                html += renderCategoryTreeWithCheckboxes(cat.children, assigned);
-            }
-            html += '</div>';
-        });
-        html += '</div>';
-        return html;
+    function collectCategoryExpandIds(categories, selectedIds, suggestedCat) {
+        const selected = new Set((selectedIds || []).map(id => parseInt(id, 10)).filter(id => id > 0));
+        const expandIds = new Set();
+        const sugCat = ((suggestedCat && suggestedCat.categoria) || '').toLowerCase().trim();
+        const sugSub = ((suggestedCat && suggestedCat.subcategoria) || '').toLowerCase().trim();
+
+        const walk = (cats, ancestors) => {
+            (cats || []).forEach(cat => {
+                const id = parseInt(cat.id, 10);
+                const nameLower = (cat.name || '').toLowerCase().trim();
+                const isSelected = selected.has(id);
+                const isSuggested = !!(sugCat && (nameLower === sugCat || (sugSub && nameLower === sugSub)));
+                if (isSelected || isSuggested) {
+                    ancestors.forEach(aid => expandIds.add(aid));
+                }
+                if (cat.children && cat.children.length) {
+                    walk(cat.children, ancestors.concat([id]));
+                }
+            });
+        };
+        walk(categories, []);
+        return expandIds;
+    }
+
+    function renderCategoryTreeWithCheckboxes(categories, selectedIds, suggestedCat) {
+        if (!categories || categories.length === 0) {
+            $('#online-categories-tree').html('<p style="color:#666;">Sin categorías disponibles</p>');
+            return;
+        }
+
+        const selected = (selectedIds || []).map(id => parseInt(id, 10));
+        const expandIds = collectCategoryExpandIds(categories, selected, suggestedCat);
+
+        const renderTree = (cats, level) => {
+            return cats.map(cat => {
+                const catId = parseInt(cat.id, 10);
+                const checked = selected.includes(catId);
+                let isSuggested = false;
+                let badge = '';
+
+                if (suggestedCat) {
+                    const catNameLower = (cat.name || '').toLowerCase().trim();
+                    const suggestedCatLower = (suggestedCat.categoria || '').toLowerCase().trim();
+                    const suggestedSubLower = (suggestedCat.subcategoria || '').toLowerCase().trim();
+                    if (catNameLower === suggestedCatLower || (suggestedSubLower && catNameLower === suggestedSubLower)) {
+                        isSuggested = true;
+                        badge = ' <span style="background:#28a745; color:white; font-size:11px; padding:2px 6px; border-radius:3px; margin-left:6px;">Sugerido</span>';
+                    }
+                }
+
+                const shouldBeChecked = checked || isSuggested;
+                const hasChildren = !!(cat.children && cat.children.length > 0);
+                const isExpanded = hasChildren && expandIds.has(catId);
+                const childrenHtml = hasChildren ? renderTree(cat.children, level + 1) : '';
+                const toggleHtml = hasChildren
+                    ? `<button type="button" class="cat-branch-toggle" aria-expanded="${isExpanded ? 'true' : 'false'}" title="${isExpanded ? 'Ocultar rama' : 'Mostrar rama'}">${isExpanded ? '▼' : '▶'}</button>`
+                    : '<span class="cat-branch-spacer"></span>';
+
+                return `<div class="cat-tree-node" data-term-id="${catId}">
+                    <div class="cat-tree-row" style="margin-left:${level * 16}px;">
+                        ${toggleHtml}
+                        <label>
+                            <input type="checkbox" class="category-checkbox" value="${catId}" ${shouldBeChecked ? 'checked' : ''} data-category-id="${catId}">
+                            <span style="margin-left:6px;">${esc(cat.name)}${badge} <small style="color:#999;">(${cat.count || 0})</small>
+                                ${canManageCategories ? `<button type="button" class="category-edit-btn" data-term-id="${catId}">Editar</button>` : ''}
+                            </span>
+                        </label>
+                    </div>
+                    ${hasChildren ? `<div class="cat-children" style="display:${isExpanded ? 'block' : 'none'};">${childrenHtml}</div>` : ''}
+                </div>`;
+            }).join('');
+        };
+
+        $('#online-categories-tree').html(renderTree(categories, 0) || '<p style="color:#666;">Sin categorías</p>');
+    }
+
+    function populateCategoryParentDropdown(categories) {
+        const parentSelect = $('#online-categories-new-parent');
+        parentSelect.find('option:not(:first)').remove();
+        const addCategories = (cats, prefix) => {
+            (cats || []).forEach(cat => {
+                parentSelect.append(`<option value="${cat.id}">${esc((prefix || '') + cat.name)}</option>`);
+                if (cat.children && cat.children.length > 0) {
+                    addCategories(cat.children, (prefix || '') + '— ');
+                }
+            });
+        };
+        addCategories(categories, '');
     }
 
     function renderSupplierCodes(p) {
-        if (!p.supplier_codes || p.supplier_codes.length === 0) {
+        const codes = p.proveedores || p.supplier_codes || [];
+        if (!codes.length) {
             $('#suppliers-list').html('<p style="color: #999;">Sin códigos proveedor asignados</p>');
             return;
         }
         let html = '<h4>Códigos Asignados</h4><table style="width: 100%; font-size: 13px; border-collapse: collapse;">';
-        p.supplier_codes.forEach(code => {
-            html += `<tr style="border-bottom: 1px solid #eee;"><td style="padding: 8px;">${esc(code.proveedor)}</td><td style="padding: 8px;"><code>${esc(code.codigo)}</code></td><td style="padding: 8px; text-align: right;"><button class="btn-small danger" onclick="window.portalProducts.removeSupplierCode(${code.id})">✕ Quitar</button></td></tr>`;
+        codes.forEach(code => {
+            const id = code.id || code.pp_id || 0;
+            const nombre = code.proveedor_nombre || code.proveedor || code.nombre || '-';
+            const codigo = code.codigo_proveedor || code.codigo || code.supplier_code || '-';
+            html += `<tr style="border-bottom: 1px solid #eee;"><td style="padding: 8px;">${esc(nombre)}</td><td style="padding: 8px;"><code>${esc(codigo)}</code></td></tr>`;
         });
         html += '</table>';
         $('#suppliers-list').html(html);
@@ -961,34 +1359,52 @@ jQuery(function($) {
             html += `<tr style="border-bottom: 1px solid #eee;">
                 <td style="padding: 8px;"><code>${esc(barcode.codigo)}</code></td>
                 <td style="padding: 8px;">${esc(barcode.tipo)} - ${esc(barcode.cantidad || 1)} ${esc(barcode.unidad || 'unidad')}</td>
-                <td style="padding: 8px; text-align: right;"><button class="btn-small danger" onclick="window.portalProducts.removeBarcode(${barcode.id})">✕ Quitar</button></td>
+                <td style="padding: 8px; text-align: right;"><button class="btn-small danger barcode-remove-btn" data-id="${barcode.id}">✕ Quitar</button></td>
             </tr>`;
         });
         html += '</table>';
         $('#barcodes-list').html(html);
     }
 
-    function renderTasks(p) {
-        const pendingTasks = (p.tasks || []).filter(t => t.estado !== 'completada');
-        if (pendingTasks.length === 0) {
-            $('#tasks-list').hide();
+    function renderTasks(tasks) {
+        const taskActionMap = {
+            'crear_contraparte_online': { button: 'Ir a Online', tab: 'online' },
+            'crear_contraparte_local': { button: 'Asignar SKU Local', action: 'editLocal' },
+            'relacionar_producto_proveedor': { button: 'Ir a Códigos', tab: 'suppliers' },
+            'confirmar_relacion_online': { button: 'Ir a Online', tab: 'online' },
+            'confirmar_estructura_atributos': { button: 'Ver Atributos', tab: 'online' },
+            'barcode_faltante': { button: 'Ir a Barcodes', tab: 'barcodes' },
+            'codigo_faltante': { button: 'Ir a Códigos', tab: 'suppliers' },
+            'autorizar_publicacion': { button: 'Autorizar', tab: 'online' },
+            'validar_categoria': { button: 'Ver Online', tab: 'online' },
+        };
+
+        const pending = (tasks || []).filter(t => t.estado !== 'completada');
+        if (!pending.length) {
+            $('#tasks-list').html('');
             $('#tasks-empty').show();
             return;
         }
         $('#tasks-empty').hide();
-        let html = '<h4>Tareas Pendientes</h4><div style="font-size: 13px;">';
-        pendingTasks.forEach(task => {
-            html += `<div style="margin-bottom: 12px; padding: 12px; background: #f9f9f9; border-radius: 4px; border-left: 4px solid #ffc107;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <strong>${esc(task.titulo)}</strong>
-                    <button class="btn-small success" onclick="window.portalProducts.completeTask(${task.id})">✓ Completar</button>
-                </div>
-                <small style="color: #666;">${esc(task.tipo)} - ${esc(task.descripcion || '')}</small>
+        let html = pending.map(t => {
+            let actionHtml = '';
+            const action = taskActionMap[t.tipo];
+            if (action) {
+                if (action.tab) {
+                    actionHtml = `<button class="btn-small task-goto" data-tab="${action.tab}">${action.button}</button>`;
+                } else if (action.action === 'editLocal') {
+                    actionHtml = '<button class="btn-small task-edit-local">Asignar SKU Local</button>';
+                }
+            } else if (t.target_url) {
+                actionHtml = `<button class="btn-small task-open-external" data-url="${esc(t.target_url)}">Abrir →</button>`;
+            }
+            return `<div class="task-item">
+                <strong>${esc(t.titulo)}</strong>
+                <br><small>${esc(t.tipo)} | ${esc(t.estado)} | Prioridad: ${esc(t.prioridad || '-')}</small>
+                ${actionHtml ? '<div style="margin-top:6px;">' + actionHtml + '</div>' : ''}
             </div>`;
-        });
-        html += '</div>';
-        $('#tasks-list').html(html);
-        $('#tasks-list').show();
+        }).join('');
+        $('#tasks-list').html(html).show();
     }
 
     function loadFamiliesDropdown() {
@@ -1259,53 +1675,88 @@ jQuery(function($) {
 
         $('#online-price-cancel').click(() => $('#online-price-editor').hide());
 
-        // Categories
-        $('#online-categories-save').click(function() {
-            const selected = [];
-            $('.category-checkbox:checked').each(function() {
-                selected.push($(this).data('category-id'));
+        // Categories (análogo wp-admin)
+        $('#online-categories-save').off('click').on('click', function() {
+            if (!currentProduct || !currentProduct.woocommerce_product_id) {
+                alert('Sin producto WooCommerce');
+                return;
+            }
+            const selectedCats = [];
+            $('#online-categories-tree .category-checkbox:checked').each(function() {
+                selectedCats.push(parseInt($(this).val(), 10));
             });
-
             post('riverso_products_set_product_categories', {
-                producto_id: currentProduct.id,
-                categorias: selected
+                woocommerce_product_id: currentProduct.woocommerce_product_id,
+                category_ids: selectedCats
             }).done(function(r) {
-                if (r.success) {
-                    alert('Categorías asignadas');
-                    openDetail(currentProduct.id);
+                if (!r.success) {
+                    alert('Error: ' + ((r.data && r.data.message) || 'desconocido'));
+                    return;
                 }
+                alert('Categorías guardadas exitosamente');
             });
         });
 
-        $('#online-categories-add-new').click(() => {
+        $('#online-categories-add-new').off('click').on('click', function() {
             $('#online-categories-add-form').toggle();
         });
 
-        $('#online-categories-cancel-btn').click(() => {
+        $('#online-categories-cancel-btn').off('click').on('click', function() {
             $('#online-categories-add-form').hide();
+            $('#online-categories-new-name').val('');
         });
 
-        $('#online-categories-create-btn').click(function() {
+        $('#online-categories-create-btn').off('click').on('click', function() {
             const name = $('#online-categories-new-name').val().trim();
-            const parent = $('#online-categories-new-parent').val();
-
+            const parent_id = parseInt($('#online-categories-new-parent').val() || 0, 10);
             if (!name) {
-                alert('Ingrese nombre de categoría');
+                alert('Ingrese el nombre de la categoría');
                 return;
             }
-
             post('riverso_products_create_category', {
-                nombre: name,
-                parent_id: parent || 0
+                name: name,
+                parent_id: parent_id
             }).done(function(r) {
-                if (r.success) {
-                    alert('Categoría creada');
-                    $('#online-categories-new-name').val('');
-                    $('#online-categories-add-form').hide();
-                    loadCategoryTree(currentProduct);
-                } else {
-                    alert('Error: ' + r.data.message);
+                if (!r.success) {
+                    alert('Error: ' + ((r.data && r.data.message) || 'desconocido'));
+                    return;
                 }
+                alert('Categoría creada exitosamente');
+                $('#online-categories-new-name').val('');
+                $('#online-categories-add-form').hide();
+                if (currentProduct && currentProduct.woocommerce_product_id) {
+                    loadCategoryTree(currentProduct.woocommerce_product_id);
+                }
+            });
+        });
+
+        $('#online-categories-accept-task').off('click').on('click', function() {
+            const taskId = $('#online-categories-task-panel').data('task_id');
+            if (!taskId || !currentProduct || !currentProduct.woocommerce_product_id) {
+                alert('No hay tarea de categoría pendiente');
+                return;
+            }
+            const selectedCats = [];
+            $('#online-categories-tree .category-checkbox:checked').each(function() {
+                selectedCats.push(parseInt($(this).val(), 10));
+            });
+            post('riverso_products_set_product_categories', {
+                woocommerce_product_id: currentProduct.woocommerce_product_id,
+                category_ids: selectedCats
+            }).done(function(r) {
+                if (!r.success) {
+                    alert('Error al guardar categorías: ' + ((r.data && r.data.message) || ''));
+                    return;
+                }
+                post('riverso_products_complete_task', { tarea_id: taskId }).done(function(r2) {
+                    if (r2.success) {
+                        alert('Categorías aceptadas y tarea completada');
+                        $('#online-categories-task-panel').hide();
+                        openDetail(currentProduct.id);
+                    } else {
+                        alert('Error al completar tarea: ' + ((r2.data && r2.data.message) || ''));
+                    }
+                });
             });
         });
 
@@ -1359,13 +1810,166 @@ jQuery(function($) {
     $('#completeness-help').click(() => $('#help-completeness').toggle());
     $('#help-close').click(() => $('#help-completeness').hide());
     
+    // Tooltips de badges: se mantienen abiertos ~3s al salir
+    let badgeTooltipTimer = null;
+    $(document).on('mouseenter', '.detail-badge', function() {
+        clearTimeout(badgeTooltipTimer);
+        $('.detail-badge').removeClass('is-open');
+        $(this).addClass('is-open');
+    });
+    $(document).on('mouseleave', '.detail-badge', function() {
+        const $badge = $(this);
+        clearTimeout(badgeTooltipTimer);
+        badgeTooltipTimer = setTimeout(function() {
+            $badge.removeClass('is-open');
+        }, 3000);
+    });
+    $(document).on('mouseenter', '.badge-tooltip', function() {
+        clearTimeout(badgeTooltipTimer);
+        $(this).closest('.detail-badge').addClass('is-open');
+    });
+    $(document).on('mouseleave', '.badge-tooltip', function() {
+        const $badge = $(this).closest('.detail-badge');
+        clearTimeout(badgeTooltipTimer);
+        badgeTooltipTimer = setTimeout(function() {
+            $badge.removeClass('is-open');
+        }, 3000);
+    });
+    // Click en badge también fija el tooltip abierto
+    $(document).on('click', '#detail-alerts-badge, #detail-tasks-badge', function(e) {
+        if ($(e.target).closest('.alerts-tooltip-item').length) return;
+        e.preventDefault();
+        clearTimeout(badgeTooltipTimer);
+        const $badge = $(this);
+        const wasOpen = $badge.hasClass('is-open');
+        $('.detail-badge').removeClass('is-open');
+        if (!wasOpen) $badge.addClass('is-open');
+    });
+
+    $(document).on('click', '#online-categories-tree .cat-branch-toggle', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const $btn = $(this);
+        const $children = $btn.closest('.cat-tree-node').children('.cat-children');
+        const open = $children.is(':visible');
+        if (open) {
+            $children.hide();
+            $btn.attr('aria-expanded', 'false').attr('title', 'Mostrar rama').text('▶');
+        } else {
+            $children.show();
+            $btn.attr('aria-expanded', 'true').attr('title', 'Ocultar rama').text('▼');
+        }
+    });
+
+    $('#online-categories-expand-all').off('click').on('click', function() {
+        $('#online-categories-tree .cat-children').show();
+        $('#online-categories-tree .cat-branch-toggle').attr('aria-expanded', 'true').attr('title', 'Ocultar rama').text('▼');
+    });
+
+    $('#online-categories-collapse-all').off('click').on('click', function() {
+        $('#online-categories-tree .cat-children').hide();
+        $('#online-categories-tree .cat-branch-toggle').attr('aria-expanded', 'false').attr('title', 'Mostrar rama').text('▶');
+    });
+
+    $(document).on('click', '.category-edit-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const termId = $(this).data('term-id');
+        const currentName = $(this).closest('label').find('span').clone().children().remove().end().text().trim().split('(')[0].trim();
+        const newName = prompt('Nuevo nombre para la categoría:', currentName);
+        if (!newName || newName === currentName) return;
+        post('riverso_products_rename_category', {
+            term_id: termId,
+            name: newName
+        }).done(function(r) {
+            if (!r.success) {
+                alert('Error: ' + ((r.data && r.data.message) || ''));
+                return;
+            }
+            if (currentProduct && currentProduct.woocommerce_product_id) {
+                loadCategoryTree(currentProduct.woocommerce_product_id);
+            }
+        });
+    });
+
     $('.detail-tab').click(function(e) {
         e.preventDefault();
-        const tab = $(this).data('tab');
-        $('.detail-tab').removeClass('active');
-        $(this).addClass('active');
-        $('.detail-tab-content').removeClass('active');
-        $(`.detail-tab-content[data-tab-content="${tab}"]`).addClass('active');
+        switchDetailTab($(this).data('tab'));
+    });
+
+    // Shortcuts desde badge de campos faltantes
+    $(document).on('click', '.alerts-tooltip-item', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const action = $(this).data('alert-action');
+        if (action === 'edit-sku') {
+            switchDetailTab('local');
+            if (canManage) {
+                enterEditMode();
+                setTimeout(() => $('#local-sku-edit').focus().select(), 100);
+            }
+        } else if (action && String(action).startsWith('tab-')) {
+            switchDetailTab(String(action).replace('tab-', ''));
+        }
+    });
+
+    // Badge tareas → tab Tasks (o sección según tipo)
+    $(document).on('click', '.task-tooltip-goto', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const tipo = $(this).data('task-tipo');
+        const map = {
+            'crear_contraparte_online': 'online',
+            'crear_contraparte_local': 'local',
+            'relacionar_producto_proveedor': 'suppliers',
+            'confirmar_relacion_online': 'online',
+            'barcode_faltante': 'barcodes',
+            'codigo_faltante': 'suppliers',
+            'validar_categoria': 'online',
+            'autorizar_publicacion': 'online',
+            'confirmar_estructura_atributos': 'online'
+        };
+        if (tipo === 'crear_contraparte_local') {
+            switchDetailTab('local');
+            if (canManage) {
+                enterEditMode();
+                setTimeout(() => $('#local-sku-edit').focus().select(), 100);
+            }
+            return;
+        }
+        switchDetailTab(map[tipo] || 'tasks');
+    });
+
+    $(document).on('click', '.task-goto', function(e) {
+        e.preventDefault();
+        switchDetailTab($(this).data('tab'));
+    });
+
+    $(document).on('click', '.task-edit-local', function(e) {
+        e.preventDefault();
+        switchDetailTab('local');
+        if (canManage) {
+            enterEditMode();
+            setTimeout(() => $('#local-sku-edit').focus().select(), 100);
+        }
+    });
+
+    $(document).on('click', '.task-open-external', function(e) {
+        e.preventDefault();
+        const url = $(this).data('url');
+        if (url) window.open(url, '_blank');
+    });
+
+    $(document).on('click', '.woo-result-item', function() {
+        window.portalProducts.selectWooProduct($(this).data('id'), $(this).data('name'));
+    });
+
+    $(document).on('click', '.barcode-remove-btn', function() {
+        window.portalProducts.removeBarcode($(this).data('id'));
+    });
+
+    $('#online-assign-code-btn').on('click', function() {
+        switchDetailTab('suppliers');
     });
 
     $('#btn-detail-close').click(() => {
@@ -1501,6 +2105,7 @@ jQuery(function($) {
     // Expose globally
     window.portalProducts = {
         openDetail: openDetail,
+        openSibling: openSiblingProduct,
         completeTask: function(taskId) {
             post('riverso_products_complete_task', { tarea_id: taskId }).done(function(r) {
                 if (r.success) {

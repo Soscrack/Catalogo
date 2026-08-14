@@ -192,6 +192,29 @@ $users = get_users(['role__in' => ['administrator', 'riverso_admin', 'riverso_ve
                                     Ver cambios
                                 </button>
                             <?php endif; ?>
+                            
+                            <?php
+                            // Botones UNDO/REDO solo para product_merged
+                            if ($log->action === 'product_merged' && $new_value = $log->new_value_decoded): 
+                                $is_undone = $new_value['undone'] ?? false;
+                                $audit_id = $log->id;
+                            ?>
+                                <div style="margin-top: 8px;">
+                                    <?php if (!$is_undone): ?>
+                                        <button type="button" class="button button-small btn-undo-merge" 
+                                                data-audit-id="<?php echo $audit_id; ?>"
+                                                style="background:#d32f2f;color:#fff;border-color:#d32f2f;">
+                                            ↶ Deshacer
+                                        </button>
+                                    <?php else: ?>
+                                        <button type="button" class="button button-small btn-redo-merge" 
+                                                data-audit-id="<?php echo $audit_id; ?>"
+                                                style="background:#388e3c;color:#fff;border-color:#388e3c;">
+                                            ↷ Rehacer
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endif; ?>
                         </td>
                         <td style="font-size: 11px; color: #666;">
                             <?php echo esc_html($log->ip_address); ?>
@@ -340,6 +363,9 @@ $users = get_users(['role__in' => ['administrator', 'riverso_admin', 'riverso_ve
 
 <script>
 jQuery(document).ready(function($) {
+    const ajaxurl = <?php echo json_encode(admin_url('admin-ajax.php')); ?>;
+    const nonce = <?php echo json_encode($nonce); ?>;
+
     // Modal cambios
     $('.btn-show-changes').on('click', function() {
         const oldVal = $(this).data('old');
@@ -359,6 +385,60 @@ jQuery(document).ready(function($) {
         if (e.target === this) {
             $(this).hide();
         }
+    });
+
+    // UNDO merge
+    $('.btn-undo-merge').on('click', function(e) {
+        e.preventDefault();
+        const auditId = $(this).data('audit-id');
+        const $btn = $(this);
+        
+        if (!confirm('¿Deshacer este merge? Los códigos y Woo serán restaurados.')) {
+            return;
+        }
+
+        $btn.prop('disabled', true).text('Deshaciendo...');
+        
+        $.post(ajaxurl, {
+            action: 'riverso_products_undo_merge',
+            nonce: nonce,
+            audit_id: auditId
+        }, function(r) {
+            if (r.success) {
+                alert(r.data.message || 'Merge deshecho exitosamente');
+                location.reload();
+            } else {
+                alert('Error: ' + (r.data && r.data.message ? r.data.message : 'No se pudo deshacer'));
+                $btn.prop('disabled', false).text('↶ Deshacer');
+            }
+        });
+    });
+
+    // REDO merge
+    $('.btn-redo-merge').on('click', function(e) {
+        e.preventDefault();
+        const auditId = $(this).data('audit-id');
+        const $btn = $(this);
+        
+        if (!confirm('¿Rehacer este merge? Los códigos y Woo serán transferidos nuevamente.')) {
+            return;
+        }
+
+        $btn.prop('disabled', true).text('Rehaciendo...');
+        
+        $.post(ajaxurl, {
+            action: 'riverso_products_redo_merge',
+            nonce: nonce,
+            audit_id: auditId
+        }, function(r) {
+            if (r.success) {
+                alert(r.data.message || 'Merge rehecho exitosamente');
+                location.reload();
+            } else {
+                alert('Error: ' + (r.data && r.data.message ? r.data.message : 'No se pudo rehacer'));
+                $btn.prop('disabled', false).text('↷ Rehacer');
+            }
+        });
     });
 });
 </script>

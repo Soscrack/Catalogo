@@ -276,6 +276,33 @@ $can_manage_families = current_user_can('riverso_manage_families');
                     <td>
                         <code id="local-sku-view">-</code>
                         <input type="text" id="local-sku-edit" style="display: none;">
+                        <!-- Panel vincular Local o generar SKU cuando está vacío -->
+                        <div id="detail-local-empty-panel" style="display:none; margin-top:12px; padding:12px; background:#f5f5f5; border:1px solid #e0e0e0; border-radius:4px;">
+                            <p style="margin:0 0 12px 0; color:#666; font-size:13px;">Este producto no tiene Local: busca uno existente o genera un nuevo SKU.</p>
+                            
+                            <!-- Buscador Local -->
+                            <div style="margin-bottom:12px;">
+                                <strong style="display:block; margin-bottom:6px;">Buscar Local existente</strong>
+                                <input type="text" id="detail-local-search" class="regular-text" placeholder="Buscar Falta Online por SKU, nombre o código..." style="margin-bottom:8px; width:100%;">
+                                <div id="detail-local-suggestions" style="border:1px solid #ddd; border-radius:2px; max-height:150px; overflow-y:auto; margin-bottom:8px; padding:0; background:#fff; display:none;"></div>
+                                <div id="detail-local-selected" style="padding:8px; background:#e8f5e9; border:1px solid #4caf50; border-radius:2px; display:none; margin-bottom:8px; font-size:13px;"></div>
+                                <button type="button" class="btn-small success" id="detail-local-adopt-btn" style="display:none; width:100%;">Vincular este Local</button>
+                            </div>
+
+                            <!-- Separador -->
+                            <div style="text-align:center; margin:12px 0; color:#999; font-size:12px;">-- o --</div>
+
+                            <!-- Generar SKU -->
+                            <div>
+                                <strong style="display:block; margin-bottom:6px;">Generar nuevo SKU Local</strong>
+                                <button type="button" class="btn-small" id="detail-local-generate-sku" style="width:100%; margin-bottom:8px;">Generar nuevo SKU Local</button>
+                                <div id="detail-local-new-sku-preview" style="padding:10px; background:#e8f5e9; border:1px solid #4caf50; border-radius:2px; display:none;">
+                                    <small style="color:#2e7d32; display:block; margin-bottom:4px;">SKU Local sugerido:</small>
+                                    <input type="text" id="detail-local-new-sku-input" class="regular-text" placeholder="Cargando..." style="margin-bottom:4px;">
+                                    <small style="color:#666; display:block;">Puedes editarlo si lo deseas.</small>
+                                </div>
+                            </div>
+                        </div>
                     </td>
                 </tr>
                 <tr>
@@ -442,7 +469,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
             <p>Vincular o crear contraparte WooCommerce.</p>
             <div style="margin: 12px 0;">
                 <h4>Buscar y vincular producto existente</h4>
-                <input type="text" id="woo-search" placeholder="Buscar producto WooCommerce">
+                <input type="text" id="woo-search" placeholder="Buscar Solo Online por nombre, SKU o ID Woo">
                 <div id="woo-results" style="display: none; border: 1px solid #ddd; max-height: 180px; overflow: auto; margin-top: 6px;"></div>
                 <input type="hidden" id="woo-selected-id">
                 <div id="woo-selected-display" style="margin-top: 6px; color: #2271b1;"></div>
@@ -827,6 +854,22 @@ jQuery(function($) {
         // Tab: Local
         $('#local-sku-view').text(p.canonical_sku || '-');
         $('#local-sku-edit').val(p.canonical_sku || '');
+        
+        // Mostrar panel de vincular Local o generar SKU si está vacío
+        const hasLocalSku = !!p.canonical_sku;
+        const hasWooLink = p.woocommerce_product_id || p.woocommerce_variation_id;
+        if (!hasLocalSku && hasWooLink) {
+            $('#detail-local-empty-panel').show();
+            // Limpiar campos del panel
+            $('#detail-local-search').val('');
+            $('#detail-local-suggestions').html('').hide();
+            $('#detail-local-selected').hide();
+            $('#detail-local-adopt-btn').hide();
+            $('#detail-local-new-sku-preview').hide();
+        } else {
+            $('#detail-local-empty-panel').hide();
+        }
+        
         $('#local-name-view').text(p.nombre_canonico || '-');
         $('#local-name-edit').val(p.nombre_canonico || '');
         $('#local-unit-view').text(p.unidad_base || 'unidad');
@@ -1172,19 +1215,20 @@ jQuery(function($) {
             return;
         }
 
-        post('riverso_products_search_woo', { s: query, limit: 10 }).done(function(r) {
+        post('riverso_products_search_woo', { s: query, limit: 10, filter: 'solo_online' }).done(function(r) {
             if (r.success) {
                 const products = r.data.results || r.data.products || [];
                 let html = '';
                 products.forEach(prod => {
                     const name = prod.name || prod.nombre || '';
                     const sku = prod.sku || '';
+                    const typeLabel = {'simple': 'Simple', 'variable': 'Variable', 'variation': 'Variación'}[prod.type] || prod.type || '';
                     html += `<div style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px;" class="woo-result-item" data-id="${prod.id}" data-name="${esc(name)}">
                         <strong>${esc(name)}</strong><br>
-                        <small style="color: #666;">ID: ${prod.id} | SKU: ${esc(sku)}</small>
+                        <small style="color: #666;">ID: ${prod.id} | SKU: ${esc(sku || '(sin SKU)')} | Tipo: ${esc(typeLabel)}</small>
                     </div>`;
                 });
-                $('#woo-results').html(html || '<div style="padding:10px;color:#999;">Sin resultados</div>').show();
+                $('#woo-results').html(html || '<div style="padding:10px;color:#999;">Sin resultados (solo Online sin Local completo)</div>').show();
             }
         });
     }
@@ -1608,8 +1652,59 @@ jQuery(function($) {
             });
         });
 
-        // WooCommerce link/create
+        // WooCommerce link/create — siempre vía merge si hay conflicto
         $('#woo-search').on('input', () => searchWooProducts());
+
+        // Modal rico de merge (Portal)
+        function openMergeModalPortal(merge) {
+            return new Promise((resolve) => {
+                if (!merge) { resolve(false); return; }
+                const src = merge.source || {};
+                const tgt = merge.target || {};
+                const woo = merge.woo || {};
+                const codes = (merge.codes_to_transfer || []).map(c => c.codigo_proveedor).filter(Boolean);
+                let codesHTML = '';
+                if (codes.length) {
+                    codesHTML = '<div style="margin-top:10px;"><strong>Códigos a heredar:</strong><br>' + codes.map(c => '<code style="background:#f0f0f0;padding:2px 6px;border-radius:3px;margin-right:4px;">' + c + '</code>').join(' ') + '</div>';
+                }
+                let warningsHTML = '';
+                (merge.warnings || []).forEach(w => {
+                    const color = w.severity === 'warning' ? '#fff3cd' : '#d1ecf1';
+                    const borderColor = w.severity === 'warning' ? '#ffc107' : '#17a2b8';
+                    warningsHTML += '<div style="background:' + color + ';border-left:4px solid ' + borderColor + ';padding:10px;margin-top:8px;border-radius:2px;font-size:13px;">' + w.message + '</div>';
+                });
+                const html = `
+<div id="merge-modal-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,0.3);padding:30px;max-width:550px;width:90%;max-height:80vh;overflow-y:auto;">
+    <h2 style="margin:0 0 20px 0;color:#1d2327;">Confirmar Merge</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:15px;">
+      <div style="border:1px solid #ddd;padding:12px;border-radius:6px;background:#f9f9f9;">
+        <h4 style="margin:0 0 8px 0;color:#d32f2f;font-size:13px;">Origen</h4>
+        <div style="font-size:12px;"><strong>#` + merge.source_id + `</strong><br>SKU: ` + (src.canonical_sku || '—') + `<br>` + (src.nombre_canonico ? src.nombre_canonico.substring(0, 40) : 'Sin nombre') + `</div>
+      </div>
+      <div style="border:1px solid #ddd;padding:12px;border-radius:6px;background:#f9f9f9;">
+        <h4 style="margin:0 0 8px 0;color:#1976d2;font-size:13px;">Destino</h4>
+        <div style="font-size:12px;"><strong>#` + merge.target_id + `</strong><br>SKU: ` + (tgt.canonical_sku || '—') + `<br>` + (tgt.nombre_canonico ? tgt.nombre_canonico.substring(0, 40) : 'Sin nombre') + `</div>
+      </div>
+    </div>
+    <div style="background:#e8f5e9;border:1px solid #4caf50;padding:10px;border-radius:6px;margin-bottom:15px;font-size:12px;"><strong style="color:#2e7d32;">SKU Online: </strong>` + (woo.sku || 'N/A') + `</div>
+    ` + codesHTML + `
+    ` + warningsHTML + `
+    <div style="margin-top:15px;border-top:1px solid #ddd;padding-top:12px;display:flex;gap:10px;justify-content:flex-end;">
+      <button type="button" id="merge-portal-cancel" class="btn-small" style="cursor:pointer;">Cancelar</button>
+      <button type="button" id="merge-portal-confirm" class="btn-small success" style="cursor:pointer;">Confirmar</button>
+    </div>
+  </div>
+</div>
+                `.trim();
+                $('body').append(html);
+                $('#merge-portal-cancel').on('click', function(){ $('#merge-modal-overlay').remove(); resolve(false); });
+                $('#merge-portal-confirm').on('click', function(){ $('#merge-modal-overlay').remove(); resolve(true); });
+                $(document).on('keydown.merge-modal', function(e){
+                    if (e.key === 'Escape') { $('#merge-modal-overlay').remove(); resolve(false); $(document).off('keydown.merge-modal'); }
+                });
+            });
+        }
 
         $('#online-link-btn').click(function() {
             const wooId = $('#woo-selected-id').val();
@@ -1618,17 +1713,28 @@ jQuery(function($) {
                 return;
             }
 
-            post('riverso_products_link_woo', {
-                producto_id: currentProduct.id,
-                woo_id: wooId
-            }).done(function(r) {
-                if (r.success) {
-                    alert('Producto vinculado');
-                    openDetail(currentProduct.id);
-                } else {
-                    alert('Error: ' + r.data.message);
-                }
-            });
+            const tryLink = (confirm_merge) => {
+                post('riverso_products_set_online', {
+                    product_id: currentProduct.id,
+                    woo_id: wooId,
+                    confirm_merge: confirm_merge ? 1 : 0
+                }).done(function(r) {
+                    if (r.success) {
+                        alert(r.data.message || 'Producto vinculado');
+                        openDetail(currentProduct.id);
+                        return;
+                    }
+                    if (r.data && r.data.needs_merge) {
+                        openMergeModalPortal(r.data.merge).then(confirmed => {
+                            if (!confirmed) return;
+                            tryLink(true);
+                        });
+                        return;
+                    }
+                    alert('Error: ' + (r.data && r.data.message ? r.data.message : 'No se pudo vincular'));
+                });
+            };
+            tryLink(false);
         });
 
         $('#online-create-btn').click(function() {
@@ -1970,6 +2076,102 @@ jQuery(function($) {
 
     $('#online-assign-code-btn').on('click', function() {
         switchDetailTab('suppliers');
+    });
+
+    // Panel Local vacío: Buscar Local existente
+    $('#detail-local-search').on('keyup', function(e){
+        const search = $(this).val().trim();
+        if (search.length < 2) {
+            $('#detail-local-suggestions').html('').hide();
+            return;
+        }
+        post('riverso_products_list', {
+            search: search,
+            limit: 10,
+            status: 'active',
+            completeness: 'falta_online'
+        }).done(function(r) {
+            if (r.success) {
+                const items = r.data.items || [];
+                let html = '';
+                items.forEach(item => {
+                    const display = esc(item.canonical_sku || '') + ' - ' + esc(item.nombre_canonico || '');
+                    html += '<div style="padding:8px; border-bottom:1px solid #eee; cursor:pointer; font-size:13px;" class="detail-local-option" data-id="' + item.id + '" data-display="' + esc(display) + '">' + display + '</div>';
+                });
+                $('#detail-local-suggestions').html(html || '<div style="padding:8px; color:#999;">Sin resultados</div>').show();
+            }
+        });
+    });
+
+    $(document).on('click', '.detail-local-option', function(){
+        const id = $(this).data('id');
+        const display = $(this).data('display');
+        $('#detail-local-search').data('selected-id', id);
+        $('#detail-local-selected').html(display).show();
+        $('#detail-local-suggestions').html('').hide();
+        $('#detail-local-adopt-btn').show();
+    });
+
+    // Panel Local vacío: Generar nuevo SKU Local
+    $('#detail-local-generate-sku').on('click', function(){
+        $(this).prop('disabled', true).text('Obteniendo siguiente SKU...');
+        post('riverso_products_next_sku', {}).done(function(r) {
+            $('#detail-local-generate-sku').prop('disabled', false).text('Generar nuevo SKU Local');
+            if (r.success) {
+                const nextSku = r.data.next_sku;
+                $('#detail-local-new-sku-input').val(nextSku).prop('readonly', false);
+                $('#detail-local-new-sku-preview').show();
+                // Limpiar búsqueda
+                $('#detail-local-search').val('').data('selected-id', 0);
+                $('#detail-local-selected').hide();
+                $('#detail-local-suggestions').html('').hide();
+                $('#detail-local-adopt-btn').hide();
+            } else {
+                alert('Error: ' + r.data.message);
+            }
+        }).fail(function(){
+            $('#detail-local-generate-sku').prop('disabled', false).text('Generar nuevo SKU Local');
+            alert('Error al obtener el siguiente SKU');
+        });
+    });
+
+    // Panel Local vacío: editar SKU generado
+    $('#detail-local-new-sku-input').on('change', function(){
+        // El valor se puede editar, se guardará junto con el SKU Local
+    });
+
+    // Panel Local vacío: Vincular Local existente → merge con preview
+    $('#detail-local-adopt-btn').on('click', function(){
+        if (!currentProduct) return;
+        const targetLocalId = $('#detail-local-search').data('selected-id');
+        if (!targetLocalId) {
+            alert('Selecciona un Local primero');
+            return;
+        }
+
+        const tryAdopt = (confirm_merge) => {
+            post('riverso_products_adopt_local', {
+                source_id: currentProduct.id,
+                target_id: targetLocalId,
+                confirm_merge: confirm_merge ? 1 : 0
+            }).done(function(r){
+                if (r.success) {
+                    alert(r.data.message);
+                    openDetail(r.data.item.id);
+                    loadProducts(currentOffset);
+                    return;
+                }
+                if (r.data && r.data.needs_merge) {
+                    openMergeModalPortal(r.data.merge).then(confirmed => {
+                        if (!confirmed) return;
+                        tryAdopt(true);
+                    });
+                    return;
+                }
+                alert('Error: ' + (r.data && r.data.message ? r.data.message : 'No se pudo vincular'));
+            });
+        };
+        tryAdopt(false);
     });
 
     $('#btn-detail-close').click(() => {

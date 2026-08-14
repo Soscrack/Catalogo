@@ -73,6 +73,10 @@ class Riverso_Product_Module {
 		add_action('wp_ajax_riverso_products_link_online', [$this, 'ajax_link_online_standalone']);
 		add_action('wp_ajax_riverso_products_evaluate_online', [$this, 'ajax_evaluate_online_merge']);
 		add_action('wp_ajax_riverso_products_get_woo_categories', [$this, 'ajax_get_woo_categories']);
+		add_action('wp_ajax_riverso_products_next_sku', [$this, 'ajax_next_sku']);
+		add_action('wp_ajax_riverso_products_adopt_local', [$this, 'ajax_adopt_local']);
+		add_action('wp_ajax_riverso_products_undo_merge', [$this, 'ajax_undo_merge']);
+		add_action('wp_ajax_riverso_products_redo_merge', [$this, 'ajax_redo_merge']);
 	}
 
     private function get_completeness_category($product) {
@@ -860,7 +864,12 @@ class Riverso_Product_Module {
             wp_send_json_error(['message' => 'Sin permisos'], 403);
         }
         $search = sanitize_text_field($_POST['s'] ?? '');
-        if (strlen($search) < 2) {
+        // solo_online: solo Woo sin Local completo (sin vínculo o stub vacío)
+        $filter = sanitize_text_field($_POST['filter'] ?? $_POST['completeness'] ?? '');
+        
+        // Permitir 1 carácter si es numérico (ID Woo), 2+ para otros
+        $min_length = is_numeric($search) ? 1 : 2;
+        if (strlen($search) < $min_length) {
             wp_send_json_success(['results' => []]);
         }
 
@@ -868,17 +877,48 @@ class Riverso_Product_Module {
             wp_send_json_success(['results' => []]);
         }
 
-        $products = wc_get_products([
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        
+        $products_by_id = [];
+
+        // 1. Búsqueda por ID Woo (si es numérico)
+        if (is_numeric($search)) {
+            $wc_product = wc_get_product(absint($search));
+            if ($wc_product) {
+                $products_by_id[$wc_product->get_id()] = $wc_product;
+            }
+        }
+
+        // 2. Búsqueda por SKU (postmeta LIKE, incluye variaciones)
+        $sku_results = $wpdb->get_results($wpdb->prepare(
+            "SELECT pm.post_id FROM {$wpdb->postmeta} pm
+             WHERE pm.meta_key = '_sku' AND pm.meta_value LIKE %s",
+            '%' . $wpdb->esc_like($search) . '%'
+        ), ARRAY_A);
+
+        foreach ($sku_results as $row) {
+            $wc_product = wc_get_product($row['post_id']);
+            if ($wc_product) {
+                $products_by_id[$wc_product->get_id()] = $wc_product;
+            }
+        }
+
+        // 3. Búsqueda por nombre (todos los tipos: simple, variable, variation)
+        $name_products = wc_get_products([
             's' => $search,
             'limit' => 20,
             'return' => 'objects',
+            'type' => ['simple', 'variable', 'variation'],
         ]);
 
-        global $wpdb;
-        $prefix = $wpdb->prefix . 'riverso_';
+        foreach ($name_products as $wc_product) {
+            $products_by_id[$wc_product->get_id()] = $wc_product;
+        }
 
+        // Deduplicar y formatear
         $results = [];
-        foreach ($products as $wc_product) {
+        foreach ($products_by_id as $wc_product) {
             $wc_id = $wc_product->get_id();
             $parent_id = 0;
             
@@ -891,13 +931,28 @@ class Riverso_Product_Module {
 
             // Buscar si ya tiene Local vinculado
             $linked_local = $wpdb->get_row($wpdb->prepare(
-                "SELECT id, canonical_sku FROM {$prefix}producto_base 
-                 WHERE (woocommerce_product_id = %d AND woocommerce_variation_id = %d)
-                 OR (woocommerce_product_id = %d AND woocommerce_variation_id = 0)",
+                "SELECT id, canonical_sku, nombre_canonico FROM {$prefix}producto_base 
+                 WHERE deleted_at IS NULL
+                 AND (
+                    (woocommerce_product_id = %d AND woocommerce_variation_id = %d)
+                    OR (woocommerce_product_id = %d AND woocommerce_variation_id = 0)
+                    OR woocommerce_variation_id = %d
+                 )
+                 LIMIT 1",
                 $parent_id > 0 ? $parent_id : $wc_id,
                 $parent_id > 0 ? $wc_id : 0,
+                $wc_id,
                 $wc_id
             ), ARRAY_A);
+
+            $has_complete_local = $linked_local
+                && !empty($linked_local['canonical_sku'])
+                && !empty($linked_local['nombre_canonico']);
+
+            // Filtro solo_online: excluir Woo ya vinculados a un Local completo
+            if ($filter === 'solo_online' && $has_complete_local) {
+                continue;
+            }
 
             $results[] = [
                 'id' => $wc_id,
@@ -913,6 +968,9 @@ class Riverso_Product_Module {
                 ] : null,
             ];
         }
+
+        // Limitar resultados finales a 20
+        $results = array_slice($results, 0, 20);
 
         wp_send_json_success(['results' => $results]);
     }
@@ -957,16 +1015,49 @@ class Riverso_Product_Module {
         $existing = $wpdb->get_row($wpdb->prepare(
             "SELECT id FROM {$prefix}producto_base 
              WHERE (woocommerce_product_id = %d AND woocommerce_variation_id = %d)
-             AND id != %d",
+             AND id != %d
+             AND deleted_at IS NULL",
             $product_id_to_save,
             $variation_id_to_save,
             $product_id
         ));
 
+        // Si el Woo ya está en otro Local → merge (preview o confirmar)
         if ($existing) {
-            wp_send_json_error([
-                'message' => 'Este producto WooCommerce ya está vinculado a otro producto local',
-                'conflict' => true,
+            $preview = $this->build_online_merge_preview($woo_id, $product_id);
+            $confirm_merge = !empty($_POST['confirm_merge']);
+
+            if (!$confirm_merge) {
+                wp_send_json_error([
+                    'message' => 'Este producto WooCommerce ya está vinculado a otro producto local. Confirma el merge para continuar.',
+                    'conflict' => true,
+                    'needs_merge' => true,
+                    'merge' => $preview,
+                ]);
+            }
+
+            $merge_result = $this->merge_stub_into_local((int) $existing->id, $product_id, [
+                'allow_deleted_source' => true,
+                'force_replace_target_woo' => true,
+            ]);
+
+            if (is_wp_error($merge_result)) {
+                wp_send_json_error(['message' => $merge_result->get_error_message(), 'needs_merge' => true, 'merge' => $preview]);
+            }
+
+            $this->close_counterpart_task($product_id, 'crear_contraparte_online');
+            $product = $this->get_product($product_id);
+            $this->trigger_counterpart_tasks($product_id);
+
+            wp_send_json_success([
+                'message' => sprintf(
+                    'Merge completado: Woo + %d código(s) heredados; origen #%d eliminado',
+                    $merge_result['transferred']['codes'] ?? 0,
+                    (int) $existing->id
+                ),
+                'merged' => true,
+                'transferred' => $merge_result['transferred'] ?? [],
+                'item' => $product,
             ]);
         }
 
@@ -1010,6 +1101,147 @@ class Riverso_Product_Module {
         $this->trigger_counterpart_tasks($product_id);
 
         wp_send_json_success(['message' => 'Producto online vinculado', 'item' => $product]);
+    }
+
+    /**
+     * Preview de merge cuando un Woo ya está ligado a otro Local.
+     * source = Local que hoy tiene el Woo; target = Local que quiere adoptarlo.
+     */
+    public function build_online_merge_preview($woo_id, $target_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $woo_id = absint($woo_id);
+        $target_id = absint($target_id);
+        $preview = [
+            'needs_merge' => false,
+            'source_id' => 0,
+            'target_id' => $target_id,
+            'source' => null,
+            'target' => null,
+            'woo' => null,
+            'codes_to_transfer' => [],
+            'barcodes_to_transfer' => [],
+            'warnings' => [],
+            'is_stub_source' => false,
+        ];
+
+        $woo_product = function_exists('wc_get_product') ? wc_get_product($woo_id) : null;
+        if (!$woo_product) {
+            $preview['warnings'][] = [
+                'type' => 'woo_missing',
+                'message' => 'Producto WooCommerce no encontrado',
+                'severity' => 'error',
+            ];
+            return $preview;
+        }
+
+        $woo_product_id = $woo_product->is_type('variation') ? $woo_product->get_parent_id() : $woo_id;
+        $woo_variation_id = $woo_product->is_type('variation') ? $woo_id : 0;
+
+        $preview['woo'] = [
+            'id' => $woo_id,
+            'product_id' => $woo_product_id,
+            'variation_id' => $woo_variation_id,
+            'sku' => $woo_product->get_sku(),
+            'name' => $woo_product->get_name(),
+            'type' => $woo_product->get_type(),
+        ];
+
+        $target = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, canonical_sku, nombre_canonico, woocommerce_product_id, woocommerce_variation_id
+             FROM {$prefix}producto_base WHERE id = %d",
+            $target_id
+        ), ARRAY_A);
+        $preview['target'] = $target;
+
+        $source = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, canonical_sku, nombre_canonico, woocommerce_product_id, woocommerce_variation_id, deleted_at
+             FROM {$prefix}producto_base
+             WHERE woocommerce_product_id = %d AND woocommerce_variation_id = %d
+             AND id != %d AND deleted_at IS NULL
+             LIMIT 1",
+            $woo_product_id,
+            $woo_variation_id,
+            $target_id ?: 0
+        ), ARRAY_A);
+
+        if (!$source) {
+            return $preview;
+        }
+
+        $preview['needs_merge'] = true;
+        $preview['source_id'] = (int) $source['id'];
+        $preview['source'] = $source;
+        $preview['is_stub_source'] = (
+            empty($source['canonical_sku']) || empty($source['nombre_canonico'])
+        );
+
+        $codes = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, proveedor_id, codigo_proveedor FROM {$prefix}producto_proveedor WHERE producto_base_id = %d",
+            $source['id']
+        ), ARRAY_A) ?: [];
+        $preview['codes_to_transfer'] = $codes;
+
+        $barcodes = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, codigo FROM {$prefix}codigo_barra WHERE producto_base_id = %d",
+            $source['id']
+        ), ARRAY_A) ?: [];
+        $preview['barcodes_to_transfer'] = $barcodes;
+
+        $src_label = trim(($source['canonical_sku'] ?: 'sin SKU') . ' — ' . ($source['nombre_canonico'] ?: 'Sin nombre'));
+        $tgt_label = $target
+            ? trim(($target['canonical_sku'] ?: 'sin SKU') . ' — ' . ($target['nombre_canonico'] ?: 'Sin nombre'))
+            : ('#' . $target_id);
+
+        $preview['warnings'][] = [
+            'type' => 'woo_already_linked',
+            'message' => sprintf(
+                'Woo %s ya está en Local #%d (%s). Al confirmar se fusionará en #%d (%s) y el origen se eliminará.',
+                $woo_product->get_sku() ?: ('ID ' . $woo_id),
+                (int) $source['id'],
+                $src_label,
+                $target_id,
+                $tgt_label
+            ),
+            'severity' => 'warning',
+        ];
+
+        if (!empty($codes)) {
+            $preview['warnings'][] = [
+                'type' => 'codes_transfer',
+                'message' => 'Códigos a heredar: ' . implode(', ', array_map(function ($c) {
+                    return $c['codigo_proveedor'];
+                }, $codes)),
+                'severity' => 'info',
+            ];
+        }
+
+        if ($target && ((int) ($target['woocommerce_product_id'] ?: 0) || (int) ($target['woocommerce_variation_id'] ?: 0))) {
+            $same = ((int) $target['woocommerce_product_id'] === (int) $woo_product_id
+                && (int) $target['woocommerce_variation_id'] === (int) $woo_variation_id);
+            if (!$same) {
+                $preview['warnings'][] = [
+                    'type' => 'local_already_has_woo',
+                    'message' => sprintf(
+                        'El Local destino ya tiene otro Woo (ID %d / var %d). Se reemplazará en el merge.',
+                        (int) $target['woocommerce_product_id'],
+                        (int) $target['woocommerce_variation_id']
+                    ),
+                    'severity' => 'warning',
+                ];
+            }
+        }
+
+        if (!$preview['is_stub_source']) {
+            $preview['warnings'][] = [
+                'type' => 'source_not_stub',
+                'message' => 'El origen no es un stub Solo Online: también se soft-deleteará tras transferir Woo y códigos.',
+                'severity' => 'warning',
+            ];
+        }
+
+        return $preview;
     }
 
     public function ajax_get_barcodes() {
@@ -1261,6 +1493,7 @@ class Riverso_Product_Module {
         $woo_price = floatval($_POST['woo_price'] ?? 0);
         $woo_categories = isset($_POST['woo_categories']) ? json_decode(stripslashes($_POST['woo_categories']), true) : [];
         $local_id = absint($_POST['local_id'] ?? 0);
+        $new_local_sku = sanitize_text_field($_POST['new_local_sku'] ?? '');
 
         if (!$woo_name || !$woo_sku) {
             wp_send_json_error(['message' => 'Nombre y SKU son requeridos']);
@@ -1277,8 +1510,45 @@ class Riverso_Product_Module {
             $product_id = $local_id;
         }
 
-        // Si tampoco hay local_id, crear uno mínimo (solo si sin Local)
-        if (!$product_id) {
+        // Si hay new_local_sku y no hay product_id, crear Local con SKU generado
+        if (!$product_id && $new_local_sku) {
+            // Validar SKU: solo dígitos, max 6 chars
+            if (!preg_match('/^\d{1,6}$/', $new_local_sku)) {
+                wp_send_json_error(['message' => 'SKU Local debe ser numérico y máximo 6 dígitos']);
+            }
+
+            global $wpdb;
+            $prefix = $wpdb->prefix . 'riverso_';
+
+            // Validar que no exista
+            $existing = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}producto_base WHERE canonical_sku = %s",
+                $new_local_sku
+            ));
+
+            if ($existing) {
+                wp_send_json_error(['message' => 'El SKU Local ' . $new_local_sku . ' ya existe']);
+            }
+
+            // Crear producto_base con SKU generado
+            $result = $wpdb->insert(
+                "{$prefix}producto_base",
+                [
+                    'nombre_canonico' => $woo_name,
+                    'canonical_sku' => $new_local_sku,
+                    'created_at' => current_time('mysql'),
+                    'updated_at' => current_time('mysql'),
+                ],
+                ['%s', '%s', '%s', '%s']
+            );
+
+            if (!$result) {
+                wp_send_json_error(['message' => 'Error creando producto base con SKU generado']);
+            }
+
+            $product_id = $wpdb->insert_id;
+        } elseif (!$product_id) {
+            // Sin Local, sin new_local_sku, crear uno mínimo con el SKU del Woo
             global $wpdb;
             $prefix = $wpdb->prefix . 'riverso_';
             
@@ -2846,89 +3116,97 @@ class Riverso_Product_Module {
 
 		$woo_id = absint($_POST['woo_id'] ?? 0);
 		$woo_sku = sanitize_text_field($_POST['woo_sku'] ?? '');
-		$local_id = absint($_POST['local_id'] ?? 0);
+		$local_id = absint($_POST['local_id'] ?? $_POST['target_id'] ?? 0);
+		$source_id = absint($_POST['source_id'] ?? 0);
 		$product_type = sanitize_text_field($_POST['product_type'] ?? 'simple');
+
+		global $wpdb;
+		$prefix = $wpdb->prefix . 'riverso_';
+
+		// Adopt: source (stub con Woo) → target Local
+		if ($source_id && $local_id) {
+			$source = $wpdb->get_row($wpdb->prepare(
+				"SELECT id, woocommerce_product_id, woocommerce_variation_id FROM {$prefix}producto_base WHERE id = %d",
+				$source_id
+			), ARRAY_A);
+			$woo_from_source = absint($source['woocommerce_variation_id'] ?? 0) ?: absint($source['woocommerce_product_id'] ?? 0);
+			if ($woo_from_source) {
+				$woo_id = $woo_from_source;
+			}
+		}
+
+		if (!$woo_id && $woo_sku && function_exists('wc_get_product_id_by_sku')) {
+			$woo_id = absint(wc_get_product_id_by_sku($woo_sku));
+		}
 
 		if (!$woo_id && !$woo_sku) {
 			wp_send_json_error(['message' => 'Debe proporcionar WooCommerce ID o SKU']);
 		}
 
-		global $wpdb;
-		$prefix = $wpdb->prefix . 'riverso_';
+		$merge = $local_id ? $this->build_online_merge_preview($woo_id, $local_id) : [
+			'needs_merge' => false,
+			'warnings' => [],
+		];
 
-		$warnings = [];
+		$warnings = $merge['warnings'] ?? [];
 
-		if ($woo_id) {
-			// Obtener el producto Woo
-			$woo_product = wc_get_product($woo_id);
-			if (!$woo_product) {
-				wp_send_json_error(['message' => 'Producto WooCommerce no encontrado']);
-			}
-
-			// Resolver parent/variation
-			$woo_product_id = $woo_product->is_type('variation') ? $woo_product->get_parent_id() : $woo_id;
-			$woo_variation_id = $woo_product->is_type('variation') ? $woo_id : 0;
-
-			// Buscar si ya tiene Local vinculado
-			$existing_link = $wpdb->get_row($wpdb->prepare(
-				"SELECT id, nombre_canonico, canonical_sku FROM {$prefix}producto_base 
-				 WHERE (woocommerce_product_id = %d AND woocommerce_variation_id = %d)
-				 AND id != %d",
-				$woo_product_id,
-				$woo_variation_id,
-				$local_id ?: 0
-			), ARRAY_A);
-
-			if ($existing_link) {
-				$warnings[] = [
-					'type' => 'woo_already_linked',
-					'message' => sprintf('Este producto Woo ya está vinculado a "%s" (SKU: %s). ¿Deseas reemplazar el vínculo?', 
-						$existing_link['nombre_canonico'], $existing_link['canonical_sku']),
-					'severity' => 'warning',
-				];
-			}
-
-			// Si es variación, verificar si hay variación coincidente por SKU
-			if ($product_type === 'child') {
-				$sku = $woo_product->get_sku();
-				if ($sku) {
-					$dup_sku = $wpdb->get_row($wpdb->prepare(
-						"SELECT id, nombre_canonico FROM {$prefix}producto_base 
-						 WHERE canonical_sku = %s AND id != %d",
-						$sku,
-						$local_id ?: 0
-					), ARRAY_A);
-
-					if ($dup_sku) {
-						$warnings[] = [
-							'type' => 'sku_duplicate',
-							'message' => sprintf('SKU "%s" ya existe en producto local "%s". ¿Deseas vincular ese producto?', 
-								$sku, $dup_sku['nombre_canonico']),
-							'severity' => 'info',
-						];
-					}
-				}
-			}
-		}
-
-		// Si se está vinculando a un local que ya tiene otro Woo
-		if ($local_id) {
+		// Si no hay merge pero el local ya tiene otro Woo, avisar
+		if ($local_id && empty($merge['needs_merge'])) {
 			$current_local = $wpdb->get_row($wpdb->prepare(
 				"SELECT woocommerce_product_id, woocommerce_variation_id FROM {$prefix}producto_base WHERE id = %d",
 				$local_id
 			), ARRAY_A);
 
 			if ($current_local && ($current_local['woocommerce_product_id'] || $current_local['woocommerce_variation_id'])) {
-				$warnings[] = [
-					'type' => 'local_already_has_woo',
-					'message' => sprintf('Este producto local ya está vinculado a WooCommerce (ID: %d, Variación: %d). ¿Deseas reemplazarlo?', 
-						$current_local['woocommerce_product_id'], $current_local['woocommerce_variation_id']),
-					'severity' => 'warning',
-				];
+				$woo_product = function_exists('wc_get_product') ? wc_get_product($woo_id) : null;
+				$new_pid = $woo_product && $woo_product->is_type('variation') ? $woo_product->get_parent_id() : $woo_id;
+				$new_vid = $woo_product && $woo_product->is_type('variation') ? $woo_id : 0;
+				$same = ((int) $current_local['woocommerce_product_id'] === (int) $new_pid
+					&& (int) $current_local['woocommerce_variation_id'] === (int) $new_vid);
+				if (!$same) {
+					$warnings[] = [
+						'type' => 'local_already_has_woo',
+						'message' => sprintf(
+							'Este producto local ya está vinculado a WooCommerce (ID: %d, Variación: %d). ¿Deseas reemplazarlo?',
+							$current_local['woocommerce_product_id'],
+							$current_local['woocommerce_variation_id']
+						),
+						'severity' => 'warning',
+					];
+				}
 			}
 		}
 
-		wp_send_json_success(['warnings' => $warnings, 'has_warnings' => !empty($warnings)]);
+		if ($product_type === 'child' && $woo_id && function_exists('wc_get_product')) {
+			$woo_product = wc_get_product($woo_id);
+			$sku = $woo_product ? $woo_product->get_sku() : '';
+			if ($sku) {
+				$dup_sku = $wpdb->get_row($wpdb->prepare(
+					"SELECT id, nombre_canonico FROM {$prefix}producto_base 
+					 WHERE canonical_sku = %s AND id != %d AND deleted_at IS NULL",
+					$sku,
+					$local_id ?: 0
+				), ARRAY_A);
+				if ($dup_sku) {
+					$warnings[] = [
+						'type' => 'sku_duplicate',
+						'message' => sprintf(
+							'SKU "%s" ya existe en producto local "%s". ¿Deseas vincular ese producto?',
+							$sku,
+							$dup_sku['nombre_canonico']
+						),
+						'severity' => 'info',
+					];
+				}
+			}
+		}
+
+		wp_send_json_success([
+			'warnings' => $warnings,
+			'has_warnings' => !empty($warnings),
+			'needs_merge' => !empty($merge['needs_merge']),
+			'merge' => $merge,
+		]);
 	}
 
 	/**
@@ -2999,6 +3277,7 @@ class Riverso_Product_Module {
 
 		$woo_id = absint($_POST['woo_id'] ?? 0);
 		$local_id = absint($_POST['local_id'] ?? 0);
+		$new_local_sku = sanitize_text_field($_POST['new_local_sku'] ?? '');
 
 		if (!$woo_id) {
 			wp_send_json_error(['message' => 'Producto WooCommerce no especificado']);
@@ -3028,8 +3307,42 @@ class Riverso_Product_Module {
 			}
 		}
 
-		// Si aún no hay product_id, crear uno mínimo
-		if (!$product_id) {
+		// Si hay new_local_sku y no hay product_id, crear Local con SKU generado
+		if (!$product_id && $new_local_sku) {
+			// Validar SKU: solo dígitos, max 6 chars
+			if (!preg_match('/^\d{1,6}$/', $new_local_sku)) {
+				wp_send_json_error(['message' => 'SKU Local debe ser numérico y máximo 6 dígitos']);
+			}
+
+			// Validar que no exista
+			$existing = $wpdb->get_var($wpdb->prepare(
+				"SELECT id FROM {$prefix}producto_base WHERE canonical_sku = %s",
+				$new_local_sku
+			));
+
+			if ($existing) {
+				wp_send_json_error(['message' => 'El SKU Local ' . $new_local_sku . ' ya existe']);
+			}
+
+			// Crear producto_base con SKU generado
+			$result = $wpdb->insert(
+				"{$prefix}producto_base",
+				[
+					'nombre_canonico' => $woo_product->get_name(),
+					'canonical_sku' => $new_local_sku,
+					'created_at' => current_time('mysql'),
+					'updated_at' => current_time('mysql'),
+				],
+				['%s', '%s', '%s', '%s']
+			);
+
+			if (!$result) {
+				wp_send_json_error(['message' => 'Error creando producto base con SKU generado']);
+			}
+
+			$product_id = $wpdb->insert_id;
+		} elseif (!$product_id) {
+			// Sin Local, sin new_local_sku, crear uno mínimo
 			$result = $wpdb->insert(
 				"{$prefix}producto_base",
 				[
@@ -3053,6 +3366,504 @@ class Riverso_Product_Module {
 		$_POST['woo_id'] = $woo_id;
 		return $this->ajax_set_online();
 	}
+
+	/**
+	 * AJAX: Obtener el siguiente SKU numérico disponible (max 6 dígitos)
+	 */
+	public function ajax_next_sku() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		global $wpdb;
+		$prefix = $wpdb->prefix . 'riverso_';
+
+		// Obtener el máximo SKU numérico actual (solo dígitos, max 6)
+		$max_sku = $wpdb->get_var($wpdb->prepare(
+			"SELECT MAX(CAST(canonical_sku AS UNSIGNED)) 
+			 FROM {$prefix}producto_base 
+			 WHERE canonical_sku REGEXP %s 
+			 AND CHAR_LENGTH(canonical_sku) <= 6",
+			'^[0-9]+$'
+		));
+
+		$next_sku = intval($max_sku ?? 0) + 1;
+
+		// Validar que no exceda 6 dígitos (999999)
+		if ($next_sku > 999999) {
+			wp_send_json_error(['message' => 'Se ha alcanzado el límite máximo de SKUs numéricos (999999)']);
+		}
+
+		// Buscar huecos por race condition (si algo se insertó justo ahora)
+		$existing = $wpdb->get_var($wpdb->prepare(
+			"SELECT id FROM {$prefix}producto_base WHERE canonical_sku = %s LIMIT 1",
+			(string) $next_sku
+		));
+
+		if ($existing) {
+			// Hay un hueco, incrementar hasta encontrar disponible
+			for ($i = $next_sku + 1; $i <= 999999; $i++) {
+				$check = $wpdb->get_var($wpdb->prepare(
+					"SELECT id FROM {$prefix}producto_base WHERE canonical_sku = %s LIMIT 1",
+					(string) $i
+				));
+				if (!$check) {
+					$next_sku = $i;
+					break;
+				}
+			}
+
+			if ($existing) {
+				wp_send_json_error(['message' => 'No hay SKUs disponibles en el rango numérico']);
+			}
+		}
+
+		wp_send_json_success(['next_sku' => (string) $next_sku]);
+	}
+
+	/**
+	 * Fusionar stub Solo Online (source) dentro de un Local (target).
+	 * Transfiere Woo, códigos proveedor, barcodes y soft-delete del stub.
+	 * No llama a wp_send_json (usable desde AJAX o reparación).
+	 *
+	 * @param int   $source_id Stub Solo Online
+	 * @param int   $target_id Local destino
+	 * @param array $opts      allow_deleted_source, skip_woo_if_target_has_same
+	 * @return array|WP_Error
+	 */
+	public function merge_stub_into_local($source_id, $target_id, $opts = []) {
+		global $wpdb;
+		$prefix = $wpdb->prefix . 'riverso_';
+
+		$source_id = absint($source_id);
+		$target_id = absint($target_id);
+		$allow_deleted_source = !empty($opts['allow_deleted_source']);
+
+		if (!$source_id || !$target_id || $source_id === $target_id) {
+			return new WP_Error('invalid_ids', 'IDs de producto inválidos');
+		}
+
+		$source_sql = "SELECT id, canonical_sku, nombre_canonico, woocommerce_product_id, woocommerce_variation_id, deleted_at
+			 FROM {$prefix}producto_base WHERE id = %d";
+		if (!$allow_deleted_source) {
+			$source_sql .= ' AND deleted_at IS NULL';
+		}
+		$source = $wpdb->get_row($wpdb->prepare($source_sql, $source_id), ARRAY_A);
+
+		if (!$source) {
+			return new WP_Error('source_missing', 'Producto stub no encontrado');
+		}
+
+		$target = $wpdb->get_row($wpdb->prepare(
+			"SELECT id, canonical_sku, nombre_canonico, woocommerce_product_id, woocommerce_variation_id
+			 FROM {$prefix}producto_base WHERE id = %d AND deleted_at IS NULL",
+			$target_id
+		), ARRAY_A);
+
+		if (!$target) {
+			return new WP_Error('target_missing', 'Producto Local no encontrado');
+		}
+
+		$transferred = [
+			'woo' => false,
+			'codes' => 0,
+			'barcodes' => 0,
+			'equivalence_members' => 0,
+		];
+
+		// Resolver Woo a transferir (desde source; si source ya no lo tiene, usar el del target si ya fue movido)
+		$raw_woo = absint($source['woocommerce_product_id'] ?: 0);
+		$raw_var = absint($source['woocommerce_variation_id'] ?: 0);
+		$woo_id_to_link = $raw_var ?: $raw_woo;
+
+		$target_has_woo = absint($target['woocommerce_product_id'] ?: 0) || absint($target['woocommerce_variation_id'] ?: 0);
+
+		if ($woo_id_to_link && function_exists('wc_get_product')) {
+			$woo_product = wc_get_product($woo_id_to_link);
+			if (!$woo_product) {
+				return new WP_Error('woo_missing', 'Producto WooCommerce no encontrado');
+			}
+
+			$woo_product_id = $woo_product->is_type('variation') ? $woo_product->get_parent_id() : $woo_id_to_link;
+			$woo_variation_id = $woo_product->is_type('variation') ? $woo_id_to_link : 0;
+
+			// Si target ya tiene el mismo Woo, no reasignar; si tiene otro, error.
+			// Caso especial: target quedó solo con el padre (variation_id=0) y el stub
+			// trae la variación hija → completar el split para no perder el SKU online.
+			if ($target_has_woo) {
+				$target_pid = absint($target['woocommerce_product_id'] ?: 0);
+				$target_vid = absint($target['woocommerce_variation_id'] ?: 0);
+				$same = ($target_pid === absint($woo_product_id) && $target_vid === absint($woo_variation_id));
+				$incomplete_parent_only = (
+					$target_pid === absint($woo_product_id)
+					&& $target_vid === 0
+					&& absint($woo_variation_id) > 0
+				);
+
+				if ($incomplete_parent_only) {
+					$wpdb->update(
+						"{$prefix}producto_base",
+						[
+							'woocommerce_product_id' => $woo_product_id,
+							'woocommerce_variation_id' => $woo_variation_id,
+							'match_estado_online' => 'CONFIRMED',
+							'match_origen_online' => 'human',
+							'matched_online_at' => current_time('mysql'),
+							'updated_at' => current_time('mysql'),
+						],
+						['id' => $target_id],
+						['%d', '%d', '%s', '%s', '%s', '%s'],
+						['%d']
+					);
+					$transferred['woo'] = true;
+				} elseif (!$same && !empty($opts['force_replace_target_woo'])) {
+					// Destino tiene otro Woo: limpiar y continuar con el transfer del source
+					$wpdb->update(
+						"{$prefix}producto_base",
+						[
+							'woocommerce_product_id' => null,
+							'woocommerce_variation_id' => null,
+							'updated_at' => current_time('mysql'),
+						],
+						['id' => $target_id],
+						['%d', '%d', '%s'],
+						['%d']
+					);
+					$target_has_woo = false;
+					$target['woocommerce_product_id'] = null;
+					$target['woocommerce_variation_id'] = null;
+				} elseif (!$same && empty($opts['skip_woo_if_target_has_same'])) {
+					return new WP_Error(
+						'target_has_woo',
+						'Este Local ya está vinculado a otro WooCommerce (ID: '
+						. ($target['woocommerce_product_id'] ?: $target['woocommerce_variation_id'])
+						. '). Desvincula primero si deseas reasignar.'
+					);
+				}
+			}
+			
+			if (!$target_has_woo) {
+				// Liberar Woo del stub antes de asignar (ux_wc_ref)
+				$wpdb->update(
+					"{$prefix}producto_base",
+					[
+						'woocommerce_product_id' => null,
+						'woocommerce_variation_id' => null,
+						'updated_at' => current_time('mysql'),
+					],
+					['id' => $source_id],
+					['%d', '%d', '%s'],
+					['%d']
+				);
+
+				// Conflicto: otro Local (no source/target) ya tiene este par WC
+				$existing = $wpdb->get_row($wpdb->prepare(
+					"SELECT id FROM {$prefix}producto_base
+					 WHERE woocommerce_product_id = %d AND woocommerce_variation_id = %d
+					 AND id NOT IN (%d, %d) AND deleted_at IS NULL",
+					$woo_product_id,
+					$woo_variation_id,
+					$source_id,
+					$target_id
+				));
+				if ($existing) {
+					return new WP_Error(
+						'woo_conflict',
+						'Este producto WooCommerce ya está vinculado a otro producto local (#' . $existing->id . ')'
+					);
+				}
+
+				$wpdb->update(
+					"{$prefix}producto_base",
+					[
+						'woocommerce_product_id' => $woo_product_id,
+						'woocommerce_variation_id' => $woo_variation_id,
+						'match_estado_online' => 'CONFIRMED',
+						'match_origen_online' => 'human',
+						'matched_online_at' => current_time('mysql'),
+						'updated_at' => current_time('mysql'),
+					],
+					['id' => $target_id],
+					['%d', '%d', '%s', '%s', '%s', '%s'],
+					['%d']
+				);
+				$transferred['woo'] = true;
+			}
+		} elseif (!$target_has_woo && !$allow_deleted_source) {
+			return new WP_Error('no_woo', 'El stub no tiene Woo vinculado');
+		}
+
+		// Transferir códigos proveedor (producto_proveedor)
+		$codes = $wpdb->get_results($wpdb->prepare(
+			"SELECT id, proveedor_id, codigo_proveedor FROM {$prefix}producto_proveedor WHERE producto_base_id = %d",
+			$source_id
+		), ARRAY_A);
+
+		foreach ($codes as $code) {
+			// Si el target ya tiene el mismo proveedor+código, dejar el del target y desvincular el del stub
+			$dup = $wpdb->get_var($wpdb->prepare(
+				"SELECT id FROM {$prefix}producto_proveedor
+				 WHERE proveedor_id = %d AND codigo_proveedor = %s AND producto_base_id = %d AND id != %d",
+				$code['proveedor_id'],
+				$code['codigo_proveedor'],
+				$target_id,
+				$code['id']
+			));
+			if ($dup) {
+				// Código ya en target: solo desasignar del stub (no borrar histórico)
+				$wpdb->update(
+					"{$prefix}producto_proveedor",
+					['producto_base_id' => null, 'updated_at' => current_time('mysql')],
+					['id' => $code['id']],
+					['%d', '%s'],
+					['%d']
+				);
+				continue;
+			}
+
+			$ok = $wpdb->update(
+				"{$prefix}producto_proveedor",
+				['producto_base_id' => $target_id, 'updated_at' => current_time('mysql')],
+				['id' => $code['id']],
+				['%d', '%s'],
+				['%d']
+			);
+			if ($ok !== false) {
+				$transferred['codes']++;
+			}
+		}
+
+		// Transferir barcodes
+		$barcodes = $wpdb->get_results($wpdb->prepare(
+			"SELECT id, codigo FROM {$prefix}codigo_barra WHERE producto_base_id = %d",
+			$source_id
+		), ARRAY_A);
+
+		foreach ($barcodes as $bc) {
+			$dup = $wpdb->get_var($wpdb->prepare(
+				"SELECT id FROM {$prefix}codigo_barra WHERE codigo = %s AND producto_base_id = %d AND id != %d",
+				$bc['codigo'],
+				$target_id,
+				$bc['id']
+			));
+			if ($dup) {
+				$wpdb->delete("{$prefix}codigo_barra", ['id' => $bc['id']], ['%d']);
+				continue;
+			}
+			$ok = $wpdb->update(
+				"{$prefix}codigo_barra",
+				['producto_base_id' => $target_id],
+				['id' => $bc['id']],
+				['%d'],
+				['%d']
+			);
+			if ($ok !== false) {
+				$transferred['barcodes']++;
+			}
+		}
+
+		// Transferir equivalence_members (evitar UNIQUE grupo+producto)
+		$members = $wpdb->get_results($wpdb->prepare(
+			"SELECT id, grupo_id FROM {$prefix}equivalence_members WHERE producto_base_id = %d",
+			$source_id
+		), ARRAY_A);
+
+		foreach ($members as $m) {
+			$dup = $wpdb->get_var($wpdb->prepare(
+				"SELECT id FROM {$prefix}equivalence_members WHERE grupo_id = %d AND producto_base_id = %d",
+				$m['grupo_id'],
+				$target_id
+			));
+			if ($dup) {
+				$wpdb->delete("{$prefix}equivalence_members", ['id' => $m['id']], ['%d']);
+				continue;
+			}
+			$ok = $wpdb->update(
+				"{$prefix}equivalence_members",
+				['producto_base_id' => $target_id],
+				['id' => $m['id']],
+				['%d'],
+				['%d']
+			);
+			if ($ok !== false) {
+				$transferred['equivalence_members']++;
+			}
+		}
+
+		// Soft-delete del stub (si aún no está borrado)
+		if (empty($source['deleted_at'])) {
+			$wpdb->update(
+				"{$prefix}producto_base",
+				[
+					'woocommerce_product_id' => null,
+					'woocommerce_variation_id' => null,
+					'deleted_at' => current_time('mysql'),
+					'estado' => 'eliminado',
+					'updated_at' => current_time('mysql'),
+				],
+				['id' => $source_id],
+				['%d', '%d', '%s', '%s', '%s'],
+				['%d']
+			);
+		} else {
+			// Asegurar que el stub soft-deleted no conserve Woo
+			$wpdb->update(
+				"{$prefix}producto_base",
+				[
+					'woocommerce_product_id' => null,
+					'woocommerce_variation_id' => null,
+					'updated_at' => current_time('mysql'),
+				],
+				['id' => $source_id],
+				['%d', '%d', '%s'],
+				['%d']
+			);
+		}
+
+		// Cerrar tarea de código proveedor en el target si ya tiene códigos
+		$code_count = (int) $wpdb->get_var($wpdb->prepare(
+			"SELECT COUNT(*) FROM {$prefix}producto_proveedor WHERE producto_base_id = %d AND activo = 1",
+			$target_id
+		));
+		if ($code_count > 0) {
+			$this->close_counterpart_task($target_id, 'relacionar_producto_proveedor');
+		}
+
+		// Auditoría: snapshot completo del merge (reversible)
+		$target_after_merge = $wpdb->get_row($wpdb->prepare(
+			"SELECT id, canonical_sku, nombre_canonico, woocommerce_product_id, woocommerce_variation_id FROM {$prefix}producto_base WHERE id = %d",
+			$target_id
+		), ARRAY_A);
+
+		$old_value_snapshot = [
+			'source' => [
+				'id' => $source['id'],
+				'canonical_sku' => $source['canonical_sku'],
+				'nombre_canonico' => $source['nombre_canonico'],
+				'woocommerce_product_id' => $source['woocommerce_product_id'],
+				'woocommerce_variation_id' => $source['woocommerce_variation_id'],
+				'deleted_at' => $source['deleted_at'],
+				'codes' => array_column($codes, 'id'),
+				'barcodes' => array_column($barcodes, 'id'),
+			],
+			'target' => [
+				'id' => $target['id'],
+				'canonical_sku' => $target['canonical_sku'],
+				'nombre_canonico' => $target['nombre_canonico'],
+				'woocommerce_product_id' => $target['woocommerce_product_id'],
+				'woocommerce_variation_id' => $target['woocommerce_variation_id'],
+			],
+		];
+
+		$new_value_snapshot = [
+			'source_id' => $source_id,
+			'target_id' => $target_id,
+			'target_after' => [
+				'id' => $target_after_merge['id'],
+				'woocommerce_product_id' => $target_after_merge['woocommerce_product_id'],
+				'woocommerce_variation_id' => $target_after_merge['woocommerce_variation_id'],
+			],
+			'transferred' => $transferred,
+			'undoable' => true,
+			'undone' => false,
+		];
+
+		if (class_exists('Riverso_POS_Audit')) {
+			Riverso_POS_Audit::log('product_merged', 'producto_base', $target_id, [
+				'actor_type' => 'human',
+				'old_value' => $old_value_snapshot,
+				'new_value' => $new_value_snapshot,
+				'details' => sprintf('Merge #%d→#%d: transferidos %d código(s), %d barcode(s); stub soft-deleted',
+					$source_id, $target_id, $transferred['codes'], $transferred['barcodes']),
+			]);
+		}
+
+		return [
+			'source_id' => $source_id,
+			'target_id' => $target_id,
+			'transferred' => $transferred,
+		];
+	}
+
+	/**
+	 * AJAX: Adoptar Local a stub Solo Online (transferir Woo + códigos + soft-delete stub)
+	 * source_id: stub Solo Online con Woo
+	 * target_id: Local existente que recibirá el Woo y los códigos
+	 */
+	public function ajax_adopt_local() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$source_id = absint($_POST['source_id'] ?? 0);
+		$target_id = absint($_POST['target_id'] ?? 0);
+		$confirm_merge = !empty($_POST['confirm_merge']);
+
+		if (!$source_id || !$target_id) {
+			wp_send_json_error(['message' => 'IDs de producto inválidos']);
+		}
+
+		global $wpdb;
+		$prefix = $wpdb->prefix . 'riverso_';
+		$source = $wpdb->get_row($wpdb->prepare(
+			"SELECT id, woocommerce_product_id, woocommerce_variation_id FROM {$prefix}producto_base WHERE id = %d",
+			$source_id
+		), ARRAY_A);
+		$woo_id = absint($source['woocommerce_variation_id'] ?? 0) ?: absint($source['woocommerce_product_id'] ?? 0);
+		$preview = $woo_id ? $this->build_online_merge_preview($woo_id, $target_id) : [
+			'needs_merge' => true,
+			'source_id' => $source_id,
+			'target_id' => $target_id,
+			'warnings' => [[
+				'type' => 'adopt_preview',
+				'message' => sprintf('Se fusionará el stub #%d en el Local #%d (Woo + códigos) y el stub se eliminará.', $source_id, $target_id),
+				'severity' => 'warning',
+			]],
+		];
+		// En adopt el source es siempre source_id (aunque build_online_merge_preview lo detecte por Woo)
+		$preview['source_id'] = $source_id;
+		$preview['target_id'] = $target_id;
+		$preview['needs_merge'] = true;
+
+		if (!$confirm_merge) {
+			wp_send_json_error([
+				'message' => 'Confirma el merge para vincular este Local.',
+				'needs_merge' => true,
+				'merge' => $preview,
+			]);
+		}
+
+		$result = $this->merge_stub_into_local($source_id, $target_id, [
+			'force_replace_target_woo' => true,
+		]);
+
+		if (is_wp_error($result)) {
+			wp_send_json_error([
+				'message' => $result->get_error_message(),
+				'needs_merge' => true,
+				'merge' => $preview,
+			]);
+		}
+
+		$updated_target = $this->get_product($target_id);
+
+		wp_send_json_success([
+			'message' => sprintf(
+				'Local adoptado: Woo transferido, %d código(s) y %d barcode(s) heredados; stub eliminado',
+				$result['transferred']['codes'],
+				$result['transferred']['barcodes']
+			),
+			'transferred' => $result['transferred'],
+			'item' => $updated_target,
+		]);
+	}
+
+	/**
+	 * AJAX: Crear nuevo producto WooCommerce (legacy del portal)
+	 */
+	public function ajax_create_woo() {
 		check_ajax_referer('riverso_pos_nonce', 'nonce');
 		if (!current_user_can('riverso_manage_products')) {
 			wp_send_json_error(['message' => 'Sin permisos'], 403);
@@ -3088,6 +3899,236 @@ class Riverso_Product_Module {
 		);
 
 		wp_send_json_success(['product_id' => $product_id, 'woo_id' => $woo_id]);
+	}
+
+	/**
+	 * AJAX: Deshacer merge de productos (UNDO)
+	 * Revierte: Woo del target, códigos, barcodes; restaura source
+	 */
+	public function ajax_undo_merge() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$audit_id = absint($_POST['audit_id'] ?? 0);
+		if (!$audit_id) {
+			wp_send_json_error(['message' => 'ID de auditoría requerido']);
+		}
+
+		global $wpdb;
+		$prefix = $wpdb->prefix . 'riverso_';
+
+		// Obtener el registro de audit product_merged
+		$audit = $wpdb->get_row($wpdb->prepare(
+			"SELECT id, action, entity_id, old_value, new_value FROM {$prefix}riverso_audit_log
+			 WHERE id = %d AND action = 'product_merged'",
+			$audit_id
+		), ARRAY_A);
+
+		if (!$audit) {
+			wp_send_json_error(['message' => 'Registro de merge no encontrado']);
+		}
+
+		$old = json_decode($audit['old_value'], true);
+		$new = json_decode($audit['new_value'], true);
+
+		if (!$old || !$new || empty($new['undone'])) {
+			wp_send_json_error(['message' => 'Snapshot de merge inválido o ya deshecho']);
+		}
+
+		$source_id = $new['source_id'];
+		$target_id = $new['target_id'];
+		$transferred = $new['transferred'] ?? [];
+
+		// Validar estado: source debe estar soft-deleted, target debe tener el Woo del merge
+		$source_now = $wpdb->get_row($wpdb->prepare(
+			"SELECT id, deleted_at, woocommerce_product_id, woocommerce_variation_id FROM {$prefix}producto_base WHERE id = %d",
+			$source_id
+		), ARRAY_A);
+		$target_now = $wpdb->get_row($wpdb->prepare(
+			"SELECT id, woocommerce_product_id, woocommerce_variation_id FROM {$prefix}producto_base WHERE id = %d",
+			$target_id
+		), ARRAY_A);
+
+		if (!$source_now || !$target_now) {
+			wp_send_json_error(['message' => 'Productos no encontrados en estado actual']);
+		}
+
+		if (empty($source_now['deleted_at'])) {
+			wp_send_json_error(['message' => 'El origen no está soft-deleted. El merge puede haber sido modificado.']);
+		}
+
+		// Validar que el target tenga el Woo del merge (no debe haber cambiado)
+		$expected_woo_pid = $new['target_after']['woocommerce_product_id'] ?? null;
+		$expected_woo_vid = $new['target_after']['woocommerce_variation_id'] ?? null;
+		if ((int) $target_now['woocommerce_product_id'] !== (int) $expected_woo_pid ||
+		    (int) $target_now['woocommerce_variation_id'] !== (int) $expected_woo_vid) {
+			wp_send_json_error(['message' => 'El target ha recibido otro Woo después del merge. No se puede deshacer.']);
+		}
+
+		// UNDO: Revertir cambios
+		// 1. Mover códigos/barcodes de target → source
+		if (!empty($transferred['codes'])) {
+			$source_codes = $old['source']['codes'] ?? [];
+			foreach ($source_codes as $code_id) {
+				$wpdb->update(
+					"{$prefix}producto_proveedor",
+					['producto_base_id' => $source_id, 'updated_at' => current_time('mysql')],
+					['id' => $code_id],
+					['%d', '%s'],
+					['%d']
+				);
+			}
+		}
+
+		if (!empty($transferred['barcodes'])) {
+			$source_barcodes = $old['source']['barcodes'] ?? [];
+			foreach ($source_barcodes as $bc_id) {
+				$wpdb->update(
+					"{$prefix}codigo_barra",
+					['producto_base_id' => $source_id],
+					['id' => $bc_id],
+					['%d'],
+					['%d']
+				);
+			}
+		}
+
+		// 2. Quitar Woo del target (o restaurar Woo previo si lo había antes del merge)
+		$old_target_woo_pid = $old['target']['woocommerce_product_id'] ?? null;
+		$old_target_woo_vid = $old['target']['woocommerce_variation_id'] ?? null;
+
+		$wpdb->update(
+			"{$prefix}producto_base",
+			[
+				'woocommerce_product_id' => $old_target_woo_pid,
+				'woocommerce_variation_id' => $old_target_woo_vid,
+				'updated_at' => current_time('mysql'),
+			],
+			['id' => $target_id],
+			['%d', '%d', '%s'],
+			['%d']
+		);
+
+		// 3. Restaurar Woo en source y quitar soft-delete
+		$old_source_woo_pid = $old['source']['woocommerce_product_id'] ?? null;
+		$old_source_woo_vid = $old['source']['woocommerce_variation_id'] ?? null;
+
+		$wpdb->update(
+			"{$prefix}producto_base",
+			[
+				'woocommerce_product_id' => $old_source_woo_pid,
+				'woocommerce_variation_id' => $old_source_woo_vid,
+				'deleted_at' => null,
+				'estado' => 'activo',
+				'updated_at' => current_time('mysql'),
+			],
+			['id' => $source_id],
+			['%d', '%d', '%s', '%s', '%s'],
+			['%d']
+		);
+
+		// Marcar audit original como undone
+		$wpdb->update(
+			"{$prefix}riverso_audit_log",
+			['new_value' => wp_json_encode(array_merge($new, ['undone' => true]))],
+			['id' => $audit_id],
+			['%s'],
+			['%d']
+		);
+
+		// Log: product_merge_undone
+		if (class_exists('Riverso_POS_Audit')) {
+			Riverso_POS_Audit::log('product_merge_undone', 'producto_base', $target_id, [
+				'actor_type' => 'human',
+				'details' => sprintf('UNDO merge #%d←#%d (audit_id: %d)', $target_id, $source_id, $audit_id),
+			]);
+		}
+
+		wp_send_json_success([
+			'message' => 'Merge deshecho: códigos y Woo restaurados',
+			'source_id' => $source_id,
+			'target_id' => $target_id,
+		]);
+	}
+
+	/**
+	 * AJAX: Rehacer merge de productos (REDO)
+	 * Reaplicar merge_stub_into_local si el UNDO fue exitoso
+	 */
+	public function ajax_redo_merge() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$audit_id = absint($_POST['audit_id'] ?? 0);
+		if (!$audit_id) {
+			wp_send_json_error(['message' => 'ID de auditoría requerido']);
+		}
+
+		global $wpdb;
+		$prefix = $wpdb->prefix . 'riverso_';
+
+		// Obtener el registro de audit product_merged y verificar que esté undone
+		$audit = $wpdb->get_row($wpdb->prepare(
+			"SELECT id, action, entity_id, old_value, new_value FROM {$prefix}riverso_audit_log
+			 WHERE id = %d AND action = 'product_merged'",
+			$audit_id
+		), ARRAY_A);
+
+		if (!$audit) {
+			wp_send_json_error(['message' => 'Registro de merge no encontrado']);
+		}
+
+		$new = json_decode($audit['new_value'], true);
+		if (!$new || empty($new['undone'])) {
+			wp_send_json_error(['message' => 'Solo se puede REDO un merge que fue deshecho (UNDO)']);
+		}
+
+		$source_id = $new['source_id'];
+		$target_id = $new['target_id'];
+
+		// Verificar que el source sea restaurable (NO debe estar hard-deleted)
+		$source_check = $wpdb->get_row($wpdb->prepare(
+			"SELECT id FROM {$prefix}producto_base WHERE id = %d",
+			$source_id
+		), ARRAY_A);
+
+		if (!$source_check) {
+			wp_send_json_error(['message' => 'El producto origen fue hard-deleted. No se puede hacer REDO.']);
+		}
+
+		// Reaplicar el merge
+		$result = $this->merge_stub_into_local($source_id, $target_id, ['force_replace_target_woo' => true]);
+
+		if (is_wp_error($result)) {
+			wp_send_json_error(['message' => $result->get_error_message()]);
+		}
+
+		// Marcar audit como no undone (volver a "live")
+		$wpdb->update(
+			"{$prefix}riverso_audit_log",
+			['new_value' => wp_json_encode(array_merge($new, ['undone' => false]))],
+			['id' => $audit_id],
+			['%s'],
+			['%d']
+		);
+
+		// Log: product_merge_redone
+		if (class_exists('Riverso_POS_Audit')) {
+			Riverso_POS_Audit::log('product_merge_redone', 'producto_base', $target_id, [
+				'actor_type' => 'human',
+				'details' => sprintf('REDO merge #%d←#%d (audit_id: %d)', $target_id, $source_id, $audit_id),
+			]);
+		}
+
+		wp_send_json_success([
+			'message' => 'Merge rehecho: Woo y códigos transferidos nuevamente',
+			'source_id' => $source_id,
+			'target_id' => $target_id,
+		]);
 	}
 }
 

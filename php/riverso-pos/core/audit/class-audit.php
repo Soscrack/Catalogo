@@ -28,6 +28,11 @@ class Riverso_POS_Audit {
         'stock_adjusted'        => 'Stock ajustado',
         'online_match_evaluated'=> 'Match online evaluado',
         'online_match_reviewed' => 'Match online revisado',
+        'product_online_linked' => 'Producto online vinculado',
+        'product_merged'        => 'Merge producto (Online→Local)',
+        'product_merge_undone'  => 'Merge deshecho',
+        'product_merge_redone'  => 'Merge rehecho',
+        'product_adopted_local' => 'Producto adoptado (legacy)',
         
         // Cotizaciones recibidas
         'quote_received'        => 'Cotización recibida',

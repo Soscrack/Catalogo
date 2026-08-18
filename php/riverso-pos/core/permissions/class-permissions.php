@@ -111,6 +111,14 @@ class Riverso_POS_Permissions {
         // === CÓDIGOS DE BARRA ===
         'riverso_scan_barcodes'      => 'Escanear códigos de barra',
         'riverso_assign_barcodes'    => 'Asignar códigos de barra',
+
+        // === ÓRDENES DE IMPRESIÓN ===
+        'riverso_view_print_orders'    => 'Ver órdenes de impresión',
+        'riverso_create_print_orders'  => 'Crear órdenes de impresión',
+        'riverso_approve_print_orders' => 'Aprobar órdenes de impresión',
+        'riverso_print_orders'         => 'Ejecutar impresión de órdenes',
+        'riverso_cancel_print_orders'  => 'Cancelar órdenes de impresión',
+        'riverso_edit_print_order_price' => 'Cambiar precio solo en la impresión (no en el producto)',
         
         // === REPORTES ===
         'riverso_view_reports'       => 'Ver reportes',
@@ -214,6 +222,14 @@ class Riverso_POS_Permissions {
             'riverso_scan_barcodes',
             'riverso_assign_barcodes',
         ],
+        'Impresiones' => [
+            'riverso_view_print_orders',
+            'riverso_create_print_orders',
+            'riverso_approve_print_orders',
+            'riverso_print_orders',
+            'riverso_cancel_print_orders',
+            'riverso_edit_print_order_price',
+        ],
         'Reportes' => [
             'riverso_view_reports',
             'riverso_export_reports',
@@ -254,6 +270,8 @@ class Riverso_POS_Permissions {
                 'riverso_view_tasks',
                 'riverso_complete_tasks',
                 'riverso_scan_barcodes',
+                'riverso_view_print_orders',
+                'riverso_create_print_orders',
             ]
         ],
         
@@ -277,6 +295,11 @@ class Riverso_POS_Permissions {
                 'riverso_manage_packaging',
                 'riverso_generate_ean13',
                 'riverso_print_labels',
+                'riverso_view_print_orders',
+                'riverso_create_print_orders',
+                'riverso_approve_print_orders',
+                'riverso_print_orders',
+                'riverso_cancel_print_orders',
             ]
         ],
         
@@ -306,6 +329,8 @@ class Riverso_POS_Permissions {
                 'riverso_view_tasks',
                 'riverso_create_tasks',
                 'riverso_complete_tasks',
+                'riverso_view_print_orders',
+                'riverso_create_print_orders',
             ]
         ],
         
@@ -324,6 +349,9 @@ class Riverso_POS_Permissions {
                 'riverso_view_tasks',
                 'riverso_complete_tasks',
                 'riverso_scan_barcodes',
+                'riverso_view_print_orders',
+                'riverso_create_print_orders',
+                'riverso_print_orders',
             ]
         ],
         
@@ -359,6 +387,12 @@ class Riverso_POS_Permissions {
                 'riverso_create_tasks',
                 'riverso_complete_tasks',
                 'riverso_view_reports',
+                'riverso_view_print_orders',
+                'riverso_create_print_orders',
+                'riverso_approve_print_orders',
+                'riverso_print_orders',
+                'riverso_cancel_print_orders',
+                'riverso_edit_print_order_price',
             ]
         ],
         
@@ -636,6 +670,11 @@ class Riverso_POS_Permissions {
         // Códigos de Barra
         if ($can('riverso_scan_barcodes') || $can('riverso_assign_barcodes')) {
             $modules['barcodes'] = ['icon' => 'barcode', 'label' => 'Códigos de Barra'];
+        }
+
+        // Órdenes de impresión
+        if ($can('riverso_view_print_orders') || $can('riverso_print_labels')) {
+            $modules['impresiones'] = ['icon' => 'printer', 'label' => 'Impresiones'];
         }
         
         // Códigos Proveedor / SKU Links

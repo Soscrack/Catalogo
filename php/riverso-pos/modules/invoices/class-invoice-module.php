@@ -50,6 +50,8 @@ class Riverso_Invoice_Module {
         add_action('wp_ajax_riverso_get_invoice', [$this, 'ajax_get_invoice']);
         add_action('wp_ajax_riverso_update_invoice_status', [$this, 'ajax_update_status']);
         add_action('wp_ajax_riverso_link_code', [$this, 'ajax_link_code']);
+        add_action('wp_ajax_riverso_get_sku_mapping_history', [$this, 'ajax_get_sku_mapping_history']);
+        add_action('wp_ajax_riverso_search_sku_catalog', [$this, 'ajax_search_sku_catalog']);
         add_action('wp_ajax_riverso_get_invoices_list', [$this, 'ajax_get_invoices_list']);
         
         // Nuevos handlers para recepción física
@@ -67,6 +69,7 @@ class Riverso_Invoice_Module {
         add_action('wp_ajax_riverso_lookup_supplier_rut', [$this, 'ajax_lookup_supplier_rut']);
         add_action('wp_ajax_riverso_repair_invoice_skus', [$this, 'ajax_repair_invoice_skus']);
         add_action('wp_ajax_riverso_delete_invoice', [$this, 'ajax_delete_invoice']);
+        add_action('wp_ajax_riverso_update_document_type', [$this, 'ajax_update_document_type']);
         
         // Handlers para pagos agrupados
         add_action('wp_ajax_riverso_create_payment_ticket', [$this, 'ajax_create_payment_ticket']);
@@ -369,9 +372,9 @@ class Riverso_Invoice_Module {
 
         $force_subtipo = sanitize_text_field($options['documento_subtipo'] ?? '');
         $link_to_factura_id = intval($options['link_to_factura_id'] ?? 0);
-        $modo_ingreso = sanitize_text_field($options['modo_ingreso'] ?? riverso_get_setting('default_intake_mode', 'recepcion'));
+        $modo_ingreso = sanitize_text_field($options['modo_ingreso'] ?? riverso_get_setting('default_intake_mode', 'solo_costos'));
         if (!in_array($modo_ingreso, ['recepcion', 'solo_costos'], true)) {
-            $modo_ingreso = 'recepcion';
+            $modo_ingreso = 'solo_costos';
         }
 
         $is_guia_despacho = ((int) ($factura_data['tipo_dte'] ?? 0) === 52)
@@ -484,8 +487,9 @@ class Riverso_Invoice_Module {
                 'modo_ingreso' => in_array($documento_subtipo, ['productos', 'guia_despacho'], true)
                     ? ($documento_subtipo === 'guia_despacho' ? 'solo_costos' : $modo_ingreso)
                     : 'solo_costos',
+                'tipo_confirmado' => !empty($options['tipo_confirmado']) ? 1 : 0,
             ],
-            ['%d', '%s', '%d', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%d', '%s', '%d', '%s', '%s', '%d', '%f', '%s']
+            ['%d', '%s', '%d', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%d', '%s', '%d', '%s', '%s', '%d', '%f', '%s', '%d']
         );
 
         if (!$result) {
@@ -519,7 +523,17 @@ class Riverso_Invoice_Module {
                     $codigo_proveedor,
                     $item['codigos'] ?? []
                 );
-                $codigo_local = $mapping['sku_local'] ?? null;
+                $codigo_local = riverso_usable_local_sku($mapping['sku_local'] ?? null, $codigo_proveedor);
+                if ($codigo_local) {
+                    $conflict = $this->intake()->get_sku_assignment_conflict(
+                        $codigo_local,
+                        $proveedor_id,
+                        $codigo_proveedor
+                    );
+                    if ($conflict && ($conflict['code'] ?? '') === 'sku_owned_elsewhere') {
+                        $codigo_local = null;
+                    }
+                }
                 if ($codigo_local) {
                     $product_id = $mapping['product_id']
                         ?? $this->intake()->resolve_product_id_for_local_sku($codigo_local, $codigo_proveedor);
@@ -634,6 +648,11 @@ class Riverso_Invoice_Module {
                 $factura_data['items'],
                 $documento_subtipo === 'guia_despacho' ? 'solo_costos' : $modo_ingreso
             );
+        }
+
+        // Tarea de confirmar tipo: todos los XML no confirmados (incluye carga masiva y flete/NC/gastos).
+        if (empty($options['tipo_confirmado'])) {
+            $this->intake()->create_document_type_confirmation_task((int) $factura_id);
         }
 
         // Actualizar estado de factura según items (solo productos)
@@ -915,12 +934,22 @@ class Riverso_Invoice_Module {
             ));
         }
 
-        // Las NC no recalculan estado por ítems; respetan recibido / sin_vincular
+        // Las NC: vinculado al folio origen o pendiente
         if ($factura && ($factura->documento_subtipo ?? '') === 'nota_credito') {
-            return $wpdb->get_var($wpdb->prepare(
-                "SELECT estado FROM {$prefix}facturas WHERE id = %d",
+            $has_origin = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$prefix}factura_referencias
+                 WHERE factura_id = %d AND factura_origen_id IS NOT NULL AND factura_origen_id > 0",
                 (int) $factura_id
             ));
+            $estado_nc = $has_origin > 0 ? 'recibido' : 'sin_vincular';
+            $wpdb->update(
+                "{$prefix}facturas",
+                ['estado' => $estado_nc],
+                ['id' => (int) $factura_id],
+                ['%s'],
+                ['%d']
+            );
+            return $estado_nc;
         }
 
         // Gastos operacionales quedan procesados (sin flujo de SKU)
@@ -979,21 +1008,36 @@ class Riverso_Invoice_Module {
             wp_send_json_error(['message' => 'No se recibió archivo XML']);
         }
 
-        $documento_tipo = sanitize_text_field($_POST['documento_tipo'] ?? 'productos');
-        if (!in_array($documento_tipo, ['productos', 'envio', 'nota_credito', 'gastos', 'guia_despacho'], true)) {
+        $documento_tipo = sanitize_text_field($_POST['documento_tipo'] ?? 'por_confirmar');
+        $upload_mode = sanitize_text_field($_POST['upload_mode'] ?? 'single');
+        $is_bulk = $upload_mode === 'bulk';
+
+        $tipos_validos = ['productos', 'envio', 'nota_credito', 'gastos', 'guia_despacho'];
+        $tipo_confirmado = 0;
+        if ($documento_tipo === 'por_confirmar' || $documento_tipo === '') {
+            $sugerido = sanitize_text_field($_POST['tipo_sugerido'] ?? 'productos');
+            $documento_tipo = in_array($sugerido, $tipos_validos, true) ? $sugerido : 'productos';
+            $tipo_confirmado = 0;
+        } elseif (!in_array($documento_tipo, $tipos_validos, true)) {
             $documento_tipo = 'productos';
+            $tipo_confirmado = 0;
+        } else {
+            // Carga individual: eligió un tipo concreto. Carga masiva: siempre queda pendiente.
+            $tipo_confirmado = $is_bulk ? 0 : 1;
+        }
+
+        if (isset($_POST['tipo_confirmado']) && $_POST['tipo_confirmado'] !== '') {
+            $tipo_confirmado = $is_bulk ? 0 : (intval($_POST['tipo_confirmado']) ? 1 : 0);
         }
 
         $link_to_factura_id = intval($_POST['link_to_factura_id'] ?? 0);
         $factura_origen_id = intval($_POST['factura_origen_id'] ?? 0);
         
-        // Detectar si es carga masiva
-        $upload_mode = sanitize_text_field($_POST['upload_mode'] ?? 'single');
-        $is_bulk = $upload_mode === 'bulk';
-        
-        // Default: carga masiva usa "solo_costos", carga individual usa configuración
-        $default_modo = $is_bulk ? 'solo_costos' : riverso_get_setting('default_intake_mode', 'recepcion');
-        $modo_ingreso = sanitize_text_field($_POST['modo_ingreso'] ?? $default_modo);
+        // Default: sin aumento de inventario (solo costos), en carga individual y masiva
+        $modo_ingreso = sanitize_text_field($_POST['modo_ingreso'] ?? 'solo_costos');
+        if (!in_array($modo_ingreso, ['recepcion', 'solo_costos'], true)) {
+            $modo_ingreso = 'solo_costos';
+        }
         
         // Forzar solo_costos para envíos, NC, gastos y guías de despacho
         if (in_array($documento_tipo, ['envio', 'nota_credito', 'gastos', 'guia_despacho'], true)) {
@@ -1005,6 +1049,7 @@ class Riverso_Invoice_Module {
             'factura_origen_id' => $documento_tipo === 'nota_credito' ? $factura_origen_id : 0,
             'reversa_inventario' => $documento_tipo === 'nota_credito' && !empty($_POST['reversa_inventario']),
             'documento_subtipo' => $documento_tipo,
+            'tipo_confirmado' => $tipo_confirmado,
             'modo_ingreso' => $modo_ingreso,
             'proveedor_modo' => sanitize_text_field($_POST['proveedor_modo'] ?? 'xml'),
             'proveedor_id' => intval($_POST['proveedor_id'] ?? 0),
@@ -1328,6 +1373,8 @@ class Riverso_Invoice_Module {
             wp_send_json_error(['message' => 'Factura no encontrada']);
         }
 
+        $factura['tipo_confirmado'] = (int) ($factura['tipo_confirmado'] ?? 0);
+
         $items = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$prefix}factura_items WHERE factura_id = %d ORDER BY numero_linea",
             $factura_id
@@ -1340,7 +1387,18 @@ class Riverso_Invoice_Module {
                 $row['proveedor_id'] = $proveedor_id;
             }
             $enriched = $this->enrich_factura_item_row($row);
-            return is_object($enriched) ? (array) $enriched : $enriched;
+            $as_array = is_object($enriched) ? (array) $enriched : $enriched;
+            $sku = trim((string) ($as_array['sku_local'] ?? ''));
+            $code = trim((string) ($as_array['codigo_proveedor'] ?? ''));
+            $as_array['sku_conflict'] = null;
+            if ($sku !== '' && $code !== '') {
+                $as_array['sku_conflict'] = $this->intake()->get_sku_assignment_conflict(
+                    $sku,
+                    $proveedor_id,
+                    $code
+                );
+            }
+            return $as_array;
         }, $items);
 
         $subtipo = $factura['documento_subtipo'] ?? 'productos';
@@ -1422,6 +1480,22 @@ class Riverso_Invoice_Module {
             (int) $factura_id
         ), ARRAY_A);
 
+        $factura['auditoria'] = [];
+        if (class_exists('Riverso_POS_Audit')) {
+            $logs = Riverso_POS_Audit::get_entity_history('invoice', (int) $factura_id, 30);
+            foreach ($logs ?: [] as $row) {
+                $factura['auditoria'][] = [
+                    'action' => $row->action,
+                    'action_label' => $row->action_label ?? $row->action,
+                    'user_name' => $row->user_name,
+                    'created_at' => $row->created_at,
+                    'details' => $row->details,
+                    'old_value' => $row->old_value_decoded,
+                    'new_value' => $row->new_value_decoded,
+                ];
+            }
+        }
+
         wp_send_json_success($factura);
     }
 
@@ -1459,18 +1533,158 @@ class Riverso_Invoice_Module {
     }
 
     /**
-     * AJAX: Vincular código proveedor con SKU local
+     * AJAX: Actualizar tipo de documento y marcar como confirmado
+     */
+    public function ajax_update_document_type() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_process_invoices')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        $factura_id = intval($_POST['factura_id'] ?? 0);
+        $documento_subtipo = sanitize_text_field($_POST['documento_subtipo'] ?? '');
+
+        $tipos_validos = ['productos', 'envio', 'nota_credito', 'guia_despacho', 'gastos'];
+        
+        if (!$factura_id || !in_array($documento_subtipo, $tipos_validos, true)) {
+            wp_send_json_error(['message' => 'Parámetros inválidos']);
+        }
+
+        $result = $this->apply_document_type($factura_id, $documento_subtipo);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+
+        wp_send_json_success([
+            'message' => 'Tipo de documento actualizado y confirmado',
+            'tipo' => $result['tipo'],
+            'estado' => $result['estado'],
+            'modo_ingreso' => $result['modo_ingreso'],
+        ]);
+    }
+
+    /**
+     * Aplica un tipo de documento: ítems, modo de ingreso, estado y auditoría.
+     */
+    public function apply_document_type($factura_id, $documento_subtipo) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $factura_id = (int) $factura_id;
+
+        $factura = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, folio, documento_subtipo, tipo_confirmado, modo_ingreso, estado
+             FROM {$prefix}facturas WHERE id = %d",
+            $factura_id
+        ));
+
+        if (!$factura) {
+            return new WP_Error('not_found', 'Factura no encontrada');
+        }
+
+        $tipo_anterior = $factura->documento_subtipo ?: 'productos';
+        $estado_anterior = $factura->estado;
+        $modo_anterior = $factura->modo_ingreso ?: 'solo_costos';
+        $ya_confirmado = (int) $factura->tipo_confirmado === 1;
+
+        $modo_ingreso = 'solo_costos';
+
+        $this->intake()->apply_item_tipos_for_subtipo($factura_id, $documento_subtipo);
+
+        $wpdb->update(
+            "{$prefix}facturas",
+            [
+                'documento_subtipo' => $documento_subtipo,
+                'tipo_confirmado' => 1,
+                'modo_ingreso' => $modo_ingreso,
+            ],
+            ['id' => $factura_id],
+            ['%s', '%d', '%s'],
+            ['%d']
+        );
+
+        $estado = $this->update_invoice_status($factura_id);
+
+        $task_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}tareas
+             WHERE tipo = 'confirmar_tipo_documento'
+               AND referencia_tipo = 'factura'
+               AND referencia_id = %d
+               AND estado NOT IN ('completada', 'cancelada')
+             LIMIT 1",
+            $factura_id
+        ));
+
+        if ($task_id) {
+            $wpdb->update(
+                "{$prefix}tareas",
+                ['estado' => 'completada', 'completado_en' => current_time('mysql')],
+                ['id' => $task_id],
+                ['%s', '%s'],
+                ['%d']
+            );
+        }
+
+        $labels = [
+            'productos' => 'Productos',
+            'envio' => 'Flete',
+            'nota_credito' => 'Nota de Crédito',
+            'guia_despacho' => 'Guía de Despacho',
+            'gastos' => 'Gastos',
+        ];
+
+        if (class_exists('Riverso_Audit_Module')) {
+            $action = ($tipo_anterior !== $documento_subtipo)
+                ? 'invoice_type_changed'
+                : 'invoice_type_confirmed';
+            Riverso_Audit_Module::get_instance()->log(
+                $action,
+                'invoice',
+                $factura_id,
+                [
+                    'documento_subtipo' => $tipo_anterior,
+                    'estado' => $estado_anterior,
+                    'modo_ingreso' => $modo_anterior,
+                    'tipo_confirmado' => $ya_confirmado ? 1 : 0,
+                ],
+                [
+                    'documento_subtipo' => $documento_subtipo,
+                    'estado' => $estado,
+                    'modo_ingreso' => $modo_ingreso,
+                    'tipo_confirmado' => 1,
+                ],
+                sprintf(
+                    'Folio %s: %s → %s (estado %s → %s)',
+                    $factura->folio,
+                    $labels[$tipo_anterior] ?? $tipo_anterior,
+                    $labels[$documento_subtipo] ?? $documento_subtipo,
+                    $estado_anterior,
+                    $estado
+                )
+            );
+        }
+
+        return [
+            'tipo' => $documento_subtipo,
+            'estado' => $estado,
+            'modo_ingreso' => $modo_ingreso,
+        ];
+    }
+
+    /**
+     * AJAX: Vincular / editar SKU local de un ítem de factura.
      */
     public function ajax_link_code() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
 
-        if (!current_user_can('riverso_manage_codes')) {
+        if (!current_user_can('riverso_manage_codes') && !current_user_can('riverso_process_invoices')) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
 
         $item_id = intval($_POST['item_id'] ?? 0);
         $sku_local = sanitize_text_field($_POST['sku_local'] ?? '');
-        $crear_mapeo = !empty($_POST['crear_mapeo']);
+        $force = !empty($_POST['force']);
+        $clear = !empty($_POST['clear']);
 
         if (!$item_id) {
             wp_send_json_error(['message' => 'ID de item requerido']);
@@ -1479,9 +1693,8 @@ class Riverso_Invoice_Module {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
-        // Obtener item y factura
         $item = $wpdb->get_row($wpdb->prepare(
-            "SELECT fi.*, f.proveedor_id 
+            "SELECT fi.*, f.proveedor_id, f.id AS factura_id, f.fecha_emision, f.folio
              FROM {$prefix}factura_items fi
              JOIN {$prefix}facturas f ON fi.factura_id = f.id
              WHERE fi.id = %d",
@@ -1493,69 +1706,73 @@ class Riverso_Invoice_Module {
         }
 
         $item = $this->enrich_factura_item_row($item);
-
-        // Verificar que el SKU local existe (producto_base o WooCommerce)
-        $product_id = $this->intake()->resolve_product_id_for_local_sku($sku_local, $item->codigo_proveedor);
-        if (!$product_id) {
-            wp_send_json_error(['message' => 'SKU local no encontrado en catálogo: ' . $sku_local]);
+        $codigo_proveedor = trim((string) ($item->codigo_proveedor ?? ''));
+        if ($codigo_proveedor === '') {
+            wp_send_json_error(['message' => 'El ítem no tiene código de proveedor']);
         }
 
-        // Actualizar item
-        $wpdb->update(
-            "{$prefix}factura_items",
-            [
-                'sku_local' => $sku_local,
-                'product_id' => $product_id,
-                'estado' => 'vinculado',
-            ],
-            ['id' => $item_id],
-            ['%s', '%d', '%s'],
-            ['%d']
-        );
+        if (!$clear && riverso_sku_equals_supplier_code($sku_local, $codigo_proveedor)) {
+            wp_send_json_error(['message' => 'El SKU local no puede ser el mismo código de proveedor. Ese código está sin usar.']);
+        }
 
-        // Crear mapeo permanente si se solicita
-        if ($crear_mapeo && !empty($item->codigo_proveedor)) {
-            $existing = $wpdb->get_var($wpdb->prepare(
-                "SELECT id FROM {$prefix}codigos 
-                 WHERE proveedor_id = %d AND codigo_proveedor = %s",
-                $item->proveedor_id,
-                $item->codigo_proveedor
+        if (!$clear && $sku_local !== '') {
+            $base_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}producto_base
+                 WHERE canonical_sku = %s AND deleted_at IS NULL LIMIT 1",
+                $sku_local
             ));
-
-            $item = $this->enrich_factura_item_row($item);
-
-            if (!$existing) {
-                $wpdb->insert(
-                    "{$prefix}codigos",
-                    [
-                        'proveedor_id' => $item->proveedor_id,
-                        'codigo_proveedor' => $item->codigo_proveedor,
-                        'sku_local' => $sku_local,
-                        'product_id' => $product_id,
-                        'nombre_proveedor' => $item->descripcion,
-                        'activo' => 1,
-                    ],
-                    ['%d', '%s', '%s', '%d', '%s', '%d']
-                );
+            $product_id = $this->intake()->resolve_product_id_for_local_sku($sku_local, $codigo_proveedor);
+            if (!$base_id && !$product_id) {
+                wp_send_json_error(['message' => 'SKU local no encontrado en catálogo: ' . $sku_local]);
             }
         }
 
-        // Actualizar estado de factura
-        $this->update_invoice_status($item->factura_id);
-
-        $this->intake()->persist_supplier_code(
+        $result = $this->intake()->assign_local_sku_mapping(
             (int) $item->proveedor_id,
-            $item->codigo_proveedor,
-            $item->descripcion,
-            [],
-            $sku_local
+            $codigo_proveedor,
+            $clear ? '' : $sku_local,
+            [
+                'force' => $force,
+                'clear' => $clear,
+                'descripcion' => $item->descripcion ?? $item->nombre ?? '',
+                'factura_item_id' => $item_id,
+                'actor_type' => 'human',
+                'document_date' => $item->fecha_emision ?? null,
+            ]
         );
+
+        if (is_wp_error($result)) {
+            $data = $result->get_error_data();
+            wp_send_json_error(array_merge([
+                'message' => $result->get_error_message(),
+                'conflict' => $result->get_error_code() === 'sku_conflict',
+            ], is_array($data) ? $data : []));
+        }
+
+        $new_sku = $clear ? null : $sku_local;
+        $product_id = $new_sku
+            ? $this->intake()->resolve_product_id_for_local_sku($new_sku, $codigo_proveedor)
+            : null;
+
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}factura_items
+             SET sku_local = NULLIF(%s, ''),
+                 product_id = NULLIF(%d, 0),
+                 estado = %s
+             WHERE id = %d",
+            $new_sku ?: '',
+            (int) $product_id,
+            $new_sku ? 'vinculado' : 'pendiente',
+            $item_id
+        ));
+
+        $this->update_invoice_status($item->factura_id);
 
         $wpdb->update(
             "{$prefix}cost_history",
             [
-                'product_id' => $product_id,
-                'pendiente_vinculacion' => 0,
+                'product_id' => $product_id ?: 0,
+                'pendiente_vinculacion' => $new_sku ? 0 : 1,
             ],
             [
                 'source_type' => 'invoice',
@@ -1565,7 +1782,7 @@ class Riverso_Invoice_Module {
             ['%s', '%d']
         );
 
-        if (class_exists('Riverso_Task_Module')) {
+        if ($new_sku && class_exists('Riverso_Task_Module')) {
             $wpdb->update(
                 "{$prefix}tareas",
                 ['estado' => 'completada', 'completado_en' => current_time('mysql')],
@@ -1580,7 +1797,159 @@ class Riverso_Invoice_Module {
             );
         }
 
-        wp_send_json_success(['message' => 'Código vinculado correctamente']);
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log(
+                $clear ? 'sku_mapping_cleared' : 'sku_mapping_changed',
+                'invoice',
+                (int) $item->factura_id,
+                [
+                    'entity_name' => $item->folio ?? '',
+                    'old_value' => ['sku_local' => $item->sku_local ?? null, 'item_id' => $item_id],
+                    'new_value' => ['sku_local' => $new_sku, 'item_id' => $item_id, 'codigo_proveedor' => $codigo_proveedor],
+                    'details' => sprintf(
+                        'Ítem %s: SKU %s → %s',
+                        $codigo_proveedor,
+                        $item->sku_local ?: '—',
+                        $new_sku ?: '—'
+                    ),
+                ]
+            );
+        }
+
+        $applied = is_array($result) ? ($result['applied'] ?? []) : [];
+        $applied_items = (int) ($applied['items'] ?? 0);
+        $base_message = $clear ? 'SKU desvinculado' : 'SKU actualizado';
+        if ($applied_items > 1) {
+            $base_message .= sprintf(' · aplicado a %d ítems posteriores a este documento', $applied_items);
+        }
+
+        wp_send_json_success([
+            'message' => $base_message,
+            'sku_local' => $new_sku,
+            'estado' => $new_sku ? 'vinculado' : 'pendiente',
+            'result' => $result,
+        ]);
+    }
+
+    /**
+     * AJAX: Historial de mapeos de un SKU o código proveedor.
+     */
+    public function ajax_get_sku_mapping_history() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_view_invoices') && !current_user_can('riverso_manage_codes')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        $sku = sanitize_text_field($_POST['sku_local'] ?? '');
+        $codigo = sanitize_text_field($_POST['codigo_proveedor'] ?? '');
+        $logs = $this->intake()->get_sku_mapping_history($sku, $codigo);
+        $owners = $sku !== '' ? $this->intake()->find_sku_owners($sku) : [];
+
+        global $wpdb;
+        $dates = null;
+        if ($codigo !== '') {
+            $dates = $wpdb->get_row($wpdb->prepare(
+                "SELECT last_seen_document_date, sku_mapped_at
+                 FROM {$wpdb->prefix}riverso_codigos
+                 WHERE codigo_proveedor = %s AND activo = 1
+                 ORDER BY last_seen_document_date DESC, sku_mapped_at DESC
+                 LIMIT 1",
+                $codigo
+            ), ARRAY_A);
+        }
+
+        wp_send_json_success([
+            'sku_local' => $sku,
+            'codigo_proveedor' => $codigo,
+            'owners' => $owners,
+            'last_seen_document_date' => $dates['last_seen_document_date'] ?? null,
+            'sku_mapped_at' => $dates['sku_mapped_at'] ?? null,
+            'history' => array_map(function ($row) {
+                $new_value = $row->new_value_decoded;
+                return [
+                    'action' => $row->action,
+                    'action_label' => $row->action_label ?? $row->action,
+                    'user_name' => $row->user_name,
+                    'created_at' => $row->created_at,
+                    'modified_at' => is_array($new_value) ? ($new_value['modified_at'] ?? $row->created_at) : $row->created_at,
+                    'document_date' => is_array($new_value) ? ($new_value['document_date'] ?? null) : null,
+                    'last_seen_document_date' => is_array($new_value) ? ($new_value['last_seen_document_date'] ?? null) : null,
+                    'details' => $row->details,
+                    'old_value' => $row->old_value_decoded,
+                    'new_value' => $new_value,
+                ];
+            }, $logs),
+        ]);
+    }
+
+    /**
+     * AJAX: sugerencias de SKU local desde el catálogo (producto_base).
+     */
+    public function ajax_search_sku_catalog() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_process_invoices')
+            && !current_user_can('riverso_manage_codes')
+            && !current_user_can('riverso_view_products')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        $search = sanitize_text_field($_POST['search'] ?? '');
+        if (strlen($search) < 1) {
+            wp_send_json_success(['products' => []]);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $like = '%' . $wpdb->esc_like($search) . '%';
+        $prefix_like = $wpdb->esc_like($search) . '%';
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT canonical_sku, nombre_canonico
+             FROM {$prefix}producto_base
+             WHERE deleted_at IS NULL
+               AND (canonical_sku LIKE %s OR nombre_canonico LIKE %s)
+             ORDER BY
+                CASE
+                    WHEN canonical_sku = %s THEN 0
+                    WHEN canonical_sku LIKE %s THEN 1
+                    ELSE 2
+                END ASC,
+                canonical_sku ASC
+             LIMIT 10",
+            $like,
+            $like,
+            $search,
+            $prefix_like
+        ), ARRAY_A);
+
+        wp_send_json_success(['products' => $rows ?: []]);
+    }
+
+    /**
+     * Parsea búsqueda de listado: folio (parcial) y/o monto.
+     */
+    private function parse_invoice_list_search($raw) {
+        $raw = trim((string) $raw);
+        if ($raw === '') {
+            return null;
+        }
+
+        $folio = ltrim($raw, "# \t");
+        $normalized = preg_replace('/[\s\$]/', '', $folio);
+        if (preg_match('/^\d{1,3}(\.\d{3})+(,\d+)?$/', $normalized)) {
+            $normalized = str_replace('.', '', $normalized);
+            $normalized = str_replace(',', '.', $normalized);
+        } else {
+            $normalized = str_replace(',', '.', $normalized);
+        }
+
+        $amount = is_numeric($normalized) ? (float) $normalized : null;
+
+        return [
+            'folio' => $folio,
+            'amount' => $amount,
+        ];
     }
 
     /**
@@ -1604,6 +1973,24 @@ class Riverso_Invoice_Module {
         $proveedor_id = intval($_POST['proveedor_id'] ?? 0);
         $fecha_desde = sanitize_text_field($_POST['fecha_desde'] ?? '');
         $fecha_hasta = sanitize_text_field($_POST['fecha_hasta'] ?? '');
+        $tipo_confirmado_raw = sanitize_text_field($_POST['tipo_confirmado'] ?? '');
+        $tipo_confirmado_filter = ($tipo_confirmado_raw === '') ? -1 : intval($tipo_confirmado_raw);
+        $search = $this->parse_invoice_list_search(sanitize_text_field($_POST['search'] ?? ''));
+
+        $orderby_map = [
+            'fecha_emision' => 'f.fecha_emision',
+            'created_at' => 'f.created_at',
+            'monto_total' => 'f.monto_total',
+            'folio' => 'f.folio',
+            'proveedor_nombre' => 'p.nombre',
+            'estado' => 'f.estado',
+            'tipo_dte' => 'f.tipo_dte',
+        ];
+        $orderby_raw = sanitize_key($_POST['orderby'] ?? 'created_at');
+        $orderby_key = isset($orderby_map[$orderby_raw]) ? $orderby_raw : 'created_at';
+        $orderby_sql = $orderby_map[$orderby_key];
+        $order_raw = strtoupper(sanitize_text_field($_POST['order'] ?? 'DESC'));
+        $order_sql = ($order_raw === 'ASC') ? 'ASC' : 'DESC';
 
         $where = ['1=1'];
         $params = [];
@@ -1628,6 +2015,24 @@ class Riverso_Invoice_Module {
             $params[] = $fecha_hasta;
         }
 
+        // Filtro de tipo confirmado: -1 = sin filtro, 0 = pendientes, 1 = confirmados
+        if ($tipo_confirmado_filter >= 0) {
+            $where[] = 'f.tipo_confirmado = %d';
+            $params[] = $tipo_confirmado_filter;
+        }
+
+        if ($search) {
+            $search_sql = ['CAST(f.folio AS CHAR) LIKE %s'];
+            $params[] = '%' . $wpdb->esc_like($search['folio']) . '%';
+            if ($search['amount'] !== null) {
+                $search_sql[] = 'f.monto_total = %f';
+                $params[] = $search['amount'];
+                $search_sql[] = 'ROUND(f.monto_total) = %d';
+                $params[] = (int) round($search['amount']);
+            }
+            $where[] = '(' . implode(' OR ', $search_sql) . ')';
+        }
+
         $where_sql = implode(' AND ', $where);
         $offset = ($page - 1) * $per_page;
 
@@ -1644,7 +2049,7 @@ class Riverso_Invoice_Module {
                 FROM {$prefix}facturas f
                 LEFT JOIN {$prefix}proveedores p ON f.proveedor_id = p.id
                 WHERE {$where_sql}
-                ORDER BY f.created_at DESC
+                ORDER BY {$orderby_sql} {$order_sql}, f.id DESC
                 LIMIT %d OFFSET %d";
         
         $params[] = $per_page;
@@ -1658,6 +2063,7 @@ class Riverso_Invoice_Module {
 
         foreach ($facturas as &$f) {
             $f['can_delete'] = $can_delete && $this->invoice_can_be_deleted($f);
+            $f['tipo_confirmado'] = (int) ($f['tipo_confirmado'] ?? 0);
         }
         unset($f);
 
@@ -1667,7 +2073,9 @@ class Riverso_Invoice_Module {
             'total' => (int) $total,
             'page' => $page,
             'per_page' => $per_page,
-            'total_pages' => ceil($total / $per_page),
+            'total_pages' => (int) ceil($total / $per_page),
+            'orderby' => $orderby_key,
+            'order' => $order_sql,
         ]);
     }
     

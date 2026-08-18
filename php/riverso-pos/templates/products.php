@@ -1117,7 +1117,9 @@ jQuery(function($){
         exitEditMode();  // Asegurar que estamos en modo view
 
         // Online tab
-        $('#online-woo-id').text(product.woocommerce_product_id || '-');
+        const hasWoo = parseInt(product.woocommerce_product_id || 0, 10) > 0
+            || parseInt(product.woocommerce_variation_id || 0, 10) > 0;
+        $('#online-woo-id').text(hasWoo ? (product.woocommerce_product_id || product.woocommerce_variation_id) : '-');
         $('#online-match-estado').text(product.match_estado_online || 'UNMATCHED');
         $('#woo-selected-id').val('');
         $('#woo-selected-display').text('');
@@ -1126,15 +1128,14 @@ jQuery(function($){
         renderOnlineDetails(product.online_details || null);
         
         // Mostrar/ocultar banner de falta código
-        const hasOnline = !!product.woocommerce_product_id;
         const hasCode = parseInt(product.proveedores_count || 0) > 0;
-        if (hasOnline && !hasCode) {
+        if (hasWoo && !hasCode) {
             $('#online-missing-code-banner').show();
         } else {
             $('#online-missing-code-banner').hide();
         }
         
-        if (!product.woocommerce_product_id) {
+        if (!hasWoo) {
             $('#online-link-btn').show();
             $('#online-create-btn').show();
         } else {
@@ -1836,22 +1837,32 @@ jQuery(function($){
             return;
         }
 
-        $.post(ajaxurl, {
-            action: 'riverso_products_link_supplier',
-            nonce,
-            product_id: productId,
-            supplier_code: code,
-            supplier_id: supplierId,
-            audit_reason: reason
-        }, function(r){
-            if (!r.success) {
-                alert('Error: ' + r.data.message);
-                return;
-            }
-            alert(r.data.message);
-            showDetail(r.data.item);
-            load();
-        });
+        function sendLink(force) {
+            $.post(ajaxurl, {
+                action: 'riverso_products_link_supplier',
+                nonce,
+                product_id: productId,
+                supplier_code: code,
+                supplier_id: supplierId,
+                audit_reason: reason,
+                force: force ? 1 : 0
+            }, function(r){
+                if (r.success) {
+                    alert(r.data.message);
+                    showDetail(r.data.item);
+                    load();
+                    return;
+                }
+                if (r.data?.conflict && !force) {
+                    if (confirm((r.data.message || 'Conflicto de SKU') + '\n\n¿Reasignar de todas formas? El dueño anterior perderá este SKU.')) {
+                        sendLink(true);
+                    }
+                    return;
+                }
+                alert('Error: ' + (r.data?.message || 'No se pudo vincular'));
+            });
+        }
+        sendLink(false);
     });
 
     // --- Merge helpers: todos los Vincular pasan por preview → modal → confirm → merge ---

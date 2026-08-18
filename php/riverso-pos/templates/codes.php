@@ -530,19 +530,30 @@ jQuery(function($) {
     });
 
     function linkCode(itemId, sku, createMapping, callback) {
-        $.post(ajaxurl, {
-            action: 'riverso_link_code',
-            nonce: nonce,
-            item_id: itemId,
-            sku_local: sku,
-            crear_mapeo: createMapping ? 1 : 0
-        }, function(response) {
-            if (response.success) {
-                if (callback) callback();
-            } else {
-                alert(response.data.message || 'Error vinculando código');
-            }
-        });
+        function send(force) {
+            $.post(ajaxurl, {
+                action: 'riverso_link_code',
+                nonce: nonce,
+                item_id: itemId,
+                sku_local: sku,
+                crear_mapeo: createMapping ? 1 : 0,
+                force: force ? 1 : 0
+            }, function(response) {
+                if (response.success) {
+                    if (callback) callback();
+                    return;
+                }
+                const data = response.data || {};
+                if (data.conflict && !force) {
+                    if (confirm((data.message || 'Conflicto de SKU') + '\n\n¿Reasignar de todas formas?')) {
+                        send(true);
+                    }
+                    return;
+                }
+                alert(data.message || 'Error vinculando código');
+            });
+        }
+        send(false);
     }
 
     // Cargar todos los códigos

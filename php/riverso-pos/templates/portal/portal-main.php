@@ -443,11 +443,32 @@
             margin-bottom: 16px;
         }
         .portal-filters select,
-        .portal-filters input[type="date"] {
+        .portal-filters input[type="date"],
+        .portal-filters input[type="search"] {
             padding: 8px 10px;
             border: 1px solid var(--border);
             border-radius: 4px;
             min-width: 150px;
+        }
+        #portal-filter-search {
+            min-width: 220px;
+        }
+        .portal-invoices-control {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .portal-invoices-pagination {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            margin-top: 12px;
+            font-size: 13px;
+            color: var(--text-secondary);
         }
 
         .portal-upload-area {
@@ -497,6 +518,10 @@
             box-shadow: 0 10px 40px rgba(0,0,0,.25);
         }
         .portal-modal.large { max-width: 960px; }
+        #portal-detail-modal .portal-modal.large {
+            width: 96%;
+            max-width: min(1480px, 96vw);
+        }
         .portal-modal-header {
             display: flex;
             justify-content: space-between;
@@ -653,6 +678,7 @@ $tareas = $wpdb->get_results($wpdb->prepare(
                     case 'invoices': echo 'Facturas'; break;
                     case 'pos': echo 'Punto de Venta'; break;
                     case 'quotes': echo 'Cotizaciones'; break;
+                    case 'impresiones': echo 'Impresiones'; break;
                     default: echo 'Dashboard';
                 }
                 ?>
@@ -942,7 +968,36 @@ $tareas = $wpdb->get_results($wpdb->prepare(
                     </select>
                     <input type="date" id="portal-filter-desde">
                     <input type="date" id="portal-filter-hasta">
+                    <input type="search" id="portal-filter-search" placeholder="Buscar folio o monto…" autocomplete="off">
                     <button type="button" class="btn btn-secondary" onclick="portalLoadInvoices(1)">Filtrar</button>
+                    <label class="portal-invoices-control">
+                        Mostrar
+                        <select id="portal-invoices-per-page">
+                            <option value="10">10</option>
+                            <option value="20" selected>20</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </label>
+                    <label class="portal-invoices-control">
+                        Ordenar por
+                        <select id="portal-invoices-orderby">
+                            <option value="created_at" selected>Fecha de ingreso</option>
+                            <option value="fecha_emision">Fecha del documento</option>
+                            <option value="folio">Folio</option>
+                            <option value="monto_total">Monto total</option>
+                            <option value="proveedor_nombre">Proveedor</option>
+                            <option value="estado">Estado</option>
+                            <option value="tipo_dte">Tipo DTE</option>
+                        </select>
+                    </label>
+                    <label class="portal-invoices-control">
+                        Dirección
+                        <select id="portal-invoices-order">
+                            <option value="DESC" selected>Descendente</option>
+                            <option value="ASC">Ascendente</option>
+                        </select>
+                    </label>
                 </div>
 
                 <div style="overflow-x:auto;">
@@ -964,7 +1019,11 @@ $tareas = $wpdb->get_results($wpdb->prepare(
                         </tbody>
                     </table>
                 </div>
-                <div id="portal-invoices-pagination" style="margin-top:12px;font-size:13px;color:var(--text-secondary);"></div>
+                <div id="portal-invoices-pagination" class="portal-invoices-pagination">
+                    <button type="button" class="btn btn-secondary" id="portal-invoices-prev" style="display:none;">← Anterior</button>
+                    <span id="portal-invoices-page-info"></span>
+                    <button type="button" class="btn btn-secondary" id="portal-invoices-next" style="display:none;">Siguiente →</button>
+                </div>
             </div>
         </div>
         
@@ -1237,6 +1296,195 @@ $tareas = $wpdb->get_results($wpdb->prepare(
             </div>
         </div>
         
+        <?php elseif ($current_page === 'impresiones'): ?>
+        <?php
+        $po_can_create  = current_user_can('riverso_create_print_orders') || current_user_can('manage_options');
+        $po_can_approve = current_user_can('riverso_approve_print_orders') || current_user_can('manage_options');
+        $po_can_print   = current_user_can('riverso_print_orders') || current_user_can('riverso_print_labels') || current_user_can('manage_options');
+        $po_can_cancel  = current_user_can('riverso_cancel_print_orders') || current_user_can('manage_options');
+        $po_can_edit_price = current_user_can('riverso_edit_print_order_price') || current_user_can('manage_options');
+        $po_mine_only   = !$po_can_approve;
+        $po_tipos = class_exists('Riverso_Print_Order_Module') ? Riverso_Print_Order_Module::TIPOS : [
+            'etiqueta_producto' => 'Etiqueta producto',
+            'bolsa' => 'Bolsa',
+            'etiqueta_simple' => 'Etiqueta simple',
+            'etiqueta_logo' => 'Etiqueta con logo',
+        ];
+        $po_modos = class_exists('Riverso_Print_Order_Module') ? Riverso_Print_Order_Module::MODOS : ['BolsaCOD'];
+        $po_colores = class_exists('Riverso_Print_Order_Module') ? Riverso_Print_Order_Module::COLORES : ['BN', 'RN'];
+        ?>
+        <style>
+            .po-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; font-weight:600; }
+            .po-badge-borrador { background:#e5e7eb; color:#374151; }
+            .po-badge-pendiente { background:#fef3c7; color:#92400e; }
+            .po-badge-aprobada { background:#dbeafe; color:#1e40af; }
+            .po-badge-impresa { background:#d1fae5; color:#065f46; }
+            .po-badge-cancelada { background:#fee2e2; color:#991b1b; }
+            .po-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
+            .po-toolbar input, .po-toolbar select { padding:8px 10px; border:1px solid var(--border); border-radius:4px; }
+            .po-hit { padding:10px; border:1px solid var(--border); border-radius:8px; margin-top:8px; display:flex; justify-content:space-between; gap:10px; background:var(--bg-light); }
+            .po-editor-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:12px; }
+        </style>
+        <div class="stats-grid" id="po-portal-stats"></div>
+        <div class="content-section">
+            <div class="section-header">
+                <h2 class="section-title">Órdenes de impresión</h2>
+                <?php if ($po_can_create): ?>
+                <button type="button" class="btn btn-primary" id="po-portal-new">Nueva orden</button>
+                <?php endif; ?>
+            </div>
+            <div class="section-body">
+                <div class="po-toolbar">
+                    <input type="search" id="po-portal-search" placeholder="Número, SKU o solicitante..." style="min-width:220px;">
+                    <select id="po-portal-estado">
+                        <option value="">Todos los estados</option>
+                        <option value="borrador">Borrador</option>
+                        <option value="pendiente">Pendiente</option>
+                        <option value="aprobada">Aprobada</option>
+                        <option value="impresa">Impresa</option>
+                        <option value="cancelada">Cancelada</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary" id="po-portal-filter">Buscar</button>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table class="portal-table" id="po-portal-table">
+                        <thead>
+                            <tr>
+                                <th>Número</th>
+                                <th>Estado</th>
+                                <th>Tipo</th>
+                                <th>Ítems</th>
+                                <th>Copias</th>
+                                <th>Solicitante</th>
+                                <th>Fecha</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="po-portal-body">
+                            <tr><td colspan="8" style="text-align:center;padding:24px;">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="po-portal-pages" style="margin-top:12px;color:var(--text-secondary);font-size:13px;"></div>
+            </div>
+        </div>
+
+        <div class="content-section" id="po-portal-editor" style="display:none;">
+            <div class="section-header">
+                <h2 class="section-title" id="po-portal-editor-title">Nueva orden</h2>
+                <button type="button" class="btn btn-secondary po-close-order">Cerrar</button>
+            </div>
+            <div class="section-body">
+                <input type="hidden" id="po-portal-id" value="">
+                <div class="po-editor-grid">
+                    <div>
+                        <label>Tipo</label>
+                        <select id="po-portal-tipo" style="width:100%;padding:8px;">
+                            <?php foreach ($po_tipos as $key => $label): ?>
+                            <option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Prioridad</label>
+                        <label style="display:flex;gap:6px;align-items:center;margin-top:8px;">
+                            <input type="checkbox" id="po-portal-prioridad"> Urgente
+                        </label>
+                    </div>
+                    <div>
+                        <label>Estado</label>
+                        <div id="po-portal-estado-badge" style="margin-top:8px;"><span class="po-badge po-badge-borrador">Borrador</span></div>
+                    </div>
+                    <div>
+                        <label>Número</label>
+                        <div id="po-portal-numero" style="margin-top:8px;color:var(--text-secondary);">Se asigna al guardar</div>
+                    </div>
+                </div>
+                <label>Notas</label>
+                <textarea id="po-portal-notas" rows="2" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:4px;margin:6px 0 14px;"></textarea>
+
+                <?php if ($po_can_create): ?>
+                <label>Agregar producto</label>
+                <div style="display:flex;gap:8px;margin:6px 0;">
+                    <input type="search" id="po-portal-q" placeholder="SKU, código o nombre..." style="flex:1;padding:10px;border:1px solid var(--border);border-radius:4px;">
+                    <button type="button" class="btn btn-secondary" id="po-portal-q-btn">Buscar</button>
+                </div>
+                <div id="po-portal-hits"></div>
+                <?php endif; ?>
+
+                <div style="overflow-x:auto;margin-top:12px;">
+                    <table class="portal-table">
+                        <thead>
+                            <tr>
+                                <th>SKU</th>
+                                <th>Nombre en etiqueta</th>
+                                <th>Cant. EAN</th>
+                                <th>Copias</th>
+                                <th>Modo</th>
+                                <th>Color</th>
+                                <th>EAN13</th>
+                                <th>Precio</th>
+                                <?php if ($po_can_create): ?><th></th><?php endif; ?>
+                            </tr>
+                        </thead>
+                        <tbody id="po-portal-items">
+                            <tr><td colspan="9" style="text-align:center;color:var(--text-secondary);">Sin productos</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p style="margin-top:8px;font-size:13px;color:var(--text-secondary);">Los cambios de nombre, copias, modo, color y EAN aplican solo a esta impresión. El SKU no se modifica. El precio se muestra con 2 decimales; usa <strong>Redondear</strong> o <strong>Desredondear</strong> en esta impresión. Cambiar el precio a otro valor requiere permiso.</p>
+
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;align-items:center;">
+                    <button type="button" class="btn btn-secondary po-close-order">Cerrar</button>
+                    <?php if ($po_can_create): ?>
+                    <button type="button" class="btn btn-primary" id="po-portal-save">Guardar borrador</button>
+                    <button type="button" class="btn btn-secondary" id="po-portal-submit">Enviar</button>
+                    <?php endif; ?>
+                    <?php if ($po_can_approve): ?>
+                    <button type="button" class="btn btn-secondary" id="po-portal-approve">Aprobar</button>
+                    <?php endif; ?>
+                    <?php if ($po_can_print): ?>
+                    <button type="button" class="btn btn-primary" id="po-portal-print">Imprimir</button>
+                    <button type="button" class="btn btn-secondary" id="po-portal-print-direct">Imprimir ahora</button>
+                    <?php endif; ?>
+                    <?php if ($po_can_create || $po_can_cancel): ?>
+                    <button type="button" class="btn btn-secondary" id="po-portal-cancel">Cancelar</button>
+                    <?php endif; ?>
+                    <span id="po-portal-msg" style="font-size:13px;color:var(--text-secondary);"></span>
+                </div>
+            </div>
+        </div>
+        <script>
+        window.riversoPrintOrders = {
+            canCreate: <?php echo $po_can_create ? 'true' : 'false'; ?>,
+            canApprove: <?php echo $po_can_approve ? 'true' : 'false'; ?>,
+            canPrint: <?php echo $po_can_print ? 'true' : 'false'; ?>,
+            canCancel: <?php echo $po_can_cancel ? 'true' : 'false'; ?>,
+            canEditPrice: <?php echo $po_can_edit_price ? 'true' : 'false'; ?>,
+            mine: <?php echo $po_mine_only ? 'true' : 'false'; ?>,
+            modos: <?php echo wp_json_encode(array_values($po_modos)); ?>,
+            colores: <?php echo wp_json_encode(array_values($po_colores)); ?>
+        };
+        </script>
+        <div id="po-cancel-modal" class="portal-modal-overlay">
+            <div class="portal-modal" style="max-width:440px;">
+                <div class="portal-modal-header">
+                    <h3 style="margin:0;">Cancelar orden</h3>
+                </div>
+                <div class="portal-modal-body">
+                    <p style="margin:0 0 12px;color:var(--text-secondary);font-size:14px;">
+                        Puedes indicar un motivo (opcional). <strong>Volver</strong> cierra este cuadro sin cancelar la orden.
+                    </p>
+                    <label for="po-cancel-motivo">Motivo</label>
+                    <textarea id="po-cancel-motivo" rows="3" style="width:100%;margin-top:6px;padding:8px;border:1px solid var(--border);border-radius:4px;" placeholder="Opcional"></textarea>
+                </div>
+                <div class="portal-modal-footer">
+                    <button type="button" class="btn btn-secondary" id="po-cancel-back">Volver</button>
+                    <button type="button" class="btn btn-primary" id="po-cancel-confirm">Cancelar orden</button>
+                </div>
+            </div>
+        </div>
+
         <?php else: ?>
         <!-- Página no encontrada -->
         <div class="content-section">
@@ -1432,6 +1680,7 @@ let portalPreviewData = null;
 let portalBulkFiles = [];
 const portalDefaultModo = '<?php echo esc_js($default_intake_mode); ?>';
 const portalOnInvoicesPage = <?php echo $current_page === 'invoices' ? 'true' : 'false'; ?>;
+let portalInvoicesPage = 1;
 
 function portalSetInputFiles(input, fileList) {
     if (!input || !fileList || !fileList.length) return false;
@@ -1691,14 +1940,22 @@ async function portalProcessBulk() {
 function portalLoadInvoices(page) {
     const tbody = document.getElementById('portal-invoices-list');
     if (!tbody) return;
+    if (page === undefined || page === null || page === '') {
+        page = portalInvoicesPage;
+    }
+    portalInvoicesPage = Math.max(1, parseInt(page, 10) || 1);
     const body = new URLSearchParams({
         action: 'riverso_get_invoices_list',
         nonce: riversoNonce,
-        page: page || 1,
+        page: portalInvoicesPage,
+        per_page: document.getElementById('portal-invoices-per-page')?.value || 20,
+        orderby: document.getElementById('portal-invoices-orderby')?.value || 'created_at',
+        order: document.getElementById('portal-invoices-order')?.value || 'DESC',
         estado: document.getElementById('portal-filter-estado')?.value || '',
         proveedor_id: document.getElementById('portal-filter-proveedor')?.value || '',
         fecha_desde: document.getElementById('portal-filter-desde')?.value || '',
-        fecha_hasta: document.getElementById('portal-filter-hasta')?.value || ''
+        fecha_hasta: document.getElementById('portal-filter-hasta')?.value || '',
+        search: document.getElementById('portal-filter-search')?.value || ''
     });
     fetch(ajaxUrl, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
         .then(r => r.json())
@@ -1711,9 +1968,15 @@ function portalLoadInvoices(page) {
                 tbody.innerHTML = '<tr><td colspan="8">Error: respuesta inválida del servidor</td></tr>';
                 return;
             }
-            const tipos = {33:'Factura',34:'F.Exenta',52:'Guía',61:'N.Crédito'};
+            const totalPages = Math.max(1, parseInt(res.data.total_pages || 1, 10));
+            const pageNum = parseInt(res.data.page || 1, 10);
+            if (pageNum > totalPages) {
+                portalLoadInvoices(totalPages);
+                return;
+            }
             if (!res.data.facturas.length) {
                 tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;">No hay facturas</td></tr>';
+                portalRenderInvoicePagination(res.data);
                 return;
             }
             tbody.innerHTML = res.data.facturas.map(f => {
@@ -1743,12 +2006,28 @@ function portalLoadInvoices(page) {
                     </td>
                 </tr>`;
             }).join('');
-            const pag = document.getElementById('portal-invoices-pagination');
-            if (pag) pag.textContent = `Página ${res.data.page} de ${res.data.total_pages} (${res.data.total} facturas)`;
+            portalRenderInvoicePagination(res.data);
         })
         .catch(() => {
             tbody.innerHTML = '<tr><td colspan="8">Error de conexión al cargar facturas</td></tr>';
         });
+}
+
+function portalRenderInvoicePagination(data) {
+    const total = parseInt(data.total || 0, 10);
+    const page = parseInt(data.page || 1, 10);
+    const totalPages = Math.max(1, parseInt(data.total_pages || 1, 10));
+    portalInvoicesPage = page;
+    const info = document.getElementById('portal-invoices-page-info');
+    const prev = document.getElementById('portal-invoices-prev');
+    const next = document.getElementById('portal-invoices-next');
+    if (info) {
+        info.textContent = total === 0
+            ? 'Sin facturas'
+            : `Página ${page} de ${totalPages} (${total} facturas)`;
+    }
+    if (prev) prev.style.display = page > 1 ? '' : 'none';
+    if (next) next.style.display = (page < totalPages && total > 0) ? '' : 'none';
 }
 
 function portalRenderInvoiceDetail(f) {
@@ -1888,7 +2167,7 @@ document.getElementById('portal-btn-assign-flete')?.addEventListener('click', ()
     const envioId = document.getElementById('portal-detail-assign-flete-id')?.value;
     if (!envioId) { alert('Seleccione un flete'); return; }
     portalAssignShipping(portalDetailFacturaId, envioId).then(res => {
-        if (res.success) { portalReloadInvoiceDetail(); portalLoadInvoices(1); }
+        if (res.success) { portalReloadInvoiceDetail(); portalLoadInvoices(); }
         else alert(res.data?.message || 'Error al vincular');
     });
 });
@@ -1897,7 +2176,7 @@ document.getElementById('portal-btn-envio-assign')?.addEventListener('click', ()
     const targetId = document.getElementById('portal-detail-envio-target-id')?.value;
     if (!targetId) { alert('Seleccione una factura de productos'); return; }
     portalAssignShipping(targetId, portalDetailFacturaId).then(res => {
-        if (res.success) { portalReloadInvoiceDetail(); portalLoadInvoices(1); }
+        if (res.success) { portalReloadInvoiceDetail(); portalLoadInvoices(); }
         else alert(res.data?.message || 'Error al vincular');
     });
 });
@@ -1905,7 +2184,7 @@ document.getElementById('portal-btn-envio-assign')?.addEventListener('click', ()
 document.getElementById('portal-btn-envio-unassign-all')?.addEventListener('click', () => {
     if (!confirm('¿Desvincular este flete de TODAS las facturas de productos?')) return;
     portalUnassignShipping(portalDetailFacturaId).then(res => {
-        if (res.success) { portalReloadInvoiceDetail(); portalLoadInvoices(1); }
+        if (res.success) { portalReloadInvoiceDetail(); portalLoadInvoices(); }
         else alert(res.data?.message || 'Error');
     });
 });
@@ -1915,7 +2194,7 @@ document.getElementById('portal-detail-modal')?.addEventListener('click', e => {
     if (prodBtn) {
         if (!confirm('¿Desvincular esta factura del flete?')) return;
         portalUnassignShipping(portalDetailFacturaId, prodBtn.dataset.productosId).then(res => {
-            if (res.success) { portalReloadInvoiceDetail(); portalLoadInvoices(1); }
+            if (res.success) { portalReloadInvoiceDetail(); portalLoadInvoices(); }
             else alert(res.data?.message || 'Error');
         });
         return;
@@ -1924,7 +2203,7 @@ document.getElementById('portal-detail-modal')?.addEventListener('click', e => {
     if (fleteBtn) {
         if (!confirm('¿Desvincular este flete?')) return;
         portalUnassignShipping(fleteBtn.dataset.envioId, portalDetailFacturaId).then(res => {
-            if (res.success) { portalReloadInvoiceDetail(); portalLoadInvoices(1); }
+            if (res.success) { portalReloadInvoiceDetail(); portalLoadInvoices(); }
             else alert(res.data?.message || 'Error');
         });
     }
@@ -1940,7 +2219,7 @@ function portalEliminarFactura(id, folio) {
         body: new URLSearchParams({ action: 'riverso_delete_invoice', nonce: riversoNonce, factura_id: id })
     }).then(r => r.json()).then(res => {
         if (res.success) {
-            portalLoadInvoices(1);
+            portalLoadInvoices();
         } else {
             alert(res.data?.message || 'Error al eliminar');
         }
@@ -2009,6 +2288,28 @@ function portalEliminarFactura(id, folio) {
         }
     });
     bindDrop(bulkDrop, files => portalSetBulkFiles(files));
+
+    ['portal-invoices-per-page', 'portal-invoices-orderby', 'portal-invoices-order'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', () => portalLoadInvoices(1));
+    });
+    document.getElementById('portal-invoices-prev')?.addEventListener('click', () => {
+        portalLoadInvoices(portalInvoicesPage - 1);
+    });
+    document.getElementById('portal-invoices-next')?.addEventListener('click', () => {
+        portalLoadInvoices(portalInvoicesPage + 1);
+    });
+    const portalSearch = document.getElementById('portal-filter-search');
+    let portalSearchTimeout = null;
+    portalSearch?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            portalLoadInvoices(1);
+        }
+    });
+    portalSearch?.addEventListener('input', () => {
+        clearTimeout(portalSearchTimeout);
+        portalSearchTimeout = setTimeout(() => portalLoadInvoices(1), 400);
+    });
 
     if (portalOnInvoicesPage) portalLoadInvoices(1);
 })();
@@ -2234,8 +2535,19 @@ function portalEliminarFactura(id, folio) {
                 return;
             }
             post('riverso_catalog_code_link', {base_id: baseId, proveedor_id: proveedorId, codigo}).then(d => {
-                alert(d.success ? 'Código vinculado' : (d.data?.message || 'Error'));
-                if (d.success) loadProduct(selectedId);
+                if (d.success) {
+                    alert('Código vinculado');
+                    loadProduct(selectedId);
+                    return;
+                }
+                if (d.data?.conflict && confirm((d.data.message || 'Conflicto de SKU') + '\n\n¿Reasignar de todas formas? El dueño anterior perderá este SKU.')) {
+                    post('riverso_catalog_code_link', {base_id: baseId, proveedor_id: proveedorId, codigo, force: 1}).then(d2 => {
+                        alert(d2.success ? 'Código reasignado' : (d2.data?.message || 'Error'));
+                        if (d2.success) loadProduct(selectedId);
+                    });
+                    return;
+                }
+                alert(d.data?.message || 'Error');
             });
         });
     }
@@ -2621,6 +2933,555 @@ function portalEliminarFactura(id, folio) {
             alert('⚠️ El módulo de impresión no está cargado. Recarga la página o contacta soporte.');
         }
     });
+})();
+
+(function() {
+    const body = document.getElementById('po-portal-body');
+    if (!body || typeof riversoPrintOrders === 'undefined') return;
+    const cfg = riversoPrintOrders;
+    const modos = cfg.modos || ['BolsaCOD'];
+    const colores = cfg.colores || ['BN', 'RN'];
+    let page = 1;
+    let current = null;
+    let items = [];
+    let cancelCallback = null;
+    const cancelModal = document.getElementById('po-cancel-modal');
+    const cancelMotivo = document.getElementById('po-cancel-motivo');
+
+    function closeCancelModal() {
+        cancelCallback = null;
+        cancelModal?.classList.remove('open');
+    }
+
+    function askCancelMotivo(onConfirm) {
+        cancelCallback = onConfirm;
+        if (cancelMotivo) cancelMotivo.value = '';
+        cancelModal?.classList.add('open');
+        setTimeout(() => cancelMotivo?.focus(), 50);
+    }
+
+    document.getElementById('po-cancel-back')?.addEventListener('click', closeCancelModal);
+    cancelModal?.addEventListener('click', e => {
+        if (e.target === cancelModal) closeCancelModal();
+    });
+    document.getElementById('po-cancel-confirm')?.addEventListener('click', () => {
+        const cb = cancelCallback;
+        const motivo = cancelMotivo?.value || '';
+        closeCancelModal();
+        if (typeof cb === 'function') cb(motivo);
+    });
+
+    function esc(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function post(action, params) {
+        const bodyParams = Object.assign({ action: action, nonce: riversoNonce }, params || {});
+        return fetch(ajaxUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams(bodyParams)
+        }).then(r => r.json());
+    }
+
+    function badge(estado, label) {
+        return `<span class="po-badge po-badge-${esc(estado)}">${esc(label || estado)}</span>`;
+    }
+
+    function loadStats() {
+        const el = document.getElementById('po-portal-stats');
+        if (!el) return;
+        post('riverso_print_orders_get_stats').then(res => {
+            if (!res.success) return;
+            const s = res.data;
+            el.innerHTML = [
+                ['Pendientes', s.pendientes, 'orange'],
+                ['Aprobadas', s.aprobadas, 'blue'],
+                ['Impresas hoy', s.impresa_hoy, 'green'],
+                ['Creadas hoy', s.creadas_hoy, 'purple']
+            ].map(([label, value, color]) => `
+                <div class="stat-card">
+                    <div class="stat-icon ${color}"><span class="dashicons dashicons-printer"></span></div>
+                    <div class="stat-value">${esc(value)}</div>
+                    <div class="stat-label">${esc(label)}</div>
+                </div>`).join('');
+        });
+    }
+
+    function loadList() {
+        post('riverso_print_orders_list', {
+            page: page,
+            per_page: 20,
+            search: document.getElementById('po-portal-search')?.value || '',
+            estado: document.getElementById('po-portal-estado')?.value || '',
+            mine: cfg.mine ? 1 : 0
+        }).then(res => {
+            if (!res.success) {
+                body.innerHTML = `<tr><td colspan="8">${esc(res.data?.message || 'Error')}</td></tr>`;
+                return;
+            }
+            const rows = res.data.items || [];
+            if (!rows.length) {
+                body.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;">No hay órdenes.</td></tr>';
+            } else {
+                body.innerHTML = rows.map(o => {
+                    const actions = [`<button type="button" class="btn btn-secondary btn-sm po-open" data-id="${o.id}">Abrir</button>`];
+                    if (cfg.canApprove && o.estado === 'pendiente') {
+                        actions.push(`<button type="button" class="btn btn-secondary btn-sm po-approve" data-id="${o.id}">Aprobar</button>`);
+                    }
+                    if (cfg.canPrint && ['borrador','pendiente','aprobada'].includes(o.estado)) {
+                        actions.push(`<button type="button" class="btn btn-primary btn-sm po-print" data-id="${o.id}" data-direct="${o.estado === 'aprobada' ? '0' : '1'}">Imprimir</button>`);
+                    }
+                    if (cfg.canCancel && o.estado !== 'impresa' && o.estado !== 'cancelada') {
+                        actions.push(`<button type="button" class="btn btn-secondary btn-sm po-cancel" data-id="${o.id}">Cancelar</button>`);
+                    }
+                    return `<tr>
+                        <td><code>${esc(o.numero_orden)}</code>${Number(o.prioridad) ? ' <strong style="color:#b91c1c;">!</strong>' : ''}</td>
+                        <td>${badge(o.estado, o.estado_label)}</td>
+                        <td>${esc(o.tipo_label || o.tipo)}</td>
+                        <td>${esc(o.total_items)}</td>
+                        <td>${esc(o.total_copias)}</td>
+                        <td>${esc(o.solicitado_por_nombre || '')}</td>
+                        <td>${esc(o.created_at || '')}</td>
+                        <td style="white-space:nowrap;">${actions.join(' ')}</td>
+                    </tr>`;
+                }).join('');
+            }
+            const pages = res.data.pages || 1;
+            const nav = document.getElementById('po-portal-pages');
+            if (nav) {
+                nav.innerHTML = `Página ${page} de ${pages} (${res.data.total}) ` +
+                    (page > 1 ? `<a href="#" data-page="${page - 1}" class="po-page">Anterior</a> ` : '') +
+                    (page < pages ? `<a href="#" data-page="${page + 1}" class="po-page">Siguiente</a>` : '');
+            }
+        }).catch(() => {
+            body.innerHTML = '<tr><td colspan="8">Error de red.</td></tr>';
+        });
+    }
+
+    function defaultModo() {
+        const map = { etiqueta_producto: 'BolsaCOD', bolsa: 'Bolsa', etiqueta_simple: 'EtiquetaSimple', etiqueta_logo: 'EtiquetaLogo' };
+        return map[document.getElementById('po-portal-tipo')?.value] || 'BolsaCOD';
+    }
+
+    function toPrice2(v) {
+        if (v === null || v === undefined || v === '') return null;
+        const n = Number(v);
+        if (!isFinite(n) || n < 0) return null;
+        return Math.round(n * 100) / 100;
+    }
+
+    function formatPrice2(v) {
+        const n = toPrice2(v);
+        if (n === null) return '—';
+        return n.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function priceInputValue(v) {
+        const n = toPrice2(v);
+        return n === null ? '' : n.toFixed(2);
+    }
+
+    function priceHasFraction(v) {
+        const n = toPrice2(v);
+        return n !== null && Math.abs(n - Math.round(n)) > 0.0001;
+    }
+
+    function canUnroundPrice(it) {
+        const orig = toPrice2(it && it.precio_original);
+        const cur = toPrice2(it && it.precio);
+        return orig !== null && cur !== null && Math.abs(orig - cur) > 0.0001;
+    }
+
+    function renderItems() {
+        const tbody = document.getElementById('po-portal-items');
+        if (!tbody) return;
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-secondary);">Sin productos</td></tr>';
+            return;
+        }
+        tbody.innerHTML = items.map((it, idx) => {
+            const modoOpts = modos.map(m => `<option value="${esc(m)}"${m === (it.modo || 'BolsaCOD') ? ' selected' : ''}>${esc(m)}</option>`).join('');
+            const colorOpts = colores.map(c => `<option value="${esc(c)}"${c === (it.color || 'BN') ? ' selected' : ''}>${esc(c)}</option>`).join('');
+            const precioVal = priceInputValue(it.precio);
+            const precioLabel = formatPrice2(it.precio);
+            const precioOpen = !!it.precioUnlocked;
+            let precioHtml = `<span class="po-precio-view">${esc(precioLabel)}</span>`;
+            if (cfg.canEditPrice) {
+                precioHtml = `<span class="po-precio-view"${precioOpen ? ' style="display:none;"' : ''}>${esc(precioLabel)}</span>` +
+                    `<input type="number" min="0" step="0.01" class="po-precio" value="${esc(precioVal)}" style="width:100px;padding:6px;${precioOpen ? '' : 'display:none;'}">`;
+            }
+            if (cfg.canCreate && priceHasFraction(it.precio)) {
+                precioHtml += ` <button type="button" class="btn btn-secondary btn-sm po-round-precio">Redondear</button>`;
+            }
+            if (cfg.canCreate && canUnroundPrice(it)) {
+                precioHtml += ` <button type="button" class="btn btn-secondary btn-sm po-unround-precio">Desredondear</button>`;
+            }
+            if (cfg.canEditPrice && !precioOpen) {
+                precioHtml += ` <button type="button" class="btn btn-secondary btn-sm po-unlock-precio">Cambiar precio</button>`;
+            }
+            return `<tr data-idx="${idx}">
+                <td><code title="El SKU no se puede cambiar">${esc(it.sku)}</code></td>
+                <td><input type="text" class="po-nombre" value="${esc(it.nombre || '')}" style="width:100%;min-width:140px;padding:6px;"></td>
+                <td><input type="number" min="1" class="po-ean" value="${esc(it.cantidad_ean || 100)}" style="width:80px;padding:6px;"></td>
+                <td><input type="number" min="1" class="po-copias" value="${esc(it.copias || 1)}" style="width:70px;padding:6px;"></td>
+                <td><select class="po-modo" style="padding:6px;">${modoOpts}</select></td>
+                <td><select class="po-color" style="padding:6px;">${colorOpts}</select></td>
+                <td><input type="text" class="po-ean13" maxlength="13" value="${esc(it.ean13 || '')}" style="width:110px;padding:6px;" placeholder="Opcional"></td>
+                <td>${precioHtml}</td>
+                ${cfg.canCreate ? `<td><button type="button" class="btn btn-secondary btn-sm po-del">Quitar</button></td>` : ''}
+            </tr>`;
+        }).join('');
+    }
+
+    function collectItems() {
+        document.querySelectorAll('#po-portal-items tr[data-idx]').forEach(tr => {
+            const idx = parseInt(tr.dataset.idx, 10);
+            if (!items[idx]) return;
+            items[idx].nombre = tr.querySelector('.po-nombre')?.value || items[idx].nombre;
+            items[idx].cantidad_ean = parseInt(tr.querySelector('.po-ean')?.value, 10) || 100;
+            items[idx].copias = parseInt(tr.querySelector('.po-copias')?.value, 10) || 1;
+            items[idx].modo = tr.querySelector('.po-modo')?.value || 'BolsaCOD';
+            items[idx].color = tr.querySelector('.po-color')?.value || 'BN';
+            items[idx].ean13 = tr.querySelector('.po-ean13')?.value || '';
+            if (cfg.canEditPrice && items[idx].precioUnlocked) {
+                const p = tr.querySelector('.po-precio')?.value;
+                const next = p === '' ? null : toPrice2(p);
+                const cur = toPrice2(items[idx].precio);
+                const orig = toPrice2(items[idx].precio_original);
+                items[idx].precio = next;
+                if (next !== null && orig !== null && Math.abs(next - orig) > 0.0001 && (cur === null || Math.abs(next - cur) > 0.0001)) {
+                    items[idx].precio_original = null;
+                }
+            }
+        });
+        return items.map((it, i) => ({
+            id: it.id || 0,
+            sku: it.sku,
+            nombre: it.nombre,
+            precio: it.precio,
+            precio_original: it.precio_original == null || it.precio_original === '' ? null : toPrice2(it.precio_original),
+            cantidad_ean: it.cantidad_ean,
+            copias: it.copias,
+            modo: it.modo,
+            color: it.color,
+            ean13: it.ean13 || '',
+            orden_posicion: i
+        }));
+    }
+
+    function fill(order) {
+        current = order;
+        items = (order.items || []).map(it => Object.assign({}, it));
+        document.getElementById('po-portal-id').value = order.id;
+        document.getElementById('po-portal-tipo').value = order.tipo;
+        document.getElementById('po-portal-prioridad').checked = Number(order.prioridad) === 1;
+        document.getElementById('po-portal-notas').value = order.notas || '';
+        document.getElementById('po-portal-numero').textContent = order.numero_orden;
+        document.getElementById('po-portal-estado-badge').innerHTML = badge(order.estado, order.estado_label);
+        document.getElementById('po-portal-editor-title').textContent = order.numero_orden;
+        document.getElementById('po-portal-editor').style.display = '';
+        renderItems();
+        document.getElementById('po-portal-msg').textContent = '';
+    }
+
+    function resetEditor() {
+        current = null;
+        items = [];
+        document.getElementById('po-portal-id').value = '';
+        document.getElementById('po-portal-tipo').value = 'etiqueta_producto';
+        document.getElementById('po-portal-prioridad').checked = false;
+        document.getElementById('po-portal-notas').value = '';
+        document.getElementById('po-portal-numero').textContent = 'Se asigna al guardar';
+        document.getElementById('po-portal-estado-badge').innerHTML = badge('borrador', 'Borrador');
+        document.getElementById('po-portal-editor-title').textContent = 'Nueva orden';
+        document.getElementById('po-portal-editor').style.display = '';
+        const hits = document.getElementById('po-portal-hits');
+        if (hits) hits.innerHTML = '';
+        renderItems();
+    }
+
+    function save() {
+        const id = document.getElementById('po-portal-id').value;
+        const payload = {
+            tipo: document.getElementById('po-portal-tipo').value,
+            prioridad: document.getElementById('po-portal-prioridad').checked ? 1 : 0,
+            notas: document.getElementById('po-portal-notas').value,
+            items: JSON.stringify(collectItems())
+        };
+        if (id) payload.id = id;
+        document.getElementById('po-portal-msg').textContent = 'Guardando...';
+        return post(id ? 'riverso_print_orders_update' : 'riverso_print_orders_create', payload).then(res => {
+            if (!res.success) {
+                document.getElementById('po-portal-msg').textContent = res.data?.message || 'Error';
+                throw new Error(res.data?.message || 'Error');
+            }
+            fill(res.data.order);
+            document.getElementById('po-portal-msg').textContent = 'Guardado ' + res.data.order.numero_orden;
+            loadList();
+            return res.data.order;
+        });
+    }
+
+    function editorHasContent() {
+        collectItems();
+        if (items.length) return true;
+        return (document.getElementById('po-portal-notas')?.value || '').trim() !== '';
+    }
+
+    function canSaveDraftOnClose() {
+        if (!cfg.canCreate) return false;
+        const estado = current && current.estado;
+        if (!estado) return true;
+        return estado === 'borrador' || estado === 'pendiente' || estado === 'aprobada';
+    }
+
+    function hideEditor() {
+        current = null;
+        items = [];
+        document.getElementById('po-portal-editor').style.display = 'none';
+        document.getElementById('po-portal-msg').textContent = '';
+        const hits = document.getElementById('po-portal-hits');
+        if (hits) hits.innerHTML = '';
+        loadList();
+    }
+
+    function closeEditor() {
+        if (canSaveDraftOnClose() && editorHasContent()) {
+            document.getElementById('po-portal-msg').textContent = 'Guardando borrador...';
+            save().then(() => hideEditor()).catch(() => {});
+            return;
+        }
+        hideEditor();
+    }
+
+    function jobsFrom(order) {
+        const printer = (typeof RiversoLabelPrint !== 'undefined' && RiversoLabelPrint.getPreferred) ? RiversoLabelPrint.getPreferred() : null;
+        return (order.items || []).map(it => ({
+            nombre: it.nombre,
+            sku: it.sku,
+            cantidad: it.cantidad_ean || 100,
+            precio: it.precio == null || it.precio === '' ? null : Math.round(Number(it.precio)),
+            copias: it.copias || 1,
+            modo: it.modo || 'BolsaCOD',
+            color: it.color || 'BN',
+            ean13: it.ean13 || null,
+            printerName: printer
+        }));
+    }
+
+    function printOrder(order, direct) {
+        if (typeof RiversoLabelPrint === 'undefined') {
+            alert('El módulo de impresión no está cargado.');
+            return;
+        }
+        const jobs = jobsFrom(order);
+        if (!jobs.length) {
+            alert('La orden no tiene ítems');
+            return;
+        }
+        if (!RiversoLabelPrint.isHealthy()) {
+            alert('Agente de impresión no disponible. Ejecuta EtiquetadorRS.exe en este PC.');
+            return;
+        }
+        const printer = RiversoLabelPrint.getPreferred() || '';
+        if (!confirm(`Imprimir ${jobs.length} producto(s) / ${order.total_copias} copias${printer ? ' en ' + printer : ''}?`)) return;
+        RiversoLabelPrint.print(jobs).then(() => post('riverso_print_orders_mark_printed', {
+            id: order.id,
+            impresora_nombre: printer,
+            direct: direct ? 1 : 0
+        })).then(res => {
+            if (!res.success) {
+                alert('Se imprimió, pero no se pudo registrar: ' + (res.data?.message || 'error'));
+                return;
+            }
+            fill(res.data.order);
+            document.getElementById('po-portal-msg').textContent = 'Impresa correctamente';
+            loadList();
+            loadStats();
+        }).catch(err => alert(err && err.message ? err.message : 'Error de impresión'));
+    }
+
+    function openOrder(id) {
+        post('riverso_print_orders_get', { id }).then(res => {
+            if (!res.success) { alert(res.data?.message || 'Error'); return; }
+            fill(res.data.order);
+        });
+    }
+
+    document.getElementById('po-portal-new')?.addEventListener('click', resetEditor);
+    document.getElementById('po-portal-editor')?.addEventListener('click', e => {
+        if (e.target.closest('.po-close-order')) closeEditor();
+    });
+    document.getElementById('po-portal-filter')?.addEventListener('click', () => { page = 1; loadList(); });
+    document.getElementById('po-portal-search')?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { page = 1; loadList(); }
+    });
+    document.getElementById('po-portal-pages')?.addEventListener('click', e => {
+        const a = e.target.closest('.po-page');
+        if (!a) return;
+        e.preventDefault();
+        page = parseInt(a.dataset.page, 10) || 1;
+        loadList();
+    });
+    body.addEventListener('click', e => {
+        const open = e.target.closest('.po-open');
+        const approve = e.target.closest('.po-approve');
+        const printBtn = e.target.closest('.po-print');
+        const cancel = e.target.closest('.po-cancel');
+        if (open) openOrder(open.dataset.id);
+        if (approve) {
+            post('riverso_print_orders_approve', { id: approve.dataset.id }).then(res => {
+                if (!res.success) { alert(res.data?.message || 'Error'); return; }
+                loadList();
+            });
+        }
+        if (printBtn) {
+            post('riverso_print_orders_get', { id: printBtn.dataset.id }).then(res => {
+                if (!res.success) { alert(res.data?.message || 'Error'); return; }
+                printOrder(res.data.order, printBtn.dataset.direct === '1');
+            });
+        }
+        if (cancel) {
+            askCancelMotivo(motivo => {
+                post('riverso_print_orders_cancel', { id: cancel.dataset.id, motivo }).then(res => {
+                    if (!res.success) { alert(res.data?.message || 'Error'); return; }
+                    loadList();
+                });
+            });
+        }
+    });
+
+    document.getElementById('po-portal-items')?.addEventListener('click', e => {
+        const del = e.target.closest('.po-del');
+        const unlock = e.target.closest('.po-unlock-precio');
+        const roundBtn = e.target.closest('.po-round-precio');
+        const unroundBtn = e.target.closest('.po-unround-precio');
+        if (unlock) {
+            if (!cfg.canEditPrice) return;
+            if (!confirm('El nuevo precio se usará solo en esta impresión. El producto en catálogo no cambia.')) return;
+            collectItems();
+            const idx = parseInt(unlock.closest('tr').dataset.idx, 10);
+            if (items[idx]) items[idx].precioUnlocked = true;
+            renderItems();
+            document.querySelector(`#po-portal-items tr[data-idx="${idx}"] .po-precio`)?.focus();
+            return;
+        }
+        if (roundBtn) {
+            if (!cfg.canCreate) return;
+            collectItems();
+            const idx = parseInt(roundBtn.closest('tr').dataset.idx, 10);
+            if (!items[idx] || items[idx].precio == null || items[idx].precio === '') return;
+            if (!priceHasFraction(items[idx].precio_original)) {
+                items[idx].precio_original = toPrice2(items[idx].precio);
+            }
+            items[idx].precio = Math.round(Number(items[idx].precio));
+            renderItems();
+            return;
+        }
+        if (unroundBtn) {
+            if (!cfg.canCreate) return;
+            collectItems();
+            const idx = parseInt(unroundBtn.closest('tr').dataset.idx, 10);
+            if (!items[idx] || !canUnroundPrice(items[idx])) return;
+            items[idx].precio = toPrice2(items[idx].precio_original);
+            renderItems();
+            return;
+        }
+        if (!del) return;
+        collectItems();
+        const idx = parseInt(del.closest('tr').dataset.idx, 10);
+        items.splice(idx, 1);
+        renderItems();
+    });
+
+    document.getElementById('po-portal-q-btn')?.addEventListener('click', searchProd);
+    document.getElementById('po-portal-q')?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); searchProd(); }
+    });
+
+    function searchProd() {
+        const q = document.getElementById('po-portal-q')?.value.trim();
+        const hits = document.getElementById('po-portal-hits');
+        if (!q || !hits) return;
+        hits.textContent = 'Buscando...';
+        post('riverso_tienda_local_search', { query: q }).then(res => {
+            const found = (res.success && res.data && res.data.items) ? res.data.items.filter(Boolean) : [];
+            if (!found.length) {
+                hits.innerHTML = '<p style="color:var(--text-secondary);">Sin resultados.</p>';
+                return;
+            }
+            hits.innerHTML = found.map(p => `
+                <div class="po-hit">
+                    <div><strong>${esc(p.nombre)}</strong><br><code>${esc(p.sku)}</code> · ${esc(p.precio_formateado || p.precio || '')}</div>
+                    <button type="button" class="btn btn-primary btn-sm po-add" data-sku="${esc(p.sku)}" data-nombre="${esc(p.nombre)}" data-precio="${esc(p.precio || 0)}">Agregar</button>
+                </div>`).join('');
+        }).catch(() => { hits.textContent = 'Error buscando.'; });
+    }
+
+    document.getElementById('po-portal-hits')?.addEventListener('click', e => {
+        const btn = e.target.closest('.po-add');
+        if (!btn) return;
+        collectItems();
+        items.push({
+            sku: btn.dataset.sku,
+            nombre: btn.dataset.nombre,
+            precio: parseFloat(btn.dataset.precio) || null,
+            cantidad_ean: 100,
+            copias: 1,
+            modo: defaultModo(),
+            color: 'BN'
+        });
+        renderItems();
+    });
+
+    document.getElementById('po-portal-save')?.addEventListener('click', () => save().catch(() => {}));
+    document.getElementById('po-portal-submit')?.addEventListener('click', () => {
+        save().then(order => post('riverso_print_orders_submit', { id: order.id })).then(res => {
+            if (!res.success) { alert(res.data?.message || 'Error'); return; }
+            fill(res.data.order);
+            loadList();
+        }).catch(() => {});
+    });
+    document.getElementById('po-portal-approve')?.addEventListener('click', () => {
+        const id = document.getElementById('po-portal-id').value;
+        if (!id) return;
+        post('riverso_print_orders_approve', { id }).then(res => {
+            if (!res.success) { alert(res.data?.message || 'Error'); return; }
+            fill(res.data.order);
+            loadList();
+        });
+    });
+    document.getElementById('po-portal-cancel')?.addEventListener('click', () => {
+        const id = document.getElementById('po-portal-id').value;
+        if (!id) {
+            hideEditor();
+            return;
+        }
+        if (!cfg.canCancel) return;
+        askCancelMotivo(motivo => {
+            post('riverso_print_orders_cancel', { id, motivo }).then(res => {
+                if (!res.success) { alert(res.data?.message || 'Error'); return; }
+                fill(res.data.order);
+                loadList();
+            });
+        });
+    });
+    document.getElementById('po-portal-print')?.addEventListener('click', () => {
+        const id = document.getElementById('po-portal-id').value;
+        if (!id) { alert('Guarda la orden primero'); return; }
+        save().then(order => printOrder(order, false)).catch(() => {});
+    });
+    document.getElementById('po-portal-print-direct')?.addEventListener('click', () => {
+        save().then(order => printOrder(order, true)).catch(() => {});
+    });
+
+    loadStats();
+    loadList();
 })();
 </script>
 

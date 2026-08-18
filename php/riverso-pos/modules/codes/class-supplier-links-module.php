@@ -239,7 +239,7 @@ class Riverso_Supplier_Links_Module {
             $canonical_params[] = absint($supplier_id);
         }
         $canonical = $wpdb->get_row($wpdb->prepare(
-            "SELECT pp.*, pb.woocommerce_product_id, pb.woocommerce_variation_id, pb.canonical_sku, pb.nombre_canonico
+            "SELECT pp.*, pb.woocommerce_product_id, pb.woocommerce_variation_id, pb.canonical_sku, pb.nombre_canonico, pb.human_product_review
              FROM {$prefix}producto_proveedor pp
              INNER JOIN {$prefix}producto_base pb ON pb.id = pp.producto_base_id
              WHERE {$canonical_where} AND pp.activo = 1
@@ -312,11 +312,17 @@ class Riverso_Supplier_Links_Module {
         }
         
         // Check in legacy codigos table
+        $legacy_where = "(codigo_proveedor = %s OR sku_local = %s OR TRIM(LEADING '0' FROM codigo_proveedor) = %s) AND activo = 1";
+        $legacy_params = array($code, $code, $normalized);
+        if ($supplier_id) {
+            $legacy_where .= " AND proveedor_id = %d";
+            $legacy_params[] = absint($supplier_id);
+        }
         $legacy = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$this->table_codes} 
-             WHERE (codigo_proveedor = %s OR sku_local = %s OR TRIM(LEADING '0' FROM codigo_proveedor) = %s) AND activo = 1
+             WHERE {$legacy_where}
              LIMIT 1",
-            $code, $code, $normalized
+            $legacy_params
         ), ARRAY_A);
         
         if ($legacy && $legacy['product_id']) {

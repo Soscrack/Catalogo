@@ -111,7 +111,7 @@ chown -R riverso.cl_1xybiw6rlcq:psacln {PLUGIN_PATH}
 chmod -R 755 {PLUGIN_PATH}
 
 # Trigger idempotent migrations as the site owner.
-if ! sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
+if ! sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -d memory_limit=512M -r '
   require "{WP_PATH}/wp-load.php";
   Riverso_POS_Activator::update_database();
   echo get_option("riverso_pos_db_version"), PHP_EOL;
@@ -127,12 +127,12 @@ VERSION=$(sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   require "{WP_PATH}/wp-load.php";
   echo defined("RIVERSO_POS_VERSION") ? RIVERSO_POS_VERSION : "missing";
 ')
-test "$VERSION" = "1.5.39"
+test "$VERSION" = "1.5.57"
 
 sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   require "{WP_PATH}/wp-load.php";
   global $wpdb;
-  foreach (["riverso_data_gaps", "riverso_ean_aliases", "riverso_factura_referencias", "riverso_factura_pagos", "riverso_factura_pago_documentos", "riverso_factura_reversa_inventario"] as $suffix) {{
+  foreach (["riverso_data_gaps", "riverso_ean_aliases", "riverso_factura_referencias", "riverso_factura_pagos", "riverso_factura_pago_documentos", "riverso_factura_reversa_inventario", "riverso_ordenes_impresion", "riverso_orden_impresion_items"] as $suffix) {{
     $table = $wpdb->prefix . $suffix;
     if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) !== $table) {{
       fwrite(STDERR, "Missing table: " . $table . PHP_EOL);
@@ -141,7 +141,7 @@ sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   }}
   $facturas = $wpdb->prefix . "riverso_facturas";
   $items = $wpdb->prefix . "riverso_factura_items";
-  foreach (["estado_pago", "tasa_iva", "impuestos_adicionales"] as $colName) {{
+  foreach (["estado_pago", "tasa_iva", "impuestos_adicionales", "tipo_confirmado"] as $colName) {{
     $col = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM `$facturas` LIKE %s", $colName));
     if (empty($col)) {{
       fwrite(STDERR, "Missing column $colName on $facturas" . PHP_EOL);
@@ -152,6 +152,14 @@ sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
     $col = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM `$items` LIKE %s", $colName));
     if (empty($col)) {{
       fwrite(STDERR, "Missing column $colName on $items" . PHP_EOL);
+      exit(1);
+    }}
+  }}
+  $codigos = $wpdb->prefix . "riverso_codigos";
+  foreach (["last_seen_document_date", "sku_mapped_at"] as $colName) {{
+    $col = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM `$codigos` LIKE %s", $colName));
+    if (empty($col)) {{
+      fwrite(STDERR, "Missing column $colName on $codigos" . PHP_EOL);
       exit(1);
     }}
   }}

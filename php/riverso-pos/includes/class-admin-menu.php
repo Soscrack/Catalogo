@@ -230,6 +230,16 @@ class Riverso_POS_Admin_Menu {
             [$this, 'render_barcodes']
         );
 
+        // Impresiones
+        add_submenu_page(
+            'riverso-pos',
+            __('Impresiones', 'riverso-pos'),
+            __('Impresiones', 'riverso-pos'),
+            'riverso_view_print_orders',
+            'riverso-pos-print-orders',
+            [$this, 'render_print_orders']
+        );
+
         // Tienda Local
         add_submenu_page(
             'riverso-pos',
@@ -418,6 +428,16 @@ class Riverso_POS_Admin_Menu {
     public function render_barcodes() {
         require_once RIVERSO_POS_PLUGIN_DIR . 'modules/barcodes/class-barcode-module.php';
         $this->render_page('barcodes');
+    }
+
+    /**
+     * Renderiza la página de órdenes de impresión
+     */
+    public function render_print_orders() {
+        if (!class_exists('Riverso_Print_Order_Module')) {
+            require_once RIVERSO_POS_PLUGIN_DIR . 'modules/print-orders/class-print-order-module.php';
+        }
+        $this->render_page('print-orders');
     }
 
     /**

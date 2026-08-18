@@ -727,34 +727,36 @@ class Riverso_Invoice_Intake_Service {
         }
 
         $supplier_code = trim((string) ($item->codigo_proveedor ?? ''));
+        $proveedor_id = isset($item->proveedor_id) ? (int) $item->proveedor_id : 0;
+        $mapping = ($supplier_code !== '' && $proveedor_id)
+            ? $this->lookup_product_mapping($proveedor_id, $supplier_code)
+            : [
+                'sku_local' => null,
+                'sku_sugerido' => $supplier_code ? riverso_mamut_online_to_local_sku($supplier_code) : null,
+                'has_mapping' => false,
+            ];
 
-        if (empty($item->sku_local) && !empty($item->product_id) && function_exists('wc_get_product')) {
-            $product = wc_get_product((int) $item->product_id);
-            if ($product) {
-                $woo_sku = trim((string) $product->get_sku());
-                if ($supplier_code !== '' && riverso_sku_equals_supplier_code($woo_sku, $supplier_code)) {
-                    $mamut = riverso_mamut_online_to_local_sku($supplier_code);
-                    if ($mamut) {
-                        $item->sku_local = $mamut;
-                    }
-                } elseif ($woo_sku !== '' && !riverso_sku_equals_supplier_code($woo_sku, $supplier_code)) {
-                    // SKU WC distinto al proveedor: podría ser local si no hay mapeo Mamut.
-                    $mamut = $supplier_code ? riverso_mamut_online_to_local_sku($supplier_code) : null;
-                    $item->sku_local = $mamut ?: $woo_sku;
-                }
+        $item->has_mapping = !empty($mapping['has_mapping']);
+        $item->sku_sugerido = $mapping['sku_sugerido'] ?? null;
+        $item->last_seen_document_date = $mapping['last_seen_document_date'] ?? null;
+        $item->sku_mapped_at = $mapping['sku_mapped_at'] ?? null;
+        $item->mapping_source = $mapping['source'] ?? null;
+
+        if (!empty($mapping['has_mapping']) && !empty($mapping['sku_local'])) {
+            $stored = trim((string) ($item->sku_local ?? ''));
+            if ($stored === '' || riverso_sku_equals_supplier_code($stored, $supplier_code)) {
+                $item->sku_local = $mapping['sku_local'];
             }
+        } elseif ($supplier_code !== '' && riverso_sku_equals_supplier_code($item->sku_local ?? '', $supplier_code)) {
+            $item->sku_local = null;
         }
 
-        if ($supplier_code !== '' && riverso_sku_equals_supplier_code($item->sku_local ?? '', $supplier_code)) {
-            $mamut = riverso_mamut_online_to_local_sku($supplier_code);
-            if ($mamut) {
-                $item->sku_local = $mamut;
-            }
+        if (empty($item->sku_sugerido) && empty($mapping['has_mapping'])) {
+            $item->sku_sugerido = $mapping['sku_local'] ?? riverso_mamut_online_to_local_sku($supplier_code);
         }
 
         $lookup = null;
         if ($supplier_code !== '' && class_exists('Riverso_Supplier_Links_Module')) {
-            $proveedor_id = isset($item->proveedor_id) ? (int) $item->proveedor_id : 0;
             $lookup = Riverso_Supplier_Links_Module::get_instance()->lookup_by_code($supplier_code, $proveedor_id ?: null);
         }
 
@@ -804,17 +806,91 @@ class Riverso_Invoice_Intake_Service {
         return $estado;
     }
 
-    public function lookup_product_mapping($proveedor_id, $codigo_proveedor, $codigos = []) {
+    /**
+     * Mapeo verificado (humano o VERIFIED) para un par proveedor+código.
+     * No incluye sugerencias de catálogo / Mamut.
+     */
+    public function get_verified_sku_mapping($proveedor_id, $codigo_proveedor) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
+        $proveedor_id = (int) $proveedor_id;
+        $codigo_proveedor = trim((string) $codigo_proveedor);
+        if (!$proveedor_id || $codigo_proveedor === '') {
+            return null;
+        }
 
+        $domain = $wpdb->get_row($wpdb->prepare(
+            "SELECT pp.id AS producto_proveedor_id, pp.match_estado, pp.producto_base_id,
+                    pb.canonical_sku, pb.woocommerce_product_id, pb.woocommerce_variation_id
+             FROM {$prefix}producto_proveedor pp
+             INNER JOIN {$prefix}producto_base pb ON pb.id = pp.producto_base_id
+             WHERE pp.proveedor_id = %d AND pp.codigo_proveedor = %s AND pp.activo = 1
+               AND pp.match_estado = 'VERIFIED'
+               AND pb.deleted_at IS NULL
+               AND pb.canonical_sku IS NOT NULL AND pb.canonical_sku != ''
+             LIMIT 1",
+            $proveedor_id,
+            $codigo_proveedor
+        ), ARRAY_A);
+
+        $codigo = $wpdb->get_row($wpdb->prepare(
+            "SELECT sku_local, product_id, product_base_id, supplier_product_id,
+                    last_seen_document_date, sku_mapped_at, verificado
+             FROM {$prefix}codigos
+             WHERE proveedor_id = %d AND codigo_proveedor = %s AND activo = 1
+             LIMIT 1",
+            $proveedor_id,
+            $codigo_proveedor
+        ), ARRAY_A);
+
+        $sku = '';
+        $product_id = null;
+        $producto_base_id = null;
+        $producto_proveedor_id = null;
+        if ($domain && !empty($domain['canonical_sku'])) {
+            $sku = trim((string) $domain['canonical_sku']);
+            $producto_base_id = (int) ($domain['producto_base_id'] ?: 0) ?: null;
+            $producto_proveedor_id = (int) ($domain['producto_proveedor_id'] ?: 0) ?: null;
+            $product_id = (int) ($domain['woocommerce_variation_id'] ?: $domain['woocommerce_product_id'] ?: 0) ?: null;
+        } elseif ($codigo && !empty($codigo['sku_local'])) {
+            $sku = trim((string) $codigo['sku_local']);
+            $product_id = (int) ($codigo['product_id'] ?: 0) ?: null;
+            $producto_base_id = (int) ($codigo['product_base_id'] ?: 0) ?: null;
+            $producto_proveedor_id = (int) ($codigo['supplier_product_id'] ?: 0) ?: null;
+        }
+
+        if ($sku === '' || riverso_sku_equals_supplier_code($sku, $codigo_proveedor)) {
+            return null;
+        }
+
+        if (!$product_id) {
+            $product_id = $this->resolve_product_id_for_local_sku($sku, $codigo_proveedor);
+        }
+
+        return [
+            'sku_local' => $sku,
+            'product_id' => $product_id,
+            'producto_base_id' => $producto_base_id,
+            'producto_proveedor_id' => $producto_proveedor_id,
+            'last_seen_document_date' => $codigo['last_seen_document_date'] ?? null,
+            'sku_mapped_at' => $codigo['sku_mapped_at'] ?? null,
+            'source' => 'verified_mapping',
+            'has_mapping' => true,
+        ];
+    }
+
+    public function lookup_product_mapping($proveedor_id, $codigo_proveedor, $codigos = []) {
         $result = [
             'sku_local' => null,
+            'sku_sugerido' => null,
             'sku_online' => null,
             'product_id' => null,
             'producto_base_id' => null,
             'producto_proveedor_id' => null,
+            'last_seen_document_date' => null,
+            'sku_mapped_at' => null,
             'source' => null,
+            'has_mapping' => false,
         ];
 
         if (empty($codigo_proveedor)) {
@@ -831,56 +907,35 @@ class Riverso_Invoice_Intake_Service {
             return $result;
         }
 
+        $verified = $this->get_verified_sku_mapping((int) $proveedor_id, $codigo_proveedor);
+        $mamut = riverso_mamut_online_to_local_sku($codigo_proveedor);
+
         $lookup = null;
         if (class_exists('Riverso_Supplier_Links_Module')) {
             $links = Riverso_Supplier_Links_Module::get_instance();
             $lookup = $links->lookup_by_code($codigo_proveedor, (int) $proveedor_id);
         }
 
-        $local_sku = $this->resolve_local_sku($codigo_proveedor, $lookup, (int) $proveedor_id);
-
-        if (!$local_sku) {
-            $mapping = $wpdb->get_row($wpdb->prepare(
-                "SELECT sku_local, product_id, product_base_id, supplier_product_id
-                 FROM {$prefix}codigos
-                 WHERE proveedor_id = %d AND codigo_proveedor = %s AND activo = 1
-                 LIMIT 1",
-                (int) $proveedor_id,
+        if ($verified) {
+            $result = array_merge($result, $verified);
+            $result['sku_sugerido'] = ($mamut && strcasecmp($mamut, $verified['sku_local']) !== 0) ? $mamut : null;
+        } else {
+            $suggested = riverso_usable_local_sku(
+                $this->resolve_local_sku($codigo_proveedor, $lookup, (int) $proveedor_id),
                 $codigo_proveedor
-            ), ARRAY_A);
-
-            if ($mapping && !empty($mapping['sku_local'])) {
-                $candidate = trim((string) $mapping['sku_local']);
-            } else {
-                $candidate = '';
-            }
-
-            if ($candidate !== ''
-                && !riverso_sku_equals_supplier_code($candidate, $codigo_proveedor)
-                && riverso_is_trusted_supplier_local_sku($codigo_proveedor, $candidate, $lookup)) {
-                $local_sku = $candidate;
-                $result['source'] = 'legacy_codigos';
-                $result['product_id'] = (int) ($mapping['product_id'] ?: 0) ?: null;
-                $result['producto_base_id'] = (int) ($mapping['product_base_id'] ?: 0) ?: null;
-                $result['producto_proveedor_id'] = (int) ($mapping['supplier_product_id'] ?: 0) ?: null;
-            }
-        }
-
-        if ($local_sku) {
-            $result['sku_local'] = $local_sku;
-            if (!$result['source']) {
-                $result['source'] = is_array($lookup) && !empty($lookup['source'])
-                    ? $lookup['source']
-                    : (riverso_mamut_online_to_local_sku($codigo_proveedor) ? 'mamut_mapping' : null);
-            }
-            if (!$result['product_id']) {
-                $result['product_id'] = $this->resolve_product_id_for_local_sku($local_sku, $codigo_proveedor);
-            }
-            if (is_array($lookup) && !empty($lookup['domain'])) {
-                $result['producto_base_id'] = $result['producto_base_id']
-                    ?: ((int) ($lookup['domain']['producto_base_id'] ?? 0) ?: null);
-                $result['producto_proveedor_id'] = $result['producto_proveedor_id']
-                    ?: ((int) ($lookup['domain']['id'] ?? 0) ?: null);
+            );
+            $result['sku_sugerido'] = $suggested;
+            $result['sku_local'] = $suggested;
+            $result['has_mapping'] = false;
+            if ($suggested) {
+                $result['source'] = $mamut && strcasecmp($mamut, $suggested) === 0
+                    ? 'catalog_suggestion'
+                    : (is_array($lookup) && !empty($lookup['source']) ? $lookup['source'] : 'catalog_suggestion');
+                $result['product_id'] = $this->resolve_product_id_for_local_sku($suggested, $codigo_proveedor);
+                if (is_array($lookup) && !empty($lookup['domain'])) {
+                    $result['producto_base_id'] = (int) ($lookup['domain']['producto_base_id'] ?? 0) ?: null;
+                    $result['producto_proveedor_id'] = (int) ($lookup['domain']['id'] ?? 0) ?: null;
+                }
             }
         }
 
@@ -892,6 +947,597 @@ class Riverso_Invoice_Intake_Service {
         );
 
         return $result;
+    }
+
+    /**
+     * Dueños actuales de un SKU local: un SKU solo puede tener un par proveedor+código.
+     */
+    public function find_sku_owners($sku_local) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $sku_local = trim((string) $sku_local);
+        if ($sku_local === '') {
+            return [];
+        }
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT pp.proveedor_id, pp.codigo_proveedor, p.nombre AS proveedor_nombre,
+                    pb.id AS producto_base_id, pb.canonical_sku, pb.nombre_canonico, 'domain' AS source
+             FROM {$prefix}producto_proveedor pp
+             INNER JOIN {$prefix}producto_base pb ON pb.id = pp.producto_base_id
+             LEFT JOIN {$prefix}proveedores p ON p.id = pp.proveedor_id
+             WHERE pp.activo = 1
+               AND pb.deleted_at IS NULL
+               AND pb.canonical_sku = %s
+               AND pp.codigo_proveedor IS NOT NULL AND pp.codigo_proveedor != ''",
+            $sku_local
+        ), ARRAY_A);
+
+        $legacy = $wpdb->get_results($wpdb->prepare(
+            "SELECT c.proveedor_id, c.codigo_proveedor, p.nombre AS proveedor_nombre,
+                    c.product_base_id AS producto_base_id, c.sku_local AS canonical_sku,
+                    c.nombre_proveedor AS nombre_canonico, 'codigos' AS source
+             FROM {$prefix}codigos c
+             LEFT JOIN {$prefix}proveedores p ON p.id = c.proveedor_id
+             WHERE c.activo = 1 AND c.sku_local = %s
+               AND c.codigo_proveedor IS NOT NULL AND c.codigo_proveedor != ''",
+            $sku_local
+        ), ARRAY_A);
+
+        $owners = [];
+        foreach (array_merge($rows ?: [], $legacy ?: []) as $row) {
+            $pid = (int) ($row['proveedor_id'] ?? 0);
+            $code = trim((string) ($row['codigo_proveedor'] ?? ''));
+            if ($pid <= 0 || $code === '') {
+                continue;
+            }
+            $key = $pid . "\0" . strtoupper($code);
+            if (!isset($owners[$key])) {
+                $owners[$key] = [
+                    'proveedor_id' => $pid,
+                    'codigo_proveedor' => $code,
+                    'proveedor_nombre' => $row['proveedor_nombre'] ?? '',
+                    'producto_base_id' => (int) ($row['producto_base_id'] ?? 0) ?: null,
+                    'sku_local' => $sku_local,
+                    'nombre_canonico' => $row['nombre_canonico'] ?? '',
+                    'source' => $row['source'] ?? '',
+                ];
+            }
+        }
+
+        return array_values($owners);
+    }
+
+    /**
+     * SKU local actualmente mapeado a un código de proveedor.
+     */
+    public function get_code_current_sku($proveedor_id, $codigo_proveedor) {
+        $codigo_proveedor = trim((string) $codigo_proveedor);
+        if (!(int) $proveedor_id || $codigo_proveedor === '') {
+            return null;
+        }
+
+        $verified = $this->get_verified_sku_mapping((int) $proveedor_id, $codigo_proveedor);
+        return $verified['sku_local'] ?? null;
+    }
+
+    public function format_sku_owner_label(array $owner) {
+        $name = trim((string) ($owner['proveedor_nombre'] ?? ''));
+        if ($name === '') {
+            $name = 'Proveedor #' . (int) ($owner['proveedor_id'] ?? 0);
+        }
+        return $name . ' / ' . ($owner['codigo_proveedor'] ?? '');
+    }
+
+    /**
+     * Conflicto si el SKU ya pertenece a otro par, o el código ya tiene otro SKU.
+     */
+    public function get_sku_assignment_conflict($sku_local, $proveedor_id, $codigo_proveedor) {
+        $sku_local = trim((string) $sku_local);
+        $codigo_proveedor = trim((string) $codigo_proveedor);
+        $proveedor_id = (int) $proveedor_id;
+        if ($sku_local === '' || !$proveedor_id || $codigo_proveedor === '') {
+            return null;
+        }
+
+        $owners = $this->find_sku_owners($sku_local);
+        $others = array_values(array_filter($owners, function ($owner) use ($proveedor_id, $codigo_proveedor) {
+            return (int) $owner['proveedor_id'] !== $proveedor_id
+                || strcasecmp((string) $owner['codigo_proveedor'], $codigo_proveedor) !== 0;
+        }));
+
+        $current = $this->get_code_current_sku($proveedor_id, $codigo_proveedor);
+        if ($current && strcasecmp($current, $sku_local) === 0 && empty($others)) {
+            return null;
+        }
+
+        if ($others) {
+            $labels = array_map([$this, 'format_sku_owner_label'], $others);
+            return [
+                'code' => 'sku_owned_elsewhere',
+                'sku_local' => $sku_local,
+                'current_sku' => $current,
+                'owners' => $others,
+                'message' => sprintf(
+                    'El SKU %s ya está asignado a %s. Cada SKU local solo puede tener un proveedor y un código.',
+                    $sku_local,
+                    implode(', ', $labels)
+                ),
+            ];
+        }
+
+        if ($current && strcasecmp($current, $sku_local) !== 0) {
+            return [
+                'code' => 'code_has_other_sku',
+                'sku_local' => $sku_local,
+                'current_sku' => $current,
+                'owners' => [],
+                'message' => sprintf(
+                    'El código %s ya está mapeado al SKU %s. ¿Cambiarlo a %s?',
+                    $codigo_proveedor,
+                    $current,
+                    $sku_local
+                ),
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Quita un SKU de un par proveedor+código (dominio + tabla códigos).
+     */
+    public function unlink_sku_from_code($proveedor_id, $codigo_proveedor, $sku_local = null, array $opts = []) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $proveedor_id = (int) $proveedor_id;
+        $codigo_proveedor = trim((string) $codigo_proveedor);
+        if (!$proveedor_id || $codigo_proveedor === '') {
+            return;
+        }
+
+        $old_sku = $sku_local ?: $this->get_code_current_sku($proveedor_id, $codigo_proveedor);
+        $document_date = $this->normalize_document_date($opts['document_date'] ?? null);
+        $modified_at = current_time('mysql');
+        $last_seen = $this->resolve_last_seen_document_date($proveedor_id, $codigo_proveedor, $document_date);
+
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}producto_proveedor
+             SET producto_base_id = NULL, match_estado = 'UNMATCHED', updated_at = %s
+             WHERE proveedor_id = %d AND codigo_proveedor = %s AND activo = 1",
+            $modified_at,
+            $proveedor_id,
+            $codigo_proveedor
+        ));
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}codigos
+             SET sku_local = NULL, product_id = NULL, product_base_id = NULL,
+                 sku_mapped_at = %s,
+                 last_seen_document_date = COALESCE(NULLIF(%s, ''), last_seen_document_date),
+                 updated_at = %s
+             WHERE proveedor_id = %d AND codigo_proveedor = %s",
+            $modified_at,
+            $last_seen ?: '',
+            $modified_at,
+            $proveedor_id,
+            $codigo_proveedor
+        ));
+
+        if ($old_sku && class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('sku_mapping_cleared', 'sku_mapping', 0, [
+                'actor_type' => $opts['actor_type'] ?? 'computer',
+                'entity_name' => $old_sku,
+                'old_value' => [
+                    'sku_local' => $old_sku,
+                    'proveedor_id' => $proveedor_id,
+                    'codigo_proveedor' => $codigo_proveedor,
+                    'document_date' => $document_date,
+                    'last_seen_document_date' => $last_seen,
+                ],
+                'new_value' => [
+                    'sku_local' => null,
+                    'proveedor_id' => $proveedor_id,
+                    'codigo_proveedor' => $codigo_proveedor,
+                    'document_date' => $document_date,
+                    'last_seen_document_date' => $last_seen,
+                    'modified_at' => $modified_at,
+                ],
+                'details' => sprintf(
+                    'Se liberó el SKU %s de %s%s',
+                    $old_sku,
+                    $codigo_proveedor,
+                    $document_date ? " (doc. {$document_date})" : ''
+                ),
+            ]);
+        }
+    }
+
+    /**
+     * Asigna SKU local a un par proveedor+código. $force=true reasigna robando el SKU a otros dueños.
+     *
+     * @return array|WP_Error
+     */
+    public function assign_local_sku_mapping($proveedor_id, $codigo_proveedor, $sku_local, array $opts = []) {
+        $proveedor_id = (int) $proveedor_id;
+        $codigo_proveedor = trim((string) $codigo_proveedor);
+        $sku_local = trim((string) $sku_local);
+        $force = !empty($opts['force']);
+        $clear = !empty($opts['clear']) || $sku_local === '';
+
+        if (!$proveedor_id || $codigo_proveedor === '') {
+            return new WP_Error('invalid_params', 'Proveedor y código son obligatorios');
+        }
+
+        $old_sku = $this->get_code_current_sku($proveedor_id, $codigo_proveedor);
+        $document_date = $this->normalize_document_date($opts['document_date'] ?? null);
+        $modified_at = current_time('mysql');
+
+        if ($clear) {
+            $this->unlink_sku_from_code($proveedor_id, $codigo_proveedor, $old_sku, [
+                'document_date' => $document_date,
+                'actor_type' => $opts['actor_type'] ?? 'human',
+            ]);
+            $applied = $this->apply_mapping_to_later_invoices(
+                $proveedor_id,
+                $codigo_proveedor,
+                '',
+                $document_date
+            );
+            return [
+                'sku_local' => null,
+                'old_sku' => $old_sku,
+                'cleared' => true,
+                'document_date' => $document_date,
+                'last_seen_document_date' => $this->resolve_last_seen_document_date($proveedor_id, $codigo_proveedor, $document_date),
+                'modified_at' => $modified_at,
+                'applied' => $applied,
+            ];
+        }
+
+        $conflict = $this->get_sku_assignment_conflict($sku_local, $proveedor_id, $codigo_proveedor);
+        if ($conflict && !$force) {
+            return new WP_Error('sku_conflict', $conflict['message'], $conflict);
+        }
+
+        if ($conflict && !empty($conflict['owners'])) {
+            foreach ($conflict['owners'] as $owner) {
+                $this->unlink_sku_from_code(
+                    (int) $owner['proveedor_id'],
+                    $owner['codigo_proveedor'],
+                    $sku_local,
+                    ['document_date' => $document_date, 'actor_type' => $opts['actor_type'] ?? 'human']
+                );
+            }
+        }
+
+        $this->persist_supplier_code(
+            $proveedor_id,
+            $codigo_proveedor,
+            $opts['descripcion'] ?? '',
+            $opts['codigos'] ?? [],
+            $sku_local,
+            true,
+            $document_date
+        );
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $base_id = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}producto_base
+             WHERE canonical_sku = %s AND deleted_at IS NULL
+             LIMIT 1",
+            $sku_local
+        ));
+        if ($base_id) {
+            $pp_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}producto_proveedor
+                 WHERE proveedor_id = %d AND codigo_proveedor = %s LIMIT 1",
+                $proveedor_id,
+                $codigo_proveedor
+            ));
+            if ($pp_id) {
+                $wpdb->update(
+                    "{$prefix}producto_proveedor",
+                    [
+                        'producto_base_id' => $base_id,
+                        'activo' => 1,
+                        'match_estado' => 'VERIFIED',
+                        'updated_at' => current_time('mysql'),
+                    ],
+                    ['id' => (int) $pp_id],
+                    ['%d', '%d', '%s', '%s'],
+                    ['%d']
+                );
+            } else {
+                $wpdb->insert("{$prefix}producto_proveedor", [
+                    'producto_base_id' => $base_id,
+                    'proveedor_id' => $proveedor_id,
+                    'codigo_proveedor' => $codigo_proveedor,
+                    'nombre_proveedor' => $opts['descripcion'] ?? null,
+                    'activo' => 1,
+                    'match_estado' => 'VERIFIED',
+                    'origen_datos' => 'manual',
+                    'created_at' => current_time('mysql'),
+                ]);
+            }
+        }
+
+        $this->touch_mapping_dates($proveedor_id, $codigo_proveedor, $modified_at, $document_date, true);
+        $product_id = $this->resolve_product_id_for_local_sku($sku_local, $codigo_proveedor);
+        $applied = $this->apply_mapping_to_later_invoices(
+            $proveedor_id,
+            $codigo_proveedor,
+            $sku_local,
+            $document_date,
+            $product_id
+        );
+        $last_seen = $this->resolve_last_seen_document_date($proveedor_id, $codigo_proveedor, $document_date);
+
+        $action = ($old_sku && strcasecmp($old_sku, $sku_local) !== 0)
+            ? 'sku_mapping_changed'
+            : 'sku_mapping_assigned';
+        if (class_exists('Riverso_POS_Audit')) {
+            $base_id = (int) ($this->lookup_product_mapping($proveedor_id, $codigo_proveedor)['producto_base_id'] ?? 0);
+            Riverso_POS_Audit::log($action, 'sku_mapping', $base_id ?: 0, [
+                'actor_type' => $opts['actor_type'] ?? 'human',
+                'entity_name' => $sku_local,
+                'old_value' => [
+                    'sku_local' => $old_sku,
+                    'proveedor_id' => $proveedor_id,
+                    'codigo_proveedor' => $codigo_proveedor,
+                    'document_date' => $document_date,
+                ],
+                'new_value' => [
+                    'sku_local' => $sku_local,
+                    'proveedor_id' => $proveedor_id,
+                    'codigo_proveedor' => $codigo_proveedor,
+                    'factura_item_id' => $opts['factura_item_id'] ?? null,
+                    'forced' => $force,
+                    'document_date' => $document_date,
+                    'last_seen_document_date' => $last_seen,
+                    'modified_at' => $modified_at,
+                    'items_updated' => $applied['items'] ?? 0,
+                ],
+                'details' => sprintf(
+                    'SKU %s ← %s%s%s',
+                    $sku_local,
+                    $codigo_proveedor,
+                    $old_sku ? " (antes {$old_sku})" : '',
+                    $document_date ? " · doc. {$document_date}" : ''
+                ),
+            ]);
+        }
+
+        return [
+            'sku_local' => $sku_local,
+            'old_sku' => $old_sku,
+            'forced' => $force,
+            'conflict' => $conflict,
+            'document_date' => $document_date,
+            'last_seen_document_date' => $last_seen,
+            'modified_at' => $modified_at,
+            'applied' => $applied,
+        ];
+    }
+
+    /**
+     * Normaliza una fecha de documento a Y-m-d.
+     */
+    public function normalize_document_date($value) {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $value, $m)) {
+            return substr($m[0], 0, 10);
+        }
+        $ts = strtotime($value);
+        return $ts ? date('Y-m-d', $ts) : null;
+    }
+
+    /**
+     * Última fecha de emisión vista para un código proveedor.
+     */
+    public function resolve_last_seen_document_date($proveedor_id, $codigo_proveedor, $candidate_date = null) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $stored = $wpdb->get_var($wpdb->prepare(
+            "SELECT last_seen_document_date FROM {$prefix}codigos
+             WHERE proveedor_id = %d AND codigo_proveedor = %s LIMIT 1",
+            (int) $proveedor_id,
+            $codigo_proveedor
+        ));
+        $from_invoices = $wpdb->get_var($wpdb->prepare(
+            "SELECT MAX(f.fecha_emision)
+             FROM {$prefix}factura_items fi
+             INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
+             WHERE f.proveedor_id = %d AND fi.codigo_proveedor = %s
+               AND (fi.item_tipo = 'producto' OR fi.item_tipo IS NULL)",
+            (int) $proveedor_id,
+            $codigo_proveedor
+        ));
+
+        $dates = array_filter([
+            $this->normalize_document_date($stored),
+            $this->normalize_document_date($from_invoices),
+            $this->normalize_document_date($candidate_date),
+        ]);
+        if (!$dates) {
+            return null;
+        }
+        sort($dates);
+        return end($dates);
+    }
+
+    /**
+     * Actualiza fecha de modificación y último documento visto del mapeo.
+     */
+    public function touch_mapping_dates($proveedor_id, $codigo_proveedor, $modified_at = null, $document_date = null, $mapping_changed = false) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $last_seen = $this->resolve_last_seen_document_date($proveedor_id, $codigo_proveedor, $document_date);
+        $fields = ['updated_at' => $modified_at ?: current_time('mysql')];
+        $formats = ['%s'];
+        if ($last_seen) {
+            $fields['last_seen_document_date'] = $last_seen;
+            $formats[] = '%s';
+        }
+        if ($mapping_changed) {
+            $fields['sku_mapped_at'] = $modified_at ?: current_time('mysql');
+            $formats[] = '%s';
+        }
+        $wpdb->update(
+            "{$prefix}codigos",
+            $fields,
+            [
+                'proveedor_id' => (int) $proveedor_id,
+                'codigo_proveedor' => $codigo_proveedor,
+            ],
+            $formats,
+            ['%d', '%s']
+        );
+        return $last_seen;
+    }
+
+    /**
+     * Aplica el mapeo a ítems y costos de facturas con fecha >= el documento editado.
+     */
+    public function apply_mapping_to_later_invoices($proveedor_id, $codigo_proveedor, $sku_local, $from_date, $product_id = null) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $proveedor_id = (int) $proveedor_id;
+        $codigo_proveedor = trim((string) $codigo_proveedor);
+        $from_date = $this->normalize_document_date($from_date);
+        $result = ['items' => 0, 'invoices' => 0, 'costs' => 0];
+        if (!$proveedor_id || $codigo_proveedor === '' || !$from_date) {
+            return $result;
+        }
+
+        $sku_local = riverso_usable_local_sku($sku_local, $codigo_proveedor) ?: '';
+        $new_sku = $sku_local !== '' ? $sku_local : '';
+        $estado = $new_sku !== '' ? 'vinculado' : 'pendiente';
+        $product_id = $new_sku !== '' ? (int) $product_id : 0;
+
+        $factura_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT f.id
+             FROM {$prefix}factura_items fi
+             INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
+             WHERE f.proveedor_id = %d
+               AND fi.codigo_proveedor = %s
+               AND (fi.item_tipo = 'producto' OR fi.item_tipo IS NULL)
+               AND f.fecha_emision >= %s",
+            $proveedor_id,
+            $codigo_proveedor,
+            $from_date
+        ));
+
+        $result['items'] = (int) $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}factura_items fi
+             INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
+             SET fi.sku_local = NULLIF(%s, ''),
+                 fi.product_id = NULLIF(%d, 0),
+                 fi.estado = %s
+             WHERE f.proveedor_id = %d
+               AND fi.codigo_proveedor = %s
+               AND (fi.item_tipo = 'producto' OR fi.item_tipo IS NULL)
+               AND f.fecha_emision >= %s",
+            $new_sku,
+            $product_id,
+            $estado,
+            $proveedor_id,
+            $codigo_proveedor,
+            $from_date
+        ));
+
+        $result['costs'] = (int) $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}cost_history ch
+             INNER JOIN {$prefix}factura_items fi ON fi.id = ch.source_item_id AND ch.source_type = 'invoice'
+             INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
+             SET ch.product_id = %d,
+                 ch.pendiente_vinculacion = %d
+             WHERE f.proveedor_id = %d
+               AND fi.codigo_proveedor = %s
+               AND ch.document_date >= %s",
+            $product_id,
+            $new_sku !== '' ? 0 : 1,
+            $proveedor_id,
+            $codigo_proveedor,
+            $from_date
+        ));
+
+        foreach ($factura_ids ?: [] as $factura_id) {
+            $this->sync_factura_item_status((int) $factura_id);
+        }
+        $result['invoices'] = count($factura_ids ?: []);
+
+        if ($new_sku !== '' && class_exists('Riverso_Task_Module') && $factura_ids) {
+            $ids = array_map('intval', $factura_ids);
+            $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}tareas t
+                 INNER JOIN {$prefix}factura_items fi ON fi.id = t.referencia_id
+                 SET t.estado = 'completada', t.completado_en = %s
+                 WHERE t.tipo = 'codigo_faltante'
+                   AND t.referencia_tipo = 'factura_item'
+                   AND t.estado = 'pendiente'
+                   AND fi.factura_id IN ($placeholders)
+                   AND fi.codigo_proveedor = %s",
+                ...array_merge([current_time('mysql')], $ids, [$codigo_proveedor])
+            ));
+        }
+
+        return $result;
+    }
+
+    /**
+     * Historial de mapeos de un SKU o de un código proveedor.
+     */
+    public function get_sku_mapping_history($sku_local = '', $codigo_proveedor = '') {
+        if (!class_exists('Riverso_POS_Audit')) {
+            return [];
+        }
+        Riverso_POS_Audit::init();
+        global $wpdb;
+        $table = $wpdb->prefix . 'riverso_audit_log';
+        $sku_local = trim((string) $sku_local);
+        $codigo_proveedor = trim((string) $codigo_proveedor);
+        if ($sku_local === '' && $codigo_proveedor === '') {
+            return [];
+        }
+
+        $actions = ['sku_mapping_assigned', 'sku_mapping_changed', 'sku_mapping_cleared'];
+        $placeholders = implode(',', array_fill(0, count($actions), '%s'));
+        $sql = "SELECT * FROM {$table}
+                WHERE action IN ($placeholders)
+                  AND entity_type = 'sku_mapping'";
+        $params = $actions;
+        $likes = [];
+        if ($sku_local !== '') {
+            $likes[] = '(new_value LIKE %s OR old_value LIKE %s OR entity_name = %s)';
+            $like = '%' . $wpdb->esc_like($sku_local) . '%';
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $sku_local;
+        }
+        if ($codigo_proveedor !== '') {
+            $likes[] = '(new_value LIKE %s OR old_value LIKE %s OR details LIKE %s)';
+            $like = '%' . $wpdb->esc_like($codigo_proveedor) . '%';
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+        }
+        if ($likes) {
+            $sql .= ' AND (' . implode(' OR ', $likes) . ')';
+        }
+        $sql .= ' ORDER BY created_at DESC LIMIT 50';
+
+        $items = $wpdb->get_results($wpdb->prepare($sql, ...$params));
+        foreach ($items ?: [] as &$item) {
+            $item->action_label = Riverso_POS_Audit::ACTIONS[$item->action] ?? $item->action;
+            $item->old_value_decoded = $item->old_value ? json_decode($item->old_value, true) : null;
+            $item->new_value_decoded = $item->new_value ? json_decode($item->new_value, true) : null;
+        }
+        return $items ?: [];
     }
 
     /**
@@ -939,7 +1585,7 @@ class Riverso_Invoice_Intake_Service {
                 (int) $item->proveedor_id,
                 $item->codigo_proveedor
             );
-            $new_sku = $mapping['sku_local'] ?? null;
+            $new_sku = riverso_usable_local_sku($mapping['sku_local'] ?? null, $item->codigo_proveedor);
             $current = trim((string) ($item->sku_local ?? ''));
 
             if ($new_sku && !riverso_sku_equals_supplier_code($new_sku, $item->codigo_proveedor)) {
@@ -1016,6 +1662,75 @@ class Riverso_Invoice_Intake_Service {
     }
 
     /**
+     * Desvincula ítems cuyo SKU local es el código proveedor (placeholder Mamut sin usar).
+     */
+    public function repair_identity_mapped_invoice_items($args = []) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $where = [
+            "(fi.item_tipo = 'producto' OR fi.item_tipo IS NULL)",
+            "fi.sku_local IS NOT NULL",
+            "fi.sku_local != ''",
+            "LOWER(fi.sku_local) = LOWER(fi.codigo_proveedor)",
+        ];
+        $params = [];
+        if (!empty($args['factura_id'])) {
+            $where[] = 'f.id = %d';
+            $params[] = (int) $args['factura_id'];
+        }
+        if (!empty($args['folio'])) {
+            $where[] = 'f.folio = %s';
+            $params[] = (string) $args['folio'];
+        }
+
+        $sql = "SELECT fi.id, fi.factura_id, fi.codigo_proveedor, fi.sku_local
+                FROM {$prefix}factura_items fi
+                INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
+                WHERE " . implode(' AND ', $where);
+        $items = $params
+            ? $wpdb->get_results($wpdb->prepare($sql, ...$params))
+            : $wpdb->get_results($sql);
+
+        $cleared = 0;
+        $factura_ids = [];
+        foreach ($items ?: [] as $item) {
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}factura_items
+                 SET sku_local = NULL, product_id = NULL, estado = 'pendiente'
+                 WHERE id = %d",
+                (int) $item->id
+            ));
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}cost_history
+                 SET product_id = 0, pendiente_vinculacion = 1
+                 WHERE source_type = 'invoice' AND source_item_id = %d",
+                (int) $item->id
+            ));
+            $factura_ids[(int) $item->factura_id] = true;
+            $cleared++;
+        }
+
+        $codigos_cleared = (int) $wpdb->query(
+            "UPDATE {$prefix}codigos
+             SET sku_local = NULL, product_id = NULL, product_base_id = NULL
+             WHERE sku_local IS NOT NULL AND sku_local != ''
+               AND LOWER(sku_local) = LOWER(codigo_proveedor)"
+        );
+
+        foreach (array_keys($factura_ids) as $fid) {
+            $this->sync_factura_item_status($fid);
+            $this->create_supplier_link_tasks($fid);
+        }
+
+        return [
+            'items_cleared' => $cleared,
+            'codigos_cleared' => $codigos_cleared,
+            'facturas' => array_map('intval', array_keys($factura_ids)),
+        ];
+    }
+
+    /**
      * Desactiva vínculos de dominio que apuntan a un SKU local no confiable.
      */
     public function repair_corrupted_domain_mappings($proveedor_id = null) {
@@ -1029,8 +1744,8 @@ class Riverso_Invoice_Intake_Service {
             $params[] = (int) $proveedor_id;
         }
 
-        $sql = "SELECT pp.id, pp.codigo_proveedor, pp.proveedor_id, pb.human_product_review,
-                       pb.canonical_sku
+        $sql = "SELECT pp.id, pp.codigo_proveedor, pp.proveedor_id, pp.match_estado,
+                       pb.human_product_review, pb.canonical_sku
                 FROM {$prefix}producto_proveedor pp
                 INNER JOIN {$prefix}producto_base pb ON pb.id = pp.producto_base_id
                 WHERE {$where}";
@@ -1043,12 +1758,17 @@ class Riverso_Invoice_Intake_Service {
             if ($canonical === '') {
                 continue;
             }
+            $code = trim((string) $row->codigo_proveedor);
             $lookup = [
                 'domain' => [
                     'human_product_review' => $row->human_product_review ?? 'pending',
+                    'match_estado' => $row->match_estado ?? 'UNMATCHED',
                 ],
             ];
-            if (riverso_is_trusted_supplier_local_sku($row->codigo_proveedor, $canonical, $lookup)) {
+            $mamut = riverso_mamut_online_to_local_sku($code);
+            $mamut_disagrees = ($mamut !== null && strcasecmp($mamut, $canonical) !== 0);
+            $alpha_to_numeric = (bool) preg_match('/[A-Za-z]/', $code) && (bool) preg_match('/^\d+$/', $canonical);
+            if (!$mamut_disagrees && !($alpha_to_numeric && !riverso_supplier_mapping_is_verified($lookup))) {
                 continue;
             }
             $wpdb->update(
@@ -1062,6 +1782,116 @@ class Riverso_Invoice_Intake_Service {
         }
 
         return $deactivated;
+    }
+
+    /**
+     * Desvincula códigos proveedor pegados a un SKU local no confiable
+     * (p.ej. Andina 120437 → tornillo 853) y limpia facturas afectadas.
+     */
+    public function repair_untrusted_supplier_sku_links($proveedor_id = null) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $where = 'pp.activo = 1 AND pp.codigo_proveedor IS NOT NULL AND pp.codigo_proveedor != \'\' AND pp.producto_base_id IS NOT NULL';
+        $params = [];
+        if ($proveedor_id) {
+            $where .= ' AND pp.proveedor_id = %d';
+            $params[] = (int) $proveedor_id;
+        }
+
+        $sql = "SELECT pp.id, pp.codigo_proveedor, pp.proveedor_id, pp.producto_base_id, pp.match_estado,
+                       pb.canonical_sku, pb.human_product_review
+                FROM {$prefix}producto_proveedor pp
+                INNER JOIN {$prefix}producto_base pb ON pb.id = pp.producto_base_id
+                WHERE {$where}";
+        $rows = $params ? $wpdb->get_results($wpdb->prepare($sql, ...$params)) : $wpdb->get_results($sql);
+
+        $unlinked = 0;
+        $cleared_codes = 0;
+        $cleared_items = 0;
+        $factura_ids = [];
+
+        foreach ($rows ?: [] as $row) {
+            $canonical = trim((string) ($row->canonical_sku ?? ''));
+            if ($canonical === '') {
+                continue;
+            }
+            $lookup = [
+                'domain' => [
+                    'human_product_review' => $row->human_product_review ?? 'pending',
+                    'match_estado' => $row->match_estado ?? 'UNMATCHED',
+                ],
+            ];
+            if (riverso_is_trusted_supplier_local_sku($row->codigo_proveedor, $canonical, $lookup)) {
+                continue;
+            }
+
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}producto_proveedor
+                 SET producto_base_id = NULL, match_estado = 'UNMATCHED', updated_at = %s
+                 WHERE id = %d",
+                current_time('mysql'),
+                (int) $row->id
+            ));
+            $unlinked++;
+
+            $cleared_codes += (int) $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}codigos
+                 SET sku_local = NULL, product_id = NULL, product_base_id = NULL, updated_at = %s
+                 WHERE proveedor_id = %d AND codigo_proveedor = %s",
+                current_time('mysql'),
+                (int) $row->proveedor_id,
+                $row->codigo_proveedor
+            ));
+        }
+
+        $item_sql = "SELECT fi.id, fi.factura_id, fi.codigo_proveedor, fi.sku_local, f.proveedor_id
+                     FROM {$prefix}factura_items fi
+                     INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
+                     WHERE (fi.item_tipo = 'producto' OR fi.item_tipo IS NULL)
+                       AND fi.sku_local IS NOT NULL AND fi.sku_local != ''";
+        $item_params = [];
+        if ($proveedor_id) {
+            $item_sql .= ' AND f.proveedor_id = %d';
+            $item_params[] = (int) $proveedor_id;
+        }
+        $items = $item_params
+            ? $wpdb->get_results($wpdb->prepare($item_sql, ...$item_params))
+            : $wpdb->get_results($item_sql);
+
+        foreach ($items ?: [] as $item) {
+            $lookup = null;
+            if (class_exists('Riverso_Supplier_Links_Module')) {
+                $lookup = Riverso_Supplier_Links_Module::get_instance()->lookup_by_code(
+                    $item->codigo_proveedor,
+                    (int) $item->proveedor_id
+                );
+            }
+            if (riverso_is_trusted_supplier_local_sku($item->codigo_proveedor, $item->sku_local, $lookup)) {
+                continue;
+            }
+
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}factura_items
+                 SET sku_local = NULL, product_id = NULL, estado = 'pendiente'
+                 WHERE id = %d",
+                (int) $item->id
+            ));
+            $factura_ids[(int) $item->factura_id] = true;
+            $cleared_items++;
+        }
+
+        foreach (array_keys($factura_ids) as $fid) {
+            $this->sync_factura_item_status($fid);
+            $this->create_supplier_link_tasks($fid);
+        }
+
+        return [
+            'pp_unlinked' => $unlinked,
+            'codigos_cleared' => $cleared_codes,
+            'items_cleared' => $cleared_items,
+            'facturas' => array_map('intval', array_keys($factura_ids)),
+        ];
     }
 
     /**
@@ -1127,7 +1957,7 @@ class Riverso_Invoice_Intake_Service {
     /**
      * Persiste código interno del proveedor y sincroniza dominio canónico si hay SKU.
      */
-    public function persist_supplier_code($proveedor_id, $codigo_proveedor, $descripcion, $codigos = [], $sku_local = null) {
+    public function persist_supplier_code($proveedor_id, $codigo_proveedor, $descripcion, $codigos = [], $sku_local = null, $allow_untrusted = false, $document_date = null) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
@@ -1135,11 +1965,27 @@ class Riverso_Invoice_Intake_Service {
             return null;
         }
 
-        if ($sku_local && (
-            riverso_sku_equals_supplier_code($sku_local, $codigo_proveedor)
-            || !riverso_is_trusted_supplier_local_sku($codigo_proveedor, $sku_local)
-        )) {
-            $sku_local = $this->resolve_local_sku($codigo_proveedor, null, (int) $proveedor_id);
+        $existing_row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}codigos WHERE proveedor_id = %d AND codigo_proveedor = %s",
+            (int) $proveedor_id,
+            $codigo_proveedor
+        ));
+        $existing = $existing_row ? (int) $existing_row->id : 0;
+
+        if (!$allow_untrusted) {
+            // No convertir sugerencias de catálogo en mapeo; conservar el registro humano.
+            $sku_local = ($existing_row && !empty($existing_row->sku_local))
+                ? trim((string) $existing_row->sku_local)
+                : null;
+        }
+
+        $sku_local = riverso_usable_local_sku($sku_local, $codigo_proveedor);
+
+        if ($sku_local && $allow_untrusted) {
+            $conflict = $this->get_sku_assignment_conflict($sku_local, (int) $proveedor_id, $codigo_proveedor);
+            if ($conflict && ($conflict['code'] ?? '') === 'sku_owned_elsewhere') {
+                $sku_local = null;
+            }
         }
 
         $codigo_tipo = 'INT1';
@@ -1153,12 +1999,6 @@ class Riverso_Invoice_Intake_Service {
                 $codigo_barras = sanitize_text_field($codigo['valor']);
             }
         }
-
-        $existing = $wpdb->get_var($wpdb->prepare(
-            "SELECT id FROM {$prefix}codigos WHERE proveedor_id = %d AND codigo_proveedor = %s",
-            (int) $proveedor_id,
-            $codigo_proveedor
-        ));
 
         $product_id = $sku_local ? $this->resolve_product_id_for_local_sku($sku_local, $codigo_proveedor) : null;
         $product_base_id = null;
@@ -1218,6 +2058,13 @@ class Riverso_Invoice_Intake_Service {
             'supplier_product_id' => $supplier_product_id,
             'activo' => 1,
         ];
+        $last_seen = $this->resolve_last_seen_document_date((int) $proveedor_id, $codigo_proveedor, $document_date);
+        if ($last_seen) {
+            $codigo_payload['last_seen_document_date'] = $last_seen;
+        }
+        if ($allow_untrusted) {
+            $codigo_payload['sku_mapped_at'] = current_time('mysql');
+        }
 
         if ($existing) {
             $wpdb->update(
@@ -1896,7 +2743,7 @@ class Riverso_Invoice_Intake_Service {
              FROM {$prefix}factura_items
              WHERE factura_id = %d
                AND (item_tipo = 'producto' OR item_tipo IS NULL)
-               AND (sku_local IS NULL OR sku_local = '')
+               AND (sku_local IS NULL OR sku_local = '' OR LOWER(sku_local) = LOWER(codigo_proveedor))
                AND codigo_proveedor IS NOT NULL AND codigo_proveedor != ''",
             (int) $factura_id
         ));
@@ -1989,6 +2836,12 @@ class Riverso_Invoice_Intake_Service {
      * Procesa ítems al guardar factura: códigos y clasificación.
      */
     public function after_invoice_saved($factura_id, $proveedor_id, array $items, $modo_ingreso = 'recepcion') {
+        global $wpdb;
+        $fecha_emision = $wpdb->get_var($wpdb->prepare(
+            "SELECT fecha_emision FROM {$wpdb->prefix}riverso_facturas WHERE id = %d",
+            (int) $factura_id
+        ));
+
         foreach ($items as $item) {
             if (in_array(($item['item_tipo'] ?? 'producto'), ['envio', 'gasto'], true)) {
                 continue;
@@ -2007,12 +2860,15 @@ class Riverso_Invoice_Intake_Service {
             }
 
             $mapping = $this->lookup_product_mapping($proveedor_id, $codigo_proveedor, $item['codigos'] ?? []);
+            $sku_to_persist = !empty($mapping['has_mapping']) ? ($mapping['sku_local'] ?? null) : null;
             $this->persist_supplier_code(
                 $proveedor_id,
                 $codigo_proveedor,
                 $item['nombre'] ?? '',
                 $item['codigos'] ?? [],
-                $mapping['sku_local']
+                $sku_to_persist,
+                false,
+                $fecha_emision
             );
         }
 
@@ -2033,5 +2889,113 @@ class Riverso_Invoice_Intake_Service {
         }
 
         return null;
+    }
+
+    /**
+     * Crea (o reutiliza) la tarea de confirmar tipo de documento.
+     */
+    public function create_document_type_confirmation_task($factura_id) {
+        if (!class_exists('Riverso_Task_Module')) {
+            return 0;
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $factura_id = (int) $factura_id;
+
+        $factura = $wpdb->get_row($wpdb->prepare(
+            "SELECT folio, documento_subtipo, tipo_confirmado FROM {$prefix}facturas WHERE id = %d",
+            $factura_id
+        ));
+
+        if (!$factura || (int) $factura->tipo_confirmado === 1) {
+            return 0;
+        }
+
+        $tipo_label = [
+            'productos' => 'Productos',
+            'envio' => 'Flete',
+            'nota_credito' => 'Nota de Crédito',
+            'guia_despacho' => 'Guía de Despacho',
+            'gastos' => 'Gastos',
+        ][$factura->documento_subtipo] ?? ($factura->documento_subtipo ?: 'sin clasificar');
+
+        return Riverso_Task_Module::get_instance()->create_review_task(
+            'confirmar_tipo_documento',
+            sprintf('Confirmar tipo de documento - Folio %s (Sugerido: %s)', $factura->folio, $tipo_label),
+            'factura',
+            $factura_id,
+            [
+                'descripcion' => sprintf(
+                    'Se sugiere que esta factura (folio %s) sea de tipo "%s". Confirme o cambie el tipo desde Facturas DTE.',
+                    $factura->folio,
+                    $tipo_label
+                ),
+                'prioridad' => 'alta',
+            ]
+        );
+    }
+
+    /**
+     * Re-clasifica ítems según el tipo de documento confirmado.
+     */
+    public function apply_item_tipos_for_subtipo($factura_id, $documento_subtipo) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $factura_id = (int) $factura_id;
+
+        $items = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, nombre, descripcion, sku_local, estado, codigo_proveedor FROM {$prefix}factura_items WHERE factura_id = %d",
+            $factura_id
+        ));
+
+        foreach ($items ?: [] as $item) {
+            if ($documento_subtipo === 'gastos') {
+                $item_tipo = 'gasto';
+                $item_estado = 'gasto';
+            } elseif ($documento_subtipo === 'envio') {
+                $item_tipo = 'envio';
+                $item_estado = 'envio';
+            } else {
+                $tmp = [
+                    'items' => [[
+                        'nombre' => $item->nombre ?? '',
+                        'descripcion' => $item->descripcion ?? '',
+                        'monto' => 0,
+                    ]],
+                ];
+                $this->classify_factura_items($tmp);
+                $item_tipo = $tmp['items'][0]['item_tipo'] ?? 'producto';
+                if ($item_tipo === 'envio') {
+                    $item_estado = 'envio';
+                } elseif ($item_tipo === 'gasto') {
+                    $item_estado = 'gasto';
+                } else {
+                    $item_estado = riverso_usable_local_sku($item->sku_local ?? '', $item->codigo_proveedor ?? '')
+                        ? 'vinculado'
+                        : 'pendiente';
+                }
+            }
+
+            $wpdb->update(
+                "{$prefix}factura_items",
+                [
+                    'item_tipo' => $item_tipo,
+                    'estado' => $item_estado,
+                ],
+                ['id' => (int) $item->id],
+                ['%s', '%s'],
+                ['%d']
+            );
+        }
+
+        return true;
+    }
+
+    /**
+     * Re-clasificar todos los ítems de una factura existente como gastos.
+     */
+    public function force_expense_items_for_factura($factura_id) {
+        return $this->apply_item_tipos_for_subtipo($factura_id, 'gastos');
     }
 }

@@ -85,6 +85,8 @@ class Riverso_POS_Activator {
             activo TINYINT(1) DEFAULT 1,
             verificado_por BIGINT UNSIGNED DEFAULT NULL,
             verificado_at DATETIME DEFAULT NULL,
+            sku_mapped_at DATETIME DEFAULT NULL,
+            last_seen_document_date DATE DEFAULT NULL,
             notas TEXT DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -301,6 +303,11 @@ class Riverso_POS_Activator {
         self::create_phase18_catalogs($prefix, $charset_collate);
         self::create_phase19_clear_catalog_as_local_sku($prefix);
         self::create_phase20_hub_v2_images($prefix);
+        self::create_phase21_invoice_tipo_confirmado($prefix);
+        self::create_phase22_untrusted_supplier_sku_repair();
+        self::create_phase23_sku_mapping_dates($prefix);
+        self::create_phase24_identity_sku_repair();
+        self::create_phase25_print_orders($prefix, $charset_collate);
         
         // Inicializar servicios core
         self::init_core_services();
@@ -340,7 +347,7 @@ class Riverso_POS_Activator {
                 'create_reception_task_on_upload' => true,
                 'prorate_shipping_to_products' => true,
                 'create_link_task_on_upload' => true,
-                'default_intake_mode' => 'recepcion',
+                'default_intake_mode' => 'solo_costos',
             ]
         ];
         
@@ -390,6 +397,7 @@ class Riverso_POS_Activator {
             ['path' => 'modules/pricing/class-pricing-module.php', 'class' => 'Riverso_Pricing_Module'],
             ['path' => 'modules/publish/class-woo-publisher-module.php', 'class' => 'Riverso_Woo_Publisher_Module'],
             ['path' => 'modules/packaging/class-packaging-module.php', 'class' => 'Riverso_Packaging_Module'],
+            ['path' => 'modules/print-orders/class-print-order-module.php', 'class' => 'Riverso_Print_Order_Module'],
         ];
 
         foreach ($module_defs as $def) {
@@ -643,20 +651,22 @@ class Riverso_POS_Activator {
                 c.notas
             FROM {$prefix}codigos c
             INNER JOIN {$prefix}producto_base pb
-                ON pb.woocommerce_product_id = COALESCE(c.product_id, 0)
+                ON pb.woocommerce_product_id = c.product_id
                AND pb.woocommerce_variation_id = 0
             WHERE c.codigo_proveedor IS NOT NULL
               AND c.codigo_proveedor <> ''
               AND COALESCE(c.proveedor_id, 0) > 0
+              AND COALESCE(c.product_id, 0) > 0
         ");
 
         $wpdb->query("
             UPDATE {$prefix}codigos c
             INNER JOIN {$prefix}producto_base pb
-                ON pb.woocommerce_product_id = COALESCE(c.product_id, 0)
+                ON pb.woocommerce_product_id = c.product_id
                AND pb.woocommerce_variation_id = 0
             SET c.product_base_id = pb.id
             WHERE c.product_base_id IS NULL
+              AND COALESCE(c.product_id, 0) > 0
         ");
 
         $wpdb->query("
@@ -2054,6 +2064,259 @@ class Riverso_POS_Activator {
                 'info',
                 'Fase 20: Agregado campo imagen_id para media picker'
             );
+        }
+    }
+
+    /**
+     * Fase 21: Confirmar tipo de documento - Agregar control de confirmación de tipo_documento
+     * Permite marcar si el tipo de documento (documento_subtipo) ha sido confirmado por usuario
+     * Al subir, se inicia con tipo_confirmado = 0 y se genera tarea de confirmación
+     */
+    private static function create_phase21_invoice_tipo_confirmado($prefix) {
+        global $wpdb;
+
+        $table = "{$prefix}facturas";
+        $column_existed = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s",
+            DB_NAME,
+            $table,
+            'tipo_confirmado'
+        ));
+
+        self::add_column_if_missing(
+            $table,
+            'tipo_confirmado',
+            "tipo_confirmado TINYINT(1) DEFAULT 0 COMMENT 'Si el documento_subtipo fue confirmado manualmente (0=pendiente, 1=confirmado)'"
+        );
+
+        self::add_index_if_missing($table, 'idx_tipo_confirmado', 'KEY idx_tipo_confirmado (tipo_confirmado)');
+
+        // Solo al crear la columna: las facturas históricas ya fueron procesadas.
+        if ($column_existed === 0) {
+            $wpdb->query("UPDATE {$table} SET tipo_confirmado = 1 WHERE tipo_confirmado = 0");
+        }
+
+        if (function_exists('riverso_create_review_task')) {
+            $pending = $wpdb->get_results(
+                "SELECT id, folio, documento_subtipo FROM {$table} WHERE tipo_confirmado = 0",
+                ARRAY_A
+            );
+            foreach ($pending ?: [] as $row) {
+                $tipo_label = [
+                    'productos' => 'Productos',
+                    'envio' => 'Flete',
+                    'nota_credito' => 'Nota de Crédito',
+                    'guia_despacho' => 'Guía de Despacho',
+                    'gastos' => 'Gastos',
+                ][$row['documento_subtipo'] ?? ''] ?? ($row['documento_subtipo'] ?: 'sin clasificar');
+                riverso_create_review_task(
+                    'confirmar_tipo_documento',
+                    sprintf('Confirmar tipo de documento - Folio %s (Sugerido: %s)', $row['folio'], $tipo_label),
+                    'factura',
+                    (int) $row['id'],
+                    [
+                        'descripcion' => sprintf(
+                            'Se sugiere que esta factura (folio %s) sea de tipo "%s". Confirme o cambie el tipo desde Facturas DTE.',
+                            $row['folio'],
+                            $tipo_label
+                        ),
+                        'prioridad' => 'alta',
+                    ]
+                );
+            }
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log(
+                'schema.phase21_invoice_tipo_confirmado',
+                'facturas',
+                0,
+                'info',
+                'Fase 21: Agregado campo tipo_confirmado para confirmar tipo de documento'
+            );
+        }
+    }
+
+    /**
+     * Fase 22: Andina y similares — no usar SKU local de un match UNMATCHED.
+     * Folio 96946179 quedó con SKU 853 (tornillo) en todas las líneas.
+     */
+    private static function create_phase22_untrusted_supplier_sku_repair() {
+        if (get_option('riverso_pos_phase22_untrusted_sku_repair') === '1') {
+            return;
+        }
+
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-mamut-sku.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/invoices/class-invoice-intake-service.php';
+
+        $intake = Riverso_Invoice_Intake_Service::get_instance();
+        $andina_id = 0;
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $andina_id = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}proveedores WHERE rut = %s LIMIT 1",
+            '911440008'
+        ));
+        if (!$andina_id) {
+            $andina_id = (int) $wpdb->get_var(
+                "SELECT proveedor_id FROM {$prefix}facturas WHERE folio = '96946179' LIMIT 1"
+            );
+        }
+
+        $result = $andina_id
+            ? $intake->repair_untrusted_supplier_sku_links($andina_id)
+            : $intake->repair_untrusted_supplier_sku_links();
+
+        $intake->repair_mislinked_invoice_items(['folio' => '96946179']);
+
+        update_option('riverso_pos_phase22_untrusted_sku_repair', '1');
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log(
+                'schema.phase22_untrusted_supplier_sku_repair',
+                'factura_items',
+                0,
+                [
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 22: desvinculados códigos Andina pegados al SKU 853',
+                    'new_value' => $result,
+                ]
+            );
+        }
+    }
+
+    /**
+     * Fase 23: fechas del mapeo SKU (modificación y último documento visto).
+     */
+    private static function create_phase23_sku_mapping_dates($prefix) {
+        $table = "{$prefix}codigos";
+        self::add_column_if_missing(
+            $table,
+            'sku_mapped_at',
+            "sku_mapped_at DATETIME DEFAULT NULL COMMENT 'Fecha de última modificación del mapeo SKU'"
+        );
+        self::add_column_if_missing(
+            $table,
+            'last_seen_document_date',
+            "last_seen_document_date DATE DEFAULT NULL COMMENT 'Fecha del último documento en que se vio este código'"
+        );
+        self::add_index_if_missing(
+            $table,
+            'idx_last_seen_document_date',
+            'KEY idx_last_seen_document_date (last_seen_document_date)'
+        );
+    }
+
+    /**
+     * Fase 24: códigos Mamut sin SKU local (04TRC → 04TRC) no deben quedar vinculados.
+     * Folio 744064 quedó procesado con todos los ítems "vinculados".
+     */
+    private static function create_phase24_identity_sku_repair() {
+        if (get_option('riverso_pos_phase24_identity_sku_repair') === '1') {
+            return;
+        }
+
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-mamut-sku.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/invoices/class-invoice-intake-service.php';
+
+        $intake = Riverso_Invoice_Intake_Service::get_instance();
+        $scoped = $intake->repair_identity_mapped_invoice_items(['folio' => '744064']);
+        $all = $intake->repair_identity_mapped_invoice_items();
+
+        update_option('riverso_pos_phase24_identity_sku_repair', '1');
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log(
+                'schema.phase24_identity_sku_repair',
+                'factura_items',
+                0,
+                [
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 24: desvinculados SKU locales iguales al código proveedor (sin usar)',
+                    'new_value' => ['folio_744064' => $scoped, 'global' => $all],
+                ]
+            );
+        }
+    }
+
+    /**
+     * Fase 25: órdenes de impresión (cabecera + ítems).
+     */
+    private static function create_phase25_print_orders($prefix, $charset_collate) {
+        global $wpdb;
+
+        $sql = "CREATE TABLE {$prefix}ordenes_impresion (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            numero_orden VARCHAR(20) NOT NULL,
+            estado VARCHAR(20) NOT NULL DEFAULT 'borrador',
+            tipo VARCHAR(30) NOT NULL DEFAULT 'etiqueta_producto',
+            prioridad TINYINT(1) NOT NULL DEFAULT 0,
+            notas TEXT DEFAULT NULL,
+            solicitado_por BIGINT UNSIGNED DEFAULT NULL,
+            solicitado_por_nombre VARCHAR(100) DEFAULT NULL,
+            aprobado_por BIGINT UNSIGNED DEFAULT NULL,
+            impreso_por BIGINT UNSIGNED DEFAULT NULL,
+            impresora_nombre VARCHAR(100) DEFAULT NULL,
+            impreso_en DATETIME DEFAULT NULL,
+            cancelado_por BIGINT UNSIGNED DEFAULT NULL,
+            cancelado_en DATETIME DEFAULT NULL,
+            motivo_cancelacion TEXT DEFAULT NULL,
+            total_items INT NOT NULL DEFAULT 0,
+            total_copias INT NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY numero_orden (numero_orden),
+            KEY estado (estado),
+            KEY solicitado_por (solicitado_por),
+            KEY created_at (created_at),
+            KEY tipo (tipo)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}orden_impresion_items (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            orden_id BIGINT UNSIGNED NOT NULL,
+            sku VARCHAR(50) NOT NULL,
+            nombre VARCHAR(255) NOT NULL,
+            precio DECIMAL(12,2) DEFAULT NULL,
+            precio_original DECIMAL(12,2) DEFAULT NULL,
+            cantidad_ean INT NOT NULL DEFAULT 100,
+            copias INT NOT NULL DEFAULT 1,
+            modo VARCHAR(30) NOT NULL DEFAULT 'BolsaCOD',
+            color VARCHAR(10) NOT NULL DEFAULT 'BN',
+            ean13 VARCHAR(13) DEFAULT NULL,
+            impreso TINYINT(1) NOT NULL DEFAULT 0,
+            orden_posicion INT NOT NULL DEFAULT 0,
+            PRIMARY KEY (id),
+            KEY orden_id (orden_id),
+            KEY sku (sku)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $col = $wpdb->get_results("SHOW COLUMNS FROM {$prefix}orden_impresion_items LIKE 'precio_original'");
+        if (empty($col)) {
+            $wpdb->query("ALTER TABLE {$prefix}orden_impresion_items ADD precio_original DECIMAL(12,2) DEFAULT NULL AFTER precio");
+        }
+
+        if (get_option('riverso_pos_phase25_print_orders') !== '1') {
+            update_option('riverso_pos_phase25_print_orders', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log(
+                    'schema.phase25_print_orders',
+                    'print_order',
+                    0,
+                    [
+                        'actor_type' => 'computer',
+                        'details' => 'Fase 25: tablas de órdenes de impresión',
+                        'new_value' => [
+                            'ordenes_impresion' => $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $prefix . 'ordenes_impresion')) ? 1 : 0,
+                            'orden_impresion_items' => $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $prefix . 'orden_impresion_items')) ? 1 : 0,
+                        ],
+                    ]
+                );
+            }
         }
     }
 }

@@ -44,6 +44,11 @@ class Riverso_POS_Audit {
         'invoice_deleted'       => 'Factura eliminada (subida revertida)',
         'invoice_processed'     => 'Factura procesada',
         'invoice_approved'      => 'Factura aprobada',
+        'invoice_type_changed'  => 'Tipo de documento cambiado',
+        'invoice_type_confirmed'=> 'Tipo de documento confirmado',
+        'sku_mapping_assigned'  => 'SKU vinculado a código proveedor',
+        'sku_mapping_changed'   => 'Mapeo de SKU modificado',
+        'sku_mapping_cleared'   => 'Mapeo de SKU desvinculado',
         
         // Recepción
         'reception_registered'  => 'Recepción registrada',
@@ -77,6 +82,18 @@ class Riverso_POS_Audit {
         'customer_quote_approved' => 'Cotización cliente aprobada',
         'customer_quote_converted'=> 'Cotización convertida a pedido',
         
+        // Órdenes de impresión
+        'print_order.created'     => 'Orden de impresión creada',
+        'print_order.submitted'   => 'Orden de impresión enviada',
+        'print_order.approved'    => 'Orden de impresión aprobada',
+        'print_order.returned'    => 'Orden de impresión devuelta a borrador',
+        'print_order.printed'     => 'Orden de impresión impresa',
+        'print_order.cancelled'   => 'Orden de impresión cancelada',
+        'print_order.modified'    => 'Orden de impresión modificada',
+        'print_order.item_added'  => 'Ítem agregado a orden de impresión',
+        'print_order.item_removed'=> 'Ítem eliminado de orden de impresión',
+        'print_order.duplicated'  => 'Orden de impresión duplicada',
+        
         // Sistema
         'user_login'            => 'Inicio de sesión',
         'user_logout'           => 'Cierre de sesión',
@@ -97,6 +114,7 @@ class Riverso_POS_Audit {
         'quote'         => 'Cotización recibida',
         'customer_quote'=> 'Cotización cliente',
         'invoice'       => 'Factura',
+        'sku_mapping'   => 'Mapeo SKU',
         'reception'     => 'Recepción',
         'task'          => 'Tarea',
         'supplier'      => 'Proveedor',
@@ -104,6 +122,7 @@ class Riverso_POS_Audit {
         'sale'          => 'Venta',
         'user'          => 'Usuario',
         'settings'      => 'Configuración',
+        'print_order'   => 'Orden de impresión',
     ];
     
     /**

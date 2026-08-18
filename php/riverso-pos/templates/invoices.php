@@ -7,7 +7,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-$default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
+$default_intake_mode = 'solo_costos';
 ?>
 
 <div class="wrap riverso-invoices">
@@ -48,9 +48,48 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
         <input type="date" id="filter-fecha-desde" placeholder="Desde">
         <input type="date" id="filter-fecha-hasta" placeholder="Hasta">
         
+        <select id="filter-tipo-confirmado">
+            <option value="">Todos los tipos</option>
+            <option value="0">Tipo pendiente de confirmar</option>
+            <option value="1">Tipos confirmados</option>
+        </select>
+
+        <input type="search" id="filter-search" class="invoices-search" placeholder="Buscar folio o monto…" autocomplete="off">
+        
         <button type="button" class="button" id="btn-filter">
             <span class="dashicons dashicons-filter"></span> Filtrar
         </button>
+    </div>
+
+    <div class="riverso-filters invoices-list-controls">
+        <label class="invoices-control">
+            Mostrar
+            <select id="invoices-per-page">
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
+        </label>
+        <label class="invoices-control">
+            Ordenar por
+            <select id="invoices-orderby">
+                <option value="created_at" selected>Fecha de ingreso</option>
+                <option value="fecha_emision">Fecha del documento</option>
+                <option value="folio">Folio</option>
+                <option value="monto_total">Monto total</option>
+                <option value="proveedor_nombre">Proveedor</option>
+                <option value="estado">Estado</option>
+                <option value="tipo_dte">Tipo DTE</option>
+            </select>
+        </label>
+        <label class="invoices-control">
+            Dirección
+            <select id="invoices-order">
+                <option value="DESC" selected>Descendente</option>
+                <option value="ASC">Ascendente</option>
+            </select>
+        </label>
     </div>
 
     <!-- Tabla de facturas -->
@@ -98,7 +137,10 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
 
     <!-- Paginación -->
     <div class="tablenav bottom">
-        <div class="tablenav-pages" id="pagination-info">
+        <div class="tablenav-pages invoices-pagination" id="pagination-info">
+            <button type="button" class="button" id="invoices-prev" style="display:none;">← Anterior</button>
+            <span id="invoices-page-info"></span>
+            <button type="button" class="button" id="invoices-next" style="display:none;">Siguiente →</button>
         </div>
     </div>
 </div>
@@ -175,25 +217,34 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
                     </div>
 
                     <h3 style="margin:0 0 8px;">Tipo de documento</h3>
-                    <p id="detection-motivo" class="description" style="margin-bottom:8px;"></p>
-                    <label style="display:block;margin-bottom:6px;">
+                    <div id="tipo-sugerencia-box" style="display:none;margin-bottom:10px;padding:10px 12px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:6px;">
+                        <p id="detection-motivo" class="description" style="margin:0 0 8px;"></p>
+                        <button type="button" class="button button-primary" id="btn-aceptar-tipo-sugerido">Aceptar sugerencia</button>
+                    </div>
+                    <input type="hidden" id="tipo-sugerido" value="productos">
+                    <label style="display:block;margin-bottom:8px;padding:8px;background:#fef3c7;border-radius:4px;">
+                        <input type="radio" name="documento_tipo" value="por_confirmar" checked>
+                        <strong>Tipo por confirmar</strong>
+                        <em class="description" style="display:block;margin:2px 0 0 22px;">Se guardará con el tipo sugerido y se creará una tarea para confirmarlo después</em>
+                    </label>
+                    <label class="tipo-radio-row" data-tipo="productos" style="display:block;margin-bottom:6px;">
                         <input type="radio" name="documento_tipo" value="productos">
                         <span id="label-tipo-productos">Factura de productos</span>
                     </label>
-                    <label style="display:block;margin-bottom:6px;">
+                    <label class="tipo-radio-row" data-tipo="envio" style="display:block;margin-bottom:6px;">
                         <input type="radio" name="documento_tipo" value="envio">
                         <span id="label-tipo-envio">Factura de transportista / flete</span>
                     </label>
-                    <label style="display:block;margin-bottom:6px;">
+                    <label class="tipo-radio-row" data-tipo="nota_credito" style="display:block;margin-bottom:6px;">
                         <input type="radio" name="documento_tipo" value="nota_credito">
                         <span id="label-tipo-nc">Nota de crédito</span>
                     </label>
-                    <label style="display:block;margin-bottom:6px;">
+                    <label class="tipo-radio-row" data-tipo="guia_despacho" style="display:block;margin-bottom:6px;">
                         <input type="radio" name="documento_tipo" value="guia_despacho">
                         <span id="label-tipo-guia">Guía de despacho</span>
                         <em class="description" style="display:block;margin:2px 0 0 22px;">TipoDTE 52 — registra códigos proveedor y costos, sin inventario</em>
                     </label>
-                    <label style="display:block;margin-bottom:12px;">
+                    <label class="tipo-radio-row" data-tipo="gastos" style="display:block;margin-bottom:12px;">
                         <input type="radio" name="documento_tipo" value="gastos">
                         <span id="label-tipo-gastos">Gastos operacionales</span>
                         <em class="description" style="display:block;margin:2px 0 0 22px;">Servicios / ítems que no se venden (luz, agua, etc.) — sin productos ni SKU</em>
@@ -230,12 +281,12 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
                     <div id="opciones-productos-wrap">
                         <h3 style="margin-bottom:8px;">Modo de ingreso</h3>
                         <label style="display:block;margin-bottom:6px;">
-                            <input type="radio" name="modo_ingreso" value="recepcion" <?php checked($default_intake_mode, 'recepcion'); ?>>
-                            Recepción completa
+                            <input type="radio" name="modo_ingreso" value="solo_costos" checked>
+                            Solo registrar costos <em>(sin aumento de inventario)</em>
                         </label>
                         <label style="display:block;margin-bottom:12px;">
-                            <input type="radio" name="modo_ingreso" value="solo_costos" <?php checked($default_intake_mode, 'solo_costos'); ?>>
-                            Solo registrar costos <em>(sin bodega)</em>
+                            <input type="radio" name="modo_ingreso" value="recepcion">
+                            Recepción completa <em>(aumenta inventario)</em>
                         </label>
                     </div>
 
@@ -324,6 +375,21 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
                 </div>
             </div>
 
+            <div id="detail-tipo-confirm-section" style="margin-bottom:16px;padding:12px;background:#f8fafc;border-left:4px solid #64748b;border-radius:6px;">
+                <h3 style="margin:0 0 8px;" id="detail-tipo-title">Tipo de documento</h3>
+                <p class="description" id="detail-tipo-help" style="margin-bottom:10px;">Puede confirmar o cambiar el tipo de este documento.</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+                    <select id="detail-tipo-select" style="flex:1;min-width:200px;">
+                        <option value="productos">Productos</option>
+                        <option value="envio">Flete</option>
+                        <option value="nota_credito">Nota de Crédito</option>
+                        <option value="guia_despacho">Guía de Despacho</option>
+                        <option value="gastos">Gastos</option>
+                    </select>
+                    <button type="button" class="button button-primary" id="btn-confirm-tipo">Guardar tipo</button>
+                </div>
+            </div>
+
             <div id="detail-shipping-section" style="display:none;margin-bottom:16px;padding:12px;background:#f0f6fc;border-radius:6px;">
                 <h3 style="margin:0 0 10px;">Fletes vinculados</h3>
                 <div id="detail-shipping-linked"></div>
@@ -379,7 +445,7 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
                         <th style="width: 70px;">Dsc/Rec</th>
                         <th style="width: 90px;">Neto final</th>
                         <th style="width: 90px;">Bruto final</th>
-                        <th style="width: 110px;">SKU Local</th>
+                        <th style="width: 220px;">SKU Local</th>
                         <th style="width: 90px;">Estado</th>
                         <th style="width: 70px;">Acción</th>
                     </tr>
@@ -387,9 +453,41 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
                 <tbody id="detail-items">
                 </tbody>
             </table>
+
+            <div id="detail-audit-section" style="margin-top:18px;padding:12px;background:#f8fafc;border-radius:6px;border-left:4px solid #64748b;">
+                <h3 style="margin:0 0 8px;">Auditoría</h3>
+                <ul id="detail-audit-list" style="margin:0;padding-left:18px;font-size:12px;color:#3c434a;"></ul>
+            </div>
         </div>
         <div class="riverso-modal-footer">
             <button type="button" class="button" id="btn-close-detail">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-sku-history" class="riverso-modal" style="display:none;">
+    <div class="riverso-modal-content" style="max-width:760px;">
+        <div class="riverso-modal-header">
+            <h2 id="sku-history-title">Historial de mapeo SKU</h2>
+            <button type="button" class="riverso-modal-close" id="btn-close-sku-history">&times;</button>
+        </div>
+        <div class="riverso-modal-body">
+            <p id="sku-history-owners" class="description"></p>
+            <table class="sku-history-table">
+                <thead>
+                    <tr>
+                        <th>Fecha modificación</th>
+                        <th>Último documento</th>
+                        <th>Acción</th>
+                        <th>Usuario</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody id="sku-history-list"></tbody>
+            </table>
+        </div>
+        <div class="riverso-modal-footer">
+            <button type="button" class="button" id="btn-close-sku-history-2">Cerrar</button>
         </div>
     </div>
 </div>
@@ -403,8 +501,37 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
 }
 
 .riverso-invoices .riverso-filters select,
-.riverso-invoices .riverso-filters input[type="date"] {
+.riverso-invoices .riverso-filters input[type="date"],
+.riverso-invoices .riverso-filters input[type="search"] {
     min-width: 150px;
+}
+
+.riverso-invoices .invoices-search {
+    min-width: 220px;
+}
+
+.riverso-invoices .invoices-list-controls {
+    margin-top: 0;
+}
+
+.riverso-invoices .invoices-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #50575e;
+}
+
+.riverso-invoices .invoices-pagination {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.riverso-invoices #invoices-page-info {
+    color: #646970;
 }
 
 .riverso-modal {
@@ -432,6 +559,11 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
 
 .riverso-modal-large {
     max-width: 900px;
+}
+
+#modal-invoice-detail .riverso-modal-content {
+    width: 96%;
+    max-width: min(1480px, 96vw);
 }
 
 .riverso-modal-stacked {
@@ -664,13 +796,42 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
 .status-sin_vincular { background: #fff3e0; color: #e65100; }
 .status-gasto { background: #f3e8ff; color: #6b21a8; }
 
+.tipo-pending-badge {
+    display: inline-block;
+    background: #fbbf24;
+    color: #78350f;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.02em;
+}
+.tipo-radio-row.is-sugerido {
+    padding: 6px 8px;
+    background: #ecfdf5;
+    border: 1px solid #6ee7b7;
+    border-radius: 4px;
+}
+.tipo-sugerido-tag {
+    display: inline-block;
+    margin-left: 6px;
+    background: #059669;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 3px;
+    vertical-align: middle;
+}
+
 .link-sku-input {
     display: flex;
     gap: 5px;
 }
 
-.link-sku-input input {
-    width: 100px;
+.link-sku-input input,
+.sku-input {
+    width: 90px;
     padding: 3px 5px;
     font-size: 12px;
 }
@@ -679,12 +840,59 @@ $default_intake_mode = riverso_get_setting('default_intake_mode', 'recepcion');
     padding: 2px 6px;
     font-size: 11px;
 }
+.sku-edit-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 160px; position: relative; }
+.sku-edit-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.sku-conflict-warn { color: #b45309; font-size: 11px; line-height: 1.3; }
+.sku-input[readonly] {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+    color: #111827;
+    cursor: default;
+}
+.sku-history-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+.sku-history-table th, .sku-history-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+.sku-history-table th { color: #64748b; font-weight: 600; }
+.sku-history-date { white-space: nowrap; font-variant-numeric: tabular-nums; color: #334155; }
+.sku-suggest { color: #1d4ed8; font-size: 11px; line-height: 1.3; }
+.sku-suggest button { margin-left: 4px; }
+.sku-suggest-list {
+    position: absolute;
+    z-index: 30;
+    background: #fff;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+    min-width: 220px;
+    max-height: 220px;
+    overflow: auto;
+    margin-top: 2px;
+}
+.sku-suggest-item { padding: 6px 8px; cursor: pointer; font-size: 12px; }
+.sku-suggest-item:hover, .sku-suggest-item.is-active { background: #eff6ff; }
+
 </style>
 
 <script>
 jQuery(function($) {
     const nonce = '<?php echo wp_create_nonce('riverso_pos_nonce'); ?>';
     const canDeleteInvoices = <?php echo (current_user_can('riverso_process_invoices') || current_user_can('riverso_create_invoices')) ? 'true' : 'false'; ?>;
+    const canEditTipo = <?php echo current_user_can('riverso_process_invoices') ? 'true' : 'false'; ?>;
+    const canEditSku = <?php echo (current_user_can('riverso_manage_codes') || current_user_can('riverso_process_invoices')) ? 'true' : 'false'; ?>;
+
+    function escHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+    function escAttr(value) {
+        return escHtml(value).replace(/'/g, '&#39;');
+    }
+
+    function isTipoPendiente(factura) {
+        return Number(factura && factura.tipo_confirmado) === 0;
+    }
 
     $('#btn-estado-help').on('click', function(e) {
         e.preventDefault();
@@ -699,25 +907,64 @@ jQuery(function($) {
         $('#estado-help-panel').prop('hidden', true);
     });
     
+    let currentPage = 1;
+
     // Cargar facturas
-    function loadInvoices(page = 1) {
+    function loadInvoices(page) {
+        if (page === undefined || page === null || page === '') {
+            page = currentPage;
+        }
+        currentPage = Math.max(1, parseInt(page, 10) || 1);
         const filters = {
             action: 'riverso_get_invoices_list',
             nonce: nonce,
-            page: page,
+            page: currentPage,
+            per_page: $('#invoices-per-page').val() || 20,
+            orderby: $('#invoices-orderby').val() || 'created_at',
+            order: $('#invoices-order').val() || 'DESC',
             estado: $('#filter-estado').val(),
             proveedor_id: $('#filter-proveedor').val(),
             fecha_desde: $('#filter-fecha-desde').val(),
-            fecha_hasta: $('#filter-fecha-hasta').val()
+            fecha_hasta: $('#filter-fecha-hasta').val(),
+            tipo_confirmado: $('#filter-tipo-confirmado').val(),
+            search: $('#filter-search').val()
         };
         
         $.post(ajaxurl, filters, function(response) {
             if (response.success) {
+                const totalPages = Math.max(1, parseInt(response.data.total_pages || 1, 10));
+                const pageNum = parseInt(response.data.page || 1, 10);
+                if (pageNum > totalPages) {
+                    loadInvoices(totalPages);
+                    return;
+                }
                 renderInvoices(response.data);
             } else {
                 alert(response.data.message || 'Error cargando facturas');
             }
         });
+    }
+
+    function renderPagination(data) {
+        const total = parseInt(data.total || 0, 10);
+        const page = parseInt(data.page || 1, 10);
+        const totalPages = Math.max(1, parseInt(data.total_pages || 1, 10));
+        currentPage = page;
+        $('#invoices-page-info').text(
+            total === 0
+                ? 'Sin facturas'
+                : `Página ${page} de ${totalPages} (${total} facturas)`
+        );
+        if (page > 1) {
+            $('#invoices-prev').show();
+        } else {
+            $('#invoices-prev').hide();
+        }
+        if (page < totalPages && total > 0) {
+            $('#invoices-next').show();
+        } else {
+            $('#invoices-next').hide();
+        }
     }
     
     function renderInvoices(data) {
@@ -726,6 +973,7 @@ jQuery(function($) {
         
         if (!data.facturas.length) {
             tbody.html('<tr><td colspan="8" style="text-align: center; padding: 40px;">No hay facturas</td></tr>');
+            renderPagination(data);
             return;
         }
         
@@ -741,7 +989,7 @@ jQuery(function($) {
             const isNc = f.documento_subtipo === 'nota_credito' || Number(f.tipo_dte) === 61;
             const isGuia = f.documento_subtipo === 'guia_despacho' || Number(f.tipo_dte) === 52;
             const isGastos = f.documento_subtipo === 'gastos';
-            const tipoLabel = isNc
+            let tipoLabel = isNc
                 ? '<span style="color:#1d4ed8;font-weight:600;">N. Crédito</span>'
                 : (isEnvio
                     ? '<span style="color:#b45309;font-weight:600;">Flete</span>'
@@ -750,6 +998,10 @@ jQuery(function($) {
                         : (isGastos
                             ? '<span style="color:#6b21a8;font-weight:600;">Gastos</span>'
                             : '<span style="color:#15803d;">Productos</span>')));
+            if (isTipoPendiente(f)) {
+                tipoLabel = `<span class="tipo-pending-badge">POR CONFIRMAR</span><br><small>${tipoLabel}</small>`;
+            }
+            
             const vinculadas = parseInt(f.facturas_vinculadas || 0, 10);
             const itemsCol = isNc
                 ? (f.estado === 'sin_vincular' ? 'Folio origen pendiente' : 'Vinculada')
@@ -787,15 +1039,38 @@ jQuery(function($) {
             tbody.append(row);
         });
         
-        // Paginación
-        $('#pagination-info').html(
-            `Página ${data.page} de ${data.total_pages} (${data.total} facturas)`
-        );
+        renderPagination(data);
     }
     
     // Event handlers
     $('#btn-filter').on('click', function() {
         loadInvoices(1);
+    });
+
+    $('#filter-search').on('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            loadInvoices(1);
+        }
+    });
+    let searchTimeout = null;
+    $('#filter-search').on('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+            loadInvoices(1);
+        }, 400);
+    });
+
+    $('#invoices-per-page, #invoices-orderby, #invoices-order').on('change', function() {
+        loadInvoices(1);
+    });
+
+    $('#invoices-prev').on('click', function() {
+        loadInvoices(currentPage - 1);
+    });
+
+    $('#invoices-next').on('click', function() {
+        loadInvoices(currentPage + 1);
     });
     
     // Upload modal
@@ -833,6 +1108,9 @@ jQuery(function($) {
         $('#btn-process-upload').prop('disabled', true);
         $('#upload-file-name, #upload-result').empty();
         $('#xml-preview-items tbody').empty();
+        $('#tipo-sugerencia-box').hide();
+        $('.tipo-radio-row').removeClass('is-sugerido').find('.tipo-sugerido-tag').remove();
+        $('input[name="documento_tipo"][value="por_confirmar"]').prop('checked', true);
     }
 
     $('#btn-upload-invoice').on('click', function() {
@@ -982,9 +1260,9 @@ jQuery(function($) {
             $row.find('.bulk-status').text('Subiendo…');
             const upload = await uploadOneFile(file, {
                 documento_tipo: tipo,
-                modo_ingreso: (tipo === 'nota_credito' || tipo === 'envio' || tipo === 'gastos' || tipo === 'guia_despacho')
-                    ? 'solo_costos'
-                    : ($('input[name="modo_ingreso"]:checked').val() || '<?php echo esc_js($default_intake_mode); ?>'),
+                tipo_sugerido: tipo,
+                tipo_confirmado: '0',
+                modo_ingreso: 'solo_costos',
                 proveedor_modo: 'xml',
                 proveedor_nombre: emisor.razon_social || '',
                 proveedor_rut: emisor.rut || '',
@@ -1051,7 +1329,27 @@ jQuery(function($) {
         $('#link-factura-wrap').toggle(isEnvio);
         $('#credit-note-section').toggle(isNc);
         $('#opciones-productos-wrap').toggle(!isEnvio && !isNc && !isGastos && !isGuia);
+        const sugerido = $('#tipo-sugerido').val();
+        const aceptada = tipo && tipo === sugerido;
+        $('#btn-aceptar-tipo-sugerido')
+            .prop('disabled', aceptada)
+            .text(aceptada ? 'Sugerencia aceptada' : 'Aceptar sugerencia');
     }
+
+    function aceptarTipoSugerido() {
+        const tipoSugerido = $('#tipo-sugerido').val() || 'productos';
+        const $radio = $(`input[name="documento_tipo"][value="${tipoSugerido}"]`);
+        if ($radio.length) {
+            $radio.prop('checked', true);
+        } else {
+            $('input[name="documento_tipo"][value="productos"]').prop('checked', true);
+        }
+        updateTipoUi();
+    }
+
+    $('#btn-aceptar-tipo-sugerido').on('click', function() {
+        aceptarTipoSugerido();
+    });
 
     function formatFolioResultLabel(f) {
         const sub = f.documento_subtipo === 'envio' ? 'Flete' : 'Productos';
@@ -1241,17 +1539,28 @@ jQuery(function($) {
             }
         }
 
+        $('#tipo-sugerido').val(tipoSugerido);
+        const tipoLabels = {
+            productos: 'Factura de productos',
+            envio: 'Factura de transportista / flete',
+            nota_credito: 'Nota de crédito',
+            guia_despacho: 'Guía de despacho',
+            gastos: 'Gastos operacionales'
+        };
+        const labelSugerido = tipoLabels[tipoSugerido] || tipoSugerido;
+        $('#tipo-sugerencia-box').show();
         $('#detection-motivo').html(
             `<span class="dashicons dashicons-lightbulb" style="color:#dba617;"></span> ` +
-            `<strong>Detección (${det.confianza || '—'}):</strong> ${det.motivo || ''}`
+            `<strong>Sugerencia (${det.confianza || '—'}):</strong> ${labelSugerido}` +
+            (det.motivo ? `<br><span style="color:#50575e;">${det.motivo}</span>` : '')
         );
-
-        const $tipoRadio = $(`input[name="documento_tipo"][value="${tipoSugerido}"]`);
-        if ($tipoRadio.length) {
-            $tipoRadio.prop('checked', true);
-        } else {
-            $('input[name="documento_tipo"][value="productos"]').prop('checked', true);
+        $('.tipo-radio-row').removeClass('is-sugerido').find('.tipo-sugerido-tag').remove();
+        const $sugerida = $(`.tipo-radio-row[data-tipo="${tipoSugerido}"]`);
+        if ($sugerida.length) {
+            $sugerida.addClass('is-sugerido');
+            $sugerida.children('span').first().after('<span class="tipo-sugerido-tag">Sugerido</span>');
         }
+        $('input[name="documento_tipo"][value="por_confirmar"]').prop('checked', true);
         updateTipoUi();
         if (tipoSugerido === 'nota_credito' || Number(d.tipo_dte) === 61) {
             fillCreditNoteSection(d);
@@ -1404,7 +1713,10 @@ jQuery(function($) {
     }
     
     $('#btn-process-upload').on('click', function() {
-        const tipo = $('input[name="documento_tipo"]:checked').val();
+        const tipoRaw = $('input[name="documento_tipo"]:checked').val();
+        const tipoSugerido = $('#tipo-sugerido').val() || 'productos';
+        const pendiente = !tipoRaw || tipoRaw === 'por_confirmar';
+        const tipo = pendiente ? tipoSugerido : tipoRaw;
 
         const btn = $(this);
         btn.prop('disabled', true).text('Procesando...');
@@ -1412,11 +1724,13 @@ jQuery(function($) {
         const formData = new FormData();
         formData.append('action', 'riverso_upload_invoice');
         formData.append('nonce', nonce);
-        formData.append('documento_tipo', tipo);
+        formData.append('documento_tipo', pendiente ? 'por_confirmar' : tipo);
+        formData.append('tipo_sugerido', tipoSugerido);
+        formData.append('tipo_confirmado', pendiente ? '0' : '1');
         formData.append('upload_mode', 'single');
         formData.append('modo_ingreso', (tipo === 'nota_credito' || tipo === 'envio' || tipo === 'gastos' || tipo === 'guia_despacho')
             ? 'solo_costos'
-            : ($('input[name="modo_ingreso"]:checked').val() || 'recepcion'));
+            : ($('input[name="modo_ingreso"]:checked').val() || 'solo_costos'));
         formData.append('link_to_factura_id', $('#link-factura-productos-id').val() || '');
         formData.append('factura_origen_id', tipo === 'nota_credito' ? ($('#credit-note-origin-factura-id').val() || '') : '');
         if (tipo === 'nota_credito' && $('#credit-note-reversa-inventario').is(':checked')) {
@@ -1492,7 +1806,7 @@ jQuery(function($) {
             factura_id: id
         }, function(response) {
             if (response.success) {
-                loadInvoices(1);
+                loadInvoices();
             } else {
                 alert(response.data?.message || 'Error al eliminar');
                 btn.prop('disabled', false);
@@ -1543,13 +1857,40 @@ jQuery(function($) {
 
         (factura.items || []).forEach(function(item) {
             const isGastoItem = isGastos || item.item_tipo === 'gasto' || item.estado === 'gasto';
-            const skuCell = isGastoItem
-                ? '<span class="description">N/A (gasto)</span>'
-                : (item.sku_local ||
-                    `<div class="link-sku-input">
-                        <input type="text" class="sku-input" placeholder="SKU local">
-                        <button class="button button-small btn-link-sku" data-item="${item.id}">OK</button>
-                    </div>`);
+            const conflict = item.sku_conflict;
+            let skuCell;
+            if (isGastoItem) {
+                skuCell = '<span class="description">N/A (gasto)</span>';
+            } else {
+                const currentSku = item.sku_local || '';
+                const suggestedSku = item.sku_sugerido || '';
+                const hasMapping = !!item.has_mapping;
+                const warn = conflict
+                    ? `<div class="sku-conflict-warn" title="${escAttr(conflict.message || '')}">⚠ ${escHtml(conflict.message || 'Conflicto de SKU')}</div>`
+                    : '';
+                const suggest = (!hasMapping && suggestedSku && suggestedSku !== currentSku)
+                    ? `<div class="sku-suggest">Sugerencia catálogo: <code>${escHtml(suggestedSku)}</code>
+                        ${canEditSku ? `<button type="button" class="button-link btn-apply-sku-suggest" data-sku="${escAttr(suggestedSku)}">Usar</button>` : ''}
+                       </div>`
+                    : (!hasMapping && currentSku ? '<div class="sku-suggest">Sugerencia de catálogo (sin mapeo guardado)</div>' : '');
+                if (canEditSku) {
+                    skuCell = `<div class="sku-edit-wrap" data-item="${item.id}" data-code="${escAttr(item.codigo_proveedor || '')}" data-original="${escAttr(currentSku)}" data-suggest="${escAttr(suggestedSku)}">
+                        <div class="sku-edit-row">
+                            <input type="text" class="sku-input" value="${escAttr(currentSku)}" placeholder="${suggestedSku ? escAttr('Sugerido: ' + suggestedSku) : 'Sin SKU'}" readonly>
+                            <button type="button" class="button button-small btn-edit-sku">Editar</button>
+                            <button type="button" class="button button-small button-primary btn-link-sku" data-item="${item.id}" style="display:none;">Guardar</button>
+                            <button type="button" class="button button-small btn-clear-sku" data-item="${item.id}" style="display:none;">Quitar</button>
+                            <button type="button" class="button button-small btn-cancel-sku" style="display:none;">Cancelar</button>
+                            <button type="button" class="button button-small btn-sku-history" data-sku="${escAttr(currentSku || suggestedSku)}" data-code="${escAttr(item.codigo_proveedor || '')}" title="Historial de mapeos">Historial</button>
+                        </div>
+                        <div class="sku-suggest-list" style="display:none;"></div>
+                        ${suggest}
+                        ${warn}
+                    </div>`;
+                } else {
+                    skuCell = (currentSku ? `<code>${escHtml(currentSku)}</code>` : '—') + suggest + warn;
+                }
+            }
             const actionsCell = (isGastoItem || item.estado === 'vinculado')
                 ? ''
                 : `<button class="button button-small btn-reject-item" data-item="${item.id}" title="Rechazar">
@@ -1587,6 +1928,21 @@ jQuery(function($) {
         }
     });
 
+    function renderDetailAudit(factura) {
+        const $list = $('#detail-audit-list').empty();
+        const logs = factura.auditoria || [];
+        if (!logs.length) {
+            $list.append('<li class="description">Sin eventos de auditoría todavía.</li>');
+            return;
+        }
+        logs.forEach(function(log) {
+            const when = (log.created_at || '').replace(' ', ' · ');
+            const who = log.user_name || 'Sistema';
+            const detail = log.details ? ' — ' + log.details : '';
+            $list.append(`<li><strong>${log.action_label || log.action}</strong> · ${who} · ${when}${detail}</li>`);
+        });
+    }
+
     function showInvoiceDetail(factura) {
         currentDetailFacturaId = factura.id;
         currentDetailFactura = factura;
@@ -1595,12 +1951,36 @@ jQuery(function($) {
         const isGuia = factura.documento_subtipo === 'guia_despacho' || Number(factura.tipo_dte) === 52;
         const isGastos = factura.documento_subtipo === 'gastos';
 
-        $('#detail-folio').text('#' + factura.folio + (isGuia ? ' · Guía (solo costos)' : (isGastos ? ' · Gastos' : '')));
+        const estadoTxt = (factura.estado || '').replace(/_/g, ' ');
+        $('#detail-folio').text(
+            '#' + factura.folio +
+            (isGuia ? ' · Guía (solo costos)' : (isGastos ? ' · Gastos' : '')) +
+            (estadoTxt ? ' · ' + estadoTxt : '')
+        );
         $('#detail-proveedor').text(factura.proveedor_nombre);
         $('#detail-rut').text(factura.proveedor_rut);
         $('#detail-fecha').text(factura.fecha_emision);
         $('#detail-total').text('$' + parseInt(factura.monto_total).toLocaleString('es-CL'));
         $('#toggle-precio-decimales').prop('checked', showPrecioDecimales);
+
+        const $tipoConfirmSection = $('#detail-tipo-confirm-section');
+        if (!canEditTipo) {
+            $tipoConfirmSection.hide();
+        } else {
+            $tipoConfirmSection.show();
+            $('#detail-tipo-select').val(factura.documento_subtipo || 'productos');
+            if (isTipoPendiente(factura)) {
+                $tipoConfirmSection.css({background:'#fef3c7', borderLeftColor:'#f59e0b'});
+                $('#detail-tipo-title').text('Confirmar tipo de documento').css('color', '#92400e');
+                $('#detail-tipo-help').text('Este documento está pendiente. Confirme el tipo sugerido o cámbielo.');
+                $('#btn-confirm-tipo').text('Confirmar tipo');
+            } else {
+                $tipoConfirmSection.css({background:'#f8fafc', borderLeftColor:'#64748b'});
+                $('#detail-tipo-title').text('Tipo de documento').css('color', '');
+                $('#detail-tipo-help').text('Puede cambiar el tipo de este documento si quedó mal clasificado.');
+                $('#btn-confirm-tipo').text('Guardar tipo');
+            }
+        }
 
         const $shippingSection = $('#detail-shipping-section');
         const $envioSection = $('#detail-envio-assign-section');
@@ -1710,6 +2090,7 @@ jQuery(function($) {
         }
 
         renderDetailItems(factura);
+        renderDetailAudit(factura);
         $('#modal-invoice-detail').css('display', 'flex');
     }
 
@@ -1723,6 +2104,33 @@ jQuery(function($) {
             if (response.success) showInvoiceDetail(response.data);
         });
     }
+
+    function saveDocumentType(facturaId, nuevoTipo, done) {
+        if (!facturaId || !nuevoTipo) {
+            alert('Seleccione un tipo de documento');
+            return;
+        }
+        $.post(ajaxurl, {
+            action: 'riverso_update_document_type',
+            nonce: nonce,
+            factura_id: facturaId,
+            documento_subtipo: nuevoTipo
+        }, function(res) {
+            if (res.success) {
+                if (typeof done === 'function') done(res);
+                loadInvoices();
+            } else {
+                alert(res.data?.message || 'Error al guardar tipo');
+            }
+        });
+    }
+
+    $('#btn-confirm-tipo').on('click', function() {
+        const nuevoTipo = $('#detail-tipo-select').val();
+        saveDocumentType(currentDetailFacturaId, nuevoTipo, function() {
+            reloadInvoiceDetail();
+        });
+    });
 
     $('#btn-detail-nc-link').on('click', function() {
         const origenId = $('#detail-nc-origen-id').val();
@@ -1814,35 +2222,247 @@ jQuery(function($) {
         currentDetailFacturaId = null;
     });
     
-    // Vincular SKU
-    $(document).on('click', '.btn-link-sku', function() {
-        const btn = $(this);
-        const itemId = btn.data('item');
-        const sku = btn.siblings('.sku-input').val().trim();
-        
-        if (!sku) {
-            alert('Ingresa un SKU');
-            return;
-        }
-        
-        $.post(ajaxurl, {
+    // Vincular / editar SKU
+    function postSkuLink(itemId, sku, extra) {
+        extra = extra || {};
+        return $.post(ajaxurl, $.extend({
             action: 'riverso_link_code',
             nonce: nonce,
             item_id: itemId,
             sku_local: sku,
             crear_mapeo: true
+        }, extra));
+    }
+
+    function reloadInvoiceDetail() {
+        if (!currentDetailFacturaId) return;
+        $.post(ajaxurl, {
+            action: 'riverso_get_invoice',
+            nonce: nonce,
+            factura_id: currentDetailFacturaId
         }, function(response) {
-            if (response.success) {
-                btn.closest('td').text(sku);
-                btn.closest('tr').find('.status-badge').removeClass('status-pendiente').addClass('status-vinculado').text('vinculado');
-                loadInvoices();
-            } else {
-                alert(response.data.message);
-            }
+            if (response.success) showInvoiceDetail(response.data);
         });
+    }
+
+    function handleSkuLinkResponse(response, retry) {
+        if (response.success) {
+            const msg = response.data && response.data.message;
+            if (msg && /ítems posteriores/.test(msg)) {
+                alert(msg);
+            }
+            reloadInvoiceDetail();
+            loadInvoices();
+            return;
+        }
+        const data = response.data || {};
+        if (data.conflict && retry) {
+            if (confirm((data.message || 'Conflicto de SKU') + '\n\n¿Reasignar de todas formas? El dueño anterior perderá este SKU.')) {
+                retry();
+            }
+            return;
+        }
+        alert(data.message || 'Error actualizando SKU');
+    }
+
+    function setSkuEditMode($wrap, editing) {
+        const $input = $wrap.find('.sku-input');
+        $wrap.find('.btn-edit-sku').toggle(!editing);
+        $wrap.find('.btn-link-sku, .btn-clear-sku, .btn-cancel-sku').toggle(!!editing);
+        $input.prop('readonly', !editing);
+        $wrap.find('.sku-suggest-list').hide().empty();
+        if (editing) {
+            $input.trigger('focus').trigger('select');
+        } else {
+            $input.val($wrap.data('original') || '');
+        }
+    }
+
+    $(document).on('click', '.btn-edit-sku', function() {
+        setSkuEditMode($(this).closest('.sku-edit-wrap'), true);
+    });
+
+    $(document).on('click', '.btn-cancel-sku', function() {
+        setSkuEditMode($(this).closest('.sku-edit-wrap'), false);
+    });
+
+    $(document).on('click', '.btn-link-sku', function() {
+        const btn = $(this);
+        const itemId = btn.data('item');
+        const sku = btn.closest('.sku-edit-wrap').find('.sku-input').val().trim();
+        if (!sku) {
+            alert('Ingresa un SKU');
+            return;
+        }
+        postSkuLink(itemId, sku).done(function(response) {
+            handleSkuLinkResponse(response, function() {
+                postSkuLink(itemId, sku, {force: 1}).done(function(res) {
+                    handleSkuLinkResponse(res);
+                });
+            });
+        });
+    });
+
+    $(document).on('click', '.btn-clear-sku', function() {
+        const itemId = $(this).data('item');
+        if (!confirm('¿Quitar el SKU de este ítem?')) return;
+        postSkuLink(itemId, '', {clear: 1}).done(function(response) {
+            handleSkuLinkResponse(response);
+        });
+    });
+
+    function formatSkuDate(value, withTime) {
+        if (!value) return '—';
+        const text = String(value).trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(text) && !withTime) {
+            const d = new Date(text + 'T00:00:00');
+            if (!Number.isNaN(d.getTime())) {
+                return d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            }
+        }
+        const d = new Date(text.replace(' ', 'T'));
+        if (Number.isNaN(d.getTime())) return text;
+        const date = d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        if (withTime === false || (/^\d{4}-\d{2}-\d{2}$/.test(text))) {
+            return date;
+        }
+        const time = d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+        return date + ' ' + time;
+    }
+
+    function openSkuHistory(sku, code) {
+        $('#sku-history-title').text('Historial de mapeo' + (sku ? ' SKU ' + sku : (code ? ' código ' + code : '')));
+        $('#sku-history-owners').text('Cargando…');
+        $('#sku-history-list').empty();
+        $('#modal-sku-history').show();
+        $.post(ajaxurl, {
+            action: 'riverso_get_sku_mapping_history',
+            nonce: nonce,
+            sku_local: sku || '',
+            codigo_proveedor: code || ''
+        }, function(response) {
+            if (!response.success) {
+                $('#sku-history-owners').text(response.data?.message || 'No se pudo cargar el historial');
+                return;
+            }
+            const owners = response.data.owners || [];
+            const lastSeen = response.data.last_seen_document_date;
+            const mappedAt = response.data.sku_mapped_at;
+            let header = '';
+            if (owners.length) {
+                const labels = owners.map(function(o) {
+                    return (o.proveedor_nombre || ('Proveedor #' + o.proveedor_id)) + ' / ' + o.codigo_proveedor;
+                });
+                header = 'Dueño actual: ' + labels.join(', ');
+            } else {
+                header = sku ? 'Este SKU no tiene un dueño único asignado.' : 'Sin dueño actual.';
+            }
+            const extras = [];
+            if (mappedAt) extras.push('Modificado: ' + formatSkuDate(mappedAt));
+            if (lastSeen) extras.push('Último documento visto: ' + formatSkuDate(lastSeen, false));
+            if (extras.length) header += ' · ' + extras.join(' · ');
+            $('#sku-history-owners').text(header);
+            const logs = response.data.history || [];
+            const $list = $('#sku-history-list');
+            if (!logs.length) {
+                $list.append('<tr><td colspan="5" class="description">Sin cambios de mapeo todavía.</td></tr>');
+                return;
+            }
+            logs.forEach(function(log) {
+                const lastDoc = log.last_seen_document_date || log.document_date || '';
+                $list.append(
+                    '<tr>' +
+                    '<td class="sku-history-date">' + escHtml(formatSkuDate(log.modified_at || log.created_at)) + '</td>' +
+                    '<td class="sku-history-date">' + escHtml(lastDoc ? formatSkuDate(lastDoc, false) : '—') + '</td>' +
+                    '<td><strong>' + escHtml(log.action_label || log.action) + '</strong></td>' +
+                    '<td>' + escHtml(log.user_name || 'Sistema') + '</td>' +
+                    '<td>' + escHtml(log.details || '—') + '</td>' +
+                    '</tr>'
+                );
+            });
+        });
+    }
+
+    $(document).on('click', '.btn-apply-sku-suggest', function() {
+        const $wrap = $(this).closest('.sku-edit-wrap');
+        const sku = String($(this).data('sku') || $wrap.data('suggest') || '');
+        if (!sku) return;
+        $wrap.find('.sku-input').val(sku);
+        setSkuEditMode($wrap, true);
+        $wrap.find('.btn-link-sku').trigger('click');
+    });
+
+    let skuSuggestTimer = null;
+    $(document).on('input', '.sku-input', function() {
+        const $input = $(this);
+        if ($input.prop('readonly')) return;
+        const $wrap = $input.closest('.sku-edit-wrap');
+        const $list = $wrap.find('.sku-suggest-list');
+        const term = $input.val().trim();
+        clearTimeout(skuSuggestTimer);
+        if (term.length < 1) {
+            $list.hide().empty();
+            return;
+        }
+        skuSuggestTimer = setTimeout(function() {
+            $.post(ajaxurl, {
+                action: 'riverso_search_sku_catalog',
+                nonce: nonce,
+                search: term
+            }, function(r) {
+                if (!r.success) {
+                    $list.hide().empty();
+                    return;
+                }
+                const products = r.data.products || [];
+                if (!products.length) {
+                    $list.html('<div class="sku-suggest-item">Sin sugerencias de catálogo</div>').show();
+                    return;
+                }
+                let html = '';
+                products.forEach(function(p) {
+                    const sku = p.canonical_sku || '';
+                    const name = p.nombre_canonico || '';
+                    html += `<div class="sku-suggest-item" data-sku="${escAttr(sku)}"><strong>${escHtml(sku)}</strong>${name ? '<br><small>' + escHtml(name) + '</small>' : ''}</div>`;
+                });
+                $list.html(html).show();
+            });
+        }, 250);
+    });
+
+    $(document).on('click', '.sku-suggest-item', function() {
+        const sku = String($(this).data('sku') || '');
+        if (!sku) return;
+        const $wrap = $(this).closest('.sku-edit-wrap');
+        $wrap.find('.sku-input').val(sku);
+        $wrap.find('.sku-suggest-list').hide().empty();
+    });
+
+    $(document).on('click', function(e) {
+        if (!$(e.target).closest('.sku-edit-wrap').length) {
+            $('.sku-suggest-list').hide();
+        }
+    });
+
+    $(document).on('click', '.btn-sku-history', function() {
+        openSkuHistory($(this).data('sku') || '', $(this).data('code') || '');
+    });
+
+    $('#btn-close-sku-history, #btn-close-sku-history-2').on('click', function() {
+        $('#modal-sku-history').hide();
     });
     
     // Cargar al inicio
     loadInvoices(1);
+    const openFacturaId = new URLSearchParams(window.location.search).get('factura');
+    if (openFacturaId) {
+        $.post(ajaxurl, {
+            action: 'riverso_get_invoice',
+            nonce: nonce,
+            factura_id: openFacturaId
+        }, function(response) {
+            if (response.success) showInvoiceDetail(response.data);
+        });
+    }
 });
 </script>

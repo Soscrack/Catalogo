@@ -42,6 +42,7 @@ class Riverso_Task_Module {
         'codigo_faltante' => 'Vincular código proveedor',
         'barcode_faltante' => 'Asignar código de barra',
         // Tareas de revisión humana (procesos automáticos)
+        'confirmar_tipo_documento' => 'Confirmar tipo de documento',
         'revisar_relacion' => 'Revisar relación de producto',
         'validar_categoria' => 'Validar categoría',
         'verificar_etiquetado' => 'Verificar etiquetado',

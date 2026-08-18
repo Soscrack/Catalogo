@@ -940,17 +940,19 @@ jQuery(function($) {
         }
 
         // Tab: Online
-        $('#online-woo-id').text(p.woocommerce_product_id || '-');
+        const hasWoo = parseInt(p.woocommerce_product_id || 0, 10) > 0
+            || parseInt(p.woocommerce_variation_id || 0, 10) > 0;
+        $('#online-woo-id').text(hasWoo ? (p.woocommerce_product_id || p.woocommerce_variation_id) : '-');
         $('#online-match-estado').text(p.match_estado_online || 'UNMATCHED');
         const hasCode = parseInt(p.proveedores_count || 0) > 0 || (p.proveedores && p.proveedores.length > 0);
-        if (!hasCode && p.woocommerce_product_id) {
+        if (!hasCode && hasWoo) {
             $('#online-missing-code-banner').show();
         } else {
             $('#online-missing-code-banner').hide();
         }
         $('#suppliers-missing-banner').toggle(!hasCode);
         const hasEan = p.barcodes && p.barcodes.some(b => b.tipo === 'ean13');
-        $('#barcodes-missing-banner').toggle(!!p.woocommerce_product_id && !hasEan);
+        $('#barcodes-missing-banner').toggle(hasWoo && !hasEan);
 
         // Badges + warnings inline (análogo wp-admin)
         calculateFieldAlerts(p);
@@ -1063,13 +1065,19 @@ jQuery(function($) {
     }
 
     function renderOnlineDetails(p) {
-        if (!p.woocommerce_product_id && !p.woocommerce_variation_id) {
+        const hasWoo = parseInt(p.woocommerce_product_id || 0, 10) > 0
+            || parseInt(p.woocommerce_variation_id || 0, 10) > 0;
+        if (!hasWoo) {
             $('#online-details').html('<em style="color:#999;">Sin producto WooCommerce asociado. Use el formulario de búsqueda/creación para vincular.</em>');
             if (canManage) {
                 $('#online-create-btn').show();
+                $('#online-link-btn').show();
             }
             return;
         }
+        $('#online-create-btn').hide();
+        // online-link-btn solo se muestra al seleccionar un Woo en búsqueda
+        $('#online-link-btn').hide();
 
         const d = p.online_details || null;
         if (!d) {

@@ -1733,9 +1733,10 @@ class Riverso_Woo_Publisher_Module {
      * @param int $base_id ID del producto_base.
      * @param int $proveedor_id ID del proveedor.
      * @param string $codigo Código del proveedor.
+     * @param bool $force Reasignar aunque el SKU ya tenga otro código.
      * @return array|WP_Error Fila actualizada o error.
      */
-    public function catalog_code_link($base_id, $proveedor_id, $codigo) {
+    public function catalog_code_link($base_id, $proveedor_id, $codigo, $force = false) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         $base_id = absint($base_id);
@@ -1752,6 +1753,32 @@ class Riverso_Woo_Publisher_Module {
         ), ARRAY_A);
         if (!$base) {
             return new WP_Error('base_not_found', 'Producto base no encontrado');
+        }
+
+        $sku_local = trim((string) ($base['canonical_sku'] ?? ''));
+        if ($sku_local !== '') {
+            if (!class_exists('Riverso_Invoice_Intake_Service')) {
+                $intake_file = RIVERSO_POS_PLUGIN_DIR . 'modules/invoices/class-invoice-intake-service.php';
+                if (is_readable($intake_file)) {
+                    require_once $intake_file;
+                }
+            }
+            if (class_exists('Riverso_Invoice_Intake_Service')) {
+                $intake = Riverso_Invoice_Intake_Service::get_instance();
+                $conflict = $intake->get_sku_assignment_conflict($sku_local, $proveedor_id, $codigo);
+                if ($conflict && ($conflict['code'] ?? '') === 'sku_owned_elsewhere') {
+                    if (!$force) {
+                        return new WP_Error('sku_conflict', $conflict['message'], $conflict);
+                    }
+                    foreach ($conflict['owners'] as $owner) {
+                        $intake->unlink_sku_from_code(
+                            (int) $owner['proveedor_id'],
+                            $owner['codigo_proveedor'],
+                            $sku_local
+                        );
+                    }
+                }
+            }
         }
 
         // Buscar o crear entrada producto_proveedor.
@@ -1815,6 +1842,19 @@ class Riverso_Woo_Publisher_Module {
                 'old_value' => ['activo' => $existing ? 0 : null],
                 'new_value' => ['proveedor_id' => $proveedor_id, 'codigo' => $codigo, 'activo' => 1],
             ]);
+            $sku_local = trim((string) ($base['canonical_sku'] ?? ''));
+            if ($sku_local !== '') {
+                Riverso_POS_Audit::log('sku_mapping_assigned', 'sku_mapping', (int) $base_id, [
+                    'actor_type' => 'human',
+                    'entity_name' => $sku_local,
+                    'new_value' => [
+                        'sku_local' => $sku_local,
+                        'proveedor_id' => $proveedor_id,
+                        'codigo_proveedor' => $codigo,
+                    ],
+                    'details' => sprintf('SKU %s ← %s (catálogo)', $sku_local, $codigo),
+                ]);
+            }
         }
 
         return [
@@ -2024,9 +2064,13 @@ class Riverso_Woo_Publisher_Module {
             wp_send_json_error(['message' => 'Parámetros incompletos']);
         }
 
-        $result = $this->catalog_code_link($base_id, $proveedor_id, $codigo);
+        $result = $this->catalog_code_link($base_id, $proveedor_id, $codigo, !empty($_POST['force']));
         if (is_wp_error($result)) {
-            wp_send_json_error(['message' => $result->get_error_message()]);
+            $data = $result->get_error_data();
+            wp_send_json_error(array_merge([
+                'message' => $result->get_error_message(),
+                'conflict' => $result->get_error_code() === 'sku_conflict',
+            ], is_array($data) ? $data : []));
         }
 
         wp_send_json_success(['code' => $result]);

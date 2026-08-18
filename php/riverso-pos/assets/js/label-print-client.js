@@ -94,6 +94,25 @@ const RiversoLabelPrint = (function () {
     }
 
     /**
+     * El agente EtiquetadorRS espera enteros (int?), no decimales ni strings.
+     */
+    function toInt(value, fallback) {
+        const n = parseInt(value, 10);
+        return Number.isFinite(n) ? n : fallback;
+    }
+
+    function toNullableInt(value) {
+        if (value === null || value === undefined || value === '') {
+            return null;
+        }
+        const n = Number(value);
+        if (!Number.isFinite(n)) {
+            return null;
+        }
+        return Math.round(n);
+    }
+
+    /**
      * Imprime un lote de trabajos
      * @param {Array} jobs - Array de trabajos: { nombre, sku, cantidad, precio, copias, modo, color, ean13, printerName }
      * @returns {Promise} Resultado de la impresión
@@ -107,9 +126,9 @@ const RiversoLabelPrint = (function () {
             jobs: jobs.map(job => ({
                 nombre: job.nombre || 'Sin nombre',
                 sku: job.sku || '0',
-                cantidad: Math.max(1, job.cantidad || 100),
-                precio: job.precio || null,
-                copias: Math.max(1, job.copias || 1),
+                cantidad: Math.max(1, toInt(job.cantidad, 100)),
+                precio: toNullableInt(job.precio),
+                copias: Math.max(1, toInt(job.copias, 1)),
                 modo: job.modo || 'BolsaCOD',
                 color: job.color || 'BN',
                 ean13: job.ean13 || null,
@@ -375,7 +394,7 @@ const RiversoLabelPrint = (function () {
                 nombre: document.getElementById('print-nombre').value,
                 sku: document.getElementById('print-sku').value,
                 cantidad: parseInt(document.getElementById('print-cantidad').value) || 100,
-                precio: defaultJob?.precio || null,
+                precio: toNullableInt(defaultJob?.precio),
                 copias: parseInt(document.getElementById('print-copias').value) || 1,
                 modo: document.getElementById('print-modo').value,
                 color: document.getElementById('print-color').value,

@@ -25,6 +25,7 @@ $filters = [
 
 $page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
 $per_page = 50;
+$nonce = wp_create_nonce('riverso_pos_nonce');
 
 $result = Riverso_POS_Audit::get_logs($filters, $page, $per_page);
 $stats = Riverso_POS_Audit::get_stats(30);
@@ -403,14 +404,22 @@ jQuery(document).ready(function($) {
             action: 'riverso_products_undo_merge',
             nonce: nonce,
             audit_id: auditId
-        }, function(r) {
-            if (r.success) {
+        })
+        .done(function(r) {
+            if (r && r.success) {
                 alert(r.data.message || 'Merge deshecho exitosamente');
                 location.reload();
-            } else {
-                alert('Error: ' + (r.data && r.data.message ? r.data.message : 'No se pudo deshacer'));
-                $btn.prop('disabled', false).text('↶ Deshacer');
+                return;
             }
+            alert('Error: ' + (r && r.data && r.data.message ? r.data.message : 'No se pudo deshacer'));
+            $btn.prop('disabled', false).text('↶ Deshacer');
+        })
+        .fail(function(xhr) {
+            const msg = (xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message)
+                ? xhr.responseJSON.data.message
+                : ('Error de red/servidor (' + xhr.status + ')');
+            alert('Error: ' + msg);
+            $btn.prop('disabled', false).text('↶ Deshacer');
         });
     });
 
@@ -430,14 +439,22 @@ jQuery(document).ready(function($) {
             action: 'riverso_products_redo_merge',
             nonce: nonce,
             audit_id: auditId
-        }, function(r) {
-            if (r.success) {
+        })
+        .done(function(r) {
+            if (r && r.success) {
                 alert(r.data.message || 'Merge rehecho exitosamente');
                 location.reload();
-            } else {
-                alert('Error: ' + (r.data && r.data.message ? r.data.message : 'No se pudo rehacer'));
-                $btn.prop('disabled', false).text('↷ Rehacer');
+                return;
             }
+            alert('Error: ' + (r && r.data && r.data.message ? r.data.message : 'No se pudo rehacer'));
+            $btn.prop('disabled', false).text('↷ Rehacer');
+        })
+        .fail(function(xhr) {
+            const msg = (xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message)
+                ? xhr.responseJSON.data.message
+                : ('Error de red/servidor (' + xhr.status + ')');
+            alert('Error: ' + msg);
+            $btn.prop('disabled', false).text('↷ Rehacer');
         });
     });
 });

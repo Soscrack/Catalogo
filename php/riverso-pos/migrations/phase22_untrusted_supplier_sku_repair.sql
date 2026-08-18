@@ -1,0 +1,4 @@
+-- Fase 22: no usar SKU local de un match UNMATCHED.
+-- Folio 96946179 (Andina) quedó con SKU 853 (tornillo) en todas las líneas.
+-- El backfill riverso_codigos pegó codigo_proveedor Andina a producto_base 13288.
+-- La reparación real corre en PHP (create_phase22_untrusted_supplier_sku_repair).

@@ -37,6 +37,14 @@ class Riverso_Tienda_Local_Module {
         add_action('wp_ajax_riverso_tienda_local_search', [$this, 'ajax_search_local']);
         add_action('wp_ajax_riverso_tienda_local_import', [$this, 'ajax_import_local']);
 
+        $mapping = RIVERSO_POS_PLUGIN_DIR . 'modules/barcodes/class-barcode-mapping-module.php';
+        if (file_exists($mapping)) {
+            require_once $mapping;
+            if (class_exists('Riverso_Barcode_Mapping_Module')) {
+                Riverso_Barcode_Mapping_Module::get_instance();
+            }
+        }
+
         if (defined('WP_CLI') && WP_CLI) {
             WP_CLI::add_command('riverso tienda-local import', [$this, 'cli_import']);
         }
@@ -271,32 +279,46 @@ class Riverso_Tienda_Local_Module {
             ];
         }
 
-        $barcode = $wpdb->get_row($wpdb->prepare(
-            "SELECT b.*, p.nombre, p.precio, p.stock, p.fecha_scraping
-             FROM {$this->table_barcodes} b
-             INNER JOIN {$this->table_productos} p ON p.sku = b.sku
-             WHERE b.barcode = %s
-             LIMIT 1",
-            $query
-        ), ARRAY_A);
-
-        if (!$barcode) {
-            $normalized = $this->normalize_barcode($query);
-            $barcode = $wpdb->get_row($wpdb->prepare(
-                "SELECT b.*, p.nombre, p.precio, p.stock, p.fecha_scraping
-                 FROM {$this->table_barcodes} b
-                 INNER JOIN {$this->table_productos} p ON p.sku = b.sku
-                 WHERE b.barcode_norm = %s
-                 LIMIT 1",
-                $normalized
-            ), ARRAY_A);
+        if (!class_exists('Riverso_Barcode_Model')) {
+            $model = RIVERSO_POS_PLUGIN_DIR . 'catalog/barcodes/class-barcode-model.php';
+            if (file_exists($model)) {
+                require_once $model;
+            }
         }
 
-        if ($barcode) {
-            return [
-                'type' => 'barcode',
-                'items' => [$this->format_product($barcode['sku'], $barcode['barcode'])],
-            ];
+        $looks_barcode = class_exists('Riverso_Barcode_Model')
+            ? Riverso_Barcode_Model::looks_like_barcode($query)
+            : (strlen($query) >= 8 && ctype_digit($query));
+
+        if ($looks_barcode && class_exists('Riverso_Barcode_Model')) {
+            $bundle = Riverso_Barcode_Model::resolve_with_suggestions($query);
+            if (!empty($bundle['match']) && !empty($bundle['match']['producto_base_id'])) {
+                $item = $this->format_from_mapping($bundle['match'], $query);
+                if ($item) {
+                    return [
+                        'type' => 'barcode',
+                        'trusted' => true,
+                        'items' => [$item],
+                    ];
+                }
+            }
+
+            $suggestions = $this->format_suggestions($bundle['suggestions'] ?? [], $query);
+            if (!empty($suggestions) || !empty($bundle['conflicts'])) {
+                return [
+                    'type' => !empty($bundle['conflicts']) ? 'conflict' : 'suggestion',
+                    'trusted' => false,
+                    'conflicts' => !empty($bundle['conflicts']),
+                    'items' => $suggestions,
+                    'rejected' => $bundle['rejected'] ?? [],
+                    'query' => $query,
+                ];
+            }
+        }
+
+        $legacy_local = $this->search_legacy_tienda_local($query);
+        if ($legacy_local) {
+            return $legacy_local;
         }
 
         $product = $wpdb->get_row($wpdb->prepare(
@@ -326,6 +348,134 @@ class Riverso_Tienda_Local_Module {
                 return $this->format_product($item['sku']);
             }, $products),
         ];
+    }
+
+    private function search_legacy_tienda_local($query) {
+        global $wpdb;
+
+        $barcode = $wpdb->get_row($wpdb->prepare(
+            "SELECT b.*, p.nombre, p.precio, p.stock, p.fecha_scraping
+             FROM {$this->table_barcodes} b
+             INNER JOIN {$this->table_productos} p ON p.sku = b.sku
+             WHERE b.barcode = %s
+             LIMIT 1",
+            $query
+        ), ARRAY_A);
+
+        if (!$barcode) {
+            $normalized = $this->normalize_barcode($query);
+            $barcode = $wpdb->get_row($wpdb->prepare(
+                "SELECT b.*, p.nombre, p.precio, p.stock, p.fecha_scraping
+                 FROM {$this->table_barcodes} b
+                 INNER JOIN {$this->table_productos} p ON p.sku = b.sku
+                 WHERE b.barcode_norm = %s
+                 LIMIT 1",
+                $normalized
+            ), ARRAY_A);
+        }
+
+        if (!$barcode) {
+            return null;
+        }
+
+        $item = $this->format_product($barcode['sku'], $barcode['barcode']);
+        if (!$item) {
+            return null;
+        }
+        $item['trusted'] = false;
+        $item['mapping_estado'] = 'propuesto';
+        $item['origen'] = 'legacy_tienda_local';
+        $item['sku_local'] = $barcode['sku'];
+        $item['matched_barcode'] = $barcode['barcode'];
+        return [
+            'type' => 'suggestion',
+            'trusted' => false,
+            'items' => [$item],
+            'query' => $query,
+        ];
+    }
+
+    private function format_from_mapping($resolved, $matched_barcode = '') {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $pb_id = intval($resolved['producto_base_id'] ?? 0);
+        $pb = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, canonical_sku, nombre_canonico FROM {$prefix}producto_base WHERE id = %d",
+            $pb_id
+        ), ARRAY_A);
+        if (!$pb) {
+            return null;
+        }
+
+        $local = $this->format_product($pb['canonical_sku'], $matched_barcode);
+        if ($local) {
+            $local['producto_base_id'] = $pb_id;
+            $local['trusted'] = true;
+            $local['mapping_estado'] = 'verificado';
+            $local['origen'] = $resolved['origen'] ?? 'codigo_barra';
+            $local['codigo_id'] = $resolved['codigo_id'] ?? ($resolved['id'] ?? null);
+            return $local;
+        }
+
+        $barcodes = $wpdb->get_results($wpdb->prepare(
+            "SELECT codigo AS barcode, estado_at AS fecha
+             FROM {$prefix}codigo_barra
+             WHERE producto_base_id = %d AND activo = 1 AND estado = 'verificado'
+             ORDER BY codigo ASC",
+            $pb_id
+        ), ARRAY_A) ?: [];
+
+        return [
+            'sku' => $pb['canonical_sku'],
+            'nombre' => $pb['nombre_canonico'] ?: $pb['canonical_sku'],
+            'precio' => 0,
+            'precio_formateado' => $this->format_clp(0),
+            'stock' => 0,
+            'fecha_scraping' => null,
+            'matched_barcode' => $matched_barcode,
+            'barcodes' => $barcodes,
+            'producto_base_id' => $pb_id,
+            'trusted' => true,
+            'mapping_estado' => 'verificado',
+            'origen' => $resolved['origen'] ?? 'codigo_barra',
+            'codigo_id' => $resolved['codigo_id'] ?? ($resolved['id'] ?? null),
+        ];
+    }
+
+    private function format_suggestions($suggestions, $query) {
+        $items = [];
+        foreach ($suggestions as $s) {
+            $item = null;
+            if (!empty($s['producto_base_id'])) {
+                $item = $this->format_from_mapping($s, $query);
+            }
+            if (!$item) {
+                $sku = $s['canonical_sku'] ?: ($s['sku_local'] ?: ($s['pending_sku'] ?: ''));
+                $item = $sku !== '' ? $this->format_product($sku, $query) : null;
+            }
+            if (!$item) {
+                $item = [
+                    'sku' => $s['canonical_sku'] ?: ($s['sku_local'] ?: ($s['pending_sku'] ?: '')),
+                    'nombre' => $s['nombre_canonico'] ?: 'Producto no encontrado en catálogo',
+                    'precio' => 0,
+                    'precio_formateado' => '',
+                    'stock' => 0,
+                    'matched_barcode' => $query,
+                    'barcodes' => [],
+                ];
+            }
+            $item['trusted'] = false;
+            $item['mapping_estado'] = $s['estado'] ?? 'propuesto';
+            $item['origen'] = $s['origen'] ?? 'legacy';
+            $item['codigo_id'] = $s['codigo_id'] ?? ($s['id'] ?? null);
+            $item['producto_base_id'] = $s['producto_base_id'] ?? null;
+            $item['pending_sku'] = $s['pending_sku'] ?? null;
+            $item['sku_local'] = $s['sku_local'] ?? null;
+            $item['advertencia'] = $s['advertencia'] ?? null;
+            $item['conflicto'] = !empty($s['conflicto']);
+            $items[] = $item;
+        }
+        return $items;
     }
 
     private function format_product($sku, $matched_barcode = '') {
@@ -372,6 +522,19 @@ class Riverso_Tienda_Local_Module {
         ];
     }
 
+    private function mapping_stats() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'riverso_codigo_barra';
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) !== $table) {
+            return [];
+        }
+        return [
+            'verificados' => (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE estado = 'verificado' AND activo = 1"),
+            'propuestos' => (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE estado = 'propuesto' AND activo = 1"),
+            'conflictos' => (int) $wpdb->get_var("SELECT COUNT(DISTINCT codigo) FROM {$table} WHERE conflicto = 1 AND estado = 'propuesto'"),
+        ];
+    }
+
     public function ajax_search_local() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
 
@@ -382,7 +545,7 @@ class Riverso_Tienda_Local_Module {
         $query = sanitize_text_field($_POST['query'] ?? '');
         $result = $this->search($query);
 
-        if (empty($result['items'])) {
+        if (empty($result['items']) && empty($result['conflicts']) && ($result['type'] ?? '') !== 'suggestion' && ($result['type'] ?? '') !== 'conflict') {
             wp_send_json_error([
                 'message' => 'Producto local no encontrado',
                 'query' => $query,
@@ -390,7 +553,7 @@ class Riverso_Tienda_Local_Module {
             ]);
         }
 
-        wp_send_json_success($result + ['stats' => $this->get_stats()]);
+        wp_send_json_success($result + ['stats' => $this->get_stats() + $this->mapping_stats()]);
     }
 
     public function ajax_import_local() {

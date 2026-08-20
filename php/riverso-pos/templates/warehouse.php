@@ -21,8 +21,12 @@ $movement_types = Riverso_Warehouse_Module::MOVEMENT_TYPES;
     <!-- Tabs -->
     <div class="nav-tab-wrapper">
         <a href="#" class="nav-tab nav-tab-active" data-tab="ubicaciones">Ubicaciones</a>
+        <?php if (current_user_can('riverso_do_inventory') || current_user_can('riverso_edit_stock') || current_user_can('manage_options')): ?>
+        <a href="#" class="nav-tab" data-tab="inventario">Inventario</a>
+        <?php endif; ?>
         <a href="#" class="nav-tab" data-tab="movimientos">Movimientos</a>
         <a href="#" class="nav-tab" data-tab="buscar">Buscar Producto</a>
+        <a href="#" class="nav-tab" data-tab="stock-status">Estado de stock</a>
     </div>
 
     <!-- Tab: Ubicaciones -->
@@ -36,13 +40,13 @@ $movement_types = Riverso_Warehouse_Module::MOVEMENT_TYPES;
                     <?php endforeach; ?>
                 </select>
                 <select id="filter-estado-ubicacion">
+                    <option value="">Todas</option>
                     <option value="1">Activas</option>
                     <option value="0">Desactivadas</option>
-                    <option value="">Todas</option>
                 </select>
                 <input type="text" id="search-ubicacion" placeholder="Buscar código o nombre...">
             </div>
-            <?php if (current_user_can('riverso_edit_stock')): ?>
+            <?php if (current_user_can('riverso_edit_stock') || current_user_can('riverso_edit_warehouse') || current_user_can('manage_options')): ?>
             <button type="button" class="button button-primary" id="btn-new-location">
                 <span class="dashicons dashicons-plus-alt"></span> Nueva Ubicación
             </button>
@@ -53,6 +57,15 @@ $movement_types = Riverso_Warehouse_Module::MOVEMENT_TYPES;
             <!-- Cargado via JS -->
         </div>
     </div>
+
+    <?php if (current_user_can('riverso_do_inventory') || current_user_can('riverso_edit_stock') || current_user_can('manage_options')): ?>
+    <div id="tab-inventario" class="tab-content" style="display: none;">
+        <?php
+        $riverso_wh_embed = true;
+        include RIVERSO_POS_PLUGIN_DIR . 'templates/portal/portal-warehouse.php';
+        ?>
+    </div>
+    <?php endif; ?>
 
     <!-- Tab: Movimientos -->
     <div id="tab-movimientos" class="tab-content" style="display: none;">
@@ -68,7 +81,7 @@ $movement_types = Riverso_Warehouse_Module::MOVEMENT_TYPES;
                 <input type="date" id="filter-mov-hasta" placeholder="Hasta">
                 <button type="button" class="button" id="btn-filter-movements">Filtrar</button>
             </div>
-            <?php if (current_user_can('riverso_edit_stock')): ?>
+            <?php if (current_user_can('riverso_edit_stock') || current_user_can('riverso_edit_warehouse') || current_user_can('manage_options')): ?>
             <button type="button" class="button button-primary" id="btn-new-movement">
                 <span class="dashicons dashicons-update"></span> Registrar Movimiento
             </button>
@@ -131,6 +144,81 @@ $movement_types = Riverso_Warehouse_Module::MOVEMENT_TYPES;
                     <span class="dashicons dashicons-plus"></span> Asignar a Ubicación
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- Tab: Estado de stock -->
+    <div id="tab-stock-status" class="tab-content" style="display: none;">
+        <div class="tab-header">
+            <div class="filters">
+                <input type="search" id="stock-status-q" placeholder="Buscar SKU o nombre..." class="regular-text">
+                <select id="stock-status-inv">
+                    <option value="">Inventariado: Todos</option>
+                    <option value="exacto">Exacto</option>
+                    <option value="al_menos">Al menos</option>
+                    <option value="desconocido">Desconocido</option>
+                </select>
+                <select id="stock-status-conf">
+                    <option value="">Confianza: Todos</option>
+                    <option value="confiable">Confiable</option>
+                    <option value="poco_confiable">Poco confiable</option>
+                    <option value="dudoso">Dudoso</option>
+                </select>
+                <select id="stock-status-alerta">
+                    <option value="">Alerta: Todas</option>
+                    <option value="1">Solo con alerta</option>
+                    <option value="0">Sin alerta</option>
+                </select>
+                <button type="button" class="button" id="btn-stock-status-reload">Actualizar</button>
+            </div>
+        </div>
+        <table class="wp-list-table widefat fixed striped">
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Producto</th>
+                    <th>Stock</th>
+                    <th>Mín.</th>
+                    <th>Crítico</th>
+                    <th>Inventariado</th>
+                    <th>Confianza</th>
+                    <th>Último conteo</th>
+                    <?php if (current_user_can('riverso_edit_stock') || current_user_can('manage_options')): ?>
+                    <th></th>
+                    <?php endif; ?>
+                </tr>
+            </thead>
+            <tbody id="stock-status-body">
+                <tr><td colspan="9">Cargando...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal: Límites de stock -->
+<div id="modal-stock-limits" class="riverso-modal" style="display: none;">
+    <div class="riverso-modal-content">
+        <div class="riverso-modal-header">
+            <h2>Límites de stock</h2>
+            <button type="button" class="riverso-modal-close">&times;</button>
+        </div>
+        <div class="riverso-modal-body">
+            <p id="stock-limits-prod" style="margin-top:0;color:#555;"></p>
+            <input type="hidden" id="stock-limits-id" value="">
+            <div class="form-field">
+                <label for="stock-limits-min">Stock mínimo (aviso para encargar)</label>
+                <input type="number" id="stock-limits-min" min="0" step="1" placeholder="Vacío = sin aviso">
+            </div>
+            <div class="form-field">
+                <label for="stock-limits-crit">Stock crítico</label>
+                <input type="number" id="stock-limits-crit" min="0" step="1" placeholder="Vacío = sin crítico">
+                <p class="description" style="margin:6px 0 0;">El crítico nunca puede ser mayor que el mínimo. Si baja el mínimo, el crítico se iguala. Si sube el crítico por encima del mínimo, el mínimo se iguala.</p>
+            </div>
+            <p id="stock-limits-hint" style="display:none;color:#1565c0;font-weight:600;"></p>
+        </div>
+        <div class="riverso-modal-footer">
+            <button type="button" class="button" id="btn-cancel-stock-limits">Cancelar</button>
+            <button type="button" class="button button-primary" id="btn-save-stock-limits">Guardar</button>
         </div>
     </div>
 </div>
@@ -382,6 +470,13 @@ $movement_types = Riverso_Warehouse_Module::MOVEMENT_TYPES;
 .stock-badge.low-stock { background: #fff3e0; color: #ef6c00; }
 .stock-badge.out-of-stock { background: #ffebee; color: #c62828; }
 
+.wh-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+.wh-badge-ok { background:#e8f5e9; color:#2e7d32; }
+.wh-badge-warn { background:#fff3e0; color:#e65100; }
+.wh-badge-off { background:#eceff1; color:#546e7a; }
+.wh-badge-err { background:#ffebee; color:#c62828; }
+.location-card.unknown { border-color: #90a4ae; background: #eceff1; }
+
 .form-row {
     display: flex;
     gap: 15px;
@@ -413,6 +508,7 @@ jQuery(function($) {
     const nonce = '<?php echo wp_create_nonce('riverso_pos_nonce'); ?>';
     const locationTypes = <?php echo wp_json_encode($location_types); ?>;
     const movementTypes = <?php echo wp_json_encode($movement_types); ?>;
+    const canEditStock = <?php echo (current_user_can('riverso_edit_stock') || current_user_can('manage_options')) ? 'true' : 'false'; ?>;
     let currentProductId = null;
     let locationsCache = [];
 
@@ -430,6 +526,10 @@ jQuery(function($) {
             loadLocations();
         } else if (tab === 'movimientos') {
             loadMovements();
+        } else if (tab === 'stock-status') {
+            loadStockStatus();
+        } else if (tab === 'inventario' && typeof window.riversoWhLoadOpenCounts === 'function') {
+            window.riversoWhLoadOpenCounts();
         }
     });
 
@@ -473,22 +573,25 @@ jQuery(function($) {
         }
 
         locations.forEach(function(loc) {
+            const isUnknown = String(loc.codigo) === '?';
             const isActive = parseInt(loc.activo) === 1;
-            const cardClass = isActive ? '' : 'inactive';
-            const statusClass = isActive ? 'active' : 'inactive';
-            const statusText = isActive ? 'Activa' : 'Desactivada';
+            const cardClass = (isUnknown ? 'unknown ' : '') + (isActive ? '' : 'inactive');
+            const statusClass = isUnknown ? 'inactive' : (isActive ? 'active' : 'inactive');
+            const statusText = isUnknown ? 'Desconocido' : (isActive ? 'Activa' : 'Desactivada');
             
             let actions = '';
-            if (isActive) {
-                actions = `
-                    <button class="button button-small btn-edit-location">Editar</button>
-                    <button class="button button-small btn-deactivate-location">Desactivar</button>
-                `;
-            } else {
-                actions = `
-                    <button class="button button-small btn-activate-location" style="background: #4caf50; color: white; border-color: #4caf50;">Reactivar</button>
-                    <button class="button button-small btn-delete-permanent" style="background: #d32f2f; color: white; border-color: #d32f2f;">Eliminar</button>
-                `;
+            if (!isUnknown) {
+                if (isActive) {
+                    actions = `
+                        <button class="button button-small btn-edit-location">Editar</button>
+                        <button class="button button-small btn-deactivate-location">Desactivar</button>
+                    `;
+                } else {
+                    actions = `
+                        <button class="button button-small btn-activate-location" style="background: #4caf50; color: white; border-color: #4caf50;">Reactivar</button>
+                        <button class="button button-small btn-delete-permanent" style="background: #d32f2f; color: white; border-color: #d32f2f;">Eliminar</button>
+                    `;
+                }
             }
             
             grid.append(`
@@ -500,9 +603,10 @@ jQuery(function($) {
                             <span class="location-status ${statusClass}">${statusText}</span>
                         </span>
                     </div>
-                    <div class="location-name">${loc.nombre}</div>
+                    <div class="location-name">${loc.nombre || loc.codigo}</div>
                     <div class="location-products">
-                        <span class="dashicons dashicons-archive"></span> ${loc.productos_count} productos
+                        <span class="dashicons dashicons-archive"></span> ${loc.productos_count || 0} productos
+                        · ${loc.preferidos_count || 0} preferidos
                     </div>
                     <div class="location-actions">
                         ${actions}
@@ -654,7 +758,7 @@ jQuery(function($) {
                 <tr>
                     <td>${m.created_at.split(' ')[0]}</td>
                     <td><span style="color: ${type.color || '#666'}">${type.label || m.tipo}</span></td>
-                    <td>${m.product_id}</td>
+                    <td>${m.canonical_sku ? (m.canonical_sku + ' · ') : ''}${m.nombre_canonico || m.product_id}</td>
                     <td style="text-align: right; font-weight: 600;">${parseFloat(m.cantidad).toFixed(0)}</td>
                     <td style="text-align: right;">${parseFloat(m.stock_anterior).toFixed(0)}</td>
                     <td style="text-align: right;">${parseFloat(m.stock_nuevo).toFixed(0)}</td>
@@ -786,8 +890,141 @@ jQuery(function($) {
         });
     }
 
+    function stockInvBadge(v) {
+        if (v === 'exacto') return '<span class="wh-badge wh-badge-ok">Exacto</span>';
+        if (v === 'al_menos') return '<span class="wh-badge wh-badge-warn">Al menos</span>';
+        return '<span class="wh-badge wh-badge-off">Desconocido</span>';
+    }
+    function stockConfBadge(v) {
+        if (v === 'confiable') return '<span class="wh-badge wh-badge-ok">Confiable</span>';
+        if (v === 'poco_confiable') return '<span class="wh-badge wh-badge-warn">Poco confiable</span>';
+        if (v === 'dudoso') return '<span class="wh-badge wh-badge-err">Dudoso</span>';
+        return '<span class="wh-badge wh-badge-off">' + (v || '') + '</span>';
+    }
+
+    function loadStockStatus() {
+        const tbody = $('#stock-status-body');
+        tbody.html('<tr><td colspan="9">Cargando...</td></tr>');
+        $.post(ajaxurl, {
+            action: 'riverso_stock_status_list',
+            nonce: nonce,
+            search: $('#stock-status-q').val(),
+            estado_inventariado: $('#stock-status-inv').val(),
+            estado_confianza: $('#stock-status-conf').val(),
+            alerta: $('#stock-status-alerta').val(),
+            page: 1,
+            per_page: 50
+        }, function(response) {
+            if (!response.success) {
+                tbody.html('<tr><td colspan="9">Error: ' + ((response.data && response.data.message) || 'No se pudo cargar') + '</td></tr>');
+                return;
+            }
+            const items = response.data.items || [];
+            if (!items.length) {
+                tbody.html('<tr><td colspan="9">Sin resultados</td></tr>');
+                return;
+            }
+            tbody.html(items.map(function(it) {
+                const alerts = [];
+                if (parseInt(it.alerta, 10) === 1) alerts.push('<span class="wh-badge wh-badge-warn">Alerta</span>');
+                if (parseInt(it.critico, 10) === 1) alerts.push('<span class="wh-badge wh-badge-err">Crítico</span>');
+                const bg = parseInt(it.critico, 10) === 1 ? 'background:#ffebee;' : (parseInt(it.alerta, 10) === 1 ? 'background:#fff8e1;' : '');
+                const editBtn = canEditStock
+                    ? '<button type="button" class="button button-small btn-stock-edit" data-id="' + it.id +
+                      '" data-sku="' + String(it.canonical_sku || '').replace(/"/g, '&quot;') +
+                      '" data-name="' + String(it.nombre_canonico || '').replace(/"/g, '&quot;') +
+                      '" data-min="' + (it.stock_minimo == null ? '' : it.stock_minimo) +
+                      '" data-crit="' + (it.stock_critico == null ? '' : it.stock_critico) + '">Editar límites</button>'
+                    : '';
+                return '<tr style="' + bg + '">' +
+                    '<td><code>' + (it.canonical_sku || '') + '</code></td>' +
+                    '<td>' + (it.nombre_canonico || '') + '</td>' +
+                    '<td>' + it.stock_total + (alerts.length ? '<br>' + alerts.join(' ') : '') + '</td>' +
+                    '<td>' + (it.stock_minimo == null ? '—' : it.stock_minimo) + '</td>' +
+                    '<td>' + (it.stock_critico == null ? '—' : it.stock_critico) + '</td>' +
+                    '<td>' + stockInvBadge(it.estado_inventariado) + '</td>' +
+                    '<td>' + stockConfBadge(it.estado_confianza) + '</td>' +
+                    '<td>' + (it.ultimo_conteo_fecha || '—') + '</td>' +
+                    (canEditStock ? '<td>' + editBtn + '</td>' : '') +
+                    '</tr>';
+            }).join(''));
+        }).fail(function() {
+            tbody.html('<tr><td colspan="9">Error de conexión</td></tr>');
+        });
+    }
+
+    $('#btn-stock-status-reload, #stock-status-inv, #stock-status-conf, #stock-status-alerta').on('click change', loadStockStatus);
+    $('#stock-status-q').on('keyup', debounce(loadStockStatus, 300));
+
+    function parseLimitVal(raw) {
+        const s = String(raw == null ? '' : raw).trim();
+        if (s === '') return null;
+        const n = parseInt(s, 10);
+        return isNaN(n) ? null : Math.max(0, n);
+    }
+    function showStockHint(msg) {
+        const $h = $('#stock-limits-hint');
+        if (!msg) { $h.hide().text(''); return; }
+        $h.text(msg).show();
+    }
+    function syncStockLimits(changed) {
+        const min = parseLimitVal($('#stock-limits-min').val());
+        const crit = parseLimitVal($('#stock-limits-crit').val());
+        if (min != null && crit != null && crit > min) {
+            if (changed === 'critico') {
+                $('#stock-limits-min').val(crit);
+                showStockHint('El mínimo se igualó al crítico.');
+            } else {
+                $('#stock-limits-crit').val(min);
+                showStockHint('El crítico se igualó al mínimo.');
+            }
+        } else {
+            showStockHint('');
+        }
+    }
+    let stockLastChanged = 'minimo';
+    $(document).on('click', '.btn-stock-edit', function() {
+        const $btn = $(this);
+        $('#stock-limits-id').val($btn.data('id'));
+        $('#stock-limits-prod').text(($btn.data('sku') || '') + ' · ' + ($btn.data('name') || ''));
+        $('#stock-limits-min').val($btn.attr('data-min') || '');
+        $('#stock-limits-crit').val($btn.attr('data-crit') || '');
+        stockLastChanged = 'minimo';
+        showStockHint('');
+        $('#modal-stock-limits').show();
+        $('#stock-limits-min').trigger('focus');
+    });
+    $('#stock-limits-min').on('input change', function() {
+        stockLastChanged = 'minimo';
+        syncStockLimits('minimo');
+    });
+    $('#stock-limits-crit').on('input change', function() {
+        stockLastChanged = 'critico';
+        syncStockLimits('critico');
+    });
+    $('#btn-save-stock-limits').on('click', function() {
+        syncStockLimits(stockLastChanged);
+        const min = parseLimitVal($('#stock-limits-min').val());
+        const crit = parseLimitVal($('#stock-limits-crit').val());
+        $.post(ajaxurl, {
+            action: 'riverso_stock_status_save_config',
+            nonce: nonce,
+            producto_base_id: $('#stock-limits-id').val(),
+            stock_minimo: min == null ? '' : min,
+            stock_critico: crit == null ? '' : crit,
+            last_changed: stockLastChanged
+        }, function(response) {
+            if (!response.success) {
+                alert((response.data && response.data.message) || 'Error');
+                return;
+            }
+            $('#modal-stock-limits').hide();
+            loadStockStatus();
+        });
+    });
+
     // Cerrar modales
-    $('.riverso-modal-close, #btn-cancel-location, #btn-cancel-movement').on('click', function() {
+    $('.riverso-modal-close, #btn-cancel-location, #btn-cancel-movement, #btn-cancel-stock-limits').on('click', function() {
         $(this).closest('.riverso-modal').hide();
     });
 

@@ -152,19 +152,20 @@ $colores = Riverso_Print_Order_Module::COLORES;
             <div class="po-editor-actions">
                 <button type="button" class="button po-close-order">Cerrar</button>
                 <?php if ($can_create): ?>
-                <button type="button" class="button button-primary" id="po-save">Guardar borrador</button>
-                <button type="button" class="button" id="po-submit">Enviar</button>
+                <button type="button" class="button button-primary po-workflow-btn" id="po-save">Guardar borrador</button>
+                <button type="button" class="button po-workflow-btn" id="po-submit">Enviar</button>
+                <button type="button" class="button" id="po-use-as-draft" style="display:none;">Usar como borrador</button>
                 <?php endif; ?>
                 <?php if ($can_approve): ?>
-                <button type="button" class="button" id="po-approve">Aprobar</button>
-                <button type="button" class="button" id="po-return">Devolver a borrador</button>
+                <button type="button" class="button po-workflow-btn" id="po-approve">Aprobar</button>
+                <button type="button" class="button po-workflow-btn" id="po-return">Devolver a borrador</button>
                 <?php endif; ?>
                 <?php if ($can_print): ?>
-                <button type="button" class="button button-primary" id="po-print">Imprimir</button>
-                <button type="button" class="button" id="po-print-direct">Imprimir directamente</button>
+                <button type="button" class="button button-primary po-workflow-btn" id="po-print">Imprimir</button>
+                <button type="button" class="button button-primary" id="po-reprint" style="display:none;">Volver a imprimir</button>
                 <?php endif; ?>
                 <?php if ($can_create || $can_cancel): ?>
-                <button type="button" class="button" id="po-cancel">Cancelar orden</button>
+                <button type="button" class="button po-workflow-btn" id="po-cancel">Cancelar orden</button>
                 <?php endif; ?>
                 <span id="po-editor-msg" class="po-muted"></span>
             </div>
@@ -345,7 +346,7 @@ jQuery(function($) {
             actions.push('<button type="button" class="button button-small po-do-approve" data-id="' + o.id + '">Aprobar</button>');
         }
         if (canPrint && (o.estado === 'aprobada' || o.estado === 'borrador' || o.estado === 'pendiente')) {
-            actions.push('<button type="button" class="button button-small po-do-print" data-id="' + o.id + '" data-direct="' + (o.estado !== 'aprobada' ? '1' : '0') + '">Imprimir</button>');
+            actions.push('<button type="button" class="button button-small po-do-print" data-id="' + o.id + '">Imprimir</button>');
         }
         if (canCancel && o.estado !== 'impresa' && o.estado !== 'cancelada') {
             actions.push('<button type="button" class="button button-small po-do-cancel" data-id="' + o.id + '">Cancelar</button>');
@@ -385,6 +386,7 @@ jQuery(function($) {
         $('#po-product-results').empty();
         renderItems();
         $('#po-editor-msg').text('');
+        syncEditorChrome();
     }
 
     function fillEditor(order) {
@@ -398,6 +400,23 @@ jQuery(function($) {
         $('#po-editor-estado').html(badge(order.estado, order.estado_label));
         renderItems();
         $('#po-editor-msg').text('');
+        syncEditorChrome();
+    }
+
+    function isLockedOrder() {
+        const estado = currentOrder && currentOrder.estado;
+        return estado === 'impresa' || estado === 'cancelada';
+    }
+
+    function syncEditorChrome() {
+        const estado = currentOrder && currentOrder.estado;
+        const locked = estado === 'impresa' || estado === 'cancelada';
+        const printed = estado === 'impresa';
+        $('.po-workflow-btn').toggle(!locked);
+        $('#po-use-as-draft').toggle(!!(locked && canCreate));
+        $('#po-reprint').toggle(!!(printed && canPrint));
+        $('#po-tipo, #po-prioridad, #po-notas').prop('disabled', locked);
+        $('.po-search-box').toggle(!locked && canCreate);
     }
 
     function modoOptions(selected) {
@@ -449,6 +468,19 @@ jQuery(function($) {
         $('#po-items-body').html(editorItems.map(function(it, idx) {
             const precioVal = priceInputValue(it.precio);
             const precioLabel = formatPrice2(it.precio);
+            if (isLockedOrder()) {
+                return '<tr data-idx="' + idx + '">' +
+                    '<td><code>' + esc(it.sku) + '</code></td>' +
+                    '<td>' + esc(it.nombre || '') + '</td>' +
+                    '<td>' + esc(it.cantidad_ean || 100) + '</td>' +
+                    '<td>' + esc(it.copias || 1) + '</td>' +
+                    '<td>' + esc(it.modo || 'BolsaCOD') + '</td>' +
+                    '<td>' + esc(it.color || 'BN') + '</td>' +
+                    '<td>' + esc(it.ean13 || '—') + '</td>' +
+                    '<td>' + esc(precioLabel) + '</td>' +
+                    (canCreate ? '<td></td>' : '') +
+                    '</tr>';
+            }
             const precioOpen = !!it.precioUnlocked;
             let precioHtml = '<span class="po-precio-view">' + esc(precioLabel) + '</span>';
             if (canEditPrice) {
@@ -480,6 +512,23 @@ jQuery(function($) {
     }
 
     function collectItems() {
+        if (isLockedOrder()) {
+            return editorItems.map(function(it, i) {
+                return {
+                    id: it.id || 0,
+                    sku: it.sku,
+                    nombre: it.nombre,
+                    precio: it.precio,
+                    precio_original: it.precio_original == null || it.precio_original === '' ? null : toPrice2(it.precio_original),
+                    cantidad_ean: it.cantidad_ean,
+                    copias: it.copias,
+                    modo: it.modo,
+                    color: it.color,
+                    ean13: it.ean13 || '',
+                    orden_posicion: i
+                };
+            });
+        }
         $('#po-items-body tr').each(function() {
             const idx = parseInt($(this).data('idx'), 10);
             if (isNaN(idx) || !editorItems[idx]) return;
@@ -743,7 +792,7 @@ jQuery(function($) {
         });
     }
 
-    function printOrder(order, direct) {
+    function printOrder(order) {
         if (typeof RiversoLabelPrint === 'undefined') {
             alert('El módulo de impresión no está cargado. Recarga la página.');
             return;
@@ -761,33 +810,36 @@ jQuery(function($) {
         if (!confirm('Imprimir ' + jobs.length + ' producto(s) / ' + order.total_copias + ' copias' + (printer ? ' en ' + printer : '') + '?')) {
             return;
         }
+        const reprint = order.estado === 'impresa';
         RiversoLabelPrint.print(jobs).then(function() {
+            if (reprint) {
+                resetEditor();
+                switchTab('listado');
+                return $.Deferred().resolve(null).promise();
+            }
             return post('riverso_print_orders_mark_printed', {
                 id: order.id,
-                impresora_nombre: printer,
-                direct: direct ? 1 : 0
+                impresora_nombre: printer
             });
         }).then(function(res) {
+            if (!res) return;
             if (!res.success) {
                 alert('Se imprimió, pero no se pudo registrar: ' + (res.data && res.data.message || 'error'));
                 return;
             }
-            fillEditor(res.data.order);
-            $('#po-editor-msg').text('Impresa correctamente');
-            loadList();
+            resetEditor();
+            switchTab('listado');
         }).catch(function(err) {
             alert(err && err.message ? err.message : 'Error de impresión');
         });
     }
 
-    function ensureAndPrint(id, direct) {
+    function ensureAndPrint(id) {
         const run = function(order) {
-            if (direct && (order.estado === 'borrador' || order.estado === 'pendiente' || order.estado === 'aprobada')) {
-                printOrder(order, true);
-            } else if (order.estado === 'aprobada') {
-                printOrder(order, false);
+            if (order.estado === 'borrador' || order.estado === 'pendiente' || order.estado === 'aprobada') {
+                printOrder(order);
             } else {
-                alert('Aprueba la orden antes de imprimir, o usa impresión directa.');
+                alert('Esta orden no se puede imprimir.');
             }
         };
         if (currentOrder && String(currentOrder.id) === String(id)) {
@@ -802,20 +854,31 @@ jQuery(function($) {
 
     $('#po-print').on('click', function() {
         const id = $('#po-order-id').val();
-        if (!id) { alert('Guarda la orden primero'); return; }
-        ensureAndPrint(id, false);
-    });
-    $('#po-print-direct').on('click', function() {
-        const go = function(order) { printOrder(order, true); };
-        if (!$('#po-order-id').val()) {
-            saveOrder().then(go);
-        } else {
-            saveOrder().then(go);
+        if (!id) {
+            saveOrder().then(function(order) { printOrder(order); });
+            return;
         }
+        ensureAndPrint(id);
+    });
+
+    $('#po-reprint').on('click', function() {
+        if (!currentOrder || currentOrder.estado !== 'impresa') return;
+        printOrder(currentOrder);
+    });
+
+    $('#po-use-as-draft').on('click', function() {
+        const id = $('#po-order-id').val();
+        if (!id || !canCreate) return;
+        post('riverso_print_orders_duplicate', { id: id }).done(function(res) {
+            if (!res.success) { alert(res.data && res.data.message || 'Error'); return; }
+            fillEditor(res.data.order);
+            switchTab('editor');
+            $('#po-editor-msg').text('Nuevo borrador ' + res.data.order.numero_orden);
+        });
     });
 
     $(document).on('click', '.po-do-print', function() {
-        ensureAndPrint($(this).data('id'), String($(this).data('direct')) === '1');
+        ensureAndPrint($(this).data('id'));
     });
     $(document).on('click', '.po-do-approve', function() {
         post('riverso_print_orders_approve', { id: $(this).data('id') }).done(function(res) {

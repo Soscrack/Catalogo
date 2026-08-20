@@ -333,6 +333,26 @@ class Riverso_POS_Module {
         }
         
         // 3. Buscar por código de barra exacto (tabla legacy: fallback)
+        // Los EAN/numéricos no se resuelven por legacy: deben estar verificados en codigo_barra.
+        $looks_barcode = class_exists('Riverso_Barcode_Model')
+            ? Riverso_Barcode_Model::looks_like_barcode($search)
+            : (strlen($search) >= 8 && ctype_digit($search));
+
+        if ($looks_barcode && class_exists('Riverso_Barcode_Model')) {
+            $bundle = Riverso_Barcode_Model::resolve_with_suggestions($search);
+            if (empty($bundle['match']) && !empty($bundle['suggestions'])) {
+                wp_send_json_success([
+                    'products' => [],
+                    'count' => 0,
+                    'search' => $search,
+                    'unconfirmed_barcode' => true,
+                    'message' => 'Código no confirmado. Apruébalo en /interno/barcodes antes de vender.',
+                    'suggestions' => count($bundle['suggestions']),
+                ]);
+            }
+        }
+
+        if (!$looks_barcode) {
         $barcode_product = $wpdb->get_row($wpdb->prepare(
             "SELECT product_id, variation_id FROM {$prefix}barcodes 
             WHERE (barcode = %s OR TRIM(LEADING '0' FROM barcode) = %s) AND is_active = 1 
@@ -354,7 +374,8 @@ class Riverso_POS_Module {
                 }
             }
         }
-        
+        }
+
         // 3. Buscar por código de barra de proveedor (supplier_barcode)
         $supplier_barcode = $wpdb->get_row($wpdb->prepare(
             "SELECT product_id, variation_id, supplier_code, supplier_description 

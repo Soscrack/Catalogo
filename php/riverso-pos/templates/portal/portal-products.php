@@ -266,6 +266,9 @@ $can_manage_families = current_user_can('riverso_manage_families');
             <?php if ($can_manage_families): ?>
                 <button class="detail-tab" data-tab="families">Familias</button>
             <?php endif; ?>
+            <?php if (current_user_can('riverso_view_warehouse') || current_user_can('manage_options')): ?>
+                <button class="detail-tab" data-tab="locations">Ubicaciones</button>
+            <?php endif; ?>
         </div>
 
         <!-- TAB: LOCAL -->
@@ -662,6 +665,32 @@ $can_manage_families = current_user_can('riverso_manage_families');
             </div>
         </div>
         <?php endif; ?>
+
+        <?php if (current_user_can('riverso_view_warehouse') || current_user_can('manage_options')): ?>
+        <div class="detail-tab-content" data-tab-content="locations">
+            <div id="prod-loc-preferidas" style="margin-bottom:16px;">
+                <h4 style="margin:0 0 8px;">Lugares preferidos</h4>
+                <div id="prod-loc-pref-list">Cargando...</div>
+                <?php if (current_user_can('riverso_edit_warehouse') || current_user_can('manage_options')): ?>
+                <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                    <select id="prod-loc-add-select" style="min-width:220px;padding:6px;"></select>
+                    <button type="button" class="btn-small" id="prod-loc-add">Agregar a preferidos</button>
+                </div>
+                <?php endif; ?>
+            </div>
+            <div id="prod-loc-actuales" style="margin-bottom:16px;">
+                <h4 style="margin:0 0 8px;">Lugares actuales (último conteo)</h4>
+                <div id="prod-loc-act-list">—</div>
+            </div>
+            <div id="prod-loc-historial">
+                <h4 style="margin:0 0 8px;">Lugares vistos (historial)</h4>
+                <table class="products-table" style="box-shadow:none;">
+                    <thead><tr><th>Fecha</th><th>Lugar</th><th>Cantidad</th><th>Conteo</th></tr></thead>
+                    <tbody id="prod-loc-hist-body"><tr><td colspan="4">—</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
 
     <!-- Help panel -->
@@ -697,6 +726,7 @@ jQuery(function($) {
     const canManage = <?php echo $can_manage ? 'true' : 'false'; ?>;
     const canManageCategories = <?php echo $can_manage_categories ? 'true' : 'false'; ?>;
     const canManageFamilies = <?php echo $can_manage_families ? 'true' : 'false'; ?>;
+    const canEditWarehouse = <?php echo (current_user_can('riverso_edit_warehouse') || current_user_can('manage_options')) ? 'true' : 'false'; ?>;
     
     let currentProduct = null;
     let currentOffset = 0;
@@ -844,6 +874,9 @@ jQuery(function($) {
         const $panel = $(`.detail-tab-content[data-tab-content="${tab}"]`);
         if ($panel.length) {
             $('html, body').animate({ scrollTop: $panel.offset().top - 80 }, 200);
+        }
+        if (tab === 'locations' && currentProduct) {
+            loadProductLocations(currentProduct.id);
         }
     }
 
@@ -2360,6 +2393,75 @@ jQuery(function($) {
         editOnlinePrice: function() {
             $('#online-price-editor').toggle();
         }
+    };
+
+    function loadProductLocations(productId) {
+        post('riverso_inventory_get_product_locations', { producto_base_id: productId }).done(function(r) {
+            if (!r.success) {
+                $('#prod-loc-pref-list').text((r.data && r.data.message) || 'Error');
+                return;
+            }
+            const pref = r.data.preferidas || [];
+            if (!pref.length) {
+                $('#prod-loc-pref-list').html('<p style="color:#666;">Sin lugares preferidos.</p>');
+            } else {
+                $('#prod-loc-pref-list').html(pref.map(function(p) {
+                    const star = parseInt(p.es_preferido, 10) ? '★' : '☆';
+                    let actions = '';
+                    if (canEditWarehouse) {
+                        if (!parseInt(p.es_preferido, 10)) {
+                            actions += ` <button class="btn-small" onclick="window.portalProducts.setPrimaryLoc(${p.ubicacion_id})">Preferido</button>`;
+                        }
+                        actions += ` <button class="btn-small danger" onclick="window.portalProducts.removePrefLoc(${p.ubicacion_id})">Quitar</button>`;
+                    }
+                    return `<div style="padding:6px 0;border-bottom:1px solid #eee;">${star} <strong>${esc(p.codigo)}</strong> ${esc(p.nombre || '')}${actions}</div>`;
+                }).join(''));
+            }
+            const act = r.data.actuales || [];
+            $('#prod-loc-act-list').html(act.length
+                ? act.map(a => `<div><strong>${esc(a.codigo)}</strong> ${esc(a.nombre || '')} · ${esc(a.cantidad_contada)} uds</div>`).join('')
+                : '<p style="color:#666;">Aún no hay conteos cerrados para este producto.</p>');
+            const hist = r.data.historial || [];
+            $('#prod-loc-hist-body').html(hist.length
+                ? hist.map(h => `<tr><td>${esc(h.fecha_conteo)}</td><td>${esc(h.codigo)} ${esc(h.nombre || '')}</td><td>${esc(h.cantidad_contada)}</td><td>${esc(h.conteo_nombre || h.conteo_id || '')}</td></tr>`).join('')
+                : '<tr><td colspan="4">Sin historial</td></tr>');
+        });
+        post('riverso_inventory_get_locations', { activo: 1 }).done(function(r) {
+            if (!r.success) return;
+            const $sel = $('#prod-loc-add-select');
+            $sel.html('<option value="">— Elegir ubicación —</option>');
+            (r.data.locations || []).forEach(function(l) {
+                $sel.append(`<option value="${l.id}">${esc(l.codigo)} · ${esc(l.nombre || '')}</option>`);
+            });
+        });
+    }
+
+    $('#prod-loc-add').on('click', function() {
+        if (!currentProduct) return;
+        const locId = $('#prod-loc-add-select').val();
+        if (!locId) return;
+        post('riverso_inventory_save_preferred_location', {
+            producto_base_id: currentProduct.id,
+            ubicacion_id: locId
+        }).done(function(r) {
+            if (!r.success) { alert((r.data && r.data.message) || 'Error'); return; }
+            loadProductLocations(currentProduct.id);
+        });
+    });
+
+    window.portalProducts.setPrimaryLoc = function(locId) {
+        if (!currentProduct) return;
+        post('riverso_inventory_set_primary_location', {
+            producto_base_id: currentProduct.id,
+            ubicacion_id: locId
+        }).done(function() { loadProductLocations(currentProduct.id); });
+    };
+    window.portalProducts.removePrefLoc = function(locId) {
+        if (!currentProduct) return;
+        post('riverso_inventory_remove_preferred_location', {
+            producto_base_id: currentProduct.id,
+            ubicacion_id: locId
+        }).done(function() { loadProductLocations(currentProduct.id); });
     };
 
     // Initial load

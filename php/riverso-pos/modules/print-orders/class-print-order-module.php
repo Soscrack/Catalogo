@@ -1022,11 +1022,8 @@ class Riverso_Print_Order_Module {
             wp_send_json_error(['message' => 'Esta orden ya está ' . $order['estado']]);
         }
 
-        $direct = !empty($_POST['direct']);
-        if ($order['estado'] !== 'aprobada') {
-            if (!$direct || !in_array($order['estado'], ['borrador', 'pendiente'], true)) {
-                wp_send_json_error(['message' => 'Aprueba la orden antes de marcarla como impresa, o usa impresión directa']);
-            }
+        if (!in_array($order['estado'], ['borrador', 'pendiente', 'aprobada'], true)) {
+            wp_send_json_error(['message' => 'Esta orden no se puede marcar como impresa']);
         }
         if (empty($order['items'])) {
             wp_send_json_error(['message' => 'La orden no tiene ítems']);
@@ -1062,7 +1059,6 @@ class Riverso_Print_Order_Module {
             'new_value' => [
                 'estado'           => 'impresa',
                 'impresora_nombre' => $printer,
-                'direct'           => $direct ? 1 : 0,
                 'total_copias'     => $order['total_copias'],
             ],
             'details' => 'Orden impresa' . ($printer ? ' en ' . $printer : ''),

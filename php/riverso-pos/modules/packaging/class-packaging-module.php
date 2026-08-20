@@ -102,6 +102,18 @@ class Riverso_Packaging_Module {
 
     /* ===================== Envases ===================== */
 
+    public static function allowed_tipo_envase() {
+        global $wpdb;
+        $defaults = ['envase', 'caja', 'balde', 'bolsa_fabrica', 'bolsa_interna', 'otro'];
+        $table = $wpdb->prefix . 'riverso_envase_tipos';
+        $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+        if ($exists !== $table) {
+            return $defaults;
+        }
+        $slugs = $wpdb->get_col("SELECT slug FROM {$table} WHERE activo = 1") ?: [];
+        return array_values(array_unique(array_merge($defaults, $slugs)));
+    }
+
     public function create_envase($producto_base_id, $cantidad_unidades, $sku_envase = '', $variation_id = 0, $extra = []) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
@@ -113,7 +125,7 @@ class Riverso_Packaging_Module {
         }
 
         $tipo_envase = sanitize_key($extra['tipo_envase'] ?? 'envase');
-        $allowed_types = ['envase', 'caja', 'balde', 'bolsa_fabrica', 'bolsa_interna', 'otro'];
+        $allowed_types = self::allowed_tipo_envase();
         if (!in_array($tipo_envase, $allowed_types, true)) {
             $tipo_envase = 'otro';
         }

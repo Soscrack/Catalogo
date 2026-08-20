@@ -127,12 +127,12 @@ VERSION=$(sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   require "{WP_PATH}/wp-load.php";
   echo defined("RIVERSO_POS_VERSION") ? RIVERSO_POS_VERSION : "missing";
 ')
-test "$VERSION" = "1.5.57"
+test "$VERSION" = "1.5.62"
 
 sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   require "{WP_PATH}/wp-load.php";
   global $wpdb;
-  foreach (["riverso_data_gaps", "riverso_ean_aliases", "riverso_factura_referencias", "riverso_factura_pagos", "riverso_factura_pago_documentos", "riverso_factura_reversa_inventario", "riverso_ordenes_impresion", "riverso_orden_impresion_items"] as $suffix) {{
+  foreach (["riverso_data_gaps", "riverso_ean_aliases", "riverso_factura_referencias", "riverso_factura_pagos", "riverso_factura_pago_documentos", "riverso_factura_reversa_inventario", "riverso_ordenes_impresion", "riverso_orden_impresion_items", "riverso_producto_ubicacion_preferida", "riverso_producto_ubicacion_historial", "riverso_conteo_scan_log", "riverso_ordenes_inventario", "riverso_orden_inventario_items", "riverso_envase_tipos"] as $suffix) {{
     $table = $wpdb->prefix . $suffix;
     if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) !== $table) {{
       fwrite(STDERR, "Missing table: " . $table . PHP_EOL);
@@ -160,6 +160,30 @@ sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
     $col = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM `$codigos` LIKE %s", $colName));
     if (empty($col)) {{
       fwrite(STDERR, "Missing column $colName on $codigos" . PHP_EOL);
+      exit(1);
+    }}
+  }}
+  $ub = $wpdb->prefix . "riverso_ubicaciones";
+  foreach (["barcode", "zona"] as $colName) {{
+    $col = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM `$ub` LIKE %s", $colName));
+    if (empty($col)) {{
+      fwrite(STDERR, "Missing column $colName on $ub" . PHP_EOL);
+      exit(1);
+    }}
+  }}
+  $cb = $wpdb->prefix . "riverso_codigo_barra";
+  foreach (["estado", "origen_datos", "sku_local", "pending_sku", "legacy_ref", "conflicto"] as $colName) {{
+    $col = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM `$cb` LIKE %s", $colName));
+    if (empty($col)) {{
+      fwrite(STDERR, "Missing column $colName on $cb" . PHP_EOL);
+      exit(1);
+    }}
+  }}
+  $conteos = $wpdb->prefix . "riverso_conteos";
+  foreach (["nombre", "tipo_conteo"] as $colName) {{
+    $col = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM `$conteos` LIKE %s", $colName));
+    if (empty($col)) {{
+      fwrite(STDERR, "Missing column $colName on $conteos" . PHP_EOL);
       exit(1);
     }}
   }}

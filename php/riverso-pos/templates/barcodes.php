@@ -14,6 +14,15 @@ if (!defined('ABSPATH')) {
         Códigos de Barra
     </h1>
 
+    <div class="notice notice-info">
+        <p>
+            El mapeo de confianza está en la pestaña <strong>Mapeo Interno</strong>
+            (<code>wp_riverso_codigo_barra</code>). Las pestañas Todos / Sin Vincular / Importar
+            siguen mostrando el catálogo <strong>legacy</strong>. También puedes revisar en
+            <a href="<?php echo esc_url(home_url('/interno/barcodes/')); ?>">/interno/barcodes</a>.
+        </p>
+    </div>
+
     <!-- Stats -->
     <div class="barcode-stats">
         <div class="stat-card">
@@ -53,6 +62,7 @@ if (!defined('ABSPATH')) {
         <a href="#" class="nav-tab nav-tab-active" data-tab="todos">Todos los Códigos</a>
         <a href="#" class="nav-tab" data-tab="sin-vincular">Sin Vincular</a>
         <a href="#" class="nav-tab" data-tab="importar">Importar</a>
+        <a href="#" class="nav-tab" data-tab="mapeo">Mapeo Interno</a>
     </div>
 
     <!-- Tab: Todos -->
@@ -150,6 +160,82 @@ if (!defined('ABSPATH')) {
             </div>
         </div>
     </div>
+
+    <!-- Tab: Mapeo interno -->
+    <div id="tab-mapeo" class="tab-content" style="display: none;">
+        <div class="mapeo-subnav">
+            <button type="button" class="button button-primary mapeo-subtab" data-sub="sku">Por SKU</button>
+            <button type="button" class="button mapeo-subtab" data-sub="pending">Pendientes</button>
+            <button type="button" class="button mapeo-subtab" data-sub="conflicts">Conflictos</button>
+            <button type="button" class="button mapeo-subtab" data-sub="tipos">Tipos de envase</button>
+        </div>
+
+        <div id="mapeo-sub-sku">
+            <div class="toolbar">
+                <div class="filters">
+                    <select id="mapeo-filter-estado">
+                        <option value="">Todos los estados</option>
+                        <option value="verificado">Verificado</option>
+                        <option value="propuesto">Propuesto</option>
+                        <option value="rechazado">Rechazado</option>
+                    </select>
+                    <input type="text" id="mapeo-search" placeholder="Buscar código o SKU...">
+                    <button type="button" class="button" id="btn-mapeo-search">Buscar</button>
+                </div>
+                <button type="button" class="button button-primary" id="btn-mapeo-add">
+                    <span class="dashicons dashicons-plus-alt"></span> Agregar al mapeo
+                </button>
+            </div>
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th style="width: 140px;">SKU local</th>
+                        <th>Producto</th>
+                        <th style="width: 90px;">Códigos</th>
+                        <th style="width: 90px;">Verificados</th>
+                        <th style="width: 90px;">Propuestos</th>
+                        <th style="width: 90px;">Conflictos</th>
+                        <th style="width: 140px;">Modificado</th>
+                        <th style="width: 90px;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="mapeo-sku-list"></tbody>
+            </table>
+            <div id="mapeo-sku-detail" style="display:none;margin-top:16px;"></div>
+        </div>
+
+        <div id="mapeo-sub-pending" style="display:none;">
+            <div id="mapeo-pending-list"></div>
+        </div>
+        <div id="mapeo-sub-conflicts" style="display:none;">
+            <div id="mapeo-conflict-list"></div>
+        </div>
+        <div id="mapeo-sub-tipos" style="display:none;">
+            <form id="form-envase-tipo" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;">
+                <div>
+                    <label>Nombre</label>
+                    <input type="text" id="tipo-nombre" required placeholder="Ej: Saco">
+                </div>
+                <div>
+                    <label>Slug</label>
+                    <input type="text" id="tipo-slug" placeholder="saco">
+                </div>
+                <button type="submit" class="button button-primary">Crear tipo</button>
+            </form>
+            <table class="wp-list-table widefat striped" style="max-width:640px;">
+                <thead>
+                    <tr>
+                        <th>Slug</th>
+                        <th>Nombre</th>
+                        <th>Activo</th>
+                        <th>Orden</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="mapeo-tipos-list"></tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
 <!-- Modal: Agregar Código -->
@@ -233,6 +319,74 @@ if (!defined('ABSPATH')) {
             <button type="button" class="button button-primary" id="btn-add-to-cart" style="display: none;">
                 <span class="dashicons dashicons-cart"></span> Agregar a Venta
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: resolver sugerencia / conflicto -->
+<div id="modal-resolve-barcode" class="riverso-modal" style="display: none;">
+    <div class="riverso-modal-content" style="max-width: 640px;">
+        <div class="riverso-modal-header">
+            <h2>Resolver mapeo</h2>
+            <button type="button" class="riverso-modal-close">&times;</button>
+        </div>
+        <div class="riverso-modal-body">
+            <p id="resolve-warning"></p>
+            <div id="resolve-suggestions"></div>
+        </div>
+        <div class="riverso-modal-footer">
+            <button type="button" class="button" id="btn-resolve-ignore">Ignorar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: agregar/editar mapeo interno -->
+<div id="modal-mapeo-edit" class="riverso-modal" style="display: none;">
+    <div class="riverso-modal-content" style="max-width: 520px;">
+        <div class="riverso-modal-header">
+            <h2 id="mapeo-edit-title">Código en mapeo interno</h2>
+            <button type="button" class="riverso-modal-close">&times;</button>
+        </div>
+        <div class="riverso-modal-body">
+            <input type="hidden" id="mapeo-edit-id">
+            <div class="form-field">
+                <label>Código de barra *</label>
+                <input type="text" id="mapeo-edit-codigo">
+            </div>
+            <div class="form-field">
+                <label>SKU local</label>
+                <input type="text" id="mapeo-edit-sku">
+            </div>
+            <div class="form-field">
+                <label>Producto (opcional)</label>
+                <input type="text" id="mapeo-edit-product-q" placeholder="Buscar SKU o nombre...">
+                <div id="mapeo-edit-product-results"></div>
+                <input type="hidden" id="mapeo-edit-producto-base-id">
+            </div>
+            <div class="form-field">
+                <label>Tipo de envase</label>
+                <select id="mapeo-edit-tipo"></select>
+            </div>
+            <div class="form-field">
+                <label>Cantidad</label>
+                <input type="number" id="mapeo-edit-cantidad" value="1" min="1" step="1">
+            </div>
+            <div class="form-field">
+                <label>Estado</label>
+                <select id="mapeo-edit-estado">
+                    <option value="propuesto">Propuesto</option>
+                    <option value="verificado">Verificado</option>
+                    <option value="en_desuso">En desuso</option>
+                </select>
+            </div>
+            <label>
+                <input type="checkbox" id="mapeo-edit-create-envase">
+                Crear envase para este producto si no existe
+            </label>
+        </div>
+        <div class="riverso-modal-footer">
+            <button type="button" class="button" id="btn-mapeo-edit-cancel">Cancelar</button>
+            <button type="button" class="button button-primary" id="btn-mapeo-edit-save">Guardar</button>
         </div>
     </div>
 </div>
@@ -500,6 +654,47 @@ if (!defined('ABSPATH')) {
     padding: 4px 8px;
     font-size: 12px;
 }
+
+.mapeo-subnav {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.badge-estado {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.badge-verificado { background: #e8f5e9; color: #2e7d32; }
+.badge-propuesto { background: #fff8e1; color: #ef6c00; }
+.badge-rechazado { background: #ffebee; color: #c62828; }
+.badge-conflicto { background: #fce4ec; color: #ad1457; }
+
+.resolve-item {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+}
+
+#mapeo-edit-product-results {
+    border: 1px solid #ddd;
+    max-height: 160px;
+    overflow-y: auto;
+    display: none;
+}
+#mapeo-edit-product-results .result-item {
+    padding: 8px;
+    cursor: pointer;
+}
+#mapeo-edit-product-results .result-item:hover { background: #f5f5f5; }
 </style>
 
 <script>
@@ -530,6 +725,7 @@ jQuery(function($) {
         $('#tab-' + $(this).data('tab')).show();
         
         if ($(this).data('tab') === 'sin-vincular') loadUnlinked();
+        if ($(this).data('tab') === 'mapeo') loadMapeoSku();
     });
 
     // Scanner
@@ -585,7 +781,14 @@ jQuery(function($) {
             barcode: barcode
         }).done(function(response) {
             if (response.success && response.data.product) {
-                result.html(renderScanProduct(response.data.product));
+                const p = response.data.product;
+                if (p.trusted === false || !emptyFlag(response.data.conflicts) || (p.suggestions && p.suggestions.length)) {
+                    showResolveModal(p, response.data.suggestions || p.suggestions || []);
+                    result.html('<p>Este código no está verificado. Revisa el diálogo de resolución.</p>');
+                    $('#scanner-input').val('').focus();
+                    return;
+                }
+                result.html(renderScanProduct(p));
                 $('#scanner-input').val('').focus();
                 return;
             }
@@ -1019,8 +1222,386 @@ jQuery(function($) {
         });
     });
 
+    function esc(v) {
+        return $('<div>').text(v == null ? '' : String(v)).html();
+    }
+    function emptyFlag(v) {
+        return v === true || v === 1 || v === '1';
+    }
+
+    function badgeEstado(estado, conflicto) {
+        if (conflicto) return '<span class="badge-estado badge-conflicto">conflicto</span>';
+        const map = {verificado: 'badge-verificado', propuesto: 'badge-propuesto', rechazado: 'badge-rechazado'};
+        return `<span class="badge-estado ${map[estado] || 'badge-propuesto'}">${esc(estado || '')}</span>`;
+    }
+
+    function postMap(action, extra) {
+        return $.post(ajaxurl, Object.assign({action: action, nonce: nonce}, extra || {}));
+    }
+
+    let mapeoTipos = [];
+    let currentSku = '';
+    let skuDetailById = {};
+
+    function loadEnvaseTipos(cb) {
+        postMap('riverso_envase_tipos_list').done(function(resp) {
+            mapeoTipos = (resp.success && resp.data.items) ? resp.data.items : [];
+            const $sel = $('#mapeo-edit-tipo');
+            $sel.empty();
+            mapeoTipos.filter(t => Number(t.activo) === 1).forEach(function(t) {
+                $sel.append(`<option value="${esc(t.slug)}">${esc(t.nombre)}</option>`);
+            });
+            if (cb) cb(mapeoTipos);
+        });
+    }
+
+    function loadMapeoSku() {
+        const search = $('#mapeo-search').val();
+        const estado = $('#mapeo-filter-estado').val();
+        $('#mapeo-sku-list').html('<tr><td colspan="8">Cargando...</td></tr>');
+        postMap('riverso_barcode_list_by_sku', {search: search, estado: estado, page: 1}).done(function(resp) {
+            if (!resp.success) {
+                $('#mapeo-sku-list').html('<tr><td colspan="8">Error al cargar</td></tr>');
+                return;
+            }
+            const items = resp.data.items || [];
+            if (!items.length) {
+                $('#mapeo-sku-list').html('<tr><td colspan="8">Sin códigos en mapeo interno. Usa el escáner o importa legacy para generar propuestas.</td></tr>');
+                return;
+            }
+            $('#mapeo-sku-list').html(items.map(function(row) {
+                return `<tr>
+                    <td><code>${esc(row.sku_key)}</code></td>
+                    <td>${esc(row.nombre || '')}</td>
+                    <td>${esc(row.barcodes)}</td>
+                    <td>${esc(row.verificados)}</td>
+                    <td>${esc(row.propuestos)}</td>
+                    <td>${esc(row.conflictos)}</td>
+                    <td>${esc(row.last_mod || '')}</td>
+                    <td><button type="button" class="button button-small btn-sku-detail" data-sku="${esc(row.sku_key)}">Ver</button></td>
+                </tr>`;
+            }).join(''));
+        }).fail(function() {
+            $('#mapeo-sku-list').html('<tr><td colspan="8">Error de red</td></tr>');
+        });
+        loadEnvaseTipos();
+    }
+
+    function renderBarcodeActions(item) {
+        const id = item.id || 0;
+        let html = '';
+        if (id && item.estado === 'propuesto') {
+            html += `<button type="button" class="button button-small button-primary btn-map-approve" data-id="${id}">Aprobar</button> `;
+            html += `<button type="button" class="button button-small btn-map-reject" data-id="${id}">Rechazar</button> `;
+        }
+        html += `<button type="button" class="button button-small btn-map-edit" data-id="${id}">Editar</button>`;
+        return html;
+    }
+
+    function loadSkuDetail(sku) {
+        currentSku = sku;
+        const $box = $('#mapeo-sku-detail').show().html('<p>Cargando detalle...</p>');
+        postMap('riverso_barcode_get_sku_detail', {sku: sku}).done(function(resp) {
+            if (!resp.success) {
+                $box.html('<p>Error al cargar detalle</p>');
+                return;
+            }
+            const items = resp.data.items || [];
+            skuDetailById = {};
+            items.forEach(function(it) { skuDetailById[it.id] = it; });
+            let html = `<h3>Códigos de <code>${esc(sku)}</code></h3>
+                <table class="wp-list-table widefat striped">
+                <thead><tr>
+                    <th>Código</th><th>Estado</th><th>Envase</th><th>Cantidad</th><th>Modificado</th><th>Acciones</th>
+                </tr></thead><tbody>`;
+            items.forEach(function(it) {
+                const envase = it.tipo_envase ? `${it.tipo_envase} (${it.envase_cantidad || it.cantidad || 1})` : '—';
+                html += `<tr>
+                    <td><span class="barcode-code">${esc(it.codigo)}</span></td>
+                    <td>${badgeEstado(it.estado, it.conflicto)}</td>
+                    <td>${esc(envase)}</td>
+                    <td>${esc(it.cantidad || 1)}</td>
+                    <td>${esc(it.updated_at || '')}</td>
+                    <td>${renderBarcodeActions(it)}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            $box.html(html);
+        });
+    }
+
+    function renderGroupList(groups, target) {
+        if (!groups || !groups.length) {
+            $(target).html('<p>Sin registros.</p>');
+            return;
+        }
+        let html = '';
+        groups.forEach(function(g) {
+            (g.items || []).forEach(function(it) { if (it.id) skuDetailById[it.id] = it; });
+            html += `<div class="resolve-item" style="flex-direction:column;align-items:stretch;">
+                <strong>${esc(g.codigo)}</strong>
+                ${(g.items || []).map(function(it) {
+                    return `<div style="display:flex;justify-content:space-between;gap:8px;margin-top:6px;">
+                        <span>${badgeEstado(it.estado, it.conflicto)} ${esc(it.sku_local || it.canonical_sku || it.pending_sku || '')} ${esc(it.nombre_canonico || '')}</span>
+                        <span>${it.id ? renderBarcodeActions(it) : '<em>solo legacy</em>'}</span>
+                    </div>`;
+                }).join('')}
+            </div>`;
+        });
+        $(target).html(html);
+    }
+
+    function loadMapeoPending() {
+        $('#mapeo-pending-list').html('<p>Cargando...</p>');
+        postMap('riverso_barcode_list_pending').done(function(resp) {
+            renderGroupList(resp.success ? (resp.data.items || []) : [], '#mapeo-pending-list');
+        }).fail(function() {
+            $('#mapeo-pending-list').html('<p>Error al cargar pendientes.</p>');
+        });
+    }
+
+    function loadMapeoConflicts() {
+        $('#mapeo-conflict-list').html('<p>Cargando...</p>');
+        postMap('riverso_barcode_list_conflicts').done(function(resp) {
+            if (!resp.success) {
+                $('#mapeo-conflict-list').html('<p>Error.</p>');
+                return;
+            }
+            renderGroupList(resp.data.items || [], '#mapeo-conflict-list');
+            const shared = resp.data.shared_sku || [];
+            if (shared.length) {
+                let extra = '<h4>SKUs con varios códigos</h4><ul>';
+                shared.forEach(function(s) {
+                    extra += `<li><code>${esc(s.sku_local)}</code> — ${esc(s.barcodes)} códigos: ${esc(s.codigos)}</li>`;
+                });
+                extra += '</ul>';
+                $('#mapeo-conflict-list').append(extra);
+            }
+        }).fail(function() {
+            $('#mapeo-conflict-list').html('<p>Error al cargar conflictos.</p>');
+        });
+    }
+
+    function loadMapeoTipos() {
+        loadEnvaseTipos(function(items) {
+            if (!items.length) {
+                $('#mapeo-tipos-list').html('<tr><td colspan="5">Sin tipos. Se crearán Envase, Caja y Balde al migrar.</td></tr>');
+                return;
+            }
+            $('#mapeo-tipos-list').html(items.map(function(t) {
+                const activo = Number(t.activo) === 1;
+                return `<tr>
+                    <td><code>${esc(t.slug)}</code></td>
+                    <td>${esc(t.nombre)}</td>
+                    <td>${activo ? 'Sí' : 'No'}</td>
+                    <td>${esc(t.orden)}</td>
+                    <td><button type="button" class="button button-small btn-tipo-toggle" data-id="${t.id}" data-activo="${activo ? 0 : 1}">${activo ? 'Desactivar' : 'Activar'}</button></td>
+                </tr>`;
+            }).join(''));
+        });
+    }
+
+    $('.mapeo-subtab').on('click', function() {
+        $('.mapeo-subtab').removeClass('button-primary');
+        $(this).addClass('button-primary');
+        const sub = $(this).data('sub');
+        $('#mapeo-sub-sku, #mapeo-sub-pending, #mapeo-sub-conflicts, #mapeo-sub-tipos').hide();
+        $('#mapeo-sub-' + sub).show();
+        if (sub === 'sku') loadMapeoSku();
+        if (sub === 'pending') loadMapeoPending();
+        if (sub === 'conflicts') loadMapeoConflicts();
+        if (sub === 'tipos') loadMapeoTipos();
+    });
+
+    $('#btn-mapeo-search').on('click', loadMapeoSku);
+    $('#mapeo-search').on('keypress', function(e) {
+        if (e.which === 13) { e.preventDefault(); loadMapeoSku(); }
+    });
+
+    $(document).on('click', '.btn-sku-detail', function() {
+        loadSkuDetail($(this).data('sku'));
+    });
+
+    $(document).on('click', '.btn-map-approve', function() {
+        const id = $(this).data('id');
+        postMap('riverso_barcode_approve', {codigo_id: id}).done(function(resp) {
+            alert(resp.success ? resp.data.message : (resp.data && resp.data.message) || 'Error');
+            if (currentSku) loadSkuDetail(currentSku);
+            loadMapeoPending();
+            loadMapeoConflicts();
+        });
+    });
+    $(document).on('click', '.btn-map-reject', function() {
+        const id = $(this).data('id');
+        const motivo = prompt('Motivo de rechazo', 'Rechazado desde wp-admin') || 'Rechazado desde wp-admin';
+        postMap('riverso_barcode_reject', {codigo_id: id, motivo: motivo}).done(function(resp) {
+            alert(resp.success ? resp.data.message : (resp.data && resp.data.message) || 'Error');
+            if (currentSku) loadSkuDetail(currentSku);
+        });
+    });
+
+    function openMapeoEdit(item) {
+        item = item || {};
+        $('#mapeo-edit-id').val(item.id || '');
+        $('#mapeo-edit-codigo').val(item.codigo || '');
+        $('#mapeo-edit-sku').val(item.sku_local || item.pending_sku || item.canonical_sku || '');
+        $('#mapeo-edit-producto-base-id').val(item.producto_base_id || '');
+        $('#mapeo-edit-cantidad').val(item.cantidad || 1);
+        $('#mapeo-edit-estado').val(item.estado === 'verificado' ? 'verificado' : 'propuesto');
+        $('#mapeo-edit-create-envase').prop('checked', false);
+        loadEnvaseTipos(function() {
+            if (item.tipo_envase) $('#mapeo-edit-tipo').val(item.tipo_envase);
+        });
+        $('#modal-mapeo-edit').show();
+    }
+
+    $('#btn-mapeo-add').on('click', function() { openMapeoEdit({}); });
+    $(document).on('click', '.btn-map-edit', function() {
+        const id = $(this).data('id');
+        openMapeoEdit(skuDetailById[id] || {id: id});
+    });
+
+    $('#mapeo-edit-product-q').on('input', debounce(function() {
+        const q = $(this).val();
+        if (q.length < 1) { $('#mapeo-edit-product-results').hide(); return; }
+        postMap('riverso_barcode_search_products', {query: q}).done(function(resp) {
+            const items = resp.success ? (resp.data.items || []) : [];
+            if (!items.length) { $('#mapeo-edit-product-results').hide(); return; }
+            $('#mapeo-edit-product-results').show().html(items.map(function(p) {
+                return `<div class="result-item" data-id="${p.id}" data-sku="${esc(p.canonical_sku)}">${esc(p.canonical_sku)} — ${esc(p.nombre_canonico)}</div>`;
+            }).join(''));
+        });
+    }, 250));
+
+    $(document).on('click', '#mapeo-edit-product-results .result-item', function() {
+        $('#mapeo-edit-producto-base-id').val($(this).data('id'));
+        $('#mapeo-edit-sku').val($(this).data('sku'));
+        $('#mapeo-edit-product-results').hide();
+    });
+
+    $('#btn-mapeo-edit-save').on('click', function() {
+        postMap('riverso_barcode_upsert', {
+            codigo_id: $('#mapeo-edit-id').val(),
+            codigo: $('#mapeo-edit-codigo').val(),
+            sku_local: $('#mapeo-edit-sku').val(),
+            producto_base_id: $('#mapeo-edit-producto-base-id').val(),
+            tipo_envase: $('#mapeo-edit-tipo').val(),
+            cantidad: $('#mapeo-edit-cantidad').val(),
+            estado: $('#mapeo-edit-estado').val(),
+            create_envase: $('#mapeo-edit-create-envase').is(':checked') ? 1 : 0
+        }).done(function(resp) {
+            if (!resp.success) {
+                alert((resp.data && resp.data.message) || 'Error al guardar');
+                return;
+            }
+            $('#modal-mapeo-edit').hide();
+            loadMapeoSku();
+            if (currentSku) loadSkuDetail(currentSku);
+        });
+    });
+
+    $('#form-envase-tipo').on('submit', function(e) {
+        e.preventDefault();
+        postMap('riverso_envase_tipo_create', {
+            nombre: $('#tipo-nombre').val(),
+            slug: $('#tipo-slug').val()
+        }).done(function(resp) {
+            if (!resp.success) {
+                alert((resp.data && resp.data.message) || 'Error');
+                return;
+            }
+            $('#tipo-nombre, #tipo-slug').val('');
+            loadMapeoTipos();
+        });
+    });
+    $(document).on('click', '.btn-tipo-toggle', function() {
+        postMap('riverso_envase_tipo_toggle', {id: $(this).data('id'), activo: $(this).data('activo')}).done(loadMapeoTipos);
+    });
+
+    function showResolveModal(product, suggestions) {
+        const barcode = product.barcode || $('#scanner-input').val();
+        const conflict = emptyFlag(product.conflicts);
+        $('#resolve-warning').html(
+            (conflict
+                ? '<strong>Conflicto:</strong> este código puede apuntar a SKUs distintos o no coincidir con el local correcto. '
+                : '<strong>Sugerencia legacy:</strong> no está en el mapeo verificado. ')
+            + '¿Quieres resolverlo ahora o ignorar?'
+        );
+        const rows = (suggestions && suggestions.length) ? suggestions : [{
+            sku: product.sku, sku_local: product.sku_local, nombre: product.name, id: product.barcode_id,
+            producto_base_id: product.producto_base_id, origen: product.source
+        }];
+        $('#resolve-suggestions').html(rows.map(function(s, idx) {
+            return `<div class="resolve-item">
+                <div>
+                    <code>${esc(s.sku_local || s.sku || '')}</code>
+                    ${esc(s.nombre || s.nombre_canonico || '')}<br>
+                    <small>${esc(s.origen || '')}</small>
+                </div>
+                <div>
+                    <button type="button" class="button button-primary btn-resolve-approve"
+                        data-id="${s.id || 0}"
+                        data-codigo="${esc(barcode)}"
+                        data-sku="${esc(s.sku_local || s.sku || '')}"
+                        data-pb="${s.producto_base_id || 0}">Aprobar esta</button>
+                    <button type="button" class="button btn-resolve-reject" data-id="${s.id || 0}">Rechazar</button>
+                </div>
+            </div>`;
+        }).join(''));
+        $('#modal-resolve-barcode').show();
+    }
+
+    $(document).on('click', '.btn-resolve-approve', function() {
+        const $btn = $(this);
+        const id = $btn.data('id');
+        const payload = {
+            codigo_id: id,
+            codigo: $btn.data('codigo'),
+            sku_local: $btn.data('sku'),
+            producto_base_id: $btn.data('pb'),
+            estado: 'verificado',
+            verify: 1
+        };
+        const action = id ? 'riverso_barcode_approve' : 'riverso_barcode_upsert';
+        const data = id ? {codigo_id: id} : payload;
+        postMap(action, data).done(function(resp) {
+            if (!resp.success && $btn.data('pb')) {
+                postMap('riverso_barcode_assign', {
+                    codigo_id: id,
+                    codigo: $btn.data('codigo'),
+                    producto_base_id: $btn.data('pb'),
+                    verify: 1
+                }).done(function(r2) {
+                    alert(r2.success ? 'Código verificado' : ((r2.data && r2.data.message) || 'No se pudo aprobar'));
+                    $('#modal-resolve-barcode').hide();
+                });
+                return;
+            }
+            if (!resp.success) {
+                postMap('riverso_barcode_upsert', payload).done(function(r3) {
+                    alert(r3.success ? 'Código guardado' : ((r3.data && r3.data.message) || 'No se pudo guardar'));
+                    $('#modal-resolve-barcode').hide();
+                });
+                return;
+            }
+            alert(resp.data.message || 'Listo');
+            $('#modal-resolve-barcode').hide();
+        });
+    });
+    $(document).on('click', '.btn-resolve-reject', function() {
+        const id = $(this).data('id');
+        if (!id) { alert('Este código aún no está en mapeo interno; ignóralo o asígnalo primero.'); return; }
+        postMap('riverso_barcode_reject', {codigo_id: id, motivo: 'Rechazado desde escáner wp-admin'}).done(function(resp) {
+            alert(resp.success ? 'Rechazado' : ((resp.data && resp.data.message) || 'Error'));
+            $('#modal-resolve-barcode').hide();
+        });
+    });
+    $('#btn-resolve-ignore').on('click', function() {
+        $('#modal-resolve-barcode').hide();
+    });
+
     // Close modals
-    $('.riverso-modal-close, #btn-cancel-add, #btn-close-scan').on('click', function() {
+    $('.riverso-modal-close, #btn-cancel-add, #btn-close-scan, #btn-mapeo-edit-cancel').on('click', function() {
         $(this).closest('.riverso-modal').hide();
     });
 

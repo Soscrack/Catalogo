@@ -908,32 +908,7 @@ $tareas = $wpdb->get_results($wpdb->prepare(
         </div>
         
         <?php elseif ($current_page === 'warehouse'): ?>
-        <!-- Bodega -->
-        <div class="content-section">
-            <div class="section-header">
-                <h2 class="section-title">Ubicaciones de Bodega</h2>
-                <?php if (current_user_can('riverso_edit_warehouse')): ?>
-                <button class="btn btn-primary" onclick="nuevaUbicacion()">
-                    <span class="dashicons dashicons-plus-alt"></span> Nueva Ubicación
-                </button>
-                <?php endif; ?>
-            </div>
-            <div class="section-body">
-                <div class="locations-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;">
-                    <?php
-                    $ubicaciones = $wpdb->get_results("SELECT * FROM {$prefix}ubicaciones WHERE activo = 1 ORDER BY codigo", ARRAY_A);
-                    foreach ($ubicaciones as $ub): ?>
-                    <div class="location-card" style="background: var(--bg-light); padding: 15px; border-radius: 8px;">
-                        <div style="font-weight: bold; font-size: 18px;"><?php echo esc_html($ub['codigo']); ?></div>
-                        <div style="color: var(--text-secondary); font-size: 14px;"><?php echo esc_html($ub['nombre']); ?></div>
-                        <div style="margin-top: 10px; font-size: 12px; color: var(--text-secondary);">
-                            <?php echo esc_html($ub['tipo']); ?>
-                        </div>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-        </div>
+        <?php include RIVERSO_POS_PLUGIN_DIR . 'templates/portal/portal-warehouse.php'; ?>
         
         <?php elseif ($current_page === 'invoices'): ?>
         <!-- Facturas (portal interno) -->
@@ -1068,21 +1043,34 @@ $tareas = $wpdb->get_results($wpdb->prepare(
         <!-- Códigos de Barra -->
         <div class="content-section">
             <div class="section-header">
-                <h2 class="section-title">Buscador de Códigos de Barra</h2>
+                <h2 class="section-title">Códigos de barra (mapeo propio)</h2>
             </div>
             <div class="section-body">
-                <div style="max-width: 760px; margin: 0 auto;">
+                <div style="max-width: 900px; margin: 0 auto;">
                     <p style="color:var(--text-secondary);margin-bottom:12px;text-align:center;">
-                        Busca en la tienda local por código de barra, SKU o nombre de producto.
+                        La fuente de verdad es el mapeo verificado. Los datos legacy aparecen como sugerencias para aceptar o rechazar.
                     </p>
-                    <div style="display:flex;gap:10px;align-items:center;">
-                        <input type="text" id="barcode-input" placeholder="Escanea, pega un código, SKU o nombre..."
-                               style="flex:1; padding:18px; font-size:20px; text-align:center; border:2px solid var(--primary); border-radius:8px;"
-                               autocomplete="off" autofocus>
-                        <button type="button" id="barcode-search-btn" class="btn btn-primary" style="padding:18px 24px;">Buscar</button>
+                    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
+                        <button type="button" class="btn btn-primary btn-sm barcode-tab" data-tab="search" onclick="window.riversoSwitchBarcodeTab && window.riversoSwitchBarcodeTab('search')">Buscar</button>
+                        <button type="button" class="btn btn-secondary btn-sm barcode-tab" data-tab="pending" onclick="window.riversoSwitchBarcodeTab && window.riversoSwitchBarcodeTab('pending')">Pendientes</button>
+                        <button type="button" class="btn btn-secondary btn-sm barcode-tab" data-tab="conflicts" onclick="window.riversoSwitchBarcodeTab && window.riversoSwitchBarcodeTab('conflicts')">Conflictos</button>
                     </div>
-                    <div id="barcode-stats" style="margin-top:12px;font-size:12px;color:var(--text-secondary);text-align:center;"></div>
-                    <div id="barcode-result" style="margin-top: 24px;"></div>
+                    <div id="barcode-tab-search">
+                        <div style="display:flex;gap:10px;align-items:center;">
+                            <input type="text" id="barcode-input" placeholder="Escanea, pega un código, SKU o nombre..."
+                                   style="flex:1; padding:18px; font-size:20px; text-align:center; border:2px solid var(--primary); border-radius:8px;"
+                                   autocomplete="off" autofocus>
+                            <button type="button" id="barcode-search-btn" class="btn btn-primary" style="padding:18px 24px;">Buscar</button>
+                        </div>
+                        <div id="barcode-stats" style="margin-top:12px;font-size:12px;color:var(--text-secondary);text-align:center;"></div>
+                        <div id="barcode-result" style="margin-top: 24px;"></div>
+                    </div>
+                    <div id="barcode-tab-pending" style="display:none;">
+                        <div id="barcode-pending-list"></div>
+                    </div>
+                    <div id="barcode-tab-conflicts" style="display:none;">
+                        <div id="barcode-conflict-list"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1404,12 +1392,14 @@ $tareas = $wpdb->get_results($wpdb->prepare(
                 <textarea id="po-portal-notas" rows="2" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:4px;margin:6px 0 14px;"></textarea>
 
                 <?php if ($po_can_create): ?>
+                <div id="po-portal-add-box">
                 <label>Agregar producto</label>
                 <div style="display:flex;gap:8px;margin:6px 0;">
                     <input type="search" id="po-portal-q" placeholder="SKU, código o nombre..." style="flex:1;padding:10px;border:1px solid var(--border);border-radius:4px;">
                     <button type="button" class="btn btn-secondary" id="po-portal-q-btn">Buscar</button>
                 </div>
                 <div id="po-portal-hits"></div>
+                </div>
                 <?php endif; ?>
 
                 <div style="overflow-x:auto;margin-top:12px;">
@@ -1437,18 +1427,19 @@ $tareas = $wpdb->get_results($wpdb->prepare(
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;align-items:center;">
                     <button type="button" class="btn btn-secondary po-close-order">Cerrar</button>
                     <?php if ($po_can_create): ?>
-                    <button type="button" class="btn btn-primary" id="po-portal-save">Guardar borrador</button>
-                    <button type="button" class="btn btn-secondary" id="po-portal-submit">Enviar</button>
+                    <button type="button" class="btn btn-primary po-workflow-btn" id="po-portal-save">Guardar borrador</button>
+                    <button type="button" class="btn btn-secondary po-workflow-btn" id="po-portal-submit">Enviar</button>
+                    <button type="button" class="btn btn-primary" id="po-portal-use-as-draft" style="display:none;">Usar como borrador</button>
                     <?php endif; ?>
                     <?php if ($po_can_approve): ?>
-                    <button type="button" class="btn btn-secondary" id="po-portal-approve">Aprobar</button>
+                    <button type="button" class="btn btn-secondary po-workflow-btn" id="po-portal-approve">Aprobar</button>
                     <?php endif; ?>
                     <?php if ($po_can_print): ?>
-                    <button type="button" class="btn btn-primary" id="po-portal-print">Imprimir</button>
-                    <button type="button" class="btn btn-secondary" id="po-portal-print-direct">Imprimir ahora</button>
+                    <button type="button" class="btn btn-primary po-workflow-btn" id="po-portal-print">Imprimir</button>
+                    <button type="button" class="btn btn-primary" id="po-portal-reprint" style="display:none;">Volver a imprimir</button>
                     <?php endif; ?>
                     <?php if ($po_can_create || $po_can_cancel): ?>
-                    <button type="button" class="btn btn-secondary" id="po-portal-cancel">Cancelar</button>
+                    <button type="button" class="btn btn-secondary po-workflow-btn" id="po-portal-cancel">Cancelar</button>
                     <?php endif; ?>
                     <span id="po-portal-msg" style="font-size:13px;color:var(--text-secondary);"></span>
                 </div>
@@ -1656,6 +1647,7 @@ $tareas = $wpdb->get_results($wpdb->prepare(
 // Nonce para AJAX
 const riversoNonce = '<?php echo $nonce; ?>';
 const ajaxUrl = '<?php echo admin_url('admin-ajax.php'); ?>';
+const canManageBarcodes = <?php echo (current_user_can('riverso_manage_products') || current_user_can('riverso_assign_barcodes')) ? 'true' : 'false'; ?>;
 const canDeleteInvoices = <?php echo (current_user_can('riverso_process_invoices') || current_user_can('riverso_create_invoices')) ? 'true' : 'false'; ?>;
 const canProcessInvoices = canDeleteInvoices;
 let portalDetailFacturaId = null;
@@ -2797,13 +2789,13 @@ function portalEliminarFactura(id, folio) {
     }
 })();
 
-// Buscador de códigos de barra / tienda local
+// Buscador de códigos de barra / mapeo propio
 (function() {
     const input = document.getElementById('barcode-input');
     const button = document.getElementById('barcode-search-btn');
     const resultDiv = document.getElementById('barcode-result');
     const statsDiv = document.getElementById('barcode-stats');
-    if (!input || !resultDiv) return;
+    if (!resultDiv && !document.getElementById('barcode-pending-list')) return;
 
     function escBarcode(s) {
         return String(s ?? '')
@@ -2813,45 +2805,86 @@ function portalEliminarFactura(id, folio) {
             .replace(/"/g, '&quot;');
     }
 
-    function renderStats(stats) {
-        if (!statsDiv || !stats) return;
-        statsDiv.textContent = `${stats.productos || 0} productos locales · ${stats.barcodes || 0} códigos · ${stats.productos_con_barcode || 0} productos con código`;
+    function postAction(action, extra) {
+        const body = new URLSearchParams(Object.assign({ action, nonce: riversoNonce }, extra || {}));
+        return fetch(ajaxUrl, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body
+        }).then(async r => {
+            const text = await r.text();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                throw new Error(text.slice(0, 180) || 'Respuesta inválida');
+            }
+        });
     }
 
-    function renderProduct(product) {
+    function renderStats(stats) {
+        if (!statsDiv || !stats) return;
+        const mapping = stats.verificados != null
+            ? ` · mapeo: ${stats.verificados || 0} verificados / ${stats.propuestos || 0} pendientes / ${stats.conflictos || 0} conflictos`
+            : '';
+        statsDiv.textContent = `${stats.productos || 0} productos locales · ${stats.barcodes || 0} códigos legacy${mapping}`;
+    }
+
+    function mappingButtons(product) {
+        if (!canManageBarcodes || !product.codigo_id || product.trusted) return '';
+        const pending = product.pending_sku ? escBarcode(product.pending_sku) : '';
+        return `<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            ${product.producto_base_id ? `<button type="button" class="btn btn-primary btn-sm btn-barcode-approve" data-id="${escBarcode(product.codigo_id)}">Aceptar</button>` : ''}
+            <button type="button" class="btn btn-secondary btn-sm btn-barcode-reject" data-id="${escBarcode(product.codigo_id)}">Rechazar</button>
+            <input type="text" class="barcode-reassign-q" data-id="${escBarcode(product.codigo_id)}" data-code="${escBarcode(product.matched_barcode || '')}" placeholder="Reasignar a SKU..." style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;min-width:160px;">
+            ${pending ? `<button type="button" class="btn btn-secondary btn-sm btn-barcode-pending" data-id="${escBarcode(product.codigo_id)}" data-code="${escBarcode(product.matched_barcode || '')}" data-sku="${pending}">Esperar ${pending}</button>` : ''}
+            <div class="barcode-reassign-results" data-id="${escBarcode(product.codigo_id)}"></div>
+        </div>`;
+    }
+
+    function renderProduct(product, opts) {
+        opts = opts || {};
         const barcodes = (product.barcodes || []).map(b =>
             `<li><code>${escBarcode(b.barcode)}</code>${b.fecha ? ` <small>(${escBarcode(b.fecha)})</small>` : ''}</li>`
         ).join('');
         const matched = product.matched_barcode
-            ? `<p style="margin:6px 0;color:var(--success);"><strong>Código encontrado:</strong> <code>${escBarcode(product.matched_barcode)}</code></p>`
+            ? `<p style="margin:6px 0;"><strong>Código:</strong> <code>${escBarcode(product.matched_barcode)}</code></p>`
             : '';
         const stockColor = Number(product.stock || 0) > 0 ? 'var(--success)' : 'var(--danger)';
+        const trusted = !!product.trusted;
+        const border = opts.conflict ? 'var(--danger)' : (trusted ? 'var(--success)' : 'var(--warning)');
+        const badge = trusted
+            ? '<span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:10px;font-size:11px;">Verificado</span>'
+            : (opts.conflict
+                ? '<span style="background:#ffebee;color:#c62828;padding:2px 8px;border-radius:10px;font-size:11px;">Conflicto</span>'
+                : '<span style="background:#fff8e1;color:#ef6c00;padding:2px 8px;border-radius:10px;font-size:11px;">Sugerencia legacy</span>');
+        const extra = [
+            product.sku_local ? `SKU local legacy: <code>${escBarcode(product.sku_local)}</code>` : '',
+            product.pending_sku ? `SKU pendiente: <code>${escBarcode(product.pending_sku)}</code>` : '',
+            product.origen ? `Origen: ${escBarcode(product.origen)}` : '',
+            product.advertencia ? escBarcode(product.advertencia) : '',
+        ].filter(Boolean).join('<br>');
 
         return `
-            <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:18px;margin-bottom:12px;text-align:left;">
-                <h3 style="margin:0 0 8px;">${escBarcode(product.nombre)}</h3>
+            <div style="background:#fff;border:1px solid ${border};border-radius:8px;padding:18px;margin-bottom:12px;text-align:left;">
+                <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
+                    <h3 style="margin:0 0 8px;">${escBarcode(product.nombre)}</h3>
+                    ${badge}
+                </div>
                 ${matched}
                 <p style="margin:8px 0;">
-                    <strong>SKU local:</strong> <code>${escBarcode(product.sku)}</code><br>
-                    <strong>Precio:</strong> ${escBarcode(product.precio_formateado || '')}<br>
+                    <strong>SKU:</strong> <code>${escBarcode(product.sku)}</code><br>
+                    ${product.precio_formateado ? `<strong>Precio:</strong> ${escBarcode(product.precio_formateado)}<br>` : ''}
                     <strong>Stock:</strong> <span style="color:${stockColor};font-weight:600;">${escBarcode(product.stock)}</span>
                 </p>
+                ${extra ? `<p style="font-size:12px;color:var(--text-secondary);">${extra}</p>` : ''}
                 <details ${(product.barcodes || []).length <= 6 ? 'open' : ''}>
                     <summary>Códigos asociados (${(product.barcodes || []).length})</summary>
                     <ul style="margin:8px 0 0 18px;">${barcodes || '<li>Sin códigos asociados.</li>'}</ul>
                 </details>
+                ${mappingButtons(product)}
                 <div style="margin-top:12px;display:flex;gap:8px;">
                     <button type="button" class="btn-print-label" data-sku="${escBarcode(product.sku)}" data-nombre="${escBarcode(product.nombre)}" data-precio="${product.precio || 0}" style="
-                        padding:8px 16px;
-                        background:#4CAF50;
-                        color:white;
-                        border:none;
-                        border-radius:4px;
-                        cursor:pointer;
-                        font-size:13px;
-                        font-weight:500;
-                        transition:background 0.2s;
-                    " onmouseover="this.style.background='#45a049'" onmouseout="this.style.background='#4CAF50'">
+                        padding:8px 16px;background:#4CAF50;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-weight:500;">
                         🖨️ Imprimir
                     </button>
                 </div>
@@ -2867,16 +2900,7 @@ function portalEliminarFactura(id, folio) {
         }
 
         resultDiv.innerHTML = '<div class="loading" style="text-align:center;">Buscando...</div>';
-        fetch(ajaxUrl, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: new URLSearchParams({
-                action: 'riverso_tienda_local_search',
-                nonce: riversoNonce,
-                query
-            })
-        })
-        .then(r => r.json())
+        postAction('riverso_tienda_local_search', { query })
         .then(data => {
             if (!data.success) {
                 renderStats(data.data?.stats);
@@ -2889,11 +2913,17 @@ function portalEliminarFactura(id, folio) {
 
             renderStats(data.data.stats);
             const items = (data.data.items || []).filter(Boolean);
-            const intro = data.data.type === 'name' && items.length > 1
-                ? `<p style="color:var(--text-secondary);text-align:center;margin-bottom:12px;">Se encontraron ${items.length} coincidencias por nombre.</p>`
-                : '';
-            resultDiv.innerHTML = intro + items.map(renderProduct).join('');
-            if (data.data.type === 'barcode') {
+            const type = data.data.type;
+            let intro = '';
+            if (type === 'conflict') {
+                intro = '<p style="color:var(--danger);text-align:center;margin-bottom:12px;">Este código tiene mapeos conflictivos. Elige el producto correcto y rechaza el resto.</p>';
+            } else if (type === 'suggestion') {
+                intro = '<p style="color:#ef6c00;text-align:center;margin-bottom:12px;">Sugerencia legacy (no verificada). Acepta, rechaza o reasigna.</p>';
+            } else if (type === 'name' && items.length > 1) {
+                intro = `<p style="color:var(--text-secondary);text-align:center;margin-bottom:12px;">Se encontraron ${items.length} coincidencias por nombre.</p>`;
+            }
+            resultDiv.innerHTML = intro + (items.length ? items.map(p => renderProduct(p, { conflict: type === 'conflict' })).join('') : '<p style="text-align:center;">Sin resultados.</p>');
+            if (type === 'barcode') {
                 input.value = '';
             }
         })
@@ -2902,37 +2932,192 @@ function portalEliminarFactura(id, folio) {
         });
     }
 
+    function switchTab(tab) {
+        ['search', 'pending', 'conflicts'].forEach(name => {
+            const el = document.getElementById('barcode-tab-' + name);
+            if (el) el.style.display = name === tab ? 'block' : 'none';
+        });
+        document.querySelectorAll('.barcode-tab').forEach(btn => {
+            btn.classList.toggle('btn-primary', btn.dataset.tab === tab);
+            btn.classList.toggle('btn-secondary', btn.dataset.tab !== tab);
+        });
+        if (tab === 'pending') loadPending();
+        if (tab === 'conflicts') loadConflicts();
+    }
+    window.riversoSwitchBarcodeTab = switchTab;
+
+    function renderGroupList(target, groups, emptyText) {
+        if (!target) return;
+        if (!groups || !groups.length) {
+            target.innerHTML = `<p style="text-align:center;color:var(--text-secondary);">${escBarcode(emptyText)}</p>`;
+            return;
+        }
+        target.innerHTML = groups.map(g => {
+            const items = (g.items || []).map(it => renderProduct({
+                sku: it.canonical_sku || it.sku_local || it.pending_sku || '',
+                nombre: it.nombre_canonico || it.canonical_sku || 'Sin producto',
+                precio: 0,
+                stock: '',
+                matched_barcode: g.codigo,
+                barcodes: [],
+                trusted: it.estado === 'verificado',
+                codigo_id: it.id,
+                producto_base_id: it.producto_base_id,
+                pending_sku: it.pending_sku,
+                sku_local: it.sku_local,
+                origen: it.origen,
+                advertencia: it.motivo,
+            }, { conflict: !!g.conflicto })).join('');
+            return `<div style="margin-bottom:18px;"><h4 style="margin:0 0 8px;font-family:monospace;">${escBarcode(g.codigo)}</h4>${items}</div>`;
+        }).join('');
+    }
+
+    function loadPending() {
+        const target = document.getElementById('barcode-pending-list');
+        if (!target) return;
+        target.innerHTML = '<div class="loading">Cargando pendientes...</div>';
+        postAction('riverso_barcode_list_pending').then(data => {
+            if (!data.success) {
+                target.innerHTML = `<p style="color:var(--danger);">${escBarcode(data.data?.message || 'Error')}</p>`;
+                return;
+            }
+            renderGroupList(target, data.data.items, 'No hay códigos pendientes.');
+        }).catch(() => {
+            target.innerHTML = '<p style="color:var(--danger);">No se pudo cargar pendientes. Recarga la página.</p>';
+        });
+    }
+
+    function loadConflicts() {
+        const target = document.getElementById('barcode-conflict-list');
+        if (!target) return;
+        target.innerHTML = '<div class="loading">Cargando conflictos...</div>';
+        postAction('riverso_barcode_list_conflicts').then(data => {
+            if (!data.success) {
+                target.innerHTML = `<p style="color:var(--danger);">${escBarcode(data.data?.message || 'Error')}</p>`;
+                return;
+            }
+            const shared = (data.data.shared_sku || []).map(s =>
+                `<li><code>${escBarcode(s.sku_local)}</code> → ${escBarcode(s.barcodes)} códigos: ${escBarcode(s.codigos)}</li>`
+            ).join('');
+            const sharedBlock = shared
+                ? `<div style="background:#fff8e1;border:1px solid #ffcc80;border-radius:8px;padding:12px;margin-bottom:16px;">
+                    <strong>SKU local compartido por varios códigos</strong> (revisar, p.ej. 145 → 45ATPF vs 45ATPF-G)
+                    <ul style="margin:8px 0 0 18px;">${shared}</ul>
+                   </div>`
+                : '';
+            target.innerHTML = sharedBlock + '<div id="barcode-conflict-groups"></div>';
+            renderGroupList(document.getElementById('barcode-conflict-groups'), data.data.items, 'No hay conflictos de producto divergente.');
+        }).catch(() => {
+            target.innerHTML = '<p style="color:var(--danger);">No se pudo cargar conflictos. Recarga la página.</p>';
+        });
+    }
+
+    function loadMappingStats() {
+        postAction('riverso_barcode_mapping_stats').then(data => {
+            if (data.success) renderStats(Object.assign({}, data.data));
+        });
+        postAction('riverso_tienda_local_search', { query: '__stats__' }).catch(() => {});
+    }
+
+    document.querySelectorAll('.barcode-tab').forEach(btn => {
+        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
     button?.addEventListener('click', searchBarcode);
-    input.addEventListener('keydown', function(e) {
+    input?.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
             e.preventDefault();
             searchBarcode();
         }
     });
 
-    // Manejador de botones de impresión
     document.addEventListener('click', function(e) {
-        const btn = e.target.closest('.btn-print-label');
-        if (!btn) return;
+        const approve = e.target.closest('.btn-barcode-approve');
+        if (approve) {
+            postAction('riverso_barcode_approve', { codigo_id: approve.dataset.id }).then(data => {
+                alert(data.data?.message || (data.success ? 'OK' : 'Error'));
+                if (input?.value) searchBarcode();
+                loadPending();
+                loadConflicts();
+            });
+            return;
+        }
+        const reject = e.target.closest('.btn-barcode-reject');
+        if (reject) {
+            const motivo = prompt('Motivo de rechazo (opcional):') || 'Rechazado desde portal.';
+            postAction('riverso_barcode_reject', { codigo_id: reject.dataset.id, motivo }).then(data => {
+                alert(data.data?.message || (data.success ? 'OK' : 'Error'));
+                if (input?.value) searchBarcode();
+                loadPending();
+                loadConflicts();
+            });
+            return;
+        }
+        const waitSku = e.target.closest('.btn-barcode-pending');
+        if (waitSku) {
+            postAction('riverso_barcode_assign', {
+                codigo_id: waitSku.dataset.id,
+                codigo: waitSku.dataset.code,
+                pending_sku: waitSku.dataset.sku
+            }).then(data => {
+                alert(data.data?.message || (data.success ? 'OK' : 'Error'));
+                loadPending();
+                loadConflicts();
+            });
+            return;
+        }
+        const pick = e.target.closest('.btn-barcode-pick');
+        if (pick) {
+            postAction('riverso_barcode_assign', {
+                codigo_id: pick.dataset.id,
+                codigo: pick.dataset.code,
+                producto_base_id: pick.dataset.pid,
+                verify: '1'
+            }).then(data => {
+                alert(data.data?.message || (data.success ? 'OK' : 'Error'));
+                if (input?.value) searchBarcode();
+                loadPending();
+                loadConflicts();
+            });
+            return;
+        }
 
-        const sku = btn.dataset.sku;
-        const nombre = btn.dataset.nombre;
-        const precio = parseInt(btn.dataset.precio) || null;
-
+        const printBtn = e.target.closest('.btn-print-label');
+        if (!printBtn) return;
+        const sku = printBtn.dataset.sku;
+        const nombre = printBtn.dataset.nombre;
+        const precio = parseInt(printBtn.dataset.precio) || null;
         if (typeof RiversoLabelPrint !== 'undefined') {
             RiversoLabelPrint.showPrintDialog({
-                sku,
-                nombre,
-                precio,
-                cantidad: 100,
-                copias: 1,
-                modo: 'BolsaCOD',
-                color: 'BN'
+                sku, nombre, precio, cantidad: 100, copias: 1, modo: 'BolsaCOD', color: 'BN'
             });
         } else {
-            alert('⚠️ El módulo de impresión no está cargado. Recarga la página o contacta soporte.');
+            alert('El módulo de impresión no está cargado. Recarga la página o contacta soporte.');
         }
     });
+
+    document.addEventListener('input', function(e) {
+        const q = e.target.closest('.barcode-reassign-q');
+        if (!q) return;
+        const box = document.querySelector('.barcode-reassign-results[data-id="' + q.dataset.id + '"]');
+        if (!box) return;
+        const term = q.value.trim();
+        if (term.length < 2) {
+            box.innerHTML = '';
+            return;
+        }
+        postAction('riverso_barcode_search_products', { query: term }).then(data => {
+            if (!data.success) return;
+            box.innerHTML = (data.data.items || []).map(p =>
+                `<button type="button" class="btn btn-secondary btn-sm btn-barcode-pick" data-id="${escBarcode(q.dataset.id)}" data-code="${escBarcode(q.dataset.code)}" data-pid="${escBarcode(p.id)}">${escBarcode(p.canonical_sku)} — ${escBarcode(p.nombre_canonico)}</button>`
+            ).join(' ');
+        });
+    });
+
+    if (statsDiv) {
+        postAction('riverso_barcode_mapping_stats').then(data => {
+            if (data.success) renderStats(data.data);
+        });
+    }
 })();
 
 (function() {
@@ -3034,7 +3219,7 @@ function portalEliminarFactura(id, folio) {
                         actions.push(`<button type="button" class="btn btn-secondary btn-sm po-approve" data-id="${o.id}">Aprobar</button>`);
                     }
                     if (cfg.canPrint && ['borrador','pendiente','aprobada'].includes(o.estado)) {
-                        actions.push(`<button type="button" class="btn btn-primary btn-sm po-print" data-id="${o.id}" data-direct="${o.estado === 'aprobada' ? '0' : '1'}">Imprimir</button>`);
+                        actions.push(`<button type="button" class="btn btn-primary btn-sm po-print" data-id="${o.id}">Imprimir</button>`);
                     }
                     if (cfg.canCancel && o.estado !== 'impresa' && o.estado !== 'cancelada') {
                         actions.push(`<button type="button" class="btn btn-secondary btn-sm po-cancel" data-id="${o.id}">Cancelar</button>`);
@@ -3097,6 +3282,32 @@ function portalEliminarFactura(id, folio) {
         return orig !== null && cur !== null && Math.abs(orig - cur) > 0.0001;
     }
 
+    function isLockedOrder() {
+        const estado = current && current.estado;
+        return estado === 'impresa' || estado === 'cancelada';
+    }
+
+    function syncEditorChrome() {
+        const estado = current && current.estado;
+        const locked = estado === 'impresa' || estado === 'cancelada';
+        const printed = estado === 'impresa';
+        document.querySelectorAll('#po-portal-editor .po-workflow-btn').forEach(btn => {
+            btn.style.display = locked ? 'none' : '';
+        });
+        const useDraft = document.getElementById('po-portal-use-as-draft');
+        if (useDraft) useDraft.style.display = locked && cfg.canCreate ? '' : 'none';
+        const reprint = document.getElementById('po-portal-reprint');
+        if (reprint) reprint.style.display = printed && cfg.canPrint ? '' : 'none';
+        const tipo = document.getElementById('po-portal-tipo');
+        const prio = document.getElementById('po-portal-prioridad');
+        const notas = document.getElementById('po-portal-notas');
+        if (tipo) tipo.disabled = locked;
+        if (prio) prio.disabled = locked;
+        if (notas) notas.readOnly = locked;
+        const addBox = document.getElementById('po-portal-add-box');
+        if (addBox) addBox.style.display = !locked && cfg.canCreate ? '' : 'none';
+    }
+
     function renderItems() {
         const tbody = document.getElementById('po-portal-items');
         if (!tbody) return;
@@ -3105,6 +3316,20 @@ function portalEliminarFactura(id, folio) {
             return;
         }
         tbody.innerHTML = items.map((it, idx) => {
+            const precioLabel = formatPrice2(it.precio);
+            if (isLockedOrder()) {
+                return `<tr data-idx="${idx}">
+                    <td><code>${esc(it.sku)}</code></td>
+                    <td>${esc(it.nombre || '')}</td>
+                    <td>${esc(it.cantidad_ean || 100)}</td>
+                    <td>${esc(it.copias || 1)}</td>
+                    <td>${esc(it.modo || 'BolsaCOD')}</td>
+                    <td>${esc(it.color || 'BN')}</td>
+                    <td>${esc(it.ean13 || '—')}</td>
+                    <td>${esc(precioLabel)}</td>
+                    ${cfg.canCreate ? '<td></td>' : ''}
+                </tr>`;
+            }
             const modoOpts = modos.map(m => `<option value="${esc(m)}"${m === (it.modo || 'BolsaCOD') ? ' selected' : ''}>${esc(m)}</option>`).join('');
             const colorOpts = colores.map(c => `<option value="${esc(c)}"${c === (it.color || 'BN') ? ' selected' : ''}>${esc(c)}</option>`).join('');
             const precioVal = priceInputValue(it.precio);
@@ -3139,6 +3364,21 @@ function portalEliminarFactura(id, folio) {
     }
 
     function collectItems() {
+        if (isLockedOrder()) {
+            return items.map((it, i) => ({
+                id: it.id || 0,
+                sku: it.sku,
+                nombre: it.nombre,
+                precio: it.precio,
+                precio_original: it.precio_original == null || it.precio_original === '' ? null : toPrice2(it.precio_original),
+                cantidad_ean: it.cantidad_ean,
+                copias: it.copias,
+                modo: it.modo,
+                color: it.color,
+                ean13: it.ean13 || '',
+                orden_posicion: i
+            }));
+        }
         document.querySelectorAll('#po-portal-items tr[data-idx]').forEach(tr => {
             const idx = parseInt(tr.dataset.idx, 10);
             if (!items[idx]) return;
@@ -3187,6 +3427,7 @@ function portalEliminarFactura(id, folio) {
         document.getElementById('po-portal-editor').style.display = '';
         renderItems();
         document.getElementById('po-portal-msg').textContent = '';
+        syncEditorChrome();
     }
 
     function resetEditor() {
@@ -3203,6 +3444,7 @@ function portalEliminarFactura(id, folio) {
         const hits = document.getElementById('po-portal-hits');
         if (hits) hits.innerHTML = '';
         renderItems();
+        syncEditorChrome();
     }
 
     function save() {
@@ -3274,7 +3516,7 @@ function portalEliminarFactura(id, folio) {
         }));
     }
 
-    function printOrder(order, direct) {
+    function printOrder(order) {
         if (typeof RiversoLabelPrint === 'undefined') {
             alert('El módulo de impresión no está cargado.');
             return;
@@ -3290,18 +3532,24 @@ function portalEliminarFactura(id, folio) {
         }
         const printer = RiversoLabelPrint.getPreferred() || '';
         if (!confirm(`Imprimir ${jobs.length} producto(s) / ${order.total_copias} copias${printer ? ' en ' + printer : ''}?`)) return;
-        RiversoLabelPrint.print(jobs).then(() => post('riverso_print_orders_mark_printed', {
-            id: order.id,
-            impresora_nombre: printer,
-            direct: direct ? 1 : 0
-        })).then(res => {
+        const reprint = order.estado === 'impresa';
+        RiversoLabelPrint.print(jobs).then(() => {
+            if (reprint) {
+                hideEditor();
+                loadStats();
+                return null;
+            }
+            return post('riverso_print_orders_mark_printed', {
+                id: order.id,
+                impresora_nombre: printer
+            });
+        }).then(res => {
+            if (!res) return;
             if (!res.success) {
                 alert('Se imprimió, pero no se pudo registrar: ' + (res.data?.message || 'error'));
                 return;
             }
-            fill(res.data.order);
-            document.getElementById('po-portal-msg').textContent = 'Impresa correctamente';
-            loadList();
+            hideEditor();
             loadStats();
         }).catch(err => alert(err && err.message ? err.message : 'Error de impresión'));
     }
@@ -3343,7 +3591,7 @@ function portalEliminarFactura(id, folio) {
         if (printBtn) {
             post('riverso_print_orders_get', { id: printBtn.dataset.id }).then(res => {
                 if (!res.success) { alert(res.data?.message || 'Error'); return; }
-                printOrder(res.data.order, printBtn.dataset.direct === '1');
+                printOrder(res.data.order);
             });
         }
         if (cancel) {
@@ -3472,12 +3720,21 @@ function portalEliminarFactura(id, folio) {
         });
     });
     document.getElementById('po-portal-print')?.addEventListener('click', () => {
-        const id = document.getElementById('po-portal-id').value;
-        if (!id) { alert('Guarda la orden primero'); return; }
-        save().then(order => printOrder(order, false)).catch(() => {});
+        save().then(order => printOrder(order)).catch(() => {});
     });
-    document.getElementById('po-portal-print-direct')?.addEventListener('click', () => {
-        save().then(order => printOrder(order, true)).catch(() => {});
+    document.getElementById('po-portal-reprint')?.addEventListener('click', () => {
+        if (!current || current.estado !== 'impresa') return;
+        printOrder(current);
+    });
+    document.getElementById('po-portal-use-as-draft')?.addEventListener('click', () => {
+        const id = document.getElementById('po-portal-id').value;
+        if (!id || !cfg.canCreate) return;
+        post('riverso_print_orders_duplicate', { id }).then(res => {
+            if (!res.success) { alert(res.data?.message || 'Error'); return; }
+            fill(res.data.order);
+            loadList();
+            document.getElementById('po-portal-msg').textContent = 'Nuevo borrador ' + res.data.order.numero_orden;
+        });
     });
 
     loadStats();

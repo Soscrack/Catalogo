@@ -32,6 +32,7 @@ class Riverso_Warehouse_Module {
         'salida' => ['label' => 'Salida', 'icon' => 'minus', 'color' => '#f44336'],
         'traslado' => ['label' => 'Traslado', 'icon' => 'randomize', 'color' => '#2196f3'],
         'ajuste' => ['label' => 'Ajuste', 'icon' => 'edit', 'color' => '#ff9800'],
+        'correccion' => ['label' => 'Corrección', 'icon' => 'clipboard', 'color' => '#6a1b9a'],
         'inventario' => ['label' => 'Inventario', 'icon' => 'clipboard', 'color' => '#9c27b0'],
     ];
 
@@ -75,13 +76,14 @@ class Riverso_Warehouse_Module {
             "{$prefix}ubicaciones",
             [
                 'codigo' => $codigo,
-                'nombre' => sanitize_text_field($data['nombre']),
+                'nombre' => sanitize_text_field($data['nombre'] ?: ($data['codigo'] ?? '')),
                 'tipo' => sanitize_text_field($data['tipo']),
                 'descripcion' => sanitize_textarea_field($data['descripcion'] ?? ''),
                 'capacidad' => intval($data['capacidad'] ?? 0),
                 'activo' => 1,
-            ],
-            ['%s', '%s', '%s', '%s', '%d', '%d']
+                'barcode' => !empty($data['barcode']) ? sanitize_text_field($data['barcode']) : null,
+                'zona' => !empty($data['zona']) ? sanitize_text_field($data['zona']) : null,
+            ]
         );
 
         return $result ? $wpdb->insert_id : new WP_Error('db_error', 'Error creando ubicación');
@@ -104,26 +106,29 @@ class Riverso_Warehouse_Module {
         $where = ['1=1'];
         $params = [];
 
-        if (isset($filters['activo'])) {
+        if (array_key_exists('activo', $filters) && $filters['activo'] !== null && $filters['activo'] !== '') {
             $where[] = 'u.activo = %d';
-            $params[] = $filters['activo'];
+            $params[] = intval($filters['activo']);
         }
         if (!empty($filters['tipo'])) {
             $where[] = 'u.tipo = %s';
             $params[] = $filters['tipo'];
         }
         if (!empty($filters['search'])) {
-            $where[] = '(u.codigo LIKE %s OR u.nombre LIKE %s)';
+            $where[] = '(u.codigo LIKE %s OR u.nombre LIKE %s OR u.barcode LIKE %s OR u.zona LIKE %s)';
             $search = '%' . $wpdb->esc_like($filters['search']) . '%';
+            $params[] = $search;
+            $params[] = $search;
             $params[] = $search;
             $params[] = $search;
         }
 
         $sql = "SELECT u.*, 
-                (SELECT COUNT(*) FROM {$prefix}producto_ubicacion pu WHERE pu.ubicacion_id = u.id) as productos_count
+                (SELECT COUNT(*) FROM {$prefix}producto_ubicacion pu WHERE pu.ubicacion_id = u.id) as productos_count,
+                (SELECT COUNT(*) FROM {$prefix}producto_ubicacion_preferida p WHERE p.ubicacion_id = u.id) as preferidos_count
                 FROM {$prefix}ubicaciones u
                 WHERE " . implode(' AND ', $where) . "
-                ORDER BY u.tipo, u.codigo";
+                ORDER BY u.activo DESC, u.tipo, u.codigo";
 
         return $wpdb->get_results($params ? $wpdb->prepare($sql, ...$params) : $sql, ARRAY_A);
     }
@@ -239,6 +244,12 @@ class Riverso_Warehouse_Module {
             $where[] = 'm.created_at <= %s';
             $params[] = $filters['fecha_hasta'] . ' 23:59:59';
         }
+        if (!empty($filters['search'])) {
+            $like = '%' . $wpdb->esc_like($filters['search']) . '%';
+            $where[] = '(pb.canonical_sku LIKE %s OR pb.nombre_canonico LIKE %s)';
+            $params[] = $like;
+            $params[] = $like;
+        }
 
         $limit = intval($filters['limit'] ?? 50);
         $offset = intval($filters['offset'] ?? 0);
@@ -246,11 +257,13 @@ class Riverso_Warehouse_Module {
         $params[] = $offset;
 
         $sql = "SELECT m.*, u.display_name as usuario_nombre,
-                uo.codigo as ubicacion_origen_codigo, ud.codigo as ubicacion_destino_codigo
+                uo.codigo as ubicacion_origen_codigo, ud.codigo as ubicacion_destino_codigo,
+                pb.canonical_sku, pb.nombre_canonico
                 FROM {$prefix}movimientos m
                 LEFT JOIN {$wpdb->users} u ON m.usuario_id = u.ID
                 LEFT JOIN {$prefix}ubicaciones uo ON m.ubicacion_origen = uo.id
                 LEFT JOIN {$prefix}ubicaciones ud ON m.ubicacion_destino = ud.id
+                LEFT JOIN {$prefix}producto_base pb ON pb.id = m.product_id
                 WHERE " . implode(' AND ', $where) . "
                 ORDER BY m.created_at DESC LIMIT %d OFFSET %d";
 
@@ -259,12 +272,38 @@ class Riverso_Warehouse_Module {
 
     // ============ AJAX HANDLERS ============
 
+    private function can_edit_locations() {
+        return current_user_can('riverso_edit_stock')
+            || current_user_can('riverso_edit_warehouse')
+            || current_user_can('manage_options');
+    }
+
+    private function is_unknown_location($id) {
+        $id = intval($id);
+        if ($id <= 0) {
+            return false;
+        }
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        return (bool) $wpdb->get_var($wpdb->prepare(
+            "SELECT 1 FROM {$prefix}ubicaciones WHERE id = %d AND codigo = %s",
+            $id,
+            '?'
+        ));
+    }
+
     public function ajax_get_locations() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('riverso_view_stock')) wp_send_json_error(['message' => 'Sin permisos']);
+        if (!current_user_can('riverso_view_stock') && !current_user_can('riverso_view_warehouse') && !current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
 
+        $activo = null;
+        if (isset($_POST['activo']) && $_POST['activo'] !== '') {
+            $activo = intval($_POST['activo']);
+        }
         $locations = $this->get_locations([
-            'activo' => isset($_POST['activo']) ? intval($_POST['activo']) : null,
+            'activo' => $activo,
             'tipo' => sanitize_text_field($_POST['tipo'] ?? ''),
             'search' => sanitize_text_field($_POST['search'] ?? ''),
         ]);
@@ -273,7 +312,7 @@ class Riverso_Warehouse_Module {
 
     public function ajax_create_location() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('riverso_edit_stock')) wp_send_json_error(['message' => 'Sin permisos']);
+        if (!$this->can_edit_locations()) wp_send_json_error(['message' => 'Sin permisos']);
 
         $data = [
             'codigo' => $_POST['codigo'] ?? '',
@@ -281,9 +320,15 @@ class Riverso_Warehouse_Module {
             'tipo' => $_POST['tipo'] ?? 'estante',
             'descripcion' => $_POST['descripcion'] ?? '',
             'capacidad' => $_POST['capacidad'] ?? 0,
+            'barcode' => $_POST['barcode'] ?? '',
+            'zona' => $_POST['zona'] ?? '',
         ];
 
-        if (empty($data['nombre'])) wp_send_json_error(['message' => 'Nombre requerido']);
+        if (empty($data['codigo'])) wp_send_json_error(['message' => 'Código requerido']);
+        if (trim((string) $data['codigo']) === '?') {
+            wp_send_json_error(['message' => 'El código ? está reservado para la ubicación especial Desconocido']);
+        }
+        if (empty($data['barcode'])) wp_send_json_error(['message' => 'Código de barras del lugar requerido']);
 
         $result = $this->create_location($data);
         if (is_wp_error($result)) wp_send_json_error(['message' => $result->get_error_message()]);
@@ -292,14 +337,17 @@ class Riverso_Warehouse_Module {
 
     public function ajax_update_location() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('riverso_edit_stock')) wp_send_json_error(['message' => 'Sin permisos']);
+        if (!$this->can_edit_locations()) wp_send_json_error(['message' => 'Sin permisos']);
 
         global $wpdb;
         $id = intval($_POST['location_id'] ?? 0);
         if (!$id) wp_send_json_error(['message' => 'ID requerido']);
+        if ($this->is_unknown_location($id)) {
+            wp_send_json_error(['message' => 'No se puede editar la ubicación especial ?']);
+        }
 
         $update = [];
-        foreach (['nombre', 'tipo', 'descripcion', 'capacidad', 'activo'] as $field) {
+        foreach (['nombre', 'tipo', 'descripcion', 'capacidad', 'activo', 'barcode', 'zona'] as $field) {
             if (isset($_POST[$field])) {
                 $update[$field] = in_array($field, ['capacidad', 'activo']) ? intval($_POST[$field]) : sanitize_text_field($_POST[$field]);
             }
@@ -312,22 +360,29 @@ class Riverso_Warehouse_Module {
 
     public function ajax_delete_location() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('riverso_edit_stock')) wp_send_json_error(['message' => 'Sin permisos']);
+        if (!$this->can_edit_locations()) wp_send_json_error(['message' => 'Sin permisos']);
 
         global $wpdb;
         $id = intval($_POST['location_id'] ?? 0);
         $permanent = !empty($_POST['permanent']);
         $prefix = $wpdb->prefix . 'riverso_';
+        if ($this->is_unknown_location($id)) {
+            wp_send_json_error(['message' => 'No se puede desactivar ni eliminar la ubicación especial ?']);
+        }
 
         if ($permanent) {
-            // Verificar que no tiene productos asignados
-            $count = $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$prefix}producto_ubicacion WHERE ubicacion_id = %d",
+            $open_counts = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$prefix}conteos WHERE ubicacion_id = %d AND estado = 'abierto'",
                 $id
             ));
-            if ($count > 0) {
-                wp_send_json_error(['message' => 'No se puede eliminar: tiene productos asignados']);
+            if ($open_counts > 0) {
+                wp_send_json_error(['message' => 'No se puede eliminar: hay un conteo abierto en este lugar']);
             }
+            $wpdb->delete("{$prefix}producto_ubicacion_preferida", ['ubicacion_id' => $id], ['%d']);
+            $wpdb->query($wpdb->prepare("UPDATE {$prefix}conteo_items SET ubicacion_id = NULL WHERE ubicacion_id = %d", $id));
+            $wpdb->query($wpdb->prepare("UPDATE {$prefix}conteos SET ubicacion_id = NULL WHERE ubicacion_id = %d", $id));
+            $wpdb->delete("{$prefix}producto_ubicacion_historial", ['ubicacion_id' => $id], ['%d']);
+            $wpdb->delete("{$prefix}producto_ubicacion", ['ubicacion_id' => $id], ['%d']);
             $wpdb->delete("{$prefix}ubicaciones", ['id' => $id], ['%d']);
             wp_send_json_success(['message' => 'Ubicación eliminada permanentemente']);
         } else {
@@ -338,17 +393,20 @@ class Riverso_Warehouse_Module {
 
     public function ajax_activate_location() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('riverso_edit_stock')) wp_send_json_error(['message' => 'Sin permisos']);
+        if (!$this->can_edit_locations()) wp_send_json_error(['message' => 'Sin permisos']);
 
         global $wpdb;
         $id = intval($_POST['location_id'] ?? 0);
+        if ($this->is_unknown_location($id)) {
+            wp_send_json_error(['message' => 'La ubicación especial ? no se puede desactivar/reactivar']);
+        }
         $wpdb->update($wpdb->prefix . 'riverso_ubicaciones', ['activo' => 1], ['id' => $id]);
         wp_send_json_success(['message' => 'Ubicación reactivada']);
     }
 
     public function ajax_assign_product() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('riverso_edit_stock')) wp_send_json_error(['message' => 'Sin permisos']);
+        if (!$this->can_edit_locations()) wp_send_json_error(['message' => 'Sin permisos']);
 
         $result = $this->assign_product_location(
             intval($_POST['product_id'] ?? 0),
@@ -377,7 +435,7 @@ class Riverso_Warehouse_Module {
 
     public function ajax_record_movement() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('riverso_edit_stock')) wp_send_json_error(['message' => 'Sin permisos']);
+        if (!$this->can_edit_locations()) wp_send_json_error(['message' => 'Sin permisos']);
 
         $data = [
             'tipo' => $_POST['tipo'] ?? '',
@@ -399,13 +457,18 @@ class Riverso_Warehouse_Module {
 
     public function ajax_get_movements() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('riverso_view_stock')) wp_send_json_error(['message' => 'Sin permisos']);
+        if (!current_user_can('riverso_view_stock')
+            && !current_user_can('riverso_view_warehouse')
+            && !current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
 
         $movements = $this->get_movements([
             'product_id' => intval($_POST['product_id'] ?? 0),
             'tipo' => sanitize_text_field($_POST['tipo'] ?? ''),
             'fecha_desde' => sanitize_text_field($_POST['fecha_desde'] ?? ''),
             'fecha_hasta' => sanitize_text_field($_POST['fecha_hasta'] ?? ''),
+            'search' => sanitize_text_field($_POST['search'] ?? ''),
             'limit' => min(100, intval($_POST['limit'] ?? 50)),
             'offset' => intval($_POST['offset'] ?? 0),
         ]);

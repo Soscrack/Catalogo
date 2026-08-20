@@ -6,6 +6,8 @@
  * - ENTRADA: recepción de factura
  * - SALIDA: venta POS
  * - AJUSTE: corrección manual
+ * - CORRECCION: cierre de inventario de lugar/producto
+ * - VENTA: (proyectado) descuenta preferido y luego "?"
  * - RECEPCIÓN: recepción parcial
  * - DEVOLUCIÓN: devolución de cliente
  * - APERTURA: apertura de envase
@@ -24,6 +26,7 @@ class Riverso_Movement {
         'entrada' => 'Entrada de mercadería',
         'salida' => 'Salida (venta)',
         'ajuste' => 'Ajuste de stock',
+        'correccion' => 'Corrección por inventario',
         'recepcion' => 'Recepción parcial',
         'venta' => 'Venta finalizada',
         'devolcion' => 'Devolución cliente',
@@ -49,49 +52,70 @@ class Riverso_Movement {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
-        // Obtener saldo anterior
-        $stock_anterior = self::get_current_balance($producto_base_id, $metadata['ubicacion_destino'] ?? null);
+        $origen_id = !empty($metadata['ubicacion_origen']) ? intval($metadata['ubicacion_origen']) : 0;
+        $destino_id = !empty($metadata['ubicacion_destino']) ? intval($metadata['ubicacion_destino']) : 0;
+
+        // Traslado: restar del origen (si existe) y sumar al destino
+        if ($tipo === 'traslado' && $origen_id > 0) {
+            $stock_origen_anterior = self::get_current_balance($producto_base_id, $origen_id);
+            $stock_origen_nuevo = $stock_origen_anterior - $cantidad;
+            self::_update_location_balance($producto_base_id, $origen_id, $stock_origen_nuevo);
+        }
+
+        // Obtener saldo anterior (destino si hay, sino total)
+        $balance_ubicacion = $destino_id > 0 ? $destino_id : null;
+        $stock_anterior = self::get_current_balance($producto_base_id, $balance_ubicacion);
 
         // Calcular saldo nuevo
-        $cantidad_neta = ($tipo === 'salida' || $tipo === 'venta') ? -$cantidad : $cantidad;
+        $cantidad_neta = ($tipo === 'salida' || $tipo === 'venta') ? -abs($cantidad) : $cantidad;
+        if ($tipo === 'traslado' && $origen_id > 0 && $destino_id > 0) {
+            $cantidad_neta = $cantidad;
+        }
         $stock_nuevo = $stock_anterior + $cantidad_neta;
 
+        // IMPORTANTE:
+        // La tabla real es riverso_movimientos con columnas:
+        // product_id, tipo, cantidad, stock_anterior, stock_nuevo,
+        // ubicacion_origen, ubicacion_destino, referencia_tipo, referencia_id, notas, usuario_id, created_at, lote_id
+        // (no existe producto_base_id ni ubicacion_origen_id / ubicacion_destino_id).
         $data = [
-            'producto_base_id' => $producto_base_id,
-            'tipo' => $tipo,
-            'cantidad' => $cantidad,
-            'cantidad_neta' => $cantidad_neta,
-            'stock_anterior' => $stock_anterior,
-            'stock_nuevo' => $stock_nuevo,
-            'usuario_id' => get_current_user_id(),
-            'created_at' => current_time('mysql'),
+            'product_id'        => intval($producto_base_id),
+            'tipo'              => sanitize_text_field($tipo),
+            'cantidad'         => floatval($cantidad),
+            'stock_anterior'   => floatval($stock_anterior),
+            'stock_nuevo'      => floatval($stock_nuevo),
+            'ubicacion_origen' => $origen_id > 0 ? intval($origen_id) : null,
+            'ubicacion_destino'=> $destino_id > 0 ? intval($destino_id) : null,
+            'referencia_tipo'  => isset($metadata['referencia_tipo']) ? sanitize_text_field($metadata['referencia_tipo']) : null,
+            'referencia_id'    => isset($metadata['referencia_id']) ? intval($metadata['referencia_id']) : null,
+            'notas'             => isset($metadata['notas']) ? sanitize_text_field($metadata['notas']) : null,
+            'usuario_id'       => get_current_user_id(),
+            'created_at'       => current_time('mysql'),
         ];
 
-        // Agregar metadatos opcionales
-        if (isset($metadata['ubicacion_origen'])) {
-            $data['ubicacion_origen_id'] = intval($metadata['ubicacion_origen']);
-        }
-        if (isset($metadata['ubicacion_destino'])) {
-            $data['ubicacion_destino_id'] = intval($metadata['ubicacion_destino']);
-        }
-        if (isset($metadata['referencia_tipo'])) {
-            $data['referencia_tipo'] = sanitize_text_field($metadata['referencia_tipo']);
-        }
-        if (isset($metadata['referencia_id'])) {
-            $data['referencia_id'] = intval($metadata['referencia_id']);
-        }
-        if (isset($metadata['notas'])) {
-            $data['notas'] = sanitize_text_field($metadata['notas']);
-        }
         if (isset($metadata['lote_id'])) {
             $data['lote_id'] = intval($metadata['lote_id']);
         }
 
-        $result = $wpdb->insert(
-            "{$prefix}movimientos",
-            $data,
-            array_fill(0, count($data), isset($data['stock_nuevo']) ? '%f' : '%s')
-        );
+        $formats = [
+            '%d', // product_id
+            '%s', // tipo
+            '%f', // cantidad
+            '%f', // stock_anterior
+            '%f', // stock_nuevo
+            '%d', // ubicacion_origen
+            '%d', // ubicacion_destino
+            '%s', // referencia_tipo
+            '%d', // referencia_id
+            '%s', // notas
+            '%d', // usuario_id
+            '%s', // created_at
+        ];
+        if (array_key_exists('lote_id', $data)) {
+            $formats[] = '%d';
+        }
+
+        $result = $wpdb->insert("{$prefix}movimientos", $data, $formats);
 
         if (!$result) {
             return false;
@@ -100,9 +124,9 @@ class Riverso_Movement {
         $movement_id = $wpdb->insert_id;
 
         // Actualizar saldo en producto_ubicacion
-        if (isset($metadata['ubicacion_destino'])) {
-            self::_update_location_balance($producto_base_id, $metadata['ubicacion_destino'], $stock_nuevo);
-        } else {
+        if ($destino_id > 0) {
+            self::_update_location_balance($producto_base_id, $destino_id, $stock_nuevo);
+        } elseif (!isset($metadata['ubicacion_destino'])) {
             self::_update_total_balance($producto_base_id, $stock_nuevo);
         }
 
@@ -205,7 +229,7 @@ class Riverso_Movement {
         return $wpdb->get_results(
             $wpdb->prepare(
                 "SELECT * FROM {$prefix}movimientos 
-                 WHERE producto_base_id = %d 
+                 WHERE product_id = %d 
                  ORDER BY created_at DESC 
                  LIMIT %d",
                 $producto_base_id,

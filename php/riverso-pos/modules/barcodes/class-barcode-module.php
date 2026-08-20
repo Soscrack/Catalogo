@@ -9,6 +9,12 @@ if (!defined('ABSPATH')) {
 }
 
 require_once __DIR__ . '/class-ean13-generator.php';
+if (defined('RIVERSO_POS_PLUGIN_DIR')) {
+    $model_file = RIVERSO_POS_PLUGIN_DIR . 'catalog/barcodes/class-barcode-model.php';
+    if (file_exists($model_file)) {
+        require_once $model_file;
+    }
+}
 
 class Riverso_Barcode_Module {
     
@@ -25,7 +31,18 @@ class Riverso_Barcode_Module {
     private function __construct() {
         global $wpdb;
         $this->table_barcodes = $wpdb->prefix . 'riverso_barcodes';
+        $mapping = __DIR__ . '/class-barcode-mapping-module.php';
+        if (file_exists($mapping)) {
+            require_once $mapping;
+            if (class_exists('Riverso_Barcode_Mapping_Module')) {
+                Riverso_Barcode_Mapping_Module::get_instance();
+            }
+        }
         $this->init_hooks();
+        $import = RIVERSO_POS_PLUGIN_DIR . 'migrations/phase29_barcodes_import_legacy.php';
+        if (file_exists($import)) {
+            require_once $import;
+        }
     }
     
     private function init_hooks() {
@@ -88,6 +105,16 @@ class Riverso_Barcode_Module {
         $normalized = ltrim($barcode, '0');
         if ($normalized === '') {
             $normalized = '0';
+        }
+
+        if (class_exists('Riverso_Barcode_Model')) {
+            $bundle = Riverso_Barcode_Model::resolve_with_suggestions($barcode);
+            if (!empty($bundle['match'])) {
+                return $this->format_mapping_hit($barcode, $bundle['match'], true, $bundle);
+            }
+            if (!empty($bundle['suggestions']) || !empty($bundle['conflicts'])) {
+                return $this->format_mapping_suggestions($barcode, $bundle);
+            }
         }
         
         // First check our barcodes table
@@ -183,6 +210,98 @@ class Riverso_Barcode_Module {
         
         // Not found
         return null;
+    }
+
+    private function format_mapping_hit($barcode, $match, $trusted, $bundle = []) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $product = null;
+        $name = $match['nombre_canonico'] ?? '';
+        $sku = $match['canonical_sku'] ?: ($match['sku_local'] ?? '');
+        $product_id = null;
+        $image = null;
+        $price = null;
+        $stock = null;
+
+        if (!empty($match['producto_base_id'])) {
+            $pb = $wpdb->get_row($wpdb->prepare(
+                "SELECT woocommerce_product_id, nombre_canonico, canonical_sku
+                 FROM {$prefix}producto_base WHERE id = %d",
+                intval($match['producto_base_id'])
+            ), ARRAY_A);
+            if ($pb) {
+                $name = $name ?: $pb['nombre_canonico'];
+                $sku = $sku ?: $pb['canonical_sku'];
+                if (!empty($pb['woocommerce_product_id']) && function_exists('wc_get_product')) {
+                    $product = wc_get_product($pb['woocommerce_product_id']);
+                }
+            }
+        }
+        if ($product) {
+            $product_id = $product->get_id();
+            $image = wp_get_attachment_url($product->get_image_id());
+            $price = $product->get_price();
+            $stock = $product->get_stock_quantity();
+            if (!$name) {
+                $name = $product->get_name();
+            }
+            if (!$sku) {
+                $sku = $product->get_sku();
+            }
+        }
+
+        return [
+            'source' => $trusted ? 'mapeo_interno' : ($match['origen'] ?? 'codigo_barra'),
+            'trusted' => $trusted,
+            'barcode' => $barcode,
+            'barcode_id' => intval($match['codigo_id'] ?? $match['id'] ?? 0),
+            'producto_base_id' => !empty($match['producto_base_id']) ? intval($match['producto_base_id']) : null,
+            'product_id' => $product_id,
+            'sku' => $sku,
+            'sku_local' => $match['sku_local'] ?? null,
+            'name' => $name ?: $sku,
+            'price' => $price,
+            'stock' => $stock,
+            'image' => $image,
+            'cantidad' => $match['cantidad_unidades'] ?? $match['cantidad'] ?? 1,
+            'estado' => $match['estado'] ?? ($trusted ? 'verificado' : 'propuesto'),
+            'conflicts' => !empty($bundle['conflicts']),
+        ];
+    }
+
+    private function format_mapping_suggestions($barcode, $bundle) {
+        $suggestions = [];
+        foreach ($bundle['suggestions'] ?? [] as $item) {
+            $suggestions[] = [
+                'id' => intval($item['codigo_id'] ?? $item['id'] ?? 0),
+                'codigo' => $barcode,
+                'sku' => $item['canonical_sku'] ?: ($item['sku_local'] ?? ''),
+                'sku_local' => $item['sku_local'] ?? null,
+                'nombre' => $item['nombre_canonico'] ?? '',
+                'producto_base_id' => !empty($item['producto_base_id']) ? intval($item['producto_base_id']) : null,
+                'origen' => $item['origen'] ?? '',
+                'estado' => $item['estado'] ?? 'propuesto',
+                'pending_sku' => $item['pending_sku'] ?? null,
+            ];
+        }
+        $skus = array_unique(array_filter(array_map(function ($s) {
+            return $s['sku_local'] ?: $s['sku'];
+        }, $suggestions)));
+        $conflicts = !empty($bundle['conflicts']) || count($skus) > 1;
+
+        return [
+            'source' => 'legacy',
+            'trusted' => false,
+            'conflicts' => $conflicts,
+            'barcode' => $barcode,
+            'suggestions' => $suggestions,
+            'rejected' => $bundle['rejected'] ?? [],
+            'sku' => count($skus) === 1 ? reset($skus) : '',
+            'name' => $conflicts ? 'Conflicto de mapeo' : 'Sugerencia legacy',
+            'message' => $conflicts
+                ? 'Este código tiene más de un SKU posible. Resuelve el conflicto o ignóralo.'
+                : 'Encontrado en legacy/propuesto. No es mapeo verificado.',
+        ];
     }
 
     /**
@@ -337,7 +456,12 @@ class Riverso_Barcode_Module {
         $result = $this->search_by_barcode($barcode);
         
         if ($result) {
-            wp_send_json_success(array('product' => $result));
+            wp_send_json_success(array(
+                'product' => $result,
+                'trusted' => !empty($result['trusted']),
+                'conflicts' => !empty($result['conflicts']),
+                'suggestions' => $result['suggestions'] ?? [],
+            ));
         } else {
             wp_send_json_error(array(
                 'message' => 'Código de barra no encontrado',

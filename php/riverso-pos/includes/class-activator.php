@@ -308,7 +308,12 @@ class Riverso_POS_Activator {
         self::create_phase23_sku_mapping_dates($prefix);
         self::create_phase24_identity_sku_repair();
         self::create_phase25_print_orders($prefix, $charset_collate);
-        
+        self::create_phase26_inventory_locations($prefix, $charset_collate);
+        self::create_phase27_sort_orders($prefix, $charset_collate);
+        self::create_phase28_stock_status($prefix, $charset_collate);
+        self::create_phase29_barcodes_authoritative($prefix);
+        self::create_phase30_envase_tipos($prefix, $charset_collate);
+
         // Inicializar servicios core
         self::init_core_services();
         
@@ -398,6 +403,7 @@ class Riverso_POS_Activator {
             ['path' => 'modules/publish/class-woo-publisher-module.php', 'class' => 'Riverso_Woo_Publisher_Module'],
             ['path' => 'modules/packaging/class-packaging-module.php', 'class' => 'Riverso_Packaging_Module'],
             ['path' => 'modules/print-orders/class-print-order-module.php', 'class' => 'Riverso_Print_Order_Module'],
+            ['path' => 'modules/inventory/class-inventory-module.php', 'class' => 'Riverso_Inventory_Count_Module'],
         ];
 
         foreach ($module_defs as $def) {
@@ -826,8 +832,24 @@ class Riverso_POS_Activator {
     }
 
     /**
-     * Agrega un índice a una tabla solo si no existe (idempotente).
+     * Elimina un índice si existe (idempotente).
      */
+    private static function drop_index_if_exists($table, $index) {
+        global $wpdb;
+
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND INDEX_NAME = %s",
+            DB_NAME,
+            $table,
+            $index
+        ));
+
+        if ((int) $exists > 0) {
+            $wpdb->query("ALTER TABLE `{$table}` DROP INDEX `{$index}`");
+        }
+    }
+
     private static function add_index_if_missing($table, $index, $definition) {
         global $wpdb;
 
@@ -846,7 +868,8 @@ class Riverso_POS_Activator {
 
     private static function table_exists($table) {
         global $wpdb;
-        return $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) === $table;
+        $like = $wpdb->esc_like($table);
+        return (string) $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $like)) === $table;
     }
 
     /**
@@ -1083,21 +1106,35 @@ class Riverso_POS_Activator {
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             codigo VARCHAR(50) NOT NULL,
             tipo VARCHAR(20) NOT NULL DEFAULT 'ean13',
-            producto_base_id BIGINT UNSIGNED NOT NULL,
+            producto_base_id BIGINT UNSIGNED DEFAULT NULL,
             proveedor_id BIGINT UNSIGNED DEFAULT NULL,
             cantidad DECIMAL(10,3) NOT NULL DEFAULT 1,
             unidad_medida VARCHAR(20) NOT NULL DEFAULT 'unidad',
             envase_id BIGINT UNSIGNED DEFAULT NULL,
             factor_a_unidad_base DECIMAL(10,3) NOT NULL DEFAULT 1,
             activo TINYINT(1) NOT NULL DEFAULT 1,
+            estado VARCHAR(20) NOT NULL DEFAULT 'verificado',
+            motivo_estado VARCHAR(255) DEFAULT NULL,
+            estado_por BIGINT UNSIGNED DEFAULT NULL,
+            estado_at DATETIME DEFAULT NULL,
+            origen_datos VARCHAR(50) NOT NULL DEFAULT 'manual',
+            requires_human_review TINYINT(1) NOT NULL DEFAULT 0,
+            sku_local VARCHAR(100) DEFAULT NULL,
+            pending_sku VARCHAR(100) DEFAULT NULL,
+            legacy_ref LONGTEXT DEFAULT NULL,
+            conflicto TINYINT(1) NOT NULL DEFAULT 0,
             migrado_de_tabla VARCHAR(50) DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
-            UNIQUE KEY ux_codigo (codigo),
+            KEY idx_codigo (codigo),
             KEY idx_producto (producto_base_id),
             KEY idx_proveedor (proveedor_id),
-            KEY idx_activo (activo)
+            KEY idx_activo (activo),
+            KEY idx_codigo_estado (codigo, estado),
+            KEY idx_sku_local (sku_local),
+            KEY idx_pending_sku (pending_sku),
+            KEY idx_conflicto (conflicto)
         ) $charset_collate;";
         dbDelta($sql);
 
@@ -2314,6 +2351,394 @@ class Riverso_POS_Activator {
                             'ordenes_impresion' => $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $prefix . 'ordenes_impresion')) ? 1 : 0,
                             'orden_impresion_items' => $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $prefix . 'orden_impresion_items')) ? 1 : 0,
                         ],
+                    ]
+                );
+            }
+        }
+    }
+
+    /**
+     * Fase 26: ubicaciones de bodega, conteos de inventario y órdenes.
+     */
+    private static function create_phase26_inventory_locations($prefix, $charset_collate) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $ubicaciones = "{$prefix}ubicaciones";
+        self::add_column_if_missing($ubicaciones, 'barcode', 'barcode VARCHAR(50) DEFAULT NULL');
+        self::add_column_if_missing($ubicaciones, 'zona', 'zona VARCHAR(50) DEFAULT NULL');
+        $wpdb->query("UPDATE {$ubicaciones} SET barcode = NULL WHERE barcode = ''");
+        self::add_index_if_missing($ubicaciones, 'ux_ubicacion_barcode', 'UNIQUE KEY ux_ubicacion_barcode (barcode)');
+
+        $conteos = "{$prefix}conteos";
+        self::add_column_if_missing($conteos, 'nombre', 'nombre VARCHAR(100) DEFAULT NULL');
+        self::add_column_if_missing($conteos, 'tipo_conteo', "tipo_conteo VARCHAR(30) NOT NULL DEFAULT 'general'");
+        self::add_column_if_missing($conteos, 'producto_base_id', 'producto_base_id BIGINT UNSIGNED DEFAULT NULL');
+        self::add_column_if_missing($conteos, 'orden_id', 'orden_id BIGINT UNSIGNED DEFAULT NULL');
+        self::add_index_if_missing($conteos, 'idx_tipo_conteo', 'KEY idx_tipo_conteo (tipo_conteo)');
+        self::add_index_if_missing($conteos, 'idx_producto_base', 'KEY idx_producto_base (producto_base_id)');
+
+        $items = "{$prefix}conteo_items";
+        self::add_column_if_missing($items, 'ubicacion_id', 'ubicacion_id BIGINT UNSIGNED DEFAULT NULL');
+        self::add_column_if_missing($items, 'es_abierto', 'es_abierto TINYINT(1) NOT NULL DEFAULT 0');
+        self::add_column_if_missing($items, 'cantidad_manual', 'cantidad_manual DECIMAL(12,4) DEFAULT NULL');
+        self::add_index_if_missing($items, 'idx_ubicacion', 'KEY idx_ubicacion (ubicacion_id)');
+        self::add_index_if_missing($items, 'idx_producto_base', 'KEY idx_producto_base (producto_base_id)');
+
+        $sql = "CREATE TABLE {$prefix}producto_ubicacion_preferida (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            ubicacion_id BIGINT UNSIGNED NOT NULL,
+            es_preferido TINYINT(1) NOT NULL DEFAULT 0,
+            prioridad INT NOT NULL DEFAULT 100,
+            notas TEXT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_producto_ubicacion (producto_base_id, ubicacion_id),
+            KEY idx_ubicacion (ubicacion_id),
+            KEY idx_preferido (producto_base_id, es_preferido)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}producto_ubicacion_historial (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            ubicacion_id BIGINT UNSIGNED NOT NULL,
+            conteo_id BIGINT UNSIGNED DEFAULT NULL,
+            cantidad_contada DECIMAL(12,4) NOT NULL DEFAULT 0,
+            fecha_conteo DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_producto_fecha (producto_base_id, fecha_conteo),
+            KEY idx_ubicacion (ubicacion_id),
+            KEY idx_conteo (conteo_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}conteo_scan_log (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            conteo_id BIGINT UNSIGNED NOT NULL,
+            conteo_item_id BIGINT UNSIGNED DEFAULT NULL,
+            ubicacion_id BIGINT UNSIGNED DEFAULT NULL,
+            barcode_raw VARCHAR(100) DEFAULT NULL,
+            tipo_barcode VARCHAR(20) DEFAULT NULL,
+            producto_base_id BIGINT UNSIGNED DEFAULT NULL,
+            envase_id BIGINT UNSIGNED DEFAULT NULL,
+            cantidad_decodificada DECIMAL(12,4) DEFAULT NULL,
+            es_abierto TINYINT(1) NOT NULL DEFAULT 0,
+            accion VARCHAR(20) NOT NULL DEFAULT 'scan',
+            usuario_id BIGINT UNSIGNED DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_conteo (conteo_id),
+            KEY idx_item (conteo_item_id),
+            KEY idx_producto (producto_base_id),
+            KEY idx_created (created_at)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}ordenes_inventario (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            titulo VARCHAR(150) DEFAULT NULL,
+            estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+            tipo VARCHAR(30) NOT NULL DEFAULT 'general',
+            prioridad TINYINT(1) NOT NULL DEFAULT 0,
+            descripcion TEXT DEFAULT NULL,
+            creado_por BIGINT UNSIGNED DEFAULT NULL,
+            asignado_a BIGINT UNSIGNED DEFAULT NULL,
+            fecha_programada DATE DEFAULT NULL,
+            completado_en DATETIME DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_estado (estado),
+            KEY idx_tipo (tipo),
+            KEY idx_asignado (asignado_a)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}orden_inventario_items (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            orden_id BIGINT UNSIGNED NOT NULL,
+            ubicacion_id BIGINT UNSIGNED DEFAULT NULL,
+            producto_base_id BIGINT UNSIGNED DEFAULT NULL,
+            estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+            conteo_id BIGINT UNSIGNED DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_orden (orden_id),
+            KEY idx_ubicacion (ubicacion_id),
+            KEY idx_producto (producto_base_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $wpdb->query("ALTER TABLE {$prefix}ordenes_inventario MODIFY titulo VARCHAR(150) NULL DEFAULT NULL");
+
+        if (get_option('riverso_pos_phase26_inventory_locations') !== '1') {
+            update_option('riverso_pos_phase26_inventory_locations', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log(
+                    'schema.phase26_inventory_locations',
+                    'inventory',
+                    0,
+                    [
+                        'actor_type' => 'computer',
+                        'details' => 'Fase 26: ubicaciones preferidas, historial y órdenes de inventario',
+                    ]
+                );
+            }
+        }
+    }
+
+    private static function create_phase27_sort_orders($prefix, $charset_collate) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE {$prefix}ordenes_ordenar (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            titulo VARCHAR(150) DEFAULT NULL,
+            estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+            ubicacion_origen_id BIGINT UNSIGNED DEFAULT NULL,
+            notas TEXT DEFAULT NULL,
+            creado_por BIGINT UNSIGNED DEFAULT NULL,
+            asignado_a BIGINT UNSIGNED DEFAULT NULL,
+            completado_en DATETIME DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_estado (estado),
+            KEY idx_origen (ubicacion_origen_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}orden_ordenar_items (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            orden_id BIGINT UNSIGNED NOT NULL,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            cantidad INT NOT NULL DEFAULT 1,
+            ubicacion_destino_id BIGINT UNSIGNED DEFAULT NULL,
+            estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+            movement_id BIGINT UNSIGNED DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_orden (orden_id),
+            KEY idx_producto (producto_base_id),
+            KEY idx_destino (ubicacion_destino_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        if (get_option('riverso_pos_phase27_sort_orders') !== '1') {
+            update_option('riverso_pos_phase27_sort_orders', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log(
+                    'schema.phase27_sort_orders',
+                    'inventory',
+                    0,
+                    [
+                        'actor_type' => 'computer',
+                        'details' => 'Fase 27: órdenes de ordenar (traslados a lugar preferido)',
+                    ]
+                );
+            }
+        }
+    }
+
+    private static function create_phase28_stock_status($prefix, $charset_collate) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        // Tabla: Config de límites de stock (min/critico) por producto
+        $sql = "CREATE TABLE {$prefix}producto_stock_config (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            stock_minimo INT DEFAULT NULL,
+            stock_critico INT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_producto (producto_base_id),
+            KEY idx_stock_minimo (stock_minimo),
+            KEY idx_stock_critico (stock_critico)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        // Asegurar columnas para ubicar '?' (si ya fueron agregadas en phase26, no pasa nada)
+        $ubicaciones = "{$prefix}ubicaciones";
+        self::add_column_if_missing($ubicaciones, 'barcode', 'barcode VARCHAR(50) DEFAULT NULL');
+        self::add_column_if_missing($ubicaciones, 'zona', 'zona VARCHAR(50) DEFAULT NULL');
+
+        // Insertar / actualizar ubicacion especial '?'
+        $unknown_code = '?';
+        $unknown_id = intval($wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}ubicaciones WHERE codigo = %s LIMIT 1",
+            $unknown_code
+        )));
+
+        if ($unknown_id <= 0) {
+            $wpdb->insert("{$prefix}ubicaciones", [
+                'codigo' => $unknown_code,
+                'nombre' => 'Desconocido',
+                'tipo' => 'bodega_ext',
+                'capacidad' => 0,
+                'activo' => 1,
+                'barcode' => $unknown_code,
+                'zona' => null,
+            ]);
+            $unknown_id = intval($wpdb->insert_id);
+        } else {
+            $wpdb->update("{$prefix}ubicaciones", [
+                'nombre' => 'Desconocido',
+                'tipo' => 'bodega_ext',
+                'capacidad' => 0,
+                'activo' => 1,
+                'barcode' => $unknown_code,
+                'zona' => null,
+            ], ['id' => $unknown_id]);
+        }
+
+        // Nunca permitir que '?' sea preferida
+        if ($unknown_id > 0) {
+            $wpdb->delete("{$prefix}producto_ubicacion_preferida", ['ubicacion_id' => $unknown_id], ['%d']);
+        }
+
+        if (get_option('riverso_pos_phase28_stock_status') !== '1') {
+            update_option('riverso_pos_phase28_stock_status', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log(
+                    'schema.phase28_stock_status',
+                    'inventory',
+                    0,
+                    [
+                        'actor_type' => 'computer',
+                        'details' => 'Fase 28: estado de stock + ubicacion especial ?',
+                    ]
+                );
+            }
+        }
+    }
+
+    /**
+     * Fase 29: mapeo autoritativo de barcodes (codigo_barra es la fuente de verdad).
+     */
+    private static function create_phase29_barcodes_authoritative($prefix) {
+        global $wpdb;
+        $table = "{$prefix}codigo_barra";
+        if (!self::table_exists($table)) {
+            return;
+        }
+
+        $wpdb->query(
+            "ALTER TABLE `{$table}`
+             MODIFY COLUMN producto_base_id BIGINT UNSIGNED DEFAULT NULL"
+        );
+
+        self::add_column_if_missing($table, 'estado', "estado VARCHAR(20) NOT NULL DEFAULT 'verificado'");
+        self::add_column_if_missing($table, 'motivo_estado', 'motivo_estado VARCHAR(255) DEFAULT NULL');
+        self::add_column_if_missing($table, 'estado_por', 'estado_por BIGINT UNSIGNED DEFAULT NULL');
+        self::add_column_if_missing($table, 'estado_at', 'estado_at DATETIME DEFAULT NULL');
+        self::add_column_if_missing($table, 'origen_datos', "origen_datos VARCHAR(50) NOT NULL DEFAULT 'legacy'");
+        self::add_column_if_missing($table, 'requires_human_review', 'requires_human_review TINYINT(1) NOT NULL DEFAULT 0');
+        self::add_column_if_missing($table, 'sku_local', 'sku_local VARCHAR(100) DEFAULT NULL');
+        self::add_column_if_missing($table, 'pending_sku', 'pending_sku VARCHAR(100) DEFAULT NULL');
+        self::add_column_if_missing($table, 'legacy_ref', 'legacy_ref LONGTEXT DEFAULT NULL');
+        self::add_column_if_missing($table, 'conflicto', 'conflicto TINYINT(1) NOT NULL DEFAULT 0');
+
+        self::drop_index_if_exists($table, 'ux_codigo');
+        self::drop_index_if_exists($table, 'codigo');
+        self::add_index_if_missing($table, 'idx_codigo', 'KEY idx_codigo (codigo)');
+        self::add_index_if_missing($table, 'idx_codigo_estado', 'KEY idx_codigo_estado (codigo, estado)');
+        self::add_index_if_missing($table, 'idx_codigo_origen', 'KEY idx_codigo_origen (codigo, origen_datos)');
+        self::add_index_if_missing($table, 'idx_sku_local', 'KEY idx_sku_local (sku_local)');
+        self::add_index_if_missing($table, 'idx_pending_sku', 'KEY idx_pending_sku (pending_sku)');
+        self::add_index_if_missing($table, 'idx_conflicto', 'KEY idx_conflicto (conflicto)');
+
+        $wpdb->query(
+            "UPDATE `{$table}`
+             SET estado = 'propuesto',
+                 requires_human_review = 1,
+                 activo = 1
+             WHERE estado = 'verificado'
+               AND (
+                    (migrado_de_tabla IS NOT NULL AND migrado_de_tabla <> '')
+                    OR origen_datos IN ('legacy', 'legacy_tienda_local', 'legacy_wp_riverso_barcodes', 'codigos_legacy')
+               )"
+        );
+
+        $import_file = RIVERSO_POS_PLUGIN_DIR . 'migrations/phase29_barcodes_import_legacy.php';
+        if (file_exists($import_file)) {
+            require_once $import_file;
+        }
+
+        if (class_exists('Riverso_Barcode_Legacy_Importer')) {
+            $imported = (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM `{$table}` WHERE origen_datos IN ('legacy_tienda_local', 'legacy_wp_riverso_barcodes')"
+            );
+            if ($imported === 0 || get_option('riverso_pos_phase29_barcode_import_v2') !== '1') {
+                Riverso_Barcode_Legacy_Importer::run(false);
+                update_option('riverso_pos_phase29_barcode_import_v2', '1');
+            }
+        }
+
+        if (get_option('riverso_pos_phase29_barcodes') !== '1') {
+            update_option('riverso_pos_phase29_barcodes', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log(
+                    'schema.phase29_barcodes_authoritative',
+                    'barcode',
+                    0,
+                    [
+                        'actor_type' => 'computer',
+                        'details' => 'Fase 29: mapeo autoritativo de códigos de barra',
+                    ]
+                );
+            }
+        }
+    }
+
+    /**
+     * Fase 30: catálogo maestro de tipos de envase (Envase, Caja, Balde).
+     */
+    private static function create_phase30_envase_tipos($prefix, $charset_collate = '') {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        if ($charset_collate === '') {
+            $charset_collate = $wpdb->get_charset_collate();
+        }
+
+        $table = "{$prefix}envase_tipos";
+        $sql = "CREATE TABLE {$table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            slug VARCHAR(30) NOT NULL,
+            nombre VARCHAR(80) NOT NULL,
+            descripcion VARCHAR(255) DEFAULT NULL,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            orden INT NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_slug (slug)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $wpdb->query(
+            "INSERT IGNORE INTO {$table} (slug, nombre, descripcion, activo, orden)
+             VALUES
+                ('envase', 'Envase', 'Unidad de venta o compra cerrada', 1, 10),
+                ('caja', 'Caja', 'Caja con varias unidades', 1, 20),
+                ('balde', 'Balde', 'Balde o contenedor', 1, 30)"
+        );
+
+        if (get_option('riverso_pos_phase30_envase_tipos') !== '1') {
+            update_option('riverso_pos_phase30_envase_tipos', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log(
+                    'schema.phase30_envase_tipos',
+                    'packaging',
+                    0,
+                    [
+                        'actor_type' => 'computer',
+                        'details' => 'Fase 30: catálogo de tipos de envase',
                     ]
                 );
             }

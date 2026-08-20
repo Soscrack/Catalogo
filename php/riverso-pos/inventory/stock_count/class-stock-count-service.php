@@ -133,7 +133,7 @@ class Riverso_Stock_Count_Service {
             // Fallback: buscar en codigo_barra / barcodes
             $row = $wpdb->get_row(
                 $wpdb->prepare(
-                    "SELECT producto_base_id, cantidad FROM {$prefix}codigo_barra WHERE codigo = %s AND activo = 1 LIMIT 1",
+                    "SELECT producto_base_id, cantidad FROM {$prefix}codigo_barra WHERE codigo = %s AND activo = 1 AND estado = 'verificado' LIMIT 1",
                     $codigo
                 ),
                 ARRAY_A

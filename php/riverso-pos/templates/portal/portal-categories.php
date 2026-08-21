@@ -21,7 +21,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
 <div class="portal-categories-section">
     <style>
         .portal-categories-section { max-width: 1200px; margin: 0 auto; }
-        .cat-tabs { display: flex; gap: 10px; border-bottom: 2px solid #eee; margin-bottom: 20px; }
+        .cat-tabs { display: flex; gap: 10px; border-bottom: 2px solid #eee; margin-bottom: 20px; position: relative; z-index: 3; }
         .cat-tabs button { padding: 10px 15px; background: none; border: none; border-bottom: 3px solid transparent; cursor: pointer; font-size: 16px; color: #666; }
         .cat-tabs button.active { border-bottom-color: #2196f3; color: #2196f3; font-weight: bold; }
         .cat-tab-content { display: none; }
@@ -42,6 +42,8 @@ $can_manage_families = current_user_can('riverso_manage_families');
         .btn-tiny:hover { background: #1976d2; }
         .btn-tiny.danger { background: #d32f2f; }
         .btn-tiny.danger:hover { background: #b71c1c; }
+        .btn-tiny.secondary { background: #666; }
+        .btn-tiny.secondary:hover { background: #555; }
         .family-list { display: grid; gap: 15px; }
         .family-card { background: white; padding: 15px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .family-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -54,8 +56,8 @@ $can_manage_families = current_user_can('riverso_manage_families');
         <h2 style="margin: 0 0 15px 0;">Categorías y Familias</h2>
 
         <div class="cat-tabs">
-            <button class="active" data-tab="categories">Categorías</button>
-            <button data-tab="families">Familias</button>
+            <button type="button" class="active" data-tab="categories">Categorías</button>
+            <button type="button" data-tab="families">Familias</button>
         </div>
 
         <!-- TAB: CATEGORÍAS -->
@@ -89,7 +91,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
 </div>
 
 <script>
-jQuery(function($) {
+(window.riversoWhenJQuery || function(fn){ jQuery(fn); })(function($) {
     const nonce = '<?php echo esc_js($nonce); ?>';
     const ajaxUrl = '<?php echo esc_js(admin_url('admin-ajax.php')); ?>';
     const canManageCategories = <?php echo $can_manage_categories ? 'true' : 'false'; ?>;
@@ -99,6 +101,20 @@ jQuery(function($) {
 
     function post(action, data) {
         return $.post(ajaxUrl, { action, nonce, ...data });
+    }
+
+    window.riversoFamilyEditor = window.riversoFamilyEditor || {};
+    window.riversoFamilyEditor.ajaxUrl = ajaxUrl;
+    window.riversoFamilyEditor.nonce = nonce;
+    window.riversoFamilyEditor.canManage = canManageFamilies;
+    window.riversoFamilyEditor.onChanged = function() { loadFamilies(); };
+
+    function ensureFamilyEditor() {
+        if (!window.RiversoFamilyEditor) {
+            alert('Editor de familias no cargado. Recarga la página (Ctrl+F5).');
+            return false;
+        }
+        return true;
     }
 
     function loadCategories() {
@@ -153,16 +169,20 @@ jQuery(function($) {
                 html = '<p style="color: #999; text-align: center; padding: 20px;">Sin familias</p>';
             } else {
                 families.forEach(f => {
+                    const stock = (f.stock_unidades !== undefined && f.stock_unidades !== null)
+                        ? Number(f.stock_unidades).toLocaleString('es-CL') + ' u'
+                        : '—';
                     html += '<div class="family-card">';
                     html += '<div class="family-header">';
-                    html += '<div><div class="family-name">' + esc(f.nombre) + '</div><small style="color: #999;">' + esc(f.codigo_grupo) + '</small></div>';
-                    html += '<div><span class="family-count">' + (f.miembros_count || 0) + ' miembros</span></div>';
+                    html += '<div><div class="family-name">' + esc(f.nombre) + '</div><small style="color: #999;">' + esc(f.codigo_grupo) + ' · ' + esc(f.tipo_sustitucion || '') + '</small></div>';
+                    html += '<div><span class="family-count">' + (f.miembros_count || 0) + ' miembros</span><br><small>Stock: ' + stock + '</small></div>';
                     html += '</div>';
+                    html += '<div class="family-actions">';
+                    html += '<button type="button" class="btn-tiny secondary" data-family-view="' + f.id + '">Ver</button>';
                     if (canManageFamilies) {
-                        html += '<div class="family-actions">';
-                        html += '<button class="btn-tiny" onclick="window.portalCat.editFamily(' + f.id + ')">Editar</button>';
-                        html += '</div>';
+                        html += '<button type="button" class="btn-tiny" data-family-edit="' + f.id + '">Editar</button>';
                     }
+                    html += '</div>';
                     html += '</div>';
                 });
             }
@@ -198,6 +218,20 @@ jQuery(function($) {
         } else {
             $children.show();
             $btn.attr('aria-expanded', 'true').attr('title', 'Ocultar rama').text('▼');
+        }
+    });
+
+    $(document).on('click', '[data-family-view]', function(e) {
+        e.preventDefault();
+        if (ensureFamilyEditor()) {
+            RiversoFamilyEditor.openView($(this).data('family-view'));
+        }
+    });
+
+    $(document).on('click', '[data-family-edit]', function(e) {
+        e.preventDefault();
+        if (ensureFamilyEditor()) {
+            RiversoFamilyEditor.openEdit($(this).data('family-edit'));
         }
     });
 
@@ -238,7 +272,14 @@ jQuery(function($) {
             }
         },
         editFamily: function(familyId) {
-            alert('Ver detalles en wp-admin para editar familia');
+            if (ensureFamilyEditor()) {
+                RiversoFamilyEditor.openEdit(familyId);
+            }
+        },
+        viewFamily: function(familyId) {
+            if (ensureFamilyEditor()) {
+                RiversoFamilyEditor.openView(familyId);
+            }
         }
     };
 
@@ -256,7 +297,9 @@ jQuery(function($) {
     });
 
     $('#btn-family-create').click(() => {
-        alert('Ver en wp-admin para crear familia con todos los parámetros');
+        if (ensureFamilyEditor()) {
+            RiversoFamilyEditor.openCreate(function() { loadFamilies(); });
+        }
     });
 });
 </script>

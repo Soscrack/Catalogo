@@ -92,16 +92,19 @@ class Riverso_POS_Module {
         $unit_price = null;
         $local_price = null;
         $family_qty = $qty; // Por defecto, solo la cantidad de este producto
+        $family_info = null;
 
         if ($base_id) {
             // Calcular cantidad agregada por familia en modo local (desde carrito)
             if ($channel === 'local' && !empty($cart_items_json)) {
                 $cart_items = json_decode(stripslashes($cart_items_json), true);
                 if (is_array($cart_items)) {
-                    $agg = $this->calculate_family_qty_from_cart($base_id, $cart_items);
-                    // Si hay familia (agg > 0) usar agregación; si no, conservar qty del request
-                    if ($agg > 0) {
-                        $family_qty = $agg;
+                    $agg = $this->calculate_family_qty_from_cart($base_id, $cart_items, true);
+                    if (is_array($agg) && ($agg['total'] ?? 0) > 0) {
+                        $family_qty = floatval($agg['total']);
+                        $family_info = $agg;
+                    } elseif (!is_array($agg) && $agg > 0) {
+                        $family_qty = floatval($agg);
                     }
                 }
             }
@@ -141,63 +144,122 @@ class Riverso_POS_Module {
             'local_price' => $local_price,
             'qty' => $qty,
             'family_qty' => $family_qty,
+            'family' => $family_info,
             'channel' => $channel,
         ]);
     }
 
     /**
-     * Calcula cantidad agregada por familia a partir de los items del carrito
-     * 
-     * @param int $base_id ID del producto base
-     * @param array $cart_items Array de items: [{product_id, units_per_pack, cantidad}, ...]
-     * @return float
+     * Calcula cantidad agregada por familia a partir de los items del carrito.
+     *
+     * @param int   $base_id
+     * @param array $cart_items
+     * @param bool  $with_breakdown Si true, retorna array con total + detalle.
+     * @return float|array
      */
-    private function calculate_family_qty_from_cart($base_id, $cart_items) {
+    private function calculate_family_qty_from_cart($base_id, $cart_items, $with_breakdown = false) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
-        // Obtener grupo de equivalencia del base_id
-        $grupo_id = $wpdb->get_var($wpdb->prepare(
-            "SELECT grupo_id FROM {$prefix}equivalence_members WHERE producto_base_id = %d AND activo = 1 LIMIT 1",
+        // Preferir familia exacta si hay varias membresías.
+        $grupo = $wpdb->get_row($wpdb->prepare(
+            "SELECT em.grupo_id, g.nombre, g.codigo_grupo, g.tipo_sustitucion
+             FROM {$prefix}equivalence_members em
+             INNER JOIN {$prefix}equivalence_groups g ON g.id = em.grupo_id
+             WHERE em.producto_base_id = %d AND em.activo = 1 AND g.activo = 1
+             ORDER BY (g.tipo_sustitucion = 'exacta') DESC, em.id ASC
+             LIMIT 1",
             $base_id
-        ));
+        ), ARRAY_A);
 
-        if (!$grupo_id) {
-            // Sin familia, solo retornar 0 (cantidad será la del qty del request)
-            return 0;
+        if (!$grupo) {
+            return $with_breakdown ? ['total' => 0, 'breakdown' => [], 'grupo_id' => null] : 0;
         }
 
-        // Obtener todos los producto_base del grupo
+        $grupo_id = intval($grupo['grupo_id']);
         $family_bases = $wpdb->get_col($wpdb->prepare(
             "SELECT producto_base_id FROM {$prefix}equivalence_members WHERE grupo_id = %d AND activo = 1",
             $grupo_id
         ));
 
         if (empty($family_bases)) {
-            return 0;
+            return $with_breakdown ? ['total' => 0, 'breakdown' => [], 'grupo_id' => $grupo_id] : 0;
         }
 
-        // Sumar unidades en el carrito de productos de la misma familia
-        $total_qty = 0;
+        $family_bases = array_map('intval', $family_bases);
+        $total_qty = 0.0;
+        $breakdown = [];
+        $pricing = class_exists('Riverso_Pricing_Module')
+            ? Riverso_Pricing_Module::get_instance()
+            : null;
+
         foreach ($cart_items as $item) {
-            // Resolver base_id de cada item en el carrito
-            if (class_exists('Riverso_Pricing_Module')) {
-                $pricing = Riverso_Pricing_Module::get_instance();
-                $item_base_id = $pricing->get_base_id_by_wc($item['product_id'] ?? 0, $item['variation_id'] ?? 0);
-                
-                if ($item_base_id && in_array($item_base_id, $family_bases)) {
-                    // Cantidad = packs × unidades por envase
-                    $units_per_pack = floatval($item['units_per_pack'] ?? 1);
-                    if ($units_per_pack <= 0) {
-                        $units_per_pack = 1;
-                    }
-                    $qty = floatval($item['cantidad'] ?? $item['quantity'] ?? 1);
-                    $total_qty += $qty * $units_per_pack;
+            if (!$pricing) {
+                continue;
+            }
+            $item_base_id = 0;
+            if (!empty($item['producto_base_id'])) {
+                $item_base_id = intval($item['producto_base_id']);
+            }
+            if (!$item_base_id) {
+                $item_base_id = intval($pricing->get_base_id_by_wc(
+                    $item['product_id'] ?? 0,
+                    $item['variation_id'] ?? 0
+                ));
+            }
+
+            if ($item_base_id && in_array($item_base_id, $family_bases, true)) {
+                $units_per_pack = floatval($item['units_per_pack'] ?? 1);
+                if ($units_per_pack <= 0) {
+                    $units_per_pack = 1;
                 }
+                $packs = floatval($item['cantidad'] ?? $item['quantity'] ?? 1);
+                $units = $packs * $units_per_pack;
+                $total_qty += $units;
+                $breakdown[] = [
+                    'producto_base_id' => $item_base_id,
+                    'sku' => $item['sku'] ?? null,
+                    'name' => $item['nombre'] ?? $item['name'] ?? null,
+                    'packs' => $packs,
+                    'units_per_pack' => $units_per_pack,
+                    'units' => $units,
+                ];
             }
         }
 
+        if ($with_breakdown) {
+            return [
+                'total' => $total_qty,
+                'grupo_id' => $grupo_id,
+                'nombre' => $grupo['nombre'] ?? null,
+                'codigo_grupo' => $grupo['codigo_grupo'] ?? null,
+                'tipo_sustitucion' => $grupo['tipo_sustitucion'] ?? null,
+                'breakdown' => $breakdown,
+                'label' => $this->format_family_qty_label($total_qty, $breakdown, $grupo['nombre'] ?? ''),
+            ];
+        }
+
         return $total_qty;
+    }
+
+    /**
+     * Texto legible: "Familia X: 600 u (6×100 + 2×300)".
+     */
+    private function format_family_qty_label($total, $breakdown, $nombre = '') {
+        $parts = [];
+        foreach ($breakdown as $row) {
+            $packs = floatval($row['packs']);
+            $upp = floatval($row['units_per_pack']);
+            if ($upp > 1) {
+                $parts[] = rtrim(rtrim(number_format($packs, 2, '.', ''), '0'), '.') . '×'
+                    . rtrim(rtrim(number_format($upp, 2, '.', ''), '0'), '.');
+            } else {
+                $parts[] = rtrim(rtrim(number_format($packs, 2, '.', ''), '0'), '.');
+            }
+        }
+        $detail = $parts ? ' (' . implode(' + ', $parts) . ')' : '';
+        $prefix = $nombre !== '' ? ('Familia ' . $nombre . ': ') : 'Familia: ';
+        return $prefix . rtrim(rtrim(number_format(floatval($total), 2, '.', ''), '0'), '.') . ' u' . $detail;
     }
     
     /**
@@ -314,43 +376,44 @@ class Riverso_POS_Module {
             }
         }
         
-        // 2. Buscar usando modelo unificado de código de barra (Barcode_Model::resolve)
-        // Si resuelve, devuelve con información de proveedor/envase/cantidad
-        if (count($results) === 0 && class_exists('Riverso_Barcode_Model')) {
-            $unified_results = $this->search_by_unified_barcode($search);
-            if (!empty($unified_results)) {
-                $results = array_merge($results, $unified_results);
-                foreach ($unified_results as $p) {
-                    $found_ids[] = $p['id'];
+        // 2. Mapeo interno (verificado o propuesto) + SKU/nombre de producto_base
+        $lookup_message = null;
+        $unconfirmed_barcode = false;
+        $lookup_conflicts = false;
+        if (class_exists('Riverso_Barcode_Model')) {
+            $lookup = Riverso_Barcode_Model::lookup_for_search($search, ['limit' => $limit]);
+            $lookup_message = $lookup['message'];
+            $lookup_conflicts = !empty($lookup['conflicts']);
+            foreach ($lookup['hits'] as $hit) {
+                $formatted = $this->format_lookup_hit($hit);
+                if (!$formatted) {
+                    continue;
                 }
-                // Si lo resolvió el modelo unificado, retornar
+                $result_id = $formatted['id'];
+                if (in_array($result_id, $found_ids, true)) {
+                    continue;
+                }
+                $results[] = $formatted;
+                $found_ids[] = $result_id;
+                if (!empty($formatted['barcode_untrusted'])) {
+                    $unconfirmed_barcode = true;
+                }
+            }
+            if (!empty($lookup['barcode_exact']) && !empty($results)) {
                 wp_send_json_success([
                     'products' => $results,
                     'count' => count($results),
-                    'search' => $search
+                    'search' => $search,
+                    'unconfirmed_barcode' => false,
+                    'conflicts' => false,
+                    'message' => null,
                 ]);
             }
         }
-        
-        // 3. Buscar por código de barra exacto (tabla legacy: fallback)
-        // Los EAN/numéricos no se resuelven por legacy: deben estar verificados en codigo_barra.
+
         $looks_barcode = class_exists('Riverso_Barcode_Model')
             ? Riverso_Barcode_Model::looks_like_barcode($search)
             : (strlen($search) >= 8 && ctype_digit($search));
-
-        if ($looks_barcode && class_exists('Riverso_Barcode_Model')) {
-            $bundle = Riverso_Barcode_Model::resolve_with_suggestions($search);
-            if (empty($bundle['match']) && !empty($bundle['suggestions'])) {
-                wp_send_json_success([
-                    'products' => [],
-                    'count' => 0,
-                    'search' => $search,
-                    'unconfirmed_barcode' => true,
-                    'message' => 'Código no confirmado. Apruébalo en /interno/barcodes antes de vender.',
-                    'suggestions' => count($bundle['suggestions']),
-                ]);
-            }
-        }
 
         if (!$looks_barcode) {
         $barcode_product = $wpdb->get_row($wpdb->prepare(
@@ -552,80 +615,97 @@ class Riverso_POS_Module {
         wp_send_json_success([
             'products' => $results,
             'count' => count($results),
-            'search' => $search
+            'search' => $search,
+            'unconfirmed_barcode' => $unconfirmed_barcode,
+            'conflicts' => $lookup_conflicts,
+            'message' => $unconfirmed_barcode || $lookup_conflicts
+                ? ($lookup_message ?: 'Código no confirmado. Apruébalo en /interno/barcodes antes de vender.')
+                : $lookup_message,
         ]);
     }
-    
-    /**
-     * Busca productos por código de barra usando el modelo unificado (Barcode_Model::resolve)
-     * Devuelve producto + envase + cantidad + proveedor + precio.
-     * Fallback a método legacy si el modelo unificado no encuentra coincidencia.
-     *
-     * @param string $search Código a buscar
-     * @return array Productos encontrados con información extendida
-     */
-    private function search_by_unified_barcode($search) {
-        global $wpdb;
-        $prefix = $wpdb->prefix . 'riverso_';
-        $results = [];
-        
-        // Intentar resolver usando Barcode_Model (nuevo modelo unificado)
-        if (class_exists('Riverso_Barcode_Model')) {
-            $barcode_data = Riverso_Barcode_Model::resolve($search);
-            
-            if ($barcode_data && !is_wp_error($barcode_data)) {
-                $producto_base_id = $barcode_data['product_base_id'];
-                $proveedor_id = $barcode_data['supplier_id'];
-                $envase_id = $barcode_data['envase_id'];
-                $cantidad = $barcode_data['cantidad'];
-                $unidad = $barcode_data['unidad_medida'];
-                $factor = $barcode_data['factor_a_unidad_base'];
-                
-                // Obtener el producto_base y su relación a WooCommerce
-                $pb = $wpdb->get_row($wpdb->prepare(
-                    "SELECT id, woocommerce_product_id, woocommerce_variation_id 
-                     FROM {$prefix}producto_base 
-                     WHERE id = %d",
-                    $producto_base_id
-                ), ARRAY_A);
-                
-                if ($pb) {
-                    $wc_id = $pb['woocommerce_variation_id'] ?: $pb['woocommerce_product_id'];
-                    if ($wc_id) {
-                        $product = wc_get_product($wc_id);
-                        if ($product) {
-                            $formatted = $this->format_product_extended($product, null, 'Código de barra unificado');
-                            
-                            // Enriquecer con datos del código de barra
-                            $formatted['barcode_info'] = [
-                                'producto_base_id' => $producto_base_id,
-                                'proveedor_id' => $proveedor_id,
-                                'envase_id' => $envase_id,
-                                'cantidad' => $cantidad,
-                                'unidad_medida' => $unidad,
-                                'factor' => $factor,
-                                'codigo_type' => $barcode_data['type'],
-                            ];
-                            
-                            // Si es un proveedor, traer su nombre
-                            if ($proveedor_id) {
-                                $proveedor = $wpdb->get_var($wpdb->prepare(
-                                    "SELECT razon_social FROM {$prefix}proveedores WHERE id = %d",
-                                    $proveedor_id
-                                ));
-                                $formatted['barcode_info']['proveedor_nombre'] = $proveedor;
-                            }
-                            
-                            $results[] = $formatted;
-                            return $results; // Prioridad: si el modelo unificado lo resuelve, retornar
-                        }
-                    }
-                }
+
+    private function format_lookup_hit($hit) {
+        $trusted = !empty($hit['trusted']);
+        $source = $hit['match_source'] ?? 'Mapeo interno';
+        $barcode = is_array($hit['barcode'] ?? null) ? $hit['barcode'] : null;
+        $formatted = null;
+
+        $wc_id = intval($hit['wc_id'] ?? 0);
+        if ($wc_id && function_exists('wc_get_product')) {
+            $product = wc_get_product($wc_id);
+            if ($product) {
+                $formatted = $this->format_product_extended($product, null, $source);
             }
         }
-        
-        // Fallback al método legacy si no se resolvió
-        return [];
+        if (!$formatted) {
+            $formatted = $this->format_from_producto_base($hit, $source);
+        }
+        if (!$formatted) {
+            return null;
+        }
+
+        $formatted['producto_base_id'] = intval($hit['producto_base_id'] ?? $formatted['producto_base_id'] ?? 0);
+        $formatted['barcode_untrusted'] = !$trusted && in_array($hit['source'] ?? '', ['barcode_proposed', 'barcode_conflict'], true);
+        if ($formatted['barcode_untrusted']) {
+            $formatted['can_sell'] = false;
+            $formatted['block_reason'] = 'Código no confirmado. Apruébalo en /interno/barcodes antes de vender.';
+        }
+        if ($barcode) {
+            $formatted['barcode_info'] = [
+                'producto_base_id' => intval($hit['producto_base_id'] ?? 0),
+                'proveedor_id' => $barcode['supplier_id'] ?? $barcode['proveedor_id'] ?? null,
+                'envase_id' => $barcode['envase_id'] ?? $barcode['presentacion_id'] ?? null,
+                'cantidad' => $barcode['cantidad'] ?? $barcode['cantidad_unidades'] ?? 1,
+                'unidad_medida' => $barcode['unidad_medida'] ?? 'unidad',
+                'factor' => $barcode['factor_a_unidad_base'] ?? 1,
+                'codigo_type' => $barcode['type'] ?? $barcode['tipo'] ?? 'ean13',
+                'trusted' => $trusted,
+            ];
+        }
+        return $formatted;
+    }
+
+    private function format_from_producto_base($hit, $match_source = '') {
+        $base_id = intval($hit['producto_base_id'] ?? $hit['id'] ?? 0);
+        if ($base_id <= 0) {
+            return null;
+        }
+        $price = 0.0;
+        $local_price = null;
+        if (class_exists('Riverso_Pricing_Module')) {
+            $pricing = Riverso_Pricing_Module::get_instance();
+            $local_row = $pricing->get_local_price($base_id);
+            if ($local_row && $local_row['p_asignado'] !== null && ($local_row['estado_aprobacion'] ?? '') === 'aprobado') {
+                $local_price = (float) $local_row['p_asignado'];
+                $price = $local_price;
+            }
+        }
+        return [
+            'id' => 'pb-' . $base_id,
+            'name' => $hit['nombre_canonico'] ?: ($hit['canonical_sku'] ?: ('Producto #' . $base_id)),
+            'sku' => $hit['canonical_sku'] ?? '',
+            'price' => $price,
+            'wc_price' => 0,
+            'local_price' => $local_price,
+            'online_price' => null,
+            'rule_price' => null,
+            'channel' => $this->get_current_channel(),
+            'producto_base_id' => $base_id,
+            'regular_price' => $price,
+            'sale_price' => null,
+            'stock_quantity' => null,
+            'stock_status' => 'instock',
+            'stock_display' => '∞',
+            'image' => '',
+            'type' => 'local',
+            'parent_id' => 0,
+            'tax_class' => '',
+            'location' => '',
+            'supplier_codes' => [],
+            'match_source' => $match_source,
+            'can_sell' => false,
+            'block_reason' => 'Producto local sin ficha WooCommerce; no se puede vender en POS.',
+        ];
     }
     
     /**
@@ -1624,12 +1704,14 @@ class Riverso_POS_Module {
         }
 
         // Preferir agregación desde carrito (qty_packs × units_per_pack)
+        $family_info = null;
         if (!empty($cart_items_json)) {
             $cart_items = json_decode(stripslashes($cart_items_json), true);
             if (is_array($cart_items)) {
-                $agg = $this->calculate_family_qty_from_cart($producto_base_id, $cart_items);
-                if ($agg > 0) {
-                    $family_qty = $agg;
+                $agg = $this->calculate_family_qty_from_cart($producto_base_id, $cart_items, true);
+                if (is_array($agg) && ($agg['total'] ?? 0) > 0) {
+                    $family_qty = floatval($agg['total']);
+                    $family_info = $agg;
                 }
             }
         }
@@ -1668,6 +1750,7 @@ class Riverso_POS_Module {
             'producto_base_id' => $producto_base_id,
             'qty_in_family' => $family_qty,
             'family_qty' => $family_qty,
+            'family' => $family_info,
             'unit_price' => $unit_price,
             'price_per_unit' => floatval($unit_price ?? 0),
             'local_price' => $local_price,

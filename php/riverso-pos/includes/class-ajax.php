@@ -303,8 +303,38 @@ class Riverso_POS_Ajax {
         
         $search = sanitize_text_field($_POST['search'] ?? '');
         
-        if (strlen($search) < 2) {
+        if (strlen($search) < 1) {
             wp_send_json_success([]);
+        }
+
+        if (class_exists('Riverso_Barcode_Model') && method_exists('Riverso_Barcode_Model', 'lookup_for_search')) {
+            $lookup = Riverso_Barcode_Model::lookup_for_search($search, ['limit' => 20]);
+            $results = [];
+            foreach ($lookup['hits'] as $hit) {
+                $wc_id = intval($hit['wc_id'] ?? 0);
+                $price = 0;
+                $type = 'local';
+                $name = $hit['nombre_canonico'] ?: ($hit['canonical_sku'] ?: '');
+                $sku = $hit['canonical_sku'] ?? '';
+                if ($wc_id && function_exists('wc_get_product')) {
+                    $product = wc_get_product($wc_id);
+                    if ($product) {
+                        $price = floatval($product->get_price());
+                        $type = $product->get_type();
+                        $name = $product->get_name() ?: $name;
+                        $sku = $product->get_sku() ?: $sku;
+                    }
+                }
+                $results[] = [
+                    'id' => $wc_id ?: intval($hit['producto_base_id']),
+                    'name' => $name,
+                    'sku' => $sku,
+                    'price' => $price,
+                    'type' => $type,
+                    'producto_base_id' => intval($hit['producto_base_id']),
+                ];
+            }
+            wp_send_json_success($results);
         }
         
         $products = wc_get_products([

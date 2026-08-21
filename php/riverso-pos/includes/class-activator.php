@@ -511,7 +511,7 @@ class Riverso_POS_Activator {
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             codigo_grupo VARCHAR(100) NOT NULL,
             nombre VARCHAR(255) NOT NULL,
-            tipo_sustitucion VARCHAR(20) DEFAULT 'compatible',
+            tipo_sustitucion VARCHAR(20) DEFAULT 'exacta',
             activo TINYINT(1) DEFAULT 1,
             notas TEXT DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -1289,11 +1289,45 @@ class Riverso_POS_Activator {
         // Consolidar esquema de familia (phase12)
         self::consolidate_family_schema($prefix);
 
+        // Normalizar tipo_sustitucion a exacta|preferida|complementaria
+        self::normalize_family_tipo_sustitucion($prefix);
+
         // Agregar soporte para asignación proveedor → familia (phase13)
         self::add_family_assignment_support($prefix);
 
         // Integrar tienda_local_productos al dominio producto_base (phase14)
         self::integrate_local_store_products($prefix);
+    }
+
+    /**
+     * Migra valores legacy de tipo_sustitucion al whitelist canónico.
+     * compatible → complementaria; sustituto|preferido → preferida.
+     */
+    private static function normalize_family_tipo_sustitucion($prefix) {
+        global $wpdb;
+        $table = "{$prefix}equivalence_groups";
+        if (!self::table_exists($table)) {
+            return;
+        }
+
+        $wpdb->query(
+            "UPDATE {$table} SET tipo_sustitucion = 'complementaria'
+             WHERE tipo_sustitucion IN ('compatible', 'COMPATIBLE')"
+        );
+        $wpdb->query(
+            "UPDATE {$table} SET tipo_sustitucion = 'preferida'
+             WHERE tipo_sustitucion IN ('sustituto', 'preferido', 'SUSTITUTO', 'PREFERIDO')"
+        );
+        $wpdb->query(
+            "UPDATE {$table} SET tipo_sustitucion = 'exacta'
+             WHERE tipo_sustitucion IS NULL OR tipo_sustitucion = ''
+                OR tipo_sustitucion NOT IN ('exacta', 'preferida', 'complementaria')"
+        );
+
+        $wpdb->query(
+            "ALTER TABLE {$table}
+             MODIFY COLUMN tipo_sustitucion VARCHAR(20) DEFAULT 'exacta'"
+        );
     }
 
     /**

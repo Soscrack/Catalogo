@@ -480,16 +480,44 @@ class Riverso_Warehouse_Module {
         if (!current_user_can('riverso_view_stock')) wp_send_json_error(['message' => 'Sin permisos']);
 
         $search = sanitize_text_field($_POST['search'] ?? '');
-        if (strlen($search) < 2) wp_send_json_success(['products' => []]);
+        if (strlen($search) < 1) wp_send_json_success(['products' => []]);
 
-        // Incluir productos publicados, privados y borradores
+        $results = [];
+        if (class_exists('Riverso_Barcode_Model') && method_exists('Riverso_Barcode_Model', 'lookup_for_search')) {
+            $lookup = Riverso_Barcode_Model::lookup_for_search($search, ['limit' => 20]);
+            foreach ($lookup['hits'] as $hit) {
+                $wc_id = intval($hit['wc_id'] ?? 0);
+                $stock = null;
+                $price = 0;
+                $status = 'local';
+                if ($wc_id && function_exists('wc_get_product')) {
+                    $p = wc_get_product($wc_id);
+                    if ($p) {
+                        $stock = $p->get_stock_quantity();
+                        $price = floatval($p->get_price());
+                        $status = $p->get_status();
+                    }
+                }
+                $results[] = [
+                    'id' => $wc_id ?: intval($hit['producto_base_id']),
+                    'name' => $hit['nombre_canonico'] ?: ($hit['canonical_sku'] ?: ''),
+                    'sku' => $hit['canonical_sku'] ?? '',
+                    'stock' => $stock,
+                    'status' => $status,
+                    'price' => $price,
+                    'producto_base_id' => intval($hit['producto_base_id']),
+                    'woocommerce_product_id' => $hit['woocommerce_product_id'],
+                ];
+            }
+            wp_send_json_success(['products' => $results]);
+        }
+
         $products = wc_get_products([
             'limit' => 20, 
             'status' => ['publish', 'private', 'draft'], 
             's' => $search, 
             'return' => 'ids'
         ]);
-        $results = [];
         foreach ($products as $pid) {
             $p = wc_get_product($pid);
             if ($p) $results[] = [
@@ -497,7 +525,8 @@ class Riverso_Warehouse_Module {
                 'name' => $p->get_name(), 
                 'sku' => $p->get_sku(), 
                 'stock' => $p->get_stock_quantity(),
-                'status' => $p->get_status()
+                'status' => $p->get_status(),
+                'price' => floatval($p->get_price()),
             ];
         }
         wp_send_json_success(['products' => $results]);

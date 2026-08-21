@@ -408,7 +408,7 @@ $location_types = class_exists('Riverso_Warehouse_Module') ? Riverso_Warehouse_M
 </div>
 
 <script>
-jQuery(function($) {
+(window.riversoWhenJQuery || function(fn){ jQuery(fn); })(function($) {
     const nonce = '<?php echo esc_js($nonce); ?>';
     const ajaxUrl = '<?php echo esc_js(admin_url('admin-ajax.php')); ?>';
     const canEdit = <?php echo $can_edit ? 'true' : 'false'; ?>;

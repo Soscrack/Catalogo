@@ -1238,8 +1238,13 @@ jQuery(document).ready(function($) {
                 search: search,
                 include_out_of_stock: 'true'
             }, function(response) {
-                if (response.success && response.data.products.length) {
+                if (response.success && response.data.products && response.data.products.length) {
                     let html = '';
+                    if (response.data.message || response.data.unconfirmed_barcode || response.data.conflicts) {
+                        html += '<div class="search-results-header" style="background:#fff8e1;color:#8a6d3b;">' +
+                            (response.data.message || 'Código no confirmado. Apruébalo en /interno/barcodes antes de vender.') +
+                            '</div>';
+                    }
                     response.data.products.forEach(function(product) {
                         // Determinar estado de stock
                         let stockClass = '';
@@ -1286,15 +1291,18 @@ jQuery(document).ready(function($) {
                     });
                     
                     // Añadir contador de resultados
-                    html = '<div class="search-results-header">' + response.data.count + ' productos encontrados para "' + response.data.search + '"</div>' + html;
+                    html = '<div class="search-results-header">' + response.data.count + ' productos encontrados para "' + search + '"</div>' + html;
                     
                     $('#pos-search-results').html(html).addClass('show');
                 } else {
+                    const emptyMsg = (response.data && response.data.message)
+                        ? response.data.message
+                        : 'Intenta con SKU, código de barra o código de proveedor';
                     $('#pos-search-results').html(`
                         <div style="padding:20px;text-align:center;color:#666;">
                             <span class="dashicons dashicons-search" style="font-size:32px;width:32px;height:32px;margin-bottom:10px;display:block;color:#ddd;"></span>
                             No se encontraron productos para "<strong>${search}</strong>"
-                            <br><small>Intenta con SKU, código de barra o código de proveedor</small>
+                            <br><small>${emptyMsg}</small>
                         </div>
                     `).addClass('show');
                 }
@@ -1321,6 +1329,14 @@ jQuery(document).ready(function($) {
     });
     
     function addToCart(product) {
+        if (product.barcode_untrusted) {
+            alert(product.block_reason || 'Código no confirmado. Apruébalo en /interno/barcodes antes de vender.');
+            return;
+        }
+        if (String(product.id).indexOf('pb-') === 0) {
+            alert(product.block_reason || 'Producto local sin ficha WooCommerce; no se puede vender en POS.');
+            return;
+        }
         const channel = $('#pos-channel-select').val() || 'local';
         const unitsPerPack = parseFloat(product.barcode_info?.cantidad) || 1;
         const existingIndex = cart.findIndex(item => item.product_id === product.id);
@@ -1358,15 +1374,16 @@ jQuery(document).ready(function($) {
      */
     function recalculateFamilyPrices() {
         const channel = $('#pos-channel-select').val() || 'local';
-        
-        // Agrupar items por familia (producto_base_id)
+        window._posFamilyLabels = window._posFamilyLabels || {};
+
+        // Agrupar items por familia (producto_base_id) — el backend agrega hermanos
         const families = {};
         cart.forEach((item, index) => {
             const baseId = item.producto_base_id || ('p' + item.product_id);
             if (!families[baseId]) families[baseId] = [];
             families[baseId].push({ index, item });
         });
-        
+
         Object.keys(families).forEach(baseId => {
             const items = families[baseId];
             let totalQty = 0;
@@ -1375,7 +1392,7 @@ jQuery(document).ready(function($) {
                 const qty = item.cantidad || item.quantity || 1;
                 totalQty += qty * unitsPerPack;
             });
-            
+
             $.ajax({
                 url: ajaxurl,
                 type: 'POST',
@@ -1391,9 +1408,18 @@ jQuery(document).ready(function($) {
                 },
                 success: function(response) {
                     if (response.success && response.data.unit_price !== null && response.data.unit_price !== undefined) {
+                        const fam = response.data.family || null;
+                        const familyQty = response.data.family_qty || totalQty;
                         items.forEach(({ index }) => {
                             cart[index].price = parseFloat(response.data.unit_price);
                             cart[index].channel = channel;
+                            cart[index].family_qty = familyQty;
+                            if (fam && fam.grupo_id) {
+                                cart[index].family_id = fam.grupo_id;
+                                cart[index].family_label = fam.label || '';
+                                cart[index].family_nombre = fam.nombre || '';
+                                window._posFamilyLabels[fam.grupo_id] = fam;
+                            }
                         });
                         renderCart();
                         updateTotals();
@@ -1402,7 +1428,33 @@ jQuery(document).ready(function($) {
             });
         });
     }
-    
+
+    function buildFamilySummaries() {
+        const byFamily = {};
+        cart.forEach(function(item) {
+            const fid = item.family_id;
+            if (!fid) return;
+            if (!byFamily[fid]) {
+                byFamily[fid] = {
+                    id: fid,
+                    nombre: item.family_nombre || '',
+                    label: item.family_label || '',
+                    total: 0,
+                    lines: []
+                };
+            }
+            const packs = item.cantidad || item.quantity || 1;
+            const upp = item.units_per_pack || 1;
+            byFamily[fid].total += packs * upp;
+            byFamily[fid].lines.push({ packs: packs, units_per_pack: upp, sku: item.sku || '' });
+            if (!byFamily[fid].label && window._posFamilyLabels && window._posFamilyLabels[fid]) {
+                byFamily[fid].label = window._posFamilyLabels[fid].label || '';
+                byFamily[fid].nombre = window._posFamilyLabels[fid].nombre || byFamily[fid].nombre;
+            }
+        });
+        return Object.values(byFamily);
+    }
+
     function renderCart() {
         if (cart.length === 0) {
             $('#pos-cart-items').html(`
@@ -1415,10 +1467,30 @@ jQuery(document).ready(function($) {
             $('#btn-complete-sale').prop('disabled', true);
             return;
         }
-        
+
         let html = '';
         let count = 0;
-        
+
+        const familySummaries = buildFamilySummaries();
+        if (familySummaries.length && ($('#pos-channel-select').val() || 'local') === 'local') {
+            html += '<div class="pos-family-summaries" style="margin-bottom:10px;">';
+            familySummaries.forEach(function(f) {
+                let label = f.label;
+                if (!label) {
+                    const parts = f.lines.map(function(l) {
+                        return l.units_per_pack > 1
+                            ? (l.packs + '×' + l.units_per_pack)
+                            : String(l.packs);
+                    });
+                    label = (f.nombre ? ('Familia ' + f.nombre + ': ') : 'Familia: ')
+                        + f.total + ' u' + (parts.length ? ' (' + parts.join(' + ') + ')' : '');
+                }
+                html += '<div class="pos-family-banner" style="background:#e8f4fc;border:1px solid #90caf9;border-radius:4px;padding:8px 10px;margin-bottom:6px;font-size:13px;">'
+                    + '<strong>' + label + '</strong></div>';
+            });
+            html += '</div>';
+        }
+
         cart.forEach(function(item, index) {
             const unitsPerPack = item.units_per_pack || 1;
             const qty = item.cantidad || item.quantity || 1;
@@ -1426,16 +1498,20 @@ jQuery(document).ready(function($) {
             const lineTotal = item.price * totalUnits;
             const channel = item.channel || $('#pos-channel-select').val() || 'local';
             count += totalUnits;
-            
+
             const packLabel = unitsPerPack > 1 ? ` × ${unitsPerPack} uds/envase` : '';
             const channelBadge = channel === 'online'
                 ? '<span class="channel-badge online">Online</span>'
                 : '<span class="channel-badge local">Local</span>';
+            const famHint = (channel === 'local' && item.family_qty && item.family_id)
+                ? `<div class="item-family-qty" style="font-size:11px;color:#1565c0;">Cant. familia: ${item.family_qty} u</div>`
+                : '';
             html += `
                 <div class="cart-item" data-index="${index}">
                     <div class="item-info">
                         <div class="item-name">${item.nombre || item.name} ${channelBadge}</div>
                         <div class="item-price">$${formatNumber(item.price)} c/u${packLabel}</div>
+                        ${famHint}
                     </div>
                     <div class="item-qty">
                         <button type="button" class="button button-small qty-minus">-</button>
@@ -1447,7 +1523,7 @@ jQuery(document).ready(function($) {
                 </div>
             `;
         });
-        
+
         $('#pos-cart-items').html(html);
         $('#pos-cart-count').text(count);
         $('#btn-complete-sale').prop('disabled', false);

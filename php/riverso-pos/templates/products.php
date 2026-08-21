@@ -255,6 +255,7 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
                     <td>
                         <div id="local-familia-view">
                             <span id="familia-display">-</span>
+                            <button class="button button-small" id="familia-view-btn" style="margin-left:8px; display:none;">Ver familia</button>
                             <button class="button button-small" id="familia-edit-toggle" style="margin-left:8px;">Editar familia</button>
                         </div>
                         <div id="local-familia-edit" style="display:none; background:#f9f9f9; padding:10px; border-radius:4px;">
@@ -494,9 +495,9 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
                         <th><label for="family-tipo">Tipo de Sustitución</label></th>
                         <td>
                             <select id="family-tipo" class="regular-text">
-                                <option value="compatible">Compatible</option>
-                                <option value="sustituto">Sustituto</option>
-                                <option value="preferido">Preferido</option>
+                                <option value="exacta" selected>Exacta (mismo ítem, distinto envase)</option>
+                                <option value="preferida">Preferida</option>
+                                <option value="complementaria">Complementaria</option>
                             </select>
                         </td>
                     </tr>
@@ -1071,8 +1072,10 @@ jQuery(function($){
         if (product.familia) {
             const fam = product.familia;
             $('#familia-display').html(`<strong>${esc(fam.nombre)}</strong> <small style="color:#666;">(${esc(fam.tipo_sustitucion)})</small>`);
+            $('#familia-view-btn').show().data('familia-id', fam.id);
         } else {
             $('#familia-display').html('<span style="color:#999;">Sin familia</span>');
+            $('#familia-view-btn').hide().data('familia-id', '');
         }
         
         // Imagen (Fase 7)
@@ -1650,6 +1653,59 @@ jQuery(function($){
         });
     });
 
+    // Evento: ver miembros de familia
+    $(document).on('click', '#familia-view-btn', function(e){
+        e.preventDefault();
+        const grupoId = $(this).data('familia-id') || (currentProduct && currentProduct.familia && currentProduct.familia.id);
+        if (!grupoId) return;
+        $.post(ajaxurl, { action: 'riverso_families_get', nonce, grupo_id: grupoId }, function(r){
+            if (!r.success || !r.data || !r.data.family) {
+                alert('No se pudo cargar la familia');
+                return;
+            }
+            const fam = r.data.family;
+            const members = fam.members || [];
+            const pending = fam.pending || [];
+            let rows = members.map(m => {
+                const units = m.cantidad_unidades != null ? m.cantidad_unidades : '—';
+                return `<tr>
+                    <td>#${m.producto_base_id}</td>
+                    <td><code>${esc(m.canonical_sku || '')}</code></td>
+                    <td>${esc(m.nombre_canonico || '')}</td>
+                    <td>${esc(String(units))}</td>
+                    <td>${esc(String(m.unidades_familia != null ? m.unidades_familia : (m.stock_abierto || 0)))}</td>
+                </tr>`;
+            }).join('');
+            let pendingHtml = '';
+            if (pending.length) {
+                pendingHtml = '<h4 style="margin:16px 0 8px;">Pendientes (proveedor)</h4><ul style="margin:0;padding-left:18px;">' +
+                    pending.map(p => `<li><code>${esc(p.codigo_proveedor || p.codigo || '')}</code> · ${esc(p.nombre_proveedor || p.proveedor || '')}${p.cantidad_unidades ? ' · ' + esc(String(p.cantidad_unidades)) + ' u' : ''}</li>`).join('') +
+                    '</ul>';
+            }
+            const stock = fam.stock && (fam.stock.stock_unidades != null ? fam.stock.stock_unidades : fam.stock.total_unidades);
+            const stockLabel = stock != null ? String(stock) : '—';
+            const html = `
+<div id="familia-view-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:8px;max-width:720px;width:94%;max-height:85vh;overflow:auto;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.25);">
+    <h2 style="margin:0 0 8px;">${esc(fam.nombre || fam.codigo_grupo || 'Familia')}</h2>
+    <p style="margin:0 0 12px;color:#666;font-size:13px;">${esc(fam.tipo_sustitucion || '')} · Stock familia: <strong>${esc(stockLabel)}</strong> u · ${members.length} miembro(s)</p>
+    <table class="widefat striped" style="font-size:13px;">
+      <thead><tr><th>ID</th><th>SKU</th><th>Nombre</th><th>Envase</th><th>Unid. fam.</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5">Sin miembros</td></tr>'}</tbody>
+    </table>
+    ${pendingHtml}
+    <div style="margin-top:16px;text-align:right;"><button type="button" class="button" id="familia-view-close">Cerrar</button></div>
+  </div>
+</div>`;
+            $('body').append(html);
+            $('#familia-view-close, #familia-view-overlay').on('click', function(ev){
+                if (ev.target.id === 'familia-view-overlay' || ev.target.id === 'familia-view-close') {
+                    $('#familia-view-overlay').remove();
+                }
+            });
+        });
+    });
+
     // Evento: editar familia
     $(document).on('click', '#familia-edit-toggle', function(e){
         e.preventDefault();
@@ -1890,15 +1946,21 @@ jQuery(function($){
             
             let warningsHTML = '';
             (merge.warnings || []).forEach(w => {
-                const color = w.severity === 'warning' ? '#fff3cd' : '#d1ecf1';
-                const borderColor = w.severity === 'warning' ? '#ffc107' : '#17a2b8';
+                const sev = w.severity || 'info';
+                const color = sev === 'error' ? '#f8d7da' : (sev === 'warning' ? '#fff3cd' : '#d1ecf1');
+                const borderColor = sev === 'error' ? '#dc3545' : (sev === 'warning' ? '#ffc107' : '#17a2b8');
                 warningsHTML += '<div style="background:' + color + ';border-left:4px solid ' + borderColor + ';padding:10px;margin-top:8px;border-radius:2px;font-size:13px;">' + esc(w.message) + '</div>';
             });
+
+            const blocked = !!merge.block_merge;
+            const confirmBtn = blocked
+                ? '<button type="button" class="button" disabled style="opacity:0.5;cursor:not-allowed;">Merge bloqueado</button>'
+                : '<button type="button" id="merge-modal-confirm" class="button button-primary" style="cursor:pointer;">Confirmar Merge</button>';
             
             const html = `
 <div id="merge-modal-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;">
   <div id="merge-modal-box" style="background:#fff;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,0.3);padding:30px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;">
-    <h2 style="margin:0 0 20px 0;color:#1d2327;">Confirmar Merge de Productos</h2>
+    <h2 style="margin:0 0 20px 0;color:#1d2327;">` + (blocked ? 'Merge bloqueado' : 'Confirmar Merge de Productos') + `</h2>
     
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
       <!-- Origen -->
@@ -1938,8 +2000,8 @@ jQuery(function($){
     ` + warningsHTML + `
     
     <div style="margin-top:20px;padding-top:15px;border-top:1px solid #ddd;display:flex;gap:10px;justify-content:flex-end;">
-      <button type="button" id="merge-modal-cancel" class="button" style="cursor:pointer;">Cancelar</button>
-      <button type="button" id="merge-modal-confirm" class="button button-primary" style="cursor:pointer;">Confirmar Merge</button>
+      <button type="button" id="merge-modal-cancel" class="button" style="cursor:pointer;">` + (blocked ? 'Cerrar' : 'Cancelar') + `</button>
+      ` + confirmBtn + `
     </div>
   </div>
 </div>
@@ -3272,10 +3334,13 @@ jQuery(function($){
                 </div>`;
             }).join('');
 
-            html += `<div style="margin-bottom:12px; padding:12px; background:#fff; border:1px solid #ddd; border-radius:4px;">
+            html += `<div style="margin-bottom:12px; padding:12px; background:#fff; border:1px solid #ddd; border-radius:4px;" class="familia-card">
                 <div style="cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
                     <span onclick="$(this).closest('.familia-card').find('.familia-members').toggle(); $(this).find('.familia-chevron').text($(this).closest('.familia-card').find('.familia-members').is(':visible') ? '▼' : '▸');" style="user-select:none; flex:1;">
-                        <span class="familia-chevron">▸</span> <strong>${esc(family.nombre)}</strong> <small style="color:#666;">(${family.children ? family.children.length : 0} miembros)</small>
+                        <span class="familia-chevron">▸</span> <strong>${esc(family.nombre)}</strong>
+                        <small style="color:#666;">(${family.children ? family.children.length : 0} miembros
+                        · stock ${family.stock_unidades !== undefined && family.stock_unidades !== null ? Number(family.stock_unidades).toLocaleString('es-CL') : '—'} u
+                        · ${esc(family.tipo_sustitucion || '')})</small>
                     </span>
                 </div>
                 <div class="familia-members" style="display:none; margin-top:8px;">
@@ -3301,7 +3366,7 @@ jQuery(function($){
         $('#family-create-form').hide();
         $('#family-codigo').val('');
         $('#family-nombre').val('');
-        $('#family-tipo').val('compatible');
+        $('#family-tipo').val('exacta');
     });
 
     // Click: guardar familia
@@ -3330,7 +3395,7 @@ jQuery(function($){
             $('#family-create-form').hide();
             $('#family-codigo').val('');
             $('#family-nombre').val('');
-            $('#family-tipo').val('compatible');
+            $('#family-tipo').val('exacta');
             loadFamilyTree();
         });
     });

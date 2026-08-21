@@ -41,6 +41,7 @@ class Riverso_Task_Module {
         'devolucion' => 'Procesamiento de devolución',
         'codigo_faltante' => 'Vincular código proveedor',
         'barcode_faltante' => 'Asignar código de barra',
+        'confirmar_barcode_legacy' => 'Confirmar código legacy',
         // Tareas de revisión humana (procesos automáticos)
         'confirmar_tipo_documento' => 'Confirmar tipo de documento',
         'revisar_relacion' => 'Revisar relación de producto',
@@ -426,6 +427,40 @@ class Riverso_Task_Module {
                 'sku' => $sku,
             ],
         ]);
+    }
+
+    /**
+     * Tarea de revisión: aceptar o rechazar un barcode legacy.
+     * Dedupe por referencia codigo_barra (una tarea por código).
+     */
+    public function create_legacy_barcode_review_task($barcode_id, $product_id, $codigo, $product_name = '') {
+        $barcode_id = absint($barcode_id);
+        $product_id = absint($product_id);
+        $codigo = sanitize_text_field($codigo);
+        if (!$barcode_id || $codigo === '') {
+            return new WP_Error('invalid', 'Código legacy inválido');
+        }
+
+        $label = $product_name !== '' ? $product_name : ('producto #' . $product_id);
+        return $this->create_review_task(
+            'confirmar_barcode_legacy',
+            sprintf('Confirmar código legacy %s', $codigo),
+            'codigo_barra',
+            $barcode_id,
+            [
+                'descripcion' => sprintf(
+                    'El código "%s" del producto "%s" viene de legacy. Aceptarlo lo convierte en Código de Proveedor (mapeo interno) o rechazarlo lo elimina.',
+                    $codigo,
+                    $label
+                ),
+                'prioridad' => 'alta',
+                'datos_extra' => [
+                    'producto_base_id' => $product_id,
+                    'codigo_id' => $barcode_id,
+                    'codigo' => $codigo,
+                ],
+            ]
+        );
     }
     
     /**

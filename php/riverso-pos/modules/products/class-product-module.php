@@ -41,7 +41,10 @@ class Riverso_Product_Module {
         add_action('wp_ajax_riverso_products_set_online', [$this, 'ajax_set_online']);
         add_action('wp_ajax_riverso_products_get_barcodes', [$this, 'ajax_get_barcodes']);
         add_action('wp_ajax_riverso_products_add_barcode', [$this, 'ajax_add_barcode']);
+        add_action('wp_ajax_riverso_products_update_barcode', [$this, 'ajax_update_barcode']);
         add_action('wp_ajax_riverso_products_remove_barcode', [$this, 'ajax_remove_barcode']);
+        add_action('wp_ajax_riverso_products_accept_legacy_barcode', [$this, 'ajax_accept_legacy_barcode']);
+        add_action('wp_ajax_riverso_products_reject_legacy_barcode', [$this, 'ajax_reject_legacy_barcode']);
         add_action('wp_ajax_riverso_products_get_tasks', [$this, 'ajax_get_tasks']);
         add_action('wp_ajax_riverso_products_create_online', [$this, 'ajax_create_online']);
         add_action('wp_ajax_riverso_products_suggest_variable_parents', [$this, 'ajax_suggest_variable_parents']);
@@ -81,8 +84,7 @@ class Riverso_Product_Module {
 
     private function get_completeness_category($product) {
         $has_local = !empty($product['canonical_sku']) && !empty($product['nombre_canonico']);
-        $has_online = !empty($product['woocommerce_product_id']) || 
-                     (!empty($product['match_estado_online']) && $product['match_estado_online'] === 'CONFIRMED');
+        $has_online = $this->product_has_online($product);
         $has_codigo = (int) ($product['proveedores_count'] ?? 0) > 0;
         $is_published = !empty($product['publication_stage']) && 
                        in_array($product['publication_stage'], ['approved_for_publication', 'published'], true);
@@ -191,6 +193,34 @@ class Riverso_Product_Module {
         $sql = "SELECT pb.*,
                        COUNT(DISTINCT pp.id) AS proveedores_count,
                        COUNT(DISTINCT em.id) AS equivalencias_count,
+                       (
+                           SELECT COUNT(DISTINCT cbx.codigo)
+                           FROM {$prefix}codigo_barra cbx
+                           WHERE cbx.activo = 1
+                             AND cbx.estado IN ('verificado','propuesto')
+                             AND (
+                                  cbx.producto_base_id = pb.id
+                               OR (
+                                    pb.canonical_sku IS NOT NULL AND pb.canonical_sku <> ''
+                                    AND cbx.producto_base_id IS NULL
+                                    AND (cbx.sku_local = pb.canonical_sku OR cbx.pending_sku = pb.canonical_sku)
+                                  )
+                             )
+                       ) AS barcodes_count,
+                       (
+                           SELECT GROUP_CONCAT(DISTINCT cbx.codigo ORDER BY cbx.codigo SEPARATOR ', ')
+                           FROM {$prefix}codigo_barra cbx
+                           WHERE cbx.activo = 1
+                             AND cbx.estado IN ('verificado','propuesto')
+                             AND (
+                                  cbx.producto_base_id = pb.id
+                               OR (
+                                    pb.canonical_sku IS NOT NULL AND pb.canonical_sku <> ''
+                                    AND cbx.producto_base_id IS NULL
+                                    AND (cbx.sku_local = pb.canonical_sku OR cbx.pending_sku = pb.canonical_sku)
+                                  )
+                             )
+                       ) AS barcode_sample,
                        GROUP_CONCAT(DISTINCT pp.codigo_proveedor SEPARATOR ', ') AS codigos_proveedor,
                        GROUP_CONCAT(DISTINCT CASE
                            WHEN pp.catalogo_id IS NOT NULL AND pp.catalogo_id > 0
@@ -201,6 +231,11 @@ class Riverso_Product_Module {
                 {$pp_join}
                 LEFT JOIN {$prefix}equivalence_members em ON em.producto_base_id = pb.id AND em.activo = 1
                 LEFT JOIN {$prefix}codigo_barra cb ON cb.producto_base_id = pb.id
+                    OR (
+                        pb.canonical_sku IS NOT NULL AND pb.canonical_sku <> ''
+                        AND cb.producto_base_id IS NULL
+                        AND (cb.sku_local = pb.canonical_sku OR cb.pending_sku = pb.canonical_sku)
+                    )
                 WHERE {$where_sql}
                 GROUP BY pb.id
                 {$having}
@@ -221,6 +256,8 @@ class Riverso_Product_Module {
             $item['sku_online'] = $this->resolve_online_sku($item);
             $item['codigos_proveedor'] = (string) ($item['codigos_proveedor'] ?? '');
             $item['codigos_catalogo'] = (string) ($item['codigos_catalogo'] ?? '');
+            $item['barcodes_count'] = (int) ($item['barcodes_count'] ?? 0);
+            $item['barcode_sample'] = (string) ($item['barcode_sample'] ?? '');
             $item['completeness_category'] = $this->get_completeness_category($item);
         }
         unset($item);
@@ -232,6 +269,11 @@ class Riverso_Product_Module {
                 {$pp_join}
                 LEFT JOIN {$prefix}equivalence_members em ON em.producto_base_id = pb.id AND em.activo = 1
                 LEFT JOIN {$prefix}codigo_barra cb ON cb.producto_base_id = pb.id
+                    OR (
+                        pb.canonical_sku IS NOT NULL AND pb.canonical_sku <> ''
+                        AND cb.producto_base_id IS NULL
+                        AND (cb.sku_local = pb.canonical_sku OR cb.pending_sku = pb.canonical_sku)
+                    )
                 WHERE {$where_sql}
                 GROUP BY pb.id
                 {$having}
@@ -242,6 +284,11 @@ class Riverso_Product_Module {
                           {$pp_join}
                           LEFT JOIN {$prefix}equivalence_members em ON em.producto_base_id = pb.id AND em.activo = 1
                           LEFT JOIN {$prefix}codigo_barra cb ON cb.producto_base_id = pb.id
+                    OR (
+                        pb.canonical_sku IS NOT NULL AND pb.canonical_sku <> ''
+                        AND cb.producto_base_id IS NULL
+                        AND (cb.sku_local = pb.canonical_sku OR cb.pending_sku = pb.canonical_sku)
+                    )
                           WHERE {$where_sql}";
         }
 
@@ -277,24 +324,48 @@ class Riverso_Product_Module {
     }
 
     /**
-     * Genera cláusula HAVING para filtro de completeness
+     * Online vinculado: Woo ID / variación, o match CONFIRMED.
+     */
+    private function product_has_online($product) {
+        return !empty($product['woocommerce_product_id'])
+            || !empty($product['woocommerce_variation_id'])
+            || (!empty($product['match_estado_online']) && $product['match_estado_online'] === 'CONFIRMED');
+    }
+
+    /**
+     * Genera cláusula HAVING para filtro de completeness.
+     * canonical_sku/nombre_canonico se persisten como NULL (no ''), así que
+     * hay que tratar NULL y '' como vacíos — igual que empty() en PHP.
      */
     private function get_completeness_having_clause($completeness) {
+        $sku_empty = "COALESCE(MAX(pb.canonical_sku), '') = ''";
+        $sku_filled = "COALESCE(MAX(pb.canonical_sku), '') != ''";
+        $nombre_empty = "COALESCE(MAX(pb.nombre_canonico), '') = ''";
+        $nombre_filled = "COALESCE(MAX(pb.nombre_canonico), '') != ''";
+        $missing_local = "({$sku_empty} OR {$nombre_empty})";
+        $has_local = "{$sku_filled} AND {$nombre_filled}";
+        $has_online = "(COALESCE(MAX(pb.woocommerce_product_id), 0) > 0 OR COALESCE(MAX(pb.woocommerce_variation_id), 0) > 0 OR MAX(pb.match_estado_online) = 'CONFIRMED')";
+        $not_online = "(COALESCE(MAX(pb.woocommerce_product_id), 0) = 0 AND COALESCE(MAX(pb.woocommerce_variation_id), 0) = 0 AND (MAX(pb.match_estado_online) IS NULL OR MAX(pb.match_estado_online) <> 'CONFIRMED'))";
+        $is_published = "MAX(pb.publication_stage) IN ('approved_for_publication', 'published')";
+        $has_codigo = 'COUNT(DISTINCT pp.id) > 0';
+        $no_codigo = 'COUNT(DISTINCT pp.id) = 0';
+
         switch ($completeness) {
             case 'completo':
-                return "HAVING MAX(pb.canonical_sku) != '' AND MAX(pb.nombre_canonico) != '' AND MAX(pb.woocommerce_product_id) IS NOT NULL AND COUNT(DISTINCT pp.id) > 0";
+                return "HAVING {$has_local} AND {$has_online} AND {$has_codigo}";
             case 'publicado':
-                return "HAVING MAX(pb.canonical_sku) != '' AND MAX(pb.nombre_canonico) != '' AND MAX(pb.woocommerce_product_id) IS NOT NULL AND COUNT(DISTINCT pp.id) > 0 AND MAX(pb.publication_stage) IN ('approved_for_publication', 'published')";
+                return "HAVING {$has_local} AND {$has_online} AND {$has_codigo} AND {$is_published}";
             case 'falta_online':
-                return "HAVING MAX(pb.canonical_sku) != '' AND MAX(pb.nombre_canonico) != '' AND MAX(pb.woocommerce_product_id) IS NULL";
+                return "HAVING {$has_local} AND {$not_online}";
             case 'falta_codigo':
-                return "HAVING MAX(pb.canonical_sku) != '' AND MAX(pb.nombre_canonico) != '' AND MAX(pb.woocommerce_product_id) IS NOT NULL AND COUNT(DISTINCT pp.id) = 0";
+                return "HAVING {$has_local} AND {$has_online} AND {$no_codigo}";
             case 'solo_online':
-                return "HAVING (MAX(pb.canonical_sku) = '' OR MAX(pb.nombre_canonico) = '') AND MAX(pb.woocommerce_product_id) IS NOT NULL";
+                // Incluye publicados: el distintivo visual es solo_online_publicado.
+                return "HAVING {$missing_local} AND {$has_online}";
             case 'solo_online_publicado':
-                return "HAVING (MAX(pb.canonical_sku) = '' OR MAX(pb.nombre_canonico) = '') AND MAX(pb.woocommerce_product_id) IS NOT NULL AND MAX(pb.publication_stage) IN ('approved_for_publication', 'published')";
+                return "HAVING {$missing_local} AND {$has_online} AND {$is_published}";
             case 'incompleto':
-                return "HAVING (MAX(pb.canonical_sku) = '' OR MAX(pb.nombre_canonico) = '')";
+                return "HAVING {$missing_local}";
             default:
                 return '';
         }
@@ -329,6 +400,7 @@ class Riverso_Product_Module {
         }
 
         $product['barcodes'] = $this->get_product_barcodes($id);
+        $this->ensure_legacy_barcode_tasks($id, $product['barcodes'], $product['nombre_canonico'] ?? '');
         $product['tasks'] = $this->get_product_tasks($id);
         $product['completeness_category'] = $this->get_completeness_category($product);
         $product['proveedores_count'] = count($product['proveedores']);
@@ -566,15 +638,35 @@ class Riverso_Product_Module {
     private function get_product_tasks($product_id) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
-        
+        $product_id = absint($product_id);
+
 		$tasks = $wpdb->get_results($wpdb->prepare(
 			"SELECT id, tipo, titulo, estado, prioridad, fecha_limite, referencia_tipo, referencia_id, datos_extra
 			 FROM {$prefix}tareas
-			 WHERE referencia_tipo = 'producto_base' AND referencia_id = %d
-			 AND estado IN ('pendiente', 'asignado', 'en_progreso')
+			 WHERE estado IN ('pendiente', 'asignado', 'en_progreso')
+			   AND (
+			        (referencia_tipo = 'producto_base' AND referencia_id = %d)
+			     OR (
+			            tipo = 'confirmar_barcode_legacy'
+			        AND referencia_tipo = 'codigo_barra'
+			        AND referencia_id IN (
+			            SELECT id FROM {$prefix}codigo_barra WHERE producto_base_id = %d
+			        )
+			     )
+			     OR (
+			            tipo = 'confirmar_barcode_legacy'
+			        AND (
+			                datos_extra LIKE %s
+			             OR datos_extra LIKE %s
+			        )
+			     )
+			   )
 			 ORDER BY prioridad DESC, id DESC
-			 LIMIT 20",
-			$product_id
+			 LIMIT 40",
+			$product_id,
+			$product_id,
+			'%"producto_base_id":' . $product_id . ',%',
+			'%"producto_base_id":' . $product_id . '}%'
 		), ARRAY_A) ?: [];
 
 		// Agregar target_url y decodificar datos_extra para cada tarea
@@ -582,8 +674,354 @@ class Riverso_Product_Module {
 			$task['datos_extra'] = json_decode( $task['datos_extra'] ?? '{}', true );
 			$task['target_url'] = riverso_resolve_task_target($task);
 		}
-        
+
         return $tasks;
+    }
+
+    /**
+     * Crea/reutiliza tareas de confirmación para barcodes legacy pendientes.
+     */
+    private function ensure_legacy_barcode_tasks($product_id, $barcodes, $product_name = '') {
+        $product_id = absint($product_id);
+        if (!$product_id || !class_exists('Riverso_Task_Module') || !class_exists('Riverso_Barcode_Model')) {
+            return;
+        }
+
+        $by_code = [];
+        foreach ((array) $barcodes as $barcode) {
+            $codigo = trim((string) ($barcode['codigo'] ?? ''));
+            if ($codigo === '') {
+                continue;
+            }
+            if (!isset($by_code[$codigo])) {
+                $by_code[$codigo] = [];
+            }
+            $by_code[$codigo][] = $barcode;
+        }
+
+        $active_legacy_ids = [];
+        $task_module = Riverso_Task_Module::get_instance();
+
+        foreach ($by_code as $codigo => $rows) {
+            $legacy_rows = array_values(array_filter($rows, function ($row) {
+                return Riverso_Barcode_Model::is_legacy_row($row);
+            }));
+            if (!$legacy_rows) {
+                continue;
+            }
+
+            // Ya aceptado como supplier manual verificado: no crear tarea.
+            $accepted = false;
+            foreach ($rows as $row) {
+                if (
+                    ($row['tipo'] ?? '') === 'supplier'
+                    && ($row['estado'] ?? '') === 'verificado'
+                    && strtolower((string) ($row['origen_datos'] ?? '')) === 'manual'
+                    && !Riverso_Barcode_Model::is_legacy_row($row)
+                ) {
+                    $accepted = true;
+                    break;
+                }
+            }
+            if ($accepted) {
+                continue;
+            }
+
+            // Preferir propuesto; si no, la primera legacy.
+            usort($legacy_rows, function ($a, $b) {
+                $pa = (($a['estado'] ?? '') === 'propuesto') ? 2 : 1;
+                $pb = (($b['estado'] ?? '') === 'propuesto') ? 2 : 1;
+                return $pb <=> $pa;
+            });
+            $rep = $legacy_rows[0];
+            $barcode_id = absint($rep['id'] ?? 0);
+            if (!$barcode_id) {
+                continue;
+            }
+            $active_legacy_ids[] = $barcode_id;
+            $task_module->create_legacy_barcode_review_task(
+                $barcode_id,
+                $product_id,
+                $codigo,
+                $product_name
+            );
+        }
+
+        $this->close_orphan_legacy_barcode_tasks($product_id, $active_legacy_ids);
+    }
+
+    /**
+     * Completa tareas legacy cuyo código ya no está pendiente de revisión.
+     */
+    private function close_orphan_legacy_barcode_tasks($product_id, array $active_legacy_ids) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $product_id = absint($product_id);
+        if (!$product_id) {
+            return;
+        }
+
+        $open = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, referencia_id, datos_extra
+             FROM {$prefix}tareas
+             WHERE tipo = 'confirmar_barcode_legacy'
+               AND estado NOT IN ('completada', 'cancelada')
+               AND (
+                    datos_extra LIKE %s
+                 OR datos_extra LIKE %s
+                 OR referencia_id IN (
+                    SELECT id FROM {$prefix}codigo_barra WHERE producto_base_id = %d
+                 )
+               )",
+            '%"producto_base_id":' . $product_id . ',%',
+            '%"producto_base_id":' . $product_id . '}%',
+            $product_id
+        ), ARRAY_A) ?: [];
+
+        $active_map = array_fill_keys(array_map('intval', $active_legacy_ids), true);
+        foreach ($open as $task) {
+            $ref_id = absint($task['referencia_id'] ?? 0);
+            $extra = json_decode($task['datos_extra'] ?? '{}', true) ?: [];
+            $codigo_id = absint($extra['codigo_id'] ?? $ref_id);
+            if ($codigo_id && isset($active_map[$codigo_id])) {
+                continue;
+            }
+            $wpdb->update(
+                "{$prefix}tareas",
+                ['estado' => 'completada'],
+                ['id' => (int) $task['id']],
+                ['%s'],
+                ['%d']
+            );
+        }
+    }
+
+    /**
+     * Completa tareas confirmar_barcode_legacy ligadas a un codigo_barra / código.
+     */
+    public function close_legacy_barcode_tasks($barcode_id, $codigo = '', $product_id = 0) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $barcode_id = absint($barcode_id);
+        $product_id = absint($product_id);
+        $codigo = trim((string) $codigo);
+
+        $ids = [];
+        if ($barcode_id) {
+            $ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM {$prefix}tareas
+                 WHERE tipo = 'confirmar_barcode_legacy'
+                   AND estado NOT IN ('completada', 'cancelada')
+                   AND (
+                        referencia_tipo = 'codigo_barra' AND referencia_id = %d
+                     OR datos_extra LIKE %s
+                   )",
+                $barcode_id,
+                '%"codigo_id":' . $barcode_id . '%'
+            )) ?: [];
+        }
+
+        if ($codigo !== '' && $product_id) {
+            $more = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM {$prefix}tareas
+                 WHERE tipo = 'confirmar_barcode_legacy'
+                   AND estado NOT IN ('completada', 'cancelada')
+                   AND datos_extra LIKE %s
+                   AND datos_extra LIKE %s",
+                '%"producto_base_id":' . $product_id . '%',
+                '%"codigo":"' . $wpdb->esc_like($codigo) . '"%'
+            )) ?: [];
+            $ids = array_merge($ids, $more);
+        }
+
+        foreach (array_unique(array_map('intval', $ids)) as $task_id) {
+            if ($task_id <= 0) {
+                continue;
+            }
+            $wpdb->update(
+                "{$prefix}tareas",
+                ['estado' => 'completada'],
+                ['id' => $task_id],
+                ['%s'],
+                ['%d']
+            );
+        }
+    }
+
+    /**
+     * Tras mover un barcode en un merge: actualiza datos_extra.producto_base_id
+     * de las tareas confirmar_barcode_legacy abiertas al producto destino.
+     */
+    private function reassign_legacy_barcode_tasks_to_product($barcode_id, $codigo, $source_id, $target_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $barcode_id = absint($barcode_id);
+        $source_id = absint($source_id);
+        $target_id = absint($target_id);
+        $codigo = trim((string) $codigo);
+        if (!$barcode_id || !$target_id) {
+            return;
+        }
+
+        $tasks = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, datos_extra
+             FROM {$prefix}tareas
+             WHERE tipo = 'confirmar_barcode_legacy'
+               AND estado NOT IN ('completada', 'cancelada')
+               AND (
+                    (referencia_tipo = 'codigo_barra' AND referencia_id = %d)
+                 OR datos_extra LIKE %s
+                 OR (
+                        datos_extra LIKE %s
+                    AND datos_extra LIKE %s
+                 )
+               )",
+            $barcode_id,
+            '%"codigo_id":' . $barcode_id . '%',
+            '%"producto_base_id":' . $source_id . ',%',
+            '%"codigo":"' . $wpdb->esc_like($codigo) . '"%'
+        ), ARRAY_A) ?: [];
+
+        // Fallback: también patrón sin coma final en JSON
+        if ($source_id && $codigo !== '') {
+            $more = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, datos_extra
+                 FROM {$prefix}tareas
+                 WHERE tipo = 'confirmar_barcode_legacy'
+                   AND estado NOT IN ('completada', 'cancelada')
+                   AND datos_extra LIKE %s
+                   AND datos_extra LIKE %s",
+                '%"producto_base_id":' . $source_id . '}%',
+                '%"codigo":"' . $wpdb->esc_like($codigo) . '"%'
+            ), ARRAY_A) ?: [];
+            $tasks = array_merge($tasks, $more);
+        }
+
+        $seen = [];
+        foreach ($tasks as $task) {
+            $task_id = (int) ($task['id'] ?? 0);
+            if ($task_id <= 0 || isset($seen[$task_id])) {
+                continue;
+            }
+            $seen[$task_id] = true;
+            $extra = json_decode($task['datos_extra'] ?? '{}', true);
+            if (!is_array($extra)) {
+                $extra = [];
+            }
+            $extra['producto_base_id'] = $target_id;
+            $extra['codigo_id'] = $barcode_id;
+            if ($codigo !== '') {
+                $extra['codigo'] = $codigo;
+            }
+            $wpdb->update(
+                "{$prefix}tareas",
+                [
+                    'datos_extra' => wp_json_encode($extra),
+                    'updated_at' => current_time('mysql'),
+                ],
+                ['id' => $task_id],
+                ['%s', '%s'],
+                ['%d']
+            );
+        }
+    }
+
+    /**
+     * Completa o reasigna tareas legacy del stub origen que ya no tienen barcode.
+     */
+    private function reassign_orphan_source_legacy_barcode_tasks($source_id, $target_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $source_id = absint($source_id);
+        $target_id = absint($target_id);
+        if (!$source_id || !$target_id) {
+            return;
+        }
+
+        $tasks = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, referencia_id, datos_extra
+             FROM {$prefix}tareas
+             WHERE tipo = 'confirmar_barcode_legacy'
+               AND estado NOT IN ('completada', 'cancelada')
+               AND (
+                    datos_extra LIKE %s
+                 OR datos_extra LIKE %s
+               )",
+            '%"producto_base_id":' . $source_id . ',%',
+            '%"producto_base_id":' . $source_id . '}%'
+        ), ARRAY_A) ?: [];
+
+        foreach ($tasks as $task) {
+            $task_id = (int) ($task['id'] ?? 0);
+            $extra = json_decode($task['datos_extra'] ?? '{}', true);
+            if (!is_array($extra)) {
+                $extra = [];
+            }
+            $codigo_id = absint($extra['codigo_id'] ?? $task['referencia_id'] ?? 0);
+            $codigo = trim((string) ($extra['codigo'] ?? ''));
+
+            $still_alive = 0;
+            if ($codigo_id) {
+                $still_alive = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$prefix}codigo_barra
+                     WHERE id = %d AND producto_base_id = %d AND activo = 1
+                       AND estado IN ('propuesto', 'verificado')",
+                    $codigo_id,
+                    $target_id
+                ));
+            }
+            if (!$still_alive && $codigo !== '') {
+                $still_alive = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$prefix}codigo_barra
+                     WHERE codigo = %s AND producto_base_id = %d AND activo = 1
+                       AND estado IN ('propuesto', 'verificado')",
+                    $codigo,
+                    $target_id
+                ));
+                if ($still_alive) {
+                    $codigo_id = (int) $wpdb->get_var($wpdb->prepare(
+                        "SELECT id FROM {$prefix}codigo_barra
+                         WHERE codigo = %s AND producto_base_id = %d AND activo = 1
+                           AND estado IN ('propuesto', 'verificado')
+                         ORDER BY (estado = 'propuesto') DESC, id DESC
+                         LIMIT 1",
+                        $codigo,
+                        $target_id
+                    ));
+                }
+            }
+
+            if ($still_alive && $codigo_id) {
+                $extra['producto_base_id'] = $target_id;
+                $extra['codigo_id'] = $codigo_id;
+                if ($codigo !== '') {
+                    $extra['codigo'] = $codigo;
+                }
+                $wpdb->update(
+                    "{$prefix}tareas",
+                    [
+                        'referencia_tipo' => 'codigo_barra',
+                        'referencia_id' => $codigo_id,
+                        'datos_extra' => wp_json_encode($extra),
+                        'updated_at' => current_time('mysql'),
+                    ],
+                    ['id' => $task_id],
+                    ['%s', '%d', '%s', '%s'],
+                    ['%d']
+                );
+            } else {
+                $wpdb->update(
+                    "{$prefix}tareas",
+                    [
+                        'estado' => 'completada',
+                        'updated_at' => current_time('mysql'),
+                    ],
+                    ['id' => $task_id],
+                    ['%s', '%s'],
+                    ['%d']
+                );
+            }
+        }
     }
 
     public function save_product($data) {
@@ -868,15 +1306,57 @@ class Riverso_Product_Module {
             }
         }
 
+        // Capturar pendiente de familia ANTES de vincular (puede limpiar grupo_id).
+        $pp_before = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, grupo_id, codigo_proveedor, factor_conversion, notas, producto_base_id
+             FROM {$prefix}producto_proveedor
+             WHERE codigo_proveedor = %s AND proveedor_id = %d AND activo = 1
+             ORDER BY id DESC LIMIT 1",
+            $supplier_code,
+            $supplier_id
+        ), ARRAY_A);
+        $pending_grupo_id = $pp_before ? intval($pp_before['grupo_id'] ?? 0) : 0;
+
         $result = Riverso_Supplier_Links_Module::get_instance()->create_link([
             'proveedor_id' => $supplier_id,
+            'supplier_id' => $supplier_id,
             'codigo_proveedor' => $supplier_code,
+            'supplier_code' => $supplier_code,
             'producto_base_id' => $product_id,
             'audit_reason' => $audit_reason,
         ]);
 
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+
+        if (class_exists('Riverso_Matching_Module')) {
+            $pp_id = $pp_before ? intval($pp_before['id']) : 0;
+            if (!$pp_id) {
+                $pp_id = intval($wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM {$prefix}producto_proveedor
+                     WHERE codigo_proveedor = %s AND proveedor_id = %d
+                     ORDER BY id DESC LIMIT 1",
+                    $supplier_code,
+                    $supplier_id
+                )));
+            }
+            if ($pp_id) {
+                if ($pending_grupo_id) {
+                    $wpdb->query($wpdb->prepare(
+                        "UPDATE {$prefix}producto_proveedor SET grupo_id = %d WHERE id = %d AND (grupo_id IS NULL OR grupo_id = 0)",
+                        $pending_grupo_id,
+                        $pp_id
+                    ));
+                }
+                Riverso_Matching_Module::get_instance()->assign_to_product($pp_id, $product_id);
+            }
+        } elseif ($pending_grupo_id && class_exists('Riverso_Family_Module') && $pp_before) {
+            Riverso_Family_Module::get_instance()->promote_pending_supplier_to_member(
+                $product_id,
+                $pending_grupo_id,
+                $pp_before
+            );
         }
 
         $this->close_counterpart_task($product_id, 'relacionar_producto_proveedor');
@@ -1054,6 +1534,16 @@ class Riverso_Product_Module {
         if ($existing) {
             $preview = $this->build_online_merge_preview($woo_id, $product_id);
             $confirm_merge = !empty($_POST['confirm_merge']);
+
+            if (!empty($preview['block_merge'])) {
+                wp_send_json_error([
+                    'message' => $preview['family']['message'] ?? 'Merge bloqueado por conflicto de familias',
+                    'conflict' => true,
+                    'needs_merge' => true,
+                    'block_merge' => true,
+                    'merge' => $preview,
+                ]);
+            }
 
             if (!$confirm_merge) {
                 wp_send_json_error([
@@ -1269,7 +1759,244 @@ class Riverso_Product_Module {
             ];
         }
 
+        $this->enrich_merge_preview_with_families($preview, (int) $source['id'], $target_id);
+
         return $preview;
+    }
+
+    /**
+     * Familia activa de un producto (prioriza exacta).
+     *
+     * @param int $producto_base_id
+     * @return array|null
+     */
+    public function get_product_family($producto_base_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $producto_base_id = absint($producto_base_id);
+        if (!$producto_base_id) {
+            return null;
+        }
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT eg.id, eg.codigo_grupo, eg.nombre, eg.tipo_sustitucion,
+                    (SELECT COUNT(*) FROM {$prefix}equivalence_members em2
+                     WHERE em2.grupo_id = eg.id AND em2.activo = 1) AS miembros_count
+             FROM {$prefix}equivalence_groups eg
+             INNER JOIN {$prefix}equivalence_members em
+                ON em.grupo_id = eg.id AND em.producto_base_id = %d AND em.activo = 1
+             WHERE eg.activo = 1
+             ORDER BY (eg.tipo_sustitucion = 'exacta') DESC, em.id ASC
+             LIMIT 1",
+            $producto_base_id
+        ), ARRAY_A);
+
+        return $row ?: null;
+    }
+
+    /**
+     * Evalúa familias source/target para merge.
+     * - Distintas → block
+     * - Iguales → ok
+     * - Una vacía → keep non-empty
+     *
+     * @return array{block:bool,keep_grupo_id:?int,source:?array,target:?array,message:string}
+     */
+    public function evaluate_family_merge($source_id, $target_id) {
+        $src = $this->get_product_family(absint($source_id));
+        $tgt = $this->get_product_family(absint($target_id));
+        $src_id = $src ? absint($src['id']) : 0;
+        $tgt_id = $tgt ? absint($tgt['id']) : 0;
+
+        if ($src_id && $tgt_id && $src_id !== $tgt_id) {
+            return [
+                'block' => true,
+                'keep_grupo_id' => null,
+                'source' => $src,
+                'target' => $tgt,
+                'message' => sprintf(
+                    'No se puede fusionar: pertenecen a familias distintas («%s» vs «%s»). Reasigna o unifica familias antes del merge.',
+                    $src['nombre'] ?: $src['codigo_grupo'],
+                    $tgt['nombre'] ?: $tgt['codigo_grupo']
+                ),
+            ];
+        }
+
+        if ($src_id && $tgt_id && $src_id === $tgt_id) {
+            return [
+                'block' => false,
+                'keep_grupo_id' => $src_id,
+                'source' => $src,
+                'target' => $tgt,
+                'message' => 'Ambos están en la misma familia; el merge es compatible.',
+            ];
+        }
+
+        if ($src_id && !$tgt_id) {
+            return [
+                'block' => false,
+                'keep_grupo_id' => $src_id,
+                'source' => $src,
+                'target' => null,
+                'message' => sprintf(
+                    'El destino no tiene familia; se conservará la familia del origen («%s»).',
+                    $src['nombre'] ?: $src['codigo_grupo']
+                ),
+            ];
+        }
+
+        if (!$src_id && $tgt_id) {
+            return [
+                'block' => false,
+                'keep_grupo_id' => $tgt_id,
+                'source' => null,
+                'target' => $tgt,
+                'message' => sprintf(
+                    'El origen no tiene familia; se conservará la familia del destino («%s»).',
+                    $tgt['nombre'] ?: $tgt['codigo_grupo']
+                ),
+            ];
+        }
+
+        return [
+            'block' => false,
+            'keep_grupo_id' => null,
+            'source' => null,
+            'target' => null,
+            'message' => 'Ninguno tiene familia asignada.',
+        ];
+    }
+
+    /**
+     * @param array $preview
+     * @param int   $source_id
+     * @param int   $target_id
+     */
+    private function enrich_merge_preview_with_families(array &$preview, $source_id, $target_id) {
+        $eval = $this->evaluate_family_merge($source_id, $target_id);
+        $preview['family'] = $eval;
+        $preview['block_merge'] = !empty($eval['block']);
+        $preview['source_family'] = $eval['source'];
+        $preview['target_family'] = $eval['target'];
+
+        if (!empty($eval['block'])) {
+            $preview['warnings'][] = [
+                'type' => 'family_conflict',
+                'message' => $eval['message'],
+                'severity' => 'error',
+            ];
+            return;
+        }
+
+        if (!empty($eval['message']) && (!empty($eval['source']) || !empty($eval['target']))) {
+            $preview['warnings'][] = [
+                'type' => 'family_keep',
+                'message' => $eval['message'],
+                'severity' => 'info',
+            ];
+        }
+    }
+
+    /**
+     * Resuelve membresías de familia en un merge según evaluate_family_merge.
+     *
+     * @return array|WP_Error
+     */
+    private function resolve_families_on_merge($source_id, $target_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $eval = $this->evaluate_family_merge($source_id, $target_id);
+
+        if (!empty($eval['block'])) {
+            return new WP_Error('family_conflict', $eval['message']);
+        }
+
+        $keep = !empty($eval['keep_grupo_id']) ? absint($eval['keep_grupo_id']) : 0;
+        $moved = 0;
+
+        // Quitar al destino de cualquier familia que no sea la a conservar.
+        $target_memberships = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, grupo_id FROM {$prefix}equivalence_members
+             WHERE producto_base_id = %d AND activo = 1",
+            $target_id
+        ), ARRAY_A) ?: [];
+        foreach ($target_memberships as $tm) {
+            if ($keep && absint($tm['grupo_id']) === $keep) {
+                continue;
+            }
+            if ($keep) {
+                $wpdb->update(
+                    "{$prefix}equivalence_members",
+                    ['activo' => 0],
+                    ['id' => absint($tm['id'])],
+                    ['%d'],
+                    ['%d']
+                );
+            }
+        }
+
+        // Mover membresías del origen: solo la familia a conservar (o todas si keep vacío y target vacío).
+        $source_memberships = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, grupo_id, activo FROM {$prefix}equivalence_members
+             WHERE producto_base_id = %d",
+            $source_id
+        ), ARRAY_A) ?: [];
+
+        foreach ($source_memberships as $sm) {
+            $gid = absint($sm['grupo_id']);
+            if ($keep && $gid !== $keep) {
+                // Origen en otra familia (no debería pasar si no hay block); desactivar.
+                $wpdb->update(
+                    "{$prefix}equivalence_members",
+                    ['activo' => 0],
+                    ['id' => absint($sm['id'])],
+                    ['%d'],
+                    ['%d']
+                );
+                continue;
+            }
+
+            $dup = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}equivalence_members
+                 WHERE grupo_id = %d AND producto_base_id = %d LIMIT 1",
+                $gid,
+                $target_id
+            ));
+            if ($dup) {
+                $wpdb->delete("{$prefix}equivalence_members", ['id' => absint($sm['id'])], ['%d']);
+                $wpdb->update(
+                    "{$prefix}equivalence_members",
+                    ['activo' => 1],
+                    ['id' => absint($dup)],
+                    ['%d'],
+                    ['%d']
+                );
+                continue;
+            }
+
+            $ok = $wpdb->update(
+                "{$prefix}equivalence_members",
+                ['producto_base_id' => $target_id, 'activo' => 1],
+                ['id' => absint($sm['id'])],
+                ['%d', '%d'],
+                ['%d']
+            );
+            if ($ok !== false) {
+                $moved++;
+            }
+        }
+
+        // Si keep es del destino y el origen no tenía membresía: nada que hacer.
+        // Si keep es del origen y destino no estaba: ensure_member ya quedó por el move.
+        if ($keep && class_exists('Riverso_Family_Module')) {
+            Riverso_Family_Module::get_instance()->ensure_member($keep, $target_id);
+        }
+
+        return [
+            'keep_grupo_id' => $keep ?: null,
+            'moved' => $moved,
+            'eval' => $eval,
+        ];
     }
 
     public function ajax_get_barcodes() {
@@ -1360,28 +2087,113 @@ class Riverso_Product_Module {
         ]);
     }
 
+    public function ajax_update_barcode() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $barcode_id = absint($_POST['barcode_id'] ?? 0);
+        $barcode = sanitize_text_field($_POST['barcode'] ?? '');
+        $audit_reason = sanitize_textarea_field($_POST['audit_reason'] ?? '');
+        $tipo = sanitize_text_field($_POST['tipo'] ?? 'ean13');
+        $proveedor_id = absint($_POST['proveedor_id'] ?? 0);
+        $cantidad = floatval($_POST['cantidad'] ?? 1);
+        $unidad_medida = sanitize_text_field($_POST['unidad_medida'] ?? 'unidad');
+
+        if (!$barcode_id || !$barcode) {
+            wp_send_json_error(['message' => 'Parámetros inválidos']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}codigo_barra WHERE id = %d",
+            $barcode_id
+        ), ARRAY_A);
+
+        if (!$row) {
+            wp_send_json_error(['message' => 'Código de barra no encontrado']);
+        }
+
+        $origen = strtolower((string) ($row['origen_datos'] ?? ''));
+        $migrado = trim((string) ($row['migrado_de_tabla'] ?? ''));
+        $legacy_ref = trim((string) ($row['legacy_ref'] ?? ''));
+        if (strpos($origen, 'legacy') !== false || $migrado !== '' || $legacy_ref !== '') {
+            wp_send_json_error(['message' => 'Los códigos legacy no se editan desde esta vista']);
+        }
+
+        $allowed_tipos = ['ean13', 'supplier', 'internal'];
+        if (!in_array($tipo, $allowed_tipos, true)) {
+            $tipo = 'ean13';
+        }
+
+        $payload = [
+            'codigo' => $barcode,
+            'tipo' => $tipo,
+            'cantidad' => $cantidad > 0 ? $cantidad : 1,
+            'unidad_medida' => $unidad_medida ?: 'unidad',
+            'proveedor_id' => $tipo === 'supplier' && $proveedor_id > 0 ? $proveedor_id : null,
+            'updated_at' => current_time('mysql'),
+        ];
+
+        $result = $wpdb->update(
+            "{$prefix}codigo_barra",
+            $payload,
+            ['id' => $barcode_id],
+            ['%s', '%s', '%f', '%s', '%d', '%s'],
+            ['%d']
+        );
+
+        if ($result === false) {
+            wp_send_json_error(['message' => 'No se pudo actualizar el código de barra']);
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('barcode_updated', 'codigo_barra', (int) $barcode_id, [
+                'actor_type' => 'human',
+                'producto_base_id' => (int) ($row['producto_base_id'] ?? 0),
+                'codigo_anterior' => $row['codigo'] ?? '',
+                'codigo' => $barcode,
+                'tipo_anterior' => $row['tipo'] ?? '',
+                'tipo' => $tipo,
+                'razon' => $audit_reason,
+            ]);
+        }
+
+        wp_send_json_success(['message' => 'Código de barra actualizado']);
+    }
+
     public function ajax_remove_barcode() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         if (!current_user_can('riverso_manage_products')) {
             wp_send_json_error(['message' => 'Sin permisos'], 403);
         }
 
+        $barcode_id = absint($_POST['barcode_id'] ?? 0);
         $product_id = absint($_POST['product_id'] ?? 0);
         $barcode_code = sanitize_text_field($_POST['barcode'] ?? '');
         $audit_reason = sanitize_textarea_field($_POST['audit_reason'] ?? '');
 
-        if (!$product_id || !$barcode_code) {
+        if (!$barcode_id && (!$product_id || !$barcode_code)) {
             wp_send_json_error(['message' => 'Parámetros inválidos']);
         }
 
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
-        $barcode = $wpdb->get_row($wpdb->prepare(
-            "SELECT id FROM {$prefix}codigo_barra WHERE codigo = %s AND producto_base_id = %d",
-            $barcode_code,
-            $product_id
-        ));
+        if ($barcode_id) {
+            $barcode = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, codigo, producto_base_id FROM {$prefix}codigo_barra WHERE id = %d",
+                $barcode_id
+            ));
+        } else {
+            $barcode = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, codigo, producto_base_id FROM {$prefix}codigo_barra WHERE codigo = %s AND producto_base_id = %d",
+                $barcode_code,
+                $product_id
+            ));
+        }
 
         if (!$barcode) {
             wp_send_json_error(['message' => 'Código de barra no encontrado']);
@@ -1391,10 +2203,13 @@ class Riverso_Product_Module {
             "{$prefix}codigo_barra",
             [
                 'estado' => 'en_desuso',
+                'activo' => 0,
                 'motivo_estado' => $audit_reason ?: 'Removido por usuario',
+                'estado_por' => get_current_user_id() ?: null,
+                'estado_at' => current_time('mysql'),
             ],
             ['id' => (int) $barcode->id],
-            ['%s', '%s'],
+            ['%s', '%d', '%s', '%d', '%s'],
             ['%d']
         );
 
@@ -1405,13 +2220,137 @@ class Riverso_Product_Module {
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('barcode_removed', 'codigo_barra', (int) $barcode->id, [
                 'actor_type' => 'human',
-                'producto_base_id' => $product_id,
-                'codigo' => $barcode_code,
+                'producto_base_id' => (int) ($barcode->producto_base_id ?? $product_id),
+                'codigo' => $barcode->codigo ?? $barcode_code,
                 'razon' => $audit_reason,
             ]);
         }
 
+        $this->close_legacy_barcode_tasks(
+            (int) $barcode->id,
+            (string) ($barcode->codigo ?? $barcode_code),
+            (int) ($barcode->producto_base_id ?? $product_id)
+        );
+
         wp_send_json_success(['message' => 'Código de barra marcado como en desuso']);
+    }
+
+    public function ajax_accept_legacy_barcode() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $barcode_id = absint($_POST['barcode_id'] ?? 0);
+        $product_id = absint($_POST['product_id'] ?? 0);
+        $motivo = sanitize_textarea_field($_POST['audit_reason'] ?? '');
+
+        if (!$barcode_id || !class_exists('Riverso_Barcode_Model')) {
+            wp_send_json_error(['message' => 'Parámetros inválidos']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}codigo_barra WHERE id = %d",
+            $barcode_id
+        ), ARRAY_A);
+        if (!$row) {
+            wp_send_json_error(['message' => 'Código de barra no encontrado']);
+        }
+        if ($product_id && (int) ($row['producto_base_id'] ?? 0) !== $product_id) {
+            wp_send_json_error(['message' => 'El código no pertenece a este producto']);
+        }
+        if (!Riverso_Barcode_Model::is_legacy_row($row) && ($row['estado'] ?? '') === 'verificado' && ($row['tipo'] ?? '') === 'supplier') {
+            wp_send_json_error(['message' => 'Este código ya fue aceptado']);
+        }
+
+        $ok = Riverso_Barcode_Model::accept_legacy_as_supplier(
+            $barcode_id,
+            $motivo !== '' ? $motivo : 'Aceptado como Código de Proveedor desde producto.'
+        );
+        if (!$ok) {
+            wp_send_json_error(['message' => 'No se pudo aceptar el código legacy']);
+        }
+
+        $this->close_legacy_barcode_tasks(
+            $barcode_id,
+            (string) ($row['codigo'] ?? ''),
+            (int) ($row['producto_base_id'] ?? $product_id)
+        );
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('barcode_legacy_accepted', 'codigo_barra', $barcode_id, [
+                'actor_type' => 'human',
+                'producto_base_id' => (int) ($row['producto_base_id'] ?? 0),
+                'codigo' => $row['codigo'] ?? '',
+                'tipo' => 'supplier',
+                'razon' => $motivo,
+            ]);
+        }
+
+        $item = $this->get_product((int) ($row['producto_base_id'] ?? $product_id));
+        wp_send_json_success([
+            'message' => 'Código aceptado como Código de Proveedor',
+            'item' => $item,
+        ]);
+    }
+
+    public function ajax_reject_legacy_barcode() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $barcode_id = absint($_POST['barcode_id'] ?? 0);
+        $product_id = absint($_POST['product_id'] ?? 0);
+        $motivo = sanitize_textarea_field($_POST['audit_reason'] ?? '');
+
+        if (!$barcode_id || !class_exists('Riverso_Barcode_Model')) {
+            wp_send_json_error(['message' => 'Parámetros inválidos']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}codigo_barra WHERE id = %d",
+            $barcode_id
+        ), ARRAY_A);
+        if (!$row) {
+            wp_send_json_error(['message' => 'Código de barra no encontrado']);
+        }
+        if ($product_id && (int) ($row['producto_base_id'] ?? 0) !== $product_id) {
+            wp_send_json_error(['message' => 'El código no pertenece a este producto']);
+        }
+
+        $ok = Riverso_Barcode_Model::reject_legacy(
+            $barcode_id,
+            $motivo !== '' ? $motivo : 'Rechazado y eliminado desde producto.'
+        );
+        if (!$ok) {
+            wp_send_json_error(['message' => 'No se pudo rechazar el código legacy']);
+        }
+
+        $this->close_legacy_barcode_tasks(
+            $barcode_id,
+            (string) ($row['codigo'] ?? ''),
+            (int) ($row['producto_base_id'] ?? $product_id)
+        );
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('barcode_legacy_rejected', 'codigo_barra', $barcode_id, [
+                'actor_type' => 'human',
+                'producto_base_id' => (int) ($row['producto_base_id'] ?? 0),
+                'codigo' => $row['codigo'] ?? '',
+                'razon' => $motivo,
+            ]);
+        }
+
+        $item = $this->get_product((int) ($row['producto_base_id'] ?? $product_id));
+        wp_send_json_success([
+            'message' => 'Código legacy rechazado y eliminado',
+            'item' => $item,
+        ]);
     }
 
     public function ajax_get_tasks() {
@@ -1442,8 +2381,7 @@ class Riverso_Product_Module {
         }
 
         $has_local = !empty($product['canonical_sku']) && !empty($product['nombre_canonico']);
-        $has_online = !empty($product['woocommerce_product_id']) || 
-                     (!empty($product['match_estado_online']) && $product['match_estado_online'] === 'CONFIRMED');
+        $has_online = $this->product_has_online($product);
         $has_codigo = (int) ($product['proveedores_count'] ?? 0) > 0;
         $match_online_unmatched = !empty($product['match_estado_online']) && $product['match_estado_online'] === 'UNMATCHED';
 
@@ -3233,6 +4171,7 @@ class Riverso_Product_Module {
 			'warnings' => $warnings,
 			'has_warnings' => !empty($warnings),
 			'needs_merge' => !empty($merge['needs_merge']),
+			'block_merge' => !empty($merge['block_merge']),
 			'merge' => $merge,
 		]);
 	}
@@ -3495,12 +4434,19 @@ class Riverso_Product_Module {
 			return new WP_Error('target_missing', 'Producto Local no encontrado');
 		}
 
+		// Familias: bloquear si distintas; conservar la no vacía si solo una tiene.
+		$family_eval = $this->evaluate_family_merge($source_id, $target_id);
+		if (!empty($family_eval['block'])) {
+			return new WP_Error('family_conflict', $family_eval['message']);
+		}
+
 		$transferred = [
 			'woo' => false,
 			'codes' => 0,
 			'barcodes' => 0,
 			'equivalence_members' => 0,
 			'tasks' => 0,
+			'family_keep_grupo_id' => $family_eval['keep_grupo_id'] ?? null,
 		];
 
 		// Resolver Woo a transferir (desde source; si source ya no lo tiene, usar el del target si ya fue movido)
@@ -3665,62 +4611,50 @@ class Riverso_Product_Module {
 			}
 		}
 
-		// Transferir barcodes
+		// Transferir barcodes + tareas legacy asociadas (explícito)
 		$barcodes = $wpdb->get_results($wpdb->prepare(
 			"SELECT id, codigo FROM {$prefix}codigo_barra WHERE producto_base_id = %d",
 			$source_id
 		), ARRAY_A);
 
 		foreach ($barcodes as $bc) {
+			$bc_id = (int) $bc['id'];
+			$bc_code = (string) ($bc['codigo'] ?? '');
 			$dup = $wpdb->get_var($wpdb->prepare(
 				"SELECT id FROM {$prefix}codigo_barra WHERE codigo = %s AND producto_base_id = %d AND id != %d",
-				$bc['codigo'],
+				$bc_code,
 				$target_id,
-				$bc['id']
+				$bc_id
 			));
 			if ($dup) {
-				$wpdb->delete("{$prefix}codigo_barra", ['id' => $bc['id']], ['%d']);
+				// Duplicado en destino: eliminar origen y cerrar su tarea legacy
+				$wpdb->delete("{$prefix}codigo_barra", ['id' => $bc_id], ['%d']);
+				$this->close_legacy_barcode_tasks($bc_id, $bc_code, $source_id);
 				continue;
 			}
 			$ok = $wpdb->update(
 				"{$prefix}codigo_barra",
 				['producto_base_id' => $target_id],
-				['id' => $bc['id']],
+				['id' => $bc_id],
 				['%d'],
 				['%d']
 			);
 			if ($ok !== false) {
 				$transferred['barcodes']++;
+				$this->reassign_legacy_barcode_tasks_to_product($bc_id, $bc_code, $source_id, $target_id);
 			}
 		}
 
-		// Transferir equivalence_members (evitar UNIQUE grupo+producto)
-		$members = $wpdb->get_results($wpdb->prepare(
-			"SELECT id, grupo_id FROM {$prefix}equivalence_members WHERE producto_base_id = %d",
-			$source_id
-		), ARRAY_A);
+		// Por si quedaron tareas legacy apuntando al stub sin barcode_id usable
+		$this->reassign_orphan_source_legacy_barcode_tasks($source_id, $target_id);
 
-		foreach ($members as $m) {
-			$dup = $wpdb->get_var($wpdb->prepare(
-				"SELECT id FROM {$prefix}equivalence_members WHERE grupo_id = %d AND producto_base_id = %d",
-				$m['grupo_id'],
-				$target_id
-			));
-			if ($dup) {
-				$wpdb->delete("{$prefix}equivalence_members", ['id' => $m['id']], ['%d']);
-				continue;
-			}
-			$ok = $wpdb->update(
-				"{$prefix}equivalence_members",
-				['producto_base_id' => $target_id],
-				['id' => $m['id']],
-				['%d'],
-				['%d']
-			);
-			if ($ok !== false) {
-				$transferred['equivalence_members']++;
-			}
+		// Transferir / consolidar familias (ya validado al inicio)
+		$family_resolve = $this->resolve_families_on_merge($source_id, $target_id);
+		if (is_wp_error($family_resolve)) {
+			return $family_resolve;
 		}
+		$transferred['equivalence_members'] = intval($family_resolve['moved'] ?? 0);
+		$transferred['family_keep_grupo_id'] = $family_resolve['keep_grupo_id'] ?? null;
 
 		// Transferir tareas abiertas (sugerencias Mamut, contrapartes, etc.)
 		$open_tasks = $wpdb->get_results($wpdb->prepare(
@@ -3807,6 +4741,14 @@ class Riverso_Product_Module {
 		if ($target_has_local) {
 			$this->close_counterpart_task($target_id, 'crear_contraparte_local');
 		}
+
+		// Regenerar/sincronizar avisos de barcodes legacy en el Local destino
+		$target_barcodes = $this->get_product_barcodes($target_id);
+		$target_name = (string) $wpdb->get_var($wpdb->prepare(
+			"SELECT nombre_canonico FROM {$prefix}producto_base WHERE id = %d",
+			$target_id
+		));
+		$this->ensure_legacy_barcode_tasks($target_id, $target_barcodes, $target_name);
 
 		// Auditoría: snapshot completo del merge (reversible)
 		$target_after_merge = $wpdb->get_row($wpdb->prepare(
@@ -3931,6 +4873,18 @@ class Riverso_Product_Module {
 		$preview['source_id'] = $source_id;
 		$preview['target_id'] = $target_id;
 		$preview['needs_merge'] = true;
+		if (empty($preview['family'])) {
+			$this->enrich_merge_preview_with_families($preview, $source_id, $target_id);
+		}
+
+		if (!empty($preview['block_merge'])) {
+			wp_send_json_error([
+				'message' => $preview['family']['message'] ?? 'Merge bloqueado por conflicto de familias',
+				'needs_merge' => true,
+				'block_merge' => true,
+				'merge' => $preview,
+			]);
+		}
 
 		if (!$confirm_merge) {
 			wp_send_json_error([

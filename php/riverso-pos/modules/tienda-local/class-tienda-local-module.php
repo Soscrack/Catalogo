@@ -286,39 +286,79 @@ class Riverso_Tienda_Local_Module {
             }
         }
 
+        $items = [];
+        $seen = [];
+        $trusted = false;
+        $conflicts = false;
+        $rejected = [];
+        $type = 'name';
         $looks_barcode = class_exists('Riverso_Barcode_Model')
             ? Riverso_Barcode_Model::looks_like_barcode($query)
             : (strlen($query) >= 8 && ctype_digit($query));
 
-        if ($looks_barcode && class_exists('Riverso_Barcode_Model')) {
-            $bundle = Riverso_Barcode_Model::resolve_with_suggestions($query);
-            if (!empty($bundle['match']) && !empty($bundle['match']['producto_base_id'])) {
-                $item = $this->format_from_mapping($bundle['match'], $query);
-                if ($item) {
-                    return [
-                        'type' => 'barcode',
-                        'trusted' => true,
-                        'items' => [$item],
-                    ];
+        $add_item = function ($item) use (&$items, &$seen) {
+            if (!$item) {
+                return;
+            }
+            $key = strtolower(trim((string) ($item['sku'] ?? '')));
+            if ($key === '') {
+                $key = 'id:' . ($item['producto_base_id'] ?? uniqid('x', true));
+            }
+            if (isset($seen[$key])) {
+                return;
+            }
+            $seen[$key] = true;
+            $items[] = $item;
+        };
+
+        if (class_exists('Riverso_Barcode_Model')) {
+            $lookup = Riverso_Barcode_Model::lookup_for_search($query, ['limit' => 25]);
+            $conflicts = !empty($lookup['conflicts']);
+            $trusted = !empty($lookup['trusted']);
+            $rejected = $lookup['rejected'] ?? [];
+            foreach ($lookup['hits'] as $hit) {
+                $source = (string) ($hit['source'] ?? '');
+                $arrived_by_barcode = in_array($source, ['barcode_verified', 'barcode_proposed', 'barcode_conflict'], true);
+                $matched_code = $arrived_by_barcode ? $query : '';
+                $payload = !empty($hit['barcode']) ? $hit['barcode'] : [
+                    'producto_base_id' => $hit['producto_base_id'],
+                    'canonical_sku' => $hit['canonical_sku'] ?? '',
+                    'nombre_canonico' => $hit['nombre_canonico'] ?? '',
+                ];
+                $mapped = $this->format_from_mapping($payload, $matched_code);
+                if ($mapped) {
+                    $mapped['trusted'] = !empty($hit['trusted']);
+                    $mapped['mapping_estado'] = !empty($hit['trusted']) ? 'verificado' : 'propuesto';
+                    $mapped['matched_barcode'] = $matched_code;
+                    $mapped['arrived_by_barcode'] = $arrived_by_barcode;
+                    $mapped['search_source'] = $source;
+                    $add_item($mapped);
                 }
             }
-
-            $suggestions = $this->format_suggestions($bundle['suggestions'] ?? [], $query);
-            if (!empty($suggestions) || !empty($bundle['conflicts'])) {
+            if (!empty($lookup['barcode_exact']) && !empty($items)) {
                 return [
-                    'type' => !empty($bundle['conflicts']) ? 'conflict' : 'suggestion',
-                    'trusted' => false,
-                    'conflicts' => !empty($bundle['conflicts']),
-                    'items' => $suggestions,
-                    'rejected' => $bundle['rejected'] ?? [],
-                    'query' => $query,
+                    'type' => 'barcode',
+                    'trusted' => true,
+                    'items' => $items,
                 ];
+            }
+            if ($looks_barcode && $conflicts) {
+                $type = 'conflict';
+            } elseif ($looks_barcode && !empty($items) && !$trusted) {
+                $type = 'suggestion';
+            } elseif ($looks_barcode && $trusted) {
+                $type = 'barcode';
             }
         }
 
         $legacy_local = $this->search_legacy_tienda_local($query);
-        if ($legacy_local) {
-            return $legacy_local;
+        if ($legacy_local && !empty($legacy_local['items'])) {
+            foreach ($legacy_local['items'] as $legacy_item) {
+                $add_item($legacy_item);
+            }
+            if ($type === 'name' && $looks_barcode) {
+                $type = 'suggestion';
+            }
         }
 
         $product = $wpdb->get_row($wpdb->prepare(
@@ -327,26 +367,47 @@ class Riverso_Tienda_Local_Module {
         ), ARRAY_A);
 
         if ($product) {
-            return [
-                'type' => 'sku',
-                'items' => [$this->format_product($product['sku'])],
-            ];
+            $item = $this->format_product($product['sku']);
+            if ($item) {
+                $item['arrived_by_barcode'] = false;
+                $item['matched_barcode'] = '';
+                $item['search_source'] = 'sku';
+                $add_item($item);
+            }
+            if ($type === 'name') {
+                $type = 'sku';
+            }
         }
 
         $like = '%' . $wpdb->esc_like($query) . '%';
         $products = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$this->table_productos}
-             WHERE nombre LIKE %s
+             WHERE nombre LIKE %s OR sku LIKE %s
              ORDER BY nombre ASC
              LIMIT 25",
+            $like,
             $like
         ), ARRAY_A);
 
+        foreach ($products as $row) {
+            $item = $this->format_product($row['sku']);
+            if ($item) {
+                if (!isset($item['arrived_by_barcode'])) {
+                    $item['arrived_by_barcode'] = false;
+                    $item['matched_barcode'] = '';
+                    $item['search_source'] = 'name';
+                }
+                $add_item($item);
+            }
+        }
+
         return [
-            'type' => 'name',
-            'items' => array_map(function ($item) {
-                return $this->format_product($item['sku']);
-            }, $products),
+            'type' => $type,
+            'trusted' => $trusted,
+            'conflicts' => $conflicts,
+            'items' => $items,
+            'rejected' => $rejected,
+            'query' => $query,
         ];
     }
 
@@ -387,12 +448,148 @@ class Riverso_Tienda_Local_Module {
         $item['origen'] = 'legacy_tienda_local';
         $item['sku_local'] = $barcode['sku'];
         $item['matched_barcode'] = $barcode['barcode'];
+        $item['arrived_by_barcode'] = true;
+        $item['search_source'] = 'barcode_proposed';
         return [
             'type' => 'suggestion',
             'trusted' => false,
             'items' => [$item],
             'query' => $query,
         ];
+    }
+
+    /**
+     * Une mapeo interno (verificado/propuesto) con códigos legacy del producto
+     * para poder aceptar o rechazar cada uno por separado.
+     */
+    private function attach_mapping_barcodes(array $item, $sku = '', $producto_base_id = 0) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $sku = trim((string) ($sku !== '' ? $sku : ($item['sku'] ?? '')));
+        $producto_base_id = absint($producto_base_id ?: ($item['producto_base_id'] ?? 0));
+
+        $table = $prefix . 'codigo_barra';
+        $has_mapping = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) === $table;
+
+        if ($has_mapping && $producto_base_id <= 0 && $sku !== '') {
+            $producto_base_id = absint($wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}producto_base WHERE canonical_sku = %s LIMIT 1",
+                $sku
+            )));
+        }
+        if ($producto_base_id > 0) {
+            $item['producto_base_id'] = $producto_base_id;
+        }
+
+        $mapped = [];
+        if ($has_mapping) {
+            if (!class_exists('Riverso_Barcode_Model')) {
+                $model = RIVERSO_POS_PLUGIN_DIR . 'catalog/barcodes/class-barcode-model.php';
+                if (file_exists($model)) {
+                    require_once $model;
+                }
+            }
+            if ($producto_base_id > 0 && class_exists('Riverso_Barcode_Model')) {
+                $mapped = Riverso_Barcode_Model::get_by_product($producto_base_id);
+            } elseif ($sku !== '') {
+                $mapped = $wpdb->get_results($wpdb->prepare(
+                    "SELECT * FROM {$table}
+                     WHERE activo = 1 AND estado IN ('verificado', 'propuesto')
+                       AND (sku_local = %s OR pending_sku = %s)
+                     ORDER BY id ASC",
+                    $sku,
+                    $sku
+                ), ARRAY_A) ?: [];
+            }
+        }
+
+        $by_code = [];
+        foreach ($mapped as $row) {
+            $code = trim((string) ($row['codigo'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $estado = $row['estado'] ?? 'propuesto';
+            $by_code[$code] = [
+                'barcode' => $code,
+                'fecha' => $row['estado_at'] ?? $row['updated_at'] ?? null,
+                'id' => intval($row['id'] ?? 0),
+                'estado' => $estado,
+                'trusted' => $estado === 'verificado',
+                'conflicto' => intval($row['conflicto'] ?? 0) === 1,
+                'origen' => $row['origen_datos'] ?? '',
+                'producto_base_id' => !empty($row['producto_base_id']) ? intval($row['producto_base_id']) : null,
+                'cantidad' => $row['cantidad'] ?? 1,
+            ];
+        }
+
+        foreach ($item['barcodes'] ?? [] as $legacy) {
+            $code = trim((string) ($legacy['barcode'] ?? $legacy['codigo'] ?? ''));
+            if ($code === '' || isset($by_code[$code])) {
+                continue;
+            }
+            $estado = $legacy['estado'] ?? 'propuesto';
+            $by_code[$code] = [
+                'barcode' => $code,
+                'fecha' => $legacy['fecha'] ?? null,
+                'id' => intval($legacy['id'] ?? 0),
+                'estado' => $estado,
+                'trusted' => $estado === 'verificado',
+                'conflicto' => !empty($legacy['conflicto']),
+                'origen' => $legacy['origen'] ?? 'legacy_tienda_local',
+                'producto_base_id' => $producto_base_id ?: null,
+                'cantidad' => $legacy['cantidad'] ?? 1,
+            ];
+        }
+
+        $matched = trim((string) ($item['matched_barcode'] ?? ''));
+        if ($matched !== '' && $sku !== '' && strcasecmp($matched, $sku) === 0) {
+            $matched = '';
+            $item['matched_barcode'] = '';
+        }
+        $matched_id = absint($item['codigo_id'] ?? 0);
+        if ($matched !== '' && !isset($by_code[$matched])) {
+            $by_code[$matched] = [
+                'barcode' => $matched,
+                'fecha' => null,
+                'id' => $matched_id,
+                'estado' => !empty($item['trusted']) ? 'verificado' : ($item['mapping_estado'] ?? 'propuesto'),
+                'trusted' => !empty($item['trusted']),
+                'conflicto' => !empty($item['conflicto']),
+                'origen' => $item['origen'] ?? '',
+                'producto_base_id' => $producto_base_id ?: null,
+                'cantidad' => $item['cantidad'] ?? 1,
+            ];
+        } elseif ($matched !== '' && isset($by_code[$matched]) && $matched_id && empty($by_code[$matched]['id'])) {
+            $by_code[$matched]['id'] = $matched_id;
+        }
+
+        $list = array_values($by_code);
+        usort($list, static function ($a, $b) use ($matched) {
+            $a_match = ($matched !== '' && (string) $a['barcode'] === $matched) ? 0 : 1;
+            $b_match = ($matched !== '' && (string) $b['barcode'] === $matched) ? 0 : 1;
+            if ($a_match !== $b_match) {
+                return $a_match - $b_match;
+            }
+            $av = !empty($a['trusted']) ? 1 : 0;
+            $bv = !empty($b['trusted']) ? 1 : 0;
+            if ($av !== $bv) {
+                return $av - $bv;
+            }
+            return strcmp((string) $a['barcode'], (string) $b['barcode']);
+        });
+
+        $unverified = 0;
+        foreach ($list as $row) {
+            if (empty($row['trusted']) && ($row['estado'] ?? '') !== 'verificado') {
+                $unverified++;
+            }
+        }
+
+        $item['barcodes'] = $list;
+        $item['unverified_barcodes'] = $unverified;
+        $item['has_unverified'] = $unverified > 0;
+        return $item;
     }
 
     private function format_from_mapping($resolved, $matched_barcode = '') {
@@ -414,18 +611,12 @@ class Riverso_Tienda_Local_Module {
             $local['mapping_estado'] = 'verificado';
             $local['origen'] = $resolved['origen'] ?? 'codigo_barra';
             $local['codigo_id'] = $resolved['codigo_id'] ?? ($resolved['id'] ?? null);
-            return $local;
+            $local['cantidad'] = $resolved['cantidad_unidades'] ?? ($resolved['cantidad'] ?? 1);
+            $local['tipo_envase'] = $resolved['tipo_envase'] ?? null;
+            return $this->attach_mapping_barcodes($local, $pb['canonical_sku'], $pb_id);
         }
 
-        $barcodes = $wpdb->get_results($wpdb->prepare(
-            "SELECT codigo AS barcode, estado_at AS fecha
-             FROM {$prefix}codigo_barra
-             WHERE producto_base_id = %d AND activo = 1 AND estado = 'verificado'
-             ORDER BY codigo ASC",
-            $pb_id
-        ), ARRAY_A) ?: [];
-
-        return [
+        return $this->attach_mapping_barcodes([
             'sku' => $pb['canonical_sku'],
             'nombre' => $pb['nombre_canonico'] ?: $pb['canonical_sku'],
             'precio' => 0,
@@ -433,13 +624,15 @@ class Riverso_Tienda_Local_Module {
             'stock' => 0,
             'fecha_scraping' => null,
             'matched_barcode' => $matched_barcode,
-            'barcodes' => $barcodes,
+            'barcodes' => [],
             'producto_base_id' => $pb_id,
             'trusted' => true,
             'mapping_estado' => 'verificado',
             'origen' => $resolved['origen'] ?? 'codigo_barra',
             'codigo_id' => $resolved['codigo_id'] ?? ($resolved['id'] ?? null),
-        ];
+            'cantidad' => $resolved['cantidad_unidades'] ?? ($resolved['cantidad'] ?? 1),
+            'tipo_envase' => $resolved['tipo_envase'] ?? null,
+        ], $pb['canonical_sku'], $pb_id);
     }
 
     private function format_suggestions($suggestions, $query) {
@@ -473,7 +666,9 @@ class Riverso_Tienda_Local_Module {
             $item['sku_local'] = $s['sku_local'] ?? null;
             $item['advertencia'] = $s['advertencia'] ?? null;
             $item['conflicto'] = !empty($s['conflicto']);
-            $items[] = $item;
+            $item['cantidad'] = $s['cantidad_unidades'] ?? ($s['cantidad'] ?? 1);
+            $item['tipo_envase'] = $s['tipo_envase'] ?? null;
+            $items[] = $this->attach_mapping_barcodes($item, $item['sku'] ?? '', intval($item['producto_base_id'] ?? 0));
         }
         return $items;
     }
@@ -498,7 +693,7 @@ class Riverso_Tienda_Local_Module {
             $sku
         ), ARRAY_A);
 
-        return [
+        return $this->attach_mapping_barcodes([
             'sku' => $product['sku'],
             'nombre' => $product['nombre'],
             'precio' => (float) $product['precio'],
@@ -507,7 +702,7 @@ class Riverso_Tienda_Local_Module {
             'fecha_scraping' => $product['fecha_scraping'],
             'matched_barcode' => $matched_barcode,
             'barcodes' => $barcodes,
-        ];
+        ], $product['sku']);
     }
 
     public function get_stats() {

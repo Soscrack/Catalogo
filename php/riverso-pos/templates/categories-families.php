@@ -106,10 +106,23 @@ if (!$can_manage) {
     <!-- TAB: Familias -->
     <div id="tab-families-content" class="tab-content" style="display:none;">
         <h2>Familias de Productos</h2>
-        <p style="color:#666; margin-bottom:16px;">Vista global de familias y grupos de equivalencia. Gestiona miembros, crea nuevas familias y edita sus propiedades.</p>
+        <p style="color:#666; margin-bottom:16px;">Vista global de familias y grupos de equivalencia. Gestiona miembros, crea nuevas familias y edita sus propiedades. Tipo <strong>exacta</strong> = mismo ítem, distinto envase.</p>
         
-        <div style="margin-bottom:12px;">
+        <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">
             <button class="button button-primary" id="families-add-new">+ Nueva Familia</button>
+            <button class="button" id="families-suggest-mamut">Sugerir desde Mamut</button>
+        </div>
+
+        <div id="families-suggestions" style="display:none; border:1px solid #90caf9; background:#e3f2fd; padding:12px; border-radius:4px; margin-bottom:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px; flex-wrap:wrap;">
+                <strong>Sugerencias Mamut (revisión humana)</strong>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="search" id="families-suggestions-search" placeholder="Buscar código o nombre (ej. 02TADB)" style="min-width:220px; padding:4px 8px;">
+                    <button type="button" class="button button-small" id="families-suggestions-close">Cerrar</button>
+                </div>
+            </div>
+            <div id="families-suggestions-stats" style="font-size:12px; color:#555; margin-bottom:8px;"></div>
+            <div id="families-suggestions-list" style="max-height:360px; overflow-y:auto;"></div>
         </div>
 
         <div id="families-list" style="border:1px solid #ddd; padding:12px; border-radius:4px; background:#fafafa; max-height:600px; overflow-y:auto; margin-bottom:16px;">
@@ -722,191 +735,169 @@ jQuery(function($) {
             return;
         }
 
-        let html = families.map(fam => `
+        let html = families.map(fam => {
+            const stock = (fam.stock_unidades !== undefined && fam.stock_unidades !== null)
+                ? Number(fam.stock_unidades).toLocaleString('es-CL')
+                : '—';
+            const warn = (fam.stock_warnings && fam.stock_warnings.length)
+                ? ` <span title="${esc((fam.stock_warnings || []).join(' | '))}" style="color:#e65100;">⚠</span>`
+                : '';
+            return `
             <div class="family-item" data-family-id="${fam.id}">
                 <div>
                     <strong>${esc(fam.nombre)}</strong><br>
-                    <small style="color:#666;">Tipo: ${esc(fam.tipo_sustitucion || '-')} | Miembros: ${fam.miembros_count || 0}</small>
+                    <small style="color:#666;">Tipo: ${esc(fam.tipo_sustitucion || '-')} | Miembros: ${fam.miembros_count || 0} | Stock familia: ${stock} u${warn}</small>
                 </div>
                 <div style="display:flex; gap:4px;">
                     <button class="button button-small family-view" data-family-id="${fam.id}">Ver</button>
                     <button class="button button-small family-edit" data-family-id="${fam.id}">Editar</button>
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
 
         $('#families-list').html(html);
-        attachFamilyEventListeners();
     }
 
-    function attachFamilyEventListeners() {
-        $(document).on('click', '.family-view', function(e) {
-            e.preventDefault();
-            const familyId = $(this).data('family-id');
-            openFamilyDetailsModal(familyId);
-        });
+    // Editor compartido (assets/js/family-editor.js)
+    window.riversoFamilyEditor = window.riversoFamilyEditor || {};
+    window.riversoFamilyEditor.ajaxUrl = ajaxurl;
+    window.riversoFamilyEditor.nonce = nonce;
+    window.riversoFamilyEditor.canManage = true;
+    window.riversoFamilyEditor.onChanged = function() { loadFamilies(); };
 
-        $(document).on('click', '.family-edit', function(e) {
-            e.preventDefault();
-            const familyId = $(this).data('family-id');
-            openFamilyEditModal(familyId);
-        });
+    function ensureFamilyEditor() {
+        if (!window.RiversoFamilyEditor) {
+            alert('Editor de familias no cargado. Recarga la página.');
+            return false;
+        }
+        return true;
     }
 
-    function openFamilyDetailsModal(familyId) {
-        $.post(ajaxurl, {
-            action: 'riverso_families_get',
-            nonce: nonce,
-            grupo_id: familyId
-        }, function(r) {
-            if (r.success && r.data.family) {
-                const fam = r.data.family;
-                const members = fam.members || [];
-                let membersHtml = '';
-                if (members.length > 0) {
-                    membersHtml = '<ul style="margin:10px 0;">' + members.map(m => 
-                        `<li>${esc(m.nombre_canonico || '-')} (SKU: ${esc(m.canonical_sku || '-')})</li>`
-                    ).join('') + '</ul>';
-                } else {
-                    membersHtml = '<p style="color:#999;">Sin miembros</p>';
-                }
-                
-                const modalHtml = `
-                    <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; display:flex; align-items:center; justify-content:center;">
-                        <div style="background:white; padding:20px; border-radius:6px; max-width:500px; width:90%; max-height:80vh; overflow-y:auto;">
-                            <h3>${esc(fam.nombre)}</h3>
-                            <p><strong>Código:</strong> ${esc(fam.codigo_grupo)}</p>
-                            <p><strong>Tipo:</strong> ${esc(fam.tipo_sustitucion || '-')}</p>
-                            <p><strong>Miembros:</strong></p>
-                            ${membersHtml}
-                            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-                                <button class="button" onclick="this.closest('div').parentElement.remove();">Cerrar</button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                $('body').append(modalHtml);
-            }
-        });
-    }
-
-    function openFamilyEditModal(familyId) {
-        $.post(ajaxurl, {
-            action: 'riverso_families_get',
-            nonce: nonce,
-            grupo_id: familyId
-        }, function(r) {
-            if (r.success && r.data.family) {
-                const fam = r.data.family;
-                const modalHtml = `
-                    <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; display:flex; align-items:center; justify-content:center;">
-                        <div style="background:white; padding:20px; border-radius:6px; max-width:500px; width:90%; max-height:80vh; overflow-y:auto;">
-                            <h3>Editar Familia</h3>
-                            <label style="display:block; margin-bottom:10px;">
-                                <strong>Nombre:</strong><br>
-                                <input type="text" class="large-text family-edit-nombre" value="${esc(fam.nombre)}" style="width:100%; padding:6px; box-sizing:border-box;">
-                            </label>
-                            <label style="display:block; margin-bottom:10px;">
-                                <strong>Código:</strong><br>
-                                <input type="text" class="large-text family-edit-codigo" value="${esc(fam.codigo_grupo)}" style="width:100%; padding:6px; box-sizing:border-box;" disabled>
-                            </label>
-                            <label style="display:block; margin-bottom:16px;">
-                                <strong>Tipo de Sustitución:</strong><br>
-                                <select class="family-edit-tipo" style="width:100%; padding:6px; box-sizing:border-box;">
-                                    <option value="exacta" ${fam.tipo_sustitucion === 'exacta' ? 'selected' : ''}>Exacta</option>
-                                    <option value="preferida" ${fam.tipo_sustitucion === 'preferida' ? 'selected' : ''}>Preferida</option>
-                                    <option value="complementaria" ${fam.tipo_sustitucion === 'complementaria' ? 'selected' : ''}>Complementaria</option>
-                                </select>
-                            </label>
-                            <div style="display:flex; gap:8px; justify-content:flex-end;">
-                                <button class="button" onclick="this.closest('div').parentElement.remove();">Cancelar</button>
-                                <button class="button button-primary family-edit-save" data-family-id="${fam.id}">Guardar</button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                const $modal = $(modalHtml);
-                $('body').append($modal);
-                
-                $modal.find('.family-edit-save').on('click', function() {
-                    const nombre = $modal.find('.family-edit-nombre').val().trim();
-                    const tipo = $modal.find('.family-edit-tipo').val();
-                    if (!nombre) {
-                        alert('El nombre es requerido');
-                        return;
-                    }
-                    $.post(ajaxurl, {
-                        action: 'riverso_families_update',
-                        nonce: nonce,
-                        grupo_id: familyId,
-                        nombre: nombre,
-                        tipo_sustitucion: tipo
-                    }, function(r) {
-                        if (r.success) {
-                            $modal.parent().remove();
-                            loadFamilies();
-                        } else {
-                            alert('Error: ' + (r.data?.message || 'No se pudo guardar'));
-                        }
-                    });
-                });
-            }
-        });
-    }
+    $(document).off('click.riversoFamilyView').on('click.riversoFamilyView', '.family-view', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (ensureFamilyEditor()) {
+            RiversoFamilyEditor.openView($(this).data('family-id'));
+        }
+    });
+    $(document).off('click.riversoFamilyEdit').on('click.riversoFamilyEdit', '.family-edit', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (ensureFamilyEditor()) {
+            RiversoFamilyEditor.openEdit($(this).data('family-id'));
+        }
+    });
 
     $('#families-add-new').on('click', function() {
-        const modalHtml = `
-            <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; display:flex; align-items:center; justify-content:center;">
-                <div style="background:white; padding:20px; border-radius:6px; max-width:500px; width:90%;">
-                    <h3>Crear Nueva Familia</h3>
-                    <label style="display:block; margin-bottom:10px;">
-                        <strong>Nombre:</strong><br>
-                        <input type="text" id="new-family-nombre" class="large-text" placeholder="Ej. Tuercas M6" style="width:100%; padding:6px; box-sizing:border-box;">
-                    </label>
-                    <label style="display:block; margin-bottom:10px;">
-                        <strong>Código:</strong><br>
-                        <input type="text" id="new-family-codigo" class="large-text" placeholder="Ej. TUERCAS_M6" style="width:100%; padding:6px; box-sizing:border-box;">
-                    </label>
-                    <label style="display:block; margin-bottom:16px;">
-                        <strong>Tipo de Sustitución:</strong><br>
-                        <select id="new-family-tipo" style="width:100%; padding:6px; box-sizing:border-box;">
-                            <option value="exacta">Exacta</option>
-                            <option value="preferida">Preferida</option>
-                            <option value="complementaria">Complementaria</option>
-                        </select>
-                    </label>
-                    <div style="display:flex; gap:8px; justify-content:flex-end;">
-                        <button class="button" onclick="this.closest('div').parentElement.remove();">Cancelar</button>
-                        <button class="button button-primary" id="new-family-save">Crear</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        const $modal = $(modalHtml);
-        $('body').append($modal);
-        
-        $modal.find('#new-family-save').on('click', function() {
-            const nombre = $modal.find('#new-family-nombre').val().trim();
-            const codigo = $modal.find('#new-family-codigo').val().trim();
-            const tipo = $modal.find('#new-family-tipo').val();
-            if (!nombre || !codigo) {
-                alert('Nombre y código son requeridos');
+        if (ensureFamilyEditor()) {
+            RiversoFamilyEditor.openCreate(function() { loadFamilies(); });
+        }
+    });
+
+    let pendingSuggestions = [];
+
+    function requestMamutSuggestions() {
+        const $btn = $('#families-suggest-mamut').prop('disabled', true).text('Buscando…');
+        const search = ($('#families-suggestions-search').val() || '').trim();
+        $.post(ajaxurl, {
+            action: 'riverso_families_suggest',
+            nonce: nonce,
+            limit: 300,
+            search: search
+        }, function(r) {
+            $btn.prop('disabled', false).text('Sugerir desde Mamut');
+            if (!r.success) {
+                alert(r.data?.message || 'No se pudieron generar sugerencias');
                 return;
             }
-            $.post(ajaxurl, {
-                action: 'riverso_families_create',
-                nonce: nonce,
-                nombre: nombre,
-                codigo_grupo: codigo,
-                tipo_sustitucion: tipo
-            }, function(r) {
-                if (r.success) {
-                    $modal.parent().remove();
-                    loadFamilies();
-                } else {
-                    alert('Error: ' + (r.data?.message || 'No se pudo crear'));
-                }
-            });
+            pendingSuggestions = r.data.suggestions || [];
+            const stats = r.data.stats || {};
+            const total = stats.total_available != null ? stats.total_available : pendingSuggestions.length;
+            $('#families-suggestions-stats').text(
+                `Mostrando ${pendingSuggestions.length} de ${total}`
+                + (search ? ` (filtro: ${search})` : '')
+                + ` · Candidatos: ${stats.candidate_groups || 0}`
+                + ` · Sin ≥2 SKU local: ${stats.skipped_unresolved || 0}`
+                + ` · Ya en familia: ${stats.skipped_already_in_family || 0}`
+            );
+            renderFamilySuggestions(pendingSuggestions);
+            $('#families-suggestions').show();
+        }).fail(function() {
+            $btn.prop('disabled', false).text('Sugerir desde Mamut');
+            alert('Error de red al sugerir familias');
+        });
+    }
+
+    $('#families-suggest-mamut').on('click', function() {
+        requestMamutSuggestions();
+    });
+
+    $('#families-suggestions-search').on('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            requestMamutSuggestions();
+        }
+    });
+
+    $('#families-suggestions-close').on('click', function() {
+        $('#families-suggestions').hide();
+    });
+
+    function renderFamilySuggestions(list) {
+        if (!list.length) {
+            $('#families-suggestions-list').html('<p style="color:#666;">No hay sugerencias pendientes.</p>');
+            return;
+        }
+        const confColor = { alta: '#2e7d32', media: '#ef6c00', baja: '#c62828' };
+        let html = list.map((s, idx) => {
+            const members = (s.members || []).map(m => {
+                const sku = m.canonical_sku || 'sin SKU local';
+                const ok = m.resolved ? '✓' : '✗';
+                return `${ok} ${esc(m.codigo_proveedor)} → ${esc(sku)} (${m.cantidad_unidades} u)`;
+            }).join('<br>');
+            const canAccept = (s.member_count || 0) >= 2 && ((s.resolved_count || 0) >= 1 || (s.member_count || 0) >= 2);
+            const resolveNote = (s.resolved_count || 0) < 2
+                ? `<div style="font-size:11px;color:#ef6c00;margin-top:4px;">Resueltos ${s.resolved_count || 0}/${s.member_count || 0} SKU local. Al aceptar, los sin local quedan pendientes en la familia y entran al vincularlos.</div>`
+                : '';
+            return `<div class="family-suggestion" data-idx="${idx}" style="background:#fff;border:1px solid #bbdefb;border-radius:4px;padding:10px;margin-bottom:8px;">
+                <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
+                    <div>
+                        <strong>${esc(s.nombre)}</strong>
+                        <span style="margin-left:8px;font-size:11px;padding:2px 6px;border-radius:3px;color:#fff;background:${confColor[s.confidence] || '#666'};">${esc(s.confidence || '')}</span>
+                        ${s.woo_confirmed ? '<span style="font-size:11px;color:#1565c0;margin-left:6px;">Woo OK</span>' : ''}
+                        <div style="font-size:12px;color:#555;margin-top:4px;">${members}</div>
+                        ${resolveNote}
+                    </div>
+                    <button class="button button-primary button-small family-accept-suggestion" data-idx="${idx}" ${canAccept ? '' : 'disabled'}>Aceptar</button>
+                </div>
+            </div>`;
+        }).join('');
+        $('#families-suggestions-list').html(html);
+    }
+
+    $(document).on('click', '.family-accept-suggestion', function() {
+        const idx = parseInt($(this).data('idx'), 10);
+        const suggestion = pendingSuggestions[idx];
+        if (!suggestion) return;
+        if (!confirm('¿Crear familia exacta "' + suggestion.nombre + '" con envases?')) return;
+        const $btn = $(this).prop('disabled', true).text('Creando…');
+        $.post(ajaxurl, {
+            action: 'riverso_families_accept_suggestion',
+            nonce: nonce,
+            suggestion: JSON.stringify(suggestion)
+        }, function(r) {
+            if (r.success) {
+                pendingSuggestions.splice(idx, 1);
+                renderFamilySuggestions(pendingSuggestions);
+                loadFamilies();
+                alert('Familia creada: ' + (r.data.family?.nombre || ''));
+            } else {
+                $btn.prop('disabled', false).text('Aceptar');
+                alert(r.data?.message || 'No se pudo aceptar la sugerencia');
+            }
+        }).fail(function() {
+            $btn.prop('disabled', false).text('Aceptar');
+            alert('Error de red');
         });
     });
 

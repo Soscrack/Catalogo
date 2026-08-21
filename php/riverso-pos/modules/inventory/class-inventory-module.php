@@ -365,20 +365,36 @@ class Riverso_Inventory_Count_Module {
         }
 
         $resolved = false;
-        if (class_exists('Riverso_Barcode_Model') && method_exists('Riverso_Barcode_Model', 'resolve')) {
+        $trusted = false;
+        if (class_exists('Riverso_Barcode_Model') && method_exists('Riverso_Barcode_Model', 'resolve_for_operation')) {
+            $op = Riverso_Barcode_Model::resolve_for_operation($code);
+            if (!empty($op['conflicts'])) {
+                return [
+                    'conflict' => true,
+                    'message' => 'Código en conflicto. Resuélvelo en /interno/barcodes antes de usarlo.',
+                    'barcode' => $code,
+                ];
+            }
+            if (!empty($op['resolved'])) {
+                $resolved = $op['resolved'];
+                $trusted = !empty($op['trusted']);
+            }
+        } elseif (class_exists('Riverso_Barcode_Model') && method_exists('Riverso_Barcode_Model', 'resolve')) {
             $resolved = Riverso_Barcode_Model::resolve($code);
+            $trusted = (bool) $resolved;
         }
 
         if (!$resolved) {
             global $wpdb;
             $prefix = $this->prefix();
             $row = $wpdb->get_row($wpdb->prepare(
-                "SELECT cb.producto_base_id, cb.cantidad, cb.envase_id, cb.tipo, cb.unidad_medida, cb.factor_a_unidad_base
+                "SELECT cb.producto_base_id, cb.cantidad, cb.envase_id, cb.tipo, cb.unidad_medida, cb.factor_a_unidad_base, cb.estado
                  FROM {$prefix}codigo_barra cb
                  INNER JOIN {$prefix}producto_base pb ON pb.id = cb.producto_base_id
                  WHERE cb.codigo = %s AND cb.activo = 1
-                   AND cb.estado = 'verificado'
-                 ORDER BY CASE WHEN pb.canonical_sku IS NOT NULL AND TRIM(pb.canonical_sku) <> '' THEN 0 ELSE 1 END
+                   AND cb.estado IN ('verificado', 'propuesto')
+                 ORDER BY CASE WHEN cb.estado = 'verificado' THEN 0 ELSE 1 END,
+                          CASE WHEN pb.canonical_sku IS NOT NULL AND TRIM(pb.canonical_sku) <> '' THEN 0 ELSE 1 END
                  LIMIT 1",
                 $code
             ), ARRAY_A);
@@ -392,6 +408,7 @@ class Riverso_Inventory_Count_Module {
                     'factor_a_unidad_base' => floatval($row['factor_a_unidad_base'] ?: 1),
                     'origen' => 'codigo_barra',
                 ];
+                $trusted = ($row['estado'] ?? '') === 'verificado';
             }
         }
 
@@ -421,6 +438,7 @@ class Riverso_Inventory_Count_Module {
             'tipo' => $resolved['tipo'] ?? $resolved['type'] ?? 'ean13',
             'origen' => $resolved['origen'] ?? 'codigo_barra',
             'barcode' => $code,
+            'trusted' => $trusted,
         ];
     }
 
@@ -472,6 +490,9 @@ class Riverso_Inventory_Count_Module {
         }
 
         $decoded = $this->decode_barcode($code);
+        if ($decoded && !empty($decoded['conflict'])) {
+            return ['status' => 'conflict', 'message' => $decoded['message'] ?? 'Código en conflicto'];
+        }
         if ($decoded) {
             if (intval($decoded['producto_base_id']) === $producto_base_id) {
                 return ['status' => 'ok', 'decoded' => $decoded];
@@ -1355,6 +1376,14 @@ class Riverso_Inventory_Count_Module {
             $classified = $this->classify_scan_for_product($barcode, $target_id);
             $status = $classified['status'] ?? '';
 
+            if ($status === 'conflict') {
+                wp_send_json_error([
+                    'message' => $classified['message'] ?? 'Código en conflicto. Resuélvelo en /interno/barcodes.',
+                    'code' => 'conflict',
+                    'barcode' => $barcode,
+                ]);
+            }
+
             if ($status === 'other_product') {
                 $other = $classified['other'] ?? [];
                 $this->log_scan([
@@ -1432,6 +1461,9 @@ class Riverso_Inventory_Count_Module {
             }
 
             $decoded = $this->decode_barcode($barcode);
+            if ($decoded && !empty($decoded['conflict'])) {
+                wp_send_json_error(['message' => $decoded['message'] ?: 'Código en conflicto']);
+            }
             if (!$decoded) {
                 $producto_id = $this->post_int('producto_base_id');
                 if ($producto_id) {
@@ -1978,6 +2010,9 @@ class Riverso_Inventory_Count_Module {
         if (!$decoded) {
             wp_send_json_error(['message' => 'Código no reconocido']);
         }
+        if (!empty($decoded['conflict'])) {
+            wp_send_json_error(['message' => $decoded['message'] ?: 'Código en conflicto']);
+        }
         wp_send_json_success(['kind' => 'product', 'decoded' => $decoded]);
     }
 
@@ -1992,18 +2027,39 @@ class Riverso_Inventory_Count_Module {
         if (strlen($q) < 1) {
             wp_send_json_success(['products' => []]);
         }
-        $like = '%' . $wpdb->esc_like($q) . '%';
         $solo_sku = $this->post_int('solo_sku_local');
         $sku_filter = $solo_sku
             ? " AND canonical_sku IS NOT NULL AND TRIM(canonical_sku) <> ''"
             : '';
+
+        if (class_exists('Riverso_Barcode_Model') && method_exists('Riverso_Barcode_Model', 'lookup_for_search')) {
+            $lookup = Riverso_Barcode_Model::lookup_for_search($q, ['limit' => 20]);
+            $rows = [];
+            foreach ($lookup['hits'] as $hit) {
+                $sku = trim((string) ($hit['canonical_sku'] ?? ''));
+                if ($solo_sku && $sku === '') {
+                    continue;
+                }
+                $rows[] = [
+                    'id' => intval($hit['producto_base_id']),
+                    'canonical_sku' => $hit['canonical_sku'] ?? '',
+                    'nombre_canonico' => $hit['nombre_canonico'] ?? '',
+                ];
+            }
+            wp_send_json_success(['products' => $rows]);
+        }
+
+        $like = '%' . $wpdb->esc_like($q) . '%';
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, canonical_sku, nombre_canonico
-             FROM {$prefix}producto_base
-             WHERE estado = 'activo'{$sku_filter}
-               AND (canonical_sku LIKE %s OR nombre_canonico LIKE %s)
-             ORDER BY canonical_sku ASC
+            "SELECT DISTINCT pb.id, pb.canonical_sku, pb.nombre_canonico
+             FROM {$prefix}producto_base pb
+             LEFT JOIN {$prefix}codigo_barra cb
+               ON cb.producto_base_id = pb.id AND cb.activo = 1 AND cb.estado IN ('verificado','propuesto')
+             WHERE pb.estado = 'activo'{$sku_filter}
+               AND (pb.canonical_sku LIKE %s OR pb.nombre_canonico LIKE %s OR cb.codigo LIKE %s)
+             ORDER BY pb.canonical_sku ASC
              LIMIT 20",
+            $like,
             $like,
             $like
         ), ARRAY_A);

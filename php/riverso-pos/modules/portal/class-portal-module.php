@@ -41,7 +41,10 @@ class Riverso_Portal_Module {
         );
         add_rewrite_tag('%riverso_portal%', '([^&]+)');
         
-        // Flush rules si es necesario (solo una vez)
+        // No hacer flush desde CLI (el deploy carga wp-load.php y puede vaciar permalinks).
+        if (php_sapi_name() === 'cli') {
+            return;
+        }
         if (get_option('riverso_portal_rules_flushed') !== RIVERSO_POS_VERSION) {
             flush_rewrite_rules();
             update_option('riverso_portal_rules_flushed', RIVERSO_POS_VERSION);

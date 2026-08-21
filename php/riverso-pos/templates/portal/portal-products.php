@@ -16,6 +16,7 @@ if (!current_user_can('riverso_view_products')) {
 
 $nonce = wp_create_nonce('riverso_pos_nonce');
 $can_manage = current_user_can('riverso_manage_products');
+$can_assign_barcodes = $can_manage || current_user_can('riverso_assign_barcodes');
 $can_manage_categories = current_user_can('riverso_manage_categories');
 $can_manage_families = current_user_can('riverso_manage_families');
 ?>
@@ -123,7 +124,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
         .detail-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
         
         /* Tabs */
-        .detail-tabs { display: flex; gap: 10px; border-bottom: 2px solid #eee; margin-bottom: 20px; flex-wrap: wrap; }
+        .detail-tabs { display: flex; gap: 10px; border-bottom: 2px solid #eee; margin-bottom: 20px; flex-wrap: wrap; position: relative; z-index: 3; }
         .detail-tab { padding: 10px 15px; cursor: pointer; border-bottom: 3px solid transparent; text-decoration: none; color: #666; font-size: 13px; background: none; border: none; }
         .detail-tab.active { border-bottom-color: #2196f3; color: #2196f3; font-weight: bold; }
         .detail-tab:hover { color: #2196f3; }
@@ -171,7 +172,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
 
     <div>
         <h2 style="margin: 0 0 10px 0;">Productos</h2>
-        <p style="color: #666; margin: 0 0 15px 0;">Gestión centralizada: crear Local, vincular Online, asignar códigos proveedor, agregar barcodes y monitorear completitud.</p>
+        <p style="color: #666; margin: 0 0 15px 0;">Listado de productos locales. Asigna un código de barra en la fila o ábrelo para ver el detalle.</p>
         
         <div class="products-toolbar">
             <select id="products-status">
@@ -213,16 +214,16 @@ $can_manage_families = current_user_can('riverso_manage_families');
                     <th style="width: 6%;">ID</th>
                     <th style="width: 11%;">SKU Local</th>
                     <th style="width: 11%;">SKU Online</th>
-                    <th style="width: 18%;">Nombre</th>
+                    <th style="width: 16%;">Nombre</th>
                     <th style="width: 12%;">Completitud</th>
-                    <th style="width: 11%;">Código Proveedor</th>
-                    <th style="width: 11%;">Código Catálogo</th>
-                    <th style="width: 8%;">Woo</th>
-                    <th style="width: 12%;">Acciones</th>
+                    <th style="width: 10%;">Código Proveedor</th>
+                    <th style="width: 10%;">Código Catálogo</th>
+                    <th style="width: 16%;">Código de barra</th>
+                    <th style="width: 10%;">Acciones</th>
                 </tr>
             </thead>
             <tbody id="products-tbody">
-                <tr><td colspan="9" style="text-align: center; color: #999; padding: 40px;">Cargando...</td></tr>
+                <tr><td colspan="10" style="text-align: center; color: #999; padding: 40px;">Cargando...</td></tr>
             </tbody>
         </table>
 
@@ -258,16 +259,16 @@ $can_manage_families = current_user_can('riverso_manage_families');
         </div>
 
         <div class="detail-tabs">
-            <button class="detail-tab active" data-tab="local">Local</button>
-            <button class="detail-tab" data-tab="online">Online</button>
-            <button class="detail-tab" data-tab="suppliers">Códigos</button>
-            <button class="detail-tab" data-tab="barcodes">Barcodes</button>
-            <button class="detail-tab" data-tab="tasks">Tareas</button>
+            <button type="button" class="detail-tab active" data-tab="local">Local</button>
+            <button type="button" class="detail-tab" data-tab="online">Online</button>
+            <button type="button" class="detail-tab" data-tab="suppliers">Códigos</button>
+            <button type="button" class="detail-tab" data-tab="barcodes">Barcodes</button>
+            <button type="button" class="detail-tab" data-tab="tasks">Tareas</button>
             <?php if ($can_manage_families): ?>
-                <button class="detail-tab" data-tab="families">Familias</button>
+                <button type="button" class="detail-tab" data-tab="families">Familias</button>
             <?php endif; ?>
             <?php if (current_user_can('riverso_view_warehouse') || current_user_can('manage_options')): ?>
-                <button class="detail-tab" data-tab="locations">Ubicaciones</button>
+                <button type="button" class="detail-tab" data-tab="locations">Ubicaciones</button>
             <?php endif; ?>
         </div>
 
@@ -403,6 +404,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
                     <td>
                         <div id="local-familia-view">
                             <span id="familia-display">-</span>
+                            <button class="btn-small" id="familia-view-btn" style="margin-left: 8px; display: none;">Ver familia</button>
                             <button class="btn-small" id="familia-edit-toggle" style="margin-left: 8px;">Editar familia</button>
                         </div>
                         <div id="local-familia-edit" style="display: none; background: #f9f9f9; padding: 10px; border-radius: 4px;">
@@ -559,6 +561,10 @@ $can_manage_families = current_user_can('riverso_manage_families');
                 <strong>⚠️ Falta Barcode EAN-13</strong>
                 <p style="margin: 6px 0 0 0;">El producto online no tiene un código EAN-13 asociado.</p>
             </div>
+            <div id="barcodes-legacy-banner" class="info-box warning" style="display: none;">
+                <strong>⚠️ Códigos legacy por confirmar</strong>
+                <p style="margin: 6px 0 0 0;">Hay códigos importados del legacy. Acéptalos como Código de Proveedor o recházalos para eliminarlos.</p>
+            </div>
             <p>Agregar códigos de barra y gestionar por tipo.</p>
             <div style="margin: 12px 0; padding: 12px; background: #f9f9f9; border-radius: 4px;">
                 <h4>Nuevo código de barra</h4>
@@ -566,8 +572,8 @@ $can_manage_families = current_user_can('riverso_manage_families');
                 <div style="margin-bottom: 12px;">
                     <label><strong>Tipo de código:</strong></label>
                     <select id="barcode-type" style="width: 100%; padding: 6px;">
+                        <option value="supplier" selected>Código de Proveedor</option>
                         <option value="ean13">EAN-13</option>
-                        <option value="supplier">Código de Proveedor</option>
                         <option value="internal">Interno</option>
                     </select>
                 </div>
@@ -647,9 +653,9 @@ $can_manage_families = current_user_can('riverso_manage_families');
                         <th><label for="family-tipo">Tipo de Sustitución</label></th>
                         <td>
                             <select id="family-tipo">
-                                <option value="compatible">Compatible</option>
-                                <option value="sustituto">Sustituto</option>
-                                <option value="preferido">Preferido</option>
+                                <option value="exacta" selected>Exacta (mismo ítem, distinto envase)</option>
+                                <option value="preferida">Preferida</option>
+                                <option value="complementaria">Complementaria</option>
                             </select>
                         </td>
                     </tr>
@@ -720,10 +726,11 @@ $can_manage_families = current_user_can('riverso_manage_families');
 </div>
 
 <script>
-jQuery(function($) {
+(window.riversoWhenJQuery || function(fn){ jQuery(fn); })(function($) {
     const nonce = '<?php echo esc_js($nonce); ?>';
     const ajaxUrl = '<?php echo esc_js(admin_url('admin-ajax.php')); ?>';
     const canManage = <?php echo $can_manage ? 'true' : 'false'; ?>;
+    const canAssignBarcodes = <?php echo $can_assign_barcodes ? 'true' : 'false'; ?>;
     const canManageCategories = <?php echo $can_manage_categories ? 'true' : 'false'; ?>;
     const canManageFamilies = <?php echo $can_manage_families ? 'true' : 'false'; ?>;
     const canEditWarehouse = <?php echo (current_user_can('riverso_edit_warehouse') || current_user_can('manage_options')) ? 'true' : 'false'; ?>;
@@ -797,7 +804,7 @@ jQuery(function($) {
             search: search || ''
         }).done(function(r) {
             if (!r.success) {
-                $('#products-tbody').html('<tr><td colspan="9" style="color: #d32f2f; padding: 20px; text-align: center;">Error: ' + esc((r.data && r.data.message) || 'cargando') + '</td></tr>');
+                $('#products-tbody').html('<tr><td colspan="10" style="color: #d32f2f; padding: 20px; text-align: center;">Error: ' + esc((r.data && r.data.message) || 'cargando') + '</td></tr>');
                 return;
             }
 
@@ -808,11 +815,10 @@ jQuery(function($) {
             let html = '';
             
             if (products.length === 0) {
-                html = '<tr><td colspan="9" style="text-align: center; color: #999; padding: 40px;">Sin productos.</td></tr>';
+                html = '<tr><td colspan="10" style="text-align: center; color: #999; padding: 40px;">Sin productos locales.</td></tr>';
             } else {
                 products.forEach(p => {
                     const cat = p.completeness_category || 'incompleto';
-                    const wooId = parseInt(p.woocommerce_product_id || 0) ? p.woocommerce_product_id : '-';
                     const skuLocal = p.sku_local || p.canonical_sku || '';
                     const skuOnline = p.sku_online || '';
                     let codigoProv = renderSkuCell(p.codigos_proveedor, 'Código Proveedor');
@@ -825,6 +831,18 @@ jQuery(function($) {
                         codigoCat = `<span style="color:#999;">—</span>`;
                     }
 
+                    const bcCount = parseInt(p.barcodes_count || 0, 10);
+                    const bcSample = p.barcode_sample ? esc(p.barcode_sample) : '';
+                    let barcodeCell = bcCount
+                        ? `<div style="font-size:12px;"><strong>${bcCount}</strong>${bcSample ? `<div style="color:#666;max-width:180px;overflow:hidden;text-overflow:ellipsis;" title="${bcSample}">${bcSample}</div>` : ''}</div>`
+                        : '<span style="color:#c77700;font-size:12px;">Sin código</span>';
+                    if (canAssignBarcodes) {
+                        barcodeCell += `<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;">
+                            <input type="text" class="products-barcode-input" placeholder="Escanear código" data-id="${p.id}" style="width:130px;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
+                            <button type="button" class="btn-small success products-assign-barcode" data-id="${p.id}" data-sku="${esc(skuLocal)}">Asignar</button>
+                        </div>`;
+                    }
+
                     html += `<tr>
                         <td>${p.id}</td>
                         <td>${renderSkuCell(skuLocal, 'SKU Local')}</td>
@@ -833,8 +851,8 @@ jQuery(function($) {
                         <td><span class="completeness-badge ${cat}">${completenessLabel(cat)}</span></td>
                         <td>${codigoProv}</td>
                         <td>${codigoCat}</td>
-                        <td>${wooId}</td>
-                        <td><button class="btn-small" onclick="window.portalProducts.openDetail(${p.id})">Ver</button></td>
+                        <td>${barcodeCell}</td>
+                        <td><button type="button" class="btn-small" onclick="window.portalProducts.openDetail(${p.id})">Ver</button></td>
                     </tr>`;
                 });
             }
@@ -952,8 +970,10 @@ jQuery(function($) {
         // Familia
         if (p.familia) {
             $('#familia-display').html(`<strong>${esc(p.familia.nombre)}</strong> <small style="color:#666;">(${esc(p.familia.tipo_sustitucion || p.familia.codigo_grupo || '')})</small>`);
+            $('#familia-view-btn').show().data('familia-id', p.familia.id);
         } else {
             $('#familia-display').html('<span style="color:#999;">Sin familia</span>');
+            $('#familia-view-btn').hide().data('familia-id', '');
         }
         loadFamiliesDropdown();
 
@@ -984,8 +1004,14 @@ jQuery(function($) {
             $('#online-missing-code-banner').hide();
         }
         $('#suppliers-missing-banner').toggle(!hasCode);
-        const hasEan = p.barcodes && p.barcodes.some(b => b.tipo === 'ean13');
-        $('#barcodes-missing-banner').toggle(hasWoo && !hasEan);
+        const hasEan13Tipo = p.barcodes && p.barcodes.some(b => (b.tipo || '') === 'ean13');
+        $('#barcodes-missing-banner').toggle(hasWoo && !hasEan13Tipo);
+        const hasLegacyPending = p.barcodes && p.barcodes.some(b => {
+            const o = String(b.origen_datos || b.origen || '').toLowerCase();
+            const m = String(b.migrado_de_tabla || '').toLowerCase();
+            return o.includes('legacy') || m !== '' || !!b.legacy_ref;
+        });
+        $('#barcodes-legacy-banner').toggle(!!hasLegacyPending);
 
         // Badges + warnings inline (análogo wp-admin)
         calculateFieldAlerts(p);
@@ -1029,6 +1055,18 @@ jQuery(function($) {
         }
         if ((product.proveedores_count || 0) === 0) {
             alerts.push({ field: 'Código Proveedor', icon: '📦', action: 'tab-suppliers' });
+        }
+        const legacyPending = (product.barcodes || []).filter(b => {
+            const o = String(b.origen_datos || b.origen || '').toLowerCase();
+            const m = String(b.migrado_de_tabla || '').toLowerCase();
+            return o.includes('legacy') || m !== '' || !!b.legacy_ref;
+        });
+        if (legacyPending.length > 0) {
+            alerts.push({
+                field: 'Códigos legacy pendientes (' + legacyPending.length + ')',
+                icon: '📊',
+                action: 'tab-barcodes'
+            });
         }
         if (product.woocommerce_product_id) {
             const hasEan = product.barcodes && product.barcodes.some(b => b.tipo === 'ean13');
@@ -1088,6 +1126,14 @@ jQuery(function($) {
         }
         if ((product.proveedores_count || 0) === 0) {
             $('#suppliers-list').before('<span class="field-warning-inline suppliers-warn" title="Falta Código Proveedor" style="display:block;margin-bottom:8px;">⚠️ Falta código proveedor</span>');
+        }
+        const legacyPendingIcons = (product.barcodes || []).filter(b => {
+            const o = String(b.origen_datos || b.origen || '').toLowerCase();
+            const m = String(b.migrado_de_tabla || '').toLowerCase();
+            return o.includes('legacy') || m !== '' || !!b.legacy_ref;
+        });
+        if (legacyPendingIcons.length > 0) {
+            $('#barcodes-list').before('<span class="field-warning-inline barcodes-warn" title="Códigos legacy pendientes" style="display:block;margin-bottom:8px;">⚠️ Hay códigos legacy por confirmar</span>');
         }
         if (product.woocommerce_product_id) {
             const hasEan = product.barcodes && product.barcodes.some(b => b.tipo === 'ean13');
@@ -1439,12 +1485,50 @@ jQuery(function($) {
             $('#barcodes-list').html('<p style="color: #999;">Sin códigos de barra registrados</p>');
             return;
         }
+        const isLegacyBarcode = (barcode) => {
+            const origen = String(barcode.origen_datos || barcode.origen || '').toLowerCase();
+            const migrado = String(barcode.migrado_de_tabla || '').toLowerCase();
+            return origen.includes('legacy') || migrado !== '' || !!barcode.legacy_ref;
+        };
+        const barcodePriority = (barcode) => {
+            if ((barcode.estado || '') === 'verificado') return 3;
+            if (isLegacyBarcode(barcode)) return 2;
+            return 1;
+        };
+        const groupedBarcodes = [];
+        const groupedByCode = new Map();
+        (p.barcodes || []).forEach(barcode => {
+            const codigo = String(barcode.codigo || '').trim();
+            if (!codigo) return;
+            const existing = groupedByCode.get(codigo);
+            if (!existing) {
+                groupedByCode.set(codigo, barcode);
+                groupedBarcodes.push(barcode);
+                return;
+            }
+            if (barcodePriority(barcode) > barcodePriority(existing)) {
+                const index = groupedBarcodes.indexOf(existing);
+                if (index >= 0) groupedBarcodes[index] = barcode;
+                groupedByCode.set(codigo, barcode);
+            }
+        });
         let html = '<h4>Códigos de Barra</h4><table style="width: 100%; font-size: 13px; border-collapse: collapse;">';
-        p.barcodes.forEach(barcode => {
+        groupedBarcodes.forEach(barcode => {
+            const isLegacy = isLegacyBarcode(barcode);
+            const tipo = isLegacy ? 'legacy' : (barcode.tipo || 'ean13');
+            const unidad = barcode.unidad_medida || barcode.unidad || 'unidad';
+            let actions = '';
+            if (isLegacy) {
+                actions = `<button class="btn-small success barcode-accept-legacy-btn" data-id="${barcode.id}" style="margin-right: 6px;">Aceptar</button>` +
+                    `<button class="btn-small danger barcode-reject-legacy-btn" data-id="${barcode.id}">Rechazar</button>`;
+            } else {
+                actions = `<button class="btn-small barcode-edit-btn" data-id="${barcode.id}" style="margin-right: 6px;">Editar</button>` +
+                    `<button class="btn-small danger barcode-remove-btn" data-id="${barcode.id}">✕ Quitar</button>`;
+            }
             html += `<tr style="border-bottom: 1px solid #eee;">
                 <td style="padding: 8px;"><code>${esc(barcode.codigo)}</code></td>
-                <td style="padding: 8px;">${esc(barcode.tipo)} - ${esc(barcode.cantidad || 1)} ${esc(barcode.unidad || 'unidad')}</td>
-                <td style="padding: 8px; text-align: right;"><button class="btn-small danger barcode-remove-btn" data-id="${barcode.id}">✕ Quitar</button></td>
+                <td style="padding: 8px;">${esc(tipo)} - ${esc(barcode.cantidad || 1)} ${esc(unidad)}</td>
+                <td style="padding: 8px; text-align: right;">${actions}</td>
             </tr>`;
         });
         html += '</table>';
@@ -1459,6 +1543,7 @@ jQuery(function($) {
             'confirmar_relacion_online': { button: 'Ir a Online', tab: 'online' },
             'confirmar_estructura_atributos': { button: 'Ver Atributos', tab: 'online' },
             'barcode_faltante': { button: 'Ir a Barcodes', tab: 'barcodes' },
+            'confirmar_barcode_legacy': { button: 'Ir a Barcodes', tab: 'barcodes' },
             'codigo_faltante': { button: 'Ir a Códigos', tab: 'suppliers' },
             'autorizar_publicacion': { button: 'Autorizar', tab: 'online' },
             'validar_categoria': { button: 'Ver Online', tab: 'online' },
@@ -1509,8 +1594,9 @@ jQuery(function($) {
 
     function loadFamilyTree(p) {
         post('riverso_families_tree', { producto_id: p.id }).done(function(r) {
-            if (r.success && r.data.families) {
-                let html = renderFamilyTreeHTML(r.data.families);
+            if (r.success) {
+                const list = r.data.tree || r.data.families || [];
+                let html = renderFamilyTreeHTML(list);
                 $('#family-tree').html(html || '<p style="color: #999;">Sin familias</p>');
             }
         });
@@ -1520,13 +1606,17 @@ jQuery(function($) {
         if (!families || families.length === 0) return '';
         let html = '';
         families.forEach(fam => {
+            const stock = (fam.stock_unidades !== undefined && fam.stock_unidades !== null)
+                ? Number(fam.stock_unidades).toLocaleString('es-CL') + ' u'
+                : '—';
+            const members = fam.members || fam.miembros || fam.children || [];
             html += `<div style="margin-bottom: 12px; padding: 12px; background: white; border-radius: 4px; border-left: 4px solid #2196f3;">
-                <strong>${esc(fam.nombre)}</strong> <small style="color: #999;">(${esc(fam.codigo)})</small><br>
-                <small style="color: #666;">Tipo: ${esc(fam.tipo_sustitucion)}</small>`;
-            if (fam.miembros && fam.miembros.length > 0) {
+                <strong>${esc(fam.nombre)}</strong> <small style="color: #999;">(${esc(fam.codigo_grupo || fam.codigo || '')})</small><br>
+                <small style="color: #666;">Tipo: ${esc(fam.tipo_sustitucion || '')} · Stock familia: ${stock}</small>`;
+            if (members.length > 0) {
                 html += '<div style="margin-top: 8px; margin-left: 12px; border-left: 2px solid #e0e0e0; padding-left: 12px;">';
-                fam.miembros.forEach(member => {
-                    html += `<div style="margin: 4px 0;"><code>${esc(member.sku)}</code> - ${esc(member.nombre)}</div>`;
+                members.forEach(member => {
+                    html += `<div style="margin: 4px 0;"><code>${esc(member.canonical_sku || member.sku || '')}</code> - ${esc(member.nombre_canonico || member.nombre || '')}</div>`;
                 });
                 html += '</div>';
             }
@@ -1657,6 +1747,7 @@ jQuery(function($) {
         $('#barcode-type').change(function() {
             $('#barcode-supplier-section').toggle($(this).val() === 'supplier');
         });
+        $('#barcode-type').trigger('change');
 
         $('#barcode-add-btn').click(function() {
             const type = $('#barcode-type').val();
@@ -1672,13 +1763,13 @@ jQuery(function($) {
             }
 
             post('riverso_products_add_barcode', {
-                producto_id: currentProduct.id,
-                type: type,
-                codigo: code,
-                proveedor: type === 'supplier' ? $('#barcode-proveedor').val() : null,
+                product_id: currentProduct.id,
+                tipo: type,
+                barcode: code,
+                proveedor_id: type === 'supplier' ? $('#barcode-proveedor').val() : null,
                 cantidad: cantidad,
-                unidad: unidad,
-                origen: origen,
+                unidad_medida: unidad,
+                origen_datos: origen,
                 audit_reason: reason
             }).done(function(r) {
                 if (r.success) {
@@ -1686,6 +1777,7 @@ jQuery(function($) {
                     $('#barcode-new').val('');
                     $('#barcode-cantidad').val('1');
                     $('#barcode-audit-reason').val('');
+                    $('#barcode-type').val('supplier').trigger('change');
                     openDetail(currentProduct.id);
                 } else {
                     alert('Error: ' + r.data.message);
@@ -1710,30 +1802,35 @@ jQuery(function($) {
                 }
                 let warningsHTML = '';
                 (merge.warnings || []).forEach(w => {
-                    const color = w.severity === 'warning' ? '#fff3cd' : '#d1ecf1';
-                    const borderColor = w.severity === 'warning' ? '#ffc107' : '#17a2b8';
-                    warningsHTML += '<div style="background:' + color + ';border-left:4px solid ' + borderColor + ';padding:10px;margin-top:8px;border-radius:2px;font-size:13px;">' + w.message + '</div>';
+                    const sev = w.severity || 'info';
+                    const color = sev === 'error' ? '#f8d7da' : (sev === 'warning' ? '#fff3cd' : '#d1ecf1');
+                    const borderColor = sev === 'error' ? '#dc3545' : (sev === 'warning' ? '#ffc107' : '#17a2b8');
+                    warningsHTML += '<div style="background:' + color + ';border-left:4px solid ' + borderColor + ';padding:10px;margin-top:8px;border-radius:2px;font-size:13px;">' + esc(w.message) + '</div>';
                 });
+                const blocked = !!merge.block_merge;
+                const confirmBtn = blocked
+                    ? '<button type="button" class="btn-small" disabled style="opacity:0.5;cursor:not-allowed;">Merge bloqueado</button>'
+                    : '<button type="button" id="merge-portal-confirm" class="btn-small success" style="cursor:pointer;">Confirmar</button>';
                 const html = `
 <div id="merge-modal-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;">
   <div style="background:#fff;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,0.3);padding:30px;max-width:550px;width:90%;max-height:80vh;overflow-y:auto;">
-    <h2 style="margin:0 0 20px 0;color:#1d2327;">Confirmar Merge</h2>
+    <h2 style="margin:0 0 20px 0;color:#1d2327;">` + (blocked ? 'Merge bloqueado' : 'Confirmar Merge') + `</h2>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:15px;">
       <div style="border:1px solid #ddd;padding:12px;border-radius:6px;background:#f9f9f9;">
         <h4 style="margin:0 0 8px 0;color:#d32f2f;font-size:13px;">Origen</h4>
-        <div style="font-size:12px;"><strong>#` + merge.source_id + `</strong><br>SKU: ` + (src.canonical_sku || '—') + `<br>` + (src.nombre_canonico ? src.nombre_canonico.substring(0, 40) : 'Sin nombre') + `</div>
+        <div style="font-size:12px;"><strong>#` + merge.source_id + `</strong><br>SKU: ` + (src.canonical_sku || '—') + `<br>` + (src.nombre_canonico ? esc(src.nombre_canonico.substring(0, 40)) : 'Sin nombre') + `</div>
       </div>
       <div style="border:1px solid #ddd;padding:12px;border-radius:6px;background:#f9f9f9;">
         <h4 style="margin:0 0 8px 0;color:#1976d2;font-size:13px;">Destino</h4>
-        <div style="font-size:12px;"><strong>#` + merge.target_id + `</strong><br>SKU: ` + (tgt.canonical_sku || '—') + `<br>` + (tgt.nombre_canonico ? tgt.nombre_canonico.substring(0, 40) : 'Sin nombre') + `</div>
+        <div style="font-size:12px;"><strong>#` + merge.target_id + `</strong><br>SKU: ` + (tgt.canonical_sku || '—') + `<br>` + (tgt.nombre_canonico ? esc(tgt.nombre_canonico.substring(0, 40)) : 'Sin nombre') + `</div>
       </div>
     </div>
-    <div style="background:#e8f5e9;border:1px solid #4caf50;padding:10px;border-radius:6px;margin-bottom:15px;font-size:12px;"><strong style="color:#2e7d32;">SKU Online: </strong>` + (woo.sku || 'N/A') + `</div>
+    <div style="background:#e8f5e9;border:1px solid #4caf50;padding:10px;border-radius:6px;margin-bottom:15px;font-size:12px;"><strong style="color:#2e7d32;">SKU Online: </strong>` + esc(woo.sku || 'N/A') + `</div>
     ` + codesHTML + `
     ` + warningsHTML + `
     <div style="margin-top:15px;border-top:1px solid #ddd;padding-top:12px;display:flex;gap:10px;justify-content:flex-end;">
-      <button type="button" id="merge-portal-cancel" class="btn-small" style="cursor:pointer;">Cancelar</button>
-      <button type="button" id="merge-portal-confirm" class="btn-small success" style="cursor:pointer;">Confirmar</button>
+      <button type="button" id="merge-portal-cancel" class="btn-small" style="cursor:pointer;">` + (blocked ? 'Cerrar' : 'Cancelar') + `</button>
+      ` + confirmBtn + `
     </div>
   </div>
 </div>
@@ -1927,7 +2024,7 @@ jQuery(function($) {
             }
 
             post('riverso_families_create', {
-                codigo: codigo,
+                codigo_grupo: codigo,
                 nombre: nombre,
                 tipo_sustitucion: tipo
             }).done(function(r) {
@@ -2044,6 +2141,42 @@ jQuery(function($) {
         switchDetailTab($(this).data('tab'));
     });
 
+    $(document).on('click', '.products-assign-barcode', function() {
+        const $btn = $(this);
+        const id = $btn.data('id');
+        const sku = $btn.data('sku') || '';
+        const codigo = String($btn.closest('td').find('.products-barcode-input').val() || '').trim();
+        if (!codigo) {
+            alert('Escribe o escanea el código de barra.');
+            $btn.closest('td').find('.products-barcode-input').focus();
+            return;
+        }
+        post('riverso_barcode_upsert', {
+            codigo: codigo,
+            producto_base_id: id,
+            sku_local: sku,
+            estado: 'verificado',
+            cantidad: 1,
+            tipo_envase: 'envase',
+            create_envase: 1
+        }).done(function(r) {
+            if (r.success) {
+                alert(r.data && r.data.message ? r.data.message : 'Código asignado');
+                loadProducts(currentOffset);
+            } else {
+                alert('Error: ' + ((r.data && r.data.message) || 'no se pudo asignar'));
+            }
+        }).fail(function() {
+            alert('No se pudo asignar el código.');
+        });
+    });
+    $(document).on('keydown', '.products-barcode-input', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            $(this).closest('td').find('.products-assign-barcode').click();
+        }
+    });
+
     // Shortcuts desde badge de campos faltantes
     $(document).on('click', '.alerts-tooltip-item', function(e) {
         e.preventDefault();
@@ -2071,6 +2204,7 @@ jQuery(function($) {
             'relacionar_producto_proveedor': 'suppliers',
             'confirmar_relacion_online': 'online',
             'barcode_faltante': 'barcodes',
+            'confirmar_barcode_legacy': 'barcodes',
             'codigo_faltante': 'suppliers',
             'validar_categoria': 'online',
             'autorizar_publicacion': 'online',
@@ -2113,6 +2247,18 @@ jQuery(function($) {
 
     $(document).on('click', '.barcode-remove-btn', function() {
         window.portalProducts.removeBarcode($(this).data('id'));
+    });
+
+    $(document).on('click', '.barcode-edit-btn', function() {
+        window.portalProducts.editBarcode($(this).data('id'));
+    });
+
+    $(document).on('click', '.barcode-accept-legacy-btn', function() {
+        window.portalProducts.acceptLegacyBarcode($(this).data('id'));
+    });
+
+    $(document).on('click', '.barcode-reject-legacy-btn', function() {
+        window.portalProducts.rejectLegacyBarcode($(this).data('id'));
     });
 
     $('#online-assign-code-btn').on('click', function() {
@@ -2260,6 +2406,57 @@ jQuery(function($) {
             $('#local-familia-edit').show();
         });
 
+        $('#familia-view-btn').click(function() {
+            const grupoId = $(this).data('familia-id') || (currentProduct && currentProduct.familia && currentProduct.familia.id);
+            if (!grupoId) return;
+            post('riverso_families_get', { grupo_id: grupoId }).done(function(r) {
+                if (!r.success || !r.data || !r.data.family) {
+                    alert('No se pudo cargar la familia');
+                    return;
+                }
+                const fam = r.data.family;
+                const members = fam.members || [];
+                const pending = fam.pending || [];
+                let rows = members.map(m => {
+                    const units = m.cantidad_unidades != null ? m.cantidad_unidades : '—';
+                    return `<tr>
+                        <td>#${m.producto_base_id}</td>
+                        <td><code>${esc(m.canonical_sku || '')}</code></td>
+                        <td>${esc(m.nombre_canonico || '')}</td>
+                        <td>${esc(String(units))}</td>
+                        <td>${esc(String(m.unidades_familia != null ? m.unidades_familia : (m.stock_abierto || 0)))}</td>
+                    </tr>`;
+                }).join('');
+                let pendingHtml = '';
+                if (pending.length) {
+                    pendingHtml = '<h4 style="margin:16px 0 8px;">Pendientes (proveedor)</h4><ul style="margin:0;padding-left:18px;">' +
+                        pending.map(p => `<li><code>${esc(p.codigo_proveedor || p.codigo || '')}</code> · ${esc(p.nombre_proveedor || p.proveedor || '')}${p.cantidad_unidades ? ' · ' + esc(String(p.cantidad_unidades)) + ' u' : ''}</li>`).join('') +
+                        '</ul>';
+                }
+                const stock = fam.stock && (fam.stock.stock_unidades != null ? fam.stock.stock_unidades : fam.stock.total_unidades);
+                const stockLabel = stock != null ? String(stock) : '—';
+                const html = `
+<div id="familia-view-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:8px;max-width:720px;width:94%;max-height:85vh;overflow:auto;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.25);">
+    <h2 style="margin:0 0 8px;">${esc(fam.nombre || fam.codigo_grupo || 'Familia')}</h2>
+    <p style="margin:0 0 12px;color:#666;font-size:13px;">${esc(fam.tipo_sustitucion || '')} · Stock familia: <strong>${esc(stockLabel)}</strong> u · ${members.length} miembro(s)</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead><tr style="text-align:left;border-bottom:1px solid #ddd;"><th>ID</th><th>SKU</th><th>Nombre</th><th>Envase</th><th>Unid. fam.</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5">Sin miembros</td></tr>'}</tbody>
+    </table>
+    ${pendingHtml}
+    <div style="margin-top:16px;text-align:right;"><button type="button" class="btn-small" id="familia-view-close">Cerrar</button></div>
+  </div>
+</div>`;
+                $('body').append(html);
+                $('#familia-view-close, #familia-view-overlay').on('click', function(ev){
+                    if (ev.target.id === 'familia-view-overlay' || ev.target.id === 'familia-view-close') {
+                        $('#familia-view-overlay').remove();
+                    }
+                });
+            });
+        });
+
         $('#familia-cancel-btn').click(() => {
             $('#local-familia-view').show();
             $('#local-familia-edit').hide();
@@ -2373,9 +2570,104 @@ jQuery(function($) {
                 post('riverso_products_remove_barcode', { barcode_id: barcodeId }).done(function(r) {
                     if (r.success) {
                         openDetail(currentProduct.id);
+                    } else {
+                        alert('Error: ' + ((r.data && r.data.message) ? r.data.message : 'No se pudo eliminar el barcode'));
                     }
                 });
             }
+        },
+        acceptLegacyBarcode: function(barcodeId) {
+            if (!confirm('¿Aceptar este código legacy como Código de Proveedor?\nQuedará en el mapeo interno y será editable.')) {
+                return;
+            }
+            post('riverso_products_accept_legacy_barcode', {
+                barcode_id: barcodeId,
+                product_id: currentProduct.id,
+                audit_reason: 'Aceptado desde portal de productos'
+            }).done(function(r) {
+                if (r.success) {
+                    openDetail(currentProduct.id);
+                } else {
+                    alert('Error: ' + ((r.data && r.data.message) ? r.data.message : 'No se pudo aceptar'));
+                }
+            });
+        },
+        rejectLegacyBarcode: function(barcodeId) {
+            if (!confirm('¿Rechazar y eliminar este código legacy?')) {
+                return;
+            }
+            post('riverso_products_reject_legacy_barcode', {
+                barcode_id: barcodeId,
+                product_id: currentProduct.id,
+                audit_reason: 'Rechazado desde portal de productos'
+            }).done(function(r) {
+                if (r.success) {
+                    openDetail(currentProduct.id);
+                } else {
+                    alert('Error: ' + ((r.data && r.data.message) ? r.data.message : 'No se pudo rechazar'));
+                }
+            });
+        },
+        editBarcode: function(barcodeId) {
+            const barcodes = (currentProduct && currentProduct.barcodes) ? currentProduct.barcodes : [];
+            const barcode = barcodes.find(function(item) {
+                return String(item.id) === String(barcodeId);
+            });
+            if (!barcode) {
+                alert('No se encontró el barcode a editar');
+                return;
+            }
+
+            const origen = String(barcode.origen_datos || barcode.origen || '').toLowerCase();
+            const migrado = String(barcode.migrado_de_tabla || '').toLowerCase();
+            if (origen.includes('legacy') || migrado !== '' || !!barcode.legacy_ref) {
+                alert('Los códigos legacy no se editan desde esta vista');
+                return;
+            }
+
+            const code = prompt('Código de barra:', barcode.codigo || '');
+            if (code === null) return;
+            const cleanCode = code.trim();
+            if (!cleanCode) {
+                alert('El código no puede quedar vacío');
+                return;
+            }
+
+            const type = prompt('Tipo de código (supplier, ean13, internal):', barcode.tipo || 'ean13');
+            if (type === null) return;
+            const cleanType = type.trim().toLowerCase();
+            if (!['supplier', 'ean13', 'internal'].includes(cleanType)) {
+                alert('Tipo inválido. Usa supplier, ean13 o internal.');
+                return;
+            }
+
+            const cantidadRaw = prompt('Cantidad:', barcode.cantidad || 1);
+            if (cantidadRaw === null) return;
+            const cantidad = parseFloat(cantidadRaw);
+            if (!Number.isFinite(cantidad) || cantidad <= 0) {
+                alert('Cantidad inválida');
+                return;
+            }
+
+            const unidad = prompt('Unidad:', barcode.unidad_medida || barcode.unidad || 'unidad');
+            if (unidad === null) return;
+            const cleanUnidad = unidad.trim() || 'unidad';
+
+            post('riverso_products_update_barcode', {
+                barcode_id: barcodeId,
+                barcode: cleanCode,
+                tipo: cleanType,
+                cantidad: cantidad,
+                unidad_medida: cleanUnidad,
+                proveedor_id: cleanType === 'supplier' ? (barcode.proveedor_id || '') : '',
+                audit_reason: 'Editado desde portal de productos'
+            }).done(function(r) {
+                if (r.success) {
+                    openDetail(currentProduct.id);
+                } else {
+                    alert('Error: ' + ((r.data && r.data.message) ? r.data.message : 'No se pudo actualizar el barcode'));
+                }
+            });
         },
         selectSupplierCode: function(supplierId, supplierCode) {
             $('#supplier-id-select').val(supplierId);

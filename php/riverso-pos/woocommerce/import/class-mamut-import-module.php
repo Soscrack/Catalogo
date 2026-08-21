@@ -42,11 +42,24 @@ class Riverso_Mamut_Import_Module {
     }
 
     /**
-     * Ruta por defecto del catálogo MAMUT (carpeta data del repositorio).
+     * Ruta por defecto del catálogo MAMUT.
+     * Prioriza data/ dentro del plugin (servidor); fallback monorepo local.
      */
     public function default_path() {
-        $candidate = realpath(RIVERSO_POS_PLUGIN_DIR . '../../data/catalogo_mamut_2025_spatial.json');
-        return $candidate ?: (RIVERSO_POS_PLUGIN_DIR . '../../data/catalogo_mamut_2025_spatial.json');
+        if (class_exists('Riverso_Family_Suggestion_Service')) {
+            return Riverso_Family_Suggestion_Service::default_catalog_path();
+        }
+        $candidates = [
+            RIVERSO_POS_PLUGIN_DIR . 'data/catalogo_mamut_2025_spatial.json',
+            RIVERSO_POS_PLUGIN_DIR . '../../data/catalogo_mamut_2025_spatial.json',
+        ];
+        foreach ($candidates as $path) {
+            $real = realpath($path);
+            if ($real && is_readable($real)) {
+                return $real;
+            }
+        }
+        return $candidates[0];
     }
 
     /**

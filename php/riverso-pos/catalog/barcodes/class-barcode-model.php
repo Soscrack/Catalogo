@@ -106,25 +106,27 @@ class Riverso_Barcode_Model {
         }
 
         foreach (self::legacy_suggestions($code, $supplier_id) as $legacy) {
-            $key = ($legacy['origen'] ?? '') . ':' . ($legacy['producto_base_id'] ?? 0) . ':' . ($legacy['sku_local'] ?? '');
-            $dup = false;
-            foreach ($suggestions as $existing) {
-                $ekey = ($existing['origen'] ?? '') . ':' . ($existing['producto_base_id'] ?? 0) . ':' . ($existing['sku_local'] ?? '');
-                if ($ekey === $key) {
-                    $dup = true;
-                    break;
-                }
-            }
             if ($match && intval($legacy['producto_base_id'] ?? 0) === intval($match['producto_base_id'] ?? 0) && !empty($legacy['producto_base_id'])) {
                 continue;
             }
-            if (!$dup) {
+            $merged_into = false;
+            foreach ($suggestions as $idx => $existing) {
+                if (!self::suggestions_are_identical($existing, $legacy)) {
+                    continue;
+                }
+                $suggestions[$idx] = self::merge_identical_suggestions($existing, $legacy);
+                $merged_into = true;
+                break;
+            }
+            if (!$merged_into) {
                 $suggestions[] = $legacy;
                 if (!empty($legacy['producto_base_id'])) {
                     $product_ids[] = intval($legacy['producto_base_id']);
                 }
             }
         }
+
+        $suggestions = self::dedupe_identical_suggestions($suggestions);
 
         $unique_products = array_unique($product_ids);
         $conflicts = count($unique_products) > 1;
@@ -142,6 +144,329 @@ class Riverso_Barcode_Model {
             'rejected' => $rejected,
             'query' => $code,
         ];
+    }
+
+    /**
+     * Misma identidad de producto (SKU / producto_base), sin importar origen legacy.
+     */
+    private static function suggestion_identity_key($item) {
+        $pb = intval($item['producto_base_id'] ?? 0);
+        if ($pb > 0) {
+            return 'pb:' . $pb;
+        }
+        $sku = strtolower(trim((string) (
+            $item['canonical_sku']
+            ?? $item['sku_local']
+            ?? $item['pending_sku']
+            ?? $item['sku']
+            ?? ''
+        )));
+        if ($sku !== '') {
+            return 'sku:' . $sku;
+        }
+        $origen = (string) ($item['origen'] ?? '');
+        $cid = intval($item['codigo_id'] ?? $item['id'] ?? 0);
+        return 'raw:' . $origen . ':' . $cid;
+    }
+
+    private static function suggestions_are_identical($a, $b) {
+        return self::suggestion_identity_key($a) === self::suggestion_identity_key($b);
+    }
+
+    /**
+     * Conserva el mejor id/nombre y une orígenes (legacy + tienda_local → una tarjeta).
+     */
+    private static function merge_identical_suggestions($base, $extra) {
+        $merged = $base;
+        foreach (['producto_base_id', 'canonical_sku', 'sku_local', 'pending_sku', 'nombre_canonico', 'unidad_medida'] as $field) {
+            if (empty($merged[$field]) && !empty($extra[$field])) {
+                $merged[$field] = $extra[$field];
+            }
+        }
+        // Preferir fila ya en mapeo interno (codigo_barra) sobre solo-legacy.
+        $base_id = intval($base['codigo_id'] ?? $base['id'] ?? 0);
+        $extra_id = intval($extra['codigo_id'] ?? $extra['id'] ?? 0);
+        $base_in_map = $base_id > 0 && strpos((string) ($base['origen'] ?? ''), 'legacy') === false;
+        $extra_in_map = $extra_id > 0 && strpos((string) ($extra['origen'] ?? ''), 'legacy') === false;
+        if ($extra_in_map && !$base_in_map) {
+            $merged['codigo_id'] = $extra_id;
+            $merged['id'] = $extra_id;
+            if (!empty($extra['estado'])) {
+                $merged['estado'] = $extra['estado'];
+            }
+        } elseif ($base_id <= 0 && $extra_id > 0) {
+            $merged['codigo_id'] = $extra_id;
+            $merged['id'] = $extra_id;
+        }
+
+        $origins = [];
+        foreach ([$base['origen'] ?? '', $extra['origen'] ?? ''] as $origen) {
+            $origen = trim((string) $origen);
+            if ($origen === '' || in_array($origen, $origins, true)) {
+                continue;
+            }
+            $origins[] = $origen;
+        }
+        if ($origins) {
+            $merged['origen'] = implode(' + ', $origins);
+            $merged['legacy'] = true;
+        }
+        return $merged;
+    }
+
+    private static function dedupe_identical_suggestions(array $suggestions) {
+        $out = [];
+        foreach ($suggestions as $item) {
+            $merged = false;
+            foreach ($out as $idx => $existing) {
+                if (!self::suggestions_are_identical($existing, $item)) {
+                    continue;
+                }
+                $out[$idx] = self::merge_identical_suggestions($existing, $item);
+                $merged = true;
+                break;
+            }
+            if (!$merged) {
+                $out[] = $item;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Búsqueda unificada para buscadores: mapeo verificado → propuesto unívoco → SKU/nombre.
+     * No corta el flujo cuando el código aún no está verificado.
+     *
+     * @param array{include_unverified?:bool,limit?:int} $opts
+     * @return array{query:string,trusted:bool,conflicts:bool,barcode_exact:bool,hits:array,suggestions:array,rejected:array,message:?string}
+     */
+    public static function lookup_for_search($query, $opts = []) {
+        $query = trim((string) $query);
+        $limit = max(1, min(50, intval($opts['limit'] ?? 20)));
+        $include_unverified = !array_key_exists('include_unverified', $opts) || $opts['include_unverified'];
+        $out = [
+            'query' => $query,
+            'trusted' => false,
+            'conflicts' => false,
+            'barcode_exact' => false,
+            'hits' => [],
+            'suggestions' => [],
+            'rejected' => [],
+            'message' => null,
+        ];
+        if ($query === '') {
+            return $out;
+        }
+
+        $seen = [];
+        $add_hit = static function ($hit) use (&$out, &$seen, $limit) {
+            if (!$hit) {
+                return;
+            }
+            $id = intval($hit['producto_base_id'] ?? 0);
+            if ($id > 0 && !empty($seen[$id])) {
+                return;
+            }
+            if ($id > 0) {
+                $seen[$id] = true;
+            }
+            $out['hits'][] = $hit;
+        };
+
+        if (self::looks_like_barcode($query)) {
+            $bundle = self::resolve_with_suggestions($query);
+            $out['suggestions'] = $bundle['suggestions'];
+            $out['rejected'] = $bundle['rejected'];
+            $out['conflicts'] = !empty($bundle['conflicts']);
+
+            if (!empty($bundle['match']) && !empty($bundle['match']['producto_base_id'])) {
+                $add_hit(self::hit_from_mapping($bundle['match'], true, 'barcode_verified'));
+                $out['trusted'] = true;
+                $out['barcode_exact'] = true;
+                return $out;
+            }
+
+            if ($include_unverified) {
+                $candidates = self::unique_mapping_candidates($bundle);
+                if ($out['conflicts'] || count($candidates) > 1) {
+                    $out['conflicts'] = true;
+                    $out['message'] = 'Este código tiene más de un SKU posible. Resuelve el conflicto en /interno/barcodes.';
+                    foreach ($candidates as $cand) {
+                        $add_hit(self::hit_from_mapping($cand, false, 'barcode_conflict'));
+                    }
+                } elseif (count($candidates) === 1) {
+                    $add_hit(self::hit_from_mapping($candidates[0], false, 'barcode_proposed'));
+                    $out['message'] = 'Código no confirmado. Aparece como sugerencia del mapeo interno.';
+                }
+            }
+        }
+
+        foreach (self::search_producto_base_text($query, $limit) as $row) {
+            if (count($out['hits']) >= $limit) {
+                break;
+            }
+            $source = strcasecmp((string) ($row['canonical_sku'] ?? ''), $query) === 0 ? 'sku' : 'name';
+            $add_hit(self::hit_from_producto_base($row, true, $source));
+        }
+
+        return $out;
+    }
+
+    /**
+     * Resolución operativa (escaneo/conteo): verificado, o propuesto unívoco.
+     *
+     * @return array{resolved:?array,trusted:bool,conflicts:bool,suggestions:array}
+     */
+    public static function resolve_for_operation($code) {
+        $bundle = self::resolve_with_suggestions($code);
+        if (!empty($bundle['match'])) {
+            return [
+                'resolved' => $bundle['match'],
+                'trusted' => true,
+                'conflicts' => false,
+                'suggestions' => $bundle['suggestions'],
+            ];
+        }
+        $candidates = self::unique_mapping_candidates($bundle);
+        if (!empty($bundle['conflicts']) || count($candidates) > 1) {
+            return [
+                'resolved' => null,
+                'trusted' => false,
+                'conflicts' => true,
+                'suggestions' => $bundle['suggestions'],
+            ];
+        }
+        if (count($candidates) === 1) {
+            return [
+                'resolved' => $candidates[0],
+                'trusted' => false,
+                'conflicts' => false,
+                'suggestions' => $bundle['suggestions'],
+            ];
+        }
+        return [
+            'resolved' => null,
+            'trusted' => false,
+            'conflicts' => false,
+            'suggestions' => $bundle['suggestions'],
+        ];
+    }
+
+    private static function unique_mapping_candidates($bundle) {
+        $by_id = [];
+        foreach ($bundle['suggestions'] ?? [] as $suggestion) {
+            $id = intval($suggestion['producto_base_id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            if (!isset($by_id[$id])) {
+                $by_id[$id] = $suggestion;
+            }
+        }
+        return array_values($by_id);
+    }
+
+    private static function hit_from_mapping($mapping, $trusted, $source) {
+        $pb_id = intval($mapping['producto_base_id'] ?? 0);
+        if ($pb_id <= 0) {
+            return null;
+        }
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $pb = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT id, canonical_sku, nombre_canonico, woocommerce_product_id, woocommerce_variation_id, estado
+                 FROM {$prefix}producto_base
+                 WHERE id = %d",
+                $pb_id
+            ),
+            ARRAY_A
+        );
+        if (!$pb) {
+            return null;
+        }
+        if (empty($pb['canonical_sku']) && !empty($mapping['canonical_sku'])) {
+            $pb['canonical_sku'] = $mapping['canonical_sku'];
+        }
+        if (empty($pb['nombre_canonico']) && !empty($mapping['nombre_canonico'])) {
+            $pb['nombre_canonico'] = $mapping['nombre_canonico'];
+        }
+        return self::hit_from_producto_base($pb, $trusted, $source, $mapping);
+    }
+
+    private static function hit_from_producto_base($pb, $trusted, $source, $mapping = null) {
+        $woo_product = !empty($pb['woocommerce_product_id']) ? intval($pb['woocommerce_product_id']) : null;
+        $woo_var = !empty($pb['woocommerce_variation_id']) ? intval($pb['woocommerce_variation_id']) : null;
+        $labels = [
+            'barcode_verified' => 'Código de barra (mapeo verificado)',
+            'barcode_proposed' => 'Código de barra (no confirmado)',
+            'barcode_conflict' => 'Código de barra (conflicto)',
+            'sku' => 'SKU',
+            'name' => 'Nombre',
+        ];
+        return [
+            'producto_base_id' => intval($pb['id']),
+            'canonical_sku' => $pb['canonical_sku'] ?? '',
+            'nombre_canonico' => $pb['nombre_canonico'] ?? ($pb['canonical_sku'] ?? ''),
+            'woocommerce_product_id' => $woo_product,
+            'woocommerce_variation_id' => $woo_var,
+            'wc_id' => $woo_var ?: $woo_product,
+            'trusted' => (bool) $trusted,
+            'source' => $source,
+            'barcode' => $mapping,
+            'match_source' => $labels[$source] ?? $source,
+        ];
+    }
+
+    private static function search_producto_base_text($query, $limit) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $like = '%' . $wpdb->esc_like($query) . '%';
+        return $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT pb.id, pb.canonical_sku, pb.nombre_canonico,
+                        pb.woocommerce_product_id, pb.woocommerce_variation_id, pb.estado
+                 FROM {$prefix}producto_base pb
+                 WHERE pb.estado = 'activo'
+                   AND pb.deleted_at IS NULL
+                   AND (
+                        pb.canonical_sku = %s
+                     OR pb.canonical_sku LIKE %s
+                     OR pb.nombre_canonico LIKE %s
+                     OR EXISTS (
+                        SELECT 1 FROM {$prefix}codigo_barra cb
+                        WHERE cb.producto_base_id = pb.id
+                          AND cb.activo = 1
+                          AND cb.estado IN ('verificado', 'propuesto')
+                          AND (cb.codigo = %s OR cb.codigo LIKE %s)
+                     )
+                   )
+                 ORDER BY
+                    CASE
+                        WHEN pb.canonical_sku = %s THEN 0
+                        WHEN EXISTS (
+                            SELECT 1 FROM {$prefix}codigo_barra cb2
+                            WHERE cb2.producto_base_id = pb.id
+                              AND cb2.activo = 1
+                              AND cb2.codigo = %s
+                        ) THEN 1
+                        WHEN pb.canonical_sku LIKE %s THEN 2
+                        ELSE 3
+                    END,
+                    pb.canonical_sku ASC
+                 LIMIT %d",
+                $query,
+                $like,
+                $like,
+                $query,
+                $like,
+                $query,
+                $query,
+                $wpdb->esc_like($query) . '%',
+                $limit
+            ),
+            ARRAY_A
+        ) ?: [];
     }
 
     private static function row_to_result($result) {
@@ -466,22 +791,193 @@ class Riverso_Barcode_Model {
     public static function get_by_product($producto_base_id, $proveedor_id = null) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
+        $producto_base_id = absint($producto_base_id);
+        if (!$producto_base_id) {
+            return [];
+        }
+
+        $sku = (string) $wpdb->get_var($wpdb->prepare(
+            "SELECT canonical_sku FROM {$prefix}producto_base WHERE id = %d",
+            $producto_base_id
+        ));
+
+        $where_extra = '';
+        $query_args = [$producto_base_id, $sku, $sku, $sku];
+        if ($proveedor_id) {
+            $where_extra = ' AND proveedor_id = %d';
+            $query_args[] = absint($proveedor_id);
+        }
 
         $query = $wpdb->prepare(
             "SELECT * FROM {$prefix}codigo_barra
-             WHERE producto_base_id = %d AND activo = 1",
-            $producto_base_id
+             WHERE activo = 1
+               AND estado IN ('verificado', 'propuesto')
+               AND (
+                    producto_base_id = %d
+                 OR (
+                    producto_base_id IS NULL
+                    AND %s <> ''
+                    AND (sku_local = %s OR pending_sku = %s)
+                 )
+               )
+               {$where_extra}
+             ORDER BY id ASC",
+            $query_args
         );
 
-        if ($proveedor_id) {
-            $query .= $wpdb->prepare(" AND proveedor_id = %d", $proveedor_id);
-        }
+        $rows = $wpdb->get_results($query, ARRAY_A) ?: [];
+        return self::dedupe_product_barcodes($rows);
+    }
 
-        return $wpdb->get_results($query, ARRAY_A);
+    /**
+     * Una fila por código: prioriza verificado y el vínculo a producto_base.
+     */
+    private static function dedupe_product_barcodes(array $rows) {
+        $best = [];
+        foreach ($rows as $row) {
+            $codigo = trim((string) ($row['codigo'] ?? ''));
+            if ($codigo === '') {
+                continue;
+            }
+            $score = 0;
+            if (($row['estado'] ?? '') === 'verificado') {
+                $score += 8;
+            }
+            if (!empty($row['producto_base_id'])) {
+                $score += 4;
+            }
+            if (!self::is_legacy_row($row)) {
+                $score += 2;
+            }
+            $score += min(1, absint($row['id'] ?? 0) > 0 ? 1 : 0);
+            if (!isset($best[$codigo]) || $score > $best[$codigo]['score']) {
+                $best[$codigo] = ['score' => $score, 'row' => $row];
+            }
+        }
+        return array_values(array_map(static function ($item) {
+            return $item['row'];
+        }, $best));
     }
 
     public static function deactivate($codigo_id) {
         return self::set_status($codigo_id, 'en_desuso', 'Desactivado desde administración.');
+    }
+
+    /**
+     * Detecta si una fila de codigo_barra proviene de legacy.
+     */
+    public static function is_legacy_row($row) {
+        if (!is_array($row)) {
+            return false;
+        }
+        $origen = strtolower((string) ($row['origen_datos'] ?? ''));
+        $migrado = trim((string) ($row['migrado_de_tabla'] ?? ''));
+        $legacy_ref = trim((string) ($row['legacy_ref'] ?? ''));
+        return strpos($origen, 'legacy') !== false || $migrado !== '' || $legacy_ref !== '';
+    }
+
+    /**
+     * Acepta un barcode legacy como Código de Proveedor en mapeo interno.
+     * Limpia flags legacy, marca verificado y rechaza duplicados del mismo código.
+     */
+    public static function accept_legacy_as_supplier($codigo_id, $motivo = '') {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $codigo_id = absint($codigo_id);
+        if (!$codigo_id) {
+            return false;
+        }
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}codigo_barra WHERE id = %d",
+            $codigo_id
+        ), ARRAY_A);
+        if (!$row) {
+            return false;
+        }
+
+        $wpdb->update(
+            "{$prefix}codigo_barra",
+            [
+                'tipo' => 'supplier',
+                'origen_datos' => 'manual',
+                'legacy_ref' => '',
+                'migrado_de_tabla' => '',
+                'requires_human_review' => 0,
+                'conflicto' => 0,
+                'updated_at' => current_time('mysql'),
+            ],
+            ['id' => $codigo_id],
+            ['%s', '%s', '%s', '%s', '%d', '%d', '%s'],
+            ['%d']
+        );
+
+        $ok = self::set_status(
+            $codigo_id,
+            'verificado',
+            $motivo !== '' ? $motivo : 'Aceptado como Código de Proveedor desde revisión legacy.'
+        );
+
+        // Rechazar otras filas del mismo código en el mismo producto (duplicados legacy).
+        if ($ok && !empty($row['codigo']) && !empty($row['producto_base_id'])) {
+            $siblings = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM {$prefix}codigo_barra
+                 WHERE producto_base_id = %d AND codigo = %s AND id <> %d
+                   AND activo = 1 AND estado IN ('propuesto', 'verificado', 'en_desuso')",
+                (int) $row['producto_base_id'],
+                $row['codigo'],
+                $codigo_id
+            )) ?: [];
+            foreach ($siblings as $sib_id) {
+                self::set_status((int) $sib_id, 'rechazado', 'Duplicado legacy reemplazado al aceptar mapeo.');
+            }
+        }
+
+        return $ok;
+    }
+
+    /**
+     * Rechaza (elimina lógicamente) un barcode legacy y sus duplicados en el producto.
+     */
+    public static function reject_legacy($codigo_id, $motivo = '') {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $codigo_id = absint($codigo_id);
+        if (!$codigo_id) {
+            return false;
+        }
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}codigo_barra WHERE id = %d",
+            $codigo_id
+        ), ARRAY_A);
+        if (!$row) {
+            return false;
+        }
+
+        $motivo = $motivo !== '' ? $motivo : 'Rechazado desde revisión legacy.';
+        $ids = [$codigo_id];
+        if (!empty($row['codigo']) && !empty($row['producto_base_id'])) {
+            $siblings = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM {$prefix}codigo_barra
+                 WHERE producto_base_id = %d AND codigo = %s AND id <> %d
+                   AND activo = 1 AND estado IN ('propuesto', 'verificado', 'en_desuso')",
+                (int) $row['producto_base_id'],
+                $row['codigo'],
+                $codigo_id
+            )) ?: [];
+            foreach ($siblings as $sib_id) {
+                $ids[] = (int) $sib_id;
+            }
+        }
+
+        $ok = true;
+        foreach (array_unique($ids) as $id) {
+            if (!self::set_status((int) $id, 'rechazado', $motivo)) {
+                $ok = false;
+            }
+        }
+        return $ok;
     }
 
     public static function set_status($codigo_id, $estado, $motivo = '') {

@@ -756,7 +756,8 @@ class Riverso_Matching_Module {
 
         // Validar producto_proveedor existe
         $pp = $wpdb->get_row($wpdb->prepare(
-            "SELECT id, producto_base_id, grupo_id FROM {$prefix}producto_proveedor WHERE id = %d",
+            "SELECT id, producto_base_id, grupo_id, codigo_proveedor, factor_conversion, notas
+             FROM {$prefix}producto_proveedor WHERE id = %d",
             $pp_id
         ), ARRAY_A);
         if (!$pp) {
@@ -770,6 +771,29 @@ class Riverso_Matching_Module {
         ), ARRAY_A);
         if (!$pb) {
             return new WP_Error('invalid_producto', 'Producto base no encontrado');
+        }
+
+        $pending_grupo_id = !empty($pp['grupo_id']) ? intval($pp['grupo_id']) : 0;
+
+        // Si venía pendiente en una familia, promover a miembro ANTES de limpiar grupo_id.
+        $promote_result = null;
+        if ($pending_grupo_id && class_exists('Riverso_Family_Module')) {
+            $promote_result = Riverso_Family_Module::get_instance()->promote_pending_supplier_to_member(
+                $producto_base_id,
+                $pending_grupo_id,
+                $pp
+            );
+            if (is_array($promote_result) && empty($promote_result['promoted'])
+                && ($promote_result['reason'] ?? '') === 'exacta_conflict'
+            ) {
+                $other = $promote_result['other_family'] ?? [];
+                return new WP_Error(
+                    'family_exacta_conflict',
+                    'El producto ya pertenece a otra familia exacta ("'
+                    . ($other['nombre'] ?? $other['codigo_grupo'] ?? '')
+                    . '"). No se puede promover el pendiente de esta familia.'
+                );
+            }
         }
 
         // Actualizar con SQL explícito para NULL en grupo_id
@@ -806,6 +830,7 @@ class Riverso_Matching_Module {
                     'producto_nombre' => $pb['nombre_canonico'],
                     'grupo_id' => null,
                 ],
+                'family_promote' => $promote_result,
             ]);
         }
 

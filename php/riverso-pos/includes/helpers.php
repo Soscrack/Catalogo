@@ -118,6 +118,8 @@ function riverso_get_task_types() {
         'etiquetado' => ['label' => 'Etiquetado de productos', 'icon' => 'tag'],
         'devolucion' => ['label' => 'Procesamiento de devolución', 'icon' => 'undo'],
         'codigo_faltante' => ['label' => 'Vincular código proveedor', 'icon' => 'warning'],
+        'barcode_faltante' => ['label' => 'Asignar código de barra', 'icon' => 'tag'],
+        'confirmar_barcode_legacy' => ['label' => 'Confirmar código legacy', 'icon' => 'warning'],
     ];
 }
 
@@ -262,10 +264,30 @@ function riverso_resolve_task_target($task) {
                 $args['tab'] = 'online';
             } elseif (in_array($task_tipo, ['relacionar_producto_proveedor', 'codigo_faltante'], true)) {
                 $args['tab'] = 'suppliers';
-            } elseif ($task_tipo === 'barcode_faltante') {
+            } elseif (in_array($task_tipo, ['barcode_faltante', 'confirmar_barcode_legacy'], true)) {
                 $args['tab'] = 'barcodes';
             }
             return add_query_arg($args, admin_url('admin.php?page=riverso-pos-products'));
+
+        case 'codigo_barra':
+            $pb_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT producto_base_id FROM {$wpdb->prefix}riverso_codigo_barra WHERE id = %d",
+                (int) $id
+            ));
+            if (!$pb_id) {
+                $extra = $task['datos_extra'] ?? [];
+                if (is_string($extra)) {
+                    $extra = json_decode($extra, true) ?: [];
+                }
+                $pb_id = absint($extra['producto_base_id'] ?? 0);
+            }
+            if ($pb_id) {
+                return add_query_arg(
+                    ['action' => 'detail', 'id' => (int) $pb_id, 'tab' => 'barcodes'],
+                    admin_url('admin.php?page=riverso-pos-products')
+                );
+            }
+            return home_url('/interno/barcodes/');
 
         case 'producto_proveedor':
             // Portal MAMUT con tab codigos

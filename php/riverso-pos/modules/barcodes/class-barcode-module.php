@@ -271,18 +271,43 @@ class Riverso_Barcode_Module {
 
     private function format_mapping_suggestions($barcode, $bundle) {
         $suggestions = [];
+        $seen = [];
         foreach ($bundle['suggestions'] ?? [] as $item) {
-            $suggestions[] = [
+            $pb = !empty($item['producto_base_id']) ? intval($item['producto_base_id']) : 0;
+            $sku = strtolower(trim((string) (
+                $item['canonical_sku'] ?: ($item['sku_local'] ?? ($item['pending_sku'] ?? ''))
+            )));
+            $key = $pb > 0 ? ('pb:' . $pb) : ($sku !== '' ? ('sku:' . $sku) : null);
+            $origen = (string) ($item['origen'] ?? '');
+            if ($key !== null && isset($seen[$key])) {
+                $idx = $seen[$key];
+                $prev = $suggestions[$idx]['origen'] ?? '';
+                if ($origen !== '' && strpos($prev, $origen) === false) {
+                    $suggestions[$idx]['origen'] = $prev !== '' ? ($prev . ' + ' . $origen) : $origen;
+                }
+                if (empty($suggestions[$idx]['id']) && !empty($item['codigo_id'])) {
+                    $suggestions[$idx]['id'] = intval($item['codigo_id']);
+                }
+                if ($suggestions[$idx]['nombre'] === '' && !empty($item['nombre_canonico'])) {
+                    $suggestions[$idx]['nombre'] = $item['nombre_canonico'];
+                }
+                continue;
+            }
+            $row = [
                 'id' => intval($item['codigo_id'] ?? $item['id'] ?? 0),
                 'codigo' => $barcode,
                 'sku' => $item['canonical_sku'] ?: ($item['sku_local'] ?? ''),
                 'sku_local' => $item['sku_local'] ?? null,
                 'nombre' => $item['nombre_canonico'] ?? '',
-                'producto_base_id' => !empty($item['producto_base_id']) ? intval($item['producto_base_id']) : null,
-                'origen' => $item['origen'] ?? '',
+                'producto_base_id' => $pb ?: null,
+                'origen' => $origen,
                 'estado' => $item['estado'] ?? 'propuesto',
                 'pending_sku' => $item['pending_sku'] ?? null,
             ];
+            if ($key !== null) {
+                $seen[$key] = count($suggestions);
+            }
+            $suggestions[] = $row;
         }
         $skus = array_unique(array_filter(array_map(function ($s) {
             return $s['sku_local'] ?: $s['sku'];

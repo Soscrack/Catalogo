@@ -5,6 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Riverso - Portal Interno</title>
     <?php wp_head(); ?>
+    <script>
+    window.riversoWhenJQuery = function(fn) {
+        if (window.jQuery) { window.jQuery(fn); return; }
+        var n = 0;
+        var t = setInterval(function() {
+            if (window.jQuery) { clearInterval(t); window.jQuery(fn); }
+            else if (++n > 80) { clearInterval(t); }
+        }, 50);
+    };
+    window.riversoSwitchBarcodeTab = function(tab) {
+        ['search', 'products', 'sku', 'pending', 'conflicts', 'tipos'].forEach(function(name) {
+            var el = document.getElementById('barcode-tab-' + name);
+            if (el) el.style.display = name === tab ? 'block' : 'none';
+        });
+        document.querySelectorAll('#barcode-tabs .barcode-tab').forEach(function(btn) {
+            var on = btn.getAttribute('data-tab') === tab;
+            btn.classList.toggle('btn-primary', !!on);
+            btn.classList.toggle('btn-secondary', !on);
+        });
+        document.dispatchEvent(new CustomEvent('riverso-barcode-tab', { detail: tab }));
+    };
+    </script>
     <style>
         :root {
             --primary: #1976d2;
@@ -43,7 +65,8 @@
             color: white;
             position: fixed;
             height: 100vh;
-            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
             z-index: 100;
         }
         
@@ -79,6 +102,8 @@
         
         .sidebar-nav {
             padding: 15px 0;
+            flex: 1;
+            overflow-y: auto;
         }
         
         .nav-section {
@@ -117,13 +142,26 @@
         }
         
         .sidebar-footer {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
+            position: relative;
             padding: 15px 20px;
             background: rgba(0,0,0,0.2);
             border-top: 1px solid rgba(255,255,255,0.1);
+            flex-shrink: 0;
+        }
+
+        .portal-menu-toggle {
+            display: none;
+            border: 1px solid var(--border);
+            background: white;
+            border-radius: 8px;
+            width: 42px;
+            height: 42px;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .portal-sidebar-backdrop {
+            display: none;
         }
         
         .user-info {
@@ -395,19 +433,33 @@
         
         /* Responsive */
         @media (max-width: 768px) {
+            .portal-menu-toggle { display: inline-flex; }
             .portal-sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
+                width: min(280px, 86vw);
+                transform: translateX(-100%);
+                transition: transform 0.2s ease;
             }
-            
+            .portal-sidebar.open { transform: translateX(0); }
+            .portal-sidebar-backdrop {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.4);
+                z-index: 90;
+            }
+            .portal-sidebar-backdrop.open { display: block; }
             .portal-main {
                 margin-left: 0;
+                padding: 16px;
             }
-            
             .sidebar-footer {
                 position: relative;
             }
+            .portal-header {
+                align-items: center;
+                gap: 12px;
+            }
+            .page-title { font-size: 22px; }
         }
 
         /* Tablas portal */
@@ -572,6 +624,92 @@
         .bulk-queue-item .bulk-status { font-size: 12px; color: var(--text-secondary); }
         .bulk-queue-item.ok .bulk-status { color: var(--success); }
         .bulk-queue-item.err .bulk-status { color: var(--danger); }
+        .barcode-tabs {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            position: relative;
+            z-index: 3;
+        }
+        .barcode-tabs .barcode-tab {
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: white;
+            color: var(--text-primary);
+        }
+        .barcode-tabs .barcode-tab.btn-primary {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        .barcode-layout {
+            width: 100%;
+            max-width: none;
+            margin: 0;
+        }
+        .barcode-section-body {
+            overflow-x: auto;
+        }
+        .portal-table tr.barcode-product-row {
+            cursor: pointer;
+        }
+        .portal-table tr.barcode-product-row:hover {
+            background: #e3f2fd;
+        }
+        .barcode-assoc-list {
+            list-style: none;
+            margin: 8px 0 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .barcode-assoc-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .barcode-assoc-row.is-unverified {
+            background: #fff8e1;
+            border-color: #ffcc80;
+        }
+        .barcode-assoc-row.is-verified {
+            background: #e8f5e9;
+            border-color: #a5d6a7;
+        }
+        .barcode-assoc-row.is-matched {
+            background: #e3f2fd;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.25);
+            order: -1;
+        }
+        .barcode-assoc-row .barcode-matched-flag {
+            background: var(--primary);
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .barcode-assoc-row .barcode-assoc-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .barcode-assoc-row .barcode-assoc-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
         .bulk-queue-item.run .bulk-status { color: var(--primary); }
     </style>
 </head>
@@ -622,6 +760,7 @@ $tareas = $wpdb->get_results($wpdb->prepare(
 ?>
 
 <div class="portal-wrapper">
+    <div class="portal-sidebar-backdrop" id="portal-sidebar-backdrop"></div>
     <!-- Sidebar -->
     <aside class="portal-sidebar">
         <div class="sidebar-header">
@@ -668,19 +807,13 @@ $tareas = $wpdb->get_results($wpdb->prepare(
     <!-- Main Content -->
     <main class="portal-main">
         <div class="portal-header">
+            <button type="button" class="portal-menu-toggle" id="portal-menu-toggle" aria-label="Abrir menú">
+                <span class="dashicons dashicons-menu"></span>
+            </button>
             <h1 class="page-title">
                 <?php
-                switch ($current_page) {
-                    case 'dashboard': echo 'Dashboard'; break;
-                    case 'tasks': echo 'Mis Tareas'; break;
-                    case 'catalog': echo 'Catálogo'; break;
-                    case 'warehouse': echo 'Bodega'; break;
-                    case 'invoices': echo 'Facturas'; break;
-                    case 'pos': echo 'Punto de Venta'; break;
-                    case 'quotes': echo 'Cotizaciones'; break;
-                    case 'impresiones': echo 'Impresiones'; break;
-                    default: echo 'Dashboard';
-                }
+                $page_title = $modules[$current_page]['label'] ?? null;
+                echo esc_html($page_title ?: ($current_page === 'dashboard' ? 'Dashboard' : ucfirst(str_replace('-', ' ', (string) $current_page))));
                 ?>
             </h1>
             <div class="header-actions">
@@ -1045,17 +1178,33 @@ $tareas = $wpdb->get_results($wpdb->prepare(
             <div class="section-header">
                 <h2 class="section-title">Códigos de barra (mapeo propio)</h2>
             </div>
-            <div class="section-body">
-                <div style="max-width: 900px; margin: 0 auto;">
+            <div class="section-body barcode-section-body">
+                <div class="barcode-layout">
                     <p style="color:var(--text-secondary);margin-bottom:12px;text-align:center;">
-                        La fuente de verdad es el mapeo verificado. Los datos legacy aparecen como sugerencias para aceptar o rechazar.
+                        La fuente de verdad es el mapeo verificado. Legacy aparece como sugerencia: acepta, rechaza o ignora.
                     </p>
-                    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
-                        <button type="button" class="btn btn-primary btn-sm barcode-tab" data-tab="search" onclick="window.riversoSwitchBarcodeTab && window.riversoSwitchBarcodeTab('search')">Buscar</button>
-                        <button type="button" class="btn btn-secondary btn-sm barcode-tab" data-tab="pending" onclick="window.riversoSwitchBarcodeTab && window.riversoSwitchBarcodeTab('pending')">Pendientes</button>
-                        <button type="button" class="btn btn-secondary btn-sm barcode-tab" data-tab="conflicts" onclick="window.riversoSwitchBarcodeTab && window.riversoSwitchBarcodeTab('conflicts')">Conflictos</button>
+                    <div id="barcode-stat-cards" class="stats-grid" style="margin-bottom:16px;"></div>
+                    <div class="barcode-tabs" id="barcode-tabs">
+                        <button type="button" class="btn btn-secondary btn-sm barcode-tab" data-tab="search">Buscar</button>
+                        <button type="button" class="btn btn-primary btn-sm barcode-tab" data-tab="products">Productos</button>
+                        <button type="button" class="btn btn-secondary btn-sm barcode-tab" data-tab="sku">Por SKU</button>
+                        <button type="button" class="btn btn-secondary btn-sm barcode-tab" data-tab="pending">Pendientes</button>
+                        <button type="button" class="btn btn-secondary btn-sm barcode-tab" data-tab="conflicts">Conflictos</button>
+                        <button type="button" class="btn btn-secondary btn-sm barcode-tab" data-tab="tipos">Tipos de envase</button>
                     </div>
-                    <div id="barcode-tab-search">
+                    <script>
+                    (function() {
+                        var bar = document.getElementById('barcode-tabs');
+                        if (!bar) return;
+                        bar.addEventListener('click', function(e) {
+                            var btn = e.target.closest('.barcode-tab');
+                            if (!btn) return;
+                            e.preventDefault();
+                            window.riversoSwitchBarcodeTab(btn.getAttribute('data-tab'));
+                        });
+                    })();
+                    </script>
+                    <div id="barcode-tab-search" style="display:none;">
                         <div style="display:flex;gap:10px;align-items:center;">
                             <input type="text" id="barcode-input" placeholder="Escanea, pega un código, SKU o nombre..."
                                    style="flex:1; padding:18px; font-size:20px; text-align:center; border:2px solid var(--primary); border-radius:8px;"
@@ -1065,12 +1214,74 @@ $tareas = $wpdb->get_results($wpdb->prepare(
                         <div id="barcode-stats" style="margin-top:12px;font-size:12px;color:var(--text-secondary);text-align:center;"></div>
                         <div id="barcode-result" style="margin-top: 24px;"></div>
                     </div>
+                    <div id="barcode-tab-products">
+                        <p style="color:var(--text-secondary);margin:0 0 12px;">Listado de productos locales. Escribe el código de barra en la fila y pulsa Asignar.</p>
+                        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+                            <input type="text" id="barcode-product-search" placeholder="Buscar producto por SKU local, nombre o código..." style="flex:1;min-width:220px;padding:10px;border:1px solid var(--border);border-radius:6px;">
+                            <select id="barcode-product-filter" style="padding:10px;border:1px solid var(--border);border-radius:6px;">
+                                <option value="all">Todos los locales</option>
+                                <option value="sin_codigo">Sin código</option>
+                                <option value="con_codigo">Con código</option>
+                            </select>
+                            <button type="button" class="btn btn-primary" id="barcode-product-search-btn">Buscar</button>
+                        </div>
+                        <div id="barcode-product-list"></div>
+                        <div id="barcode-product-pager" style="display:flex;gap:8px;justify-content:center;margin-top:12px;"></div>
+                        <div id="barcode-product-detail"></div>
+                    </div>
+                    <div id="barcode-tab-sku" style="display:none;">
+                        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+                            <input type="text" id="barcode-sku-search" placeholder="Filtrar SKU o código..." style="flex:1;min-width:180px;padding:10px;border:1px solid var(--border);border-radius:6px;">
+                            <button type="button" class="btn btn-secondary" id="barcode-sku-search-btn">Buscar</button>
+                            <button type="button" class="btn btn-primary" id="barcode-add-open">Agregar código</button>
+                        </div>
+                        <div id="barcode-sku-list"></div>
+                        <div id="barcode-sku-detail"></div>
+                    </div>
                     <div id="barcode-tab-pending" style="display:none;">
                         <div id="barcode-pending-list"></div>
                     </div>
                     <div id="barcode-tab-conflicts" style="display:none;">
                         <div id="barcode-conflict-list"></div>
                     </div>
+                    <div id="barcode-tab-tipos" style="display:none;">
+                        <form id="barcode-tipo-form" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-end;">
+                            <input type="text" id="barcode-tipo-nombre" placeholder="Nombre (ej. Saco)" required style="padding:8px;border:1px solid var(--border);border-radius:6px;">
+                            <input type="text" id="barcode-tipo-slug" placeholder="slug" style="padding:8px;border:1px solid var(--border);border-radius:6px;">
+                            <button type="submit" class="btn btn-primary">Crear tipo</button>
+                        </form>
+                        <div id="barcode-tipos-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="barcode-edit-modal" class="portal-modal-overlay">
+            <div class="portal-modal">
+                <div class="portal-modal-header">
+                    <h3>Código en mapeo interno</h3>
+                    <button type="button" class="btn btn-secondary btn-sm" id="barcode-edit-close">Cerrar</button>
+                </div>
+                <div class="portal-modal-body">
+                    <input type="hidden" id="bc-edit-id">
+                    <input type="hidden" id="bc-edit-pb">
+                    <label>Código</label>
+                    <input type="text" id="bc-edit-codigo" style="width:100%;margin-bottom:8px;padding:8px;">
+                    <label>SKU local</label>
+                    <input type="text" id="bc-edit-sku" style="width:100%;margin-bottom:8px;padding:8px;">
+                    <label>Tipo de envase</label>
+                    <select id="bc-edit-tipo" style="width:100%;margin-bottom:8px;padding:8px;"></select>
+                    <label>Cantidad</label>
+                    <input type="number" id="bc-edit-cantidad" value="1" min="1" style="width:100%;margin-bottom:8px;padding:8px;">
+                    <label>Estado</label>
+                    <select id="bc-edit-estado" style="width:100%;margin-bottom:8px;padding:8px;">
+                        <option value="propuesto">Propuesto</option>
+                        <option value="verificado">Verificado</option>
+                    </select>
+                    <label><input type="checkbox" id="bc-edit-create-envase"> Crear envase si no existe</label>
+                </div>
+                <div class="portal-modal-footer">
+                    <button type="button" class="btn btn-secondary" id="barcode-edit-cancel">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="barcode-edit-save">Guardar</button>
                 </div>
             </div>
         </div>
@@ -1312,6 +1523,7 @@ $tareas = $wpdb->get_results($wpdb->prepare(
             .po-toolbar input, .po-toolbar select { padding:8px 10px; border:1px solid var(--border); border-radius:4px; }
             .po-hit { padding:10px; border:1px solid var(--border); border-radius:8px; margin-top:8px; display:flex; justify-content:space-between; gap:10px; background:var(--bg-light); }
             .po-editor-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:12px; }
+            #po-portal-editor { scroll-margin-top: 16px; }
         </style>
         <div class="stats-grid" id="po-portal-stats"></div>
         <div class="content-section">
@@ -1394,9 +1606,10 @@ $tareas = $wpdb->get_results($wpdb->prepare(
                 <?php if ($po_can_create): ?>
                 <div id="po-portal-add-box">
                 <label>Agregar producto</label>
-                <div style="display:flex;gap:8px;margin:6px 0;">
-                    <input type="search" id="po-portal-q" placeholder="SKU, código o nombre..." style="flex:1;padding:10px;border:1px solid var(--border);border-radius:4px;">
+                <div style="display:flex;gap:8px;margin:6px 0;flex-wrap:wrap;">
+                    <input type="search" id="po-portal-q" placeholder="SKU, código o nombre..." style="flex:1;min-width:180px;padding:10px;border:1px solid var(--border);border-radius:4px;">
                     <button type="button" class="btn btn-secondary" id="po-portal-q-btn">Buscar</button>
+                    <button type="button" class="btn btn-secondary" id="po-portal-q-clear">Borrar búsqueda</button>
                 </div>
                 <div id="po-portal-hits"></div>
                 </div>
@@ -1647,6 +1860,21 @@ $tareas = $wpdb->get_results($wpdb->prepare(
 // Nonce para AJAX
 const riversoNonce = '<?php echo $nonce; ?>';
 const ajaxUrl = '<?php echo admin_url('admin-ajax.php'); ?>';
+
+(function() {
+    const sidebar = document.querySelector('.portal-sidebar');
+    const backdrop = document.getElementById('portal-sidebar-backdrop');
+    const toggle = document.getElementById('portal-menu-toggle');
+    const closeMenu = () => {
+        sidebar?.classList.remove('open');
+        backdrop?.classList.remove('open');
+    };
+    toggle?.addEventListener('click', () => {
+        const open = sidebar?.classList.toggle('open');
+        backdrop?.classList.toggle('open', !!open);
+    });
+    backdrop?.addEventListener('click', closeMenu);
+})();
 const canManageBarcodes = <?php echo (current_user_can('riverso_manage_products') || current_user_can('riverso_assign_barcodes')) ? 'true' : 'false'; ?>;
 const canDeleteInvoices = <?php echo (current_user_can('riverso_process_invoices') || current_user_can('riverso_create_invoices')) ? 'true' : 'false'; ?>;
 const canProcessInvoices = canDeleteInvoices;
@@ -2796,6 +3024,7 @@ function portalEliminarFactura(id, folio) {
     const resultDiv = document.getElementById('barcode-result');
     const statsDiv = document.getElementById('barcode-stats');
     if (!resultDiv && !document.getElementById('barcode-pending-list')) return;
+    let lastBarcodeQuery = '';
 
     function escBarcode(s) {
         return String(s ?? '')
@@ -2822,47 +3051,136 @@ function portalEliminarFactura(id, folio) {
     }
 
     function renderStats(stats) {
-        if (!statsDiv || !stats) return;
+        if (!statsDiv || !stats) {
+            if (stats) renderStatCards(stats);
+            return;
+        }
         const mapping = stats.verificados != null
             ? ` · mapeo: ${stats.verificados || 0} verificados / ${stats.propuestos || 0} pendientes / ${stats.conflictos || 0} conflictos`
             : '';
         statsDiv.textContent = `${stats.productos || 0} productos locales · ${stats.barcodes || 0} códigos legacy${mapping}`;
+        renderStatCards(stats);
     }
 
-    function mappingButtons(product) {
-        if (!canManageBarcodes || !product.codigo_id || product.trusted) return '';
+    function isUnverifiedBarcode(b, product) {
+        if (!b || (b.estado || '') === 'verificado' || b.trusted) return false;
+        const code = String(b.barcode || b.codigo || '');
+        const sku = String((product && (product.sku_local || product.sku)) || '');
+        if (sku && code && code.toLowerCase() === sku.toLowerCase()) return false;
+        return true;
+    }
+
+    function barcodeRowActions(b, product) {
+        if (!canManageBarcodes || !isUnverifiedBarcode(b, product)) return '';
+        const id = b.id || 0;
+        const code = escBarcode(b.barcode || b.codigo || '');
+        const sku = escBarcode(product.sku_local || product.sku || '');
+        const rowPb = escBarcode(b.producto_base_id || '');
+        const pb = escBarcode(product.producto_base_id || b.producto_base_id || '');
+        return `<div class="barcode-assoc-actions">
+            <button type="button" class="btn btn-primary btn-sm btn-barcode-accept-one"
+                data-id="${escBarcode(id)}" data-code="${code}" data-sku="${sku}" data-pb="${pb}" data-row-pb="${rowPb}">Aceptar</button>
+            <button type="button" class="btn btn-secondary btn-sm btn-barcode-reject-one"
+                data-id="${escBarcode(id)}" data-code="${code}" data-sku="${sku}" data-pb="${pb}">Rechazar</button>
+        </div>`;
+    }
+
+    function renderBarcodeList(product) {
+        const rows = (product.barcodes || []).slice();
+        if (!rows.length) {
+            return '<p style="color:var(--text-secondary);margin:8px 0 0;">Sin códigos asociados.</p>';
+        }
+        const highlight = product.arrived_by_barcode ? String(product.matched_barcode || '').trim() : '';
+        if (highlight) {
+            rows.sort((a, b) => {
+                const am = String(a.barcode || '') === highlight ? 0 : 1;
+                const bm = String(b.barcode || '') === highlight ? 0 : 1;
+                return am - bm;
+            });
+        }
+        const unverified = rows.filter(b => isUnverifiedBarcode(b, product)).length;
+        const notice = unverified
+            ? `<p style="margin:8px 0 0;font-size:13px;color:#ef6c00;">Este producto tiene ${unverified} código${unverified === 1 ? '' : 's'} no verificado${unverified === 1 ? '' : 's'}. Acepta o rechaza cada uno por separado.</p>`
+            : '';
+        const items = rows.map(b => {
+            const unverifiedRow = isUnverifiedBarcode(b, product);
+            const matched = !!(highlight && String(b.barcode) === highlight);
+            const badge = !unverifiedRow
+                ? '<span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:10px;font-size:11px;">Verificado</span>'
+                : (b.conflicto
+                    ? '<span style="background:#ffebee;color:#c62828;padding:2px 8px;border-radius:10px;font-size:11px;">Conflicto</span>'
+                    : '<span style="background:#fff8e1;color:#ef6c00;padding:2px 8px;border-radius:10px;font-size:11px;">No verificado</span>');
+            const rowClass = [
+                'barcode-assoc-row',
+                unverifiedRow ? 'is-unverified' : 'is-verified',
+                matched ? 'is-matched' : ''
+            ].filter(Boolean).join(' ');
+            return `<li class="${rowClass}">
+                <div class="barcode-assoc-meta">
+                    <code>${escBarcode(b.barcode)}</code>
+                    ${badge}
+                    ${matched ? '<span class="barcode-matched-flag">Código buscado</span>' : ''}
+                    ${b.fecha ? `<small>(${escBarcode(b.fecha)})</small>` : ''}
+                </div>
+                ${barcodeRowActions(b, product)}
+            </li>`;
+        }).join('');
+        return `${notice}<ul class="barcode-assoc-list">${items}</ul>`;
+    }
+
+    function mappingButtons(product, opts) {
+        opts = opts || {};
+        const arrivedByBarcode = !!(opts.arrivedByBarcode || product.arrived_by_barcode);
+        if (!canManageBarcodes || !arrivedByBarcode || product.trusted) return '';
         const pending = product.pending_sku ? escBarcode(product.pending_sku) : '';
+        const code = escBarcode(product.matched_barcode || '');
+        const sku = escBarcode(product.sku_local || product.sku || '');
+        const id = product.codigo_id || 0;
+        if (!id && !product.has_unverified) {
+            return `<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;">
+                <button type="button" class="btn btn-primary btn-sm btn-barcode-upsert" data-code="${code}" data-sku="${sku}" data-pb="${escBarcode(product.producto_base_id || '')}">Agregar al mapeo y aprobar</button>
+                <button type="button" class="btn btn-secondary btn-sm btn-barcode-ignore">Ignorar</button>
+            </div>`;
+        }
         return `<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-            ${product.producto_base_id ? `<button type="button" class="btn btn-primary btn-sm btn-barcode-approve" data-id="${escBarcode(product.codigo_id)}">Aceptar</button>` : ''}
-            <button type="button" class="btn btn-secondary btn-sm btn-barcode-reject" data-id="${escBarcode(product.codigo_id)}">Rechazar</button>
-            <input type="text" class="barcode-reassign-q" data-id="${escBarcode(product.codigo_id)}" data-code="${escBarcode(product.matched_barcode || '')}" placeholder="Reasignar a SKU..." style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;min-width:160px;">
-            ${pending ? `<button type="button" class="btn btn-secondary btn-sm btn-barcode-pending" data-id="${escBarcode(product.codigo_id)}" data-code="${escBarcode(product.matched_barcode || '')}" data-sku="${pending}">Esperar ${pending}</button>` : ''}
-            <div class="barcode-reassign-results" data-id="${escBarcode(product.codigo_id)}"></div>
+            <button type="button" class="btn btn-secondary btn-sm btn-barcode-ignore">Ignorar</button>
+            <input type="text" class="barcode-reassign-q" data-id="${escBarcode(id)}" data-code="${code}" placeholder="Reasignar a SKU..." style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;min-width:160px;">
+            ${pending ? `<button type="button" class="btn btn-secondary btn-sm btn-barcode-pending" data-id="${escBarcode(id)}" data-code="${code}" data-sku="${pending}">Esperar ${pending}</button>` : ''}
+            <div class="barcode-reassign-results" data-id="${escBarcode(id)}"></div>
         </div>`;
     }
 
     function renderProduct(product, opts) {
         opts = opts || {};
-        const barcodes = (product.barcodes || []).map(b =>
-            `<li><code>${escBarcode(b.barcode)}</code>${b.fecha ? ` <small>(${escBarcode(b.fecha)})</small>` : ''}</li>`
-        ).join('');
-        const matched = product.matched_barcode
+        const arrivedByBarcode = !!(opts.arrivedByBarcode || product.arrived_by_barcode);
+        if (arrivedByBarcode && !product.matched_barcode && opts.query) {
+            product.matched_barcode = opts.query;
+            product.arrived_by_barcode = true;
+        }
+        const matched = arrivedByBarcode && product.matched_barcode
             ? `<p style="margin:6px 0;"><strong>Código:</strong> <code>${escBarcode(product.matched_barcode)}</code></p>`
             : '';
         const stockColor = Number(product.stock || 0) > 0 ? 'var(--success)' : 'var(--danger)';
         const trusted = !!product.trusted;
-        const border = opts.conflict ? 'var(--danger)' : (trusted ? 'var(--success)' : 'var(--warning)');
-        const badge = trusted
-            ? '<span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:10px;font-size:11px;">Verificado</span>'
-            : (opts.conflict
-                ? '<span style="background:#ffebee;color:#c62828;padding:2px 8px;border-radius:10px;font-size:11px;">Conflicto</span>'
-                : '<span style="background:#fff8e1;color:#ef6c00;padding:2px 8px;border-radius:10px;font-size:11px;">Sugerencia legacy</span>');
+        const hasUnverified = (product.barcodes || []).some(b => isUnverifiedBarcode(b, product));
+        const border = opts.conflict ? 'var(--danger)' : (hasUnverified ? 'var(--warning)' : (trusted ? 'var(--success)' : 'var(--border)'));
+        const badge = opts.conflict
+            ? '<span style="background:#ffebee;color:#c62828;padding:2px 8px;border-radius:10px;font-size:11px;">Conflicto</span>'
+            : (arrivedByBarcode && trusted
+                ? '<span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:10px;font-size:11px;">Verificado</span>'
+                : (arrivedByBarcode && hasUnverified
+                    ? '<span style="background:#fff8e1;color:#ef6c00;padding:2px 8px;border-radius:10px;font-size:11px;">Tiene códigos no verificados</span>'
+                    : (hasUnverified
+                        ? '<span style="background:#fff8e1;color:#ef6c00;padding:2px 8px;border-radius:10px;font-size:11px;">Tiene códigos no verificados</span>'
+                        : '')));
         const extra = [
             product.sku_local ? `SKU local legacy: <code>${escBarcode(product.sku_local)}</code>` : '',
             product.pending_sku ? `SKU pendiente: <code>${escBarcode(product.pending_sku)}</code>` : '',
+            product.tipo_envase ? `Envase: ${escBarcode(product.tipo_envase)} × ${escBarcode(product.cantidad || 1)}` : (product.cantidad ? `Cantidad: ${escBarcode(product.cantidad)}` : ''),
             product.origen ? `Origen: ${escBarcode(product.origen)}` : '',
             product.advertencia ? escBarcode(product.advertencia) : '',
         ].filter(Boolean).join('<br>');
+        const barcodeCount = (product.barcodes || []).length;
 
         return `
             <div style="background:#fff;border:1px solid ${border};border-radius:8px;padding:18px;margin-bottom:12px;text-align:left;">
@@ -2877,11 +3195,11 @@ function portalEliminarFactura(id, folio) {
                     <strong>Stock:</strong> <span style="color:${stockColor};font-weight:600;">${escBarcode(product.stock)}</span>
                 </p>
                 ${extra ? `<p style="font-size:12px;color:var(--text-secondary);">${extra}</p>` : ''}
-                <details ${(product.barcodes || []).length <= 6 ? 'open' : ''}>
-                    <summary>Códigos asociados (${(product.barcodes || []).length})</summary>
-                    <ul style="margin:8px 0 0 18px;">${barcodes || '<li>Sin códigos asociados.</li>'}</ul>
+                <details ${(hasUnverified || barcodeCount <= 6) ? 'open' : ''}>
+                    <summary>Códigos asociados (${barcodeCount})</summary>
+                    ${renderBarcodeList(product)}
                 </details>
-                ${mappingButtons(product)}
+                ${mappingButtons(product, { arrivedByBarcode })}
                 <div style="margin-top:12px;display:flex;gap:8px;">
                     <button type="button" class="btn-print-label" data-sku="${escBarcode(product.sku)}" data-nombre="${escBarcode(product.nombre)}" data-precio="${product.precio || 0}" style="
                         padding:8px 16px;background:#4CAF50;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-weight:500;">
@@ -2892,12 +3210,13 @@ function portalEliminarFactura(id, folio) {
         `;
     }
 
-    function searchBarcode() {
-        const query = input.value.trim();
+    function searchBarcode(forceQuery) {
+        const query = (forceQuery != null ? forceQuery : input.value).trim();
         if (!query) {
             resultDiv.innerHTML = '<div style="color:var(--warning);text-align:center;">Ingresa un código, SKU o nombre.</div>';
             return;
         }
+        lastBarcodeQuery = query;
 
         resultDiv.innerHTML = '<div class="loading" style="text-align:center;">Buscando...</div>';
         postAction('riverso_tienda_local_search', { query })
@@ -2916,13 +3235,17 @@ function portalEliminarFactura(id, folio) {
             const type = data.data.type;
             let intro = '';
             if (type === 'conflict') {
-                intro = '<p style="color:var(--danger);text-align:center;margin-bottom:12px;">Este código tiene mapeos conflictivos. Elige el producto correcto y rechaza el resto.</p>';
+                intro = '<div style="background:#ffebee;border:1px solid #ef9a9a;border-radius:8px;padding:12px;margin-bottom:12px;text-align:center;"><strong>Conflicto.</strong> Este código puede apuntar a SKUs distintos. Aprueba el correcto, rechaza el resto, o ignora.</div>';
             } else if (type === 'suggestion') {
-                intro = '<p style="color:#ef6c00;text-align:center;margin-bottom:12px;">Sugerencia legacy (no verificada). Acepta, rechaza o reasigna.</p>';
+                intro = '<div style="background:#fff8e1;border:1px solid #ffcc80;border-radius:8px;padding:12px;margin-bottom:12px;text-align:center;"><strong>Sugerencia legacy (no verificada).</strong> ¿Resolver ahora o ignorar?</div>';
             } else if (type === 'name' && items.length > 1) {
                 intro = `<p style="color:var(--text-secondary);text-align:center;margin-bottom:12px;">Se encontraron ${items.length} coincidencias por nombre.</p>`;
             }
-            resultDiv.innerHTML = intro + (items.length ? items.map(p => renderProduct(p, { conflict: type === 'conflict' })).join('') : '<p style="text-align:center;">Sin resultados.</p>');
+            resultDiv.innerHTML = intro + (items.length ? items.map(p => renderProduct(p, {
+                conflict: type === 'conflict',
+                arrivedByBarcode: type === 'barcode' || type === 'suggestion' || type === 'conflict' || !!p.arrived_by_barcode,
+                query
+            })).join('') : '<p style="text-align:center;">Sin resultados.</p>');
             if (type === 'barcode') {
                 input.value = '';
             }
@@ -2932,19 +3255,238 @@ function portalEliminarFactura(id, folio) {
         });
     }
 
-    function switchTab(tab) {
-        ['search', 'pending', 'conflicts'].forEach(name => {
-            const el = document.getElementById('barcode-tab-' + name);
-            if (el) el.style.display = name === tab ? 'block' : 'none';
-        });
-        document.querySelectorAll('.barcode-tab').forEach(btn => {
-            btn.classList.toggle('btn-primary', btn.dataset.tab === tab);
-            btn.classList.toggle('btn-secondary', btn.dataset.tab !== tab);
-        });
-        if (tab === 'pending') loadPending();
-        if (tab === 'conflicts') loadConflicts();
+    function loadTabData(tab) {
+        try {
+            if (tab === 'pending') loadPending();
+            else if (tab === 'conflicts') loadConflicts();
+            else if (tab === 'sku') loadSkuList();
+            else if (tab === 'tipos') loadTipos();
+            else if (tab === 'products') loadProductList();
+        } catch (err) {
+            const target = document.getElementById('barcode-tab-' + tab);
+            if (target) {
+                const box = target.querySelector('[id$="-list"]') || target;
+                box.innerHTML = '<p style="color:var(--danger);">Error al abrir la pestaña. Recarga la página.</p>';
+            }
+            console.error(err);
+        }
     }
-    window.riversoSwitchBarcodeTab = switchTab;
+    function switchTab(tab) {
+        window.riversoSwitchBarcodeTab(tab);
+    }
+
+    let skuDetailById = {};
+    let envaseTipos = [];
+
+    function renderStatCards(stats) {
+        const box = document.getElementById('barcode-stat-cards');
+        if (!box || !stats) return;
+        const cards = [
+            ['Verificados', stats.verificados || 0, 'green'],
+            ['Pendientes', stats.propuestos || 0, 'orange'],
+            ['Conflictos', stats.conflictos || 0, 'purple'],
+            ['Sin producto', stats.pendiente_sku || 0, 'blue'],
+        ];
+        box.innerHTML = cards.map(([label, value, color]) =>
+            `<div class="stat-card"><div class="stat-icon ${color}"><span class="dashicons dashicons-tag"></span></div><div class="stat-value">${escBarcode(value)}</div><div class="stat-label">${label}</div></div>`
+        ).join('');
+    }
+
+    function fillTipoSelect(selected) {
+        const sel = document.getElementById('bc-edit-tipo');
+        if (!sel) return;
+        sel.innerHTML = envaseTipos.filter(t => Number(t.activo) === 1).map(t =>
+            `<option value="${escBarcode(t.slug)}" ${t.slug === selected ? 'selected' : ''}>${escBarcode(t.nombre)}</option>`
+        ).join('');
+    }
+
+    function loadTiposCatalog(cb) {
+        postAction('riverso_envase_tipos_list').then(data => {
+            envaseTipos = data.success ? (data.data.items || []) : [];
+            fillTipoSelect();
+            if (cb) cb(envaseTipos);
+        });
+    }
+
+    function loadSkuList() {
+        const target = document.getElementById('barcode-sku-list');
+        if (!target) return;
+        target.innerHTML = '<div class="loading">Cargando mapeo interno...</div>';
+        postAction('riverso_barcode_list_by_sku', {
+            search: document.getElementById('barcode-sku-search')?.value || '',
+            page: 1
+        }).then(data => {
+            if (!data.success) {
+                target.innerHTML = `<p style="color:var(--danger);">${escBarcode(data.data?.message || 'Error')}</p>`;
+                return;
+            }
+            const items = data.data.items || [];
+            if (!items.length) {
+                target.innerHTML = '<p style="text-align:center;color:var(--text-secondary);">Sin códigos en mapeo interno. Revisa Pendientes o agrega uno.</p>';
+                return;
+            }
+            target.innerHTML = `<table class="portal-table"><thead><tr>
+                <th>SKU</th><th>Producto</th><th>Códigos</th><th>Verif.</th><th>Prop.</th><th>Conf.</th><th></th>
+            </tr></thead><tbody>${items.map(row => `<tr>
+                <td><code>${escBarcode(row.sku_key)}</code></td>
+                <td>${escBarcode(row.nombre || '')}</td>
+                <td>${escBarcode(row.barcodes)}</td>
+                <td>${escBarcode(row.verificados)}</td>
+                <td>${escBarcode(row.propuestos)}</td>
+                <td>${escBarcode(row.conflictos)}</td>
+                <td><button type="button" class="btn btn-secondary btn-sm btn-sku-open" data-sku="${escBarcode(row.sku_key)}">Ver</button></td>
+            </tr>`).join('')}</tbody></table>`;
+        }).catch(() => {
+            target.innerHTML = '<p style="color:var(--danger);">No se pudo cargar el mapeo interno.</p>';
+        });
+    }
+
+    function loadSkuDetail(sku, opts) {
+        opts = opts || {};
+        const box = document.getElementById(opts.target || 'barcode-sku-detail');
+        if (!box) return;
+        box.innerHTML = '<div class="loading">Cargando detalle...</div>';
+        const payload = {};
+        if (opts.producto_base_id) payload.producto_base_id = opts.producto_base_id;
+        if (sku) payload.sku = sku;
+        postAction('riverso_barcode_get_sku_detail', payload).then(data => {
+            if (!data.success) {
+                box.innerHTML = `<p style="color:var(--danger);">${escBarcode(data.data?.message || 'Error')}</p>`;
+                return;
+            }
+            skuDetailById = {};
+            (data.data.items || []).forEach(it => { skuDetailById[it.id] = it; });
+            const title = opts.nombre ? `${escBarcode(opts.nombre)} <code>${escBarcode(sku || '')}</code>` : `<code>${escBarcode(sku || '')}</code>`;
+            const addBtn = (canManageBarcodes && (opts.producto_base_id || sku))
+                ? `<button type="button" class="btn btn-primary btn-sm btn-product-add" data-pb="${escBarcode(opts.producto_base_id || '')}" data-sku="${escBarcode(sku || '')}" data-nombre="${escBarcode(opts.nombre || '')}">Agregar código de barra</button>`
+                : '';
+            const rows = (data.data.items || []).map(it => {
+                const envase = it.tipo_envase ? `${it.tipo_envase} × ${it.envase_cantidad || it.cantidad || 1}` : '—';
+                return `<tr>
+                    <td><code>${escBarcode(it.codigo)}</code></td>
+                    <td>${escBarcode(it.estado)}${it.conflicto ? ' / conflicto' : ''}</td>
+                    <td>${escBarcode(envase)}</td>
+                    <td>${escBarcode(it.cantidad || 1)}</td>
+                    <td>${escBarcode(it.updated_at || '')}</td>
+                    <td>
+                        ${it.estado !== 'verificado' && it.id ? `<button type="button" class="btn btn-primary btn-sm btn-barcode-approve" data-id="${it.id}">Aceptar</button> <button type="button" class="btn btn-secondary btn-sm btn-barcode-reject" data-id="${it.id}">Rechazar</button>` : ''}
+                        <button type="button" class="btn btn-secondary btn-sm btn-map-edit" data-id="${it.id}">Editar</button>
+                    </td>
+                </tr>`;
+            }).join('');
+            box.innerHTML = `<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin:16px 0 8px;flex-wrap:wrap;">
+                    <h3 style="margin:0;">Códigos de ${title}</h3>
+                    ${addBtn}
+                </div>
+                <table class="portal-table"><thead><tr>
+                    <th>Código</th><th>Estado</th><th>Envase</th><th>Cant.</th><th>Modificado</th><th></th>
+                </tr></thead><tbody>${rows || '<tr><td colspan="6">Este producto aún no tiene códigos. Agrega el primero.</td></tr>'}</tbody></table>`;
+        });
+    }
+
+    let productPage = 1;
+    let currentProduct = null;
+
+    function loadProductList(page) {
+        if (page) productPage = page;
+        const target = document.getElementById('barcode-product-list');
+        const pager = document.getElementById('barcode-product-pager');
+        if (!target) return;
+        target.innerHTML = '<div class="loading">Cargando productos...</div>';
+        postAction('riverso_barcode_list_products', {
+            search: document.getElementById('barcode-product-search')?.value || '',
+            filter: document.getElementById('barcode-product-filter')?.value || 'all',
+            page: productPage,
+            per_page: 40
+        }).then(data => {
+            if (!data.success) {
+                target.innerHTML = `<p style="color:var(--danger);">${escBarcode(data.data?.message || 'Error')}</p>`;
+                return;
+            }
+            const items = data.data.items || [];
+            const pages = data.data.pages || 1;
+            productPage = data.data.page || 1;
+            if (!items.length) {
+                target.innerHTML = '<p style="text-align:center;color:var(--text-secondary);">No hay productos. Prueba otro filtro o limpia la búsqueda.</p>';
+                if (pager) pager.innerHTML = '';
+                return;
+            }
+            target.innerHTML = `<p style="color:var(--text-secondary);margin-bottom:8px;">${escBarcode(data.data.total)} productos locales</p>
+                <table class="portal-table"><thead><tr>
+                    <th>SKU local</th><th>Producto</th><th>Códigos actuales</th><th>Asignar código de barra</th>
+                </tr></thead><tbody>${items.map(row => {
+                    const sample = row.barcode_sample ? escBarcode(row.barcode_sample) : 'Sin código';
+                    const assign = canManageBarcodes ? `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                        <input type="text" class="barcode-inline-code" placeholder="Escanear o pegar código" data-pb="${row.id}" data-sku="${escBarcode(row.canonical_sku)}" data-nombre="${escBarcode(row.nombre_canonico || '')}" style="min-width:160px;flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;">
+                        <button type="button" class="btn btn-primary btn-sm btn-product-inline-assign" data-pb="${row.id}" data-sku="${escBarcode(row.canonical_sku)}" data-nombre="${escBarcode(row.nombre_canonico || '')}">Asignar</button>
+                    </div>` : '';
+                    return `<tr class="barcode-product-row" data-id="${row.id}" data-sku="${escBarcode(row.canonical_sku)}" data-nombre="${escBarcode(row.nombre_canonico || '')}">
+                    <td><code>${escBarcode(row.canonical_sku || '—')}</code></td>
+                    <td>${escBarcode(row.nombre_canonico || '')}</td>
+                    <td><span>${escBarcode(row.barcodes || 0)}</span>${row.barcode_sample ? `<div style="font-size:12px;color:var(--text-secondary);max-width:240px;overflow:hidden;text-overflow:ellipsis;">${sample}</div>` : '<div style="font-size:12px;color:var(--warning);">Sin código</div>'}</td>
+                    <td>
+                        ${assign}
+                        <button type="button" class="btn btn-secondary btn-sm btn-product-open" data-id="${row.id}" data-sku="${escBarcode(row.canonical_sku)}" data-nombre="${escBarcode(row.nombre_canonico || '')}" style="margin-top:6px;">Ver códigos</button>
+                    </td>
+                </tr>`;
+                }).join('')}</tbody></table>`;
+            if (pager) {
+                pager.innerHTML = `
+                    <button type="button" class="btn btn-secondary btn-sm" id="barcode-product-prev" ${productPage <= 1 ? 'disabled' : ''}>Anterior</button>
+                    <span>Página ${productPage} / ${pages}</span>
+                    <button type="button" class="btn btn-secondary btn-sm" id="barcode-product-next" ${productPage >= pages ? 'disabled' : ''}>Siguiente</button>`;
+            }
+        }).catch(() => {
+            target.innerHTML = '<p style="color:var(--danger);">No se pudo cargar productos.</p>';
+        });
+    }
+
+    function openProduct(row) {
+        currentProduct = row;
+        loadSkuDetail(row.sku, {
+            producto_base_id: row.id,
+            nombre: row.nombre,
+            target: 'barcode-product-detail'
+        });
+        document.getElementById('barcode-product-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function loadTipos() {
+        const target = document.getElementById('barcode-tipos-list');
+        if (!target) return;
+        loadTiposCatalog(items => {
+            if (!items.length) {
+                target.innerHTML = '<p>Sin tipos. Se crean Envase, Caja y Balde en la migración.</p>';
+                return;
+            }
+            target.innerHTML = `<table class="portal-table"><thead><tr><th>Slug</th><th>Nombre</th><th>Activo</th><th></th></tr></thead><tbody>${
+                items.map(t => `<tr>
+                    <td><code>${escBarcode(t.slug)}</code></td>
+                    <td>${escBarcode(t.nombre)}</td>
+                    <td>${Number(t.activo) === 1 ? 'Sí' : 'No'}</td>
+                    <td><button type="button" class="btn btn-secondary btn-sm btn-tipo-toggle" data-id="${t.id}" data-activo="${Number(t.activo) === 1 ? 0 : 1}">${Number(t.activo) === 1 ? 'Desactivar' : 'Activar'}</button></td>
+                </tr>`).join('')
+            }</tbody></table>`;
+        });
+    }
+
+    function openEdit(item) {
+        item = item || {};
+        document.getElementById('bc-edit-id').value = item.id || '';
+        const pbField = document.getElementById('bc-edit-pb');
+        if (pbField) pbField.value = item.producto_base_id || '';
+        document.getElementById('bc-edit-codigo').value = item.codigo || item.matched_barcode || '';
+        document.getElementById('bc-edit-sku').value = item.sku_local || item.pending_sku || item.sku || '';
+        document.getElementById('bc-edit-cantidad').value = item.cantidad || 1;
+        document.getElementById('bc-edit-estado').value = item.estado === 'verificado' ? 'verificado' : 'propuesto';
+        document.getElementById('bc-edit-create-envase').checked = false;
+        loadTiposCatalog(() => fillTipoSelect(item.tipo_envase));
+        document.getElementById('barcode-edit-modal')?.classList.add('open');
+    }
+
+    function closeEdit() {
+        document.getElementById('barcode-edit-modal')?.classList.remove('open');
+    }
 
     function renderGroupList(target, groups, emptyText) {
         if (!target) return;
@@ -2967,6 +3509,8 @@ function portalEliminarFactura(id, folio) {
                 sku_local: it.sku_local,
                 origen: it.origen,
                 advertencia: it.motivo,
+                cantidad: it.cantidad,
+                tipo_envase: it.tipo_envase,
             }, { conflict: !!g.conflicto })).join('');
             return `<div style="margin-bottom:18px;"><h4 style="margin:0 0 8px;font-family:monospace;">${escBarcode(g.codigo)}</h4>${items}</div>`;
         }).join('');
@@ -3019,8 +3563,8 @@ function portalEliminarFactura(id, folio) {
         postAction('riverso_tienda_local_search', { query: '__stats__' }).catch(() => {});
     }
 
-    document.querySelectorAll('.barcode-tab').forEach(btn => {
-        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    document.addEventListener('riverso-barcode-tab', function(e) {
+        if (e.detail) loadTabData(e.detail);
     });
     button?.addEventListener('click', searchBarcode);
     input?.addEventListener('keydown', function(e) {
@@ -3030,14 +3574,99 @@ function portalEliminarFactura(id, folio) {
         }
     });
 
+    function refreshAfterMapping() {
+        if (lastBarcodeQuery) searchBarcode(lastBarcodeQuery);
+        loadPending();
+        loadConflicts();
+        if (currentProduct) {
+            loadSkuDetail(currentProduct.sku, {
+                producto_base_id: currentProduct.id,
+                nombre: currentProduct.nombre,
+                target: 'barcode-product-detail'
+            });
+        }
+        loadMappingStats();
+    }
+
+    function acceptOneBarcode(btn) {
+        const id = parseInt(btn.dataset.id || '0', 10) || 0;
+        const code = btn.dataset.code || '';
+        const sku = btn.dataset.sku || '';
+        const pb = btn.dataset.pb || '';
+        const rowPb = btn.dataset.rowPb || '';
+        let req;
+        if (id && rowPb) {
+            req = postAction('riverso_barcode_approve', { codigo_id: id });
+        } else if (id && pb) {
+            req = postAction('riverso_barcode_assign', { codigo_id: id, codigo: code, producto_base_id: pb, verify: '1' });
+        } else {
+            req = postAction('riverso_barcode_upsert', {
+                codigo: code,
+                sku_local: sku,
+                producto_base_id: pb,
+                estado: pb ? 'verificado' : 'propuesto',
+                cantidad: 1,
+                create_envase: 0
+            });
+        }
+        btn.disabled = true;
+        req.then(data => {
+            if (!data.success) {
+                alert(data.data?.message || 'No se pudo aceptar este código');
+                btn.disabled = false;
+                return;
+            }
+            refreshAfterMapping();
+        }).catch(() => {
+            alert('No se pudo aceptar este código');
+            btn.disabled = false;
+        });
+    }
+
+    function rejectOneBarcode(btn) {
+        const id = parseInt(btn.dataset.id || '0', 10) || 0;
+        const motivo = prompt('Motivo de rechazo (opcional):') || 'Rechazado desde portal.';
+        const req = id
+            ? postAction('riverso_barcode_reject', { codigo_id: id, motivo })
+            : postAction('riverso_barcode_upsert', {
+                codigo: btn.dataset.code || '',
+                sku_local: btn.dataset.sku || '',
+                producto_base_id: btn.dataset.pb || '',
+                estado: 'rechazado',
+                motivo,
+                cantidad: 1,
+                create_envase: 0
+            });
+        btn.disabled = true;
+        req.then(data => {
+            if (!data.success) {
+                alert(data.data?.message || 'No se pudo rechazar este código');
+                btn.disabled = false;
+                return;
+            }
+            refreshAfterMapping();
+        }).catch(() => {
+            alert('No se pudo rechazar este código');
+            btn.disabled = false;
+        });
+    }
+
     document.addEventListener('click', function(e) {
+        const acceptOne = e.target.closest('.btn-barcode-accept-one');
+        if (acceptOne) {
+            acceptOneBarcode(acceptOne);
+            return;
+        }
+        const rejectOne = e.target.closest('.btn-barcode-reject-one');
+        if (rejectOne) {
+            rejectOneBarcode(rejectOne);
+            return;
+        }
         const approve = e.target.closest('.btn-barcode-approve');
         if (approve) {
             postAction('riverso_barcode_approve', { codigo_id: approve.dataset.id }).then(data => {
                 alert(data.data?.message || (data.success ? 'OK' : 'Error'));
-                if (input?.value) searchBarcode();
-                loadPending();
-                loadConflicts();
+                refreshAfterMapping();
             });
             return;
         }
@@ -3046,9 +3675,7 @@ function portalEliminarFactura(id, folio) {
             const motivo = prompt('Motivo de rechazo (opcional):') || 'Rechazado desde portal.';
             postAction('riverso_barcode_reject', { codigo_id: reject.dataset.id, motivo }).then(data => {
                 alert(data.data?.message || (data.success ? 'OK' : 'Error'));
-                if (input?.value) searchBarcode();
-                loadPending();
-                loadConflicts();
+                refreshAfterMapping();
             });
             return;
         }
@@ -3078,6 +3705,109 @@ function portalEliminarFactura(id, folio) {
                 loadPending();
                 loadConflicts();
             });
+            return;
+        }
+
+        const ignore = e.target.closest('.btn-barcode-ignore');
+        if (ignore) {
+            if (resultDiv) resultDiv.innerHTML = '<p style="text-align:center;color:var(--text-secondary);">Ignorado. El código no se verificó.</p>';
+            return;
+        }
+        const upsert = e.target.closest('.btn-barcode-upsert');
+        if (upsert) {
+            postAction('riverso_barcode_upsert', {
+                codigo: upsert.dataset.code,
+                sku_local: upsert.dataset.sku,
+                producto_base_id: upsert.dataset.pb || '',
+                estado: upsert.dataset.pb ? 'verificado' : 'propuesto',
+                cantidad: 1,
+                create_envase: 0
+            }).then(data => {
+                alert(data.data?.message || (data.success ? 'OK' : 'Error'));
+                if (input?.value) searchBarcode();
+                loadPending();
+                loadSkuList();
+            });
+            return;
+        }
+        const skuOpen = e.target.closest('.btn-sku-open');
+        if (skuOpen) {
+            loadSkuDetail(skuOpen.dataset.sku);
+            return;
+        }
+        const productOpen = e.target.closest('.btn-product-open');
+        if (productOpen) {
+            openProduct({
+                id: productOpen.dataset.id,
+                sku: productOpen.dataset.sku,
+                nombre: productOpen.dataset.nombre
+            });
+            return;
+        }
+        const productAdd = e.target.closest('.btn-product-add');
+        if (productAdd) {
+            currentProduct = {
+                id: productAdd.dataset.pb,
+                sku: productAdd.dataset.sku,
+                nombre: productAdd.dataset.nombre
+            };
+            openEdit({
+                producto_base_id: productAdd.dataset.pb,
+                sku_local: productAdd.dataset.sku,
+                sku: productAdd.dataset.sku,
+                estado: 'verificado',
+                cantidad: 1
+            });
+            return;
+        }
+        const inlineAssign = e.target.closest('.btn-product-inline-assign');
+        if (inlineAssign) {
+            const input = inlineAssign.closest('td')?.querySelector('.barcode-inline-code');
+            const codigo = (input?.value || '').trim();
+            if (!codigo) {
+                alert('Escribe o escanea el código de barra.');
+                input?.focus();
+                return;
+            }
+            postAction('riverso_barcode_upsert', {
+                codigo,
+                sku_local: inlineAssign.dataset.sku,
+                producto_base_id: inlineAssign.dataset.pb,
+                estado: 'verificado',
+                cantidad: 1,
+                tipo_envase: 'envase',
+                create_envase: 1
+            }).then(data => {
+                alert(data.data?.message || (data.success ? 'Código asignado' : 'Error'));
+                if (data.success) {
+                    if (input) input.value = '';
+                    loadProductList();
+                    openProduct({
+                        id: inlineAssign.dataset.pb,
+                        sku: inlineAssign.dataset.sku,
+                        nombre: inlineAssign.dataset.nombre
+                    });
+                }
+            }).catch(() => alert('No se pudo asignar el código.'));
+            return;
+        }
+        const productRow = e.target.closest('.barcode-product-row');
+        if (productRow && !e.target.closest('button') && !e.target.closest('input')) {
+            openProduct({
+                id: productRow.dataset.id,
+                sku: productRow.dataset.sku,
+                nombre: productRow.dataset.nombre
+            });
+            return;
+        }
+        const mapEdit = e.target.closest('.btn-map-edit');
+        if (mapEdit) {
+            openEdit(skuDetailById[mapEdit.dataset.id] || { id: mapEdit.dataset.id });
+            return;
+        }
+        const tipoToggle = e.target.closest('.btn-tipo-toggle');
+        if (tipoToggle) {
+            postAction('riverso_envase_tipo_toggle', { id: tipoToggle.dataset.id, activo: tipoToggle.dataset.activo }).then(loadTipos);
             return;
         }
 
@@ -3117,6 +3847,71 @@ function portalEliminarFactura(id, folio) {
         postAction('riverso_barcode_mapping_stats').then(data => {
             if (data.success) renderStats(data.data);
         });
+    }
+    document.getElementById('barcode-sku-search-btn')?.addEventListener('click', loadSkuList);
+    document.getElementById('barcode-sku-search')?.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); loadSkuList(); }
+    });
+    document.getElementById('barcode-product-search-btn')?.addEventListener('click', () => loadProductList(1));
+    document.getElementById('barcode-product-search')?.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); loadProductList(1); }
+    });
+    document.getElementById('barcode-product-filter')?.addEventListener('change', () => loadProductList(1));
+    document.getElementById('barcode-product-list')?.addEventListener('keydown', function(e) {
+        if (e.key !== 'Enter') return;
+        const input = e.target.closest('.barcode-inline-code');
+        if (!input) return;
+        e.preventDefault();
+        input.closest('td')?.querySelector('.btn-product-inline-assign')?.click();
+    });
+    document.getElementById('barcode-product-pager')?.addEventListener('click', function(e) {
+        if (e.target.id === 'barcode-product-prev') loadProductList(productPage - 1);
+        if (e.target.id === 'barcode-product-next') loadProductList(productPage + 1);
+    });
+    document.getElementById('barcode-add-open')?.addEventListener('click', () => openEdit({}));
+    document.getElementById('barcode-edit-close')?.addEventListener('click', closeEdit);
+    document.getElementById('barcode-edit-cancel')?.addEventListener('click', closeEdit);
+    document.getElementById('barcode-edit-save')?.addEventListener('click', function() {
+        postAction('riverso_barcode_upsert', {
+            codigo_id: document.getElementById('bc-edit-id').value,
+            codigo: document.getElementById('bc-edit-codigo').value,
+            sku_local: document.getElementById('bc-edit-sku').value,
+            producto_base_id: document.getElementById('bc-edit-pb')?.value || '',
+            tipo_envase: document.getElementById('bc-edit-tipo').value,
+            cantidad: document.getElementById('bc-edit-cantidad').value,
+            estado: document.getElementById('bc-edit-estado').value,
+            create_envase: document.getElementById('bc-edit-create-envase').checked ? 1 : 0
+        }).then(data => {
+            alert(data.data?.message || (data.success ? 'Guardado' : 'Error'));
+            if (data.success) {
+                closeEdit();
+                loadSkuList();
+                loadProductList();
+                if (currentProduct) {
+                    openProduct(currentProduct);
+                }
+                loadMappingStats();
+            }
+        });
+    });
+    document.getElementById('barcode-tipo-form')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+        postAction('riverso_envase_tipo_create', {
+            nombre: document.getElementById('barcode-tipo-nombre').value,
+            slug: document.getElementById('barcode-tipo-slug').value
+        }).then(data => {
+            if (!data.success) {
+                alert(data.data?.message || 'Error');
+                return;
+            }
+            document.getElementById('barcode-tipo-nombre').value = '';
+            document.getElementById('barcode-tipo-slug').value = '';
+            loadTipos();
+        });
+    });
+    if (document.getElementById('barcode-tab-products')) {
+        const activeBtn = document.querySelector('#barcode-tabs .barcode-tab.btn-primary');
+        loadTabData(activeBtn ? activeBtn.getAttribute('data-tab') : 'products');
     }
 })();
 
@@ -3333,7 +4128,6 @@ function portalEliminarFactura(id, folio) {
             const modoOpts = modos.map(m => `<option value="${esc(m)}"${m === (it.modo || 'BolsaCOD') ? ' selected' : ''}>${esc(m)}</option>`).join('');
             const colorOpts = colores.map(c => `<option value="${esc(c)}"${c === (it.color || 'BN') ? ' selected' : ''}>${esc(c)}</option>`).join('');
             const precioVal = priceInputValue(it.precio);
-            const precioLabel = formatPrice2(it.precio);
             const precioOpen = !!it.precioUnlocked;
             let precioHtml = `<span class="po-precio-view">${esc(precioLabel)}</span>`;
             if (cfg.canEditPrice) {
@@ -3414,6 +4208,30 @@ function portalEliminarFactura(id, folio) {
         }));
     }
 
+    function scrollToEditor() {
+        requestAnimationFrame(() => {
+            document.getElementById('po-portal-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }
+
+    function scrollToList() {
+        requestAnimationFrame(() => {
+            const target = document.querySelector('.portal-header') || document.getElementById('po-portal-stats');
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                return;
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    }
+
+    function clearProductSearch() {
+        const q = document.getElementById('po-portal-q');
+        const hits = document.getElementById('po-portal-hits');
+        if (q) q.value = '';
+        if (hits) hits.innerHTML = '';
+    }
+
     function fill(order) {
         current = order;
         items = (order.items || []).map(it => Object.assign({}, it));
@@ -3441,10 +4259,10 @@ function portalEliminarFactura(id, folio) {
         document.getElementById('po-portal-estado-badge').innerHTML = badge('borrador', 'Borrador');
         document.getElementById('po-portal-editor-title').textContent = 'Nueva orden';
         document.getElementById('po-portal-editor').style.display = '';
-        const hits = document.getElementById('po-portal-hits');
-        if (hits) hits.innerHTML = '';
+        clearProductSearch();
         renderItems();
         syncEditorChrome();
+        scrollToEditor();
     }
 
     function save() {
@@ -3487,9 +4305,9 @@ function portalEliminarFactura(id, folio) {
         items = [];
         document.getElementById('po-portal-editor').style.display = 'none';
         document.getElementById('po-portal-msg').textContent = '';
-        const hits = document.getElementById('po-portal-hits');
-        if (hits) hits.innerHTML = '';
+        clearProductSearch();
         loadList();
+        scrollToList();
     }
 
     function closeEditor() {
@@ -3558,6 +4376,7 @@ function portalEliminarFactura(id, folio) {
         post('riverso_print_orders_get', { id }).then(res => {
             if (!res.success) { alert(res.data?.message || 'Error'); return; }
             fill(res.data.order);
+            scrollToEditor();
         });
     }
 
@@ -3648,6 +4467,7 @@ function portalEliminarFactura(id, folio) {
     });
 
     document.getElementById('po-portal-q-btn')?.addEventListener('click', searchProd);
+    document.getElementById('po-portal-q-clear')?.addEventListener('click', clearProductSearch);
     document.getElementById('po-portal-q')?.addEventListener('keydown', e => {
         if (e.key === 'Enter') { e.preventDefault(); searchProd(); }
     });

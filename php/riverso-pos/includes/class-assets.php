@@ -56,6 +56,22 @@ class Riverso_POS_Assets {
                 'loading' => __('Cargando...', 'riverso-pos'),
             ]
         ]);
+
+        // Editor de familias (Categorías/Familias y páginas de productos)
+        if (strpos($hook, 'riverso-pos-categories') !== false || strpos($hook, 'riverso-pos-products') !== false) {
+            wp_enqueue_script(
+                'riverso-family-editor',
+                RIVERSO_POS_PLUGIN_URL . 'assets/js/family-editor.js',
+                ['jquery'],
+                RIVERSO_POS_VERSION,
+                true
+            );
+            wp_localize_script('riverso-family-editor', 'riversoFamilyEditor', [
+                'ajaxUrl' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('riverso_pos_nonce'),
+                'canManage' => current_user_can('riverso_manage_families'),
+            ]);
+        }
     }
 
     /**
@@ -66,6 +82,33 @@ class Riverso_POS_Assets {
         $portal_page = get_query_var('riverso_portal');
         if (empty($portal_page) && !is_page() && !is_singular()) {
             return;
+        }
+
+        if (!empty($portal_page)) {
+            wp_enqueue_script('jquery');
+            // El cliente de impresión va en footer; sin esto WordPress mueve jQuery
+            // al footer y los scripts inline del portal fallan (pestañas muertas).
+            if (function_exists('wp_scripts')) {
+                wp_scripts()->add_data('jquery', 'group', 0);
+                wp_scripts()->add_data('jquery-core', 'group', 0);
+                wp_scripts()->add_data('jquery-migrate', 'group', 0);
+            }
+            wp_enqueue_style('dashicons');
+
+            if ($portal_page === 'categories') {
+                wp_enqueue_script(
+                    'riverso-family-editor',
+                    RIVERSO_POS_PLUGIN_URL . 'assets/js/family-editor.js',
+                    ['jquery'],
+                    RIVERSO_POS_VERSION,
+                    true
+                );
+                wp_localize_script('riverso-family-editor', 'riversoFamilyEditor', [
+                    'ajaxUrl' => admin_url('admin-ajax.php'),
+                    'nonce' => wp_create_nonce('riverso_pos_nonce'),
+                    'canManage' => current_user_can('riverso_manage_families'),
+                ]);
+            }
         }
 
         $this->enqueue_label_print_client('riverso_label_print_config');

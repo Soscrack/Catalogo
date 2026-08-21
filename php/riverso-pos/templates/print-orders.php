@@ -124,6 +124,7 @@ $colores = Riverso_Print_Order_Module::COLORES;
                 <div class="po-search-row">
                     <input type="search" id="po-product-q" placeholder="SKU, código de barra o nombre...">
                     <button type="button" class="button" id="po-product-search">Buscar</button>
+                    <button type="button" class="button" id="po-product-clear">Borrar búsqueda</button>
                 </div>
                 <div id="po-product-results"></div>
             </div>
@@ -384,6 +385,7 @@ jQuery(function($) {
         $('#po-editor-numero').text('Se asigna al guardar');
         $('#po-editor-estado').html(badge('borrador', 'Borrador'));
         $('#po-product-results').empty();
+        $('#po-product-q').val('');
         renderItems();
         $('#po-editor-msg').text('');
         syncEditorChrome();
@@ -589,6 +591,8 @@ jQuery(function($) {
     $('#btn-new-order').on('click', function() {
         resetEditor();
         switchTab('editor');
+        const editor = document.getElementById('tab-editor');
+        if (editor) editor.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
     $(document).on('click', '.po-open', function() { openOrder($(this).data('id')); });
@@ -636,6 +640,10 @@ jQuery(function($) {
     });
 
     $('#po-product-search').on('click', searchProducts);
+    $('#po-product-clear').on('click', function() {
+        $('#po-product-q').val('');
+        $('#po-product-results').empty();
+    });
     $('#po-product-q').on('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); searchProducts(); } });
 
     function searchProducts() {
@@ -717,6 +725,7 @@ jQuery(function($) {
         const goList = function() {
             resetEditor();
             switchTab('listado');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         };
         if (canSaveDraftOnClose() && editorHasContent()) {
             $('#po-editor-msg').text('Guardando borrador...');

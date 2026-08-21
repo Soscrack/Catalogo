@@ -147,13 +147,29 @@ class Riverso_Supplier_Links_Module {
         }
 
         $supplier_row = $wpdb->get_row($wpdb->prepare(
-            "SELECT id FROM {$table_supplier} WHERE proveedor_id = %d AND codigo_proveedor = %s LIMIT 1",
+            "SELECT id, grupo_id, factor_conversion, notas, codigo_proveedor
+             FROM {$table_supplier} WHERE proveedor_id = %d AND codigo_proveedor = %s LIMIT 1",
             $supplier_id,
             $supplier_code
         ), ARRAY_A);
 
+        $pending_grupo_id = $supplier_row && !empty($supplier_row['grupo_id'])
+            ? intval($supplier_row['grupo_id'])
+            : 0;
+
+        if ($pending_grupo_id && class_exists('Riverso_Family_Module')) {
+            Riverso_Family_Module::get_instance()->promote_pending_supplier_to_member(
+                absint($base_id),
+                $pending_grupo_id,
+                $supplier_row
+            );
+        }
+
         $supplier_payload = array(
             'producto_base_id' => absint($base_id),
+            'grupo_id' => null,
+            'assigned_to_family_at' => null,
+            'assigned_to_family_by' => null,
             'proveedor_id' => $supplier_id,
             'supplier_link_id' => $link_id,
             'codigo_proveedor' => $supplier_code,
@@ -167,6 +183,11 @@ class Riverso_Supplier_Links_Module {
         if ($supplier_row) {
             $wpdb->update($table_supplier, $supplier_payload, array('id' => absint($supplier_row['id'])));
             $supplier_product_id = absint($supplier_row['id']);
+            // Forzar limpieza de grupo_id (wpdb->update a veces ignora null).
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$table_supplier} SET grupo_id = NULL, assigned_to_family_at = NULL, assigned_to_family_by = NULL WHERE id = %d",
+                $supplier_product_id
+            ));
         } else {
             $wpdb->insert($table_supplier, $supplier_payload);
             $supplier_product_id = absint($wpdb->insert_id);

@@ -121,7 +121,16 @@ class Riverso_Stock_Count_Service {
         $producto_base_id = 0;
         $factor = 1.0;
 
-        if (class_exists('Riverso_Barcode_Model') && method_exists('Riverso_Barcode_Model', 'resolve')) {
+        if (class_exists('Riverso_Barcode_Model') && method_exists('Riverso_Barcode_Model', 'resolve_for_operation')) {
+            $op = Riverso_Barcode_Model::resolve_for_operation($codigo);
+            if (!empty($op['conflicts'])) {
+                return false;
+            }
+            if (!empty($op['resolved'])) {
+                $producto_base_id = intval($op['resolved']['producto_base_id'] ?? $op['resolved']['product_id'] ?? 0);
+                $factor = floatval($op['resolved']['cantidad'] ?? $op['resolved']['factor_a_unidad_base'] ?? 1);
+            }
+        } elseif (class_exists('Riverso_Barcode_Model') && method_exists('Riverso_Barcode_Model', 'resolve')) {
             $resolved = Riverso_Barcode_Model::resolve($codigo);
             if ($resolved) {
                 $producto_base_id = intval($resolved['producto_base_id'] ?? $resolved['product_id'] ?? 0);
@@ -130,10 +139,12 @@ class Riverso_Stock_Count_Service {
         }
 
         if (!$producto_base_id) {
-            // Fallback: buscar en codigo_barra / barcodes
             $row = $wpdb->get_row(
                 $wpdb->prepare(
-                    "SELECT producto_base_id, cantidad FROM {$prefix}codigo_barra WHERE codigo = %s AND activo = 1 AND estado = 'verificado' LIMIT 1",
+                    "SELECT producto_base_id, cantidad FROM {$prefix}codigo_barra
+                     WHERE codigo = %s AND activo = 1 AND estado IN ('verificado', 'propuesto')
+                     ORDER BY CASE WHEN estado = 'verificado' THEN 0 ELSE 1 END
+                     LIMIT 1",
                     $codigo
                 ),
                 ARRAY_A

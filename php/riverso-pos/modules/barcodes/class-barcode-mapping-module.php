@@ -28,6 +28,7 @@ class Riverso_Barcode_Mapping_Module {
         add_action('wp_ajax_riverso_barcode_list_pending', [$this, 'ajax_list_pending']);
         add_action('wp_ajax_riverso_barcode_mapping_stats', [$this, 'ajax_stats']);
         add_action('wp_ajax_riverso_barcode_search_products', [$this, 'ajax_search_products']);
+        add_action('wp_ajax_riverso_barcode_list_products', [$this, 'ajax_list_products']);
         add_action('wp_ajax_riverso_barcode_approve_unambiguous', [$this, 'ajax_approve_unambiguous']);
         add_action('wp_ajax_riverso_barcode_list_by_sku', [$this, 'ajax_list_by_sku']);
         add_action('wp_ajax_riverso_barcode_get_sku_detail', [$this, 'ajax_get_sku_detail']);
@@ -71,12 +72,34 @@ class Riverso_Barcode_Mapping_Module {
         if (empty($row['producto_base_id'])) {
             wp_send_json_error(['message' => 'No se puede verificar sin producto_base. Reasigna o espera el alta del SKU.']);
         }
-        $ok = Riverso_Barcode_Model::set_status($id, 'verificado', sanitize_text_field($_POST['motivo'] ?? 'Aprobado desde portal.'));
+
+        $motivo = sanitize_text_field($_POST['motivo'] ?? 'Aprobado desde portal.');
+        $is_legacy = class_exists('Riverso_Barcode_Model') && Riverso_Barcode_Model::is_legacy_row($row);
+
+        if ($is_legacy) {
+            $ok = Riverso_Barcode_Model::accept_legacy_as_supplier($id, $motivo);
+        } else {
+            $ok = Riverso_Barcode_Model::set_status($id, 'verificado', $motivo);
+        }
         if (!$ok) {
             wp_send_json_error(['message' => 'No se pudo aprobar']);
         }
+
+        if (class_exists('Riverso_Product_Module')) {
+            Riverso_Product_Module::get_instance()->close_legacy_barcode_tasks(
+                $id,
+                (string) ($row['codigo'] ?? ''),
+                (int) ($row['producto_base_id'] ?? 0)
+            );
+        }
+
         $this->audit('barcode_approved', $id, $row);
-        wp_send_json_success(['message' => 'Código verificado', 'id' => $id]);
+        wp_send_json_success([
+            'message' => $is_legacy
+                ? 'Código verificado como Código de Proveedor'
+                : 'Código verificado',
+            'id' => $id,
+        ]);
     }
 
     public function ajax_reject() {
@@ -88,11 +111,34 @@ class Riverso_Barcode_Mapping_Module {
         if (!$id) {
             wp_send_json_error(['message' => 'ID requerido']);
         }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}codigo_barra WHERE id = %d",
+            $id
+        ), ARRAY_A);
+
         $motivo = sanitize_text_field($_POST['motivo'] ?? 'Rechazado desde portal.');
-        $ok = Riverso_Barcode_Model::set_status($id, 'rechazado', $motivo);
+        $is_legacy = $row && class_exists('Riverso_Barcode_Model') && Riverso_Barcode_Model::is_legacy_row($row);
+
+        if ($is_legacy) {
+            $ok = Riverso_Barcode_Model::reject_legacy($id, $motivo);
+        } else {
+            $ok = Riverso_Barcode_Model::set_status($id, 'rechazado', $motivo);
+        }
         if (!$ok) {
             wp_send_json_error(['message' => 'No se pudo rechazar']);
         }
+
+        if ($row && class_exists('Riverso_Product_Module')) {
+            Riverso_Product_Module::get_instance()->close_legacy_barcode_tasks(
+                $id,
+                (string) ($row['codigo'] ?? ''),
+                (int) ($row['producto_base_id'] ?? 0)
+            );
+        }
+
         $this->audit('barcode_rejected', $id, ['motivo' => $motivo]);
         wp_send_json_success(['message' => 'Código rechazado', 'id' => $id]);
     }
@@ -258,6 +304,124 @@ class Riverso_Barcode_Mapping_Module {
         wp_send_json_success(['items' => $rows]);
     }
 
+    public function ajax_list_products() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!$this->can_view()) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $page = max(1, absint($_POST['page'] ?? 1));
+        $per_page = min(100, max(10, absint($_POST['per_page'] ?? 40)));
+        $search = sanitize_text_field($_POST['search'] ?? '');
+        $filter = sanitize_key($_POST['filter'] ?? 'all');
+        $offset = ($page - 1) * $per_page;
+
+        $where = ['pb.deleted_at IS NULL', 'pb.archived_at IS NULL'];
+        $params = [];
+        if ($search !== '') {
+            $like = '%' . $wpdb->esc_like($search) . '%';
+            $where[] = "(pb.canonical_sku LIKE %s OR pb.nombre_canonico LIKE %s OR EXISTS (
+                SELECT 1 FROM {$prefix}codigo_barra cbx
+                WHERE cbx.producto_base_id = pb.id AND cbx.codigo LIKE %s
+            ))";
+            array_push($params, $like, $like, $like);
+        }
+
+        $having = '';
+        if ($filter === 'sin_codigo') {
+            $having = 'HAVING barcodes = 0';
+        } elseif ($filter === 'con_codigo') {
+            $having = 'HAVING barcodes > 0';
+        }
+
+        $where_sql = implode(' AND ', $where);
+        $sql = "SELECT pb.id, pb.canonical_sku, pb.nombre_canonico,
+                       (
+                           SELECT COUNT(DISTINCT cbx.codigo)
+                           FROM {$prefix}codigo_barra cbx
+                           WHERE cbx.activo = 1
+                             AND cbx.estado IN ('verificado','propuesto')
+                             AND (
+                                  cbx.producto_base_id = pb.id
+                               OR (
+                                    pb.canonical_sku IS NOT NULL AND pb.canonical_sku <> ''
+                                    AND cbx.producto_base_id IS NULL
+                                    AND (cbx.sku_local = pb.canonical_sku OR cbx.pending_sku = pb.canonical_sku)
+                                  )
+                             )
+                       ) AS barcodes,
+                       (
+                           SELECT SUM(cbx.estado = 'verificado' AND cbx.activo = 1)
+                           FROM {$prefix}codigo_barra cbx
+                           WHERE cbx.activo = 1
+                             AND cbx.estado IN ('verificado','propuesto')
+                             AND (
+                                  cbx.producto_base_id = pb.id
+                               OR (
+                                    pb.canonical_sku IS NOT NULL AND pb.canonical_sku <> ''
+                                    AND cbx.producto_base_id IS NULL
+                                    AND (cbx.sku_local = pb.canonical_sku OR cbx.pending_sku = pb.canonical_sku)
+                                  )
+                             )
+                       ) AS verificados,
+                       (
+                           SELECT GROUP_CONCAT(DISTINCT cbx.codigo ORDER BY cbx.codigo SEPARATOR ', ')
+                           FROM {$prefix}codigo_barra cbx
+                           WHERE cbx.activo = 1
+                             AND cbx.estado IN ('verificado','propuesto')
+                             AND (
+                                  cbx.producto_base_id = pb.id
+                               OR (
+                                    pb.canonical_sku IS NOT NULL AND pb.canonical_sku <> ''
+                                    AND cbx.producto_base_id IS NULL
+                                    AND (cbx.sku_local = pb.canonical_sku OR cbx.pending_sku = pb.canonical_sku)
+                                  )
+                             )
+                       ) AS barcode_sample
+                FROM {$prefix}producto_base pb
+                WHERE {$where_sql}
+                {$having}
+                ORDER BY (pb.canonical_sku IS NULL OR pb.canonical_sku = '') ASC, pb.canonical_sku ASC, pb.id ASC
+                LIMIT %d OFFSET %d";
+        $params[] = $per_page;
+        $params[] = $offset;
+        $items = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A) ?: [];
+
+        $count_sql = "SELECT COUNT(*) FROM (
+                        SELECT pb.id,
+                               (
+                                   SELECT COUNT(DISTINCT cbx.codigo)
+                                   FROM {$prefix}codigo_barra cbx
+                                   WHERE cbx.activo = 1
+                                     AND cbx.estado IN ('verificado','propuesto')
+                                     AND (
+                                          cbx.producto_base_id = pb.id
+                                       OR (
+                                            pb.canonical_sku IS NOT NULL AND pb.canonical_sku <> ''
+                                            AND cbx.producto_base_id IS NULL
+                                            AND (cbx.sku_local = pb.canonical_sku OR cbx.pending_sku = pb.canonical_sku)
+                                          )
+                                     )
+                               ) AS barcodes
+                        FROM {$prefix}producto_base pb
+                        WHERE {$where_sql}
+                        {$having}
+                      ) t";
+        $count_params = array_slice($params, 0, -2);
+        $total = (int) ($count_params
+            ? $wpdb->get_var($wpdb->prepare($count_sql, $count_params))
+            : $wpdb->get_var($count_sql));
+
+        wp_send_json_success([
+            'items' => $items,
+            'total' => $total,
+            'page' => $page,
+            'pages' => max(1, (int) ceil($total / $per_page)),
+        ]);
+    }
+
     public function ajax_approve_unambiguous() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         if (!$this->can_manage()) {
@@ -341,26 +505,42 @@ class Riverso_Barcode_Mapping_Module {
             wp_send_json_error(['message' => 'Sin permisos'], 403);
         }
         $sku = sanitize_text_field($_POST['sku'] ?? '');
-        if ($sku === '') {
-            wp_send_json_error(['message' => 'SKU requerido']);
+        $producto_base_id = absint($_POST['producto_base_id'] ?? 0);
+        if ($sku === '' && $producto_base_id <= 0) {
+            wp_send_json_error(['message' => 'SKU o producto requerido']);
         }
 
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
-        $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT cb.*, pb.canonical_sku, pb.nombre_canonico,
-                    e.tipo_envase, e.cantidad_unidades AS envase_cantidad, e.sku_envase
-             FROM {$prefix}codigo_barra cb
-             LEFT JOIN {$prefix}producto_base pb ON pb.id = cb.producto_base_id
-             LEFT JOIN {$prefix}envases e ON e.id = cb.envase_id
-             WHERE cb.sku_local = %s OR cb.pending_sku = %s OR pb.canonical_sku = %s
-             ORDER BY
-                CASE cb.estado WHEN 'verificado' THEN 0 WHEN 'propuesto' THEN 1 ELSE 2 END,
-                cb.updated_at DESC, cb.id DESC",
-            $sku,
-            $sku,
-            $sku
-        ), ARRAY_A) ?: [];
+        if ($producto_base_id > 0) {
+            $rows = $wpdb->get_results($wpdb->prepare(
+                "SELECT cb.*, pb.canonical_sku, pb.nombre_canonico,
+                        e.tipo_envase, e.cantidad_unidades AS envase_cantidad, e.sku_envase
+                 FROM {$prefix}codigo_barra cb
+                 LEFT JOIN {$prefix}producto_base pb ON pb.id = cb.producto_base_id
+                 LEFT JOIN {$prefix}envases e ON e.id = cb.envase_id
+                 WHERE cb.producto_base_id = %d
+                 ORDER BY
+                    CASE cb.estado WHEN 'verificado' THEN 0 WHEN 'propuesto' THEN 1 ELSE 2 END,
+                    cb.updated_at DESC, cb.id DESC",
+                $producto_base_id
+            ), ARRAY_A) ?: [];
+        } else {
+            $rows = $wpdb->get_results($wpdb->prepare(
+                "SELECT cb.*, pb.canonical_sku, pb.nombre_canonico,
+                        e.tipo_envase, e.cantidad_unidades AS envase_cantidad, e.sku_envase
+                 FROM {$prefix}codigo_barra cb
+                 LEFT JOIN {$prefix}producto_base pb ON pb.id = cb.producto_base_id
+                 LEFT JOIN {$prefix}envases e ON e.id = cb.envase_id
+                 WHERE cb.sku_local = %s OR cb.pending_sku = %s OR pb.canonical_sku = %s
+                 ORDER BY
+                    CASE cb.estado WHEN 'verificado' THEN 0 WHEN 'propuesto' THEN 1 ELSE 2 END,
+                    cb.updated_at DESC, cb.id DESC",
+                $sku,
+                $sku,
+                $sku
+            ), ARRAY_A) ?: [];
+        }
 
         $items = [];
         foreach ($rows as $row) {

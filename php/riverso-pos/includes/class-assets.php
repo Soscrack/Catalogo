@@ -72,6 +72,38 @@ class Riverso_POS_Assets {
                 'canManage' => current_user_can('riverso_manage_families'),
             ]);
         }
+
+        // Historial de costos: Chart.js + explorador
+        if (strpos($hook, 'riverso-pos-costs') !== false) {
+            $this->enqueue_cost_history_assets();
+        }
+    }
+
+    /**
+     * Encola Chart.js + cost-history.js (admin y portal)
+     */
+    private function enqueue_cost_history_assets() {
+        wp_enqueue_script(
+            'chartjs',
+            'https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js',
+            [],
+            '3.9.1',
+            true
+        );
+
+        wp_enqueue_script(
+            'riverso-cost-history',
+            RIVERSO_POS_PLUGIN_URL . 'assets/js/cost-history.js',
+            ['jquery', 'chartjs'],
+            RIVERSO_POS_VERSION,
+            true
+        );
+
+        wp_localize_script('riverso-cost-history', 'riversoCostHistory', [
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('riverso_pos_nonce'),
+            'can_manage' => current_user_can('riverso_manage_costs'),
+        ]);
     }
 
     /**
@@ -108,6 +140,10 @@ class Riverso_POS_Assets {
                     'nonce' => wp_create_nonce('riverso_pos_nonce'),
                     'canManage' => current_user_can('riverso_manage_families'),
                 ]);
+            }
+
+            if ($portal_page === 'cost-history') {
+                $this->enqueue_cost_history_assets();
             }
         }
 

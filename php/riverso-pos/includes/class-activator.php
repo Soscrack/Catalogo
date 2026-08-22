@@ -971,6 +971,7 @@ class Riverso_POS_Activator {
 
         self::add_column_if_missing("{$prefix}facturas", 'modo_ingreso', "modo_ingreso VARCHAR(20) NOT NULL DEFAULT 'recepcion'");
         self::add_index_if_missing("{$prefix}facturas", 'idx_modo_ingreso', "KEY idx_modo_ingreso (modo_ingreso)");
+        self::add_index_if_missing("{$prefix}facturas", 'idx_proveedor', "KEY idx_proveedor (proveedor_id)");
 
         // Historial de costos: permitir registros pendientes de vinculación (sin product_id WC).
         $cost_table = "{$prefix}cost_history";

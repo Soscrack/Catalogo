@@ -23,7 +23,24 @@ class Riverso_Cost_History_Module {
     private function __construct() {
         global $wpdb;
         $this->table_name = $wpdb->prefix . 'riverso_cost_history';
+        $this->ensure_lookup_service();
         $this->init_hooks();
+    }
+
+    private function ensure_lookup_service() {
+        if (!class_exists('Riverso_Cost_Lookup_Service')) {
+            $path = dirname(__FILE__) . '/class-cost-lookup-service.php';
+            if (file_exists($path)) {
+                require_once $path;
+            }
+        }
+    }
+
+    private function lookup() {
+        $this->ensure_lookup_service();
+        return class_exists('Riverso_Cost_Lookup_Service')
+            ? Riverso_Cost_Lookup_Service::get_instance()
+            : null;
     }
     
     private function init_hooks() {
@@ -36,6 +53,16 @@ class Riverso_Cost_History_Module {
         add_action('wp_ajax_riverso_get_cost_chart_data', array($this, 'ajax_get_cost_chart_data'));
         add_action('wp_ajax_riverso_bulk_import_costs', array($this, 'ajax_bulk_import_costs'));
         add_action('wp_ajax_riverso_delete_cost_entry', array($this, 'ajax_delete_cost_entry'));
+
+        // Explorer: búsqueda por SKU / barcode / código proveedor + timeline desde facturas
+        add_action('wp_ajax_riverso_cost_search_products', array($this, 'ajax_cost_search_products'));
+        add_action('wp_ajax_riverso_cost_get_timeline', array($this, 'ajax_cost_get_timeline'));
+        add_action('wp_ajax_riverso_cost_get_chart', array($this, 'ajax_cost_get_chart'));
+        add_action('wp_ajax_riverso_cost_get_document', array($this, 'ajax_cost_get_document'));
+        add_action('wp_ajax_riverso_cost_search_invoices', array($this, 'ajax_cost_search_invoices'));
+        add_action('wp_ajax_riverso_cost_analyze_invoice', array($this, 'ajax_cost_analyze_invoice'));
+        add_action('wp_ajax_riverso_cost_list_recent_invoices', array($this, 'ajax_cost_list_recent_invoices'));
+        add_action('wp_ajax_riverso_cost_list_increases', array($this, 'ajax_cost_list_increases'));
     }
     
     /**
@@ -255,6 +282,7 @@ class Riverso_Cost_History_Module {
         $order = strtoupper($args['order']) === 'ASC' ? 'ASC' : 'DESC';
         
         $suppliers_table = $wpdb->prefix . 'riverso_proveedores';
+        $facturas_table = $wpdb->prefix . 'riverso_facturas';
         
         $sql = "SELECT ch.*, 
                        p.post_title as product_name,
@@ -262,13 +290,18 @@ class Riverso_Cost_History_Module {
                        s.rut as supplier_rut,
                        u.display_name as created_by_name,
                        pm_price.meta_value as current_price,
-                       pm_sku.meta_value as product_sku
+                       pm_sku.meta_value as product_sku,
+                       f.folio AS factura_folio,
+                       f.tipo_dte AS factura_tipo_dte,
+                       f.fecha_emision AS factura_fecha_emision,
+                       f.razon_social_emisor AS factura_razon_social
                 FROM {$this->table_name} ch
                 LEFT JOIN {$wpdb->posts} p ON ch.product_id = p.ID
                 LEFT JOIN {$suppliers_table} s ON ch.supplier_id = s.id
                 LEFT JOIN {$wpdb->users} u ON ch.created_by = u.ID
                 LEFT JOIN {$wpdb->postmeta} pm_price ON ch.product_id = pm_price.post_id AND pm_price.meta_key = '_price'
                 LEFT JOIN {$wpdb->postmeta} pm_sku ON ch.product_id = pm_sku.post_id AND pm_sku.meta_key = '_sku'
+                LEFT JOIN {$facturas_table} f ON ch.source_type = 'invoice' AND ch.source_document_id = f.id
                 WHERE {$where_clause}
                 ORDER BY ch.{$orderby} {$order}
                 LIMIT %d OFFSET %d";
@@ -282,13 +315,19 @@ class Riverso_Cost_History_Module {
         
         $results = $wpdb->get_results($sql, ARRAY_A);
         
-        // Calculate margin for each entry
+        // Calculate margin for each entry + flags UI
         foreach ($results as &$row) {
             $price = floatval($row['current_price']);
             $cost = floatval($row['unit_cost'] ?: $row['cost']);
             $row['margin'] = $price > 0 ? round((($price - $cost) / $price) * 100, 2) : null;
             $row['margin_alert'] = $price > 0 && $price < ($cost * 1.5);
+            $row['can_delete'] = ($row['source_type'] ?? '') !== 'invoice';
+            $row['has_document'] = ($row['source_type'] ?? '') === 'invoice' && !empty($row['source_document_id']);
+            $row['created_at_fmt'] = !empty($row['created_at'])
+                ? substr($row['created_at'], 0, 16)
+                : null;
         }
+        unset($row);
         
         return $results;
     }
@@ -775,6 +814,11 @@ class Riverso_Cost_History_Module {
         if (!$entry) {
             wp_send_json_error('Registro no encontrado');
         }
+
+        // No permitir borrar costos generados desde factura XML
+        if (($entry['source_type'] ?? '') === 'invoice') {
+            wp_send_json_error('No se puede eliminar un costo proveniente de una factura. El registro se mantiene ligado al documento.');
+        }
         
         $result = $wpdb->delete($this->table_name, array('id' => $id), array('%d'));
         
@@ -796,6 +840,204 @@ class Riverso_Cost_History_Module {
         wp_send_json_success('Registro eliminado');
     }
     
+    // ==================== EXPLORER AJAX (facturas en vivo) ====================
+
+    public function ajax_cost_search_products() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_view_costs')) {
+            wp_send_json_error('Sin permisos', 403);
+        }
+
+        $svc = $this->lookup();
+        if (!$svc) {
+            wp_send_json_error('Servicio de costos no disponible');
+        }
+
+        $term = isset($_POST['term']) ? sanitize_text_field(wp_unslash($_POST['term'])) : '';
+        $limit = isset($_POST['limit']) ? absint($_POST['limit']) : 15;
+
+        wp_send_json_success([
+            'results' => $svc->search($term, $limit),
+            'term' => $term,
+        ]);
+    }
+
+    public function ajax_cost_get_timeline() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_view_costs')) {
+            wp_send_json_error('Sin permisos', 403);
+        }
+
+        $svc = $this->lookup();
+        if (!$svc) {
+            wp_send_json_error('Servicio de costos no disponible');
+        }
+
+        $payload = $svc->build_explorer_payload([
+            'producto_base_id' => isset($_POST['producto_base_id']) ? absint($_POST['producto_base_id']) : null,
+            'proveedor_id' => isset($_POST['proveedor_id']) ? absint($_POST['proveedor_id']) : null,
+            'codigo_proveedor' => isset($_POST['codigo_proveedor']) ? sanitize_text_field(wp_unslash($_POST['codigo_proveedor'])) : null,
+            'limit_per_pair' => isset($_POST['limit_per_pair']) ? absint($_POST['limit_per_pair']) : 3,
+            'months' => isset($_POST['months']) ? absint($_POST['months']) : 24,
+            'doc_type' => isset($_POST['doc_type']) ? sanitize_text_field(wp_unslash($_POST['doc_type'])) : 'factura',
+        ]);
+
+        if (is_wp_error($payload)) {
+            wp_send_json_error($payload->get_error_message());
+        }
+
+        wp_send_json_success($payload);
+    }
+
+    public function ajax_cost_get_chart() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_view_costs')) {
+            wp_send_json_error('Sin permisos', 403);
+        }
+
+        $svc = $this->lookup();
+        if (!$svc) {
+            wp_send_json_error('Servicio de costos no disponible');
+        }
+
+        $producto_base_id = isset($_POST['producto_base_id']) ? absint($_POST['producto_base_id']) : 0;
+        $proveedor_id = isset($_POST['proveedor_id']) ? absint($_POST['proveedor_id']) : 0;
+        $codigo_proveedor = isset($_POST['codigo_proveedor']) ? sanitize_text_field(wp_unslash($_POST['codigo_proveedor'])) : '';
+        $months = isset($_POST['months']) ? absint($_POST['months']) : 24;
+        $doc_type = isset($_POST['doc_type']) ? sanitize_text_field(wp_unslash($_POST['doc_type'])) : 'factura';
+
+        if ($producto_base_id) {
+            $pares = $svc->get_supplier_pairs($producto_base_id);
+        } elseif ($proveedor_id && $codigo_proveedor !== '') {
+            $pares = [[
+                'proveedor_id' => $proveedor_id,
+                'codigo_proveedor' => $codigo_proveedor,
+            ]];
+        } else {
+            wp_send_json_error('Se requiere producto o par proveedor/código');
+        }
+
+        wp_send_json_success($svc->get_chart_series($pares, $months, $doc_type));
+    }
+
+    public function ajax_cost_get_document() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_view_costs')) {
+            wp_send_json_error('Sin permisos', 403);
+        }
+
+        $svc = $this->lookup();
+        if (!$svc) {
+            wp_send_json_error('Servicio de costos no disponible');
+        }
+
+        $factura_id = isset($_POST['factura_id']) ? absint($_POST['factura_id']) : 0;
+        $doc = $svc->get_document($factura_id);
+
+        if (!$doc) {
+            wp_send_json_error('Documento no encontrado');
+        }
+
+        wp_send_json_success($doc);
+    }
+
+    public function ajax_cost_search_invoices() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_view_costs')) {
+            wp_send_json_error('Sin permisos', 403);
+        }
+
+        $svc = $this->lookup();
+        if (!$svc) {
+            wp_send_json_error('Servicio de costos no disponible');
+        }
+
+        $term = isset($_POST['term']) ? sanitize_text_field(wp_unslash($_POST['term'])) : '';
+        $limit = isset($_POST['limit']) ? absint($_POST['limit']) : 15;
+
+        wp_send_json_success([
+            'results' => $svc->search_product_invoices($term, $limit),
+            'term' => $term,
+        ]);
+    }
+
+    public function ajax_cost_analyze_invoice() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_view_costs')) {
+            wp_send_json_error('Sin permisos', 403);
+        }
+
+        $svc = $this->lookup();
+        if (!$svc) {
+            wp_send_json_error('Servicio de costos no disponible');
+        }
+
+        $factura_id = isset($_POST['factura_id']) ? absint($_POST['factura_id']) : 0;
+        $result = $svc->analyze_invoice($factura_id);
+
+        if (is_wp_error($result)) {
+            wp_send_json_error($result->get_error_message());
+        }
+
+        wp_send_json_success($result);
+    }
+
+    public function ajax_cost_list_recent_invoices() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_view_costs')) {
+            wp_send_json_error('Sin permisos', 403);
+        }
+
+        $svc = $this->lookup();
+        if (!$svc) {
+            wp_send_json_error('Servicio de costos no disponible');
+        }
+
+        $result = $svc->list_recent_product_invoices([
+            'date_field' => isset($_POST['date_field']) ? sanitize_text_field(wp_unslash($_POST['date_field'])) : 'fecha_emision',
+            'date_from' => isset($_POST['date_from']) ? sanitize_text_field(wp_unslash($_POST['date_from'])) : '',
+            'date_to' => isset($_POST['date_to']) ? sanitize_text_field(wp_unslash($_POST['date_to'])) : '',
+            'proveedor_id' => isset($_POST['proveedor_id']) ? absint($_POST['proveedor_id']) : 0,
+            'search' => isset($_POST['search']) ? sanitize_text_field(wp_unslash($_POST['search'])) : '',
+            'orderby' => isset($_POST['orderby']) ? sanitize_text_field(wp_unslash($_POST['orderby'])) : 'fecha_emision',
+            'order' => isset($_POST['order']) ? sanitize_text_field(wp_unslash($_POST['order'])) : 'DESC',
+            'limit' => isset($_POST['limit']) ? absint($_POST['limit']) : 25,
+            'offset' => isset($_POST['offset']) ? absint($_POST['offset']) : 0,
+        ]);
+
+        wp_send_json_success($result);
+    }
+
+    public function ajax_cost_list_increases() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_view_costs')) {
+            wp_send_json_error('Sin permisos', 403);
+        }
+
+        $svc = $this->lookup();
+        if (!$svc) {
+            wp_send_json_error('Servicio de costos no disponible');
+        }
+
+        $result = $svc->list_cost_increases([
+            'date_from' => isset($_POST['date_from']) ? sanitize_text_field(wp_unslash($_POST['date_from'])) : '',
+            'date_to' => isset($_POST['date_to']) ? sanitize_text_field(wp_unslash($_POST['date_to'])) : '',
+            'min_pct' => isset($_POST['min_pct']) ? floatval($_POST['min_pct']) : 0,
+            'margin_threshold' => isset($_POST['margin_threshold']) ? floatval($_POST['margin_threshold']) : 1.5,
+            'limit' => isset($_POST['limit']) ? absint($_POST['limit']) : 100,
+        ]);
+
+        wp_send_json_success($result);
+    }
+
     /**
      * Get statistics for dashboard widget
      */

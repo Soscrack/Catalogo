@@ -604,6 +604,18 @@
         .portal-badge-pendiente { background: #fafafa; color: #666; }
         .portal-badge-vinculado { background: #e8f5e9; color: #2e7d32; }
         .portal-badge-sin_vincular { background: #fff3e0; color: #e65100; }
+        .portal-badge-gasto { background: #f3e8ff; color: #6b21a8; }
+
+        .portal-tipo-pending-badge {
+            display: inline-block;
+            background: #fbbf24;
+            color: #78350f;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+            font-size: 10px;
+            letter-spacing: .02em;
+        }
 
         .bulk-queue {
             max-height: 220px;
@@ -1076,6 +1088,11 @@ $tareas = $wpdb->get_results($wpdb->prepare(
                     </select>
                     <input type="date" id="portal-filter-desde">
                     <input type="date" id="portal-filter-hasta">
+                    <select id="portal-filter-tipo-confirmado">
+                        <option value="">Todos los tipos</option>
+                        <option value="0">Tipo pendiente de confirmar</option>
+                        <option value="1">Tipos confirmados</option>
+                    </select>
                     <input type="search" id="portal-filter-search" placeholder="Buscar folio o monto…" autocomplete="off">
                     <button type="button" class="btn btn-secondary" onclick="portalLoadInvoices(1)">Filtrar</button>
                     <label class="portal-invoices-control">
@@ -1363,9 +1380,12 @@ $tareas = $wpdb->get_results($wpdb->prepare(
             </div>
             <div class="section-body">
                 <p style="color: var(--text-secondary);">Gestiona las cotizaciones recibidas de proveedores.</p>
-                <a href="<?php echo admin_url('admin.php?page=riverso-received-quotes'); ?>" class="btn btn-secondary" style="margin-top: 15px;">
+                <a href="<?php echo admin_url('admin.php?page=riverso-pos-received-quotes'); ?>" class="btn btn-secondary" style="margin-top: 15px;">
                     Ver en WP Admin
                 </a>
+                <div style="margin-top: 24px;">
+                    <?php include RIVERSO_POS_PLUGIN_DIR . 'templates/partials/cost-quotes-wip.php'; ?>
+                </div>
             </div>
         </div>
         
@@ -1374,12 +1394,27 @@ $tareas = $wpdb->get_results($wpdb->prepare(
         <div class="content-section">
             <div class="section-header">
                 <h2 class="section-title">Historial de Costos</h2>
+                <a href="<?php echo admin_url('admin.php?page=riverso-pos-costs'); ?>" class="btn btn-secondary" target="_blank" rel="noopener">
+                    WP Admin
+                </a>
             </div>
             <div class="section-body">
-                <p style="color: var(--text-secondary);">Revisa el historial de cambios de precios y costos de productos.</p>
-                <a href="<?php echo admin_url('admin.php?page=riverso-cost-history'); ?>" class="btn btn-secondary" style="margin-top: 15px;">
-                    Ver en WP Admin
-                </a>
+                <?php if (!current_user_can('riverso_view_costs')): ?>
+                    <p style="color: var(--text-secondary);">No tienes permiso para ver el historial de costos.</p>
+                <?php else: ?>
+                    <?php
+                    if (!class_exists('Riverso_Cost_History_Module')) {
+                        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/costs/class-cost-history-module.php';
+                    }
+                    $lookup_svc = RIVERSO_POS_PLUGIN_DIR . 'modules/costs/class-cost-lookup-service.php';
+                    if (file_exists($lookup_svc) && !class_exists('Riverso_Cost_Lookup_Service')) {
+                        require_once $lookup_svc;
+                    }
+                    Riverso_Cost_History_Module::get_instance();
+                    $riverso_cost_history_context = 'portal';
+                    include RIVERSO_POS_PLUGIN_DIR . 'templates/partials/cost-history-app.php';
+                    ?>
+                <?php endif; ?>
             </div>
         </div>
         
@@ -2137,6 +2172,7 @@ async function portalProcessBulk() {
         const emisor = preview.data.emisor || {};
         const upload = await portalUploadFile(file, {
             documento_tipo: tipo,
+            upload_mode: 'bulk',
             modo_ingreso: tipo === 'envio' ? 'solo_costos' : portalDefaultModo,
             proveedor_modo: 'xml',
             proveedor_nombre: emisor.razon_social || '',
@@ -2157,6 +2193,10 @@ async function portalProcessBulk() {
     if (portalOnInvoicesPage) portalLoadInvoices(1);
 }
 
+function portalTipoPendiente(factura) {
+    return Number(factura && factura.tipo_confirmado) === 0;
+}
+
 function portalLoadInvoices(page) {
     const tbody = document.getElementById('portal-invoices-list');
     if (!tbody) return;
@@ -2175,6 +2215,7 @@ function portalLoadInvoices(page) {
         proveedor_id: document.getElementById('portal-filter-proveedor')?.value || '',
         fecha_desde: document.getElementById('portal-filter-desde')?.value || '',
         fecha_hasta: document.getElementById('portal-filter-hasta')?.value || '',
+        tipo_confirmado: document.getElementById('portal-filter-tipo-confirmado')?.value || '',
         search: document.getElementById('portal-filter-search')?.value || ''
     });
     fetch(ajaxUrl, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body })
@@ -2201,12 +2242,35 @@ function portalLoadInvoices(page) {
             }
             tbody.innerHTML = res.data.facturas.map(f => {
                 const isEnvio = f.documento_subtipo === 'envio';
-                const tipoLabel = isEnvio ? '<span style="color:#b45309;font-weight:600;">Flete</span>' : '<span style="color:#15803d;">Productos</span>';
+                const isNc = f.documento_subtipo === 'nota_credito' || Number(f.tipo_dte) === 61;
+                const isGuia = f.documento_subtipo === 'guia_despacho' || Number(f.tipo_dte) === 52;
+                const isGastos = f.documento_subtipo === 'gastos';
+                let tipoLabel = isNc
+                    ? '<span style="color:#1d4ed8;font-weight:600;">N. Crédito</span>'
+                    : (isEnvio
+                        ? '<span style="color:#b45309;font-weight:600;">Flete</span>'
+                        : (isGuia
+                            ? '<span style="color:#0e7490;font-weight:600;">Guía</span>'
+                            : (isGastos
+                                ? '<span style="color:#6b21a8;font-weight:600;">Gastos</span>'
+                                : '<span style="color:#15803d;">Productos</span>')));
+                if (portalTipoPendiente(f)) {
+                    tipoLabel = `<span class="portal-tipo-pending-badge">POR CONFIRMAR</span><br><small>${tipoLabel}</small>`;
+                }
                 const vinculadas = parseInt(f.facturas_vinculadas || 0, 10);
-                const itemsCol = isEnvio
-                    ? (vinculadas > 0 ? `${vinculadas} factura(s)` : 'Sin asignar')
-                    : `${f.items_vinculados}/${f.total_items}` + (parseInt(f.fletes_vinculados) > 0 ? ` · ${f.fletes_vinculados} flete(s)` : '');
-                const estadoLabel = (f.estado || '').replace(/_/g, ' ');
+                const itemsCol = isNc
+                    ? (f.estado === 'sin_vincular' ? 'Folio origen pendiente' : 'Vinculada')
+                    : (isEnvio
+                        ? (vinculadas > 0 ? `${vinculadas} factura(s)` : 'Sin asignar')
+                        : (isGastos
+                            ? 'Sin inventario'
+                            : (isGuia
+                                ? `${f.items_vinculados}/${f.total_items} · Solo costos`
+                                : `${f.items_vinculados}/${f.total_items}` +
+                                  (parseInt(f.fletes_vinculados) > 0 ? ` · ${f.fletes_vinculados} flete(s)` : ''))));
+                const estadoLabel = isNc && f.estado === 'sin_vincular'
+                    ? 'NC sin folio'
+                    : (f.estado || '').replace(/_/g, ' ');
                 const linkBtn = (canProcessInvoices && isEnvio)
                     ? `<button type="button" class="btn btn-primary btn-sm" style="margin-left:4px;" onclick="portalVincularFlete(${f.id})" title="Vincular a facturas de productos">Vincular</button>`
                     : '';

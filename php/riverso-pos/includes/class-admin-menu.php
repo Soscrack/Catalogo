@@ -419,6 +419,11 @@ class Riverso_POS_Admin_Menu {
      */
     public function render_costs() {
         require_once RIVERSO_POS_PLUGIN_DIR . 'modules/costs/class-cost-history-module.php';
+        $lookup = RIVERSO_POS_PLUGIN_DIR . 'modules/costs/class-cost-lookup-service.php';
+        if (file_exists($lookup)) {
+            require_once $lookup;
+        }
+        Riverso_Cost_History_Module::get_instance();
         $this->render_page('cost-history');
     }
     

@@ -1,0 +1,164 @@
+{
+  "erp_table": "nExLU_riverso_producto_base",
+  "erp_counts": {
+    "total": 9847,
+    "estado:activo": 9845,
+    "estado:eliminado": 2,
+    "sku_empty": 5146,
+    "sku_numeric_le6": 4683
+  },
+  "erp_skus": 4701,
+  "facto_skus": 5093,
+  "match_exact_sku": 4691,
+  "only_erp": 10,
+  "only_facto": 402,
+  "name_mismatch_among_matches": 751,
+  "sample_only_erp": [
+    "21679",
+    "22372",
+    "22431",
+    "231",
+    "24756",
+    "28821",
+    "29205",
+    "351",
+    "582",
+    "N24RL"
+  ],
+  "sample_only_facto": [
+    "05FV27",
+    "1005",
+    "158",
+    "20702",
+    "20821",
+    "20968",
+    "21190",
+    "21217",
+    "21446",
+    "21719",
+    "21922",
+    "22072",
+    "22103",
+    "22144",
+    "24658",
+    "24701",
+    "24750",
+    "247560",
+    "24761",
+    "24781",
+    "24789",
+    "24790",
+    "24799",
+    "24801",
+    "24808",
+    "24821",
+    "24823",
+    "24824",
+    "24825",
+    "24826"
+  ],
+  "sample_name_diff": [
+    {
+      "sku": "03FMGE",
+      "erp": "Clavo Polvora SDM 3.7 x 1  (03FMGE)",
+      "facto": "Clavo Polvora SDM 3.7 x 1 (03FMGE)"
+    },
+    {
+      "sku": "1000",
+      "erp": "Disco Diamantado Segmentado 7\"(Tyrolit)",
+      "facto": "Disco Diamantado Segmentado 7''(Tyrolit)"
+    },
+    {
+      "sku": "1003",
+      "erp": "Clavo 4\" X 8 CAJA 25KG PRECIO POR CAJA DE 25KL",
+      "facto": "Clavo 4'' X 8 CAJA 25KG PRECIO POR CAJA DE 25KL"
+    },
+    {
+      "sku": "1012",
+      "erp": "Esmeril Angular 4.5\" 1100W D28112-B2 DeWALT",
+      "facto": "Esmeril Angular 4.5'' 1100W D28112-B2 DeWALT"
+    },
+    {
+      "sku": "1015",
+      "erp": "Torn.P.Wings S-Phillips 8-18x1.5/8 Broca c/alas (Steelfix)",
+      "facto": "Torn.P.Wings S-Phillips 8-18x1.5/8 Broca c/alas (Steel)"
+    },
+    {
+      "sku": "1020",
+      "erp": "Aceite HELIX HX5 SN 20W50 3X4LT",
+      "facto": "Aceite HELIX HX7 SN 10W40 3X4LT"
+    },
+    {
+      "sku": "104",
+      "erp": "Terminal Cerrado",
+      "facto": "TERMINAL PARA BATERIA SET 2 PZAS"
+    },
+    {
+      "sku": "111",
+      "erp": "Abrazadera 9mm-16/25mm 1\"",
+      "facto": "Abrazadera 9mm-16/25mm 1''"
+    },
+    {
+      "sku": "115",
+      "erp": "Abrazadera Electrica 5/8\" PVC NARANJA",
+      "facto": "Abrazadera Electrica 5/8'' PVC NARANJA"
+    },
+    {
+      "sku": "116",
+      "erp": "Abrazadera 9mm-12/20mm 3/4\"",
+      "facto": "Abrazadera 9mm-12/20mm 3/4''"
+    },
+    {
+      "sku": "117",
+      "erp": "Amarras Plasticas 300mm x 4.8",
+      "facto": "Amarras Plasticas 450mm x 4.8"
+    },
+    {
+      "sku": "125",
+      "erp": "Ampolleta cola pescado flösser pequeña",
+      "facto": "Ampolleta cola pescado flÃ¶sser pequeÃ±a"
+    },
+    {
+      "sku": "126",
+      "erp": "Ampolleta cola pescado flösser",
+      "facto": "Ampolleta cola pescado flÃ¶sser"
+    },
+    {
+      "sku": "12900",
+      "erp": "LENTEJA.P.BROCA. #8x1/2            ZBR",
+      "facto": "Lenteja 8x1/2 P.B. (50ATPF-G)"
+    },
+    {
+      "sku": "147",
+      "erp": "ATPF 12-14 x 3/4  (107RLHN)",
+      "facto": "ATPF 12-14 x 3/4 (107RLHN)"
+    },
+    {
+      "sku": "152",
+      "erp": "DRYWALL PTA BROCA #8-18x3\"         ZBR",
+      "facto": "Torn 8 x 3 P.B. (06TADB)"
+    },
+    {
+      "sku": "153",
+      "erp": "Punta Phillips #2 (06PTA) CORTA",
+      "facto": "Punta Phillips #2 (06PTA) CORTA 10X4000"
+    },
+    {
+      "sku": "154",
+      "erp": "PUNTA CON TOPE PHILLIPS PH2X 50MM (308PTA)",
+      "facto": "Punta Cuadrada #2"
+    },
+    {
+      "sku": "181",
+      "erp": "Perno de Anclaje 1/2-13x3.3/4 (107PAN)$950C/U",
+      "facto": "Perno de Anclaje 1/2-13x3.3/4 (107PAN)$850C/U"
+    },
+    {
+      "sku": "200",
+      "erp": "Agorex Madera Extra 1/2 Pote",
+      "facto": "Agorex no mas calvos 100gr"
+    }
+  ],
+  "match_rate_vs_facto": 0.9211,
+  "match_rate_vs_erp": 0.9979
+}

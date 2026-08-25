@@ -19,8 +19,30 @@ $default_intake_mode = 'solo_costos';
             <span class="dashicons dashicons-upload"></span> Subir XML
         </button>
         <?php endif; ?>
+        <?php if (current_user_can('riverso_process_scans') || current_user_can('riverso_process_invoices')): ?>
+        <button type="button" class="page-title-action" id="btn-upload-scan-header" style="display:none;">
+            <span class="dashicons dashicons-camera"></span> Subir escaneo
+        </button>
+        <?php endif; ?>
     </h1>
 
+    <nav class="invoices-tab-nav">
+        <button type="button" class="button invoices-main-tab active" data-panel="panel-xml">
+            Facturas XML
+            <span class="invoices-tab-badge" id="badge-xml-pendientes" title="Tipo pendiente de confirmar" hidden>0</span>
+        </button>
+        <button type="button" class="button invoices-main-tab" data-panel="panel-scans">
+            Escaneos (PDF/Imagen)
+            <span class="invoices-tab-badge" id="badge-scans-pendientes" title="Pendientes de confirmar" hidden>0</span>
+        </button>
+        <?php if (current_user_can('riverso_process_invoices') || current_user_can('manage_options')): ?>
+        <button type="button" class="button invoices-main-tab" data-panel="panel-facto-import">
+            Importar FACTO Inbox
+        </button>
+        <?php endif; ?>
+    </nav>
+
+    <div id="panel-xml" class="invoices-tab-panel">
     <!-- Filtros -->
     <div class="riverso-filters">
         <select id="filter-estado">
@@ -52,6 +74,14 @@ $default_intake_mode = 'solo_costos';
             <option value="">Todos los tipos</option>
             <option value="0">Tipo pendiente de confirmar</option>
             <option value="1">Tipos confirmados</option>
+        </select>
+
+        <select id="filter-origen">
+            <option value="">Todos los orígenes</option>
+            <option value="xml">Solo XML</option>
+            <option value="escaneo">Solo escaneo (PDF/imagen)</option>
+            <option value="ambos">XML + escaneo</option>
+            <option value="facto">FACTO Inbox</option>
         </select>
 
         <input type="search" id="filter-search" class="invoices-search" placeholder="Buscar folio o monto…" autocomplete="off">
@@ -98,6 +128,7 @@ $default_intake_mode = 'solo_costos';
             <tr>
                 <th style="width: 80px;">Folio</th>
                 <th style="width: 80px;">Tipo</th>
+                <th style="width: 100px;">Origen</th>
                 <th class="col-proveedor">Proveedor</th>
                 <th style="width: 100px;">Fecha</th>
                 <th style="width: 120px;">Total</th>
@@ -127,7 +158,7 @@ $default_intake_mode = 'solo_costos';
         </thead>
         <tbody id="invoices-list">
             <tr class="loading-row">
-                <td colspan="8" style="text-align: center; padding: 40px;">
+                <td colspan="9" style="text-align: center; padding: 40px;">
                     <span class="spinner is-active" style="float: none;"></span>
                     Cargando facturas...
                 </td>
@@ -143,7 +174,12 @@ $default_intake_mode = 'solo_costos';
             <button type="button" class="button" id="invoices-next" style="display:none;">Siguiente →</button>
         </div>
     </div>
-</div>
+</div><!-- /panel-xml -->
+
+<?php include RIVERSO_POS_PLUGIN_DIR . 'templates/invoices-scans.php'; ?>
+<?php include RIVERSO_POS_PLUGIN_DIR . 'templates/invoices-facto-import.php'; ?>
+
+</div><!-- /wrap riverso-invoices -->
 
 <!-- Modal: Subir factura -->
 <div id="modal-upload-invoice" class="riverso-modal" style="display: none;">
@@ -425,6 +461,18 @@ $default_intake_mode = 'solo_costos';
                 </div>
                 <p id="detail-nc-selected-label" class="description" style="margin-top:6px;"></p>
                 <button type="button" class="button button-primary" id="btn-detail-nc-link" style="margin-top:8px;">Vincular a folio seleccionado</button>
+            </div>
+
+            <div id="detail-origen-section" style="margin-bottom:16px;padding:12px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+                    <h3 style="margin:0;">Documentos fuente</h3>
+                    <span id="detail-origen-badge" class="origen-badge origen-badge-xml">XML</span>
+                </div>
+                <p id="detail-origen-desc" class="description" style="margin:0 0 10px;"></p>
+                <div id="detail-adjuntos-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;"></div>
+                <div id="detail-adjunto-viewer-wrap" style="display:none;">
+                    <iframe id="detail-adjunto-viewer" title="Escaneo" style="width:100%;height:480px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;"></iframe>
+                </div>
             </div>
             
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0 8px;">
@@ -870,6 +918,13 @@ $default_intake_mode = 'solo_costos';
 .sku-suggest-item { padding: 6px 8px; cursor: pointer; font-size: 12px; }
 .sku-suggest-item:hover, .sku-suggest-item.is-active { background: #eff6ff; }
 
+.origen-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; line-height:1.5; }
+.origen-badge-xml { background:#e0f2fe; color:#0369a1; }
+.origen-badge-escaneo { background:#fef3c7; color:#92400e; }
+.origen-badge-ambos { background:#dcfce7; color:#166534; }
+.origen-badge-facto { background:#ede9fe; color:#5b21b6; }
+.btn-view-adjunto { max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
 </style>
 
 <script>
@@ -927,6 +982,7 @@ jQuery(function($) {
             fecha_desde: $('#filter-fecha-desde').val(),
             fecha_hasta: $('#filter-fecha-hasta').val(),
             tipo_confirmado: $('#filter-tipo-confirmado').val(),
+            origen_ingreso: $('#filter-origen').val(),
             search: $('#filter-search').val()
         };
         
@@ -941,6 +997,9 @@ jQuery(function($) {
                 renderInvoices(response.data);
             } else {
                 alert(response.data.message || 'Error cargando facturas');
+            }
+            if (typeof window.refreshInvoicesTabBadges === 'function') {
+                window.refreshInvoicesTabBadges();
             }
         });
     }
@@ -972,12 +1031,26 @@ jQuery(function($) {
         tbody.empty();
         
         if (!data.facturas.length) {
-            tbody.html('<tr><td colspan="8" style="text-align: center; padding: 40px;">No hay facturas</td></tr>');
+            tbody.html('<tr><td colspan="9" style="text-align: center; padding: 40px;">No hay facturas</td></tr>');
             renderPagination(data);
             return;
         }
         
         const tiposDTE = {33: 'Factura', 34: 'F.Exenta', 52: 'Guía', 61: 'N.Crédito'};
+
+        function origenBadge(f) {
+            const o = f.origen || {};
+            const cls = o.badge_class || ('origen-badge-' + (f.origen_ingreso || 'xml'));
+            const label = o.origen_label || (f.origen_ingreso === 'escaneo' ? 'Escaneo' : (f.origen_ingreso === 'ambos' ? 'XML + Escaneo' : (f.origen_ingreso === 'facto' ? 'FACTO Inbox' : 'XML')));
+            return `<span class="origen-badge ${cls}">${label}</span>`;
+        }
+
+        function adjuntoBtn(f) {
+            const o = f.origen || {};
+            if (!o.tiene_escaneo && (f.origen_ingreso !== 'escaneo' && f.origen_ingreso !== 'ambos')) return '';
+            return `<button type="button" class="button button-small btn-view-adjunto" data-id="${f.id}" title="Ver PDF/imagen escaneado">
+                <span class="dashicons dashicons-media-document"></span></button>`;
+        }
         
         data.facturas.forEach(function(f) {
             const deleteBtn = (canDeleteInvoices && f.can_delete)
@@ -1023,6 +1096,7 @@ jQuery(function($) {
             row.html(`
                 <td><strong>${f.folio}</strong></td>
                 <td>${tipoLabel}</td>
+                <td>${origenBadge(f)}</td>
                 <td class="col-proveedor">${f.proveedor_nombre}</td>
                 <td>${f.fecha_emision}</td>
                 <td style="text-align: right;">$${parseInt(f.monto_total).toLocaleString('es-CL')}</td>
@@ -1032,6 +1106,7 @@ jQuery(function($) {
                     <button class="button button-small btn-view-invoice" data-id="${f.id}">
                         <span class="dashicons dashicons-visibility"></span>
                     </button>
+                    ${adjuntoBtn(f)}
                     ${linkBtn}
                     ${deleteBtn}
                 </td>
@@ -1081,6 +1156,9 @@ jQuery(function($) {
     function hideRiversoModal($el) {
         $el.css('display', 'none');
     }
+
+    window.showRiversoModal = showRiversoModal;
+    window.hideRiversoModal = hideRiversoModal;
 
     function setInputFiles(input, fileList) {
         if (!input || !fileList || !fileList.length) return false;
@@ -1271,9 +1349,11 @@ jQuery(function($) {
 
             if (upload.success) {
                 $row.removeClass('run').addClass('ok');
-                const note = tipo === 'envio' ? ' (sin asignar)'
+                const note = upload.data?.merged
+                    ? ' (unido XML+escaneo)'
+                    : (tipo === 'envio' ? ' (sin asignar)'
                     : (tipo === 'gastos' ? ' (gasto)'
-                        : (tipo === 'guia_despacho' ? ' (guía)' : ''));
+                        : (tipo === 'guia_despacho' ? ' (guía)' : '')));
                 $row.find('.bulk-status').text('✓ Folio ' + (upload.data?.resumen?.folio || '') + note);
                 ok++;
             } else {
@@ -1748,9 +1828,21 @@ jQuery(function($) {
             success: function(response) {
                 const result = $('#upload-result');
                 if (response.success) {
+                    const mergedNote = response.data.merged
+                        ? '<br><strong>Origen: XML + Escaneo</strong>' +
+                          (response.data.warning ? '<br>⚠ ' + response.data.warning : '') +
+                          (response.data.resumen?.scans_linked
+                            ? '<br>Escaneos vinculados: ' + response.data.resumen.scans_linked
+                            : '') +
+                          (response.data.scan_is_truth || response.data.resumen?.scan_truth_applied
+                            ? '<br>✓ Detalle tomado del escaneo (XML SII sin líneas)'
+                            : '')
+                        : (response.data.resumen?.scan_truth_applied
+                            ? '<br>✓ Detalle tomado del escaneo (XML SII sin líneas)'
+                            : '');
                     result.html(`
                         <div class="notice notice-success" style="padding: 10px;">
-                            <strong>✓ ${response.data.message}</strong><br>
+                            <strong>✓ ${response.data.message}</strong>${mergedNote}<br>
                             Proveedor: ${response.data.resumen.proveedor}<br>
                             Folio: ${response.data.resumen.folio}
                             ${response.data.resumen.documento_tipo === 'envio'
@@ -1943,6 +2035,73 @@ jQuery(function($) {
         });
     }
 
+    function renderFacturaAdjuntos(factura) {
+        const info = factura.adjuntos_info || {};
+        const origen = info.origen_ingreso || factura.origen_ingreso || 'xml';
+        const label = info.origen_label || (origen === 'escaneo' ? 'Escaneo' : (origen === 'ambos' ? 'XML + Escaneo' : (origen === 'facto' ? 'FACTO Inbox' : 'XML')));
+        const badgeClass = 'origen-badge-' + origen;
+        $('#detail-origen-badge').attr('class', 'origen-badge ' + badgeClass).text(label);
+
+        let desc = '';
+        if (origen === 'xml') {
+            desc = 'Ingresada desde XML DTE. No hay escaneo PDF/imagen adjunto.';
+        } else if (origen === 'escaneo') {
+            desc = 'Ingresada desde escaneo (PDF o imagen). No hay XML asociado.';
+        } else {
+            desc = 'Tiene datos del XML DTE y respaldo escaneado (PDF/imagen).';
+        }
+        $('#detail-origen-desc').text(desc);
+
+        const $list = $('#detail-adjuntos-list').empty();
+        $('#detail-adjunto-viewer-wrap').hide();
+        $('#detail-adjunto-viewer').attr('src', 'about:blank');
+
+        const adjuntos = info.adjuntos || [];
+        if (!adjuntos.length) {
+            $list.html('<span class="description">Sin archivos escaneados para visualizar.</span>');
+            if (origen === 'escaneo') {
+                $('#detail-origen-desc').text('Marcada como escaneo; el archivo aún no está disponible en R2.');
+            }
+            return;
+        }
+
+        adjuntos.forEach(function(adj, idx) {
+            const icon = adj.tipo === 'pdf' ? 'dashicons-pdf' : 'dashicons-format-image';
+            const disabled = adj.url ? '' : ' disabled title="Archivo no disponible en R2"';
+            const btn = $(`<button type="button" class="button btn-open-adjunto"${disabled} data-idx="${idx}">
+                <span class="dashicons ${icon}"></span> ${adj.label || ('Documento ' + (idx + 1))}
+            </button>`);
+            btn.data('url', adj.url || '');
+            $list.append(btn);
+        });
+    }
+
+    $(document).on('click', '.btn-open-adjunto', function() {
+        const url = $(this).data('url');
+        if (!url) {
+            alert('El archivo escaneado no está disponible. Verifique la configuración de R2.');
+            return;
+        }
+        $('#detail-adjunto-viewer').attr('src', url);
+        $('#detail-adjunto-viewer-wrap').show();
+    });
+
+    $(document).on('click', '.btn-view-adjunto', function(e) {
+        e.stopPropagation();
+        const id = $(this).data('id');
+        $.post(ajaxurl, { action: 'riverso_get_invoice', nonce, factura_id: id }, function(response) {
+            if (response.success) {
+                showInvoiceDetail(response.data);
+                showRiversoModal($('#modal-invoice-detail'));
+                const first = (response.data.adjuntos_info && response.data.adjuntos_info.adjuntos || [])[0];
+                if (first && first.url) {
+                    $('#detail-adjunto-viewer').attr('src', first.url);
+                    $('#detail-adjunto-viewer-wrap').show();
+                }
+            }
+        });
+    });
+
     function showInvoiceDetail(factura) {
         currentDetailFacturaId = factura.id;
         currentDetailFactura = factura;
@@ -1962,6 +2121,7 @@ jQuery(function($) {
         $('#detail-fecha').text(factura.fecha_emision);
         $('#detail-total').text('$' + parseInt(factura.monto_total).toLocaleString('es-CL'));
         $('#toggle-precio-decimales').prop('checked', showPrecioDecimales);
+        renderFacturaAdjuntos(factura);
 
         const $tipoConfirmSection = $('#detail-tipo-confirm-section');
         if (!canEditTipo) {
@@ -2093,6 +2253,8 @@ jQuery(function($) {
         renderDetailAudit(factura);
         $('#modal-invoice-detail').css('display', 'flex');
     }
+
+    window.showInvoiceDetail = showInvoiceDetail;
 
     function reloadInvoiceDetail() {
         if (!currentDetailFacturaId) return;
@@ -2454,6 +2616,62 @@ jQuery(function($) {
     
     // Cargar al inicio
     loadInvoices(1);
+    refreshInvoicesTabBadges();
+
+    function setTabBadge($el, count, titleWhenPending) {
+        const n = parseInt(count, 10) || 0;
+        if (n > 0) {
+            $el.text(n > 99 ? '99+' : String(n)).attr('hidden', false).attr('title', titleWhenPending + ' (' + n + ')');
+        } else {
+            $el.text('0').attr('hidden', true);
+        }
+    }
+
+    function refreshInvoicesTabBadges() {
+        $.post(ajaxurl, { action: 'riverso_invoices_tab_counts', nonce: nonce }, function(r) {
+            if (!r || !r.success || !r.data) return;
+            setTabBadge($('#badge-xml-pendientes'), r.data.xml_pendientes, 'Tipo pendiente de confirmar');
+            setTabBadge($('#badge-scans-pendientes'), r.data.scans_pendientes, 'Escaneos pendientes de confirmar');
+        });
+    }
+    window.refreshInvoicesTabBadges = refreshInvoicesTabBadges;
+
+    // Clic en badge XML → filtrar tipo pendiente
+    $('#badge-xml-pendientes').on('click', function(e) {
+        e.stopPropagation();
+        $('.invoices-main-tab[data-panel="panel-xml"]').trigger('click');
+        $('#filter-tipo-confirmado').val('0');
+        loadInvoices(1);
+    });
+    $('#badge-scans-pendientes').on('click', function(e) {
+        e.stopPropagation();
+        $('.invoices-main-tab[data-panel="panel-scans"]').trigger('click');
+        $('#scan-filter-estado').val('pendiente');
+        if (typeof window.riversoReloadScans === 'function') {
+            window.riversoReloadScans();
+        }
+    });
+
+    // Pestañas Facturas XML / Escaneos
+    $('.invoices-main-tab').on('click', function() {
+        const panel = $(this).data('panel');
+        $('.invoices-main-tab').removeClass('active');
+        $(this).addClass('active');
+        $('.invoices-tab-panel').hide();
+        $('#' + panel).show();
+        $('#btn-upload-invoice').toggle(panel === 'panel-xml');
+        $('#btn-upload-scan-header').toggle(panel === 'panel-scans');
+        if (panel === 'panel-scans' && typeof window.riversoInitScansPanel === 'function') {
+            window.riversoInitScansPanel();
+        }
+        if (panel === 'panel-facto-import' && typeof window.riversoInitFactoImportPanel === 'function') {
+            window.riversoInitFactoImportPanel();
+        }
+    });
+    $('#btn-upload-scan-header').on('click', function() {
+        $('#btn-upload-scan').trigger('click');
+    });
+
     const openFacturaId = new URLSearchParams(window.location.search).get('factura');
     if (openFacturaId) {
         $.post(ajaxurl, {

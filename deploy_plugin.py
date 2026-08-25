@@ -30,12 +30,17 @@ PASSWORD = os.environ.get('RIVERSO_DEPLOY_PASSWORD')
 WP_PATH = os.environ.get('RIVERSO_WP_PATH', '/var/www/vhosts/riverso.cl/httpdocs')
 PLUGIN_PATH = f'{WP_PATH}/wp-content/plugins/riverso-pos'
 
-def build_zip():
-    """Regenera riverso-pos-deploy.zip desde php/riverso-pos antes de subir."""
+def build_zip(source=None):
+    """Regenera riverso-pos-deploy.zip antes de subir.
+
+    `source` permite empaquetar desde una copia preparada aparte (por ejemplo
+    para desplegar sin arrastrar trabajo en curso). Por defecto usa el plugin
+    del repo.
+    """
     import zipfile
     from pathlib import Path
 
-    plugin = Path(ROOT) / 'php' / 'riverso-pos'
+    plugin = Path(source) if source else Path(ROOT) / 'php' / 'riverso-pos'
     out = Path(ROOT) / 'riverso-pos-deploy.zip'
     if not plugin.is_dir():
         raise RuntimeError(f'No existe el plugin en {plugin}')
@@ -53,14 +58,14 @@ def build_zip():
     return str(out)
 
 
-def main():
+def main(source=None):
     if not PASSWORD:
         raise RuntimeError(
             'Falta la contraseña de deploy. Crea .env.deploy en la raíz del repo '
             'con RIVERSO_DEPLOY_PASSWORD=... o exporta esa variable.'
         )
 
-    zip_path = build_zip()
+    zip_path = build_zip(source)
 
     # Connect
     ssh = paramiko.SSHClient()
@@ -127,7 +132,7 @@ VERSION=$(sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   require "{WP_PATH}/wp-load.php";
   echo defined("RIVERSO_POS_VERSION") ? RIVERSO_POS_VERSION : "missing";
 ')
-test "$VERSION" = "1.5.95"
+test "$VERSION" = "1.6.14"
 
 sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   require "{WP_PATH}/wp-load.php";
@@ -224,7 +229,7 @@ echo "Files deployed: $VERSION"
 '''
 
     print('Deploying files...')
-    stdin, stdout, stderr = ssh.exec_command(commands, timeout=300)
+    stdin, stdout, stderr = ssh.exec_command(commands, timeout=600)
     print('Output:', stdout.read().decode())
     err = stderr.read().decode()
     if err:
@@ -238,4 +243,11 @@ echo "Files deployed: $VERSION"
     print('\nDeployment complete!')
 
 if __name__ == '__main__':
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Despliega el plugin riverso-pos')
+    parser.add_argument(
+        '--source',
+        help='Directorio del plugin a empaquetar (por defecto php/riverso-pos)'
+    )
+    main(parser.parse_args().source)

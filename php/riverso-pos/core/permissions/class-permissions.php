@@ -71,6 +71,7 @@ class Riverso_POS_Permissions {
         'riverso_view_invoices'      => 'Ver facturas recibidas',
         'riverso_create_invoices'    => 'Ingresar facturas',
         'riverso_process_invoices'   => 'Procesar facturas',
+        'riverso_process_scans'      => 'Procesar escaneos PDF/imagen',
         'riverso_approve_invoices'   => 'Aprobar facturas',
         'riverso_manage_invoice_payments' => 'Gestionar pagos de facturas',
 
@@ -186,6 +187,7 @@ class Riverso_POS_Permissions {
             'riverso_view_invoices',
             'riverso_create_invoices',
             'riverso_process_invoices',
+            'riverso_process_scans',
             'riverso_approve_invoices',
         ],
         'Recepción' => [
@@ -332,6 +334,7 @@ class Riverso_POS_Permissions {
                 'riverso_view_invoices',
                 'riverso_create_invoices',
                 'riverso_process_invoices',
+                'riverso_process_scans',
                 'riverso_view_suppliers',
                 'riverso_edit_suppliers',
                 'riverso_manage_codes',

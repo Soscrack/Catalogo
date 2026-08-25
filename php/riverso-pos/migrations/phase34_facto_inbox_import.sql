@@ -1,0 +1,8 @@
+-- Fase 34: importación DTE desde Inbox FACTO
+-- Tablas creadas por dbDelta en Riverso_POS_Activator::create_phase34_facto_inbox_import()
+--
+-- {prefix}riverso_facto_inbox_map
+--   idempotencia por inbox_document_id + vínculo a factura local
+--
+-- {prefix}riverso_facto_inbox_runs
+--   intervalos de fechas procesados (historial de importaciones)

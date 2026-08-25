@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "check": "auth",
+      "ok": true
+    },
+    {
+      "check": "list_page_1",
+      "ok": true,
+      "page_count": 10,
+      "total_items": 234,
+      "items_on_page": 25
+    },
+    {
+      "check": "per_page_ignored",
+      "ok": true
+    },
+    {
+      "check": "document_xml_present",
+      "ok": true,
+      "inbox_document_id": 3,
+      "encoding_normalized": true
+    },
+    {
+      "check": "ascending_order",
+      "ok": true,
+      "page1_min": "2017-07-10",
+      "page1_max": "2019-12-31",
+      "last_min": "2025-12-03",
+      "last_max": "2026-08-20"
+    },
+    {
+      "check": "binary_search_short_range",
+      "ok": true,
+      "from": "2017-07-10",
+      "to": "2019-12-31",
+      "page_from": 1
+    }
+  ]
+}

@@ -40,7 +40,7 @@ $can_edit = current_user_can('riverso_edit_suppliers');
             </select>
         </div>
         <div>
-            <input type="text" id="filter-search" placeholder="Buscar por nombre, RUT, email..." style="width: 300px;">
+            <input type="text" id="filter-search" placeholder="Buscar por nombre, RUT, email o apodo..." style="width: 300px;">
         </div>
         <button type="button" class="button" id="btn-search">
             <span class="dashicons dashicons-search" style="vertical-align: middle;"></span> Buscar

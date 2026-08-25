@@ -1304,49 +1304,1027 @@ $tareas = $wpdb->get_results($wpdb->prepare(
         </div>
         
         <?php elseif ($current_page === 'codes'): ?>
+        <?php if (!current_user_can('riverso_manage_codes')): ?>
+        <div class="content-section">
+            <div class="section-header">
+                <h2 class="section-title">Códigos Proveedor</h2>
+            </div>
+            <div class="section-body">
+                <div class="empty-state">
+                    <span class="dashicons dashicons-lock"></span>
+                    <p>No tienes permiso para gestionar códigos de proveedor.</p>
+                </div>
+            </div>
+        </div>
+        <?php else: ?>
         <!-- Códigos Proveedor -->
         <div class="content-section">
             <div class="section-header">
                 <h2 class="section-title">Vinculación Códigos Proveedor → SKU</h2>
             </div>
             <div class="section-body">
-                <div style="margin-bottom: 20px;">
-                    <input type="text" id="code-search" placeholder="Buscar código proveedor o SKU..." 
-                           style="width: 100%; max-width: 400px; padding: 10px; border: 1px solid var(--border); border-radius: 4px;">
+                <div class="stats-grid" id="codes-stat-cards" style="margin-bottom:16px;"></div>
+
+                <div class="codes-tabs" id="codes-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+                    <button type="button" class="btn btn-primary btn-sm codes-tab" data-tab="todos">Todos los códigos</button>
+                    <button type="button" class="btn btn-secondary btn-sm codes-tab" data-tab="pendientes">Pendientes de factura</button>
+                    <button type="button" class="btn btn-secondary btn-sm codes-tab" data-tab="proveedores">Proveedores</button>
                 </div>
-                <table style="width: 100%; border-collapse: collapse;">
-                    <thead>
-                        <tr style="background: var(--bg-light);">
-                            <th style="padding: 12px; text-align: left;">Código Proveedor</th>
-                            <th style="padding: 12px; text-align: left;">Proveedor</th>
-                            <th style="padding: 12px; text-align: left;">SKU Local</th>
-                            <th style="padding: 12px; text-align: center;">Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php
-                        $codigos = $wpdb->get_results(
-                            "SELECT c.*, p.nombre as proveedor_nombre FROM {$prefix}codigos c
-                             LEFT JOIN {$prefix}proveedores p ON c.proveedor_id = p.id
-                             ORDER BY c.created_at DESC LIMIT 50", ARRAY_A);
-                        foreach ($codigos as $c): ?>
-                        <tr style="border-bottom: 1px solid var(--border);">
-                            <td style="padding: 12px; font-family: monospace;"><?php echo esc_html($c['codigo_proveedor']); ?></td>
-                            <td style="padding: 12px;"><?php echo esc_html($c['proveedor_nombre'] ?? '-'); ?></td>
-                            <td style="padding: 12px; font-family: monospace;"><?php echo esc_html($c['sku_local'] ?? '-'); ?></td>
-                            <td style="padding: 12px; text-align: center;">
-                                <?php if ($c['sku_local']): ?>
-                                <span style="color: var(--success);">✓ Vinculado</span>
-                                <?php else: ?>
-                                <span style="color: var(--warning);">⚠ Pendiente</span>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+
+                <div id="codes-tab-todos">
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;margin-bottom:16px;">
+                        <div style="position:relative;">
+                            <input type="text" id="codes-proveedor-search" placeholder="Filtrar por proveedor..." autocomplete="off"
+                                   style="padding:10px;border:1px solid var(--border);border-radius:4px;min-width:220px;">
+                            <div id="codes-proveedor-results" class="codes-picker"></div>
+                            <input type="hidden" id="codes-proveedor-id">
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm" id="codes-clear-proveedor" style="display:none;">Quitar proveedor</button>
+                        <select id="codes-estado" style="padding:10px;border:1px solid var(--border);border-radius:4px;">
+                            <option value="">Todos los estados</option>
+                            <option value="vinculado">Solo vinculados</option>
+                            <option value="pendiente">Solo pendientes</option>
+                            <option value="por_confirmar">Por confirmar</option>
+                        </select>
+                        <select id="codes-origen" style="padding:10px;border:1px solid var(--border);border-radius:4px;">
+                            <option value="">Todos los orígenes</option>
+                            <option value="catalogo">Catálogo</option>
+                            <option value="legacy">Legacy</option>
+                            <option value="manual">Manual</option>
+                            <option value="factura">Facturación</option>
+                        </select>
+                        <input type="text" id="code-search" placeholder="Buscar código, SKU o descripción..." autocomplete="off"
+                               style="flex:1;min-width:240px;padding:10px;border:1px solid var(--border);border-radius:4px;">
+                        <span id="codes-status" style="align-self:center;color:var(--text-secondary);font-size:12px;"></span>
+                    </div>
+
+                    <table class="portal-table">
+                        <thead>
+                            <tr>
+                                <th>Código Proveedor</th>
+                                <th class="col-desc">Descripción</th>
+                                <th class="col-proveedor">Proveedor</th>
+                                <th>SKU Local</th>
+                                <th>Origen</th>
+                                <th>Ingreso</th>
+                                <th style="text-align:center;">Estado</th>
+                                <th style="text-align:center;">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="codes-list"></tbody>
+                    </table>
+
+                    <div style="display:flex;gap:10px;align-items:center;margin-top:16px;">
+                        <button type="button" class="btn btn-secondary btn-sm" id="codes-prev" disabled>&laquo; Anterior</button>
+                        <span id="codes-page-info" style="color:var(--text-secondary);font-size:13px;"></span>
+                        <button type="button" class="btn btn-secondary btn-sm" id="codes-next" disabled>Siguiente &raquo;</button>
+                    </div>
+                </div>
+
+                <div id="codes-tab-pendientes" style="display:none;">
+                    <p style="color:var(--text-secondary);margin-bottom:12px;">
+                        Items de factura sin SKU local asignado.
+                    </p>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;margin-bottom:16px;">
+                        <div style="position:relative;">
+                            <input type="text" id="codes-pending-proveedor-search" placeholder="Filtrar por proveedor..." autocomplete="off"
+                                   style="padding:10px;border:1px solid var(--border);border-radius:4px;min-width:220px;">
+                            <div id="codes-pending-proveedor-results" class="codes-picker"></div>
+                            <input type="hidden" id="codes-pending-proveedor-id">
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm" id="codes-clear-pending-proveedor" style="display:none;">Quitar proveedor</button>
+                        <input type="text" id="codes-pending-search" placeholder="Buscar código, descripción o folio..." autocomplete="off"
+                               style="flex:1;min-width:240px;padding:10px;border:1px solid var(--border);border-radius:4px;">
+                        <span id="codes-pending-status" style="align-self:center;color:var(--text-secondary);font-size:12px;"></span>
+                    </div>
+                    <table class="portal-table">
+                        <thead>
+                            <tr>
+                                <th>Código Proveedor</th>
+                                <th class="col-desc">Descripción</th>
+                                <th class="col-proveedor">Proveedor</th>
+                                <th>Factura</th>
+                                <th style="text-align:center;">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="codes-pending-list"></tbody>
+                    </table>
+                    <div style="display:flex;gap:10px;align-items:center;margin-top:16px;">
+                        <button type="button" class="btn btn-secondary btn-sm" id="codes-pending-prev" disabled>&laquo; Anterior</button>
+                        <span id="codes-pending-page-info" style="color:var(--text-secondary);font-size:13px;"></span>
+                        <button type="button" class="btn btn-secondary btn-sm" id="codes-pending-next" disabled>Siguiente &raquo;</button>
+                    </div>
+                </div>
+
+                <div id="codes-tab-proveedores" style="display:none;">
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;">
+                        <input type="text" id="codes-providers-search" placeholder="Buscar por nombre, RUT o apodo..." autocomplete="off"
+                               style="flex:1;min-width:240px;padding:10px;border:1px solid var(--border);border-radius:4px;">
+                        <span id="codes-providers-status" style="color:var(--text-secondary);font-size:12px;"></span>
+                    </div>
+                    <table class="portal-table">
+                        <thead>
+                            <tr>
+                                <th>RUT</th>
+                                <th>Nombre</th>
+                                <th>Apodos</th>
+                                <th>Contacto</th>
+                                <th style="text-align:center;">Códigos</th>
+                                <th style="text-align:center;">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="codes-providers-list"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
+
+        <div id="codes-edit-modal" class="portal-modal-overlay">
+            <div class="portal-modal">
+                <div class="portal-modal-header">
+                    <h3>Editar código de proveedor</h3>
+                    <button type="button" class="btn btn-secondary btn-sm" id="codes-edit-close">Cerrar</button>
+                </div>
+                <div class="portal-modal-body">
+                    <input type="hidden" id="codes-edit-id">
+
+                    <label>Código proveedor</label>
+                    <input type="text" id="codes-edit-codigo" style="width:100%;margin-bottom:12px;padding:8px;">
+
+                    <label>Proveedor</label>
+                    <div style="position:relative;margin-bottom:4px;">
+                        <input type="text" id="codes-edit-proveedor-search" autocomplete="off"
+                               placeholder="Buscar proveedor por nombre o RUT..." style="width:100%;padding:8px;">
+                        <div id="codes-edit-proveedor-results" class="codes-picker"></div>
+                    </div>
+                    <div id="codes-edit-proveedor-hint" style="font-size:12px;color:var(--success);margin-bottom:12px;"></div>
+                    <input type="hidden" id="codes-edit-proveedor-id">
+
+                    <label>Descripción del proveedor</label>
+                    <input type="text" id="codes-edit-descripcion" style="width:100%;margin-bottom:12px;padding:8px;">
+
+                    <label>Origen</label>
+                    <input type="text" id="codes-edit-origen" readonly style="width:100%;margin-bottom:12px;padding:8px;background:#f6f7f7;">
+
+                    <label>Fecha de ingreso</label>
+                    <input type="text" id="codes-edit-fecha" readonly style="width:100%;margin-bottom:12px;padding:8px;background:#f6f7f7;">
+
+                    <label>SKU local vinculado</label>
+                    <div style="position:relative;margin-bottom:4px;">
+                        <input type="text" id="codes-edit-sku-search" autocomplete="off"
+                               placeholder="Buscar por SKU o nombre..." style="width:100%;padding:8px;">
+                        <div id="codes-edit-sku-results" class="codes-picker"></div>
+                    </div>
+                    <div id="codes-edit-sku-hint" style="font-size:12px;color:var(--success);margin-bottom:6px;"></div>
+                    <input type="hidden" id="codes-edit-base-id">
+                    <button type="button" class="btn btn-secondary btn-sm" id="codes-edit-unlink" style="margin-bottom:12px;">
+                        Desvincular SKU
+                    </button>
+
+                    <label>Notas</label>
+                    <textarea id="codes-edit-notas" rows="2" style="width:100%;margin-bottom:12px;padding:8px;"></textarea>
+
+                    <label style="display:block;margin-bottom:12px;">
+                        <input type="checkbox" id="codes-edit-activo"> Código activo
+                    </label>
+
+                    <label>Motivo del cambio</label>
+                    <textarea id="codes-edit-audit" rows="2" placeholder="Queda registrado en auditoría"
+                              style="width:100%;padding:8px;"></textarea>
+
+                    <div id="codes-edit-confirm-box" style="display:none;margin-top:14px;padding:12px;background:#fff8e5;border:1px solid #f0c36d;border-radius:4px;">
+                        <div style="color:#6e4e00;font-size:13px;line-height:1.4;">
+                            <strong style="display:inline-block;margin-right:8px;background:#f0c36d;color:#3c2f00;padding:2px 8px;border-radius:3px;font-size:11px;text-transform:uppercase;">Por confirmar</strong>
+                            <span id="codes-edit-task-hint"></span>
+                        </div>
+                        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+                            <button type="button" class="btn btn-primary btn-sm" id="codes-edit-confirm">Confirmar vínculo</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="codes-edit-reject">Rechazar código</button>
+                        </div>
+                    </div>
+
+                    <div id="codes-edit-error" style="display:none;margin-top:12px;padding:8px 10px;background:#fdecea;border-left:4px solid var(--danger, #d63638);"></div>
+                </div>
+                <div class="portal-modal-footer">
+                    <button type="button" class="btn btn-secondary" id="codes-edit-cancel">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="codes-edit-save">Guardar</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="codes-link-modal" class="portal-modal-overlay">
+            <div class="portal-modal">
+                <div class="portal-modal-header">
+                    <h3>Vincular código de factura</h3>
+                    <button type="button" class="btn btn-secondary btn-sm" id="codes-link-close">Cerrar</button>
+                </div>
+                <div class="portal-modal-body">
+                    <input type="hidden" id="codes-link-item-id">
+                    <div id="codes-link-summary" style="background:var(--bg-light);padding:12px;border-radius:6px;margin-bottom:16px;font-size:13px;"></div>
+
+                    <label>SKU local</label>
+                    <div style="position:relative;margin-bottom:4px;">
+                        <input type="text" id="codes-link-sku-search" autocomplete="off"
+                               placeholder="Buscar por SKU o nombre..." style="width:100%;padding:8px;">
+                        <div id="codes-link-sku-results" class="codes-picker"></div>
+                    </div>
+                    <div id="codes-link-sku-hint" style="font-size:12px;color:var(--success);margin-bottom:12px;"></div>
+                    <input type="hidden" id="codes-link-sku">
+
+                    <label style="display:block;">
+                        <input type="checkbox" id="codes-link-save-mapping" checked> Guardar mapeo para futuras facturas
+                    </label>
+
+                    <div id="codes-link-error" style="display:none;margin-top:12px;padding:8px 10px;background:#fdecea;border-left:4px solid var(--danger, #d63638);"></div>
+                </div>
+                <div class="portal-modal-footer">
+                    <button type="button" class="btn btn-secondary" id="codes-link-cancel">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="codes-link-save">Vincular</button>
+                </div>
+            </div>
+        </div>
+
+        <style>
+        .codes-picker {
+            display: none;
+            position: absolute;
+            z-index: 30;
+            left: 0;
+            right: 0;
+            min-width: 240px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            max-height: 220px;
+            overflow-y: auto;
+            box-shadow: 0 4px 12px rgba(0,0,0,.12);
+        }
+        .codes-picker .codes-pick {
+            padding: 8px 10px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }
+        .codes-picker .codes-pick:hover { background: var(--bg-light); }
+        .codes-picker .codes-pick-empty {
+            padding: 10px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .codes-picker .matched-apodo {
+            display: block;
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+        .apodo-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            align-items: center;
+        }
+        .apodo-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #e8f0fe;
+            color: #1a73e8;
+            border-radius: 12px;
+            padding: 2px 8px;
+            font-size: 12px;
+        }
+        .apodo-chip button {
+            border: none;
+            background: transparent;
+            color: #1a73e8;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            font-size: 14px;
+        }
+        .apodo-input {
+            min-width: 90px;
+            max-width: 130px;
+            padding: 4px 6px;
+            font-size: 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+        }
+        </style>
+
+        <script>
+        (function() {
+            const codesNonce = '<?php echo esc_js($nonce); ?>';
+            const codesAjaxUrl = '<?php echo esc_url_raw(admin_url('admin-ajax.php')); ?>';
+
+            function esc(s) {
+                return String(s ?? '')
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
+            function post(action, params) {
+                const body = new URLSearchParams({action, nonce: codesNonce, ...params});
+                return fetch(codesAjaxUrl, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body
+                }).then(r => r.json());
+            }
+
+            function debounce(fn, wait) {
+                let timer = null;
+                return function(...args) {
+                    clearTimeout(timer);
+                    timer = setTimeout(() => fn.apply(this, args), wait);
+                };
+            }
+
+            const listEl = document.getElementById('codes-list');
+            if (!listEl) return;
+
+            let page = 1;
+            let totalPages = 1;
+            let requestId = 0;
+
+            // --- Stats ---
+            function loadStats() {
+                post('riverso_get_codes_stats', {}).then(d => {
+                    if (!d.success) return;
+                    const s = d.data;
+                    document.getElementById('codes-stat-cards').innerHTML = `
+                        <div class="stat-card">
+                            <div class="stat-icon blue"><span class="dashicons dashicons-tag"></span></div>
+                            <div class="stat-value">${s.total || 0}</div>
+                            <div class="stat-label">Total códigos</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon orange"><span class="dashicons dashicons-warning"></span></div>
+                            <div class="stat-value">${s.pending || 0}</div>
+                            <div class="stat-label">Pendientes</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background:#fffbeb;color:#78350f;"><span class="dashicons dashicons-flag"></span></div>
+                            <div class="stat-value">${s.por_confirmar || 0}</div>
+                            <div class="stat-label">Por confirmar</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon green"><span class="dashicons dashicons-yes-alt"></span></div>
+                            <div class="stat-value">${s.linked || 0}</div>
+                            <div class="stat-label">Vinculados</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon purple"><span class="dashicons dashicons-groups"></span></div>
+                            <div class="stat-value">${s.providers || 0}</div>
+                            <div class="stat-label">Proveedores</div>
+                        </div>`;
+                });
+            }
+
+            // --- Tabs ---
+            document.getElementById('codes-tabs').addEventListener('click', e => {
+                const btn = e.target.closest('.codes-tab');
+                if (!btn) return;
+                const tab = btn.dataset.tab;
+
+                document.querySelectorAll('.codes-tab').forEach(el => {
+                    el.classList.toggle('btn-primary', el === btn);
+                    el.classList.toggle('btn-secondary', el !== btn);
+                });
+                ['todos', 'pendientes', 'proveedores'].forEach(name => {
+                    document.getElementById('codes-tab-' + name).style.display = name === tab ? '' : 'none';
+                });
+
+                if (tab === 'pendientes') loadPending();
+                if (tab === 'proveedores') loadProviders();
+            });
+
+            // --- Listado principal ---
+            function loadCodes(targetPage) {
+                page = Math.max(1, targetPage || 1);
+                const currentRequest = ++requestId;
+                document.getElementById('codes-status').textContent = 'Buscando...';
+
+                post('riverso_get_all_codes', {
+                    proveedor_id: document.getElementById('codes-proveedor-id').value,
+                    estado: document.getElementById('codes-estado').value,
+                    origen: document.getElementById('codes-origen')?.value || '',
+                    search: document.getElementById('code-search').value,
+                    page: page,
+                    per_page: 50
+                }).then(d => {
+                    // Descartar respuestas de búsquedas ya superadas.
+                    if (currentRequest !== requestId) return;
+
+                    if (!d.success) {
+                        document.getElementById('codes-status').textContent = d.data?.message || 'Error al buscar';
+                        listEl.innerHTML = '<tr><td colspan="8" style="text-align:center;">No se pudo cargar el listado</td></tr>';
+                        setPagination(0, 0);
+                        return;
+                    }
+
+                    const codes = d.data.codes || [];
+                    const total = d.data.total || 0;
+                    totalPages = d.data.total_pages || 1;
+                    document.getElementById('codes-status').textContent =
+                        total + (total === 1 ? ' resultado' : ' resultados');
+
+                    if (!codes.length) {
+                        listEl.innerHTML = '<tr><td colspan="8" style="text-align:center;">No hay códigos que coincidan</td></tr>';
+                        setPagination(0, 0);
+                        return;
+                    }
+
+                    listEl.innerHTML = codes.map(c => {
+                        const needs = !!c.needs_confirm;
+                        let estado = c.producto_base_id
+                            ? '<span style="color:var(--success);">✓ Vinculado</span>'
+                            : '<span style="color:var(--warning);">⚠ Pendiente</span>';
+                        if (needs) {
+                            estado = '<span style="display:inline-block;background:#f0c36d;color:#3c2f00;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600;">Por confirmar</span>';
+                        }
+                        const confirmBtns = needs
+                            ? `<button type="button" class="btn btn-primary btn-sm codes-confirm-btn" data-id="${c.id}">Confirmar</button>
+                               <button type="button" class="btn btn-secondary btn-sm codes-reject-btn" data-id="${c.id}">Rechazar</button>`
+                            : '';
+                        const fecha = c.fecha_ingreso ? String(c.fecha_ingreso).split(' ')[0] : '-';
+                        const rowStyle = needs ? 'background:#fffbeb;' : '';
+                        let skuHtml = esc(c.sku_local || '-');
+                        if (needs && c.sku_local) {
+                            skuHtml = '<span style="display:inline-block;background:#fbbf24;color:#78350f;padding:1px 6px;border-radius:3px;font-weight:600;font-size:10px;letter-spacing:0.02em;">POR CONFIRMAR</span><br><small>' + esc(c.sku_local) + '</small>';
+                        } else if (needs) {
+                            skuHtml = '<span style="display:inline-block;background:#fbbf24;color:#78350f;padding:1px 6px;border-radius:3px;font-weight:600;font-size:10px;letter-spacing:0.02em;">POR CONFIRMAR</span>';
+                        }
+                        return `<tr style="${rowStyle}">
+                        <td style="font-family:monospace;">${esc(c.codigo_proveedor)}</td>
+                        <td class="col-desc">${esc(c.descripcion_proveedor || '-')}</td>
+                        <td class="col-proveedor">${esc(c.proveedor_nombre || '-')}</td>
+                        <td style="font-family:monospace;">${skuHtml}</td>
+                        <td><small>${esc(c.origen_label || c.origen_datos || '-')}</small></td>
+                        <td><small>${esc(fecha)}</small></td>
+                        <td style="text-align:center;">${estado}</td>
+                        <td style="text-align:center;white-space:nowrap;">
+                            ${confirmBtns}
+                            <button type="button" class="btn btn-secondary btn-sm codes-edit-btn" data-id="${c.id}">Editar</button>
+                        </td>
+                    </tr>`;
+                    }).join('');
+
+                    setPagination(page, totalPages);
+                });
+            }
+
+            function setPagination(current, pages) {
+                document.getElementById('codes-page-info').textContent =
+                    pages > 0 ? `Página ${current} de ${pages}` : '';
+                document.getElementById('codes-prev').disabled = current <= 1;
+                document.getElementById('codes-next').disabled = current >= pages;
+            }
+
+            document.getElementById('code-search').addEventListener('input', debounce(() => loadCodes(1), 300));
+            document.getElementById('codes-estado').addEventListener('change', () => loadCodes(1));
+            const origenEl = document.getElementById('codes-origen');
+            if (origenEl) origenEl.addEventListener('change', () => loadCodes(1));
+            document.getElementById('codes-prev').addEventListener('click', () => loadCodes(page - 1));
+            document.getElementById('codes-next').addEventListener('click', () => loadCodes(page + 1));
+
+            listEl.addEventListener('click', e => {
+                const confirmBtn = e.target.closest('.codes-confirm-btn');
+                const rejectBtn = e.target.closest('.codes-reject-btn');
+                if (confirmBtn) {
+                    if (!confirm('¿Confirmar este vínculo?')) return;
+                    post('riverso_codes_confirm', { pp_id: confirmBtn.dataset.id }).then(d => {
+                        if (!d.success) { alert(d.data?.message || 'Error'); return; }
+                        loadCodes(page);
+                    });
+                    return;
+                }
+                if (rejectBtn) {
+                    if (!confirm('¿Rechazar este código? Quedará inactivo.')) return;
+                    post('riverso_codes_reject', { pp_id: rejectBtn.dataset.id }).then(d => {
+                        if (!d.success) { alert(d.data?.message || 'Error'); return; }
+                        loadCodes(page);
+                    });
+                }
+            });
+
+            // --- Autocompletado reutilizable ---
+            function bindPicker(searchId, resultsId, options) {
+                const searchEl = document.getElementById(searchId);
+                const resultsEl = document.getElementById(resultsId);
+                if (!searchEl || !resultsEl) return;
+
+                searchEl.addEventListener('input', debounce(() => {
+                    const q = searchEl.value.trim();
+                    if (options.onType) options.onType();
+
+                    if (q.length < 2) {
+                        resultsEl.innerHTML = '';
+                        resultsEl.style.display = 'none';
+                        return;
+                    }
+
+                    post(options.action, options.params(q)).then(d => {
+                        if (!d.success) return;
+                        const items = options.extract(d) || [];
+                        resultsEl.innerHTML = items.length
+                            ? items.map(options.render).join('')
+                            : `<div class="codes-pick-empty">${esc(options.emptyText)}</div>`;
+                        resultsEl.style.display = 'block';
+                    });
+                }, 300));
+
+                resultsEl.addEventListener('click', e => {
+                    const pick = e.target.closest('.codes-pick');
+                    if (!pick) return;
+                    options.onPick(pick.dataset);
+                    resultsEl.innerHTML = '';
+                    resultsEl.style.display = 'none';
+                });
+
+                document.addEventListener('click', e => {
+                    if (!searchEl.contains(e.target) && !resultsEl.contains(e.target)) {
+                        resultsEl.style.display = 'none';
+                    }
+                });
+            }
+
+            const supplierPickerOptions = (onPick, onType) => ({
+                action: 'riverso_search_suppliers',
+                params: q => ({search: q, limit: 15}),
+                extract: d => d.data.suppliers,
+                emptyText: 'Sin proveedores para esa búsqueda.',
+                render: s => {
+                    const apodoHint = s.matched_apodo
+                        ? `<span class="matched-apodo">Apodo: ${esc(s.matched_apodo)}</span>`
+                        : '';
+                    return `<div class="codes-pick" data-id="${s.id}" data-nombre="${esc(s.nombre)}">
+                        <strong>${esc(s.nombre)}</strong> <span style="color:var(--text-secondary);">${esc(s.rut || '')}</span>
+                        ${apodoHint}
+                    </div>`;
+                },
+                onPick,
+                onType
+            });
+
+            const skuPickerOptions = (onPick) => ({
+                action: 'riverso_search_sku_catalog',
+                params: q => ({search: q}),
+                extract: d => d.data.products,
+                emptyText: 'Sin SKU que coincidan.',
+                render: p => `<div class="codes-pick" data-id="${p.id}" data-sku="${esc(p.canonical_sku)}" data-nombre="${esc(p.nombre_canonico || '')}">
+                        <strong>${esc(p.canonical_sku)}</strong><br>
+                        <span style="color:var(--text-secondary);font-size:12px;">${esc(p.nombre_canonico || '')}</span>
+                    </div>`,
+                onPick
+            });
+
+            // Filtro de proveedor
+            bindPicker('codes-proveedor-search', 'codes-proveedor-results', supplierPickerOptions(
+                data => {
+                    document.getElementById('codes-proveedor-id').value = data.id;
+                    document.getElementById('codes-proveedor-search').value = data.nombre;
+                    document.getElementById('codes-clear-proveedor').style.display = '';
+                    loadCodes(1);
+                },
+                () => {
+                    document.getElementById('codes-proveedor-id').value = '';
+                    document.getElementById('codes-clear-proveedor').style.display = 'none';
+                }
+            ));
+
+            document.getElementById('codes-clear-proveedor').addEventListener('click', () => {
+                document.getElementById('codes-proveedor-id').value = '';
+                document.getElementById('codes-proveedor-search').value = '';
+                document.getElementById('codes-clear-proveedor').style.display = 'none';
+                loadCodes(1);
+            });
+
+            // --- Pendientes de factura ---
+            let pendingPage = 1;
+            let pendingTotalPages = 1;
+            let pendingRequestId = 0;
+
+            function setPendingPagination(current, pages) {
+                document.getElementById('codes-pending-page-info').textContent =
+                    pages > 0 ? `Página ${current} de ${pages}` : '';
+                document.getElementById('codes-pending-prev').disabled = current <= 1;
+                document.getElementById('codes-pending-next').disabled = current >= pages;
+            }
+
+            function loadPending(targetPage) {
+                pendingPage = Math.max(1, targetPage || 1);
+                const currentRequest = ++pendingRequestId;
+                const tbody = document.getElementById('codes-pending-list');
+                document.getElementById('codes-pending-status').textContent = 'Buscando...';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Cargando...</td></tr>';
+
+                post('riverso_get_pending_codes', {
+                    proveedor_id: document.getElementById('codes-pending-proveedor-id').value,
+                    search: document.getElementById('codes-pending-search').value,
+                    page: pendingPage,
+                    per_page: 50
+                }).then(d => {
+                    if (currentRequest !== pendingRequestId) return;
+
+                    if (!d.success) {
+                        document.getElementById('codes-pending-status').textContent = d.data?.message || 'Error';
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No se pudo cargar</td></tr>';
+                        setPendingPagination(0, 0);
+                        return;
+                    }
+
+                    const items = d.data.items || [];
+                    const total = d.data.total || 0;
+                    pendingTotalPages = d.data.total_pages || 1;
+                    document.getElementById('codes-pending-status').textContent =
+                        total + (total === 1 ? ' resultado' : ' resultados');
+
+                    if (!items.length) {
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Sin códigos pendientes que coincidan</td></tr>';
+                        setPendingPagination(0, 0);
+                        return;
+                    }
+
+                    tbody.innerHTML = items.map(i => `<tr>
+                        <td style="font-family:monospace;">${esc(i.codigo_proveedor || '-')}</td>
+                        <td class="col-desc">${esc(i.descripcion || '-')}</td>
+                        <td class="col-proveedor">${esc(i.proveedor_nombre || '-')}</td>
+                        <td>#${esc(i.folio)}</td>
+                        <td style="text-align:center;">
+                            <button type="button" class="btn btn-primary btn-sm codes-link-btn"
+                                    data-id="${i.id}"
+                                    data-codigo="${esc(i.codigo_proveedor || '')}"
+                                    data-descripcion="${esc(i.descripcion || '')}"
+                                    data-proveedor="${esc(i.proveedor_nombre || '')}">Vincular</button>
+                        </td>
+                    </tr>`).join('');
+
+                    setPendingPagination(pendingPage, pendingTotalPages);
+                });
+            }
+
+            bindPicker('codes-pending-proveedor-search', 'codes-pending-proveedor-results', supplierPickerOptions(
+                data => {
+                    document.getElementById('codes-pending-proveedor-id').value = data.id;
+                    document.getElementById('codes-pending-proveedor-search').value = data.nombre;
+                    document.getElementById('codes-clear-pending-proveedor').style.display = '';
+                    loadPending(1);
+                },
+                () => {
+                    document.getElementById('codes-pending-proveedor-id').value = '';
+                    document.getElementById('codes-clear-pending-proveedor').style.display = 'none';
+                }
+            ));
+
+            document.getElementById('codes-clear-pending-proveedor').addEventListener('click', () => {
+                document.getElementById('codes-pending-proveedor-id').value = '';
+                document.getElementById('codes-pending-proveedor-search').value = '';
+                document.getElementById('codes-clear-pending-proveedor').style.display = 'none';
+                loadPending(1);
+            });
+
+            document.getElementById('codes-pending-search').addEventListener('input', debounce(() => loadPending(1), 300));
+            document.getElementById('codes-pending-prev').addEventListener('click', () => loadPending(pendingPage - 1));
+            document.getElementById('codes-pending-next').addEventListener('click', () => loadPending(pendingPage + 1));
+
+            // --- Proveedores ---
+            function renderApodosCell(providerId, apodos) {
+                const chips = (apodos || []).map(a => `
+                    <span class="apodo-chip">
+                        ${esc(a)}
+                        <button type="button" class="codes-remove-apodo" data-id="${providerId}" data-apodo="${esc(a)}" title="Quitar">&times;</button>
+                    </span>`).join('');
+                return `<div class="apodo-chips" data-provider-id="${providerId}">
+                    ${chips}
+                    <input type="text" class="apodo-input" data-id="${providerId}" placeholder="+ apodo" autocomplete="off">
+                </div>`;
+            }
+
+            function loadProviders() {
+                const tbody = document.getElementById('codes-providers-list');
+                const search = document.getElementById('codes-providers-search').value;
+                document.getElementById('codes-providers-status').textContent = 'Buscando...';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Cargando...</td></tr>';
+
+                post('riverso_get_providers', {search}).then(d => {
+                    const providers = d.success ? (d.data.providers || []) : [];
+                    document.getElementById('codes-providers-status').textContent =
+                        providers.length + (providers.length === 1 ? ' resultado' : ' resultados');
+
+                    if (!providers.length) {
+                        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Sin proveedores</td></tr>';
+                        return;
+                    }
+                    tbody.innerHTML = providers.map(p => `<tr data-provider-id="${p.id}">
+                        <td>${esc(p.rut)}</td>
+                        <td><strong>${esc(p.nombre)}</strong></td>
+                        <td>${renderApodosCell(p.id, p.apodos || [])}</td>
+                        <td>${esc(p.contacto || p.email || '-')}</td>
+                        <td style="text-align:center;">${p.codigos_count || 0}</td>
+                        <td style="text-align:center;">${parseInt(p.activo, 10) === 1
+                            ? '<span style="color:var(--success);">Activo</span>'
+                            : '<span style="color:var(--text-secondary);">Inactivo</span>'}</td>
+                    </tr>`).join('');
+                });
+            }
+
+            document.getElementById('codes-providers-search').addEventListener('input', debounce(loadProviders, 300));
+
+            function addProviderApodo(providerId, apodo, input) {
+                apodo = String(apodo || '').trim();
+                if (!apodo) return;
+                post('riverso_add_provider_alias', {
+                    proveedor_id: providerId,
+                    apodo: apodo
+                }).then(d => {
+                    if (!d.success) {
+                        alert(d.data?.message || 'No se pudo agregar el apodo');
+                        return;
+                    }
+                    const cell = input.closest('td');
+                    cell.innerHTML = renderApodosCell(providerId, d.data.apodos || []);
+                    cell.querySelector('.apodo-input')?.focus();
+                });
+            }
+
+            document.getElementById('codes-providers-list').addEventListener('keydown', e => {
+                if (!e.target.classList.contains('apodo-input')) return;
+                if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault();
+                    addProviderApodo(e.target.dataset.id, e.target.value.replace(/,/g, ''), e.target);
+                }
+            });
+
+            document.getElementById('codes-providers-list').addEventListener('focusout', e => {
+                if (!e.target.classList.contains('apodo-input')) return;
+                const val = e.target.value.trim();
+                if (val) {
+                    addProviderApodo(e.target.dataset.id, val, e.target);
+                }
+            });
+
+            document.getElementById('codes-providers-list').addEventListener('click', e => {
+                const btn = e.target.closest('.codes-remove-apodo');
+                if (!btn) return;
+                const providerId = btn.dataset.id;
+                const apodo = btn.dataset.apodo;
+                const cell = btn.closest('td');
+                post('riverso_remove_provider_alias', {
+                    proveedor_id: providerId,
+                    apodo: apodo
+                }).then(d => {
+                    if (!d.success) {
+                        alert(d.data?.message || 'No se pudo eliminar el apodo');
+                        return;
+                    }
+                    cell.innerHTML = renderApodosCell(providerId, d.data.apodos || []);
+                });
+            });
+
+            loadStats();
+            loadCodes(1);
+
+            // --- Modal de edición ---
+            const editModal = document.getElementById('codes-edit-modal');
+
+            function setEditSku(baseId, sku, nombre) {
+                document.getElementById('codes-edit-base-id').value = baseId || '';
+                document.getElementById('codes-edit-sku-hint').textContent = baseId
+                    ? 'Vinculado a ' + sku + (nombre ? ' — ' + nombre : '')
+                    : 'Sin SKU local vinculado';
+                document.getElementById('codes-edit-unlink').style.display = baseId ? '' : 'none';
+            }
+
+            function closeEditModal() {
+                editModal.classList.remove('open');
+            }
+
+            document.getElementById('codes-edit-close').addEventListener('click', closeEditModal);
+            document.getElementById('codes-edit-cancel').addEventListener('click', closeEditModal);
+            editModal.addEventListener('click', e => { if (e.target === editModal) closeEditModal(); });
+
+            listEl.addEventListener('click', e => {
+                const btn = e.target.closest('.codes-edit-btn');
+                if (!btn) return;
+
+                document.getElementById('codes-edit-error').style.display = 'none';
+                document.getElementById('codes-edit-sku-search').value = '';
+                document.getElementById('codes-edit-audit').value = '';
+                const confirmBox = document.getElementById('codes-edit-confirm-box');
+                const taskHint = document.getElementById('codes-edit-task-hint');
+                if (confirmBox) confirmBox.style.display = 'none';
+                if (taskHint) taskHint.textContent = '';
+
+                post('riverso_codes_get', {pp_id: btn.dataset.id}).then(d => {
+                    if (!d.success) {
+                        alert(d.data?.message || 'No se pudo cargar el código');
+                        return;
+                    }
+                    const c = d.data.code;
+                    document.getElementById('codes-edit-id').value = c.id;
+                    document.getElementById('codes-edit-codigo').value = c.codigo_proveedor || '';
+                    document.getElementById('codes-edit-descripcion').value = c.nombre_proveedor || '';
+                    document.getElementById('codes-edit-origen').value = c.origen_label || c.origen_datos || '-';
+                    document.getElementById('codes-edit-fecha').value = c.fecha_ingreso || c.created_at || '-';
+                    document.getElementById('codes-edit-notas').value = c.notas || '';
+                    document.getElementById('codes-edit-activo').checked = parseInt(c.activo, 10) === 1;
+                    document.getElementById('codes-edit-proveedor-id').value = c.proveedor_id || '';
+                    document.getElementById('codes-edit-proveedor-search').value = c.proveedor_nombre || '';
+                    document.getElementById('codes-edit-proveedor-hint').textContent =
+                        c.proveedor_nombre ? 'Proveedor: ' + c.proveedor_nombre : 'Sin proveedor asignado';
+                    setEditSku(c.producto_base_id, c.canonical_sku, c.nombre_canonico);
+
+                    const needsConfirm = !!c.needs_confirm;
+                    if (confirmBox) {
+                        confirmBox.style.display = needsConfirm ? 'block' : 'none';
+                    }
+                    if (needsConfirm && taskHint) {
+                        let hint = 'Este vínculo viene de catálogo/legacy y requiere revisión humana.';
+                        if (c.has_open_task && c.open_task) {
+                            hint = 'Hay una tarea abierta: «' + (c.open_task.titulo || 'Confirmar código proveedor') + '» (#' + c.open_task.id + ').';
+                        } else if (c.has_open_task) {
+                            hint = 'Hay una tarea de confirmación asignada a este código.';
+                        }
+                        taskHint.textContent = hint;
+                    }
+
+                    editModal.classList.add('open');
+                });
+            });
+
+            bindPicker('codes-edit-proveedor-search', 'codes-edit-proveedor-results', supplierPickerOptions(
+                data => {
+                    document.getElementById('codes-edit-proveedor-id').value = data.id;
+                    document.getElementById('codes-edit-proveedor-search').value = data.nombre;
+                    document.getElementById('codes-edit-proveedor-hint').textContent = 'Proveedor: ' + data.nombre;
+                },
+                () => {
+                    document.getElementById('codes-edit-proveedor-id').value = '';
+                    document.getElementById('codes-edit-proveedor-hint').textContent = 'Selecciona un proveedor';
+                }
+            ));
+
+            bindPicker('codes-edit-sku-search', 'codes-edit-sku-results', skuPickerOptions(data => {
+                setEditSku(data.id, data.sku, data.nombre);
+                document.getElementById('codes-edit-sku-search').value = '';
+            }));
+
+            document.getElementById('codes-edit-unlink').addEventListener('click', () => setEditSku(0, '', ''));
+
+            function closeEditAfterReview() {
+                editModal.classList.remove('open');
+                loadCodes(page);
+            }
+
+            const editConfirmBtn = document.getElementById('codes-edit-confirm');
+            if (editConfirmBtn) {
+                editConfirmBtn.addEventListener('click', () => {
+                    const id = document.getElementById('codes-edit-id').value;
+                    if (!id || !confirm('¿Confirmar este vínculo de código a SKU local?')) return;
+                    post('riverso_codes_confirm', {
+                        pp_id: id,
+                        audit_reason: document.getElementById('codes-edit-audit').value
+                    }).then(d => {
+                        if (!d.success) { alert(d.data?.message || 'Error al confirmar'); return; }
+                        closeEditAfterReview();
+                    });
+                });
+            }
+
+            const editRejectBtn = document.getElementById('codes-edit-reject');
+            if (editRejectBtn) {
+                editRejectBtn.addEventListener('click', () => {
+                    const id = document.getElementById('codes-edit-id').value;
+                    if (!id || !confirm('¿Rechazar este código? Quedará inactivo.')) return;
+                    post('riverso_codes_reject', {
+                        pp_id: id,
+                        audit_reason: document.getElementById('codes-edit-audit').value
+                    }).then(d => {
+                        if (!d.success) { alert(d.data?.message || 'Error al rechazar'); return; }
+                        closeEditAfterReview();
+                    });
+                });
+            }
+
+            document.getElementById('codes-edit-save').addEventListener('click', function() {
+                const errorEl = document.getElementById('codes-edit-error');
+                const codigo = document.getElementById('codes-edit-codigo').value.trim();
+                const proveedorId = document.getElementById('codes-edit-proveedor-id').value;
+
+                function fail(message) {
+                    errorEl.textContent = message;
+                    errorEl.style.display = 'block';
+                }
+
+                errorEl.style.display = 'none';
+                if (!codigo) { fail('El código no puede quedar vacío'); return; }
+                if (!proveedorId) { fail('Selecciona un proveedor'); return; }
+
+                this.disabled = true;
+                const button = this;
+                post('riverso_codes_update', {
+                    pp_id: document.getElementById('codes-edit-id').value,
+                    codigo_proveedor: codigo,
+                    proveedor_id: proveedorId,
+                    nombre_proveedor: document.getElementById('codes-edit-descripcion').value,
+                    notas: document.getElementById('codes-edit-notas').value,
+                    activo: document.getElementById('codes-edit-activo').checked ? 1 : 0,
+                    producto_base_id: document.getElementById('codes-edit-base-id').value || 0,
+                    audit_reason: document.getElementById('codes-edit-audit').value
+                }).then(d => {
+                    button.disabled = false;
+                    if (!d.success) { fail(d.data?.message || 'No se pudo guardar'); return; }
+                    closeEditModal();
+                    loadCodes(page);
+                    loadStats();
+                }).catch(() => {
+                    button.disabled = false;
+                    fail('Error de conexión al guardar');
+                });
+            });
+
+            // --- Modal de vinculación de pendientes ---
+            const linkModal = document.getElementById('codes-link-modal');
+
+            function closeLinkModal() {
+                linkModal.classList.remove('open');
+            }
+
+            document.getElementById('codes-link-close').addEventListener('click', closeLinkModal);
+            document.getElementById('codes-link-cancel').addEventListener('click', closeLinkModal);
+            linkModal.addEventListener('click', e => { if (e.target === linkModal) closeLinkModal(); });
+
+            document.getElementById('codes-pending-list').addEventListener('click', e => {
+                const btn = e.target.closest('.codes-link-btn');
+                if (!btn) return;
+
+                document.getElementById('codes-link-item-id').value = btn.dataset.id;
+                document.getElementById('codes-link-sku').value = '';
+                document.getElementById('codes-link-sku-search').value = '';
+                document.getElementById('codes-link-sku-hint').textContent = '';
+                document.getElementById('codes-link-error').style.display = 'none';
+                document.getElementById('codes-link-summary').innerHTML = `
+                    <div><strong>Código:</strong> ${esc(btn.dataset.codigo || '-')}</div>
+                    <div><strong>Descripción:</strong> ${esc(btn.dataset.descripcion || '-')}</div>
+                    <div><strong>Proveedor:</strong> ${esc(btn.dataset.proveedor || '-')}</div>`;
+                linkModal.classList.add('open');
+            });
+
+            bindPicker('codes-link-sku-search', 'codes-link-sku-results', skuPickerOptions(data => {
+                document.getElementById('codes-link-sku').value = data.sku;
+                document.getElementById('codes-link-sku-search').value = data.sku;
+                document.getElementById('codes-link-sku-hint').textContent =
+                    data.nombre ? 'Seleccionado: ' + data.nombre : 'Seleccionado';
+            }));
+
+            document.getElementById('codes-link-save').addEventListener('click', function() {
+                const errorEl = document.getElementById('codes-link-error');
+                const sku = document.getElementById('codes-link-sku').value;
+                const button = this;
+
+                function fail(message) {
+                    errorEl.textContent = message;
+                    errorEl.style.display = 'block';
+                }
+
+                errorEl.style.display = 'none';
+                if (!sku) { fail('Selecciona un SKU local'); return; }
+
+                function send(force) {
+                    button.disabled = true;
+                    post('riverso_link_code', {
+                        item_id: document.getElementById('codes-link-item-id').value,
+                        sku_local: sku,
+                        crear_mapeo: document.getElementById('codes-link-save-mapping').checked ? 1 : 0,
+                        force: force ? 1 : 0
+                    }).then(d => {
+                        button.disabled = false;
+                        if (d.success) {
+                            closeLinkModal();
+                            loadPending();
+                            loadCodes(page);
+                            loadStats();
+                            return;
+                        }
+                        const data = d.data || {};
+                        if (data.conflict && !force) {
+                            if (confirm((data.message || 'Conflicto de SKU') + '\n\n¿Reasignar de todas formas?')) {
+                                send(true);
+                            }
+                            return;
+                        }
+                        fail(data.message || 'No se pudo vincular');
+                    }).catch(() => {
+                        button.disabled = false;
+                        fail('Error de conexión al vincular');
+                    });
+                }
+                send(false);
+            });
+        })();
+        </script>
+        <?php endif; ?>
         
         <?php elseif ($current_page === 'customer-quotes'): ?>
         <!-- Cotizaciones a Clientes -->
@@ -2782,6 +3760,7 @@ function portalEliminarFactura(id, folio) {
                     resultsEl.innerHTML = items.length ? items.map(s => `
                         <div class="supplier-pick" data-id="${s.id}" data-nombre="${esc(s.nombre)}" style="padding:6px;border-bottom:1px solid #ddd;cursor:pointer;font-size:13px;">
                             <strong>${esc(s.nombre)}</strong> <span style="color:#666;">(${esc(s.rut)})</span>
+                            ${s.matched_apodo ? `<div style="font-size:11px;color:#888;">Apodo: ${esc(s.matched_apodo)}</div>` : ''}
                         </div>`).join('') : '<p style="font-size:12px;padding:6px;">Sin proveedores. Crea uno nuevo abajo.</p>';
                     resultsEl.querySelectorAll('.supplier-pick').forEach(el => el.addEventListener('click', () => {
                         idEl.value = el.dataset.id;

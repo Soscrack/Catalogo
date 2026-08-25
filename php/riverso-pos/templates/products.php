@@ -389,20 +389,46 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
 
         <!-- TAB: CÓDIGOS PROVEEDOR -->
         <div class="detail-tab-content" id="tab-suppliers" style="display:none;">
-            <p>Buscar y asignar códigos proveedor.</p>
-            <div style="margin:12px 0;">
-                <input type="text" id="supplier-code-search" class="regular-text" placeholder="Código proveedor (p.ej. 123456)">
-                <div id="supplier-search-results" style="display:none; border:1px solid #ddd; max-height:180px; overflow:auto; margin-top:6px;"></div>
-                <input type="hidden" id="supplier-id-select">
-                <input type="hidden" id="supplier-code-select">
+            <p>Para asignar un código hay que elegir primero el proveedor y después el código de ese proveedor.</p>
+
+            <div class="supplier-link-form">
+                <div class="supplier-link-step">
+                    <label class="supplier-step-label">
+                        <span class="supplier-step-num">1</span> Proveedor <span class="supplier-step-req">*</span>
+                    </label>
+                    <input type="text" id="supplier-provider-search" class="regular-text"
+                           placeholder="Buscar proveedor por nombre o RUT..." autocomplete="off">
+                    <div id="supplier-provider-results" class="supplier-picker-results"></div>
+                    <div id="supplier-provider-selected" class="supplier-picked"></div>
+                    <input type="hidden" id="supplier-id-select">
+                </div>
+
+                <div class="supplier-link-step">
+                    <label class="supplier-step-label">
+                        <span class="supplier-step-num">2</span> Código de proveedor <span class="supplier-step-req">*</span>
+                    </label>
+                    <input type="text" id="supplier-code-search" class="regular-text"
+                           placeholder="Selecciona un proveedor primero" autocomplete="off" disabled>
+                    <p class="description" id="supplier-code-hint">Escribe para buscar entre los códigos de este proveedor.</p>
+                    <div id="supplier-search-results" class="supplier-picker-results"></div>
+                    <div id="supplier-code-warning" class="supplier-code-warning"></div>
+                    <div id="supplier-code-selected" class="supplier-picked"></div>
+                    <input type="hidden" id="supplier-code-select">
+                    <input type="hidden" id="supplier-force-reassign" value="0">
+                </div>
+
+                <div class="supplier-link-step">
+                    <label class="supplier-step-label">Motivo auditoría</label>
+                    <textarea id="supplier-audit-reason" class="large-text" rows="2" placeholder="Describe por qué asignas este código..."></textarea>
+                </div>
+
+                <p>
+                    <button class="button button-primary" id="supplier-link-btn" disabled>Asignar código proveedor</button>
+                    <button type="button" class="button" id="supplier-link-reset">Limpiar</button>
+                    <span id="supplier-link-state" class="description"></span>
+                </p>
             </div>
-            <div style="margin:12px 0;">
-                <label>Motivo auditoría:</label>
-                <textarea id="supplier-audit-reason" class="large-text" rows="2" placeholder="Describe por qué asignas este código..."></textarea>
-            </div>
-            <p>
-                <button class="button button-primary" id="supplier-link-btn">Asignar código proveedor</button>
-            </p>
+
             <div id="suppliers-list" style="margin-top:12px;"></div>
         </div>
 
@@ -765,6 +791,104 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
     justify-content: space-between;
     align-items: center;
 }
+.supplier-link-form {
+    background: #f9f9f9;
+    border: 1px solid #e2e4e7;
+    border-radius: 4px;
+    padding: 16px;
+    max-width: 640px;
+}
+.supplier-link-step {
+    margin-bottom: 16px;
+}
+.supplier-link-step:last-of-type {
+    margin-bottom: 8px;
+}
+.supplier-step-label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.supplier-step-num {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    text-align: center;
+    border-radius: 50%;
+    background: #2271b1;
+    color: #fff;
+    font-size: 12px;
+    margin-right: 4px;
+}
+.supplier-step-req {
+    color: #d63638;
+}
+.supplier-picker-results {
+    display: none;
+    border: 1px solid #ddd;
+    border-top: none;
+    background: #fff;
+    max-height: 240px;
+    overflow-y: auto;
+}
+.supplier-picker-group {
+    padding: 6px 10px;
+    background: #f0f0f1;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #50575e;
+    border-bottom: 1px solid #ddd;
+}
+.supplier-picker-item {
+    padding: 8px 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f1;
+}
+.supplier-picker-item:hover {
+    background: #f6f7f7;
+}
+.supplier-picker-item.is-linked {
+    background: #fbfbfb;
+    color: #8c8f94;
+    cursor: not-allowed;
+}
+.supplier-picker-item.is-linked:hover {
+    background: #fcf0f1;
+}
+.supplier-picker-item.is-create {
+    background: #edfaef;
+}
+.supplier-picker-empty {
+    padding: 10px;
+    color: #8c8f94;
+}
+.supplier-linked-badge {
+    display: inline-block;
+    background: #f0b849;
+    color: #1d2327;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+}
+.supplier-code-warning {
+    display: none;
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: #fcf0f1;
+    border-left: 4px solid #d63638;
+    border-radius: 2px;
+}
+.supplier-picked {
+    margin-top: 6px;
+    color: #007017;
+    font-weight: 600;
+}
+.supplier-picked.is-forced {
+    color: #b32d2e;
+}
 .barcode-item {
     padding: 8px;
     border: 1px solid #ddd;
@@ -845,6 +969,8 @@ jQuery(function($){
     let currentPages = 0;
 
     function esc(v){ return $('<div>').text(v === null || v === undefined ? '' : v).html(); }
+    // Para interpolar dentro de atributos: esc() no escapa las comillas dobles.
+    function escAttr(v){ return esc(v).replace(/"/g, '&quot;'); }
 
     // Funciones de edicion de producto
     let editModeActive = false;
@@ -1147,11 +1273,8 @@ jQuery(function($){
         }
 
         // Suppliers tab
-        $('#supplier-id-select').val('');
-        $('#supplier-code-select').val('');
-        $('#supplier-audit-reason').val('');
+        resetSupplierLinkForm();
         renderSuppliers(product.proveedores || []);
-        updateSupplierLinkBtnState();
 
         // Barcodes tab
         renderBarcodes(product.barcodes || []);
@@ -1166,30 +1289,54 @@ jQuery(function($){
     function updateSupplierLinkBtnState() {
         const code = $('#supplier-code-select').val();
         const supplierId = $('#supplier-id-select').val();
-        
-        if (code && supplierId) {
-            $('#supplier-link-btn').prop('disabled', false).css('opacity', '1');
-        } else {
-            $('#supplier-link-btn').prop('disabled', true).css('opacity', '0.5');
+        const ready = !!(code && supplierId);
+
+        $('#supplier-link-btn').prop('disabled', !ready).css('opacity', ready ? '1' : '0.5');
+
+        let state = '';
+        if (!supplierId) {
+            state = 'Falta elegir el proveedor.';
+        } else if (!code) {
+            state = 'Falta elegir el código de proveedor.';
         }
+        $('#supplier-link-state').text(state);
     }
 
     function renderSuppliers(suppliers) {
         let html = '';
         if (suppliers.length > 0) {
+            const pending = suppliers.filter(s => s.needs_confirm);
+            if (pending.length > 0) {
+                html += `<div class="notice notice-warning" style="margin:0 0 12px;padding:8px 12px;">
+                    <strong>${pending.length}</strong> código(s) por confirmar (legacy / catálogo).
+                </div>`;
+            }
             html += '<h4 style="margin-top:0;">Códigos asignados:</h4>';
             suppliers.forEach(s => {
-                const fuente = s.fuente_display || 'Manual';
-                const badgeColor = fuente.includes('Catálogo') ? '#0073aa' : fuente.includes('Facturación') ? '#ff6b35' : '#666';
+                const fuente = s.origen_label || s.fuente_display || 'Manual';
+                const badgeColor = fuente.includes('Catálogo') ? '#0073aa' : fuente.includes('Factur') ? '#ff6b35' : fuente.includes('Legacy') ? '#9c27b0' : '#666';
                 const barcodeProveedor = s.codigo_barras_proveedor ? `<br><small style="color:#999;">Barcode Proveedor: <code>${esc(s.codigo_barras_proveedor)}</code></small>` : '';
+                const fecha = s.fecha_ingreso ? String(s.fecha_ingreso).split(' ')[0] : '';
+                const confirmBtns = s.needs_confirm
+                    ? `<div style="margin-top:6px;">
+                        <button type="button" class="button button-small button-primary btn-pp-confirm" data-id="${s.id}">Confirmar</button>
+                        <button type="button" class="button button-small btn-pp-reject" data-id="${s.id}">Rechazar</button>
+                       </div>`
+                    : '';
+                const pendingBadge = s.needs_confirm
+                    ? '<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:3px;font-size:11px;margin-left:6px;">Por confirmar</span>'
+                    : '';
                 
                 html += `<div class="supplier-code-item">
                     <div>
                         <strong>${esc(s.codigo_proveedor)}</strong> 
-                        <span style="background:${badgeColor}; color:white; padding:2px 8px; border-radius:3px; font-size:11px; margin-left:8px;">${esc(fuente)}</span><br>
+                        <span style="background:${badgeColor}; color:white; padding:2px 8px; border-radius:3px; font-size:11px; margin-left:8px;">${esc(fuente)}</span>
+                        ${pendingBadge}<br>
                         <small>${esc(s.proveedor_nombre || 'Proveedor')}</small><br>
                         <small style="color:#999;">${esc(s.nombre_proveedor || '')}</small>
+                        ${fecha ? `<br><small style="color:#999;">Ingreso: ${esc(fecha)}</small>` : ''}
                         ${barcodeProveedor}
+                        ${confirmBtns}
                     </div>
                 </div>`;
             });
@@ -1394,6 +1541,7 @@ jQuery(function($){
             'crear_contraparte_online': { button: 'Ir a Online', tab: 'online' },
             'crear_contraparte_local': { button: 'Asignar SKU Local', action: 'editLocal' },
             'relacionar_producto_proveedor': { button: 'Ir a Códigos', tab: 'suppliers' },
+            'confirmar_codigo_proveedor': { button: 'Ir a Códigos', tab: 'suppliers' },
             'confirmar_relacion_online': { button: 'Ir a Online', tab: 'online' },
             'confirmar_estructura_atributos': { button: 'Ver Atributos', tab: 'online', scroll: 'attributes' },
             'barcode_faltante': { button: 'Ir a Barcodes', tab: 'barcodes' },
@@ -1850,46 +1998,294 @@ jQuery(function($){
         $('#woo-results').hide();
     });
 
-    // Evento: buscar código proveedor
-    $(document).on('keyup', '#supplier-code-search', function(){
-        const q = $(this).val();
+    // --- Códigos de proveedor: paso 1 proveedor, paso 2 código ---
+
+    let supplierProviderTimer = null;
+    let supplierCodeTimer = null;
+    let supplierCodeRequestId = 0;
+
+    function setSupplierCodeStepEnabled(enabled) {
+        $('#supplier-code-search')
+            .prop('disabled', !enabled)
+            .attr('placeholder', enabled ? 'Escribe el código (p.ej. 123456)' : 'Selecciona un proveedor primero');
+        $('#supplier-code-hint').text(enabled
+            ? 'Los códigos ya vinculados aparecen bloqueados.'
+            : 'Escribe para buscar entre los códigos de este proveedor.');
+    }
+
+    function clearSupplierCodeChoice() {
+        $('#supplier-code-select').val('');
+        $('#supplier-force-reassign').val('0');
+        $('#supplier-code-warning').hide().empty();
+        $('#supplier-code-selected').removeClass('is-forced').empty();
+    }
+
+    function resetSupplierCodeStep() {
+        $('#supplier-code-search').val('');
+        $('#supplier-search-results').empty().hide();
+        clearSupplierCodeChoice();
+    }
+
+    function resetSupplierLinkForm() {
+        $('#supplier-id-select').val('');
+        $('#supplier-provider-search').val('');
+        $('#supplier-provider-results').empty().hide();
+        $('#supplier-provider-selected').empty();
+        $('#supplier-audit-reason').val('');
+        resetSupplierCodeStep();
+        setSupplierCodeStepEnabled(false);
+        updateSupplierLinkBtnState();
+    }
+
+    $('#supplier-link-reset').on('click', resetSupplierLinkForm);
+
+    // Paso 1: proveedor
+    $(document).on('input', '#supplier-provider-search', function(){
+        clearTimeout(supplierProviderTimer);
+        const q = $(this).val().trim();
+
+        // Cambiar de proveedor invalida el código ya elegido.
+        $('#supplier-id-select').val('');
+        $('#supplier-provider-selected').empty();
+        resetSupplierCodeStep();
+        setSupplierCodeStepEnabled(false);
+        updateSupplierLinkBtnState();
+
         if (q.length < 2) {
-            $('#supplier-search-results').hide();
+            $('#supplier-provider-results').empty().hide();
             return;
         }
-        $.post(ajaxurl, {
-            action: 'riverso_products_search_code',
-            nonce,
-            code: q
-        }, function(r){
-            if (!r.success) return;
-            const results = Array.isArray(r.data.results) ? r.data.results : [r.data.results];
-            const html = results.map(c => {
-                const label = c.nombre_proveedor || c.codigo_proveedor || 'N/A';
-                return `<div class="supplier-result-item" data-code="${esc(c.codigo_proveedor)}" data-supplier-id="${c.proveedor_id || 0}">${esc(label)}</div>`;
-            }).join('');
-            $('#supplier-search-results').html(html).show();
-        });
+
+        supplierProviderTimer = setTimeout(function(){
+            $.post(ajaxurl, {
+                action: 'riverso_search_suppliers',
+                nonce,
+                search: q,
+                limit: 15
+            }, function(r){
+                if (!r.success) return;
+                const items = r.data.suppliers || [];
+                const html = items.length
+                    ? items.map(s => {
+                        const apodoHint = s.matched_apodo
+                            ? `<br><small style="color:#8c8f94;">Apodo: ${esc(s.matched_apodo)}</small>`
+                            : '';
+                        return `<div class="supplier-picker-item supplier-provider-pick" data-id="${s.id}" data-nombre="${escAttr(s.nombre)}">
+                            <strong>${esc(s.nombre)}</strong> <span style="color:#666;">${esc(s.rut || '')}</span>
+                            ${apodoHint}
+                        </div>`;
+                    }).join('')
+                    : '<div class="supplier-picker-empty">Sin proveedores para esa búsqueda.</div>';
+                $('#supplier-provider-results').html(html).show();
+            });
+        }, 250);
     });
 
-    $(document).on('click', '.supplier-result-item', function(){
-        const code = $(this).data('code');
-        const supplierId = $(this).data('supplier-id');
+    $(document).on('click', '.supplier-provider-pick', function(){
+        const nombre = String($(this).data('nombre') || '');
+        $('#supplier-id-select').val($(this).data('id'));
+        $('#supplier-provider-search').val(nombre);
+        $('#supplier-provider-selected').text('Proveedor: ' + nombre);
+        $('#supplier-provider-results').empty().hide();
+        setSupplierCodeStepEnabled(true);
+        updateSupplierLinkBtnState();
+        $('#supplier-code-search').trigger('focus');
+    });
+
+    // Paso 2: código del proveedor
+    $(document).on('input', '#supplier-code-search', function(){
+        clearTimeout(supplierCodeTimer);
+        const q = $(this).val().trim();
+        const supplierId = $('#supplier-id-select').val();
+
+        clearSupplierCodeChoice();
+        updateSupplierLinkBtnState();
+
+        if (!supplierId || q.length < 2) {
+            $('#supplier-search-results').empty().hide();
+            return;
+        }
+
+        const requestId = ++supplierCodeRequestId;
+        supplierCodeTimer = setTimeout(function(){
+            $.post(ajaxurl, {
+                action: 'riverso_codes_search_by_supplier',
+                nonce,
+                supplier_id: supplierId,
+                query: q,
+                limit: 25
+            }, function(r){
+                // Descartar respuestas que llegan fuera de orden.
+                if (requestId !== supplierCodeRequestId) return;
+                if (!r.success) {
+                    $('#supplier-search-results')
+                        .html(`<div class="supplier-picker-empty">${esc(r.data?.message || 'Error buscando códigos')}</div>`)
+                        .show();
+                    return;
+                }
+                renderSupplierCodeResults(r.data, q);
+            });
+        }, 300);
+    });
+
+    function renderSupplierCodeResults(data, query) {
+        const results = data.results || [];
+        const available = results.filter(c => !c.linked);
+        const linked = results.filter(c => c.linked);
+        let html = '';
+
+        if (available.length) {
+            html += '<div class="supplier-picker-group">Disponibles</div>';
+            html += available.map(c => `
+                <div class="supplier-picker-item supplier-code-pick" data-code="${escAttr(c.codigo_proveedor)}">
+                    <strong>${esc(c.codigo_proveedor)}</strong>
+                    ${c.descripcion ? `<br><small style="color:#666;">${esc(c.descripcion)}</small>` : ''}
+                </div>`).join('');
+        }
+
+        if (data.can_create) {
+            html += '<div class="supplier-picker-group">Ingresar manualmente</div>';
+            html += `<div class="supplier-picker-item is-create supplier-code-pick" data-code="${escAttr(query)}">
+                    Usar <strong>${esc(query)}</strong> como código nuevo de este proveedor
+                </div>`;
+        }
+
+        if (linked.length) {
+            html += '<div class="supplier-picker-group">Ya vinculados — no seleccionables</div>';
+            html += linked.map(c => `
+                <div class="supplier-picker-item is-linked supplier-code-linked"
+                     data-code="${escAttr(c.codigo_proveedor)}"
+                     data-sku="${escAttr(c.canonical_sku || '')}"
+                     data-nombre="${escAttr(c.nombre_canonico || '')}"
+                     data-base-id="${c.producto_base_id || 0}">
+                    <strong>${esc(c.codigo_proveedor)}</strong>
+                    <span class="supplier-linked-badge">Vinculado a ${esc(c.canonical_sku || 'otro producto')}</span>
+                    ${c.nombre_canonico ? `<br><small>${esc(c.nombre_canonico)}</small>` : ''}
+                </div>`).join('');
+        }
+
+        if (!html) {
+            html = '<div class="supplier-picker-empty">Este proveedor no tiene códigos que coincidan.</div>';
+        }
+
+        $('#supplier-search-results').html(html).show();
+    }
+
+    $(document).on('click', '.supplier-code-pick', function(){
+        const code = String($(this).data('code') || '');
         $('#supplier-code-select').val(code);
-        $('#supplier-id-select').val(supplierId);
-        $('#supplier-search-results').hide();
+        $('#supplier-code-search').val(code);
+        $('#supplier-force-reassign').val('0');
+        $('#supplier-search-results').empty().hide();
+        $('#supplier-code-warning').hide().empty();
+        $('#supplier-code-selected').removeClass('is-forced').text('Código: ' + code);
         updateSupplierLinkBtnState();
     });
 
-    // Evento: vincular código proveedor
+    $(document).on('click', '.supplier-code-linked', function(){
+        const code = String($(this).data('code') || '');
+        const sku = String($(this).data('sku') || '');
+        const nombre = String($(this).data('nombre') || '');
+        const baseId = parseInt($(this).data('base-id') || 0, 10);
+
+        clearSupplierCodeChoice();
+        updateSupplierLinkBtnState();
+
+        const owner = sku
+            ? `<code>${esc(sku)}</code>${nombre ? ' — ' + esc(nombre) : ''}`
+            : 'otro producto';
+        const openBtn = baseId
+            ? `<button type="button" class="button button-small supplier-open-owner" data-base-id="${baseId}">Ver ese producto</button>`
+            : '';
+
+        $('#supplier-code-warning').html(`
+            <strong>El código ${esc(code)} ya está vinculado.</strong>
+            <div style="margin-top:4px;">Dueño actual: ${owner}</div>
+            <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+                ${openBtn}
+                <button type="button" class="button button-small supplier-force-pick" data-code="${escAttr(code)}">Reasignar de todas formas</button>
+            </div>
+        `).show();
+    });
+
+    $(document).on('click', '.supplier-force-pick', function(){
+        const code = String($(this).data('code') || '');
+        if (!confirm(`El código ${code} se quitará del producto que lo tiene hoy y pasará a este.\n\n¿Continuar?`)) {
+            return;
+        }
+        $('#supplier-code-select').val(code);
+        $('#supplier-code-search').val(code);
+        $('#supplier-force-reassign').val('1');
+        $('#supplier-search-results').empty().hide();
+        $('#supplier-code-warning').hide().empty();
+        $('#supplier-code-selected').addClass('is-forced').text('Código: ' + code + ' (reasignación forzada)');
+        updateSupplierLinkBtnState();
+    });
+
+    $(document).on('click', '.supplier-open-owner', function(){
+        const baseId = parseInt($(this).data('base-id') || 0, 10);
+        if (!baseId) return;
+        $.post(ajaxurl, { action: 'riverso_products_get', nonce, id: baseId }, function(r){
+            if (r.success && r.data.item) {
+                showDetail(r.data.item);
+            }
+        });
+    });
+
+    $(document).on('click', function(e){
+        if (!$(e.target).closest('#supplier-provider-search, #supplier-provider-results').length) {
+            $('#supplier-provider-results').hide();
+        }
+        if (!$(e.target).closest('#supplier-code-search, #supplier-search-results').length) {
+            $('#supplier-search-results').hide();
+        }
+    });
+
+    $(document).on('click', '.btn-pp-confirm', function(){
+        const id = $(this).data('id');
+        if (!confirm('¿Confirmar este vínculo de código a SKU local?')) return;
+        $.post(ajaxurl, { action: 'riverso_codes_confirm', nonce, pp_id: id }, function(r){
+            if (!r.success) {
+                alert(r.data?.message || 'Error al confirmar');
+                return;
+            }
+            if (currentProduct && currentProduct.id) {
+                $.post(ajaxurl, { action: 'riverso_products_get', nonce, id: currentProduct.id }, function(resp){
+                    if (resp.success) showDetail(resp.data.item || resp.data);
+                });
+            }
+        });
+    });
+
+    $(document).on('click', '.btn-pp-reject', function(){
+        const id = $(this).data('id');
+        if (!confirm('¿Rechazar este código? Quedará inactivo.')) return;
+        $.post(ajaxurl, { action: 'riverso_codes_reject', nonce, pp_id: id }, function(r){
+            if (!r.success) {
+                alert(r.data?.message || 'Error al rechazar');
+                return;
+            }
+            if (currentProduct && currentProduct.id) {
+                $.post(ajaxurl, { action: 'riverso_products_get', nonce, id: currentProduct.id }, function(resp){
+                    if (resp.success) showDetail(resp.data.item || resp.data);
+                });
+            }
+        });
+    });
+
+    // Asignar el código al producto
     $('#supplier-link-btn').on('click', function(){
         const productId = currentProduct.id;
         const code = $('#supplier-code-select').val();
         const supplierId = $('#supplier-id-select').val();
         const reason = $('#supplier-audit-reason').val();
 
-        if (!code || !supplierId) {
-            alert('Selecciona un código proveedor primero');
+        if (!supplierId) {
+            alert('Selecciona primero el proveedor');
+            return;
+        }
+        if (!code) {
+            alert('Selecciona o escribe el código de proveedor');
             return;
         }
 
@@ -1918,7 +2314,7 @@ jQuery(function($){
                 alert('Error: ' + (r.data?.message || 'No se pudo vincular'));
             });
         }
-        sendLink(false);
+        sendLink($('#supplier-force-reassign').val() === '1');
     });
 
     // --- Merge helpers: todos los Vincular pasan por preview → modal → confirm → merge ---

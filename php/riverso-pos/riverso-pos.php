@@ -3,7 +3,7 @@
  * Plugin Name: Riverso POS
  * Plugin URI: https://riverso.cl
  * Description: Sistema POS/mini-ERP integrado con WooCommerce para gestión de productos, facturas, inventario y tareas operativas.
- * Version: 1.5.95
+ * Version: 1.6.14
  * Author: Riverso
  * Author URI: https://riverso.cl
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constantes del plugin
-define('RIVERSO_POS_VERSION', '1.5.95');
+define('RIVERSO_POS_VERSION', '1.6.14');
 define('RIVERSO_POS_PLUGIN_FILE', __FILE__);
 define('RIVERSO_POS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RIVERSO_POS_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -95,6 +95,9 @@ final class Riverso_POS {
         // Helpers
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-mamut-sku.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-scan.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-facto.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-factura-adjuntos.php';
         
         // Aliases de compatibilidad: cargar clases movidas a core/
         // (permiten que código antiguo siga usando el path antiguo)
@@ -233,6 +236,7 @@ final class Riverso_POS {
         $module_list = [
             'portal'    => ['file' => 'class-portal-module.php', 'class' => 'Riverso_Portal_Module'],
             'invoices'  => ['file' => 'class-invoice-module.php', 'class' => 'Riverso_Invoice_Module'],
+            'scans'     => ['file' => 'class-scan-module.php', 'class' => 'Riverso_Scan_Module'],
             'tasks'     => [
                 'file' => 'class-task-module.php',
                 'class' => 'Riverso_Task_Module',
@@ -291,6 +295,13 @@ final class Riverso_POS {
                 ],
             ],
             'reports'         => ['file' => 'class-reports-module.php', 'class' => 'Riverso_Reports_Module'],
+            'integrations/facto' => [
+                'file'  => 'class-facto-module.php',
+                'class' => 'Riverso_Facto_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'modules/integrations/facto/class-facto-module.php',
+                ],
+            ],
         ];
         
         foreach ($module_list as $module_name => $config) {

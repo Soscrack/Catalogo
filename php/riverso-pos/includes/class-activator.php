@@ -65,6 +65,18 @@ class Riverso_POS_Activator {
             UNIQUE KEY rut (rut)
         ) $charset_collate;";
         dbDelta($sql);
+
+        // Tabla: Apodos de proveedores (nombres cortos / alias de búsqueda)
+        $sql = "CREATE TABLE {$prefix}proveedor_apodos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            proveedor_id BIGINT UNSIGNED NOT NULL,
+            apodo VARCHAR(100) NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_proveedor_apodo (proveedor_id, apodo),
+            KEY idx_apodo (apodo)
+        ) $charset_collate;";
+        dbDelta($sql);
         
         // Tabla: Códigos
         $sql = "CREATE TABLE {$prefix}codigos (
@@ -313,6 +325,12 @@ class Riverso_POS_Activator {
         self::create_phase28_stock_status($prefix, $charset_collate);
         self::create_phase29_barcodes_authoritative($prefix);
         self::create_phase30_envase_tipos($prefix, $charset_collate);
+        self::create_phase31_scan_documents($prefix, $charset_collate);
+        self::create_phase32_factura_origen_ingreso($prefix);
+        self::create_phase33_facto_integration($prefix, $charset_collate);
+        self::create_phase34_facto_inbox_import($prefix, $charset_collate);
+        self::create_phase35_tecbolt_unify($prefix);
+        self::create_phase35b_catalog_mapping_confirm($prefix);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -1915,26 +1933,41 @@ class Riverso_POS_Activator {
             "KEY idx_catalogo (catalogo_id)"
         );
 
-        // Backfill: crear catálogo MAMUT y vincular todos los producto_proveedor existentes
-        $mamut = $wpdb->get_row(
-            "SELECT id FROM {$prefix}proveedores WHERE nombre = 'MAMUT' OR rut = 'MAMUT' LIMIT 1"
+        // Backfill: catálogo MAMUT bajo Tecbolt (no crear proveedor MAMUT).
+        $mamut_id = (int) $wpdb->get_var(
+            "SELECT p.id FROM {$prefix}proveedores p
+             LEFT JOIN {$prefix}proveedor_apodos a ON a.proveedor_id = p.id
+             WHERE p.nombre LIKE '%Tecbolt%'
+                OR a.apodo LIKE '%Mamut%'
+                OR a.apodo = 'MAMUT'
+                OR p.nombre = 'MAMUT'
+                OR p.rut = 'MAMUT'
+             ORDER BY
+                CASE WHEN p.nombre LIKE '%Tecbolt%' THEN 0 ELSE 1 END,
+                p.id ASC
+             LIMIT 1"
         );
 
-        if (!$mamut) {
-            // Si no existe el proveedor MAMUT, crearlo
+        if (!$mamut_id) {
+            // Último recurso: crear Tecbolt SA (nunca MAMUT como nombre canónico).
             $wpdb->insert(
                 "{$prefix}proveedores",
                 [
-                    'rut' => 'MAMUT',
-                    'nombre' => 'MAMUT',
+                    'rut' => '76.000.000-0',
+                    'nombre' => 'Tecbolt SA',
                     'activo' => 1,
                     'created_at' => current_time('mysql'),
                 ],
                 ['%s', '%s', '%d', '%s']
             );
-            $mamut_id = $wpdb->insert_id;
-        } else {
-            $mamut_id = $mamut->id;
+            $mamut_id = (int) $wpdb->insert_id;
+            if ($mamut_id > 0) {
+                $wpdb->insert(
+                    "{$prefix}proveedor_apodos",
+                    ['proveedor_id' => $mamut_id, 'apodo' => 'Mamut'],
+                    ['%d', '%s']
+                );
+            }
         }
 
         // Crear catálogo MAMUT 2025 si no existe (también por alias, por si proveedor_id diverge)
@@ -2777,6 +2810,787 @@ class Riverso_POS_Activator {
                     ]
                 );
             }
+        }
+    }
+
+    /**
+     * Fase 31: documentos escaneados (PDF/imagen) con extracción IA.
+     */
+    private static function create_phase31_scan_documents($prefix, $charset_collate = '') {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        if ($charset_collate === '') {
+            $charset_collate = $wpdb->get_charset_collate();
+        }
+
+        $sql = "CREATE TABLE {$prefix}documentos_archivos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            archivo_hash CHAR(64) NOT NULL,
+            nombre_original VARCHAR(255) NOT NULL,
+            mime VARCHAR(100) NOT NULL,
+            bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            paginas INT UNSIGNED NOT NULL DEFAULT 1,
+            r2_key_original VARCHAR(512) DEFAULT NULL,
+            r2_key_json VARCHAR(512) DEFAULT NULL,
+            estado VARCHAR(30) NOT NULL DEFAULT 'pendiente',
+            gemini_model VARCHAR(80) DEFAULT NULL,
+            gemini_tokens_in INT UNSIGNED NOT NULL DEFAULT 0,
+            gemini_tokens_out INT UNSIGNED NOT NULL DEFAULT 0,
+            gemini_llamadas INT UNSIGNED NOT NULL DEFAULT 0,
+            gemini_reutilizado TINYINT(1) NOT NULL DEFAULT 0,
+            error_mensaje TEXT DEFAULT NULL,
+            subido_por BIGINT UNSIGNED DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_archivo_hash (archivo_hash),
+            KEY idx_estado (estado),
+            KEY idx_created (created_at)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}documentos_escaneados (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            archivo_id BIGINT UNSIGNED NOT NULL,
+            pagina_inicio INT UNSIGNED NOT NULL DEFAULT 1,
+            pagina_fin INT UNSIGNED NOT NULL DEFAULT 1,
+            doc_hash CHAR(64) NOT NULL,
+            tipo_documento VARCHAR(50) DEFAULT NULL,
+            tipo_dte INT DEFAULT NULL,
+            folio VARCHAR(50) DEFAULT NULL,
+            rut_emisor VARCHAR(20) DEFAULT NULL,
+            razon_social_emisor VARCHAR(255) DEFAULT NULL,
+            rut_receptor VARCHAR(20) DEFAULT NULL,
+            fecha_emision DATE DEFAULT NULL,
+            fecha_vencimiento DATE DEFAULT NULL,
+            monto_neto DECIMAL(12,2) DEFAULT 0,
+            monto_exento DECIMAL(12,2) DEFAULT 0,
+            monto_iva DECIMAL(12,2) DEFAULT 0,
+            monto_total DECIMAL(12,2) DEFAULT 0,
+            confianza DECIMAL(5,4) DEFAULT NULL,
+            validacion LONGTEXT DEFAULT NULL,
+            estado_revision VARCHAR(30) NOT NULL DEFAULT 'pendiente',
+            factura_id BIGINT UNSIGNED DEFAULT NULL,
+            r2_key_json VARCHAR(512) DEFAULT NULL,
+            datos_json LONGTEXT DEFAULT NULL,
+            notas TEXT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_doc_hash (doc_hash),
+            KEY idx_archivo (archivo_id),
+            KEY idx_estado (estado_revision),
+            KEY idx_folio_rut (folio, rut_emisor),
+            KEY idx_factura (factura_id),
+            KEY idx_fecha (fecha_emision)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}documento_items (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            documento_id BIGINT UNSIGNED NOT NULL,
+            numero_linea INT NOT NULL DEFAULT 1,
+            codigo VARCHAR(100) DEFAULT NULL,
+            nombre VARCHAR(255) NOT NULL,
+            descripcion TEXT DEFAULT NULL,
+            cantidad DECIMAL(12,4) NOT NULL DEFAULT 0,
+            unidad VARCHAR(20) DEFAULT NULL,
+            precio_unitario DECIMAL(12,4) DEFAULT 0,
+            monto_total DECIMAL(12,2) DEFAULT 0,
+            confianza DECIMAL(5,4) DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_documento (documento_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}documento_referencias (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            documento_id BIGINT UNSIGNED NOT NULL,
+            tipo_ref VARCHAR(50) NOT NULL,
+            tipo_doc_ref INT DEFAULT NULL,
+            folio_ref VARCHAR(50) NOT NULL,
+            fecha_ref DATE DEFAULT NULL,
+            razon TEXT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_documento (documento_id),
+            KEY idx_folio_ref (folio_ref),
+            KEY idx_tipo_folio (tipo_doc_ref, folio_ref)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        if (get_option('riverso_pos_phase31_scan_documents') !== '1') {
+            update_option('riverso_pos_phase31_scan_documents', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log(
+                    'schema.phase31_scan_documents',
+                    'invoice_scan',
+                    0,
+                    [
+                        'actor_type' => 'computer',
+                        'details' => 'Fase 31: documentos escaneados con extracción IA',
+                    ]
+                );
+            }
+        }
+    }
+
+    /**
+     * Fase 32: origen de ingreso de factura (xml / escaneo / ambos).
+     */
+    private static function create_phase32_factura_origen_ingreso($prefix) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $table = "{$prefix}facturas";
+        $col = $wpdb->get_results("SHOW COLUMNS FROM {$table} LIKE 'origen_ingreso'");
+        if (empty($col)) {
+            $wpdb->query(
+                "ALTER TABLE {$table} ADD COLUMN origen_ingreso VARCHAR(20) NOT NULL DEFAULT 'xml'
+                 COMMENT 'xml|escaneo|ambos' AFTER xml_hash"
+            );
+        }
+
+        // Backfill: facturas con escaneos vinculados
+        $docs_table = "{$prefix}documentos_escaneados";
+        $wpdb->query(
+            "UPDATE {$table} f
+             SET f.origen_ingreso = 'escaneo'
+             WHERE f.origen_ingreso = 'xml'
+               AND EXISTS (
+                   SELECT 1 FROM {$docs_table} d
+                   WHERE d.factura_id = f.id
+                     AND d.estado_revision IN ('confirmado', 'duplicado')
+               )
+               AND (f.xml_path IS NULL OR f.xml_path = '' OR f.xml_path NOT LIKE '[%')"
+        );
+        $wpdb->query(
+            "UPDATE {$table} f
+             SET f.origen_ingreso = 'ambos'
+             WHERE f.origen_ingreso = 'xml'
+               AND f.xml_path IS NOT NULL AND f.xml_path != '' AND f.xml_path LIKE '[%'
+               AND EXISTS (
+                   SELECT 1 FROM {$docs_table} d
+                   WHERE d.factura_id = f.id
+                     AND d.estado_revision IN ('confirmado', 'duplicado')
+               )"
+        );
+
+        if (get_option('riverso_pos_phase32_origen_ingreso') !== '1') {
+            update_option('riverso_pos_phase32_origen_ingreso', '1');
+        }
+    }
+
+    /**
+     * Fase 33: mapeo productos Riverso ↔ FACTO + outbox de sincronización.
+     */
+    private static function create_phase33_facto_integration($prefix, $charset_collate = '') {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        if ($charset_collate === '') {
+            $charset_collate = $wpdb->get_charset_collate();
+        }
+
+        $sql = "CREATE TABLE {$prefix}facto_producto_map (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            facto_product_id BIGINT UNSIGNED NOT NULL,
+            facto_sku VARCHAR(100) DEFAULT NULL,
+            last_payload_hash CHAR(40) DEFAULT NULL,
+            sync_state VARCHAR(20) NOT NULL DEFAULT 'linked',
+            last_error TEXT DEFAULT NULL,
+            last_synced_at DATETIME DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_producto_base (producto_base_id),
+            UNIQUE KEY ux_facto_product (facto_product_id),
+            KEY idx_facto_sku (facto_sku),
+            KEY idx_sync_state (sync_state)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}facto_sync_outbox (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            operation VARCHAR(20) NOT NULL,
+            payload LONGTEXT DEFAULT NULL,
+            attempts INT UNSIGNED NOT NULL DEFAULT 0,
+            next_attempt_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            state VARCHAR(20) NOT NULL DEFAULT 'pending',
+            last_error TEXT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_state_next (state, next_attempt_at),
+            KEY idx_producto (producto_base_id),
+            KEY idx_operation (operation)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        if (get_option('riverso_pos_phase33_facto_integration') !== '1') {
+            update_option('riverso_pos_phase33_facto_integration', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log(
+                    'schema.phase33_facto_integration',
+                    'facto',
+                    0,
+                    [
+                        'actor_type' => 'computer',
+                        'details' => 'Fase 33: integración FACTO (map + outbox)',
+                    ]
+                );
+            }
+        }
+    }
+
+    /**
+     * Fase 34: importación DTE desde Inbox FACTO + historial de intervalos.
+     */
+    private static function create_phase34_facto_inbox_import($prefix, $charset_collate = '') {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        if ($charset_collate === '') {
+            $charset_collate = $wpdb->get_charset_collate();
+        }
+
+        $sql = "CREATE TABLE {$prefix}facto_inbox_map (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            inbox_document_id BIGINT UNSIGNED NOT NULL,
+            factura_id BIGINT UNSIGNED DEFAULT NULL,
+            tipo_dte TINYINT UNSIGNED DEFAULT NULL,
+            folio VARCHAR(50) DEFAULT NULL,
+            rut_emisor VARCHAR(20) DEFAULT NULL,
+            document_date DATE DEFAULT NULL,
+            total_amount DECIMAL(14,2) DEFAULT NULL,
+            state VARCHAR(20) NOT NULL DEFAULT 'imported',
+            last_error TEXT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_inbox_document (inbox_document_id),
+            KEY idx_state (state),
+            KEY idx_document_date (document_date),
+            KEY idx_factura (factura_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}facto_inbox_runs (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            fecha_desde DATE NOT NULL,
+            fecha_hasta DATE NOT NULL,
+            state VARCHAR(20) NOT NULL DEFAULT 'running',
+            docs_found INT UNSIGNED NOT NULL DEFAULT 0,
+            docs_imported INT UNSIGNED NOT NULL DEFAULT 0,
+            docs_merged INT UNSIGNED NOT NULL DEFAULT 0,
+            docs_duplicate INT UNSIGNED NOT NULL DEFAULT 0,
+            docs_skipped INT UNSIGNED NOT NULL DEFAULT 0,
+            docs_error INT UNSIGNED NOT NULL DEFAULT 0,
+            pages_scanned INT UNSIGNED NOT NULL DEFAULT 0,
+            page_from INT UNSIGNED DEFAULT NULL,
+            page_to INT UNSIGNED DEFAULT NULL,
+            started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            finished_at DATETIME DEFAULT NULL,
+            started_by BIGINT UNSIGNED DEFAULT NULL,
+            last_error TEXT DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_fechas (fecha_desde, fecha_hasta),
+            KEY idx_state (state)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        if (get_option('riverso_pos_phase34_facto_inbox_import') !== '1') {
+            update_option('riverso_pos_phase34_facto_inbox_import', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log(
+                    'schema.phase34_facto_inbox_import',
+                    'facto_inbox',
+                    0,
+                    [
+                        'actor_type' => 'computer',
+                        'details' => 'Fase 34: importación DTE Inbox FACTO (map + runs)',
+                    ]
+                );
+            }
+        }
+    }
+
+    /**
+     * Fase 35: unificar MAMUT → Tecbolt SA, normalizar origen_datos,
+     * marcar matches legacy por confirmar y crear tasks.
+     */
+    private static function create_phase35_tecbolt_unify($prefix) {
+        global $wpdb;
+
+        if (get_option('riverso_pos_phase35_tecbolt_unify') === '1') {
+            // Asegurar apodo Mamut (además de MAMUT) sin re-ejecutar la unificación.
+            $tecbolt_id = (int) $wpdb->get_var(
+                "SELECT id FROM {$prefix}proveedores WHERE nombre LIKE '%Tecbolt%' ORDER BY id ASC LIMIT 1"
+            );
+            if ($tecbolt_id > 0) {
+                foreach (['Mamut', 'MAMUT'] as $apodo) {
+                    $exists = (int) $wpdb->get_var($wpdb->prepare(
+                        "SELECT id FROM {$prefix}proveedor_apodos
+                         WHERE proveedor_id = %d AND LOWER(apodo) = LOWER(%s) LIMIT 1",
+                        $tecbolt_id,
+                        $apodo
+                    ));
+                    if (!$exists) {
+                        $wpdb->insert(
+                            "{$prefix}proveedor_apodos",
+                            ['proveedor_id' => $tecbolt_id, 'apodo' => $apodo],
+                            ['%d', '%s']
+                        );
+                    }
+                }
+            }
+            return;
+        }
+
+        $report = [
+            'origen_normalized' => 0,
+            'pp_moved' => 0,
+            'pp_merged' => 0,
+            'marked_pending' => 0,
+            'tasks_created' => 0,
+            'mamut_deleted' => false,
+            'tecbolt_id' => 0,
+            'warnings' => [],
+        ];
+
+        // --- A) Normalizar origen_datos ---
+        $report['origen_normalized'] += (int) $wpdb->query(
+            "UPDATE {$prefix}producto_proveedor
+             SET origen_datos = 'legacy'
+             WHERE origen_datos = 'riverso_codigos'"
+        );
+        $report['origen_normalized'] += (int) $wpdb->query(
+            "UPDATE {$prefix}producto_proveedor
+             SET origen_datos = 'catalogo'
+             WHERE origen_datos IN ('computer', 'mamut_import')
+                OR (origen_datos = 'manual' AND catalogo_id IS NOT NULL AND catalogo_id > 0)"
+        );
+        $report['origen_normalized'] += (int) $wpdb->query(
+            "UPDATE {$prefix}producto_proveedor
+             SET origen_datos = 'factura'
+             WHERE origen_datos = 'factura_intake'"
+        );
+
+        // --- B) Resolver Tecbolt ---
+        $tecbolt_id = (int) $wpdb->get_var(
+            "SELECT id FROM {$prefix}proveedores
+             WHERE nombre LIKE '%Tecbolt%'
+             ORDER BY id ASC LIMIT 1"
+        );
+        if (!$tecbolt_id) {
+            $wpdb->insert(
+                "{$prefix}proveedores",
+                [
+                    'rut' => '76.000.000-0',
+                    'nombre' => 'Tecbolt SA',
+                    'activo' => 1,
+                    'created_at' => current_time('mysql'),
+                ],
+                ['%s', '%s', '%d', '%s']
+            );
+            $tecbolt_id = (int) $wpdb->insert_id;
+            $report['warnings'][] = 'Tecbolt SA no existía; se creó con RUT placeholder.';
+        }
+        $report['tecbolt_id'] = $tecbolt_id;
+
+        // Apodos Mamut / MAMUT
+        foreach (['Mamut', 'MAMUT'] as $apodo) {
+            $exists = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}proveedor_apodos
+                 WHERE proveedor_id = %d AND LOWER(apodo) = LOWER(%s) LIMIT 1",
+                $tecbolt_id,
+                $apodo
+            ));
+            if (!$exists) {
+                $wpdb->insert(
+                    "{$prefix}proveedor_apodos",
+                    ['proveedor_id' => $tecbolt_id, 'apodo' => $apodo],
+                    ['%d', '%s']
+                );
+            }
+        }
+
+        $mamut_id = (int) $wpdb->get_var(
+            "SELECT id FROM {$prefix}proveedores
+             WHERE (nombre = 'MAMUT' OR rut = 'MAMUT') AND id <> {$tecbolt_id}
+             LIMIT 1"
+        );
+
+        if ($mamut_id > 0 && $tecbolt_id > 0 && $mamut_id !== $tecbolt_id) {
+            // Catálogo mamut → Tecbolt
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}catalogos SET proveedor_id = %d
+                 WHERE alias = 'mamut' OR proveedor_id = %d",
+                $tecbolt_id,
+                $mamut_id
+            ));
+
+            // Mover PP MAMUT → Tecbolt con manejo de colisiones
+            $mamut_pps = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$prefix}producto_proveedor WHERE proveedor_id = %d",
+                $mamut_id
+            ), ARRAY_A);
+
+            foreach ($mamut_pps ?: [] as $mamut_pp) {
+                $clash = $wpdb->get_row($wpdb->prepare(
+                    "SELECT * FROM {$prefix}producto_proveedor
+                     WHERE proveedor_id = %d AND codigo_proveedor = %s AND id <> %d
+                     LIMIT 1",
+                    $tecbolt_id,
+                    $mamut_pp['codigo_proveedor'],
+                    $mamut_pp['id']
+                ), ARRAY_A);
+
+                if (!$clash) {
+                    $wpdb->update(
+                        "{$prefix}producto_proveedor",
+                        ['proveedor_id' => $tecbolt_id],
+                        ['id' => (int) $mamut_pp['id']],
+                        ['%d'],
+                        ['%d']
+                    );
+                    $report['pp_moved']++;
+                    continue;
+                }
+
+                // Colisión: conservar Tecbolt, enriquecer desde Mamut si hace falta
+                $patch = [];
+                $formats = [];
+                if (empty($clash['catalogo_id']) && !empty($mamut_pp['catalogo_id'])) {
+                    $patch['catalogo_id'] = (int) $mamut_pp['catalogo_id'];
+                    $formats[] = '%d';
+                }
+                $clash_verified = strtoupper((string) ($clash['match_estado'] ?? '')) === 'VERIFIED';
+                $mamut_has_base = !empty($mamut_pp['producto_base_id']);
+                $clash_has_base = !empty($clash['producto_base_id']);
+                if (!$clash_verified && $mamut_has_base && !$clash_has_base) {
+                    $patch['producto_base_id'] = (int) $mamut_pp['producto_base_id'];
+                    $formats[] = '%d';
+                }
+                if (empty($clash['nombre_proveedor']) && !empty($mamut_pp['nombre_proveedor'])) {
+                    $patch['nombre_proveedor'] = $mamut_pp['nombre_proveedor'];
+                    $formats[] = '%s';
+                }
+                // Preferir origen catalogo si el clash no lo tiene
+                if (($clash['origen_datos'] ?? '') === 'manual' && in_array($mamut_pp['origen_datos'] ?? '', ['catalogo', 'computer'], true)) {
+                    $patch['origen_datos'] = 'catalogo';
+                    $formats[] = '%s';
+                }
+                if (!empty($patch)) {
+                    $wpdb->update(
+                        "{$prefix}producto_proveedor",
+                        $patch,
+                        ['id' => (int) $clash['id']],
+                        $formats,
+                        ['%d']
+                    );
+                }
+                // Borrar duplicado MAMUT (UNIQUE impide reasignar el mismo código).
+                $wpdb->delete("{$prefix}producto_proveedor", ['id' => (int) $mamut_pp['id']], ['%d']);
+                $report['pp_merged']++;
+            }
+
+            // Reapuntar tablas relacionadas
+            foreach (['codigos', 'codigo_barra', 'facturas'] as $suffix) {
+                $table = "{$prefix}{$suffix}";
+                if (self::table_exists($table)) {
+                    $wpdb->query($wpdb->prepare(
+                        "UPDATE {$table} SET proveedor_id = %d WHERE proveedor_id = %d",
+                        $tecbolt_id,
+                        $mamut_id
+                    ));
+                }
+            }
+            if (self::table_exists("{$prefix}facturas_recibidas")) {
+                $wpdb->query($wpdb->prepare(
+                    "UPDATE {$prefix}facturas_recibidas SET proveedor_id = %d WHERE proveedor_id = %d",
+                    $tecbolt_id,
+                    $mamut_id
+                ));
+            }
+            if (self::table_exists("{$prefix}supplier_product_links")) {
+                $wpdb->query($wpdb->prepare(
+                    "UPDATE {$prefix}supplier_product_links SET supplier_id = %d WHERE supplier_id = %d",
+                    $tecbolt_id,
+                    $mamut_id
+                ));
+            }
+
+            // Borrar apodos y proveedor MAMUT
+            $wpdb->delete("{$prefix}proveedor_apodos", ['proveedor_id' => $mamut_id], ['%d']);
+            $remaining = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$prefix}producto_proveedor WHERE proveedor_id = %d",
+                $mamut_id
+            ));
+            if ($remaining === 0) {
+                $deleted = $wpdb->delete("{$prefix}proveedores", ['id' => $mamut_id], ['%d']);
+                $report['mamut_deleted'] = (bool) $deleted;
+            } else {
+                $wpdb->update(
+                    "{$prefix}proveedores",
+                    ['activo' => 0],
+                    ['id' => $mamut_id],
+                    ['%d'],
+                    ['%d']
+                );
+                $report['warnings'][] = "MAMUT aún tiene {$remaining} PP; se desactivó en vez de borrar.";
+            }
+        }
+
+        // --- C) Marcar por confirmar + crear tasks ---
+        $pending = $wpdb->get_results(
+            "SELECT pp.id, pp.codigo_proveedor, pp.proveedor_id, pp.producto_base_id,
+                    pp.origen_datos, pp.match_estado, pp.match_origen, pb.canonical_sku
+             FROM {$prefix}producto_proveedor pp
+             INNER JOIN {$prefix}producto_base pb
+                ON pb.id = pp.producto_base_id
+               AND pb.deleted_at IS NULL
+               AND pb.canonical_sku IS NOT NULL AND pb.canonical_sku <> ''
+             WHERE pp.activo = 1
+               AND COALESCE(pp.match_estado, '') <> 'VERIFIED'
+               AND (
+                    pp.origen_datos IN ('legacy', 'riverso_codigos')
+                 OR (
+                        pp.origen_datos IN ('catalogo', 'computer')
+                    AND (
+                           COALESCE(pp.match_origen, '') IN ('computer', 'mamut', 'sku_mapping', '')
+                        OR COALESCE(pp.match_estado, '') IN ('AUTO_MATCH', 'HUMAN_REVIEW', 'UNMATCHED', '')
+                    )
+                 )
+               )",
+            ARRAY_A
+        );
+
+        $now = current_time('mysql');
+        $task_module = class_exists('Riverso_Task_Module') ? Riverso_Task_Module::get_instance() : null;
+
+        foreach ($pending ?: [] as $row) {
+            $wpdb->update(
+                "{$prefix}producto_proveedor",
+                [
+                    'requires_human_review' => 1,
+                    'review_status' => 'pendiente',
+                    'updated_at' => $now,
+                ],
+                ['id' => (int) $row['id']],
+                ['%d', '%s', '%s'],
+                ['%d']
+            );
+            $report['marked_pending']++;
+
+            if ($task_module) {
+                $codigo = (string) $row['codigo_proveedor'];
+                $task_id = $task_module->create_review_task(
+                    'confirmar_codigo_proveedor',
+                    "Confirmar código proveedor {$codigo}",
+                    'producto_proveedor',
+                    (int) $row['id'],
+                    [
+                        'prioridad' => 'normal',
+                        'datos_extra' => [
+                            'producto_base_id' => (int) $row['producto_base_id'],
+                            'codigo_proveedor' => $codigo,
+                            'proveedor_id' => (int) $row['proveedor_id'],
+                            'canonical_sku' => $row['canonical_sku'],
+                            'origen' => 'phase35',
+                        ],
+                    ]
+                );
+                if ($task_id) {
+                    $report['tasks_created']++;
+                }
+            }
+        }
+
+        update_option('riverso_pos_phase35_tecbolt_unify', '1');
+        update_option('riverso_pos_phase35_tecbolt_unify_report', $report);
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log(
+                'schema.phase35_tecbolt_unify',
+                'proveedor',
+                $tecbolt_id,
+                [
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 35: MAMUT→Tecbolt, orígenes, confirmación legacy',
+                    'new_value' => $report,
+                ]
+            );
+        }
+    }
+
+    /**
+     * Fase 35b: códigos de catálogo Mamut con SKU local en sku_mapping.json
+     * se vinculan al producto_base local y quedan por confirmar (+ tasks).
+     */
+    private static function create_phase35b_catalog_mapping_confirm($prefix) {
+        global $wpdb;
+
+        if (get_option('riverso_pos_phase35b_catalog_mapping_confirm') === '1') {
+            return;
+        }
+
+        if (!function_exists('riverso_mamut_online_to_local_sku')) {
+            $helper = RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-mamut-sku.php';
+            if (file_exists($helper)) {
+                require_once $helper;
+            }
+        }
+        if (!function_exists('riverso_mamut_online_to_local_sku')) {
+            // No marcar como hecha: reintentar en el próximo update_database.
+            return;
+        }
+
+        if (!class_exists('Riverso_Task_Module')) {
+            $task_file = RIVERSO_POS_PLUGIN_DIR . 'core/tasks/class-task-module.php';
+            if (file_exists($task_file)) {
+                require_once $task_file;
+            }
+        }
+
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(300);
+        }
+
+        $cat_id = (int) $wpdb->get_var(
+            "SELECT id FROM {$prefix}catalogos WHERE alias = 'mamut' ORDER BY id ASC LIMIT 1"
+        );
+
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT pp.id, pp.codigo_proveedor, pp.proveedor_id, pp.producto_base_id,
+                        pp.match_estado, pb.canonical_sku
+                 FROM {$prefix}producto_proveedor pp
+                 LEFT JOIN {$prefix}producto_base pb
+                   ON pb.id = pp.producto_base_id AND pb.deleted_at IS NULL
+                 WHERE pp.activo = 1
+                   AND COALESCE(pp.match_estado, '') <> 'VERIFIED'
+                   AND (
+                        pp.catalogo_id = %d
+                     OR pp.origen_datos IN ('catalogo', 'computer', 'legacy')
+                   )",
+                $cat_id > 0 ? $cat_id : 0
+            ),
+            ARRAY_A
+        );
+
+        $report = [
+            'scanned' => count($rows ?: []),
+            'linked' => 0,
+            'already_on_local' => 0,
+            'marked_pending' => 0,
+            'tasks_created' => 0,
+            'skipped_no_map' => 0,
+            'skipped_no_base' => 0,
+        ];
+
+        $now = current_time('mysql');
+        $task_module = class_exists('Riverso_Task_Module') ? Riverso_Task_Module::get_instance() : null;
+        $sku_base_cache = [];
+
+        foreach ($rows ?: [] as $row) {
+            $pp_id = (int) $row['id'];
+            $code = (string) $row['codigo_proveedor'];
+            $current_sku = trim((string) ($row['canonical_sku'] ?? ''));
+            $target_sku = $current_sku;
+
+            if ($target_sku === '') {
+                $mapped = riverso_mamut_online_to_local_sku($code);
+                if (!$mapped) {
+                    $report['skipped_no_map']++;
+                    continue;
+                }
+                $target_sku = (string) $mapped;
+            }
+
+            if (!isset($sku_base_cache[$target_sku])) {
+                $sku_base_cache[$target_sku] = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM {$prefix}producto_base
+                     WHERE canonical_sku = %s AND deleted_at IS NULL
+                     ORDER BY id ASC LIMIT 1",
+                    $target_sku
+                ));
+            }
+            $local_base_id = $sku_base_cache[$target_sku];
+            if ($local_base_id <= 0) {
+                $report['skipped_no_base']++;
+                continue;
+            }
+
+            $update = [
+                'requires_human_review' => 1,
+                'review_status' => 'pendiente',
+                'updated_at' => $now,
+            ];
+            $formats = ['%d', '%s', '%s'];
+
+            if ((int) ($row['producto_base_id'] ?? 0) !== $local_base_id) {
+                $update['producto_base_id'] = $local_base_id;
+                $formats[] = '%d';
+                $update['match_origen'] = 'sku_mapping';
+                $formats[] = '%s';
+                if (strtoupper((string) ($row['match_estado'] ?? '')) === ''
+                    || strtoupper((string) ($row['match_estado'] ?? '')) === 'UNMATCHED') {
+                    $update['match_estado'] = 'HUMAN_REVIEW';
+                    $formats[] = '%s';
+                }
+                $report['linked']++;
+            } else {
+                $report['already_on_local']++;
+            }
+
+            $wpdb->update(
+                "{$prefix}producto_proveedor",
+                $update,
+                ['id' => $pp_id],
+                $formats,
+                ['%d']
+            );
+            $report['marked_pending']++;
+
+            if ($task_module) {
+                $task_id = $task_module->create_review_task(
+                    'confirmar_codigo_proveedor',
+                    "Confirmar código proveedor {$code}",
+                    'producto_proveedor',
+                    $pp_id,
+                    [
+                        'prioridad' => 'normal',
+                        'datos_extra' => [
+                            'producto_base_id' => $local_base_id,
+                            'codigo_proveedor' => $code,
+                            'proveedor_id' => (int) $row['proveedor_id'],
+                            'canonical_sku' => $target_sku,
+                            'origen' => 'phase35b_catalog_mapping',
+                        ],
+                    ]
+                );
+                if ($task_id) {
+                    $report['tasks_created']++;
+                }
+            }
+        }
+
+        update_option('riverso_pos_phase35b_catalog_mapping_confirm', '1');
+        update_option('riverso_pos_phase35b_catalog_mapping_confirm_report', $report);
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log(
+                'schema.phase35b_catalog_mapping_confirm',
+                'producto_proveedor',
+                0,
+                [
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 35b: catálogo Mamut con SKU mapeado → por confirmar',
+                    'new_value' => $report,
+                ]
+            );
         }
     }
 }

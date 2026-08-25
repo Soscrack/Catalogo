@@ -40,6 +40,11 @@ class Riverso_Supplier_Links_Module {
         add_action('wp_ajax_riverso_domain_search_barcode', array($this, 'ajax_domain_search_barcode'));
         add_action('wp_ajax_riverso_domain_update_mapping', array($this, 'ajax_domain_update_mapping'));
         add_action('wp_ajax_riverso_domain_get_audit', array($this, 'ajax_domain_get_audit'));
+        add_action('wp_ajax_riverso_codes_search_by_supplier', array($this, 'ajax_search_codes_by_supplier'));
+        add_action('wp_ajax_riverso_codes_get', array($this, 'ajax_get_code'));
+        add_action('wp_ajax_riverso_codes_update', array($this, 'ajax_update_code'));
+        add_action('wp_ajax_riverso_codes_confirm', array($this, 'ajax_confirm_code'));
+        add_action('wp_ajax_riverso_codes_reject', array($this, 'ajax_reject_code'));
     }
     
     /**
@@ -1045,5 +1050,759 @@ class Riverso_Supplier_Links_Module {
             'unlinked_codes' => (int) $wpdb->get_var("SELECT COUNT(*) FROM {$this->table_links} WHERE product_id IS NULL AND is_active = 1"),
             'suppliers_with_links' => (int) $wpdb->get_var("SELECT COUNT(DISTINCT supplier_id) FROM {$this->table_links} WHERE is_active = 1")
         );
+    }
+
+    // ========================================
+    // BÚSQUEDA DE CÓDIGOS POR PROVEEDOR
+    // ========================================
+
+    /**
+     * Normaliza un código para comparar entre tablas que lo guardan con
+     * distinta puntuación (guiones, espacios, barras).
+     */
+    private function code_match_key($code) {
+        $key = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string) $code));
+        return $key !== '' ? $key : strtoupper(trim((string) $code));
+    }
+
+    /**
+     * Autoridad de cada tabla para decidir el estado de un código cuando
+     * aparece en varias. producto_proveedor manda sobre las demás; sin esto,
+     * una fila legacy obsoleta marcaría como ocupado un código ya liberado.
+     */
+    private function code_source_authority($source) {
+        $ranking = array(
+            'factura_items' => 0,
+            'codigos_legacy' => 1,
+            'supplier_product_links' => 2,
+            'producto_proveedor' => 3,
+        );
+        return $ranking[$source] ?? 0;
+    }
+
+    /**
+     * Acumula un candidato en el bucket de resultados, fusionando duplicados
+     * que provienen de tablas distintas.
+     */
+    private function collect_code_candidate(array &$bucket, array $candidate) {
+        $code = trim((string) ($candidate['codigo_proveedor'] ?? ''));
+        if ($code === '') {
+            return;
+        }
+
+        $key = $this->code_match_key($code);
+        $candidate['codigo_proveedor'] = $code;
+        $candidate['producto_base_id'] = absint($candidate['producto_base_id'] ?? 0);
+        $candidate['pp_id'] = absint($candidate['pp_id'] ?? 0);
+        $candidate['canonical_sku'] = trim((string) ($candidate['canonical_sku'] ?? ''));
+        $candidate['nombre_canonico'] = trim((string) ($candidate['nombre_canonico'] ?? ''));
+        $candidate['descripcion'] = trim((string) ($candidate['descripcion'] ?? ''));
+        $candidate['linked'] = ($candidate['producto_base_id'] > 0 || $candidate['canonical_sku'] !== '');
+
+        if (!isset($bucket[$key])) {
+            $bucket[$key] = $candidate;
+            return;
+        }
+
+        $existing = $bucket[$key];
+        $existing_rank = $this->code_source_authority($existing['source'] ?? '');
+        $candidate_rank = $this->code_source_authority($candidate['source'] ?? '');
+
+        // Gana la fuente más autorizada; a igualdad, gana el que sí está
+        // vinculado para que el aviso llegue al usuario.
+        $takes_over = $candidate_rank > $existing_rank
+            || ($candidate_rank === $existing_rank && $candidate['linked'] && !$existing['linked']);
+
+        if ($takes_over) {
+            if ($candidate['descripcion'] === '') {
+                $candidate['descripcion'] = $existing['descripcion'];
+            }
+            if (!$candidate['pp_id']) {
+                $candidate['pp_id'] = $existing['pp_id'];
+            }
+            $bucket[$key] = $candidate;
+            return;
+        }
+
+        if ($existing['descripcion'] === '' && $candidate['descripcion'] !== '') {
+            $bucket[$key]['descripcion'] = $candidate['descripcion'];
+        }
+        if (!$existing['pp_id'] && $candidate['pp_id']) {
+            $bucket[$key]['pp_id'] = $candidate['pp_id'];
+        }
+    }
+
+    /**
+     * Busca códigos de un proveedor concreto, marcando cuáles ya están
+     * vinculados a un SKU local.
+     *
+     * Consulta producto_proveedor (fuente de verdad), supplier_product_links y
+     * codigos (legacy, sólo lectura) y añade los códigos vistos en items de
+     * factura que aún no tienen par creado.
+     *
+     * @return array|WP_Error
+     */
+    public function search_codes_by_supplier($supplier_id, $query = '', $limit = 25) {
+        global $wpdb;
+
+        $supplier_id = absint($supplier_id);
+        if (!$supplier_id) {
+            return new WP_Error('missing_supplier', 'Debes seleccionar un proveedor primero');
+        }
+
+        $prefix = $wpdb->prefix . 'riverso_';
+        $limit = min(100, max(5, intval($limit)));
+        $query = trim((string) $query);
+        $has_query = $query !== '';
+        $like = '%' . $wpdb->esc_like($query) . '%';
+        $sql_limit = $limit * 2;
+
+        $bucket = array();
+
+        // 1) producto_proveedor: modelo canónico.
+        $where = array('pp.proveedor_id = %d', 'pp.activo = 1');
+        $params = array($supplier_id);
+        if ($has_query) {
+            $where[] = '(pp.codigo_proveedor LIKE %s OR pp.nombre_proveedor LIKE %s)';
+            $params[] = $like;
+            $params[] = $like;
+        }
+        $params[] = $sql_limit;
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT pp.id AS pp_id, pp.codigo_proveedor, pp.nombre_proveedor,
+                    pp.producto_base_id, pb.canonical_sku, pb.nombre_canonico
+             FROM {$prefix}producto_proveedor pp
+             LEFT JOIN {$prefix}producto_base pb
+                    ON pb.id = pp.producto_base_id AND pb.deleted_at IS NULL
+             WHERE " . implode(' AND ', $where) . "
+             ORDER BY (pp.producto_base_id IS NULL) DESC, pp.codigo_proveedor ASC
+             LIMIT %d",
+            $params
+        ), ARRAY_A);
+        foreach ($rows as $row) {
+            $this->collect_code_candidate($bucket, array(
+                'codigo_proveedor' => $row['codigo_proveedor'],
+                'descripcion' => $row['nombre_proveedor'],
+                'pp_id' => $row['pp_id'],
+                'producto_base_id' => $row['producto_base_id'],
+                'canonical_sku' => $row['canonical_sku'],
+                'nombre_canonico' => $row['nombre_canonico'],
+                'source' => 'producto_proveedor',
+            ));
+        }
+
+        // 2) supplier_product_links: puente hacia WooCommerce.
+        $where = array('l.supplier_id = %d', 'l.is_active = 1', "l.supplier_code IS NOT NULL", "l.supplier_code <> ''");
+        $params = array($supplier_id);
+        if ($has_query) {
+            $where[] = '(l.supplier_code LIKE %s OR l.supplier_description LIKE %s)';
+            $params[] = $like;
+            $params[] = $like;
+        }
+        $params[] = $sql_limit;
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT l.supplier_code, l.supplier_description, l.internal_sku,
+                    l.product_base_id, pb.canonical_sku, pb.nombre_canonico
+             FROM {$this->table_links} l
+             LEFT JOIN {$prefix}producto_base pb
+                    ON pb.id = l.product_base_id AND pb.deleted_at IS NULL
+             WHERE " . implode(' AND ', $where) . "
+             ORDER BY (l.product_base_id IS NULL) DESC, l.supplier_code ASC
+             LIMIT %d",
+            $params
+        ), ARRAY_A);
+        foreach ($rows as $row) {
+            $this->collect_code_candidate($bucket, array(
+                'codigo_proveedor' => $row['supplier_code'],
+                'descripcion' => $row['supplier_description'],
+                'producto_base_id' => $row['product_base_id'],
+                'canonical_sku' => $row['canonical_sku'] ?: $row['internal_sku'],
+                'nombre_canonico' => $row['nombre_canonico'],
+                'source' => 'supplier_product_links',
+            ));
+        }
+
+        // 3) codigos: tabla legacy, sólo lectura de compatibilidad.
+        $where = array('c.proveedor_id = %d', 'c.activo = 1');
+        $params = array($supplier_id);
+        if ($has_query) {
+            $where[] = '(c.codigo_proveedor LIKE %s OR c.sku_local LIKE %s)';
+            $params[] = $like;
+            $params[] = $like;
+        }
+        $params[] = $sql_limit;
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT c.codigo_proveedor, c.sku_local, c.product_base_id,
+                    pb.canonical_sku, pb.nombre_canonico
+             FROM {$this->table_codes} c
+             LEFT JOIN {$prefix}producto_base pb
+                    ON pb.id = c.product_base_id AND pb.deleted_at IS NULL
+             WHERE " . implode(' AND ', $where) . "
+             ORDER BY (c.sku_local IS NULL) DESC, c.codigo_proveedor ASC
+             LIMIT %d",
+            $params
+        ), ARRAY_A);
+        foreach ($rows as $row) {
+            $this->collect_code_candidate($bucket, array(
+                'codigo_proveedor' => $row['codigo_proveedor'],
+                'producto_base_id' => $row['product_base_id'],
+                'canonical_sku' => $row['canonical_sku'] ?: $row['sku_local'],
+                'nombre_canonico' => $row['nombre_canonico'],
+                'source' => 'codigos_legacy',
+            ));
+        }
+
+        // 4) factura_items: códigos vistos en documentos sin par creado todavía.
+        $where = array(
+            'f.proveedor_id = %d',
+            'fi.codigo_proveedor IS NOT NULL',
+            "fi.codigo_proveedor <> ''",
+        );
+        $params = array($supplier_id);
+        if ($has_query) {
+            $where[] = '(fi.codigo_proveedor LIKE %s OR fi.descripcion LIKE %s)';
+            $params[] = $like;
+            $params[] = $like;
+        }
+        $params[] = $sql_limit;
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT fi.codigo_proveedor,
+                    MAX(fi.descripcion) AS descripcion,
+                    COUNT(*) AS occurrences
+             FROM {$prefix}factura_items fi
+             INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
+             WHERE " . implode(' AND ', $where) . "
+             GROUP BY fi.codigo_proveedor
+             ORDER BY occurrences DESC
+             LIMIT %d",
+            $params
+        ), ARRAY_A);
+        foreach ($rows as $row) {
+            $this->collect_code_candidate($bucket, array(
+                'codigo_proveedor' => $row['codigo_proveedor'],
+                'descripcion' => $row['descripcion'],
+                'occurrences' => (int) $row['occurrences'],
+                'source' => 'factura_items',
+            ));
+        }
+
+        $results = array_values($bucket);
+
+        // Los disponibles primero: son los únicos seleccionables en la UI.
+        usort($results, function ($a, $b) {
+            if ($a['linked'] !== $b['linked']) {
+                return $a['linked'] ? 1 : -1;
+            }
+            return strcmp($a['codigo_proveedor'], $b['codigo_proveedor']);
+        });
+
+        $available = 0;
+        $linked = 0;
+        foreach ($results as $row) {
+            if ($row['linked']) {
+                $linked++;
+            } else {
+                $available++;
+            }
+        }
+
+        // Un match exacto significa que el usuario no puede crear ese código
+        // como nuevo: la UI usa esto para ofrecer o no el ingreso manual.
+        $exact_match = null;
+        if ($has_query) {
+            $query_key = $this->code_match_key($query);
+            foreach ($results as $row) {
+                if ($this->code_match_key($row['codigo_proveedor']) === $query_key) {
+                    $exact_match = $row;
+                    break;
+                }
+            }
+        }
+
+        return array(
+            'results' => array_slice($results, 0, $limit),
+            'total' => count($results),
+            'available' => $available,
+            'linked' => $linked,
+            'exact_match' => $exact_match,
+            'can_create' => $has_query && $exact_match === null,
+        );
+    }
+
+    public function ajax_search_codes_by_supplier() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_view_products') && !current_user_can('riverso_manage_codes')) {
+            wp_send_json_error(array('message' => 'Sin permisos'), 403);
+        }
+
+        $result = $this->search_codes_by_supplier(
+            $_POST['supplier_id'] ?? 0,
+            sanitize_text_field($_POST['query'] ?? ''),
+            $_POST['limit'] ?? 25
+        );
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(array('message' => $result->get_error_message()));
+        }
+
+        wp_send_json_success($result);
+    }
+
+    // ========================================
+    // EDICIÓN DE UN PAR PROVEEDOR-CÓDIGO
+    // ========================================
+
+    /**
+     * Detalle de un par proveedor+código del modelo canónico.
+     *
+     * @return array|WP_Error
+     */
+    public function get_code_detail($pp_id) {
+        global $wpdb;
+
+        $pp_id = absint($pp_id);
+        if (!$pp_id) {
+            return new WP_Error('missing_id', 'Identificador requerido');
+        }
+
+        $prefix = $wpdb->prefix . 'riverso_';
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT pp.id, pp.codigo_proveedor, pp.codigo_barras_proveedor, pp.nombre_proveedor,
+                    pp.proveedor_id, pp.producto_base_id, pp.notas, pp.activo,
+                    pp.factor_conversion, pp.unidad_compra, pp.created_at, pp.updated_at,
+                    pp.origen_datos, pp.catalogo_id, pp.review_status, pp.requires_human_review,
+                    pp.match_estado, pp.match_origen, pp.matched_at,
+                    prov.nombre AS proveedor_nombre, prov.rut AS proveedor_rut,
+                    cat.nombre AS catalogo_nombre,
+                    pb.canonical_sku, pb.nombre_canonico
+             FROM {$prefix}producto_proveedor pp
+             LEFT JOIN {$prefix}proveedores prov ON prov.id = pp.proveedor_id
+             LEFT JOIN {$prefix}catalogos cat ON cat.id = pp.catalogo_id
+             LEFT JOIN {$prefix}producto_base pb ON pb.id = pp.producto_base_id AND pb.deleted_at IS NULL
+             WHERE pp.id = %d",
+            $pp_id
+        ), ARRAY_A);
+
+        if (!$row) {
+            return new WP_Error('not_found', 'Código no encontrado');
+        }
+
+        $row['linked'] = absint($row['producto_base_id']) > 0;
+        $row['fecha_ingreso'] = $row['created_at'] ?? null;
+        $row['origen_label'] = function_exists('riverso_pp_origen_label')
+            ? riverso_pp_origen_label($row)
+            : ($row['origen_datos'] ?? '');
+        $row['needs_confirm'] = function_exists('riverso_pp_needs_human_confirm')
+            ? riverso_pp_needs_human_confirm($row)
+            : false;
+
+        $open_task = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, titulo, estado, tipo FROM {$prefix}tareas
+             WHERE tipo = 'confirmar_codigo_proveedor'
+               AND estado IN ('pendiente','asignado','en_progreso')
+               AND (
+                    (referencia_tipo = 'producto_proveedor' AND referencia_id = %d)
+                 OR datos_extra LIKE %s
+               )
+             ORDER BY id DESC LIMIT 1",
+            $pp_id,
+            '%"pp_id":' . $pp_id . '%'
+        ), ARRAY_A);
+        $row['has_open_task'] = !empty($open_task);
+        $row['open_task'] = $open_task ?: null;
+
+        return $row;
+    }
+
+    /**
+     * Actualiza un par proveedor+código: descripción, notas, estado, proveedor
+     * y vínculo con el SKU local.
+     *
+     * @return array|WP_Error
+     */
+    public function update_code($pp_id, array $data, $audit_reason = '') {
+        global $wpdb;
+
+        $existing = $this->get_code_detail($pp_id);
+        if (is_wp_error($existing)) {
+            return $existing;
+        }
+
+        $prefix = $wpdb->prefix . 'riverso_';
+        $pp_id = absint($pp_id);
+        $update = array();
+        $formats = array();
+        $human_edit = false;
+
+        if (array_key_exists('codigo_proveedor', $data)) {
+            $codigo = trim(sanitize_text_field($data['codigo_proveedor']));
+            if ($codigo === '') {
+                return new WP_Error('invalid_code', 'El código de proveedor no puede quedar vacío');
+            }
+            $update['codigo_proveedor'] = $codigo;
+            $formats[] = '%s';
+            $human_edit = true;
+        }
+
+        if (array_key_exists('proveedor_id', $data)) {
+            $proveedor_id = absint($data['proveedor_id']);
+            if (!$proveedor_id) {
+                return new WP_Error('invalid_supplier', 'Proveedor requerido');
+            }
+            $exists = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}proveedores WHERE id = %d",
+                $proveedor_id
+            ));
+            if (!$exists) {
+                return new WP_Error('invalid_supplier', 'El proveedor indicado no existe');
+            }
+            $update['proveedor_id'] = $proveedor_id;
+            $formats[] = '%d';
+            $human_edit = true;
+        }
+
+        // La tabla tiene UNIQUE (proveedor_id, codigo_proveedor): validar antes
+        // de escribir para devolver un mensaje útil en vez de un error de BD.
+        $target_supplier = $update['proveedor_id'] ?? absint($existing['proveedor_id']);
+        $target_code = $update['codigo_proveedor'] ?? $existing['codigo_proveedor'];
+        if (isset($update['proveedor_id']) || isset($update['codigo_proveedor'])) {
+            $clash = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}producto_proveedor
+                 WHERE proveedor_id = %d AND codigo_proveedor = %s AND id <> %d
+                 LIMIT 1",
+                $target_supplier,
+                $target_code,
+                $pp_id
+            ));
+            if ($clash) {
+                return new WP_Error(
+                    'duplicate',
+                    'Ya existe otro registro con ese código para el proveedor seleccionado'
+                );
+            }
+        }
+
+        if (array_key_exists('nombre_proveedor', $data)) {
+            $update['nombre_proveedor'] = sanitize_text_field($data['nombre_proveedor']);
+            $formats[] = '%s';
+            $human_edit = true;
+        }
+
+        if (array_key_exists('notas', $data)) {
+            $update['notas'] = sanitize_textarea_field($data['notas']);
+            $formats[] = '%s';
+        }
+
+        if (array_key_exists('activo', $data)) {
+            $update['activo'] = !empty($data['activo']) ? 1 : 0;
+            $formats[] = '%d';
+            $human_edit = true;
+        }
+
+        if (array_key_exists('producto_base_id', $data)) {
+            $base_id = absint($data['producto_base_id']);
+            if ($base_id) {
+                $base_exists = $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM {$prefix}producto_base WHERE id = %d AND deleted_at IS NULL",
+                    $base_id
+                ));
+                if (!$base_exists) {
+                    return new WP_Error('invalid_product', 'El SKU local indicado no existe');
+                }
+                $update['producto_base_id'] = $base_id;
+                $formats[] = '%d';
+            } else {
+                $update['producto_base_id'] = null;
+                $formats[] = '%s';
+            }
+            $human_edit = true;
+        }
+
+        if (empty($update)) {
+            return new WP_Error('no_changes', 'No hay cambios para guardar');
+        }
+
+        // Edición manual = revisión humana del vínculo.
+        if ($human_edit) {
+            $now = current_time('mysql');
+            $has_base = array_key_exists('producto_base_id', $update)
+                ? !empty($update['producto_base_id'])
+                : absint($existing['producto_base_id']) > 0;
+            if ($has_base && (!isset($update['activo']) || !empty($update['activo']))) {
+                $update['match_estado'] = 'VERIFIED';
+                $formats[] = '%s';
+                $update['match_origen'] = 'human';
+                $formats[] = '%s';
+                $update['matched_at'] = $now;
+                $formats[] = '%s';
+                $update['requires_human_review'] = 0;
+                $formats[] = '%d';
+                $update['review_status'] = 'aprobado';
+                $formats[] = '%s';
+            }
+        }
+
+        $result = $wpdb->update(
+            "{$prefix}producto_proveedor",
+            $update,
+            array('id' => $pp_id),
+            $formats,
+            array('%d')
+        );
+
+        if ($result === false) {
+            return new WP_Error('db_error', 'No se pudo guardar el código');
+        }
+
+        if ($human_edit) {
+            $this->close_codigo_proveedor_review_tasks($pp_id);
+        }
+
+        $this->audit_log(
+            'product_updated',
+            'producto_proveedor',
+            $pp_id,
+            $existing,
+            $update,
+            $audit_reason !== '' ? $audit_reason : 'Edición de código de proveedor'
+        );
+
+        return $this->get_code_detail($pp_id);
+    }
+
+    /**
+     * Confirma el vínculo legacy/auto-match de un código a SKU local.
+     *
+     * @return array|WP_Error
+     */
+    public function confirm_code($pp_id, $audit_reason = '') {
+        global $wpdb;
+        $existing = $this->get_code_detail($pp_id);
+        if (is_wp_error($existing)) {
+            return $existing;
+        }
+        if (empty($existing['producto_base_id'])) {
+            return new WP_Error('not_linked', 'El código no tiene SKU local para confirmar');
+        }
+
+        $now = current_time('mysql');
+        $update = [
+            'match_estado' => 'VERIFIED',
+            'match_origen' => 'human',
+            'matched_at' => $now,
+            'requires_human_review' => 0,
+            'review_status' => 'aprobado',
+            'activo' => 1,
+        ];
+        $ok = $wpdb->update(
+            $wpdb->prefix . 'riverso_producto_proveedor',
+            $update,
+            ['id' => absint($pp_id)],
+            ['%s', '%s', '%s', '%d', '%s', '%d'],
+            ['%d']
+        );
+        if ($ok === false) {
+            return new WP_Error('db_error', 'No se pudo confirmar el código');
+        }
+
+        $this->close_codigo_proveedor_review_tasks($pp_id);
+        $this->audit_log(
+            'product_updated',
+            'producto_proveedor',
+            absint($pp_id),
+            $existing,
+            $update,
+            $audit_reason !== '' ? $audit_reason : 'Confirmación humana de código proveedor'
+        );
+
+        return $this->get_code_detail($pp_id);
+    }
+
+    /**
+     * Rechaza el vínculo legacy: desactiva el código y cierra la task.
+     *
+     * @return array|WP_Error
+     */
+    public function reject_code($pp_id, $audit_reason = '') {
+        global $wpdb;
+        $existing = $this->get_code_detail($pp_id);
+        if (is_wp_error($existing)) {
+            return $existing;
+        }
+
+        $now = current_time('mysql');
+        $update = [
+            'activo' => 0,
+            'match_estado' => 'REJECTED',
+            'match_origen' => 'human',
+            'matched_at' => $now,
+            'requires_human_review' => 0,
+            'review_status' => 'rechazado',
+        ];
+        $ok = $wpdb->update(
+            $wpdb->prefix . 'riverso_producto_proveedor',
+            $update,
+            ['id' => absint($pp_id)],
+            ['%d', '%s', '%s', '%s', '%d', '%s'],
+            ['%d']
+        );
+        if ($ok === false) {
+            return new WP_Error('db_error', 'No se pudo rechazar el código');
+        }
+
+        $this->close_codigo_proveedor_review_tasks($pp_id);
+        $this->audit_log(
+            'product_updated',
+            'producto_proveedor',
+            absint($pp_id),
+            $existing,
+            $update,
+            $audit_reason !== '' ? $audit_reason : 'Rechazo humano de código proveedor'
+        );
+
+        return $this->get_code_detail($pp_id);
+    }
+
+    /**
+     * Crea tasks de confirmación para códigos pendientes del producto.
+     *
+     * @param int   $product_id
+     * @param array $proveedores
+     */
+    public function ensure_codigo_proveedor_review_tasks($product_id, $proveedores = []) {
+        $product_id = absint($product_id);
+        if (!$product_id || !class_exists('Riverso_Task_Module')) {
+            return;
+        }
+        $task_module = Riverso_Task_Module::get_instance();
+        foreach ($proveedores as $pp) {
+            if (!function_exists('riverso_pp_needs_human_confirm') || !riverso_pp_needs_human_confirm($pp)) {
+                continue;
+            }
+            $pp_id = absint($pp['id'] ?? 0);
+            if (!$pp_id) {
+                continue;
+            }
+            $codigo = (string) ($pp['codigo_proveedor'] ?? '');
+            $titulo = $codigo !== ''
+                ? "Confirmar código proveedor {$codigo}"
+                : "Confirmar código proveedor #{$pp_id}";
+            $task_module->create_review_task(
+                'confirmar_codigo_proveedor',
+                $titulo,
+                'producto_proveedor',
+                $pp_id,
+                [
+                    'prioridad' => 'normal',
+                    'datos_extra' => [
+                        'producto_base_id' => $product_id,
+                        'codigo_proveedor' => $codigo,
+                        'proveedor_id' => absint($pp['proveedor_id'] ?? 0),
+                    ],
+                ]
+            );
+        }
+    }
+
+    /**
+     * Completa tareas confirmar_codigo_proveedor ligadas a un PP.
+     */
+    public function close_codigo_proveedor_review_tasks($pp_id) {
+        global $wpdb;
+        $pp_id = absint($pp_id);
+        if (!$pp_id) {
+            return;
+        }
+        $prefix = $wpdb->prefix . 'riverso_';
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}tareas
+             SET estado = 'completada', updated_at = %s
+             WHERE tipo = 'confirmar_codigo_proveedor'
+               AND estado IN ('pendiente','asignado','en_progreso')
+               AND (
+                    (referencia_tipo = 'producto_proveedor' AND referencia_id = %d)
+                 OR datos_extra LIKE %s
+               )",
+            current_time('mysql'),
+            $pp_id,
+            '%"pp_id":' . $pp_id . '%'
+        ));
+    }
+
+    public function ajax_get_code() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_manage_codes')) {
+            wp_send_json_error(array('message' => 'Sin permisos'), 403);
+        }
+
+        $result = $this->get_code_detail($_POST['pp_id'] ?? 0);
+        if (is_wp_error($result)) {
+            wp_send_json_error(array('message' => $result->get_error_message()));
+        }
+
+        wp_send_json_success(array('code' => $result));
+    }
+
+    public function ajax_update_code() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_manage_codes')) {
+            wp_send_json_error(array('message' => 'Sin permisos'), 403);
+        }
+
+        $fields = array('codigo_proveedor', 'proveedor_id', 'nombre_proveedor', 'notas', 'activo', 'producto_base_id');
+        $data = array();
+        foreach ($fields as $field) {
+            if (array_key_exists($field, $_POST)) {
+                $data[$field] = $_POST[$field];
+            }
+        }
+
+        $result = $this->update_code(
+            $_POST['pp_id'] ?? 0,
+            $data,
+            sanitize_textarea_field($_POST['audit_reason'] ?? '')
+        );
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(array('message' => $result->get_error_message()));
+        }
+
+        wp_send_json_success(array(
+            'message' => 'Código actualizado',
+            'code' => $result,
+        ));
+    }
+
+    public function ajax_confirm_code() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_codes')) {
+            wp_send_json_error(array('message' => 'Sin permisos'), 403);
+        }
+        $result = $this->confirm_code(
+            $_POST['pp_id'] ?? 0,
+            sanitize_textarea_field($_POST['audit_reason'] ?? '')
+        );
+        if (is_wp_error($result)) {
+            wp_send_json_error(array('message' => $result->get_error_message()));
+        }
+        wp_send_json_success(array('message' => 'Código confirmado', 'code' => $result));
+    }
+
+    public function ajax_reject_code() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_codes')) {
+            wp_send_json_error(array('message' => 'Sin permisos'), 403);
+        }
+        $result = $this->reject_code(
+            $_POST['pp_id'] ?? 0,
+            sanitize_textarea_field($_POST['audit_reason'] ?? '')
+        );
+        if (is_wp_error($result)) {
+            wp_send_json_error(array('message' => $result->get_error_message()));
+        }
+        wp_send_json_success(array('message' => 'Código rechazado', 'code' => $result));
     }
 }

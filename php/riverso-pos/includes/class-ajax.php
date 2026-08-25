@@ -30,12 +30,24 @@ class Riverso_POS_Ajax {
     /**
      * Verifica nonce y permisos
      */
+    /**
+     * @param string|array $capability Capability requerida, o lista de la que
+     *                                 basta cumplir una.
+     */
     private function verify_request($capability, $nonce_action = 'riverso_pos_nonce') {
         if (!check_ajax_referer($nonce_action, 'nonce', false)) {
             wp_send_json_error(['message' => 'Nonce inválido'], 403);
         }
-        
-        if (!current_user_can($capability)) {
+
+        $allowed = false;
+        foreach ((array) $capability as $cap) {
+            if (current_user_can($cap)) {
+                $allowed = true;
+                break;
+            }
+        }
+
+        if (!$allowed) {
             wp_send_json_error(['message' => 'Sin permisos'], 403);
         }
     }
@@ -476,16 +488,37 @@ class Riverso_POS_Ajax {
      * Obtiene estadísticas de códigos
      */
     public function get_codes_stats() {
-        $this->verify_request('riverso_view_invoices');
+        $this->verify_request(['riverso_manage_codes', 'riverso_view_invoices']);
         
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         
         wp_send_json_success([
-            'total' => $wpdb->get_var("SELECT COUNT(*) FROM {$prefix}codigos"),
-            'pending' => $wpdb->get_var("SELECT COUNT(*) FROM {$prefix}factura_items WHERE estado = 'pendiente'"),
-            'linked' => $wpdb->get_var("SELECT COUNT(*) FROM {$prefix}codigos WHERE activo = 1"),
-            'providers' => $wpdb->get_var("SELECT COUNT(*) FROM {$prefix}proveedores WHERE activo = 1"),
+            'total' => (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM {$prefix}producto_proveedor WHERE activo = 1"
+            ),
+            'pending' => (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM {$prefix}factura_items WHERE estado = 'pendiente'"
+            ),
+            'por_confirmar' => (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM {$prefix}producto_proveedor pp
+                 INNER JOIN {$prefix}producto_base pb
+                   ON pb.id = pp.producto_base_id AND pb.deleted_at IS NULL
+                 WHERE pp.activo = 1
+                   AND pp.producto_base_id IS NOT NULL
+                   AND COALESCE(pp.match_estado, '') <> 'VERIFIED'
+                   AND pp.requires_human_review = 1
+                   AND COALESCE(pp.review_status, '') = 'pendiente'
+                   AND pb.canonical_sku IS NOT NULL
+                   AND pb.canonical_sku <> ''"
+            ),
+            'linked' => (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM {$prefix}producto_proveedor
+                 WHERE activo = 1 AND producto_base_id IS NOT NULL"
+            ),
+            'providers' => (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM {$prefix}proveedores WHERE activo = 1"
+            ),
         ]);
     }
 
@@ -493,23 +526,65 @@ class Riverso_POS_Ajax {
      * Obtiene códigos pendientes de vincular
      */
     public function get_pending_codes() {
-        $this->verify_request('riverso_view_invoices');
+        $this->verify_request(['riverso_manage_codes', 'riverso_view_invoices']);
         
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         
-        $items = $wpdb->get_results(
-            "SELECT fi.*, f.folio, p.nombre as proveedor_nombre
-             FROM {$prefix}factura_items fi
-             JOIN {$prefix}facturas f ON fi.factura_id = f.id
-             JOIN {$prefix}proveedores p ON f.proveedor_id = p.id
-             WHERE fi.estado = 'pendiente' AND fi.codigo_proveedor IS NOT NULL AND fi.codigo_proveedor != ''
-             ORDER BY f.created_at DESC
-             LIMIT 100",
-            ARRAY_A
-        );
+        $page = max(1, absint($_POST['page'] ?? 1));
+        $per_page = min(200, max(10, absint($_POST['per_page'] ?? 50)));
+        $offset = ($page - 1) * $per_page;
         
-        wp_send_json_success(['items' => $items]);
+        $where = [
+            "fi.estado = 'pendiente'",
+            'fi.codigo_proveedor IS NOT NULL',
+            "fi.codigo_proveedor != ''",
+        ];
+        $params = [];
+        
+        if (!empty($_POST['proveedor_id'])) {
+            $where[] = 'f.proveedor_id = %d';
+            $params[] = intval($_POST['proveedor_id']);
+        }
+        
+        if (!empty($_POST['search'])) {
+            $search = '%' . $wpdb->esc_like(sanitize_text_field($_POST['search'])) . '%';
+            $where[] = "(fi.codigo_proveedor LIKE %s
+                         OR fi.descripcion LIKE %s
+                         OR CAST(f.folio AS CHAR) LIKE %s
+                         OR p.nombre LIKE %s
+                         OR EXISTS (
+                             SELECT 1 FROM {$prefix}proveedor_apodos a
+                             WHERE a.proveedor_id = p.id AND a.apodo LIKE %s
+                         ))";
+            array_push($params, $search, $search, $search, $search, $search);
+        }
+        
+        $from = "FROM {$prefix}factura_items fi
+                 JOIN {$prefix}facturas f ON fi.factura_id = f.id
+                 JOIN {$prefix}proveedores p ON f.proveedor_id = p.id
+                 WHERE " . implode(' AND ', $where);
+        
+        $count_sql = "SELECT COUNT(*) {$from}";
+        $total = (int) ($params
+            ? $wpdb->get_var($wpdb->prepare($count_sql, ...$params))
+            : $wpdb->get_var($count_sql));
+        
+        $sql = "SELECT fi.*, f.folio, p.nombre as proveedor_nombre
+                {$from}
+                ORDER BY f.created_at DESC
+                LIMIT %d OFFSET %d";
+        
+        $page_params = array_merge($params, [$per_page, $offset]);
+        $items = $wpdb->get_results($wpdb->prepare($sql, ...$page_params), ARRAY_A);
+        
+        wp_send_json_success([
+            'items' => $items ?: [],
+            'total' => $total,
+            'page' => $page,
+            'per_page' => $per_page,
+            'total_pages' => $per_page > 0 ? (int) ceil($total / $per_page) : 1,
+        ]);
     }
 
     /**
@@ -521,50 +596,155 @@ class Riverso_POS_Ajax {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         
+        $page = max(1, absint($_POST['page'] ?? 1));
+        $per_page = min(200, max(10, absint($_POST['per_page'] ?? 50)));
+        $offset = ($page - 1) * $per_page;
+        
         $where = ['1=1'];
         $params = [];
         
         if (!empty($_POST['proveedor_id'])) {
-            $where[] = 'c.proveedor_id = %d';
+            $where[] = 'pp.proveedor_id = %d';
             $params[] = intval($_POST['proveedor_id']);
         }
         
         if (!empty($_POST['search'])) {
-            $where[] = '(c.codigo_proveedor LIKE %s OR c.sku_local LIKE %s)';
-            $search = '%' . $wpdb->esc_like($_POST['search']) . '%';
-            $params[] = $search;
-            $params[] = $search;
+            $search = '%' . $wpdb->esc_like(sanitize_text_field($_POST['search'])) . '%';
+            $where[] = "(pp.codigo_proveedor LIKE %s
+                         OR pp.nombre_proveedor LIKE %s
+                         OR pb.canonical_sku LIKE %s
+                         OR pb.nombre_canonico LIKE %s
+                         OR prov.nombre LIKE %s
+                         OR EXISTS (
+                             SELECT 1 FROM {$prefix}proveedor_apodos a
+                             WHERE a.proveedor_id = prov.id AND a.apodo LIKE %s
+                         ))";
+            array_push($params, $search, $search, $search, $search, $search, $search);
         }
         
-        $sql = "SELECT c.*, p.nombre as proveedor_nombre
-                FROM {$prefix}codigos c
-                JOIN {$prefix}proveedores p ON c.proveedor_id = p.id
-                WHERE " . implode(' AND ', $where) . "
-                ORDER BY c.created_at DESC
-                LIMIT 200";
+        $estado = sanitize_key($_POST['estado'] ?? '');
+        if ($estado === 'vinculado') {
+            $where[] = 'pp.producto_base_id IS NOT NULL';
+        } elseif ($estado === 'pendiente') {
+            $where[] = 'pp.producto_base_id IS NULL';
+        } elseif ($estado === 'por_confirmar') {
+            $where[] = "pp.producto_base_id IS NOT NULL
+                        AND pp.activo = 1
+                        AND COALESCE(pp.match_estado, '') <> 'VERIFIED'
+                        AND pp.requires_human_review = 1
+                        AND COALESCE(pp.review_status, '') = 'pendiente'
+                        AND pb.canonical_sku IS NOT NULL
+                        AND pb.canonical_sku <> ''";
+        }
+
+        $origen = sanitize_key($_POST['origen'] ?? '');
+        if ($origen !== '') {
+            if ($origen === 'catalogo') {
+                $where[] = "(pp.origen_datos IN ('catalogo','computer','mamut_import') OR pp.catalogo_id IS NOT NULL)";
+            } elseif ($origen === 'legacy') {
+                $where[] = "pp.origen_datos IN ('legacy','riverso_codigos')";
+            } elseif ($origen === 'factura') {
+                $where[] = "pp.origen_datos IN ('factura','factura_intake')";
+            } else {
+                $where[] = 'pp.origen_datos = %s';
+                $params[] = $origen;
+            }
+        }
         
-        $codes = $params ? $wpdb->get_results($wpdb->prepare($sql, ...$params), ARRAY_A) : $wpdb->get_results($sql, ARRAY_A);
+        // LEFT JOIN en proveedores y producto_base: un código sin proveedor
+        // asignado o sin SKU local sigue siendo un código que hay que ver.
+        $from = "FROM {$prefix}producto_proveedor pp
+                 LEFT JOIN {$prefix}proveedores prov ON prov.id = pp.proveedor_id
+                 LEFT JOIN {$prefix}producto_base pb
+                        ON pb.id = pp.producto_base_id AND pb.deleted_at IS NULL
+                 LEFT JOIN {$prefix}catalogos cat ON cat.id = pp.catalogo_id
+                 WHERE " . implode(' AND ', $where);
         
-        wp_send_json_success(['codes' => $codes]);
+        $count_sql = "SELECT COUNT(*) {$from}";
+        $total = (int) ($params
+            ? $wpdb->get_var($wpdb->prepare($count_sql, ...$params))
+            : $wpdb->get_var($count_sql));
+        
+        $sql = "SELECT pp.id, pp.codigo_proveedor, pp.nombre_proveedor AS descripcion_proveedor,
+                       pp.proveedor_id, pp.producto_base_id, pp.activo, pp.created_at,
+                       pp.origen_datos, pp.catalogo_id, pp.review_status, pp.requires_human_review,
+                       pp.match_estado, pp.match_origen,
+                       prov.nombre AS proveedor_nombre,
+                       cat.nombre AS catalogo_nombre,
+                       pb.canonical_sku AS sku_local, pb.nombre_canonico
+                {$from}
+                ORDER BY pp.created_at DESC
+                LIMIT %d OFFSET %d";
+        
+        $page_params = array_merge($params, [$per_page, $offset]);
+        $codes = $wpdb->get_results($wpdb->prepare($sql, ...$page_params), ARRAY_A);
+
+        foreach ($codes as &$code) {
+            $code['fecha_ingreso'] = $code['created_at'] ?? null;
+            $code['origen_label'] = function_exists('riverso_pp_origen_label')
+                ? riverso_pp_origen_label($code)
+                : ($code['origen_datos'] ?? '');
+            $code['needs_confirm'] = function_exists('riverso_pp_needs_human_confirm')
+                ? riverso_pp_needs_human_confirm($code)
+                : false;
+        }
+        unset($code);
+        
+        wp_send_json_success([
+            'codes' => $codes,
+            'total' => $total,
+            'page' => $page,
+            'per_page' => $per_page,
+            'total_pages' => $per_page > 0 ? (int) ceil($total / $per_page) : 1,
+        ]);
     }
 
     /**
      * Obtiene proveedores
      */
     public function get_providers() {
-        $this->verify_request('riverso_view_invoices');
+        $this->verify_request(['riverso_manage_codes', 'riverso_view_invoices']);
         
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         
-        $providers = $wpdb->get_results(
-            "SELECT p.*, (SELECT COUNT(*) FROM {$prefix}codigos WHERE proveedor_id = p.id) as codigos_count
-             FROM {$prefix}proveedores p
-             ORDER BY p.nombre",
-            ARRAY_A
-        );
+        $where = ['1=1'];
+        $params = [];
         
-        wp_send_json_success(['providers' => $providers]);
+        if (!empty($_POST['search'])) {
+            $search = '%' . $wpdb->esc_like(sanitize_text_field($_POST['search'])) . '%';
+            $where[] = "(p.nombre LIKE %s OR p.rut LIKE %s OR EXISTS (
+                SELECT 1 FROM {$prefix}proveedor_apodos a
+                WHERE a.proveedor_id = p.id AND a.apodo LIKE %s
+            ))";
+            array_push($params, $search, $search, $search);
+        }
+        
+        $where_sql = implode(' AND ', $where);
+        $sql = "SELECT p.*,
+                       (SELECT COUNT(*) FROM {$prefix}producto_proveedor
+                        WHERE proveedor_id = p.id AND activo = 1) as codigos_count,
+                       (SELECT GROUP_CONCAT(a.apodo ORDER BY a.apodo SEPARATOR '||')
+                        FROM {$prefix}proveedor_apodos a
+                        WHERE a.proveedor_id = p.id) as apodos_raw
+                FROM {$prefix}proveedores p
+                WHERE {$where_sql}
+                ORDER BY p.nombre";
+        
+        $providers = $params
+            ? $wpdb->get_results($wpdb->prepare($sql, ...$params), ARRAY_A)
+            : $wpdb->get_results($sql, ARRAY_A);
+        
+        foreach ($providers as &$provider) {
+            $raw = $provider['apodos_raw'] ?? '';
+            $provider['apodos'] = $raw !== '' && $raw !== null
+                ? array_values(array_filter(explode('||', $raw)))
+                : [];
+            unset($provider['apodos_raw']);
+        }
+        unset($provider);
+        
+        wp_send_json_success(['providers' => $providers ?: []]);
     }
 
     /**

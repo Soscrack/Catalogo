@@ -1,0 +1,420 @@
+{
+  "base": "https://apifacto.com/v1",
+  "steps": [
+    {
+      "step": "auth",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "step": "post_legacy",
+      "status": 201,
+      "sku": "RIVERSO-POC-88B199BE",
+      "response": {
+        "product_id": "5845",
+        "name": "Riverso PoC API Test",
+        "invoicing_details": "",
+        "additional_details": "poc riverso",
+        "model": "POC",
+        "brand": "RIVERSO",
+        "status": "1",
+        "sku": "RIVERSO-POC-88B199BE",
+        "measure_unit": "UN",
+        "type": "1",
+        "embedded_quantity_barcode": null,
+        "embedded_quantity_barcode_decimals": null,
+        "additional_data_1": "",
+        "additional_data_2": "",
+        "additional_data_3": "",
+        "favorite": null,
+        "product_category_id": null,
+        "cost": {
+          "currency_id": "39",
+          "value": "1000.000000"
+        },
+        "price": null,
+        "inventories": {
+          "details": [
+            {
+              "product_location_id": "1",
+              "available_quantity": "5.000000",
+              "reserved_quantity": null
+            }
+          ],
+          "total_available": 0,
+          "total_reserved": 0
+        },
+        "_links": {
+          "self": {
+            "href": "https://apifacto.com/v1/products"
+          }
+        }
+      }
+    },
+    {
+      "step": "put_name_sku",
+      "status": 200,
+      "response": {
+        "name": "Riverso PoC UPDATED name only",
+        "sku": "RIVERSO-POC-88B199BE-A",
+        "_links": {
+          "self": {
+            "href": "https://apifacto.com/v1/products/5845"
+          }
+        }
+      }
+    },
+    {
+      "step": "put_full",
+      "status": 200,
+      "response": {
+        "name": "Riverso PoC FULL UPDATE",
+        "invoicing_details": "invoice detail updated",
+        "additional_details": "additional updated",
+        "model": "POC-FULL",
+        "brand": "RIVERSO-FULL",
+        "status": 1,
+        "sku": "RIVERSO-POC-88B199BE-B",
+        "barcode": "7809999000999",
+        "measure_unit": "UN",
+        "type": 1,
+        "favorite": 1,
+        "product_category_id": 0,
+        "cost": {
+          "currency_id": 39,
+          "value": 2500
+        },
+        "price": [
+          {
+            "price_list_id": 1,
+            "unit_net": 4201.680672,
+            "unit_tax": 798.319328,
+            "unit_total": 5000,
+            "currency_id": 39,
+            "sales_commission_percentage": 0,
+            "taxes": [
+              {
+                "tax_type_id": "387",
+                "tax_percentage": 19,
+                "tax_amount": 798.319328
+              }
+            ]
+          }
+        ],
+        "inventories": {
+          "total_available": 99,
+          "total_reserved": 0,
+          "details": [
+            {
+              "product_location_id": "1",
+              "available_quantity": 99,
+              "reserved_quantity": 0
+            }
+          ]
+        },
+        "_links": {
+          "self": {
+            "href": "https://apifacto.com/v1/products/5845"
+          }
+        }
+      }
+    }
+  ],
+  "catalogs": {
+    "product_categories": {
+      "status": 200,
+      "count": 25,
+      "sample": [
+        {
+          "account_id": 423,
+          "product_category_id": 3,
+          "name": "CINTAS",
+          "parent_product_category_id": 18
+        },
+        {
+          "account_id": 423,
+          "product_category_id": 4,
+          "name": "Artículos de cocina ",
+          "parent_product_category_id": 3
+        },
+        {
+          "account_id": 423,
+          "product_category_id": 5,
+          "name": "ropa mujer",
+          "parent_product_category_id": 4
+        }
+      ]
+    },
+    "product_locations": {
+      "status": 200,
+      "count": 25,
+      "sample": [
+        {
+          "account_id": 423,
+          "product_location_id": 1,
+          "name": "Bodega general",
+          "status": 1,
+          "company_branch_id": 1
+        },
+        {
+          "account_id": 423,
+          "product_location_id": 2,
+          "name": "Otros productos",
+          "status": 0,
+          "company_branch_id": 1
+        },
+        {
+          "account_id": 423,
+          "product_location_id": 3,
+          "name": "bodega",
+          "status": 0,
+          "company_branch_id": 1
+        }
+      ]
+    },
+    "product_price_lists": {
+      "status": 200,
+      "count": 11,
+      "sample": [
+        {
+          "account_id": 423,
+          "product_price_list_id": 1,
+          "name": "Precios base"
+        },
+        {
+          "account_id": 423,
+          "product_price_list_id": 23,
+          "name": "MAYORISTAS"
+        },
+        {
+          "account_id": 423,
+          "product_price_list_id": 24,
+          "name": "PROMOCION"
+        }
+      ]
+    },
+    "company_branches": {
+      "status": 200,
+      "count": 3,
+      "sample": [
+        {
+          "company_branch_id": 1,
+          "is_headquarters": 1,
+          "branch_type": 1,
+          "name": "Casa Matriz",
+          "address": null,
+          "district": null,
+          "city": null,
+          "phone": null,
+          "company_branch_tax_code": null,
+          "company_branch_internal_code": null,
+          "parent_company_branch_id": null
+        },
+        {
+          "company_branch_id": 89,
+          "is_headquarters": 0,
+          "branch_type": 2,
+          "name": "TEST",
+          "address": "",
+          "district": "",
+          "city": "",
+          "phone": "",
+          "company_branch_tax_code": "",
+          "company_branch_internal_code": "TEST",
+          "parent_company_branch_id": 1
+        },
+        {
+          "company_branch_id": 90,
+          "is_headquarters": 0,
+          "branch_type": 1,
+          "name": "test",
+          "address": "test",
+          "district": "Talagante",
+          "city": "test",
+          "phone": "test",
+          "company_branch_tax_code": "55555",
+          "company_branch_internal_code": "test",
+          "parent_company_branch_id": null
+        }
+      ]
+    }
+  },
+  "product_id": "5845",
+  "sku": "RIVERSO-POC-88B199BE",
+  "before_put": {
+    "product_id": "5845",
+    "name": "Riverso PoC API Test",
+    "invoicing_details": "",
+    "additional_details": "poc riverso",
+    "model": "POC",
+    "brand": "RIVERSO",
+    "status": "1",
+    "sku": "RIVERSO-POC-88B199BE",
+    "measure_unit": "UN",
+    "type": "1",
+    "embedded_quantity_barcode": null,
+    "embedded_quantity_barcode_decimals": null,
+    "additional_data_1": "",
+    "additional_data_2": "",
+    "additional_data_3": "",
+    "favorite": null,
+    "product_category_id": null,
+    "cost": {
+      "currency_id": "39",
+      "value": "1000.000000"
+    },
+    "price": null,
+    "inventories": {
+      "details": [
+        {
+          "product_location_id": "1",
+          "available_quantity": "5.000000",
+          "reserved_quantity": null
+        }
+      ],
+      "total_available": 0,
+      "total_reserved": 0
+    },
+    "_links": {
+      "self": {
+        "href": "https://apifacto.com/v1/products/5845"
+      }
+    }
+  },
+  "after_put_a": {
+    "product_id": "5845",
+    "name": "Riverso PoC UPDATED name only",
+    "invoicing_details": "",
+    "additional_details": "poc riverso",
+    "model": "POC",
+    "brand": "RIVERSO",
+    "status": "1",
+    "sku": "RIVERSO-POC-88B199BE",
+    "measure_unit": "UN",
+    "type": "1",
+    "embedded_quantity_barcode": null,
+    "embedded_quantity_barcode_decimals": null,
+    "additional_data_1": "",
+    "additional_data_2": "",
+    "additional_data_3": "",
+    "favorite": null,
+    "product_category_id": null,
+    "cost": {
+      "currency_id": "39",
+      "value": "1000.000000"
+    },
+    "price": null,
+    "inventories": {
+      "details": [
+        {
+          "product_location_id": "1",
+          "available_quantity": "5.000000",
+          "reserved_quantity": null
+        }
+      ],
+      "total_available": 0,
+      "total_reserved": 0
+    },
+    "_links": {
+      "self": {
+        "href": "https://apifacto.com/v1/products/5845"
+      }
+    }
+  },
+  "after_put_b": {
+    "product_id": "5845",
+    "name": "Riverso PoC FULL UPDATE",
+    "invoicing_details": "invoice detail updated",
+    "additional_details": "additional updated",
+    "model": "POC-FULL",
+    "brand": "RIVERSO-FULL",
+    "status": "1",
+    "sku": "RIVERSO-POC-88B199BE",
+    "measure_unit": "UN",
+    "type": "1",
+    "embedded_quantity_barcode": null,
+    "embedded_quantity_barcode_decimals": null,
+    "additional_data_1": "",
+    "additional_data_2": "",
+    "additional_data_3": "",
+    "favorite": null,
+    "product_category_id": null,
+    "cost": {
+      "currency_id": "39",
+      "value": "1000.000000"
+    },
+    "price": null,
+    "inventories": {
+      "details": [
+        {
+          "product_location_id": "1",
+          "available_quantity": "5.000000",
+          "reserved_quantity": null
+        }
+      ],
+      "total_available": 0,
+      "total_reserved": 0
+    },
+    "_links": {
+      "self": {
+        "href": "https://apifacto.com/v1/products/5845"
+      }
+    }
+  },
+  "diff_summary": {
+    "after_a": {
+      "product_id": "5845",
+      "name": "Riverso PoC UPDATED name only",
+      "sku": "RIVERSO-POC-88B199BE",
+      "brand": "RIVERSO",
+      "model": "POC",
+      "status": "1",
+      "measure_unit": "UN",
+      "additional_details": "poc riverso",
+      "invoicing_details": "",
+      "cost": {
+        "currency_id": "39",
+        "value": "1000.000000"
+      },
+      "price": null,
+      "inventories": {
+        "details": [
+          {
+            "product_location_id": "1",
+            "available_quantity": "5.000000",
+            "reserved_quantity": null
+          }
+        ],
+        "total_available": 0,
+        "total_reserved": 0
+      }
+    },
+    "after_b": {
+      "product_id": "5845",
+      "name": "Riverso PoC FULL UPDATE",
+      "sku": "RIVERSO-POC-88B199BE",
+      "brand": "RIVERSO-FULL",
+      "model": "POC-FULL",
+      "status": "1",
+      "measure_unit": "UN",
+      "additional_details": "additional updated",
+      "invoicing_details": "invoice detail updated",
+      "cost": {
+        "currency_id": "39",
+        "value": "1000.000000"
+      },
+      "price": null,
+      "inventories": {
+        "details": [
+          {
+            "product_location_id": "1",
+            "available_quantity": "5.000000",
+            "reserved_quantity": null
+          }
+        ],
+        "total_available": 0,
+        "total_reserved": 0
+      }
+    }
+  }
+}

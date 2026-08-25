@@ -137,26 +137,62 @@ class Riverso_Mamut_Import_Module {
     /**
      * Obtiene (o crea) el proveedor MAMUT.
      */
+    /**
+     * Obtiene (o resuelve) el proveedor del catálogo Mamut = Tecbolt SA.
+     * Ya no crea un proveedor "MAMUT"; usa Tecbolt o el dueño del catálogo mamut.
+     */
     public function get_or_create_supplier() {
         global $wpdb;
         $table = $wpdb->prefix . 'riverso_proveedores';
+        $prefix = $wpdb->prefix . 'riverso_';
 
-        $id = $wpdb->get_var($wpdb->prepare(
+        // 1) Dueño actual del catálogo mamut
+        $from_catalog = (int) $wpdb->get_var(
+            "SELECT proveedor_id FROM {$prefix}catalogos
+             WHERE alias = 'mamut' OR (nombre LIKE '%Mamut%' AND version = '2025')
+             ORDER BY id ASC LIMIT 1"
+        );
+        if ($from_catalog > 0) {
+            return $from_catalog;
+        }
+
+        // 2) Tecbolt por nombre/apodo
+        $tecbolt = (int) $wpdb->get_var(
+            "SELECT p.id FROM {$table} p
+             LEFT JOIN {$prefix}proveedor_apodos a ON a.proveedor_id = p.id
+             WHERE p.nombre LIKE '%Tecbolt%'
+                OR a.apodo LIKE '%Mamut%'
+                OR a.apodo LIKE '%MAMUT%'
+             ORDER BY p.id ASC LIMIT 1"
+        );
+        if ($tecbolt > 0) {
+            return $tecbolt;
+        }
+
+        // 3) Legacy: aún existe fila MAMUT
+        $mamut = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT id FROM {$table} WHERE rut = %s OR nombre = %s LIMIT 1",
             self::SUPPLIER_RUT,
             self::SUPPLIER_NAME
         ));
-        if ($id) {
-            return intval($id);
+        if ($mamut > 0) {
+            return $mamut;
         }
 
+        // 4) Último recurso: crear Tecbolt SA (nunca MAMUT)
         $wpdb->insert($table, [
-            'rut' => self::SUPPLIER_RUT,
-            'nombre' => self::SUPPLIER_NAME,
+            'rut' => '76.000.000-0',
+            'nombre' => 'Tecbolt SA',
             'activo' => 1,
         ], ['%s', '%s', '%d']);
-
-        return (int) $wpdb->insert_id;
+        $id = (int) $wpdb->insert_id;
+        if ($id > 0) {
+            $wpdb->insert("{$prefix}proveedor_apodos", [
+                'proveedor_id' => $id,
+                'apodo' => 'Mamut',
+            ], ['%d', '%s']);
+        }
+        return $id;
     }
 
     /**
@@ -298,7 +334,7 @@ class Riverso_Mamut_Import_Module {
             'proveedor_id' => $supplier_id,
             'codigo_proveedor' => $sku,
             'nombre_proveedor' => $nombre,
-            'origen_datos' => 'computer',
+            'origen_datos' => 'catalogo',
             'activo' => 1,
             'created_by_system' => 1,
             'requires_human_review' => 1,
@@ -313,8 +349,32 @@ class Riverso_Mamut_Import_Module {
         }
 
         $wpdb->insert("{$prefix}producto_proveedor", $insert_data, $insert_formats);
+        $pp_id = (int) $wpdb->insert_id;
 
-        return (int) $wpdb->insert_id;
+        // Si el base ya tiene SKU local (match legacy/mapping), dejar por confirmar.
+        if ($pp_id > 0 && $base_id > 0) {
+            $has_local = $wpdb->get_var($wpdb->prepare(
+                "SELECT canonical_sku FROM {$prefix}producto_base
+                 WHERE id = %d AND canonical_sku IS NOT NULL AND canonical_sku <> ''",
+                $base_id
+            ));
+            if ($has_local && class_exists('Riverso_Supplier_Links_Module')) {
+                Riverso_Supplier_Links_Module::get_instance()->ensure_codigo_proveedor_review_tasks(
+                    $base_id,
+                    [[
+                        'id' => $pp_id,
+                        'codigo_proveedor' => $sku,
+                        'proveedor_id' => $supplier_id,
+                        'producto_base_id' => $base_id,
+                        'match_estado' => 'UNMATCHED',
+                        'requires_human_review' => 1,
+                        'review_status' => 'pendiente',
+                    ]]
+                );
+            }
+        }
+
+        return $pp_id;
     }
 
     /**

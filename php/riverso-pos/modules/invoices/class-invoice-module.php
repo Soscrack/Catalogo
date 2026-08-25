@@ -61,6 +61,7 @@ class Riverso_Invoice_Module {
         add_action('wp_ajax_riverso_approve_invoice', [$this, 'ajax_approve_invoice']);
         add_action('wp_ajax_riverso_search_invoice', [$this, 'ajax_search_invoice']);
         add_action('wp_ajax_riverso_get_reception_stats', [$this, 'ajax_get_reception_stats']);
+        add_action('wp_ajax_riverso_invoices_tab_counts', [$this, 'ajax_tab_counts']);
         add_action('wp_ajax_riverso_link_shipping_invoice', [$this, 'ajax_link_shipping_invoice']);
         add_action('wp_ajax_riverso_assign_shipping_invoice', [$this, 'ajax_assign_shipping_invoice']);
         add_action('wp_ajax_riverso_unassign_shipping_invoice', [$this, 'ajax_unassign_shipping_invoice']);
@@ -79,6 +80,7 @@ class Riverso_Invoice_Module {
         add_action('wp_ajax_riverso_download_payment_comprobante', [$this, 'ajax_download_payment_comprobante']);
         add_action('wp_ajax_riverso_search_invoice_folios', [$this, 'ajax_search_invoice_folios']);
         add_action('wp_ajax_riverso_link_credit_note_origin', [$this, 'ajax_link_credit_note_origin']);
+        add_action('wp_ajax_riverso_invoice_adjuntos', [$this, 'ajax_invoice_adjuntos']);
     }
 
     /**
@@ -488,8 +490,9 @@ class Riverso_Invoice_Module {
                     ? ($documento_subtipo === 'guia_despacho' ? 'solo_costos' : $modo_ingreso)
                     : 'solo_costos',
                 'tipo_confirmado' => !empty($options['tipo_confirmado']) ? 1 : 0,
+                'origen_ingreso'  => sanitize_text_field($options['origen_ingreso'] ?? 'xml'),
             ],
-            ['%d', '%s', '%d', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%d', '%s', '%d', '%s', '%s', '%d', '%f', '%s', '%d']
+            ['%d', '%s', '%d', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%d', '%s', '%d', '%s', '%s', '%d', '%f', '%s', '%d', '%s']
         );
 
         if (!$result) {
@@ -679,6 +682,487 @@ class Riverso_Invoice_Module {
         }
 
         return $factura_id;
+    }
+
+    /**
+     * Une un XML a una factura existente (p. ej. creada por escaneo).
+     * El XML manda en cabecera; ítems solo si no hay recepción.
+     * Excepción: XML rescatado del SII (sin detalle) — el escaneo manda en ítems.
+     *
+     * @return array|WP_Error {factura_id, merged, items_updated, warning?, scans_linked}
+     */
+    public function merge_xml_into_factura($factura_id, array $factura_data, array $options = []) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $factura_id = (int) $factura_id;
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}facturas WHERE id = %d",
+            $factura_id
+        ), ARRAY_A);
+        if (!$row) {
+            return new WP_Error('not_found', 'Factura no encontrada');
+        }
+
+        $this->intake()->classify_factura_items($factura_data);
+        if (empty($factura_data['items'][0]['costo_neto_final'] ?? null)) {
+            $this->intake()->enrich_factura_items_costs($factura_data);
+        }
+
+        $force_subtipo = sanitize_text_field($options['documento_subtipo'] ?? '');
+        $modo_ingreso = sanitize_text_field($options['modo_ingreso'] ?? ($row['modo_ingreso'] ?? 'solo_costos'));
+        if (!in_array($modo_ingreso, ['recepcion', 'solo_costos'], true)) {
+            $modo_ingreso = 'solo_costos';
+        }
+
+        $is_credit_note = $this->credit_notes()->is_credit_note($factura_data['tipo_dte'] ?? 0);
+        $is_guia = ((int) ($factura_data['tipo_dte'] ?? 0) === 52) || $force_subtipo === 'guia_despacho';
+
+        if ($is_credit_note) {
+            $documento_subtipo = 'nota_credito';
+            $modo_ingreso = 'solo_costos';
+        } elseif ($is_guia) {
+            $documento_subtipo = 'guia_despacho';
+            $modo_ingreso = 'solo_costos';
+        } elseif ($force_subtipo && in_array($force_subtipo, ['productos', 'envio', 'gastos', 'guia_despacho', 'nota_credito'], true)) {
+            $documento_subtipo = $force_subtipo;
+        } else {
+            $documento_subtipo = $row['documento_subtipo'] ?: 'productos';
+        }
+        if ($documento_subtipo === 'gastos') {
+            $this->intake()->force_expense_items($factura_data);
+            $modo_ingreso = 'solo_costos';
+        }
+
+        $proveedor_id = $this->resolve_proveedor_for_upload($factura_data['emisor'], $options);
+        if (is_wp_error($proveedor_id)) {
+            return $proveedor_id;
+        }
+
+        $rut_emisor = sanitize_text_field($factura_data['emisor']['rut'] ?? '');
+        $folio = (string) $factura_data['folio'];
+        $tasa_iva = (float) ($factura_data['totales']['tasa_iva'] ?? 19);
+        $impuestos_json = !empty($factura_data['totales']['impuestos_adicionales'])
+            ? wp_json_encode($factura_data['totales']['impuestos_adicionales'])
+            : null;
+        $costo_envio_inline = (float) ($factura_data['costo_envio_inline'] ?? 0);
+
+        $wpdb->update("{$prefix}facturas", [
+            'tipo_dte'            => (int) $factura_data['tipo_dte'],
+            'folio'               => $folio,
+            'proveedor_id'        => $proveedor_id,
+            'rut_emisor'          => $rut_emisor,
+            'razon_social_emisor' => sanitize_text_field($factura_data['emisor']['razon_social'] ?? ''),
+            'fecha_emision'       => $factura_data['fecha_emision'],
+            'monto_neto'          => $factura_data['totales']['neto'],
+            'monto_iva'           => $factura_data['totales']['iva'],
+            'monto_total'         => $factura_data['totales']['total'],
+            'tasa_iva'            => $tasa_iva,
+            'impuestos_adicionales' => $impuestos_json,
+            'documento_subtipo'   => $documento_subtipo,
+            'costo_envio_total'   => $documento_subtipo === 'envio'
+                ? (float) ($row['costo_envio_total'] ?? 0)
+                : $costo_envio_inline,
+            'tipo_confirmado'     => !empty($options['tipo_confirmado']) ? 1 : (int) ($row['tipo_confirmado'] ?? 0),
+        ], ['id' => $factura_id]);
+
+        riverso_factura_mark_xml_attached($factura_id);
+
+        $items_updated = false;
+        $warning = null;
+        $xml_is_sii_stub = function_exists('riverso_factura_data_is_sii_rescued_stub')
+            && riverso_factura_data_is_sii_rescued_stub($factura_data);
+        $origen_prev = sanitize_text_field($row['origen_ingreso'] ?? 'xml');
+        $scan_is_truth = $xml_is_sii_stub && (
+            in_array($origen_prev, ['escaneo', 'ambos'], true)
+            || !(function_exists('riverso_factura_db_is_sii_rescued_stub')
+                && riverso_factura_db_is_sii_rescued_stub($factura_id))
+        );
+
+        $can_replace = $this->factura_safe_to_replace_items($factura_id, $row);
+        if ($can_replace && $scan_is_truth) {
+            $can_replace = false;
+            $warning = 'XML rescatado del SII (sin detalle): se mantiene el detalle del escaneo.';
+        }
+
+        if ($can_replace) {
+            $this->replace_factura_items_from_data(
+                $factura_id,
+                $proveedor_id,
+                $factura_data['items'] ?? [],
+                $documento_subtipo,
+                $tasa_iva,
+                $modo_ingreso
+            );
+            $items_updated = true;
+        } elseif ($warning === null) {
+            $warning = 'XML unido, pero no se actualizaron ítems porque la factura ya tiene recepción o no está en solo costos.';
+        }
+
+        $link = function_exists('riverso_link_scans_to_factura')
+            ? riverso_link_scans_to_factura($factura_id, $factura_data['tipo_dte'], $folio, $rut_emisor)
+            : ['linked' => 0, 'doc_ids' => []];
+
+        if (class_exists('Riverso_Audit_Module')) {
+            Riverso_Audit_Module::get_instance()->log(
+                'invoice_xml_merged',
+                'invoice',
+                $factura_id,
+                null,
+                [
+                    'folio'          => $folio,
+                    'items_updated'  => $items_updated,
+                    'scans_linked'   => $link['linked'] ?? 0,
+                    'origen_prev'    => $row['origen_ingreso'] ?? '',
+                    'sii_stub_xml'   => $xml_is_sii_stub,
+                    'scan_is_truth'  => $scan_is_truth,
+                ],
+                sprintf('XML unido a factura folio %s', $folio)
+            );
+        }
+
+        // Si el XML es stub SII y hay escaneos con detalle, aplicar el escaneo como verdad de ítems
+        if ($xml_is_sii_stub && !empty($link['doc_ids'])) {
+            $applied = $this->try_apply_linked_scan_detail($factura_id, $link['doc_ids'], $options);
+            if (!empty($applied['items_updated'])) {
+                $items_updated = true;
+                $warning = $applied['message'] ?? 'Detalle tomado del escaneo (XML SII sin líneas).';
+            }
+        }
+
+        return [
+            'factura_id'     => $factura_id,
+            'merged'         => true,
+            'items_updated'  => $items_updated,
+            'warning'        => $warning,
+            'scans_linked'   => (int) ($link['linked'] ?? 0),
+            'sii_stub_xml'   => $xml_is_sii_stub,
+            'scan_is_truth'  => $scan_is_truth,
+            'folio'          => $folio,
+            'proveedor'      => $factura_data['emisor']['razon_social'] ?? ($row['razon_social_emisor'] ?? ''),
+            'total'          => $factura_data['totales']['total'] ?? $row['monto_total'],
+            'documento_tipo' => $documento_subtipo,
+        ];
+    }
+
+    /**
+     * Une un escaneo con detalle a una factura cuyo XML es stub SII (sin líneas).
+     *
+     * @return array|WP_Error
+     */
+    public function merge_scan_into_factura($factura_id, array $factura_data, array $options = []) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $factura_id = (int) $factura_id;
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}facturas WHERE id = %d",
+            $factura_id
+        ), ARRAY_A);
+        if (!$row) {
+            return new WP_Error('not_found', 'Factura no encontrada');
+        }
+
+        if (!function_exists('riverso_factura_db_is_sii_rescued_stub')
+            || !riverso_factura_db_is_sii_rescued_stub($factura_id)) {
+            return new WP_Error(
+                'not_sii_stub',
+                'La factura ya tiene detalle; el escaneo solo se adjunta como respaldo.'
+            );
+        }
+
+        if (!$this->factura_safe_to_replace_items($factura_id, $row)) {
+            return new WP_Error(
+                'unsafe_replace',
+                'No se puede reemplazar el detalle: la factura tiene recepción o no está en solo costos.'
+            );
+        }
+
+        $this->intake()->classify_factura_items($factura_data);
+        if (empty($factura_data['items'][0]['costo_neto_final'] ?? null)) {
+            $this->intake()->enrich_factura_items_costs($factura_data);
+        }
+
+        $documento_subtipo = sanitize_text_field(
+            $options['documento_subtipo'] ?? ($row['documento_subtipo'] ?: 'productos')
+        );
+        $modo_ingreso = sanitize_text_field(
+            $options['modo_ingreso'] ?? ($row['modo_ingreso'] ?? 'solo_costos')
+        );
+        if (!in_array($modo_ingreso, ['recepcion', 'solo_costos'], true)) {
+            $modo_ingreso = 'solo_costos';
+        }
+        $tasa_iva = (float) ($factura_data['totales']['tasa_iva'] ?? ($row['tasa_iva'] ?? 19));
+        $proveedor_id = (int) ($row['proveedor_id'] ?? 0);
+        if ($proveedor_id <= 0) {
+            $proveedor_id = $this->resolve_proveedor_for_upload($factura_data['emisor'] ?? [], $options);
+            if (is_wp_error($proveedor_id)) {
+                return $proveedor_id;
+            }
+        }
+
+        $this->replace_factura_items_from_data(
+            $factura_id,
+            $proveedor_id,
+            $factura_data['items'] ?? [],
+            $documento_subtipo,
+            $tasa_iva,
+            $modo_ingreso
+        );
+
+        // Cabecera fiscal del XML se conserva; solo se refrescan montos si el escaneo trae totales útiles
+        $totales = $factura_data['totales'] ?? [];
+        $update = [];
+        if (!empty($totales['neto']) || !empty($totales['total'])) {
+            if (isset($totales['neto'])) {
+                $update['monto_neto'] = (float) $totales['neto'];
+            }
+            if (isset($totales['iva'])) {
+                $update['monto_iva'] = (float) $totales['iva'];
+            }
+            if (isset($totales['total'])) {
+                $update['monto_total'] = (float) $totales['total'];
+            }
+        }
+        if ($update) {
+            $wpdb->update("{$prefix}facturas", $update, ['id' => $factura_id]);
+        }
+
+        riverso_factura_mark_scan_attached($factura_id);
+
+        if (class_exists('Riverso_Audit_Module')) {
+            Riverso_Audit_Module::get_instance()->log(
+                'invoice_scan_merged_over_sii_stub',
+                'invoice',
+                $factura_id,
+                null,
+                [
+                    'folio'         => $row['folio'] ?? '',
+                    'items_count'   => count($factura_data['items'] ?? []),
+                    'origen_prev'   => $row['origen_ingreso'] ?? '',
+                ],
+                sprintf('Detalle de escaneo aplicado sobre XML SII stub folio %s', $row['folio'] ?? '')
+            );
+        }
+
+        return [
+            'factura_id'    => $factura_id,
+            'merged'        => true,
+            'items_updated' => true,
+            'message'       => 'Detalle del escaneo aplicado (XML SII sin líneas de detalle).',
+        ];
+    }
+
+    /**
+     * Si hay documentos escaneados vinculados con JSON normalizado, aplica su detalle.
+     */
+    private function try_apply_linked_scan_detail($factura_id, array $doc_ids, array $options = []) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        if (!function_exists('riverso_factura_db_is_sii_rescued_stub')
+            || !riverso_factura_db_is_sii_rescued_stub($factura_id)) {
+            return ['items_updated' => false];
+        }
+
+        foreach ($doc_ids as $doc_id) {
+            $doc = $wpdb->get_row($wpdb->prepare(
+                "SELECT datos_json FROM {$prefix}documentos_escaneados WHERE id = %d",
+                (int) $doc_id
+            ), ARRAY_A);
+            if (!$doc) {
+                continue;
+            }
+            $payload = json_decode($doc['datos_json'] ?? '{}', true) ?: [];
+            $factura = $payload['normalized'] ?? null;
+            if (!$factura || empty($factura['items']) || !is_array($factura['items'])) {
+                continue;
+            }
+            if (function_exists('riverso_factura_data_is_sii_rescued_stub')
+                && riverso_factura_data_is_sii_rescued_stub($factura)) {
+                continue;
+            }
+            $merge = $this->merge_scan_into_factura($factura_id, $factura, $options);
+            if (!is_wp_error($merge) && !empty($merge['items_updated'])) {
+                return $merge;
+            }
+        }
+        return ['items_updated' => false];
+    }
+
+    /**
+     * Reemplaza ítems de una factura (borra + inserta + after_invoice_saved).
+     */
+    private function replace_factura_items_from_data(
+        $factura_id,
+        $proveedor_id,
+        array $items,
+        $documento_subtipo,
+        $tasa_iva,
+        $modo_ingreso
+    ) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $item_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT id FROM {$prefix}factura_items WHERE factura_id = %d",
+            $factura_id
+        ));
+        if ($item_ids) {
+            $in = implode(',', array_map('intval', $item_ids));
+            $wpdb->query(
+                "DELETE FROM {$prefix}tareas
+                 WHERE referencia_tipo = 'factura_item' AND referencia_id IN ({$in})"
+            );
+        }
+        $wpdb->delete("{$prefix}cost_history", [
+            'source_type' => 'invoice',
+            'source_document_id' => $factura_id,
+        ], ['%s', '%d']);
+        $wpdb->delete("{$prefix}factura_items", ['factura_id' => $factura_id], ['%d']);
+
+        $this->insert_factura_items_rows(
+            $factura_id,
+            $proveedor_id,
+            $items,
+            $documento_subtipo,
+            $tasa_iva
+        );
+
+        $wpdb->update("{$prefix}facturas", [
+            'items_total'  => count($items),
+            'modo_ingreso' => in_array($documento_subtipo, ['productos', 'guia_despacho'], true)
+                ? ($documento_subtipo === 'guia_despacho' ? 'solo_costos' : $modo_ingreso)
+                : 'solo_costos',
+        ], ['id' => $factura_id]);
+
+        if (in_array($documento_subtipo, ['productos', 'guia_despacho'], true)) {
+            $this->intake()->after_invoice_saved(
+                $factura_id,
+                $proveedor_id,
+                $items,
+                $documento_subtipo === 'guia_despacho' ? 'solo_costos' : $modo_ingreso
+            );
+        }
+        $this->update_invoice_status($factura_id);
+    }
+
+    /**
+     * ¿Se pueden reemplazar ítems con datos del XML sin romper recepción?
+     */
+    private function factura_safe_to_replace_items($factura_id, array $row) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $estado = $row['estado'] ?? '';
+        if (!in_array($estado, ['recibido', 'sin_vincular'], true)) {
+            return false;
+        }
+        if (($row['modo_ingreso'] ?? '') !== 'solo_costos') {
+            return false;
+        }
+        $received = (float) $wpdb->get_var($wpdb->prepare(
+            "SELECT COALESCE(SUM(cantidad_recibida), 0) FROM {$prefix}factura_items WHERE factura_id = %d",
+            (int) $factura_id
+        ));
+        return $received <= 0;
+    }
+
+    /**
+     * Inserta filas de factura_items (misma lógica que save_invoice).
+     */
+    private function insert_factura_items_rows($factura_id, $proveedor_id, array $items, $documento_subtipo, $tasa_iva) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        foreach ($items as $item) {
+            $item_tipo = $item['item_tipo'] ?? 'producto';
+            if ($documento_subtipo === 'gastos') {
+                $item_tipo = 'gasto';
+            }
+            $codigo_proveedor = '';
+            $codigo_tipo = 'INT1';
+            foreach (($item['codigos'] ?? []) as $codigo) {
+                if (!empty($codigo['valor'])) {
+                    $codigo_proveedor = $codigo['valor'];
+                    $codigo_tipo = $codigo['tipo'] ?? 'INT1';
+                    break;
+                }
+            }
+
+            $codigo_local = null;
+            $product_id = null;
+            if ($item_tipo === 'producto' && $codigo_proveedor) {
+                $mapping = $this->intake()->lookup_product_mapping(
+                    $proveedor_id,
+                    $codigo_proveedor,
+                    $item['codigos'] ?? []
+                );
+                $codigo_local = riverso_usable_local_sku($mapping['sku_local'] ?? null, $codigo_proveedor);
+                if ($codigo_local) {
+                    $conflict = $this->intake()->get_sku_assignment_conflict(
+                        $codigo_local,
+                        $proveedor_id,
+                        $codigo_proveedor
+                    );
+                    if ($conflict && ($conflict['code'] ?? '') === 'sku_owned_elsewhere') {
+                        $codigo_local = null;
+                    }
+                }
+                if ($codigo_local) {
+                    $product_id = $mapping['product_id']
+                        ?? $this->intake()->resolve_product_id_for_local_sku($codigo_local, $codigo_proveedor);
+                }
+            }
+
+            $item_nombre = trim($item['nombre'] ?? '') ?: trim($item['descripcion'] ?? '') ?: 'Sin descripción';
+            $labels = $this->intake()->normalize_item_labels($item_nombre, $item['descripcion'] ?? '');
+            $item_nombre = $labels['nombre'];
+            $item_descripcion = $labels['descripcion'];
+
+            if ($item_tipo === 'envio') {
+                $item_estado = 'envio';
+            } elseif ($item_tipo === 'gasto') {
+                $item_estado = 'gasto';
+            } else {
+                $item_estado = $codigo_local ? 'vinculado' : 'pendiente';
+            }
+
+            $costs = $this->intake()->compute_item_cost_breakdown($item, $tasa_iva);
+            $landed_unit = $item_tipo === 'producto'
+                ? ($costs['costo_unitario_neto_final'] ?? $item['precio'])
+                : null;
+
+            $wpdb->insert(
+                "{$prefix}factura_items",
+                [
+                    'factura_id' => $factura_id,
+                    'numero_linea' => $item['numero'] ?? 1,
+                    'codigo_proveedor' => $codigo_proveedor,
+                    'codigo_tipo' => $codigo_tipo,
+                    'nombre' => $item_nombre,
+                    'descripcion' => $item_descripcion,
+                    'cantidad' => $item['cantidad'] ?? 0,
+                    'unidad' => $item['unidad'] ?? '',
+                    'precio_unitario' => $item['precio'] ?? 0,
+                    'descuento_porcentaje' => $costs['descuento_porcentaje'],
+                    'descuento_monto' => $costs['descuento_monto'],
+                    'recargo_porcentaje' => $costs['recargo_porcentaje'],
+                    'recargo_monto' => $costs['recargo_monto'],
+                    'cod_imp_adic' => $item['cod_imp_adic'] ?? null,
+                    'impuesto_especifico_tasa' => $costs['impuesto_especifico_tasa'],
+                    'impuesto_especifico_monto' => $costs['impuesto_especifico_monto'],
+                    'costo_neto_base' => $costs['costo_neto_base'],
+                    'costo_bruto_base' => $costs['costo_bruto_base'],
+                    'costo_neto_final' => $costs['costo_neto_final'],
+                    'costo_bruto_final' => $costs['costo_bruto_final'],
+                    'monto_total' => $item['monto'] ?? 0,
+                    'product_id' => $product_id,
+                    'sku_local' => $codigo_local,
+                    'estado' => $item_estado,
+                    'item_tipo' => $item_tipo,
+                    'costo_landed_unitario' => $landed_unit,
+                ]
+            );
+        }
     }
 
     /**
@@ -1075,10 +1559,86 @@ class Riverso_Invoice_Module {
             wp_send_json_error(['message' => $factura->get_error_message()]);
         }
 
+        $save_options['origen_ingreso'] = 'xml';
+
+        // Si ya existe factura (p. ej. creada por escaneo), unir XML en vez de error duplicado
+        $existing_row = function_exists('riverso_find_factura_by_dte')
+            ? riverso_find_factura_by_dte(
+                $factura['tipo_dte'] ?? 0,
+                $factura['folio'] ?? '',
+                $factura['emisor']['rut'] ?? ''
+            )
+            : null;
+
+        if ($existing_row) {
+            $merge = $this->merge_xml_into_factura((int) $existing_row['id'], $factura, $save_options);
+            if (is_wp_error($merge)) {
+                $data = $merge->get_error_data();
+                if (!empty($data['needs_input'])) {
+                    wp_send_json_error([
+                        'message' => $merge->get_error_message(),
+                        'needs_input' => true,
+                        'gaps' => $data['gaps'] ?? [],
+                    ]);
+                }
+                wp_send_json_error(['message' => $merge->get_error_message()]);
+            }
+
+            $msg = sprintf(
+                'XML unido a factura de escaneo #%s',
+                $merge['folio'] ?? ($existing_row['folio'] ?? $existing_row['id'])
+            );
+            if (!empty($merge['warning'])) {
+                $msg .= ' — ' . $merge['warning'];
+            } elseif (!empty($merge['items_updated'])) {
+                $msg .= ' — ítems y montos actualizados desde XML';
+            }
+
+            wp_send_json_success([
+                'message'      => $msg,
+                'factura_id'   => (int) $merge['factura_id'],
+                'merged'       => true,
+                'items_updated'=> !empty($merge['items_updated']),
+                'warning'      => $merge['warning'] ?? null,
+                'modo_ingreso' => $modo_ingreso,
+                'resumen'      => [
+                    'proveedor'      => $merge['proveedor'] ?? ($factura['emisor']['razon_social'] ?? ''),
+                    'folio'          => $merge['folio'] ?? $factura['folio'],
+                    'total'          => $merge['total'] ?? ($factura['totales']['total'] ?? 0),
+                    'documento_tipo' => $merge['documento_tipo'] ?? $documento_tipo,
+                    'items'          => count(array_filter($factura['items'] ?? [], function ($i) {
+                        return ($i['item_tipo'] ?? 'producto') !== 'envio';
+                    })),
+                    'items_envio'    => count(array_filter($factura['items'] ?? [], function ($i) {
+                        return ($i['item_tipo'] ?? '') === 'envio';
+                    })),
+                    'scans_linked'   => (int) ($merge['scans_linked'] ?? 0),
+                    'merged'         => true,
+                ],
+            ]);
+        }
+
         $factura_id = $this->save_invoice($factura, $save_options);
         if (is_wp_error($factura_id)) {
             $data = $factura_id->get_error_data();
             if ($factura_id->get_error_code() === 'duplicate' && isset($data['factura_id'])) {
+                // Carrera: alguien creó la factura entre find y save — intentar merge
+                $merge = $this->merge_xml_into_factura((int) $data['factura_id'], $factura, $save_options);
+                if (!is_wp_error($merge)) {
+                    wp_send_json_success([
+                        'message'    => sprintf('XML unido a factura existente #%s', $merge['folio'] ?? $data['factura_id']),
+                        'factura_id' => (int) $merge['factura_id'],
+                        'merged'     => true,
+                        'modo_ingreso' => $modo_ingreso,
+                        'resumen'    => [
+                            'proveedor' => $merge['proveedor'] ?? '',
+                            'folio'     => $merge['folio'] ?? '',
+                            'total'     => $merge['total'] ?? 0,
+                            'documento_tipo' => $merge['documento_tipo'] ?? $documento_tipo,
+                            'merged'    => true,
+                        ],
+                    ]);
+                }
                 wp_send_json_error([
                     'message' => 'Factura duplicada',
                     'factura_id' => $data['factura_id'],
@@ -1092,6 +1652,25 @@ class Riverso_Invoice_Module {
                 ]);
             }
             wp_send_json_error(['message' => $factura_id->get_error_message()]);
+        }
+
+        // Recoger escaneos pendientes del mismo folio
+        $scan_link = ['linked' => 0, 'doc_ids' => []];
+        if (function_exists('riverso_link_scans_to_factura')) {
+            $scan_link = riverso_link_scans_to_factura(
+                (int) $factura_id,
+                $factura['tipo_dte'] ?? 0,
+                $factura['folio'] ?? '',
+                $factura['emisor']['rut'] ?? ''
+            );
+        }
+
+        $scan_truth_applied = false;
+        if (function_exists('riverso_factura_data_is_sii_rescued_stub')
+            && riverso_factura_data_is_sii_rescued_stub($factura)
+            && !empty($scan_link['doc_ids'])) {
+            $applied = $this->try_apply_linked_scan_detail((int) $factura_id, $scan_link['doc_ids'], $save_options);
+            $scan_truth_applied = !empty($applied['items_updated']);
         }
 
         $product_items = count(array_filter($factura['items'], function ($i) {
@@ -1108,6 +1687,8 @@ class Riverso_Invoice_Module {
             'items_envio' => $shipping_items,
             'costo_envio_inline' => $factura['costo_envio_inline'] ?? 0,
             'vinculado_a_factura' => $documento_tipo === 'envio' ? $link_to_factura_id : null,
+            'scans_linked' => (int) ($scan_link['linked'] ?? 0),
+            'scan_truth_applied' => $scan_truth_applied,
         ];
 
         if ($documento_tipo === 'nota_credito') {
@@ -1496,7 +2077,29 @@ class Riverso_Invoice_Module {
             }
         }
 
+        if (function_exists('riverso_factura_get_adjuntos')) {
+            $factura['adjuntos_info'] = riverso_factura_get_adjuntos((int) $factura_id, $factura);
+        }
+
         wp_send_json_success($factura);
+    }
+
+    /**
+     * AJAX: URLs de adjuntos escaneados (PDF/imagen) de una factura.
+     */
+    public function ajax_invoice_adjuntos() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_invoices')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $factura_id = (int) ($_POST['factura_id'] ?? 0);
+        if (!$factura_id) {
+            wp_send_json_error(['message' => 'ID requerido']);
+        }
+        if (!function_exists('riverso_factura_get_adjuntos')) {
+            wp_send_json_error(['message' => 'Módulo de adjuntos no disponible']);
+        }
+        wp_send_json_success(riverso_factura_get_adjuntos($factura_id));
     }
 
     /**
@@ -1905,7 +2508,7 @@ class Riverso_Invoice_Module {
         $like = '%' . $wpdb->esc_like($search) . '%';
         $prefix_like = $wpdb->esc_like($search) . '%';
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT canonical_sku, nombre_canonico
+            "SELECT id, canonical_sku, nombre_canonico
              FROM {$prefix}producto_base
              WHERE deleted_at IS NULL
                AND (canonical_sku LIKE %s OR nombre_canonico LIKE %s)
@@ -1976,6 +2579,7 @@ class Riverso_Invoice_Module {
         $tipo_confirmado_raw = sanitize_text_field($_POST['tipo_confirmado'] ?? '');
         $tipo_confirmado_filter = ($tipo_confirmado_raw === '') ? -1 : intval($tipo_confirmado_raw);
         $search = $this->parse_invoice_list_search(sanitize_text_field($_POST['search'] ?? ''));
+        $origen_ingreso = sanitize_text_field($_POST['origen_ingreso'] ?? '');
 
         $orderby_map = [
             'fecha_emision' => 'f.fecha_emision',
@@ -2033,6 +2637,11 @@ class Riverso_Invoice_Module {
             $where[] = '(' . implode(' OR ', $search_sql) . ')';
         }
 
+        if ($origen_ingreso && in_array($origen_ingreso, ['xml', 'escaneo', 'ambos', 'facto'], true)) {
+            $where[] = 'f.origen_ingreso = %s';
+            $params[] = $origen_ingreso;
+        }
+
         $where_sql = implode(' AND ', $where);
         $offset = ($page - 1) * $per_page;
 
@@ -2045,7 +2654,8 @@ class Riverso_Invoice_Module {
                 (SELECT COUNT(*) FROM {$prefix}factura_items WHERE factura_id = f.id) as total_items,
                 (SELECT COUNT(*) FROM {$prefix}factura_items WHERE factura_id = f.id AND estado = 'vinculado') as items_vinculados,
                 (SELECT COUNT(*) FROM {$prefix}factura_flete_vinculos fv WHERE fv.factura_productos_id = f.id) as fletes_vinculados,
-                (SELECT COUNT(*) FROM {$prefix}factura_flete_vinculos fv WHERE fv.factura_envio_id = f.id) as facturas_vinculadas
+                (SELECT COUNT(*) FROM {$prefix}factura_flete_vinculos fv WHERE fv.factura_envio_id = f.id) as facturas_vinculadas,
+                (SELECT COUNT(*) FROM {$prefix}documentos_escaneados de WHERE de.factura_id = f.id AND de.estado_revision IN ('confirmado','duplicado')) as adjuntos_count
                 FROM {$prefix}facturas f
                 LEFT JOIN {$prefix}proveedores p ON f.proveedor_id = p.id
                 WHERE {$where_sql}
@@ -2064,6 +2674,9 @@ class Riverso_Invoice_Module {
         foreach ($facturas as &$f) {
             $f['can_delete'] = $can_delete && $this->invoice_can_be_deleted($f);
             $f['tipo_confirmado'] = (int) ($f['tipo_confirmado'] ?? 0);
+            if (function_exists('riverso_factura_origen_summary')) {
+                $f['origen'] = riverso_factura_origen_summary($f);
+            }
         }
         unset($f);
 
@@ -2632,6 +3245,38 @@ class Riverso_Invoice_Module {
         riverso_set_setting('default_intake_mode', in_array($default_mode, ['recepcion', 'solo_costos'], true) ? $default_mode : 'recepcion');
 
         wp_send_json_success(['message' => 'Configuración guardada']);
+    }
+
+    /**
+     * Contadores para badges de pestañas (tipo por confirmar / escaneos por revisar).
+     */
+    public function ajax_tab_counts() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_view_invoices')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $xml_pendientes = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$prefix}facturas WHERE IFNULL(tipo_confirmado, 0) = 0"
+        );
+
+        $scans_pendientes = 0;
+        $scans_table = $prefix . 'documentos_escaneados';
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $scans_table)) === $scans_table) {
+            $scans_pendientes = (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM {$scans_table}
+                 WHERE estado_revision IN ('pendiente', 'revisado')"
+            );
+        }
+
+        wp_send_json_success([
+            'xml_pendientes'   => $xml_pendientes,
+            'scans_pendientes' => $scans_pendientes,
+        ]);
     }
     
     /**

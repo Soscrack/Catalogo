@@ -120,7 +120,76 @@ function riverso_get_task_types() {
         'codigo_faltante' => ['label' => 'Vincular código proveedor', 'icon' => 'warning'],
         'barcode_faltante' => ['label' => 'Asignar código de barra', 'icon' => 'tag'],
         'confirmar_barcode_legacy' => ['label' => 'Confirmar código legacy', 'icon' => 'warning'],
+        'confirmar_codigo_proveedor' => ['label' => 'Confirmar código proveedor (legacy)', 'icon' => 'warning'],
     ];
+}
+
+/**
+ * Orígenes canónicos de producto_proveedor.origen_datos.
+ *
+ * @return array<string,string>
+ */
+function riverso_pp_origen_labels() {
+    return [
+        'catalogo' => 'Catálogo',
+        'legacy' => 'Legacy',
+        'manual' => 'Manual',
+        'factura' => 'Facturación',
+        // aliases históricos
+        'computer' => 'Catálogo',
+        'riverso_codigos' => 'Legacy',
+        'mamut_import' => 'Catálogo',
+        'factura_intake' => 'Facturación',
+    ];
+}
+
+/**
+ * Etiqueta de origen/fuente para un código proveedor.
+ *
+ * @param array $row Fila con origen_datos y opcionalmente catalogo_id / catalogo_nombre.
+ * @return string
+ */
+function riverso_pp_origen_label($row) {
+    $row = is_array($row) ? $row : [];
+    if (!empty($row['catalogo_id']) && !empty($row['catalogo_nombre'])) {
+        return 'Catálogo: ' . $row['catalogo_nombre'];
+    }
+    if (!empty($row['catalogo_id']) && empty($row['catalogo_nombre'])) {
+        return 'Catálogo';
+    }
+    $origen = (string) ($row['origen_datos'] ?? 'manual');
+    $labels = riverso_pp_origen_labels();
+    if (isset($labels[$origen])) {
+        return $labels[$origen];
+    }
+    return ucfirst(str_replace('_', ' ', $origen));
+}
+
+/**
+ * ¿El código proveedor requiere confirmación humana del vínculo a SKU local?
+ *
+ * @param array $row
+ * @return bool
+ */
+function riverso_pp_needs_human_confirm($row) {
+    $row = is_array($row) ? $row : [];
+    if (empty($row['producto_base_id'])) {
+        return false;
+    }
+    // Solo si hay SKU local real: el catálogo Mamut crea miles de bases sin canonical_sku.
+    // En listados AJAX el campo suele venir como sku_local (alias de canonical_sku).
+    $sku = trim((string) ($row['canonical_sku'] ?? $row['sku_local'] ?? ''));
+    if ($sku === '') {
+        return false;
+    }
+    $match = strtoupper((string) ($row['match_estado'] ?? ''));
+    if ($match === 'VERIFIED') {
+        return false;
+    }
+    if (!empty($row['requires_human_review']) && (string) ($row['review_status'] ?? '') === 'pendiente') {
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -262,7 +331,7 @@ function riverso_resolve_task_target($task) {
                 $args['edit'] = '1';
             } elseif (in_array($task_tipo, ['validar_categoria', 'crear_contraparte_online', 'confirmar_relacion_online', 'autorizar_publicacion'], true)) {
                 $args['tab'] = 'online';
-            } elseif (in_array($task_tipo, ['relacionar_producto_proveedor', 'codigo_faltante'], true)) {
+            } elseif (in_array($task_tipo, ['relacionar_producto_proveedor', 'codigo_faltante', 'confirmar_codigo_proveedor'], true)) {
                 $args['tab'] = 'suppliers';
             } elseif (in_array($task_tipo, ['barcode_faltante', 'confirmar_barcode_legacy'], true)) {
                 $args['tab'] = 'barcodes';
@@ -290,8 +359,24 @@ function riverso_resolve_task_target($task) {
             return home_url('/interno/barcodes/');
 
         case 'producto_proveedor':
-            // Portal MAMUT con tab codigos
-            return add_query_arg('pp', (int) $id, home_url('/interno/catalog/')) . '#codigos';
+            $pb_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT producto_base_id FROM {$wpdb->prefix}riverso_producto_proveedor WHERE id = %d",
+                (int) $id
+            ));
+            if (!$pb_id) {
+                $extra = $task['datos_extra'] ?? [];
+                if (is_string($extra)) {
+                    $extra = json_decode($extra, true) ?: [];
+                }
+                $pb_id = absint($extra['producto_base_id'] ?? 0);
+            }
+            if ($pb_id) {
+                return add_query_arg(
+                    ['action' => 'detail', 'id' => (int) $pb_id, 'tab' => 'suppliers'],
+                    admin_url('admin.php?page=riverso-pos-products')
+                );
+            }
+            return add_query_arg('pp', (int) $id, admin_url('admin.php?page=riverso-pos-codes'));
 
         case 'producto':
         case 'product':

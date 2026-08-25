@@ -390,6 +390,7 @@ class Riverso_Product_Module {
              LEFT JOIN {$prefix}proveedores p ON p.id = pp.proveedor_id
              LEFT JOIN {$prefix}catalogos c ON c.id = pp.catalogo_id
              WHERE pp.producto_base_id = %d
+               AND pp.activo = 1
              ORDER BY pp.es_preferido DESC, pp.id DESC",
             $id
         ), ARRAY_A);
@@ -397,10 +398,26 @@ class Riverso_Product_Module {
         // Enriquecer cada proveedor con fuente_display
         foreach ($product['proveedores'] as &$prov) {
             $prov['fuente_display'] = $this->get_supplier_source_label($prov);
+            $prov['fecha_ingreso'] = $prov['created_at'] ?? null;
+            $prov['origen_label'] = $prov['fuente_display'];
+            // El SKU local del producto es el contexto de confirmación del vínculo.
+            if (empty($prov['canonical_sku'])) {
+                $prov['canonical_sku'] = $product['canonical_sku'] ?? '';
+            }
+            $prov['needs_confirm'] = function_exists('riverso_pp_needs_human_confirm')
+                ? riverso_pp_needs_human_confirm($prov)
+                : false;
         }
+        unset($prov);
 
         $product['barcodes'] = $this->get_product_barcodes($id);
         $this->ensure_legacy_barcode_tasks($id, $product['barcodes'], $product['nombre_canonico'] ?? '');
+        if (class_exists('Riverso_Supplier_Links_Module')) {
+            Riverso_Supplier_Links_Module::get_instance()->ensure_codigo_proveedor_review_tasks(
+                $id,
+                $product['proveedores']
+            );
+        }
         $product['tasks'] = $this->get_product_tasks($id);
         $product['completeness_category'] = $this->get_completeness_category($product);
         $product['proveedores_count'] = count($product['proveedores']);
@@ -469,21 +486,10 @@ class Riverso_Product_Module {
      * Calcula la etiqueta de fuente para un código proveedor
      */
     private function get_supplier_source_label($proveedor) {
-        if (!empty($proveedor['catalogo_id']) && !empty($proveedor['catalogo_nombre'])) {
-            return 'Catálogo: ' . $proveedor['catalogo_nombre'];
+        if (function_exists('riverso_pp_origen_label')) {
+            return riverso_pp_origen_label($proveedor);
         }
-        
-        $origen = $proveedor['origen_datos'] ?? 'manual';
-        switch ($origen) {
-            case 'factura_intake':
-                return 'Facturación';
-            case 'mamut_import':
-                return 'Catálogo Mamut';
-            case 'manual':
-                return 'Manual';
-            default:
-                return ucfirst(str_replace('_', ' ', $origen));
-        }
+        return 'Manual';
     }
 
     /**
@@ -1086,6 +1092,20 @@ class Riverso_Product_Module {
         $product = $this->get_product($id);
         $this->trigger_counterpart_tasks($id);
 
+        // Evento desacoplado para integraciones (FACTO, etc.)
+        $event = ($action === 'product_created') ? 'product.created' : 'product.updated';
+        $event_payload = [
+            'id' => $id,
+            'canonical_sku' => $product['canonical_sku'] ?? null,
+            'nombre_canonico' => $product['nombre_canonico'] ?? null,
+            'estado' => $product['estado'] ?? null,
+        ];
+        if (function_exists('riverso_event_publish')) {
+            riverso_event_publish($event, $event_payload, ['source' => 'product_module']);
+        } else {
+            do_action('riverso_' . str_replace('.', '_', $event), $event_payload, ['source' => 'product_module']);
+        }
+
         return $product;
     }
 
@@ -1129,7 +1149,28 @@ class Riverso_Product_Module {
             ]);
         }
 
-        return $this->get_product($id);
+        $product = $this->get_product($id);
+        $event_payload = [
+            'id' => $id,
+            'canonical_sku' => $product['canonical_sku'] ?? null,
+            'nombre_canonico' => $product['nombre_canonico'] ?? null,
+            'estado' => $product['estado'] ?? null,
+            'lifecycle_action' => $action,
+        ];
+        if ($action === 'archive' || $action === 'delete') {
+            $event = ($action === 'delete') ? 'product.deleted' : 'product.archived';
+        } elseif ($action === 'restore') {
+            $event = 'product.restored';
+        } else {
+            $event = 'product.updated';
+        }
+        if (function_exists('riverso_event_publish')) {
+            riverso_event_publish($event, $event_payload, ['source' => 'product_module']);
+        } else {
+            do_action('riverso_' . str_replace('.', '_', $event), $event_payload, ['source' => 'product_module']);
+        }
+
+        return $product;
     }
 
     public function approve_gate($id, $gate, $status = 'approved') {
@@ -1286,6 +1327,38 @@ class Riverso_Product_Module {
 
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
+
+        // El par (proveedor, código) puede estar ya tomado por otro producto.
+        // Se avisa antes de tocar nada para que la UI muestre el dueño actual.
+        $owner = $wpdb->get_row($wpdb->prepare(
+            "SELECT pp.id AS pp_id, pp.producto_base_id, pb.canonical_sku, pb.nombre_canonico
+             FROM {$prefix}producto_proveedor pp
+             INNER JOIN {$prefix}producto_base pb
+                     ON pb.id = pp.producto_base_id AND pb.deleted_at IS NULL
+             WHERE pp.codigo_proveedor = %s AND pp.proveedor_id = %d AND pp.activo = 1
+             LIMIT 1",
+            $supplier_code,
+            $supplier_id
+        ), ARRAY_A);
+
+        if ($owner && absint($owner['producto_base_id']) !== $product_id && empty($_POST['force'])) {
+            wp_send_json_error([
+                'message' => sprintf(
+                    'El código %s ya está vinculado a %s (%s).',
+                    $supplier_code,
+                    $owner['canonical_sku'] ?: 'otro producto',
+                    $owner['nombre_canonico'] ?: 'sin nombre'
+                ),
+                'already_linked' => true,
+                'conflict' => true,
+                'owner' => [
+                    'producto_base_id' => absint($owner['producto_base_id']),
+                    'canonical_sku' => $owner['canonical_sku'],
+                    'nombre_canonico' => $owner['nombre_canonico'],
+                ],
+            ]);
+        }
+
         $sku_local = trim((string) $wpdb->get_var($wpdb->prepare(
             "SELECT canonical_sku FROM {$prefix}producto_base WHERE id = %d",
             $product_id
@@ -1326,7 +1399,9 @@ class Riverso_Product_Module {
             'audit_reason' => $audit_reason,
         ]);
 
-        if (is_wp_error($result)) {
+        // Un link ya existente no es un fallo: la asignación canónica ocurre
+        // más abajo sobre producto_proveedor y debe poder reasignarse.
+        if (is_wp_error($result) && $result->get_error_code() !== 'duplicate') {
             wp_send_json_error(['message' => $result->get_error_message()]);
         }
 
@@ -2977,6 +3052,7 @@ class Riverso_Product_Module {
                          FROM {$prefix}producto_proveedor pp
                          LEFT JOIN {$prefix}catalogos c ON c.id = pp.catalogo_id
                          WHERE pp.producto_base_id = %d
+                           AND pp.activo = 1
                          ORDER BY pp.id ASC",
                         $producto_base_id
                     )
@@ -3820,6 +3896,18 @@ class Riverso_Product_Module {
 
 		if ($result === false) {
 			wp_send_json_error(['message' => 'Error al actualizar'], 500);
+		}
+
+		$payload = [
+			'id' => $product_id,
+			'canonical_sku' => $sku,
+			'nombre_canonico' => $nombre,
+			'unidad_base' => $unidad,
+		];
+		if (function_exists('riverso_event_publish')) {
+			riverso_event_publish('product.updated', $payload, ['source' => 'product_module_ajax_update']);
+		} else {
+			do_action('riverso_product_updated', $payload, ['source' => 'product_module_ajax_update']);
 		}
 
 		wp_send_json_success(['id' => $product_id]);

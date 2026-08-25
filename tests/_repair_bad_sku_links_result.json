@@ -1,0 +1,106 @@
+{
+  "apply": true,
+  "pp_unlink_candidates": 58,
+  "pp_unlinked": 58,
+  "barcode_detach_candidates": 89,
+  "barcode_detach_by_sku": {
+    "12900": 33,
+    "815": 5,
+    "827": 48,
+    "853": 3
+  },
+  "barcodes_detached": 89,
+  "restores": [
+    {
+      "codigo": "50ATPF-G",
+      "sku": "12900",
+      "base_id": "17219",
+      "legacy_sku": "12900",
+      "pp_before": {
+        "id": "8926",
+        "producto_base_id": "11411",
+        "activo": "0",
+        "origen_datos": "manual"
+      },
+      "pp_id": 8926,
+      "status": "pp_updated",
+      "barcode_id": 8271
+    },
+    {
+      "codigo": "09RTP",
+      "sku": "827",
+      "base_id": "8916",
+      "legacy_sku": "827",
+      "pp_before": {
+        "id": "8848",
+        "producto_base_id": "7814",
+        "activo": "0",
+        "origen_datos": "manual"
+      },
+      "pp_id": 8848,
+      "status": "pp_updated",
+      "barcode_id": 5
+    },
+    {
+      "codigo": "10RTP",
+      "sku": "815",
+      "base_id": "8919",
+      "legacy_sku": "815",
+      "pp_before": {
+        "id": "8849",
+        "producto_base_id": "7816",
+        "activo": "0",
+        "origen_datos": "manual"
+      },
+      "pp_id": 8849,
+      "status": "pp_updated",
+      "barcode_id": 6
+    }
+  ],
+  "verify": {
+    "12900": {
+      "base_id": 17219,
+      "pp_activo": 1,
+      "pp_inactivo_linked": 0,
+      "supplier_barcodes_activo": 1,
+      "codes": [
+        "50ATPF-G"
+      ],
+      "pp_codes": [
+        "50ATPF-G"
+      ]
+    },
+    "827": {
+      "base_id": 8916,
+      "pp_activo": 1,
+      "pp_inactivo_linked": 0,
+      "supplier_barcodes_activo": 1,
+      "codes": [
+        "09RTP"
+      ],
+      "pp_codes": [
+        "09RTP"
+      ]
+    },
+    "815": {
+      "base_id": 8919,
+      "pp_activo": 1,
+      "pp_inactivo_linked": 0,
+      "supplier_barcodes_activo": 1,
+      "codes": [
+        "10RTP"
+      ],
+      "pp_codes": [
+        "10RTP"
+      ]
+    },
+    "853": {
+      "base_id": 13288,
+      "pp_activo": 0,
+      "pp_inactivo_linked": 0,
+      "supplier_barcodes_activo": 0,
+      "codes": [],
+      "pp_codes": []
+    }
+  }
+}

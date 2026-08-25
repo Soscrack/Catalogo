@@ -10,10 +10,12 @@ if (!defined('ABSPATH')) {
 class Riverso_POS_Supplier_Module {
     
     private $table_name;
+    private $table_apodos;
     
     public function __construct() {
         global $wpdb;
         $this->table_name = $wpdb->prefix . 'riverso_proveedores';
+        $this->table_apodos = $wpdb->prefix . 'riverso_proveedor_apodos';
     }
     
     public function init() {
@@ -25,6 +27,8 @@ class Riverso_POS_Supplier_Module {
         add_action('wp_ajax_riverso_toggle_supplier', [$this, 'ajax_toggle_supplier']);
         add_action('wp_ajax_riverso_search_suppliers', [$this, 'ajax_search_suppliers']);
         add_action('wp_ajax_riverso_get_supplier_stats', [$this, 'ajax_get_supplier_stats']);
+        add_action('wp_ajax_riverso_add_provider_alias', [$this, 'ajax_add_provider_alias']);
+        add_action('wp_ajax_riverso_remove_provider_alias', [$this, 'ajax_remove_provider_alias']);
     }
     
     /**
@@ -54,8 +58,13 @@ class Riverso_POS_Supplier_Module {
         }
         
         if ($search) {
-            $where[] = '(nombre LIKE %s OR rut LIKE %s OR email LIKE %s OR contacto LIKE %s)';
+            $where[] = "(p.nombre LIKE %s OR p.rut LIKE %s OR p.email LIKE %s OR p.contacto LIKE %s
+                         OR EXISTS (
+                             SELECT 1 FROM {$this->table_apodos} a
+                             WHERE a.proveedor_id = p.id AND a.apodo LIKE %s
+                         ))";
             $like = '%' . $wpdb->esc_like($search) . '%';
+            $params[] = $like;
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
@@ -65,7 +74,7 @@ class Riverso_POS_Supplier_Module {
         $where_sql = implode(' AND ', $where);
         
         // Total
-        $count_sql = "SELECT COUNT(*) FROM {$this->table_name} WHERE $where_sql";
+        $count_sql = "SELECT COUNT(*) FROM {$this->table_name} p WHERE $where_sql";
         if (!empty($params)) {
             $count_sql = $wpdb->prepare($count_sql, $params);
         }
@@ -73,19 +82,31 @@ class Riverso_POS_Supplier_Module {
         
         // Registros
         $offset = ($page - 1) * $per_page;
-        $select_sql = "SELECT * FROM {$this->table_name} WHERE $where_sql ORDER BY nombre ASC LIMIT %d OFFSET %d";
+        $select_sql = "SELECT p.*,
+                              (SELECT GROUP_CONCAT(a.apodo ORDER BY a.apodo SEPARATOR '||')
+                               FROM {$this->table_apodos} a WHERE a.proveedor_id = p.id) AS apodos_raw
+                       FROM {$this->table_name} p
+                       WHERE $where_sql
+                       ORDER BY p.nombre ASC
+                       LIMIT %d OFFSET %d";
         $params[] = $per_page;
         $params[] = $offset;
         
         $suppliers = $wpdb->get_results($wpdb->prepare($select_sql, $params));
         
-        // Agregar conteo de códigos por proveedor
+        // Agregar conteo de códigos y apodos por proveedor
         foreach ($suppliers as &$supplier) {
             $supplier->codigos_count = $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$wpdb->prefix}riverso_codigos WHERE proveedor_id = %d",
+                "SELECT COUNT(*) FROM {$wpdb->prefix}riverso_producto_proveedor WHERE proveedor_id = %d AND activo = 1",
                 $supplier->id
             ));
+            $raw = $supplier->apodos_raw ?? '';
+            $supplier->apodos = $raw !== '' && $raw !== null
+                ? array_values(array_filter(explode('||', $raw)))
+                : [];
+            unset($supplier->apodos_raw);
         }
+        unset($supplier);
         
         wp_send_json_success([
             'suppliers' => $suppliers,
@@ -330,30 +351,177 @@ class Riverso_POS_Supplier_Module {
     public function ajax_search_suppliers() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         
+        if (!current_user_can('riverso_view_suppliers')
+            && !current_user_can('riverso_manage_codes')
+            && !current_user_can('riverso_view_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+        
         global $wpdb;
         
         $search = isset($_POST['search']) ? sanitize_text_field($_POST['search']) : '';
         $limit = isset($_POST['limit']) ? min(50, max(5, intval($_POST['limit']))) : 10;
         
-        $where = ['activo = 1'];
+        $where = ['p.activo = 1'];
         $params = [];
         
         if ($search) {
-            $where[] = '(nombre LIKE %s OR rut LIKE %s)';
             $like = '%' . $wpdb->esc_like($search) . '%';
+            $where[] = "(p.nombre LIKE %s OR p.rut LIKE %s OR EXISTS (
+                SELECT 1 FROM {$this->table_apodos} a
+                WHERE a.proveedor_id = p.id AND a.apodo LIKE %s
+            ))";
+            $params[] = $like;
             $params[] = $like;
             $params[] = $like;
         }
         
         $where_sql = implode(' AND ', $where);
-        $params[] = $limit;
+        $like = $search !== '' ? ('%' . $wpdb->esc_like($search) . '%') : '';
+        
+        // El LIKE del subquery de matched_apodo va primero en los placeholders.
+        $select_params = $like !== '' ? array_merge([$like], $params, [$limit]) : array_merge($params, [$limit]);
+        
+        $matched_select = $like !== ''
+            ? "(SELECT a.apodo FROM {$this->table_apodos} a
+                WHERE a.proveedor_id = p.id AND a.apodo LIKE %s
+                ORDER BY a.apodo ASC LIMIT 1) AS matched_apodo"
+            : "NULL AS matched_apodo";
         
         $suppliers = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, rut, nombre FROM {$this->table_name} WHERE $where_sql ORDER BY nombre ASC LIMIT %d",
-            $params
+            "SELECT p.id, p.rut, p.nombre, {$matched_select}
+             FROM {$this->table_name} p
+             WHERE $where_sql
+             ORDER BY p.nombre ASC
+             LIMIT %d",
+            $select_params
         ));
         
         wp_send_json_success(['suppliers' => $suppliers]);
+    }
+    
+    /**
+     * Normaliza un apodo: trim y colapsa espacios internos.
+     */
+    private function normalize_apodo($apodo) {
+        $apodo = sanitize_text_field($apodo);
+        $apodo = preg_replace('/\s+/u', ' ', trim($apodo));
+        return $apodo;
+    }
+    
+    private function can_manage_aliases() {
+        return current_user_can('riverso_manage_codes')
+            || current_user_can('riverso_edit_suppliers');
+    }
+    
+    /**
+     * Lista apodos de un proveedor.
+     */
+    public function get_apodos($proveedor_id) {
+        global $wpdb;
+        $proveedor_id = absint($proveedor_id);
+        if (!$proveedor_id) {
+            return [];
+        }
+        return $wpdb->get_col($wpdb->prepare(
+            "SELECT apodo FROM {$this->table_apodos}
+             WHERE proveedor_id = %d
+             ORDER BY apodo ASC",
+            $proveedor_id
+        )) ?: [];
+    }
+    
+    public function ajax_add_provider_alias() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        
+        if (!$this->can_manage_aliases()) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+        
+        global $wpdb;
+        
+        $proveedor_id = absint($_POST['proveedor_id'] ?? 0);
+        $apodo = $this->normalize_apodo($_POST['apodo'] ?? '');
+        
+        if (!$proveedor_id || $apodo === '') {
+            wp_send_json_error(['message' => 'Proveedor y apodo requeridos']);
+        }
+        
+        if (mb_strlen($apodo) > 100) {
+            wp_send_json_error(['message' => 'El apodo no puede superar 100 caracteres']);
+        }
+        
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$this->table_name} WHERE id = %d",
+            $proveedor_id
+        ));
+        if (!$exists) {
+            wp_send_json_error(['message' => 'Proveedor no encontrado']);
+        }
+        
+        // Unicidad case-insensitive dentro del mismo proveedor.
+        $clash = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$this->table_apodos}
+             WHERE proveedor_id = %d AND LOWER(apodo) = LOWER(%s)
+             LIMIT 1",
+            $proveedor_id,
+            $apodo
+        ));
+        if ($clash) {
+            wp_send_json_error(['message' => 'Ese apodo ya existe para este proveedor']);
+        }
+        
+        $result = $wpdb->insert(
+            $this->table_apodos,
+            [
+                'proveedor_id' => $proveedor_id,
+                'apodo' => $apodo,
+            ],
+            ['%d', '%s']
+        );
+        
+        if ($result === false) {
+            wp_send_json_error(['message' => 'No se pudo guardar el apodo']);
+        }
+        
+        wp_send_json_success([
+            'message' => 'Apodo agregado',
+            'apodo' => $apodo,
+            'apodos' => $this->get_apodos($proveedor_id),
+        ]);
+    }
+    
+    public function ajax_remove_provider_alias() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        
+        if (!$this->can_manage_aliases()) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+        
+        global $wpdb;
+        
+        $proveedor_id = absint($_POST['proveedor_id'] ?? 0);
+        $apodo = $this->normalize_apodo($_POST['apodo'] ?? '');
+        
+        if (!$proveedor_id || $apodo === '') {
+            wp_send_json_error(['message' => 'Proveedor y apodo requeridos']);
+        }
+        
+        $deleted = $wpdb->query($wpdb->prepare(
+            "DELETE FROM {$this->table_apodos}
+             WHERE proveedor_id = %d AND LOWER(apodo) = LOWER(%s)",
+            $proveedor_id,
+            $apodo
+        ));
+        
+        if ($deleted === false) {
+            wp_send_json_error(['message' => 'No se pudo eliminar el apodo']);
+        }
+        
+        wp_send_json_success([
+            'message' => 'Apodo eliminado',
+            'apodos' => $this->get_apodos($proveedor_id),
+        ]);
     }
     
     /**

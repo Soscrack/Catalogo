@@ -42,6 +42,7 @@ class Riverso_Task_Module {
         'codigo_faltante' => 'Vincular código proveedor',
         'barcode_faltante' => 'Asignar código de barra',
         'confirmar_barcode_legacy' => 'Confirmar código legacy',
+        'confirmar_codigo_proveedor' => 'Confirmar código proveedor (legacy)',
         // Tareas de revisión humana (procesos automáticos)
         'confirmar_tipo_documento' => 'Confirmar tipo de documento',
         'revisar_relacion' => 'Revisar relación de producto',

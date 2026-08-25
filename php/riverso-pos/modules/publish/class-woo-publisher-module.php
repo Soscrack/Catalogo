@@ -1648,9 +1648,20 @@ class Riverso_Woo_Publisher_Module {
 
         $like = '%' . $wpdb->esc_like($search) . '%';
         $suppliers = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, rut, nombre FROM {$prefix}proveedores
-             WHERE activo = 1 AND (nombre LIKE %s OR rut LIKE %s)
-             ORDER BY nombre ASC LIMIT %d",
+            "SELECT p.id, p.rut, p.nombre,
+                    (SELECT a.apodo FROM {$prefix}proveedor_apodos a
+                     WHERE a.proveedor_id = p.id AND a.apodo LIKE %s
+                     ORDER BY a.apodo ASC LIMIT 1) AS matched_apodo
+             FROM {$prefix}proveedores p
+             WHERE p.activo = 1 AND (
+                 p.nombre LIKE %s OR p.rut LIKE %s OR EXISTS (
+                     SELECT 1 FROM {$prefix}proveedor_apodos a2
+                     WHERE a2.proveedor_id = p.id AND a2.apodo LIKE %s
+                 )
+             )
+             ORDER BY p.nombre ASC LIMIT %d",
+            $like,
+            $like,
             $like,
             $like,
             $limit

@@ -1,0 +1,14 @@
+-- Fase 33: integración FACTO
+-- Tablas creadas por dbDelta en Riverso_POS_Activator::create_phase33_facto_integration()
+--
+-- {prefix}riverso_facto_producto_map
+--   producto_base_id (unique) <-> facto_product_id (unique)
+--   facto_sku, last_payload_hash, sync_state, last_error, last_synced_at
+--
+-- {prefix}riverso_facto_sync_outbox
+--   cola create/update/archive con reintentos (state, attempts, next_attempt_at)
+--
+-- Alcance sync v1 (validado en sandbox Chile):
+--   POST: alta con sku/name/unit (+ price/cost/stock best-effort)
+--   PUT: name, brand, model, details, status (SKU inmutable tras create)
+--   archive: PUT status=0 (nunca DELETE HTTP)

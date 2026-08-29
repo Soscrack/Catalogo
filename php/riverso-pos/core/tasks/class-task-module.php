@@ -53,9 +53,70 @@ class Riverso_Task_Module {
         'confirmar_relacion_online' => 'Confirmar relación producto local ↔ online',
         'crear_contraparte_online' => 'Crear o asignar contraparte online',
         'crear_contraparte_local' => 'Crear o asignar contraparte local',
+        'preguntar_familia' => '¿Necesita familia?',
+        'asignar_familia' => 'Asignar familia',
         'confirmar_estructura_atributos' => 'Confirmar estructura de atributos',
         'autorizar_publicacion' => 'Autorizar publicación',
         'revisar_calidad_catalogo' => 'Revisar salud del catálogo',
+    ];
+
+    /**
+     * Categorías de tareas (agrupación en UI).
+     */
+    const TASK_CATEGORIES = [
+        'administracion' => 'Administración',
+        'productos' => 'Productos',
+        'precios' => 'Precios',
+        'inventario' => 'Inventario',
+        'otros' => 'Otros',
+    ];
+
+    /**
+     * Mapeo tipo → categoría.
+     */
+    const TASK_TYPE_CATEGORY = [
+        'confirmar_tipo_documento' => 'administracion',
+        'autorizar_publicacion' => 'administracion',
+        'confirmar_estructura_atributos' => 'administracion',
+        'revisar_calidad_catalogo' => 'administracion',
+        'codigo_faltante' => 'productos',
+        'barcode_faltante' => 'productos',
+        'confirmar_barcode_legacy' => 'productos',
+        'confirmar_codigo_proveedor' => 'productos',
+        'revisar_relacion' => 'productos',
+        'validar_categoria' => 'productos',
+        'relacionar_producto_proveedor' => 'productos',
+        'confirmar_relacion_online' => 'productos',
+        'crear_contraparte_online' => 'productos',
+        'crear_contraparte_local' => 'productos',
+        'preguntar_familia' => 'productos',
+        'asignar_familia' => 'productos',
+        'verificar_etiquetado' => 'productos',
+        'aprobar_lista_precios' => 'precios',
+        'cotizacion' => 'precios',
+        'picking' => 'inventario',
+        'reposicion' => 'inventario',
+        'recepcion' => 'inventario',
+        'inventario' => 'inventario',
+        'ubicacion' => 'inventario',
+        'etiquetado' => 'inventario',
+        'bodegaje' => 'inventario',
+        'devolucion' => 'inventario',
+    ];
+
+    /**
+     * Tipos que pueden completarse manualmente desde la lista (piso de bodega).
+     */
+    const MANUAL_COMPLETION_TYPES = [
+        'cotizacion',
+        'picking',
+        'reposicion',
+        'recepcion',
+        'inventario',
+        'ubicacion',
+        'etiquetado',
+        'bodegaje',
+        'devolucion',
     ];
 
     /**
@@ -67,6 +128,65 @@ class Riverso_Task_Module {
         'alta' => ['label' => 'Alta', 'color' => '#ff9800'],
         'urgente' => ['label' => 'Urgente', 'color' => '#f44336'],
     ];
+
+    /**
+     * Categoría de un tipo de tarea.
+     */
+    public static function get_task_category($tipo) {
+        return self::TASK_TYPE_CATEGORY[$tipo] ?? 'otros';
+    }
+
+    /**
+     * Modo de cierre: guided (en pantalla de trabajo) o manual (lista).
+     */
+    public static function get_completion_mode($tipo) {
+        return in_array($tipo, self::MANUAL_COMPLETION_TYPES, true) ? 'manual' : 'guided';
+    }
+
+    /**
+     * Tipos pertenecientes a una categoría.
+     *
+     * @return string[]
+     */
+    public static function get_types_for_category($categoria) {
+        if ($categoria === 'otros') {
+            $mapped = array_keys(self::TASK_TYPE_CATEGORY);
+            return array_values(array_diff(array_keys(self::TASK_TYPES), $mapped));
+        }
+
+        $types = [];
+        foreach (self::TASK_TYPE_CATEGORY as $tipo => $cat) {
+            if ($cat === $categoria) {
+                $types[] = $tipo;
+            }
+        }
+        return $types;
+    }
+
+    /**
+     * ¿El usuario actual puede marcar completada esta tarea desde la lista?
+     */
+    public static function task_allows_manual_complete($task) {
+        $task = is_object($task) ? (array) $task : $task;
+        if (($task['estado'] ?? '') === 'completada') {
+            return false;
+        }
+        if (self::get_completion_mode($task['tipo'] ?? '') === 'manual') {
+            return true;
+        }
+        return current_user_can('riverso_assign_tasks');
+    }
+
+    /**
+     * Enriquece fila de tarea con metadata de UI (destino, categoría, cierre).
+     */
+    public static function enrich_task(array &$task, $context = 'admin') {
+        $task['target_url'] = riverso_resolve_task_target($task, $context);
+        $task['categoria'] = self::get_task_category($task['tipo'] ?? '');
+        $task['categoria_label'] = self::TASK_CATEGORIES[$task['categoria']] ?? 'Otros';
+        $task['completion_mode'] = self::get_completion_mode($task['tipo'] ?? '');
+        $task['allow_complete'] = self::task_allows_manual_complete($task);
+    }
 
     /**
      * Inicializar módulo
@@ -139,6 +259,17 @@ class Riverso_Task_Module {
         if (!empty($filters['tipo'])) {
             $where[] = 't.tipo = %s';
             $params[] = $filters['tipo'];
+        } elseif (!empty($filters['categoria'])) {
+            $types = self::get_types_for_category(sanitize_key($filters['categoria']));
+            if (!empty($types)) {
+                $placeholders = implode(',', array_fill(0, count($types), '%s'));
+                $where[] = "t.tipo IN ({$placeholders})";
+                foreach ($types as $type) {
+                    $params[] = $type;
+                }
+            } else {
+                $where[] = '1=0';
+            }
         }
 
         if (!empty($filters['estado'])) {
@@ -166,6 +297,13 @@ class Riverso_Task_Module {
 
         if (isset($filters['sin_asignar']) && $filters['sin_asignar']) {
             $where[] = 't.asignado_a IS NULL';
+        }
+
+        if (!empty($filters['portal_scope_user'])) {
+            $scope_user = (int) $filters['portal_scope_user'];
+            $where[] = '(t.asignado_a = %d OR t.asignado_a IS NULL OR t.creado_por = %d)';
+            $params[] = $scope_user;
+            $params[] = $scope_user;
         }
 
         $where_sql = implode(' AND ', $where);
@@ -239,8 +377,12 @@ class Riverso_Task_Module {
 
     /**
      * Completar tarea
+     *
+     * @param int    $task_id ID de la tarea.
+     * @param string $notas   Notas opcionales al completar.
+     * @param string $source  'user' (UI) o 'system' (cierre automático al hacer el trabajo).
      */
-    public function complete_task($task_id, $notas = '') {
+    public function complete_task($task_id, $notas = '', $source = 'user') {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
@@ -251,6 +393,13 @@ class Riverso_Task_Module {
 
         if (!$task) {
             return new WP_Error('not_found', 'Tarea no encontrada');
+        }
+
+        if ($source === 'user' && self::get_completion_mode($task['tipo']) === 'guided' && !current_user_can('riverso_assign_tasks')) {
+            return new WP_Error(
+                'guided_task',
+                'Esta tarea se completa al realizar el trabajo en la pantalla correspondiente. Use "Ir a realizar".'
+            );
         }
 
         // Verificar permisos
@@ -695,6 +844,7 @@ class Riverso_Task_Module {
 
         $filters = [
             'tipo' => sanitize_text_field($_POST['tipo'] ?? ''),
+            'categoria' => sanitize_key($_POST['categoria'] ?? ''),
             'estado' => sanitize_text_field($_POST['estado'] ?? ''),
             'prioridad' => sanitize_text_field($_POST['prioridad'] ?? ''),
             'asignado_a' => intval($_POST['asignado_a'] ?? 0),
@@ -705,15 +855,15 @@ class Riverso_Task_Module {
 
         $tasks = $this->get_tasks($filters);
 
-        // Agregar target_url a cada tarea.
         foreach ($tasks as &$task) {
-            $task['target_url'] = riverso_resolve_task_target($task);
+            self::enrich_task($task);
         }
         unset($task);
 
         wp_send_json_success([
             'tasks' => $tasks,
             'types' => self::TASK_TYPES,
+            'categories' => self::TASK_CATEGORIES,
             'priorities' => self::PRIORITIES,
         ]);
     }
@@ -750,6 +900,8 @@ class Riverso_Task_Module {
         if (!$task) {
             wp_send_json_error(['message' => 'Tarea no encontrada']);
         }
+
+        self::enrich_task($task);
 
         wp_send_json_success(['task' => $task]);
     }
@@ -863,12 +1015,11 @@ class Riverso_Task_Module {
             'limit' => 10,
         ]);
 
-        // Agregar target_url a cada tarea.
         foreach ($tasks as &$task) {
-            $task['target_url'] = riverso_resolve_task_target($task);
+            self::enrich_task($task);
         }
         foreach ($pending as &$task) {
-            $task['target_url'] = riverso_resolve_task_target($task);
+            self::enrich_task($task);
         }
         unset($task);
 
@@ -876,6 +1027,7 @@ class Riverso_Task_Module {
             'mis_tareas' => $tasks,
             'sin_asignar' => $pending,
             'types' => self::TASK_TYPES,
+            'categories' => self::TASK_CATEGORIES,
         ]);
     }
 }

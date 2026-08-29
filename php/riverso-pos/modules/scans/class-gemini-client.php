@@ -17,7 +17,7 @@ class Riverso_Gemini_Client {
     private $last_tokens_out = 0;
 
     public function __construct() {
-        $this->api_key = (string) riverso_get_scan_config('gemini_api_key', '');
+        $this->api_key = trim((string) riverso_get_scan_config('gemini_api_key', ''));
         $this->model   = (string) riverso_get_scan_config('gemini_model', 'gemini-3.6-flash');
     }
 

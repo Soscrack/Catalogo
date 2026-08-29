@@ -99,8 +99,9 @@ $facto_tax_type_id = riverso_get_facto_config('tax_type_id', 387);
                 <th scope="row">Gemini API Key</th>
                 <td>
                     <input type="password" name="scan_gemini_api_key" class="regular-text"
-                           value="<?php echo esc_attr($scan_gemini_key ? riverso_mask_secret($scan_gemini_key) : ''); ?>"
-                           placeholder="<?php echo $scan_gemini_key ? 'Configurada (wp-config o settings)' : 'RIVERSO_GEMINI_API_KEY'; ?>" autocomplete="off">
+                           value=""
+                           placeholder="<?php echo $scan_gemini_key ? 'Configurada — deja en blanco para conservar' : 'RIVERSO_GEMINI_API_KEY'; ?>" autocomplete="new-password">
+                    <p class="description">Si ya está configurada, deja el campo vacío al guardar. Solo pega una clave nueva si quieres reemplazarla.</p>
                 </td>
             </tr>
             <tr>
@@ -114,14 +115,16 @@ $facto_tax_type_id = riverso_get_facto_config('tax_type_id', 387);
                 <th scope="row">R2 Access Key ID</th>
                 <td>
                     <input type="text" name="scan_r2_access_key_id" class="regular-text"
-                           value="<?php echo esc_attr($scan_r2_key ? riverso_mask_secret($scan_r2_key) : ''); ?>">
+                           value=""
+                           placeholder="<?php echo $scan_r2_key ? 'Configurada — deja en blanco para conservar' : ''; ?>" autocomplete="off">
                 </td>
             </tr>
             <tr>
                 <th scope="row">R2 Secret Access Key</th>
                 <td>
                     <input type="password" name="scan_r2_secret_access_key" class="regular-text"
-                           value="<?php echo esc_attr($scan_r2_secret ? riverso_mask_secret($scan_r2_secret) : ''); ?>" autocomplete="off">
+                           value=""
+                           placeholder="<?php echo $scan_r2_secret ? 'Configurada — deja en blanco para conservar' : ''; ?>" autocomplete="new-password">
                 </td>
             </tr>
             <tr>

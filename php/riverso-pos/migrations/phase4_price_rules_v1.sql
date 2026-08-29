@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS `{prefix}price_rule_tiers` (
     `multiplicador` DECIMAL(8,4) DEFAULT NULL,
     `addendo` DECIMAL(12,2) DEFAULT NULL,
     `redondeo` VARCHAR(20) NOT NULL DEFAULT 'ninguno',
+    `formula` VARCHAR(500) DEFAULT NULL,
     `total_minimo` DECIMAL(12,2) DEFAULT NULL,
     `orden` INT NOT NULL DEFAULT 0,
     PRIMARY KEY (`id`),

@@ -210,7 +210,17 @@ class Riverso_POS_Admin_Menu {
             [$this, 'render_publish']
         );
 
-        // Embolsado
+        // Manufactura [WIP]
+        add_submenu_page(
+            'riverso-pos',
+            __('Manufactura', 'riverso-pos'),
+            __('Manufactura [WIP]', 'riverso-pos'),
+            'riverso_manage_manufacturing',
+            'riverso-pos-manufacturing',
+            [$this, 'render_manufacturing']
+        );
+
+        // Embolsado (redirección a Manufactura)
         add_submenu_page(
             'riverso-pos',
             __('Embolsado', 'riverso-pos'),
@@ -280,6 +290,16 @@ class Riverso_POS_Admin_Menu {
             [$this, 'render_reports']
         );
         
+        // Configuración
+        add_submenu_page(
+            'riverso-pos',
+            __('Export FACTO', 'riverso-pos'),
+            __('Export FACTO', 'riverso-pos'),
+            'riverso_export_facto',
+            'riverso-pos-facto-export',
+            [$this, 'render_facto_export']
+        );
+
         // Configuración
         add_submenu_page(
             'riverso-pos',
@@ -482,14 +502,24 @@ class Riverso_POS_Admin_Menu {
     }
 
     /**
-     * Renderiza la página de embolsado
+     * Renderiza la página de Manufactura [WIP]
+     */
+    public function render_manufacturing() {
+        if (!current_user_can('riverso_manage_manufacturing')) {
+            wp_die(__('No tienes permisos para acceder a esta página.', 'riverso-pos'));
+        }
+        $this->render_page('manufacturing');
+    }
+
+    /**
+     * Redirección legacy Embolsado → Manufactura
      */
     public function render_packaging() {
-        $mod = RIVERSO_POS_PLUGIN_DIR . 'modules/packaging/class-packaging-module.php';
-        if (file_exists($mod)) {
-            require_once $mod;
+        if (!current_user_can('riverso_manage_packaging') && !current_user_can('riverso_manage_manufacturing')) {
+            wp_die(__('No tienes permisos para acceder a esta página.', 'riverso-pos'));
         }
-        $this->render_page('packaging');
+        wp_safe_redirect(admin_url('admin.php?page=riverso-pos-manufacturing'));
+        exit;
     }
     
     /**
@@ -497,6 +527,10 @@ class Riverso_POS_Admin_Menu {
      */
     public function render_settings() {
         $this->render_page('settings');
+    }
+
+    public function render_facto_export() {
+        $this->render_page('facto-export');
     }
     
     /**

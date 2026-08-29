@@ -46,10 +46,13 @@ $can_manage_families = current_user_can('riverso_manage_families');
         .btn-tiny.secondary:hover { background: #555; }
         .family-list { display: grid; gap: 15px; }
         .family-card { background: white; padding: 15px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .family-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .family-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 8px; }
         .family-name { font-weight: bold; font-size: 15px; }
         .family-count { background: #e0e0e0; padding: 2px 8px; border-radius: 3px; font-size: 12px; }
-        .family-actions { display: flex; gap: 5px; }
+        .family-actions { display: flex; gap: 5px; flex-shrink: 0; }
+        .families-search-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+        .families-search-row input[type="search"] { min-width: 240px; padding: 8px 10px; flex: 1; max-width: 480px; border: 1px solid #ccc; border-radius: 4px; }
+        .families-search-count { font-size: 12px; color: #666; }
     </style>
 
     <div style="margin-bottom: 20px;">
@@ -82,6 +85,10 @@ $can_manage_families = current_user_can('riverso_manage_families');
                 <?php if ($can_manage_families): ?>
                 <button class="btn-tiny" id="btn-family-create" style="background: #28a745;">+ Nueva Familia</button>
                 <?php endif; ?>
+            </div>
+            <div class="families-search-row">
+                <input type="search" id="families-search" placeholder="Nombre, miembro, SKU, código proveedor o barcode" autocomplete="off">
+                <span id="families-search-count" class="families-search-count"></span>
             </div>
             <div class="family-list" id="families-list">
                 <p style="color: #999; text-align: center; padding: 20px;">Cargando familias...</p>
@@ -155,28 +162,79 @@ $can_manage_families = current_user_can('riverso_manage_families');
         });
     }
 
-    function loadFamilies() {
-        post('riverso_families_list').done(function(r) {
+    function highlightSearchTerm(text, query) {
+        const raw = text === null || text === undefined ? '' : String(text);
+        const escaped = esc(raw || '—');
+        const q = (query || '').trim();
+        if (!q) return escaped;
+        try {
+            const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+            return escaped.replace(re, '<mark style="background:#fff59d;padding:0 2px;">$1</mark>');
+        } catch (e) {
+            return escaped;
+        }
+    }
+
+    function renderFamilySkusInline(members, search) {
+        const list = members || [];
+        if (!list.length) return '';
+        const locals = list.map(m => highlightSearchTerm(m.sku_local || m.canonical_sku || '—', search)).join(', ');
+        const onlines = list.map(m => highlightSearchTerm(m.sku_online || '—', search)).join(', ');
+        return ' | <span class="riverso-fp-inline-skus">' +
+            '<span class="sku-local" style="color:#1565c0;">Local: <code style="color:#1565c0;">' + locals + '</code></span> | ' +
+            '<span class="sku-online" style="color:#2e7d32;">Online: <code style="color:#2e7d32;">' + onlines + '</code></span>' +
+            '</span>';
+    }
+
+    function renderFamilyPreview(members, search) {
+        if (window.RiversoFamilyEditor && typeof RiversoFamilyEditor.renderListPreview === 'function') {
+            return RiversoFamilyEditor.renderListPreview(members || [], {
+                expanded: !!search,
+                search: search || ''
+            });
+        }
+        return '';
+    }
+
+    let familiesSearchTimer = null;
+    let familiesSearchQuery = '';
+
+    function loadFamilies(search) {
+        const q = search !== undefined ? search : familiesSearchQuery;
+        familiesSearchQuery = (q || '').trim();
+        post('riverso_families_list', { search: familiesSearchQuery }).done(function(r) {
             if (!r.success) {
                 $('#families-list').html('<div style="color: #d32f2f; padding: 20px;">Error al cargar familias</div>');
                 return;
             }
 
             const families = r.data.families || [];
+            const total = families.length;
+            const label = familiesSearchQuery
+                ? total + ' coincidencia' + (total !== 1 ? 's' : '')
+                : total + ' familia' + (total !== 1 ? 's' : '');
+            $('#families-search-count').text(label);
+
             let html = '';
-            
+
             if (families.length === 0) {
-                html = '<p style="color: #999; text-align: center; padding: 20px;">Sin familias</p>';
+                html = familiesSearchQuery
+                    ? '<p style="color: #999; text-align: center; padding: 20px;">Sin coincidencias para «' + esc(familiesSearchQuery) + '»</p>'
+                    : '<p style="color: #999; text-align: center; padding: 20px;">Sin familias</p>';
             } else {
                 families.forEach(f => {
                     const stock = (f.stock_unidades !== undefined && f.stock_unidades !== null)
                         ? Number(f.stock_unidades).toLocaleString('es-CL') + ' u'
                         : '—';
+                    const preview = renderFamilyPreview(f.members, familiesSearchQuery);
+                    const memberSkus = renderFamilySkusInline(f.members, familiesSearchQuery);
                     html += '<div class="family-card">';
                     html += '<div class="family-header">';
-                    html += '<div><div class="family-name">' + esc(f.nombre) + '</div><small style="color: #999;">' + esc(f.codigo_grupo) + ' · ' + esc(f.tipo_sustitucion || '') + '</small></div>';
-                    html += '<div><span class="family-count">' + (f.miembros_count || 0) + ' miembros</span><br><small>Stock: ' + stock + '</small></div>';
+                    html += '<div><div class="family-name">' + esc(f.nombre) + '</div>';
+                    html += '<small style="color: #999;">Tipo: ' + esc(f.tipo_sustitucion || '-') + ' | Miembros: ' + (f.miembros_count || 0) + ' | Stock familia: ' + stock + memberSkus + '</small></div>';
+                    html += '<div><span class="family-count">' + esc(f.codigo_grupo || '') + '</span></div>';
                     html += '</div>';
+                    html += preview;
                     html += '<div class="family-actions">';
                     html += '<button type="button" class="btn-tiny secondary" data-family-view="' + f.id + '">Ver</button>';
                     if (canManageFamilies) {
@@ -190,6 +248,26 @@ $can_manage_families = current_user_can('riverso_manage_families');
             $('#families-list').html(html);
         });
     }
+
+    $(document).on('click', '.riverso-fp-toggle', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const $wrap = $(this).closest('.riverso-family-list-preview');
+        const $ul = $wrap.find('.riverso-fp-members');
+        const open = !$ul.is(':visible');
+        $ul.toggle(open);
+        const count = $wrap.find('.riverso-fp-member').length;
+        $(this).text((open ? '▼' : '▶') + ' ' + count + ' miembro(s)');
+        $wrap.attr('data-expanded', open ? '1' : '0');
+    });
+
+    $('#families-search').on('input', function() {
+        clearTimeout(familiesSearchTimer);
+        const val = $(this).val().trim();
+        familiesSearchTimer = setTimeout(function() {
+            loadFamilies(val);
+        }, 300);
+    });
 
     $('.cat-tabs button').click(function(e) {
         e.preventDefault();

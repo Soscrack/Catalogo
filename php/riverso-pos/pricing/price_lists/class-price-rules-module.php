@@ -30,12 +30,14 @@ class Riverso_Price_Rules_Module {
     }
 
     public function init() {
+        self::maybe_upgrade_schema();
         add_action('wp_ajax_riverso_price_rules_list', [$this, 'ajax_list']);
         add_action('wp_ajax_riverso_price_rule_get', [$this, 'ajax_get']);
         add_action('wp_ajax_riverso_price_rule_save', [$this, 'ajax_save']);
         add_action('wp_ajax_riverso_price_rule_approve', [$this, 'ajax_approve']);
         add_action('wp_ajax_riverso_price_rule_assign', [$this, 'ajax_assign']);
         add_action('wp_ajax_riverso_price_rule_preview', [$this, 'ajax_preview']);
+        add_action('wp_ajax_riverso_price_rule_eval_formulas', [$this, 'ajax_eval_formulas']);
     }
 
     public static function create_tables() {
@@ -73,6 +75,7 @@ class Riverso_Price_Rules_Module {
             multiplicador DECIMAL(8,4) DEFAULT NULL,
             addendo DECIMAL(12,2) DEFAULT NULL,
             redondeo VARCHAR(20) NOT NULL DEFAULT 'ninguno',
+            formula VARCHAR(500) DEFAULT NULL,
             total_minimo DECIMAL(12,2) DEFAULT NULL,
             orden INT NOT NULL DEFAULT 0,
             PRIMARY KEY (id),
@@ -93,8 +96,26 @@ class Riverso_Price_Rules_Module {
         ) $charset_collate;";
         dbDelta($sql);
 
+        self::maybe_upgrade_schema();
         self::seed_example_rule();
         self::seed_legacy_screw_rule();
+    }
+
+    /**
+     * Añade columnas nuevas de tramos si la tabla ya existía.
+     */
+    public static function maybe_upgrade_schema() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'riverso_price_rule_tiers';
+        $found = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+        if (!$found) {
+            return;
+        }
+        $table_esc = esc_sql($table);
+        $col = $wpdb->get_results("SHOW COLUMNS FROM `{$table_esc}` LIKE 'formula'");
+        if (empty($col)) {
+            $wpdb->query("ALTER TABLE `{$table_esc}` ADD formula VARCHAR(500) NULL DEFAULT NULL AFTER redondeo");
+        }
     }
 
     /**
@@ -126,12 +147,12 @@ class Riverso_Price_Rules_Module {
 
         // Tramos del ejemplo R-1.
         $tiers = [
-            ['qty_min' => 1,     'qty_max' => 20,    'formula_tipo' => 'multiplicador', 'multiplicador' => 3,    'addendo' => null, 'redondeo' => 'techo_decena', 'total_minimo' => 30,   'orden' => 1],
-            ['qty_min' => 21,    'qty_max' => 50,    'formula_tipo' => 'multiplicador', 'multiplicador' => 2,    'addendo' => null, 'redondeo' => 'techo_decena', 'total_minimo' => null, 'orden' => 2],
-            ['qty_min' => 51,    'qty_max' => 100,   'formula_tipo' => 'suma',          'multiplicador' => null, 'addendo' => 4,    'redondeo' => 'ninguno',      'total_minimo' => null, 'orden' => 3],
-            ['qty_min' => 101,   'qty_max' => 299,   'formula_tipo' => 'suma',          'multiplicador' => null, 'addendo' => 3,    'redondeo' => 'ninguno',      'total_minimo' => null, 'orden' => 4],
-            ['qty_min' => 300,   'qty_max' => 10999, 'formula_tipo' => 'multiplicador', 'multiplicador' => 1,    'addendo' => null, 'redondeo' => 'ninguno',      'total_minimo' => null, 'orden' => 5],
-            ['qty_min' => 11000, 'qty_max' => null,  'formula_tipo' => 'rango',         'multiplicador' => 1.7,  'addendo' => null, 'redondeo' => 'ninguno',      'total_minimo' => null, 'orden' => 6],
+            ['qty_min' => 1,     'qty_max' => 20,    'formula_tipo' => 'formula', 'formula' => 'T10(P*3)', 'multiplicador' => 3,    'addendo' => null, 'redondeo' => 'ninguno', 'total_minimo' => 30,   'orden' => 1],
+            ['qty_min' => 21,    'qty_max' => 50,    'formula_tipo' => 'formula', 'formula' => 'T10(P*2)', 'multiplicador' => 2,    'addendo' => null, 'redondeo' => 'ninguno', 'total_minimo' => null, 'orden' => 2],
+            ['qty_min' => 51,    'qty_max' => 100,   'formula_tipo' => 'formula', 'formula' => 'P+4',      'multiplicador' => null, 'addendo' => 4,    'redondeo' => 'ninguno', 'total_minimo' => null, 'orden' => 3],
+            ['qty_min' => 101,   'qty_max' => 299,   'formula_tipo' => 'formula', 'formula' => 'P+3',      'multiplicador' => null, 'addendo' => 3,    'redondeo' => 'ninguno', 'total_minimo' => null, 'orden' => 4],
+            ['qty_min' => 300,   'qty_max' => 10999, 'formula_tipo' => 'formula', 'formula' => 'P',        'multiplicador' => 1,    'addendo' => null, 'redondeo' => 'ninguno', 'total_minimo' => null, 'orden' => 5],
+            ['qty_min' => 11000, 'qty_max' => null,  'formula_tipo' => 'formula', 'formula' => 'P*1.7',    'multiplicador' => 1.7,  'addendo' => null, 'redondeo' => 'ninguno', 'total_minimo' => null, 'orden' => 6],
         ];
         foreach ($tiers as $t) {
             $t['rule_id'] = $rule_id;
@@ -170,9 +191,9 @@ class Riverso_Price_Rules_Module {
         }
 
         $tiers = [
-            ['qty_min' => 1, 'qty_max' => 30, 'formula_tipo' => 'suma', 'multiplicador' => null, 'addendo' => 3, 'redondeo' => 'techo_decena', 'total_minimo' => null, 'orden' => 1],
-            ['qty_min' => 31, 'qty_max' => 300, 'formula_tipo' => 'suma', 'multiplicador' => null, 'addendo' => 3, 'redondeo' => 'ninguno', 'total_minimo' => null, 'orden' => 2],
-            ['qty_min' => 301, 'qty_max' => null, 'formula_tipo' => 'multiplicador', 'multiplicador' => 1, 'addendo' => null, 'redondeo' => 'ninguno', 'total_minimo' => null, 'orden' => 3],
+            ['qty_min' => 1, 'qty_max' => 30, 'formula_tipo' => 'formula', 'formula' => 'T10(P+3)', 'multiplicador' => null, 'addendo' => 3, 'redondeo' => 'ninguno', 'total_minimo' => null, 'orden' => 1],
+            ['qty_min' => 31, 'qty_max' => 300, 'formula_tipo' => 'formula', 'formula' => 'P+3', 'multiplicador' => null, 'addendo' => 3, 'redondeo' => 'ninguno', 'total_minimo' => null, 'orden' => 2],
+            ['qty_min' => 301, 'qty_max' => null, 'formula_tipo' => 'formula', 'formula' => 'P', 'multiplicador' => 1, 'addendo' => null, 'redondeo' => 'ninguno', 'total_minimo' => null, 'orden' => 3],
         ];
         foreach ($tiers as $tier) {
             $tier['rule_id'] = $rule_id;
@@ -212,7 +233,11 @@ class Riverso_Price_Rules_Module {
             return new WP_Error('db_error', 'No se pudo crear la regla');
         }
 
-        $this->replace_tiers($rule_id, $data['tiers'] ?? []);
+        $replaced = $this->replace_tiers($rule_id, $data['tiers'] ?? []);
+        if (is_wp_error($replaced)) {
+            $wpdb->delete("{$prefix}price_rules", ['id' => $rule_id], ['%d']);
+            return $replaced;
+        }
 
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('rule_created', 'price_rule', $rule_id, [
@@ -224,35 +249,75 @@ class Riverso_Price_Rules_Module {
     }
 
     /**
+     * Normaliza y valida tramos (incluye fórmulas tipo calculadora).
+     *
+     * @param array $tiers
+     * @return array|WP_Error
+     */
+    public function normalize_tiers($tiers) {
+        $normalized = [];
+        $orden = 0;
+        foreach ((array) $tiers as $t) {
+            $orden++;
+            $formula_txt = Riverso_Price_Rule_Engine::sanitize_formula($t['formula'] ?? '');
+            if ($formula_txt === '' && !empty($t['formula_tipo']) && $t['formula_tipo'] !== 'formula') {
+                $formula_txt = Riverso_Price_Rule_Engine::formula_from_tier($t);
+            }
+            if ($formula_txt !== '') {
+                $check = Riverso_Price_Rule_Engine::validate_formula($formula_txt);
+                if (is_wp_error($check)) {
+                    return new WP_Error('invalid_formula', 'Tramo ' . $orden . ': ' . $check->get_error_message());
+                }
+            }
+
+            $formula_tipo = 'formula';
+            if ($formula_txt === '') {
+                $formula_tipo = in_array($t['formula_tipo'] ?? '', Riverso_Price_Rule_Engine::FORMULAS, true)
+                    ? $t['formula_tipo'] : 'multiplicador';
+            }
+            $redondeo = in_array($t['redondeo'] ?? '', Riverso_Price_Rule_Engine::REDONDEOS, true)
+                ? $t['redondeo'] : 'ninguno';
+            if ($formula_txt !== '') {
+                $redondeo = 'ninguno';
+            }
+
+            $normalized[] = [
+                'qty_min' => intval($t['qty_min'] ?? 1),
+                'qty_max' => (isset($t['qty_max']) && $t['qty_max'] !== '' && $t['qty_max'] !== null) ? intval($t['qty_max']) : null,
+                'formula_tipo' => $formula_tipo,
+                'multiplicador' => (isset($t['multiplicador']) && $t['multiplicador'] !== '' && $t['multiplicador'] !== null) ? floatval($t['multiplicador']) : null,
+                'addendo' => (isset($t['addendo']) && $t['addendo'] !== '' && $t['addendo'] !== null) ? floatval($t['addendo']) : null,
+                'redondeo' => $redondeo,
+                'formula' => $formula_txt !== '' ? $formula_txt : null,
+                'total_minimo' => (isset($t['total_minimo']) && $t['total_minimo'] !== '' && $t['total_minimo'] !== null) ? floatval($t['total_minimo']) : null,
+                'orden' => intval($t['orden'] ?? $orden),
+            ];
+        }
+        return $normalized;
+    }
+
+    /**
      * Reemplaza los tramos de una regla.
+     *
+     * @return true|WP_Error
      */
     public function replace_tiers($rule_id, $tiers) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         $rule_id = intval($rule_id);
 
+        $normalized = $this->normalize_tiers($tiers);
+        if (is_wp_error($normalized)) {
+            return $normalized;
+        }
+
         $wpdb->delete("{$prefix}price_rule_tiers", ['rule_id' => $rule_id], ['%d']);
 
-        $orden = 0;
-        foreach ((array) $tiers as $t) {
-            $orden++;
-            $formula = in_array($t['formula_tipo'] ?? '', Riverso_Price_Rule_Engine::FORMULAS, true)
-                ? $t['formula_tipo'] : 'multiplicador';
-            $redondeo = in_array($t['redondeo'] ?? '', Riverso_Price_Rule_Engine::REDONDEOS, true)
-                ? $t['redondeo'] : 'ninguno';
-
-            $wpdb->insert("{$prefix}price_rule_tiers", [
-                'rule_id' => $rule_id,
-                'qty_min' => intval($t['qty_min'] ?? 1),
-                'qty_max' => (isset($t['qty_max']) && $t['qty_max'] !== '' && $t['qty_max'] !== null) ? intval($t['qty_max']) : null,
-                'formula_tipo' => $formula,
-                'multiplicador' => (isset($t['multiplicador']) && $t['multiplicador'] !== '' && $t['multiplicador'] !== null) ? floatval($t['multiplicador']) : null,
-                'addendo' => (isset($t['addendo']) && $t['addendo'] !== '' && $t['addendo'] !== null) ? floatval($t['addendo']) : null,
-                'redondeo' => $redondeo,
-                'total_minimo' => (isset($t['total_minimo']) && $t['total_minimo'] !== '' && $t['total_minimo'] !== null) ? floatval($t['total_minimo']) : null,
-                'orden' => intval($t['orden'] ?? $orden),
-            ]);
+        foreach ($normalized as $row) {
+            $row['rule_id'] = $rule_id;
+            $wpdb->insert("{$prefix}price_rule_tiers", $row);
         }
+        return true;
     }
 
     /**
@@ -305,6 +370,10 @@ class Riverso_Price_Rules_Module {
             "SELECT * FROM {$prefix}price_rule_tiers WHERE rule_id = %d ORDER BY orden ASC",
             $rule_id
         ), ARRAY_A);
+        foreach ($rule['tiers'] as &$tier) {
+            $tier['formula'] = Riverso_Price_Rule_Engine::formula_from_tier($tier);
+        }
+        unset($tier);
         $rule['assignments'] = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$prefix}price_rule_assignments WHERE rule_id = %d",
             $rule_id
@@ -387,6 +456,17 @@ class Riverso_Price_Rules_Module {
     }
 
     private function get_assignment_rule($target_tipo, $target_id) {
+        return $this->get_assigned_rule_id($target_tipo, $target_id);
+    }
+
+    /**
+     * Regla asignada a un target (sin resolver versión aprobada).
+     *
+     * @param string $target_tipo
+     * @param int    $target_id
+     * @return int|null
+     */
+    public function get_assigned_rule_id($target_tipo, $target_id) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         $rule_id = $wpdb->get_var($wpdb->prepare(
@@ -463,11 +543,8 @@ class Riverso_Price_Rules_Module {
             return null;
         }
 
-        if ($p_asignado === null && class_exists('Riverso_Pricing_Module')) {
-            $price_row = Riverso_Pricing_Module::get_instance()->get_local_price($producto_base_id);
-            if ($price_row && $price_row['p_asignado'] !== null) {
-                $p_asignado = (float) $price_row['p_asignado'];
-            }
+        if ($p_asignado === null) {
+            $p_asignado = $this->resolve_p_asignado_for_base($producto_base_id);
         }
         if ($p_asignado === null) {
             return null;
@@ -475,6 +552,38 @@ class Riverso_Price_Rules_Module {
 
         $tiers = $this->get_tiers($rule_id);
         return Riverso_Price_Rule_Engine::evaluate($tiers, $p_asignado, $qty);
+    }
+
+    /**
+     * P base para reglas: producto unitario de la familia si aplica, si no el propio.
+     *
+     * @param int $producto_base_id
+     * @return float|null
+     */
+    public function resolve_p_asignado_for_base($producto_base_id) {
+        if (!class_exists('Riverso_Pricing_Module')) {
+            return null;
+        }
+
+        $pricing = Riverso_Pricing_Module::get_instance();
+        $producto_base_id = intval($producto_base_id);
+
+        $product_rule = $this->get_assigned_rule_id('producto', $producto_base_id);
+        $price_base_id = $producto_base_id;
+
+        if (!$product_rule && class_exists('Riverso_Unit_Product_Service')) {
+            $ctx = Riverso_Unit_Product_Service::get_instance()->resolve_family_unit_for_base($producto_base_id);
+            if ($ctx && !empty($ctx['es_producto_unitario']) && !empty($ctx['unit_producto_base_id'])) {
+                $price_base_id = intval($ctx['unit_producto_base_id']);
+            }
+        }
+
+        $price_row = $pricing->get_local_price($price_base_id);
+        if ($price_row && $price_row['p_asignado'] !== null) {
+            return (float) $price_row['p_asignado'];
+        }
+
+        return null;
     }
 
     /* ===================== AJAX ===================== */
@@ -534,7 +643,10 @@ class Riverso_Price_Rules_Module {
                 }
                 wp_send_json_success(['rule_id' => $new_id, 'message' => 'Nueva versión en borrador creada']);
             }
-            $this->replace_tiers($rule_id, $tiers);
+            $replaced = $this->replace_tiers($rule_id, $tiers);
+            if (is_wp_error($replaced)) {
+                wp_send_json_error(['message' => $replaced->get_error_message()]);
+            }
             if (!empty($_POST['nombre'])) {
                 $wpdb->update("{$prefix}price_rules", ['nombre' => sanitize_text_field($_POST['nombre'])], ['id' => $rule_id]);
             }
@@ -588,8 +700,56 @@ class Riverso_Price_Rules_Module {
         $rule_id = intval($_POST['rule_id'] ?? 0);
         $p_asignado = floatval($_POST['p_asignado'] ?? 0);
         $qty = floatval($_POST['qty'] ?? 1);
-        $tiers = $this->get_tiers($rule_id);
+        $tiers = [];
+        if (!empty($_POST['tiers'])) {
+            $decoded = json_decode(wp_unslash($_POST['tiers']), true);
+            if (is_array($decoded)) {
+                $normalized = $this->normalize_tiers($decoded);
+                if (is_wp_error($normalized)) {
+                    wp_send_json_error(['message' => $normalized->get_error_message()]);
+                }
+                $tiers = $normalized;
+            }
+        }
+        if (!$tiers && $rule_id) {
+            $tiers = $this->get_tiers($rule_id);
+        }
         $price = Riverso_Price_Rule_Engine::evaluate($tiers, $p_asignado, $qty);
-        wp_send_json_success(['price' => $price]);
+        $total = ($price === null) ? null : round($price * $qty, 2);
+        wp_send_json_success([
+            'price' => $price,
+            'qty' => $qty,
+            'total' => $total,
+        ]);
+    }
+
+    /**
+     * Evalúa fórmulas del editor (vista previa por tramo, sin guardar).
+     */
+    public function ajax_eval_formulas() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_prices')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $p_asignado = floatval($_POST['p_asignado'] ?? 0);
+        $formulas = isset($_POST['formulas']) ? json_decode(wp_unslash($_POST['formulas']), true) : [];
+        if (!is_array($formulas)) {
+            $formulas = [];
+        }
+        $results = [];
+        foreach ($formulas as $i => $formula) {
+            $formula = Riverso_Price_Rule_Engine::sanitize_formula($formula);
+            if ($formula === '') {
+                $results[(string) $i] = ['ok' => true, 'value' => null, 'hint' => ''];
+                continue;
+            }
+            try {
+                $value = Riverso_Price_Rule_Engine::evaluate_formula($formula, $p_asignado);
+                $results[(string) $i] = ['ok' => true, 'value' => round($value, 2), 'hint' => ''];
+            } catch (Exception $e) {
+                $results[(string) $i] = ['ok' => false, 'value' => null, 'hint' => $e->getMessage()];
+            }
+        }
+        wp_send_json_success(['results' => $results]);
     }
 }

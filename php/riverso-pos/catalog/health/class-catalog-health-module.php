@@ -407,7 +407,13 @@ class Riverso_Catalog_Health_Module {
                 ON eg.id = em.grupo_id AND eg.activo = 1
              WHERE pb.estado = 'activo'
                AND pb.deleted_at IS NULL AND pb.archived_at IS NULL
-               AND eg.id IS NULL"
+               AND pb.familia_decision = 'requiere'
+               AND em.id IS NULL
+               AND pb.unit_of_grupo_id IS NULL
+               AND NOT EXISTS (
+                   SELECT 1 FROM {$prefix}equivalence_groups eg3
+                   WHERE eg3.unit_producto_base_id = pb.id AND eg3.activo = 1
+               )"
         );
 
         $codes = $wpdb->get_results(

@@ -638,3 +638,225 @@
     background: #f8d7da;
     color: #721c24;
 }
+
+/* Reglas de precio: editor tipo calculadora */
+.riverso-price-rules .rpr-layout {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+}
+
+.riverso-price-rules .rpr-list {
+    flex: 1;
+    min-width: 280px;
+}
+
+.riverso-price-rules .rpr-editor-wrap {
+    flex: 1.6;
+    min-width: 420px;
+}
+
+.riverso-price-rules .rpr-editor {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    padding: 16px;
+    border-radius: 4px;
+}
+
+.riverso-price-rules .rpr-meta {
+    margin-top: 0;
+}
+
+.riverso-price-rules .rpr-list-filters {
+    margin: 0 0 8px;
+}
+
+.riverso-price-rules .rpr-editor-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+}
+
+.riverso-price-rules .rpr-tiers-wrap {
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+}
+
+.riverso-price-rules .rpr-editor-grid.calc-hidden .rpr-calc {
+    display: none;
+}
+
+.riverso-price-rules .rpr-tiers .t-formula-input {
+    width: 100%;
+    min-width: 160px;
+    font-family: Consolas, "SFMono-Regular", Menlo, Monaco, monospace;
+    font-size: 13px;
+    padding: 6px 8px;
+    border: 1px solid #8c8f94;
+    border-radius: 4px;
+    background: #f6f7f7;
+}
+
+.riverso-price-rules .rpr-tiers .t-formula-input:focus {
+    background: #fff;
+    border-color: #2271b1;
+    box-shadow: 0 0 0 1px #2271b1;
+    outline: none;
+}
+
+.riverso-price-rules .rpr-tiers .t-formula-input.is-invalid {
+    border-color: #d63638;
+    background: #fcf0f1;
+}
+
+.riverso-price-rules .rpr-formula-hint {
+    font-size: 11px;
+    color: #646970;
+    margin-top: 3px;
+    min-height: 14px;
+}
+
+.riverso-price-rules .rpr-tiers tr.is-active {
+    background: #e7f2fb;
+}
+
+.riverso-price-rules .rpr-preview {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.riverso-price-rules .rpr-err {
+    color: #d63638;
+    font-size: 11px;
+}
+
+.riverso-price-rules .rpr-calc {
+    width: 100%;
+    max-width: 320px;
+    background: #1d2327;
+    color: #f0f0f1;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.riverso-price-rules .rpr-calc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.riverso-price-rules .rpr-calc-close {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: #f0f0f1;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+}
+
+.riverso-price-rules .rpr-calc-close:hover {
+    color: #f0b849;
+}
+
+.riverso-price-rules .rpr-calc-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 11px;
+    color: #a7aaad;
+    margin-bottom: 10px;
+}
+
+.riverso-price-rules .rpr-calc-legend b {
+    color: #72aee6;
+    font-family: Consolas, Menlo, Monaco, monospace;
+}
+
+.riverso-price-rules .rpr-calc-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+
+.riverso-price-rules .rpr-calc-btn {
+    appearance: none;
+    border: 0;
+    border-radius: 6px;
+    background: #3c434a;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    min-height: 36px;
+    cursor: pointer;
+}
+
+.riverso-price-rules .rpr-calc-btn:hover {
+    background: #50575e;
+}
+
+.riverso-price-rules .rpr-calc-btn.rpr-calc-var {
+    background: #00a32a;
+}
+
+.riverso-price-rules .rpr-calc-btn.rpr-calc-var:hover {
+    background: #008a20;
+}
+
+.riverso-price-rules .rpr-calc-btn.rpr-calc-fn {
+    background: #2271b1;
+    font-family: Consolas, Menlo, Monaco, monospace;
+    font-size: 12px;
+}
+
+.riverso-price-rules .rpr-calc-btn.rpr-calc-fn:hover {
+    background: #135e96;
+}
+
+.riverso-price-rules .rpr-calc-btn.rpr-calc-op {
+    background: #646970;
+}
+
+.riverso-price-rules .rpr-calc-btn.rpr-calc-danger {
+    background: #8c1742;
+}
+
+.riverso-price-rules .rpr-calc-btn.rpr-calc-danger:hover {
+    background: #a32a5a;
+}
+
+.riverso-price-rules .rpr-calc-btn.rpr-calc-danger[data-action="clear"] {
+    grid-column: 1 / -1;
+}
+
+.riverso-price-rules .rpr-calc-hint {
+    font-size: 11px;
+    color: #a7aaad;
+    margin: 10px 0 0;
+}
+
+.riverso-price-rules .rpr-calc-hint code {
+    background: #3c434a;
+    color: #72aee6;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+.riverso-price-rules .rpr-sim #sim-result {
+    margin-left: 8px;
+}
+
+.riverso-price-rules .rpr-sim-total {
+    font-size: 1.05em;
+}
+
+@media (max-width: 1100px) {
+    .riverso-price-rules .rpr-layout {
+        flex-direction: column;
+    }
+}

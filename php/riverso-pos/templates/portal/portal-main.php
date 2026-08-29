@@ -345,6 +345,57 @@
         .task-actions {
             display: flex;
             gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .task-type-badge {
+            font-size: 11px;
+            color: #666;
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-left: 6px;
+        }
+
+        .task-category-badge {
+            font-size: 11px;
+            color: #1565c0;
+            background: #e3f2fd;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-left: 6px;
+        }
+
+        .task-no-target {
+            font-size: 11px;
+            color: #b71c1c;
+            background: #ffebee;
+            padding: 2px 8px;
+            border-radius: 3px;
+        }
+
+        .portal-task-tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        .portal-task-tabs a {
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            color: var(--text-secondary);
+            background: var(--bg-light);
+            border: 1px solid var(--border);
+            font-size: 13px;
+        }
+
+        .portal-task-tabs a.active {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
         }
         
         /* Buttons */
@@ -769,6 +820,20 @@ $tareas = $wpdb->get_results($wpdb->prepare(
      ORDER BY FIELD(t.prioridad, 'urgente', 'alta', 'normal', 'baja'), t.created_at DESC LIMIT 5",
     $user_id
 ), ARRAY_A) ?? [];
+
+foreach ($tareas as &$tarea_row) {
+    if (class_exists('Riverso_Task_Module')) {
+        Riverso_Task_Module::enrich_task($tarea_row, 'portal');
+    } else {
+        $tarea_row['target_url'] = riverso_resolve_task_target($tarea_row, 'portal');
+    }
+}
+unset($tarea_row);
+
+$portal_task_types = class_exists('Riverso_Task_Module') ? Riverso_Task_Module::TASK_TYPES : [];
+$portal_task_categories = riverso_get_task_categories();
+$portal_task_type_labels = riverso_get_task_types();
+$portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Task_Module::TASK_TYPE_CATEGORY : [];
 ?>
 
 <div class="portal-wrapper">
@@ -889,26 +954,28 @@ $tareas = $wpdb->get_results($wpdb->prepare(
                         <p>No tienes tareas pendientes</p>
                     </div>
                     <?php else: ?>
-                        <?php foreach ($tareas as $tarea): ?>
+                        <?php foreach ($tareas as $tarea):
+                            $tipo_info = $portal_task_type_labels[$tarea['tipo']] ?? ['label' => $tarea['tipo']];
+                        ?>
                         <div class="task-item">
                             <div class="task-priority <?php echo esc_attr($tarea['prioridad']); ?>"></div>
                             <div class="task-content">
                                 <div class="task-title"><?php echo esc_html($tarea['titulo']); ?></div>
                                 <div class="task-meta">
-                                    <?php echo esc_html($tarea['tipo']); ?> 
-                                    • <?php echo date_i18n('j M', strtotime($tarea['created_at'])); ?>
+                                    <span class="task-type-badge"><?php echo esc_html($tipo_info['label']); ?></span>
+                                    <?php if (!empty($tarea['categoria_label'])): ?>
+                                        <span class="task-category-badge"><?php echo esc_html($tarea['categoria_label']); ?></span>
+                                    <?php endif; ?>
+                                    • <?php echo esc_html(date_i18n('j M', strtotime($tarea['created_at']))); ?>
                                     <?php if ($tarea['fecha_limite']): ?>
-                                        • Límite: <?php echo date_i18n('j M', strtotime($tarea['fecha_limite'])); ?>
+                                        • Límite: <?php echo esc_html(date_i18n('j M', strtotime($tarea['fecha_limite']))); ?>
                                     <?php endif; ?>
                                 </div>
                             </div>
                             <div class="task-actions">
-                                <?php 
-                                    $target_url = riverso_resolve_task_target($tarea);
-                                    if ($target_url):
-                                ?>
-                                    <a href="<?php echo esc_url($target_url); ?>" class="btn btn-info btn-sm">
-                                        Ir a la tarea
+                                <?php if (!empty($tarea['target_url'])): ?>
+                                    <a href="<?php echo esc_url($tarea['target_url']); ?>" class="btn btn-primary btn-sm">
+                                        Ir a realizar
                                     </a>
                                 <?php endif; ?>
                             </div>
@@ -933,7 +1000,7 @@ $tareas = $wpdb->get_results($wpdb->prepare(
                         <?php endif; ?>
                         
                         <?php if (current_user_can('riverso_create_tasks')): ?>
-                        <a href="<?php echo admin_url('admin.php?page=riverso-tasks'); ?>" class="quick-action">
+                        <a href="<?php echo esc_url(admin_url('admin.php?page=riverso-pos-tasks&action=new')); ?>" class="quick-action">
                             <span class="dashicons dashicons-plus-alt"></span>
                             <span>Nueva Tarea</span>
                         </a>
@@ -947,7 +1014,7 @@ $tareas = $wpdb->get_results($wpdb->prepare(
                         <?php endif; ?>
                         
                         <?php if (current_user_can('riverso_view_warehouse')): ?>
-                        <a href="<?php echo admin_url('admin.php?page=riverso-warehouse'); ?>" class="quick-action">
+                        <a href="<?php echo home_url('/interno/warehouse/'); ?>" class="quick-action">
                             <span class="dashicons dashicons-store"></span>
                             <span>Ver Bodega</span>
                         </a>
@@ -958,67 +1025,173 @@ $tareas = $wpdb->get_results($wpdb->prepare(
         </div>
         
         <?php elseif ($current_page === 'tasks'): ?>
+        <?php
+        $portal_task_tab = sanitize_key($_GET['tab'] ?? 'todas');
+        $portal_task_filter_categoria = sanitize_key($_GET['categoria'] ?? '');
+        $portal_task_filter_tipo = sanitize_key($_GET['tipo'] ?? '');
+        $portal_task_filter_prioridad = sanitize_key($_GET['prioridad'] ?? '');
+
+        $portal_task_query = [
+            'limit' => 50,
+            'portal_scope_user' => $user_id,
+        ];
+        if ($portal_task_tab === 'mis-tareas') {
+            $portal_task_query['asignado_a'] = $user_id;
+            unset($portal_task_query['portal_scope_user']);
+        } elseif ($portal_task_tab === 'sin-asignar') {
+            $portal_task_query['sin_asignar'] = true;
+            unset($portal_task_query['portal_scope_user']);
+        } elseif ($portal_task_tab === 'completadas') {
+            $portal_task_query['estado'] = 'completada';
+            $portal_task_query['include_completed'] = true;
+            unset($portal_task_query['portal_scope_user']);
+        }
+        if ($portal_task_filter_categoria) {
+            $portal_task_query['categoria'] = $portal_task_filter_categoria;
+        }
+        if ($portal_task_filter_tipo) {
+            $portal_task_query['tipo'] = $portal_task_filter_tipo;
+        }
+        if ($portal_task_filter_prioridad) {
+            $portal_task_query['prioridad'] = $portal_task_filter_prioridad;
+        }
+
+        $all_tasks = class_exists('Riverso_Task_Module')
+            ? Riverso_Task_Module::get_instance()->get_tasks($portal_task_query)
+            : [];
+
+        foreach ($all_tasks as &$portal_task_row) {
+            if (class_exists('Riverso_Task_Module')) {
+                Riverso_Task_Module::enrich_task($portal_task_row, 'portal');
+            }
+        }
+        unset($portal_task_row);
+
+        $portal_tasks_base_url = home_url('/interno/tasks/');
+        $portal_task_tab_links = function($tab) use ($portal_tasks_base_url, $portal_task_filter_categoria, $portal_task_filter_tipo, $portal_task_filter_prioridad) {
+            return add_query_arg(array_filter([
+                'tab' => $tab !== 'todas' ? $tab : null,
+                'categoria' => $portal_task_filter_categoria ?: null,
+                'tipo' => $portal_task_filter_tipo ?: null,
+                'prioridad' => $portal_task_filter_prioridad ?: null,
+            ]), $portal_tasks_base_url);
+        };
+        ?>
         <!-- Página Tareas -->
         <div class="content-section">
             <div class="section-header">
-                <h2 class="section-title">Mis Tareas</h2>
+                <h2 class="section-title">Tareas</h2>
                 <?php if (current_user_can('riverso_create_tasks')): ?>
                 <button class="btn btn-primary" onclick="crearTarea()">
                     <span class="dashicons dashicons-plus-alt"></span> Nueva Tarea
                 </button>
                 <?php endif; ?>
             </div>
-            <div class="section-body" id="tasks-list">
-                <?php
-                $all_tasks = $wpdb->get_results($wpdb->prepare(
-                    "SELECT t.*, u.display_name as creador_nombre, ua.display_name as asignado_nombre
-                     FROM {$prefix}tareas t
-                     LEFT JOIN {$wpdb->users} u ON t.creado_por = u.ID
-                     LEFT JOIN {$wpdb->users} ua ON t.asignado_a = ua.ID
-                     WHERE (t.asignado_a = %d OR t.asignado_a IS NULL OR t.creado_por = %d)
-                     ORDER BY FIELD(t.estado, 'en_progreso', 'pendiente', 'completada', 'cancelada'),
-                              FIELD(t.prioridad, 'urgente', 'alta', 'normal', 'baja'), t.created_at DESC
-                     LIMIT 50",
-                    $user_id, $user_id
-                ), ARRAY_A);
-                
-                if (empty($all_tasks)): ?>
+            <div class="section-body">
+                <div class="portal-task-tabs">
+                    <a href="<?php echo esc_url($portal_task_tab_links('todas')); ?>" class="<?php echo $portal_task_tab === 'todas' ? 'active' : ''; ?>">Todas</a>
+                    <a href="<?php echo esc_url($portal_task_tab_links('mis-tareas')); ?>" class="<?php echo $portal_task_tab === 'mis-tareas' ? 'active' : ''; ?>">Mis Tareas</a>
+                    <a href="<?php echo esc_url($portal_task_tab_links('sin-asignar')); ?>" class="<?php echo $portal_task_tab === 'sin-asignar' ? 'active' : ''; ?>">Sin Asignar</a>
+                    <a href="<?php echo esc_url($portal_task_tab_links('completadas')); ?>" class="<?php echo $portal_task_tab === 'completadas' ? 'active' : ''; ?>">Completadas</a>
+                </div>
+
+                <form method="get" action="<?php echo esc_url($portal_tasks_base_url); ?>" class="portal-filters" style="margin-bottom: 16px;">
+                    <?php if ($portal_task_tab !== 'todas'): ?>
+                        <input type="hidden" name="tab" value="<?php echo esc_attr($portal_task_tab); ?>">
+                    <?php endif; ?>
+                    <select name="categoria" id="portal-filter-categoria">
+                        <option value="">Todas las categorías</option>
+                        <?php foreach ($portal_task_categories as $cat_key => $cat_label): ?>
+                            <option value="<?php echo esc_attr($cat_key); ?>" <?php selected($portal_task_filter_categoria, $cat_key); ?>>
+                                <?php echo esc_html($cat_label); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <select name="tipo" id="portal-filter-tipo">
+                        <option value="">Todos los tipos</option>
+                        <?php foreach ($portal_task_types as $type_key => $type_label): ?>
+                            <option value="<?php echo esc_attr($type_key); ?>"
+                                    data-categoria="<?php echo esc_attr($portal_task_type_categories[$type_key] ?? 'otros'); ?>"
+                                    <?php selected($portal_task_filter_tipo, $type_key); ?>>
+                                <?php echo esc_html($type_label); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <select name="prioridad">
+                        <option value="">Todas las prioridades</option>
+                        <?php foreach (Riverso_Task_Module::PRIORITIES as $prio_key => $prio_data): ?>
+                            <option value="<?php echo esc_attr($prio_key); ?>" <?php selected($portal_task_filter_prioridad, $prio_key); ?>>
+                                <?php echo esc_html($prio_data['label']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="submit" class="btn btn-secondary btn-sm">Filtrar</button>
+                    <a href="<?php echo esc_url($portal_task_tab_links($portal_task_tab)); ?>" class="btn btn-secondary btn-sm">Limpiar</a>
+                </form>
+
+                <div id="tasks-list">
+                <?php if (empty($all_tasks)): ?>
                 <div class="empty-state">
                     <span class="dashicons dashicons-clipboard"></span>
                     <p>No hay tareas</p>
                 </div>
-                <?php else: 
-                    foreach ($all_tasks as $t): ?>
-                <div class="task-item" data-id="<?php echo $t['id']; ?>">
+                <?php else:
+                    foreach ($all_tasks as $t):
+                        $tipo_info = $portal_task_type_labels[$t['tipo']] ?? ['label' => $t['tipo']];
+                ?>
+                <div class="task-item" data-id="<?php echo (int) $t['id']; ?>">
                     <div class="task-priority <?php echo esc_attr($t['prioridad']); ?>"></div>
                     <div class="task-content">
                         <div class="task-title"><?php echo esc_html($t['titulo']); ?></div>
                         <div class="task-meta">
                             <span class="task-status <?php echo esc_attr($t['estado']); ?>"><?php echo esc_html(ucfirst($t['estado'])); ?></span>
-                            • <?php echo esc_html($t['tipo']); ?>
-                            <?php if ($t['asignado_nombre']): ?>
+                            <span class="task-type-badge"><?php echo esc_html($tipo_info['label']); ?></span>
+                            <?php if (!empty($t['categoria_label'])): ?>
+                                <span class="task-category-badge"><?php echo esc_html($t['categoria_label']); ?></span>
+                            <?php endif; ?>
+                            <?php if (!empty($t['asignado_nombre'])): ?>
                                 • Asignado a: <?php echo esc_html($t['asignado_nombre']); ?>
                             <?php endif; ?>
                         </div>
                     </div>
                     <?php if ($t['estado'] !== 'completada' && $t['estado'] !== 'cancelada'): ?>
                     <div class="task-actions">
-                        <?php 
-                            $target_url = riverso_resolve_task_target($t);
-                            if ($target_url):
-                        ?>
-                            <a href="<?php echo esc_url($target_url); ?>" class="btn btn-info btn-sm">Ir a la tarea</a>
+                        <?php if (!empty($t['target_url'])): ?>
+                            <a href="<?php echo esc_url($t['target_url']); ?>" class="btn btn-primary btn-sm">Ir a realizar</a>
+                        <?php else: ?>
+                            <span class="task-no-target">Sin destino</span>
                         <?php endif; ?>
-                        <?php if (current_user_can('riverso_complete_tasks')): ?>
-                        <button class="btn btn-primary btn-sm" onclick="completarTarea(<?php echo $t['id']; ?>)">Completar</button>
+                        <?php if (!empty($t['allow_complete']) && current_user_can('riverso_complete_tasks')): ?>
+                        <button class="btn btn-secondary btn-sm" onclick="completarTarea(<?php echo (int) $t['id']; ?>)">Completar</button>
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
                 </div>
                     <?php endforeach;
                 endif; ?>
+                </div>
             </div>
         </div>
+        <script>
+        (function() {
+            const categoria = document.getElementById('portal-filter-categoria');
+            const tipo = document.getElementById('portal-filter-tipo');
+            if (!categoria || !tipo) return;
+            function syncTipoOptions() {
+                const cat = categoria.value;
+                Array.from(tipo.options).forEach(function(opt) {
+                    if (!opt.value) return;
+                    opt.hidden = !!(cat && opt.dataset.categoria !== cat);
+                });
+                if (tipo.value) {
+                    const selected = tipo.options[tipo.selectedIndex];
+                    if (selected && selected.hidden) tipo.value = '';
+                }
+            }
+            categoria.addEventListener('change', syncTipoOptions);
+            syncTipoOptions();
+        })();
+        </script>
         
         <?php elseif ($current_page === 'pos'): ?>
         <!-- Punto de Venta -->
@@ -2906,7 +3079,7 @@ function completarTarea(id) {
 }
 
 function crearTarea() {
-    window.location.href = '<?php echo admin_url('admin.php?page=riverso-tasks&action=new'); ?>';
+    window.location.href = '<?php echo esc_url(admin_url('admin.php?page=riverso-pos-tasks&action=new')); ?>';
 }
 
 let portalPreviewData = null;
@@ -3573,7 +3746,14 @@ function portalEliminarFactura(id, folio) {
         portalSearchTimeout = setTimeout(() => portalLoadInvoices(1), 400);
     });
 
-    if (portalOnInvoicesPage) portalLoadInvoices(1);
+    if (portalOnInvoicesPage) {
+        const invoiceParams = new URLSearchParams(window.location.search);
+        const facturaDeepLink = parseInt(invoiceParams.get('factura') || '0', 10);
+        portalLoadInvoices(1);
+        if (facturaDeepLink) {
+            setTimeout(function() { portalVerFactura(facturaDeepLink); }, 400);
+        }
+    }
 })();
 
 (function() {

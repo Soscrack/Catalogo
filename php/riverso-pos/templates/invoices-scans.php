@@ -8,6 +8,7 @@ if (!defined('ABSPATH')) {
 $can_process = current_user_can('riverso_process_scans')
     || current_user_can('riverso_process_invoices')
     || current_user_can('riverso_create_invoices');
+$gemini_configured = riverso_scan_gemini_configured();
 
 $scan_dte_options = [
     33  => 'Factura electrónica',
@@ -30,8 +31,18 @@ $scan_dte_options = [
     </div>
 
     <?php if ($can_process): ?>
+    <?php if (!$gemini_configured): ?>
+    <div class="notice notice-error inline" style="margin:12px 0;">
+        <p>
+            <strong>Gemini API no configurada.</strong>
+            El ingreso de PDF/imagen necesita una API Key válida.
+            Ve a <a href="<?php echo esc_url(admin_url('admin.php?page=riverso-pos-settings')); ?>">Configuración</a>
+            y pega la clave real (no el valor con asteriscos).
+        </p>
+    </div>
+    <?php endif; ?>
     <p>
-        <button type="button" class="button button-primary" id="btn-upload-scan">
+        <button type="button" class="button button-primary" id="btn-upload-scan" <?php disabled(!$gemini_configured); ?>>
             <span class="dashicons dashicons-upload"></span> Subir PDF o Imagen
         </button>
     </p>

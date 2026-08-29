@@ -59,11 +59,15 @@ class Riverso_POS_Assets {
 
         // Editor de familias (Categorías/Familias y páginas de productos)
         if (strpos($hook, 'riverso-pos-categories') !== false || strpos($hook, 'riverso-pos-products') !== false) {
+            $family_editor_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/family-editor.js';
+            $family_editor_ver = file_exists($family_editor_path)
+                ? (string) filemtime($family_editor_path)
+                : RIVERSO_POS_VERSION;
             wp_enqueue_script(
                 'riverso-family-editor',
                 RIVERSO_POS_PLUGIN_URL . 'assets/js/family-editor.js',
                 ['jquery'],
-                RIVERSO_POS_VERSION,
+                $family_editor_ver,
                 true
             );
             wp_localize_script('riverso-family-editor', 'riversoFamilyEditor', [
@@ -128,11 +132,15 @@ class Riverso_POS_Assets {
             wp_enqueue_style('dashicons');
 
             if ($portal_page === 'categories') {
+                $family_editor_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/family-editor.js';
+                $family_editor_ver = file_exists($family_editor_path)
+                    ? (string) filemtime($family_editor_path)
+                    : RIVERSO_POS_VERSION;
                 wp_enqueue_script(
                     'riverso-family-editor',
                     RIVERSO_POS_PLUGIN_URL . 'assets/js/family-editor.js',
                     ['jquery'],
-                    RIVERSO_POS_VERSION,
+                    $family_editor_ver,
                     true
                 );
                 wp_localize_script('riverso-family-editor', 'riversoFamilyEditor', [

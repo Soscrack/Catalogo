@@ -174,6 +174,25 @@ class Riverso_Pricing_Module {
     }
 
     /**
+     * c_ref unitario: MAX(coste/unidades) de miembros de la familia del producto.
+     *
+     * @param int $producto_base_id
+     * @return float|null
+     */
+    public function calculate_c_ref_unitario($producto_base_id) {
+        if (!class_exists('Riverso_Unit_Product_Service')) {
+            return null;
+        }
+        $svc = Riverso_Unit_Product_Service::get_instance();
+        $ctx = $svc->resolve_family_unit_for_base(intval($producto_base_id));
+        if (!$ctx || empty($ctx['grupo_id'])) {
+            return null;
+        }
+        $result = $svc->calculate_coste_unitario(intval($ctx['grupo_id']));
+        return $result['coste'];
+    }
+
+    /**
      * c_ref ONLINE: costo_unitario del envase/lote específico (por variación
      * WooCommerce). Toma el lote más reciente con costo para esa variación.
      *

@@ -110,6 +110,7 @@ class Riverso_POS_Permissions {
 
         // === EMBOLSADO / EAN13 ===
         'riverso_manage_packaging'   => 'Gestionar embolsado y bolsas',
+        'riverso_manage_manufacturing' => 'Gestionar manufactura (Embolsar)',
         'riverso_generate_ean13'     => 'Generar códigos EAN13',
         'riverso_print_labels'       => 'Imprimir etiquetas con código de barras',
         
@@ -128,6 +129,7 @@ class Riverso_POS_Permissions {
         // === REPORTES ===
         'riverso_view_reports'       => 'Ver reportes',
         'riverso_export_reports'     => 'Exportar reportes',
+        'riverso_export_facto'       => 'Exportar Excel a FACTO',
     ];
     
     /**
@@ -139,6 +141,7 @@ class Riverso_POS_Permissions {
             'riverso_access_portal',
             'riverso_manage_system',
             'riverso_manage_settings',
+            'riverso_export_facto',
             'riverso_manage_users',
             'riverso_view_audit',
         ],
@@ -225,6 +228,7 @@ class Riverso_POS_Permissions {
         ],
         'Embolsado / EAN13' => [
             'riverso_manage_packaging',
+            'riverso_manage_manufacturing',
             'riverso_generate_ean13',
             'riverso_print_labels',
         ],
@@ -307,6 +311,7 @@ class Riverso_POS_Permissions {
                 'riverso_scan_barcodes',
                 'riverso_assign_barcodes',
                 'riverso_manage_packaging',
+                'riverso_manage_manufacturing',
                 'riverso_generate_ean13',
                 'riverso_print_labels',
                 'riverso_view_print_orders',
@@ -404,6 +409,7 @@ class Riverso_POS_Permissions {
                 'riverso_publish_products',
                 'riverso_manage_matching',
                 'riverso_manage_packaging',
+                'riverso_manage_manufacturing',
                 'riverso_generate_ean13',
                 'riverso_view_tasks',
                 'riverso_create_tasks',

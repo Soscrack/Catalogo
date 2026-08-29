@@ -8,7 +8,9 @@ if (!defined('ABSPATH')) {
 }
 
 $task_types = Riverso_Task_Module::TASK_TYPES;
+$task_categories = Riverso_Task_Module::TASK_CATEGORIES;
 $priorities = Riverso_Task_Module::PRIORITIES;
+$task_type_categories = Riverso_Task_Module::TASK_TYPE_CATEGORY;
 ?>
 
 <div class="wrap riverso-tasks">
@@ -30,10 +32,19 @@ $priorities = Riverso_Task_Module::PRIORITIES;
 
     <!-- Filtros -->
     <div class="riverso-filters">
+        <select id="filter-categoria">
+            <option value="">Todas las categorías</option>
+            <?php foreach ($task_categories as $key => $label): ?>
+                <option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></option>
+            <?php endforeach; ?>
+        </select>
+
         <select id="filter-tipo">
             <option value="">Todos los tipos</option>
             <?php foreach ($task_types as $key => $label): ?>
-                <option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></option>
+                <option value="<?php echo esc_attr($key); ?>" data-categoria="<?php echo esc_attr($task_type_categories[$key] ?? 'otros'); ?>">
+                    <?php echo esc_html($label); ?>
+                </option>
             <?php endforeach; ?>
         </select>
         
@@ -230,6 +241,27 @@ $priorities = Riverso_Task_Module::PRIORITIES;
     border-radius: 3px;
 }
 
+.task-category {
+    font-size: 11px;
+    color: #1565c0;
+    background: #e3f2fd;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+}
+
+.task-no-target {
+    font-size: 11px;
+    color: #b71c1c;
+    background: #ffebee;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.btn-goto-task-primary {
+    font-weight: 600;
+}
+
 .task-description {
     font-size: 13px;
     color: #555;
@@ -304,12 +336,34 @@ jQuery(function($) {
     const nonce = '<?php echo wp_create_nonce('riverso_pos_nonce'); ?>';
     let currentTab = 'todas';
     let taskTypes = <?php echo wp_json_encode($task_types); ?>;
+    let taskCategories = <?php echo wp_json_encode($task_categories); ?>;
+    let taskTypeCategories = <?php echo wp_json_encode($task_type_categories); ?>;
+
+    function syncTipoFilterOptions() {
+        const categoria = $('#filter-categoria').val();
+        const currentTipo = $('#filter-tipo').val();
+        $('#filter-tipo option').each(function() {
+            const $opt = $(this);
+            if (!$opt.val()) {
+                return;
+            }
+            const match = !categoria || $opt.data('categoria') === categoria;
+            $opt.toggle(match);
+        });
+        if (currentTipo) {
+            const selected = $('#filter-tipo option:selected');
+            if (!selected.length || !selected.is(':visible')) {
+                $('#filter-tipo').val('');
+            }
+        }
+    }
     
     // Cargar tareas
     function loadTasks() {
         const filters = {
             action: 'riverso_get_tasks',
             nonce: nonce,
+            categoria: $('#filter-categoria').val(),
             tipo: $('#filter-tipo').val(),
             prioridad: $('#filter-prioridad').val()
         };
@@ -351,13 +405,25 @@ jQuery(function($) {
         }
         
         tasks.forEach(function(task) {
+            const categoriaLabel = task.categoria_label || taskCategories[task.categoria] || '';
+            const gotoBtn = task.target_url
+                ? `<a href="${escapeHtml(task.target_url)}" class="button button-primary button-small btn-goto-task btn-goto-task-primary" title="Ir a realizar">Ir a realizar</a>`
+                : (task.completion_mode === 'guided'
+                    ? `<span class="task-no-target" title="Falta destino configurado">Sin destino</span>`
+                    : '');
+            const completeBtn = (task.estado !== 'completada' && task.allow_complete)
+                ? `<button class="button button-small btn-complete-task" title="Completar"><span class="dashicons dashicons-yes"></span></button>`
+                : '';
             const card = $(`
                 <div class="task-card" data-id="${task.id}">
                     <div class="task-priority-indicator task-priority-${task.prioridad}"></div>
                     <div class="task-content">
                         <div class="task-header">
                             <h4 class="task-title">${escapeHtml(task.titulo)}</h4>
-                            <span class="task-type">${taskTypes[task.tipo] || task.tipo}</span>
+                            <span>
+                                <span class="task-type">${taskTypes[task.tipo] || task.tipo}</span>
+                                ${categoriaLabel ? `<span class="task-category">${escapeHtml(categoriaLabel)}</span>` : ''}
+                            </span>
                         </div>
                         ${task.descripcion ? `<div class="task-description">${escapeHtml(task.descripcion.substring(0, 200))}${task.descripcion.length > 200 ? '...' : ''}</div>` : ''}
                         <div class="task-meta">
@@ -367,21 +433,13 @@ jQuery(function($) {
                         </div>
                     </div>
                     <div class="task-actions">
-                        ${task.target_url ? `
-                            <a href="${escapeHtml(task.target_url)}" class="button button-small btn-goto-task" title="Ir a la tarea">
-                                <span class="dashicons dashicons-arrow-right"></span>
-                            </a>
-                        ` : ''}
+                        ${gotoBtn}
                         ${task.tipo === 'etiquetado' ? `
                             <button class="button button-small btn-print-task" data-id="${task.id}" title="Imprimir etiquetas">
                                 <span class="dashicons dashicons-print"></span> Imprimir
                             </button>
                         ` : ''}
-                        ${task.estado !== 'completada' ? `
-                            <button class="button button-small btn-complete-task" title="Completar">
-                                <span class="dashicons dashicons-yes"></span>
-                            </button>
-                        ` : ''}
+                        ${completeBtn}
                         <button class="button button-small btn-edit-task" title="Editar">
                             <span class="dashicons dashicons-edit"></span>
                         </button>
@@ -409,6 +467,10 @@ jQuery(function($) {
     
     // Filtros
     $('#btn-refresh').on('click', loadTasks);
+    $('#filter-categoria').on('change', function() {
+        syncTipoFilterOptions();
+        loadTasks();
+    });
     $('#filter-tipo, #filter-prioridad').on('change', loadTasks);
     
     // Nueva tarea
@@ -589,6 +651,7 @@ jQuery(function($) {
     });
     
     // Cargar al inicio
+    syncTipoFilterOptions();
     loadTasks();
 });
 </script>

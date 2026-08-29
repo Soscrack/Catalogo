@@ -19,6 +19,8 @@ if (!defined('ABSPATH')) {
 }
 
 require_once RIVERSO_POS_PLUGIN_DIR . 'modules/barcodes/class-ean13-generator.php';
+require_once RIVERSO_POS_PLUGIN_DIR . 'modules/families/class-unit-product-service.php';
+require_once RIVERSO_POS_PLUGIN_DIR . 'inventory/movements/class-movement.php';
 
 class Riverso_Packaging_Module {
 
@@ -188,9 +190,24 @@ class Riverso_Packaging_Module {
             return new WP_Error('not_found', 'Producto base no encontrado');
         }
 
-        // Regla BR-005: solo se puede abrir si el stock abierto está habilitado.
-        if (empty($pb['stock_abierto_habilitado'])) {
+        // Regla BR-005: solo se puede abrir si el stock abierto está habilitado (miembro o unitario).
+        $unit_base_id = Riverso_Unit_Product_Service::get_instance()->resolve_unit_for_base(intval($pb['id']));
+        $stock_target_id = $unit_base_id ?: intval($pb['id']);
+        $stock_target = $unit_base_id
+            ? $wpdb->get_row($wpdb->prepare("SELECT * FROM {$prefix}producto_base WHERE id = %d", $stock_target_id), ARRAY_A)
+            : $pb;
+
+        if (empty($stock_target['stock_abierto_habilitado']) && !$unit_base_id) {
             return new WP_Error('not_allowed', 'El producto no permite stock abierto (BR-005)');
+        }
+        if ($unit_base_id && empty($stock_target['stock_abierto_habilitado'])) {
+            $wpdb->update(
+                "{$prefix}producto_base",
+                ['stock_abierto_habilitado' => 1],
+                ['id' => $stock_target_id],
+                ['%d'],
+                ['%d']
+            );
         }
 
         $unidades = $cantidad_envases * (float) $envase['cantidad_unidades'];
@@ -211,7 +228,7 @@ class Riverso_Packaging_Module {
             $costo_unitario = Riverso_Pricing_Module::get_instance()->calculate_c_ref_local($pb['id']);
         }
 
-        $stock_anterior = (float) $pb['stock_abierto'];
+        $stock_anterior = (float) ($stock_target['stock_abierto'] ?? 0);
         $stock_nuevo = $stock_anterior + $unidades;
 
         $wc_id = intval($envase['woocommerce_variation_id']) ?: intval($pb['woocommerce_variation_id']) ?: intval($pb['woocommerce_product_id']);
@@ -228,18 +245,61 @@ class Riverso_Packaging_Module {
 
         $wpdb->query('START TRANSACTION');
 
-        // 1. Aumentar inventario abierto.
-        $updated_open = $wpdb->query($wpdb->prepare(
-            "UPDATE {$prefix}producto_base
-             SET stock_abierto = stock_abierto + %f
-             WHERE id = %d AND stock_abierto = %f",
-            $unidades,
-            $pb['id'],
-            $stock_anterior
-        ));
-        if ($updated_open !== 1) {
-            $wpdb->query('ROLLBACK');
-            return new WP_Error('concurrent_stock_change', 'El stock cambió durante la apertura. Intenta nuevamente.');
+        // 1. Aumentar inventario abierto (unitario si existe, si no miembro — dual-write).
+        if ($unit_base_id) {
+            $updated_open = $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}producto_base
+                 SET stock_abierto = stock_abierto + %f, stock_abierto_habilitado = 1
+                 WHERE id = %d AND stock_abierto = %f",
+                $unidades,
+                $unit_base_id,
+                $stock_anterior
+            ));
+            if ($updated_open !== 1) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('concurrent_stock_change', 'El stock unitario cambió durante la apertura.');
+            }
+
+            $ubicacion_id = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT ubicacion_id FROM {$prefix}producto_ubicacion_preferida
+                 WHERE producto_base_id = %d AND es_preferido = 1 LIMIT 1",
+                $unit_base_id
+            ));
+            if (!$ubicacion_id) {
+                $ubicacion_id = (int) $wpdb->get_var(
+                    "SELECT id FROM {$prefix}ubicaciones WHERE activo = 1 ORDER BY id ASC LIMIT 1"
+                );
+            }
+            if ($ubicacion_id && class_exists('Riverso_Movement')) {
+                Riverso_Movement::create('entrada', $unit_base_id, $unidades, [
+                    'ubicacion_destino' => $ubicacion_id,
+                    'referencia_tipo' => 'apertura',
+                    'notas' => sprintf('Apertura envase #%d → unitario', $envase_id),
+                ]);
+            }
+            $stock_nuevo = $stock_anterior + $unidades;
+        } else {
+            $updated_open = $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}producto_base
+                 SET stock_abierto = stock_abierto + %f
+                 WHERE id = %d AND stock_abierto = %f",
+                $unidades,
+                $stock_target_id,
+                $stock_anterior
+            ));
+            if ($updated_open !== 1) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('concurrent_stock_change', 'El stock cambió durante la apertura. Intenta nuevamente.');
+            }
+        }
+
+        // Dual-write en miembro para compatibilidad con compute_family_stock legacy.
+        if ($unit_base_id && $stock_target_id !== intval($pb['id'])) {
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}producto_base SET stock_abierto = stock_abierto + %f WHERE id = %d",
+                $unidades,
+                intval($pb['id'])
+            ));
         }
 
         // 2. Descontar stock cerrado (lote si aplica).
@@ -270,7 +330,7 @@ class Riverso_Packaging_Module {
         // 4. Registrar apertura.
         $opened = $wpdb->insert("{$prefix}aperturas", [
             'envase_id' => $envase_id,
-            'producto_base_id' => $pb['id'],
+            'producto_base_id' => $stock_target_id,
             'lote_id' => $lote_id ? intval($lote_id) : null,
             'cantidad_envases' => $cantidad_envases,
             'cantidad_abierta' => $unidades,
@@ -285,7 +345,7 @@ class Riverso_Packaging_Module {
 
         // 5. Movimiento de inventario (tipo apertura).
         $movement = $wpdb->insert("{$prefix}movimientos", [
-            'product_id' => intval($pb['woocommerce_product_id']),
+            'product_id' => intval($stock_target['woocommerce_product_id'] ?: $pb['woocommerce_product_id']),
             'variation_id' => intval($envase['woocommerce_variation_id']) ?: null,
             'lote_id' => $lote_id ? intval($lote_id) : null,
             'tipo' => 'apertura',
@@ -294,7 +354,12 @@ class Riverso_Packaging_Module {
             'stock_nuevo' => $stock_nuevo,
             'referencia_tipo' => 'apertura',
             'referencia_id' => $apertura_id,
-            'notas' => sprintf('Apertura de %s envase(s) = %s unidades abiertas', $cantidad_envases, $unidades),
+            'notas' => sprintf(
+                'Apertura de %s envase(s) = %s unidades abiertas%s',
+                $cantidad_envases,
+                $unidades,
+                $unit_base_id ? ' (unitario)' : ''
+            ),
             'usuario_id' => get_current_user_id(),
         ]);
         if (!$movement) {
@@ -305,9 +370,9 @@ class Riverso_Packaging_Module {
         $wpdb->query('COMMIT');
 
         if (class_exists('Riverso_POS_Audit')) {
-            Riverso_POS_Audit::log('envase_abierto', 'producto_base', $pb['id'], [
+            Riverso_POS_Audit::log('envase_abierto', 'producto_base', $stock_target_id, [
                 'old_value' => ['stock_abierto' => $stock_anterior],
-                'new_value' => ['stock_abierto' => $stock_nuevo],
+                'new_value' => ['stock_abierto' => $stock_nuevo, 'unit_base_id' => $unit_base_id],
                 'details' => 'Apertura de envase',
             ]);
         }
@@ -316,6 +381,7 @@ class Riverso_Packaging_Module {
             'apertura_id' => $apertura_id,
             'unidades_abiertas' => $unidades,
             'stock_abierto' => $stock_nuevo,
+            'unit_producto_base_id' => $unit_base_id ?: intval($pb['id']),
             'costo_unitario' => $costo_unitario,
         ];
     }
@@ -347,22 +413,28 @@ class Riverso_Packaging_Module {
             return new WP_Error('not_found', 'Producto base no encontrado');
         }
 
-        $stock_abierto = (float) $pb['stock_abierto'];
+        $unit_base_id = Riverso_Unit_Product_Service::get_instance()->resolve_unit_for_base($producto_base_id);
+        $stock_target_id = $unit_base_id ?: $producto_base_id;
+        $stock_pb = $unit_base_id
+            ? $wpdb->get_row($wpdb->prepare("SELECT * FROM {$prefix}producto_base WHERE id = %d", $stock_target_id), ARRAY_A)
+            : $pb;
+
+        $stock_abierto = (float) ($stock_pb['stock_abierto'] ?? 0);
         if ($cantidad > $stock_abierto) {
             return new WP_Error('insufficient', 'Stock abierto insuficiente (' . $stock_abierto . ')');
         }
 
         // Costo unitario y total.
         $costo_unitario = class_exists('Riverso_Pricing_Module')
-            ? Riverso_Pricing_Module::get_instance()->calculate_c_ref_local($producto_base_id)
+            ? Riverso_Pricing_Module::get_instance()->calculate_c_ref_local($stock_target_id)
             : null;
 
-        // SKU de la bolsa y EAN13 (formato interno 2SSSSSSQQQQQX).
-        $sku_base = $pb['canonical_sku'] ?: ('B' . $producto_base_id);
+        // SKU de la bolsa y EAN13 (formato interno 2SSSSSSQQQQQX) — siempre SKU del unitario.
+        $sku_base = $stock_pb['canonical_sku'] ?: ('B' . $stock_target_id);
         $sku_bolsa = $sku_base . '-B' . (int) $cantidad;
         $ean13 = null;
-        if (!empty($pb['permite_ean13_personalizado'])) {
-            $ean13 = Riverso_EAN13_Generator::build_for_product($producto_base_id, $cantidad);
+        if (!empty($stock_pb['permite_ean13_personalizado'])) {
+            $ean13 = Riverso_EAN13_Generator::build_for_product($stock_target_id, $cantidad);
             if (is_wp_error($ean13)) {
                 return $ean13;
             }
@@ -374,7 +446,7 @@ class Riverso_Packaging_Module {
              SET stock_abierto = stock_abierto - %f
              WHERE id = %d AND stock_abierto >= %f AND stock_abierto = %f",
             $cantidad,
-            $producto_base_id,
+            $stock_target_id,
             $cantidad,
             $stock_abierto
         ));
@@ -383,8 +455,27 @@ class Riverso_Packaging_Module {
             return new WP_Error('concurrent_stock_change', 'El stock abierto cambió. Intenta nuevamente.');
         }
 
+        if ($unit_base_id && $stock_target_id !== $producto_base_id) {
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}producto_base
+                 SET stock_abierto = GREATEST(0, stock_abierto - %f)
+                 WHERE id = %d",
+                $cantidad,
+                $producto_base_id
+            ));
+        }
+
+        $ubicacion_id = 0;
+        if ($unit_base_id) {
+            $ubicacion_id = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT ubicacion_id FROM {$prefix}producto_ubicacion_preferida
+                 WHERE producto_base_id = %d AND es_preferido = 1 LIMIT 1",
+                $stock_target_id
+            ));
+        }
+
         $bag_inserted = $wpdb->insert("{$prefix}bolsas", [
-            'producto_base_id' => $producto_base_id,
+            'producto_base_id' => $stock_target_id,
             'cantidad' => $cantidad,
             'sku_bolsa' => $sku_bolsa,
             'ean13' => $ean13,
@@ -401,15 +492,24 @@ class Riverso_Packaging_Module {
         $bolsa_id = (int) $wpdb->insert_id;
 
         // Movimiento de salida del stock abierto.
+        if ($unit_base_id && $ubicacion_id && class_exists('Riverso_Movement')) {
+            Riverso_Movement::create('salida', $stock_target_id, $cantidad, [
+                'ubicacion_origen' => $ubicacion_id,
+                'referencia_tipo' => 'bolsa',
+                'referencia_id' => $bolsa_id,
+                'notas' => 'Generación de bolsa ' . $sku_bolsa,
+            ]);
+        }
+
         $movement = $wpdb->insert("{$prefix}movimientos", [
-            'product_id' => intval($pb['woocommerce_product_id']),
+            'product_id' => intval($stock_pb['woocommerce_product_id'] ?: $pb['woocommerce_product_id']),
             'tipo' => 'embolsado',
             'cantidad' => $cantidad,
             'stock_anterior' => $stock_abierto,
             'stock_nuevo' => $stock_abierto - $cantidad,
             'referencia_tipo' => 'bolsa',
             'referencia_id' => $bolsa_id,
-            'notas' => 'Generación de bolsa ' . $sku_bolsa,
+            'notas' => 'Generación de bolsa ' . $sku_bolsa . ($unit_base_id ? ' (unitario)' : ''),
             'usuario_id' => get_current_user_id(),
         ]);
         if (!$movement) {
@@ -466,6 +566,7 @@ class Riverso_Packaging_Module {
             'ean13' => $ean13,
             'cantidad' => $cantidad,
             'stock_abierto' => $stock_abierto - $cantidad,
+            'unit_producto_base_id' => $stock_target_id,
         ];
     }
 

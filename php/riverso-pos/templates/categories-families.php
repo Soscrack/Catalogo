@@ -125,6 +125,11 @@ if (!$can_manage) {
             <div id="families-suggestions-list" style="max-height:360px; overflow-y:auto;"></div>
         </div>
 
+        <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <input type="search" id="families-search" placeholder="Nombre, miembro, SKU, código proveedor o barcode" style="min-width:280px; padding:6px 10px; flex:1; max-width:480px;" autocomplete="off">
+            <span id="families-search-count" style="font-size:12px; color:#666;"></span>
+        </div>
+
         <div id="families-list" style="border:1px solid #ddd; padding:12px; border-radius:4px; background:#fafafa; max-height:600px; overflow-y:auto; margin-bottom:16px;">
             <p style="color:#999; text-align:center;">Cargando familias...</p>
         </div>
@@ -241,8 +246,16 @@ if (!$can_manage) {
     margin-bottom: 8px;
     background: white;
     display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+}
+.family-item-main {
+    display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    width: 100%;
+    gap: 8px;
 }
 .button.button-danger {
     background-color: #dc3545;
@@ -717,21 +730,70 @@ jQuery(function($) {
     });
 
     // ===== FAMILIAS =====
-    function loadFamilies() {
+    let familiesSearchTimer = null;
+    let familiesSearchQuery = '';
+
+    function loadFamilies(search) {
+        const q = search !== undefined ? search : familiesSearchQuery;
+        familiesSearchQuery = (q || '').trim();
         $.post(ajaxurl, {
             action: 'riverso_families_list',
-            nonce: nonce
+            nonce: nonce,
+            search: familiesSearchQuery
         }, function(r) {
             if (r.success && r.data.families) {
                 familiesList = r.data.families || [];
-                renderFamiliesList(familiesList);
+                renderFamiliesList(familiesList, familiesSearchQuery);
+                const total = familiesList.length;
+                const label = familiesSearchQuery
+                    ? total + ' coincidencia' + (total !== 1 ? 's' : '')
+                    : total + ' familia' + (total !== 1 ? 's' : '');
+                $('#families-search-count').text(label);
             }
         });
     }
 
-    function renderFamiliesList(families) {
+    function highlightSearchTerm(text, query) {
+        const raw = text === null || text === undefined ? '' : String(text);
+        const escaped = esc(raw || '—');
+        const q = (query || '').trim();
+        if (!q) return escaped;
+        try {
+            const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+            return escaped.replace(re, '<mark style="background:#fff59d;padding:0 2px;">$1</mark>');
+        } catch (e) {
+            return escaped;
+        }
+    }
+
+    function renderFamilySkusInline(members, search) {
+        const list = members || [];
+        if (!list.length) return '';
+        const locals = list.map(m => highlightSearchTerm(m.sku_local || m.canonical_sku || '—', search)).join(', ');
+        const onlines = list.map(m => highlightSearchTerm(m.sku_online || '—', search)).join(', ');
+        return ' | <span class="riverso-fp-inline-skus">' +
+            '<span class="sku-local" style="color:#1565c0;">Local: <code style="color:#1565c0;">' + locals + '</code></span> | ' +
+            '<span class="sku-online" style="color:#2e7d32;">Online: <code style="color:#2e7d32;">' + onlines + '</code></span>' +
+            '</span>';
+    }
+
+    function renderFamilyPreview(members, search) {
+        if (window.RiversoFamilyEditor && typeof RiversoFamilyEditor.renderListPreview === 'function') {
+            return RiversoFamilyEditor.renderListPreview(members || [], {
+                expanded: !!search,
+                search: search || ''
+            });
+        }
+        return '';
+    }
+
+    function renderFamiliesList(families, search) {
+        search = search || '';
         if (!families || families.length === 0) {
-            $('#families-list').html('<p style="color:#999; text-align:center;">Sin familias</p>');
+            const msg = search
+                ? 'Sin coincidencias para «' + esc(search) + '»'
+                : 'Sin familias';
+            $('#families-list').html('<p style="color:#999; text-align:center;">' + msg + '</p>');
             return;
         }
 
@@ -742,21 +804,50 @@ jQuery(function($) {
             const warn = (fam.stock_warnings && fam.stock_warnings.length)
                 ? ` <span title="${esc((fam.stock_warnings || []).join(' | '))}" style="color:#e65100;">⚠</span>`
                 : '';
+            const unitSku = fam.unit_sku
+                ? ` | Unitario: <code>${esc(fam.unit_sku)}</code>`
+                : '';
+            const memberSkus = renderFamilySkusInline(fam.members, search);
+            const preview = renderFamilyPreview(fam.members, search);
             return `
             <div class="family-item" data-family-id="${fam.id}">
-                <div>
-                    <strong>${esc(fam.nombre)}</strong><br>
-                    <small style="color:#666;">Tipo: ${esc(fam.tipo_sustitucion || '-')} | Miembros: ${fam.miembros_count || 0} | Stock familia: ${stock} u${warn}</small>
+                <div class="family-item-main">
+                    <div>
+                        <strong>${esc(fam.nombre)}</strong><br>
+                        <small style="color:#666;">Tipo: ${esc(fam.tipo_sustitucion || '-')} | Miembros: ${fam.miembros_count || 0} | Stock familia: ${stock} u${warn}${unitSku}${memberSkus}</small>
+                    </div>
+                    <div style="display:flex; gap:4px; flex-shrink:0;">
+                        <button class="button button-small family-view" data-family-id="${fam.id}">Ver</button>
+                        <button class="button button-small family-edit" data-family-id="${fam.id}">Editar</button>
+                        <button class="button button-small family-delete" data-family-id="${fam.id}" data-family-name="${esc(fam.nombre || '')}" data-members="${fam.miembros_count || 0}" title="Eliminar" style="color:#b71c1c;">🗑</button>
+                    </div>
                 </div>
-                <div style="display:flex; gap:4px;">
-                    <button class="button button-small family-view" data-family-id="${fam.id}">Ver</button>
-                    <button class="button button-small family-edit" data-family-id="${fam.id}">Editar</button>
-                </div>
+                ${preview}
             </div>`;
         }).join('');
 
         $('#families-list').html(html);
     }
+
+    $(document).off('click.riversoFpToggle').on('click.riversoFpToggle', '.riverso-fp-toggle', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const $wrap = $(this).closest('.riverso-family-list-preview');
+        const $ul = $wrap.find('.riverso-fp-members');
+        const open = !$ul.is(':visible');
+        $ul.toggle(open);
+        const count = $wrap.find('.riverso-fp-member').length;
+        $(this).text((open ? '▼' : '▶') + ' ' + count + ' miembro(s)');
+        $wrap.attr('data-expanded', open ? '1' : '0');
+    });
+
+    $('#families-search').on('input', function() {
+        clearTimeout(familiesSearchTimer);
+        const val = $(this).val().trim();
+        familiesSearchTimer = setTimeout(function() {
+            loadFamilies(val);
+        }, 300);
+    });
 
     // Editor compartido (assets/js/family-editor.js)
     window.riversoFamilyEditor = window.riversoFamilyEditor || {};
@@ -786,6 +877,37 @@ jQuery(function($) {
         if (ensureFamilyEditor()) {
             RiversoFamilyEditor.openEdit($(this).data('family-id'));
         }
+    });
+
+    $(document).off('click.riversoFamilyDelete').on('click.riversoFamilyDelete', '.family-delete', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = $(this).data('family-id');
+        const nombre = $(this).data('family-name') || ('#' + id);
+        const members = parseInt($(this).data('members') || 0, 10);
+        if (!confirm(
+            '¿Eliminar la familia «' + nombre + '»?\n\n' +
+            'Se desactivará y se quitarán ' + members + ' miembro(s).\n' +
+            'Los productos no se borran.'
+        )) {
+            return;
+        }
+        const $btn = $(this).prop('disabled', true);
+        $.post(ajaxurl, {
+            action: 'riverso_families_delete',
+            nonce: nonce,
+            grupo_id: id
+        }, function(r) {
+            if (!r.success) {
+                $btn.prop('disabled', false);
+                alert((r.data && r.data.message) || 'No se pudo eliminar');
+                return;
+            }
+            loadFamilies();
+        }).fail(function() {
+            $btn.prop('disabled', false);
+            alert('Error de red');
+        });
     });
 
     $('#families-add-new').on('click', function() {

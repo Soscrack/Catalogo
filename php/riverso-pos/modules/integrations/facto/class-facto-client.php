@@ -168,6 +168,10 @@ class Riverso_Facto_Client {
         return $this->request('GET', 'products/' . absint($product_id));
     }
 
+    public function list_product_locations($query = []) {
+        return $this->request('GET', 'product_locations', null, $query);
+    }
+
     public function create_product(array $payload) {
         return $this->request('POST', 'products', $payload);
     }

@@ -254,25 +254,42 @@ $actividad_reciente = $wpdb->get_results("
                             $tipos = riverso_get_task_types();
                             $prioridad = $prioridades[$tarea->prioridad] ?? ['label' => $tarea->prioridad, 'color' => '#777'];
                             $tipo = $tipos[$tarea->tipo] ?? ['label' => $tarea->tipo, 'icon' => 'marker'];
+                            $tarea_arr = (array) $tarea;
+                            $target_url = riverso_resolve_task_target($tarea_arr);
+                            $allow_complete = class_exists('Riverso_Task_Module')
+                                ? Riverso_Task_Module::task_allows_manual_complete($tarea_arr)
+                                : true;
+                            $task_link = $target_url ?: admin_url('admin.php?page=riverso-pos-tasks');
                         ?>
-                        <li class="task-item priority-<?php echo $tarea->prioridad; ?>">
-                            <span class="task-icon dashicons dashicons-<?php echo $tipo['icon']; ?>"></span>
+                        <li class="task-item priority-<?php echo esc_attr($tarea->prioridad); ?>">
+                            <span class="task-icon dashicons dashicons-<?php echo esc_attr($tipo['icon']); ?>"></span>
                             <div class="task-content">
                                 <strong><?php echo esc_html($tarea->titulo); ?></strong>
                                 <span class="task-meta">
-                                    <span class="priority-badge" style="background: <?php echo $prioridad['color']; ?>">
-                                        <?php echo $prioridad['label']; ?>
+                                    <span class="priority-badge" style="background: <?php echo esc_attr($prioridad['color']); ?>">
+                                        <?php echo esc_html($prioridad['label']); ?>
                                     </span>
-                                    <?php echo $tipo['label']; ?>
+                                    <?php echo esc_html($tipo['label']); ?>
                                     <?php if ($tarea->asignado_nombre): ?>
                                         <span class="assignee">→ <?php echo esc_html($tarea->asignado_nombre); ?></span>
                                     <?php endif; ?>
                                 </span>
                             </div>
-                            <a href="<?php echo admin_url('admin.php?page=riverso-pos-tasks&action=complete&id=' . $tarea->id); ?>" 
-                               class="button button-small complete-task" title="Completar">
+                            <a href="<?php echo esc_url($task_link); ?>"
+                               class="button button-small <?php echo $target_url ? 'button-primary' : ''; ?>"
+                               title="<?php echo esc_attr($target_url ? __('Ir a realizar', 'riverso-pos') : __('Ver tareas', 'riverso-pos')); ?>">
+                                <span class="dashicons dashicons-<?php echo $target_url ? 'arrow-right-alt2' : 'clipboard'; ?>"></span>
+                                <?php if ($target_url): ?>
+                                    <span class="screen-reader-text"><?php esc_html_e('Ir a realizar', 'riverso-pos'); ?></span>
+                                <?php endif; ?>
+                            </a>
+                            <?php if ($allow_complete && current_user_can('riverso_complete_tasks')): ?>
+                            <a href="<?php echo esc_url(admin_url('admin.php?page=riverso-pos-tasks')); ?>"
+                               class="button button-small complete-task"
+                               title="<?php esc_attr_e('Completar desde lista de tareas', 'riverso-pos'); ?>">
                                 <span class="dashicons dashicons-yes"></span>
                             </a>
+                            <?php endif; ?>
                         </li>
                         <?php endforeach; ?>
                     </ul>
@@ -572,7 +589,12 @@ $actividad_reciente = $wpdb->get_results("
 }
 
 .task-list.modern .complete-task {
+    margin-left: 4px;
     padding: 5px 8px;
+}
+
+.task-list.modern .task-item .button-primary {
+    margin-left: auto;
 }
 
 .success-msg {

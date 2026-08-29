@@ -211,14 +211,15 @@ $can_manage_families = current_user_can('riverso_manage_families');
         <table class="products-table">
             <thead>
                 <tr>
-                    <th style="width: 6%;">ID</th>
-                    <th style="width: 11%;">SKU Local</th>
-                    <th style="width: 11%;">SKU Online</th>
-                    <th style="width: 16%;">Nombre</th>
-                    <th style="width: 12%;">Completitud</th>
-                    <th style="width: 10%;">Código Proveedor</th>
-                    <th style="width: 10%;">Código Catálogo</th>
-                    <th style="width: 16%;">Código de barra</th>
+                    <th style="width: 5%;">ID</th>
+                    <th style="width: 10%;">SKU Local</th>
+                    <th style="width: 10%;">SKU Online</th>
+                    <th style="width: 14%;">Nombre</th>
+                    <th style="width: 11%;">Completitud</th>
+                    <th style="width: 9%;">Código Proveedor</th>
+                    <th style="width: 9%;">Código Catálogo</th>
+                    <th style="width: 8%;">Woo</th>
+                    <th style="width: 14%;">Código de barra</th>
                     <th style="width: 10%;">Acciones</th>
                 </tr>
             </thead>
@@ -402,7 +403,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
                 <tr>
                     <th>Familia</th>
                     <td>
-                        <div id="local-familia-view">
+                        <div id="local-familia-view" data-section="familia">
                             <span id="familia-display">-</span>
                             <button class="btn-small" id="familia-view-btn" style="margin-left: 8px; display: none;">Ver familia</button>
                             <button class="btn-small" id="familia-edit-toggle" style="margin-left: 8px;">Editar familia</button>
@@ -485,6 +486,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
             </table>
             <p>
                 <button class="btn-small success" id="online-link-btn" style="display: none;">Vincular producto WooCommerce</button>
+                <button class="btn-small danger" id="online-unlink-btn" style="display: none; margin-left: 6px;">Desvincular</button>
             </p>
             <hr style="margin: 16px 0;">
             <p>
@@ -642,12 +644,15 @@ $can_manage_families = current_user_can('riverso_manage_families');
                 <h4 style="margin-top: 0;">Crear Nueva Familia</h4>
                 <table class="form-table">
                     <tr>
-                        <th><label for="family-codigo">Código Único</label></th>
-                        <td><input type="text" id="family-codigo" placeholder="ej. FAM001"></td>
-                    </tr>
-                    <tr>
                         <th><label for="family-nombre">Nombre</label></th>
                         <td><input type="text" id="family-nombre" placeholder="ej. Bebidas Refrescantes"></td>
+                    </tr>
+                    <tr>
+                        <th><label for="family-codigo">Código Único</label></th>
+                        <td>
+                            <input type="text" id="family-codigo" placeholder="Se genera del nombre si lo dejas vacío">
+                            <p class="description" style="margin:4px 0 0;font-size:12px;color:#666;">Opcional. Si está vacío se usa el slug del nombre.</p>
+                        </td>
                     </tr>
                     <tr>
                         <th><label for="family-tipo">Tipo de Sustitución</label></th>
@@ -746,6 +751,30 @@ $can_manage_families = current_user_can('riverso_manage_families');
         return $('<div>').text(v === null || v === undefined ? '' : v).html();
     }
 
+    /** Woo ID compacto: producto simple, o "padre / variación". */
+    function formatWooIds(p) {
+        const parent = parseInt(p.woocommerce_product_id || 0, 10);
+        const child = parseInt(p.woocommerce_variation_id || 0, 10);
+        if (child > 0) {
+            const padre = parent > 0 ? parent : '?';
+            return padre + ' / ' + child;
+        }
+        if (parent > 0) return String(parent);
+        return '-';
+    }
+
+    /** Woo ID legible en pestaña Online. */
+    function formatWooIdsLabel(p) {
+        const parent = parseInt(p.woocommerce_product_id || 0, 10);
+        const child = parseInt(p.woocommerce_variation_id || 0, 10);
+        if (child > 0) {
+            const padre = parent > 0 ? parent : '?';
+            return 'Padre ' + padre + ' · Var ' + child;
+        }
+        if (parent > 0) return String(parent);
+        return '-';
+    }
+
     function post(action, data) {
         return $.post(ajaxUrl, { action, nonce, ...data });
     }
@@ -824,12 +853,15 @@ $can_manage_families = current_user_can('riverso_manage_families');
                     let codigoProv = renderSkuCell(p.codigos_proveedor, 'Código Proveedor');
                     let codigoCat = renderSkuCell(p.codigos_catalogo, 'Código Catálogo');
 
-                    const hasOnline = !!p.woocommerce_product_id;
+                    const hasOnline = parseInt(p.woocommerce_product_id || 0, 10) > 0
+                        || parseInt(p.woocommerce_variation_id || 0, 10) > 0;
                     const hasCode = parseInt(p.proveedores_count || 0) > 0;
                     if (hasOnline && !hasCode && cat === 'falta_codigo') {
                         codigoProv = `<span class="completeness-badge falta_codigo" style="cursor:pointer; padding:4px 8px; display:inline-block;" data-product-id="${p.id}" title="Ir a Códigos">Falta código</span>`;
                         codigoCat = `<span style="color:#999;">—</span>`;
                     }
+
+                    const wooId = formatWooIds(p);
 
                     const bcCount = parseInt(p.barcodes_count || 0, 10);
                     const bcSample = p.barcode_sample ? esc(p.barcode_sample) : '';
@@ -851,6 +883,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
                         <td><span class="completeness-badge ${cat}">${completenessLabel(cat)}</span></td>
                         <td>${codigoProv}</td>
                         <td>${codigoCat}</td>
+                        <td><code style="font-size:12px;">${esc(wooId)}</code></td>
                         <td>${barcodeCell}</td>
                         <td><button type="button" class="btn-small" onclick="window.portalProducts.openDetail(${p.id})">Ver</button></td>
                     </tr>`;
@@ -870,7 +903,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
         });
     }
 
-    function openDetail(productId) {
+    function openDetail(productId, onReady) {
         post('riverso_products_get', { id: productId }).done(function(r) {
             if (!r.success) {
                 alert('Error: ' + ((r.data && r.data.message) || 'desconocido'));
@@ -881,6 +914,9 @@ $can_manage_families = current_user_can('riverso_manage_families');
             renderDetail();
             $('#product-detail-panel').show();
             $('html, body').animate({ scrollTop: $('#product-detail-panel').offset().top - 50 }, 300);
+            if (typeof onReady === 'function') {
+                onReady();
+            }
         });
     }
 
@@ -968,13 +1004,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
         }
 
         // Familia
-        if (p.familia) {
-            $('#familia-display').html(`<strong>${esc(p.familia.nombre)}</strong> <small style="color:#666;">(${esc(p.familia.tipo_sustitucion || p.familia.codigo_grupo || '')})</small>`);
-            $('#familia-view-btn').show().data('familia-id', p.familia.id);
-        } else {
-            $('#familia-display').html('<span style="color:#999;">Sin familia</span>');
-            $('#familia-view-btn').hide().data('familia-id', '');
-        }
+        renderFamiliaHub(p);
         loadFamiliesDropdown();
 
         // Imagen Local
@@ -995,8 +1025,13 @@ $can_manage_families = current_user_can('riverso_manage_families');
         // Tab: Online
         const hasWoo = parseInt(p.woocommerce_product_id || 0, 10) > 0
             || parseInt(p.woocommerce_variation_id || 0, 10) > 0;
-        $('#online-woo-id').text(hasWoo ? (p.woocommerce_product_id || p.woocommerce_variation_id) : '-');
+        $('#online-woo-id').text(formatWooIdsLabel(p));
         $('#online-match-estado').text(p.match_estado_online || 'UNMATCHED');
+        if (canManage) {
+            $('#online-unlink-btn').toggle(!!hasWoo);
+        } else {
+            $('#online-unlink-btn').hide();
+        }
         const hasCode = parseInt(p.proveedores_count || 0) > 0 || (p.proveedores && p.proveedores.length > 0);
         if (!hasCode && hasWoo) {
             $('#online-missing-code-banner').show();
@@ -1038,6 +1073,83 @@ $can_manage_families = current_user_can('riverso_manage_families');
         showFieldWarningIcons(p);
     }
 
+    function getPendingFamilyTasks(product) {
+        const tasks = (product.tasks || []).filter(t => t.estado !== 'completada');
+        return {
+            ask: tasks.find(t => t.tipo === 'preguntar_familia') || null,
+            assign: tasks.find(t => t.tipo === 'asignar_familia') || null,
+        };
+    }
+
+    function renderFamiliaHub(product) {
+        $('.familia-decision-ui, .familia-assign-warn').remove();
+        if (product.familia) {
+            $('#familia-display').html(`<strong>${esc(product.familia.nombre)}</strong> <small style="color:#666;">(${esc(product.familia.tipo_sustitucion || product.familia.codigo_grupo || '')})</small>`);
+            $('#familia-view-btn').show().data('familia-id', product.familia.id);
+            return;
+        }
+
+        $('#familia-view-btn').hide().data('familia-id', '');
+        const ft = getPendingFamilyTasks(product);
+
+        if (ft.ask) {
+            $('#familia-display').html('<span style="color:#666;">¿Este producto necesita familia?</span>');
+            $('#local-familia-view').append(
+                `<div class="familia-decision-ui" style="margin-top:8px;">
+                    <button type="button" class="btn-small success familia-answer-yes">Sí, necesita</button>
+                    <button type="button" class="btn-small familia-answer-no" style="margin-left:6px;">No, queda solo</button>
+                </div>`
+            );
+            return;
+        }
+
+        if (ft.assign) {
+            $('#familia-display').html('<span style="color:#b45309;">Asignar familia</span>');
+            $('#local-familia-view').append('<span class="field-warning-inline familia-assign-warn" title="Asignar familia">⚠️</span>');
+            return;
+        }
+
+        if (product.familia_decision === 'no_requiere') {
+            $('#familia-display').html('<span style="color:#666;">No requiere familia</span>');
+            return;
+        }
+
+        $('#familia-display').html('<span style="color:#999;">Sin familia</span>');
+    }
+
+    function answerFamilyNeed(needsFamily) {
+        if (!currentProduct || !currentProduct.id) return $.Deferred().reject();
+        return post('riverso_products_answer_family_need', {
+            product_id: currentProduct.id,
+            needs_family: needsFamily ? 1 : 0
+        });
+    }
+
+    function refreshProductAfterFamilyAnswer(r) {
+        if (r.success && r.data && r.data.product) {
+            currentProduct = r.data.product;
+            renderFamiliaHub(currentProduct);
+            calculateFieldAlerts(currentProduct);
+            showFieldWarningIcons(currentProduct);
+            calculatePendingTasks(currentProduct);
+            renderTasks(currentProduct.tasks || []);
+        }
+    }
+
+    $(document).on('click', '.familia-answer-yes, .task-family-yes', function(e) {
+        e.preventDefault();
+        answerFamilyNeed(true).done(refreshProductAfterFamilyAnswer).fail(function() {
+            alert('Error al guardar la respuesta');
+        });
+    });
+
+    $(document).on('click', '.familia-answer-no, .task-family-no', function(e) {
+        e.preventDefault();
+        answerFamilyNeed(false).done(refreshProductAfterFamilyAnswer).fail(function() {
+            alert('Error al guardar la respuesta');
+        });
+    });
+
     function calculateFieldAlerts(product) {
         const alerts = [];
 
@@ -1047,8 +1159,9 @@ $can_manage_families = current_user_can('riverso_manage_families');
         if (!product.precio_local || !product.precio_local.p_asignado) {
             alerts.push({ field: 'Precio Local', icon: '⚠️', action: 'tab-local' });
         }
-        if (!product.familia) {
-            alerts.push({ field: 'Familia', icon: '👥', action: 'tab-local' });
+        const ft = getPendingFamilyTasks(product);
+        if (ft.assign) {
+            alerts.push({ field: 'Asignar familia', icon: '👥', action: 'tab-local' });
         }
         if (!product.imagen_id) {
             alerts.push({ field: 'Imagen Local', icon: '📷', action: 'tab-local' });
@@ -1118,9 +1231,8 @@ $can_manage_families = current_user_can('riverso_manage_families');
         if (!product.precio_local || !product.precio_local.p_asignado) {
             $('#local-precio-view').after('<span class="field-warning-inline" title="Falta Precio Local">⚠️</span>');
         }
-        if (!product.familia) {
-            $('#familia-display').after('<span class="field-warning-inline" title="Falta Familia">⚠️</span>');
-        }
+        // Familia: warning solo vía renderFamiliaHub cuando hay tarea asignar_familia
+        
         if (!product.imagen_id) {
             $('#local-image-select').after('<span class="field-warning-inline" title="Falta Imagen">⚠️</span>');
         }
@@ -1152,15 +1264,19 @@ $can_manage_families = current_user_can('riverso_manage_families');
                 $('#online-create-btn').show();
                 $('#online-link-btn').show();
             }
+            $('#online-unlink-btn').hide();
             return;
         }
         $('#online-create-btn').hide();
         // online-link-btn solo se muestra al seleccionar un Woo en búsqueda
         $('#online-link-btn').hide();
+        if (canManage) {
+            $('#online-unlink-btn').show();
+        }
 
         const d = p.online_details || null;
         if (!d) {
-            let html = `<strong>ID WooCommerce:</strong> ${esc(p.woocommerce_product_id || '-')}<br>`;
+            let html = `<strong>ID WooCommerce:</strong> ${esc(formatWooIdsLabel(p))}<br>`;
             html += `<strong>Estado Match:</strong> ${esc(p.match_estado_online || 'UNMATCHED')}<br>`;
             if (p.precio_online && p.precio_online.p_asignado != null) {
                 html += `<strong>Precio Online:</strong> ${formatMoney(p.precio_online.p_asignado)}`;
@@ -1207,7 +1323,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
                 </tr>
                 <tr>
                     <td style="padding:6px; border-bottom:1px solid #eee;"><strong>Woo ID:</strong></td>
-                    <td style="padding:6px; border-bottom:1px solid #eee;">${esc(p.woocommerce_variation_id || p.woocommerce_product_id || '-')}</td>
+                    <td style="padding:6px; border-bottom:1px solid #eee;">${esc(formatWooIdsLabel(p))}</td>
                 </tr>
                 <tr>
                     <td style="padding:6px; border-bottom:1px solid #eee;"><strong>Precio:</strong></td>
@@ -1310,9 +1426,12 @@ $can_manage_families = current_user_can('riverso_manage_families');
                     const name = prod.name || prod.nombre || '';
                     const sku = prod.sku || '';
                     const typeLabel = {'simple': 'Simple', 'variable': 'Variable', 'variation': 'Variación'}[prod.type] || prod.type || '';
+                    const parentHint = (prod.type === 'variation' && prod.parent_id)
+                        ? ` | Padre: ${prod.parent_id}`
+                        : '';
                     html += `<div style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px;" class="woo-result-item" data-id="${prod.id}" data-name="${esc(name)}">
                         <strong>${esc(name)}</strong><br>
-                        <small style="color: #666;">ID: ${prod.id} | SKU: ${esc(sku || '(sin SKU)')} | Tipo: ${esc(typeLabel)}</small>
+                        <small style="color: #666;">ID: ${prod.id}${parentHint} | SKU: ${esc(sku || '(sin SKU)')} | Tipo: ${esc(typeLabel)}</small>
                     </div>`;
                 });
                 $('#woo-results').html(html || '<div style="padding:10px;color:#999;">Sin resultados (solo Online sin Local completo)</div>').show();
@@ -1548,6 +1667,8 @@ $can_manage_families = current_user_can('riverso_manage_families');
             'codigo_faltante': { button: 'Ir a Códigos', tab: 'suppliers' },
             'autorizar_publicacion': { button: 'Autorizar', tab: 'online' },
             'validar_categoria': { button: 'Ver Online', tab: 'online' },
+            'preguntar_familia': { buttons: 'familyAsk' },
+            'asignar_familia': { button: 'Ir a Familia', tab: 'local', focusEdit: true },
         };
 
         const pending = (tasks || []).filter(t => t.estado !== 'completada');
@@ -1561,8 +1682,11 @@ $can_manage_families = current_user_can('riverso_manage_families');
             let actionHtml = '';
             const action = taskActionMap[t.tipo];
             if (action) {
-                if (action.tab) {
-                    actionHtml = `<button class="btn-small task-goto" data-tab="${action.tab}">${action.button}</button>`;
+                if (action.buttons === 'familyAsk') {
+                    actionHtml = `<button class="btn-small success task-family-yes">Sí, necesita</button>
+                        <button class="btn-small task-family-no" style="margin-left:6px;">No, queda solo</button>`;
+                } else if (action.tab) {
+                    actionHtml = `<button class="btn-small task-goto" data-tab="${action.tab}" data-focus-edit="${action.focusEdit ? '1' : ''}">${action.button}</button>`;
                 } else if (action.action === 'editLocal') {
                     actionHtml = '<button class="btn-small task-edit-local">Asignar SKU Local</button>';
                 }
@@ -1876,6 +2000,131 @@ $can_manage_families = current_user_can('riverso_manage_families');
             tryLink(false);
         });
 
+        function openUnlinkSplitModalPortal(preview) {
+            return new Promise((resolve) => {
+                if (!preview) { resolve(null); return; }
+
+                const local = preview.local || {};
+                const woo = preview.woo || {};
+                const codes = preview.codes || [];
+
+                let codesRows = '';
+                if (!codes.length) {
+                    codesRows = '<p style="color:#666;font-size:13px;margin:8px 0 0 0;">No hay códigos de proveedor/catálogo. Solo se creará el Solo Online con el Woo.</p>';
+                } else {
+                    codesRows = '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;">'
+                        + '<thead><tr style="text-align:left;border-bottom:1px solid #ddd;">'
+                        + '<th style="padding:6px;">Código</th><th style="padding:6px;">Fuente</th>'
+                        + '<th style="padding:6px;">Local</th><th style="padding:6px;">Online</th></tr></thead><tbody>';
+                    codes.forEach(c => {
+                        const sug = c.suggested_destination === 'online' ? 'online' : 'local';
+                        const label = esc(c.origen_label || (c.is_catalog ? 'Catálogo' : 'Proveedor'));
+                        const nameHint = c.catalogo_nombre
+                            ? esc(c.catalogo_nombre)
+                            : esc(c.proveedor_nombre || '');
+                        codesRows += '<tr style="border-bottom:1px solid #eee;">'
+                            + '<td style="padding:8px;"><code>' + esc(c.codigo_proveedor || '') + '</code>'
+                            + (nameHint ? '<br><small style="color:#666;">' + nameHint + '</small>' : '')
+                            + (c.needs_confirm ? ' <span style="background:#fff3cd;color:#856404;padding:1px 6px;border-radius:3px;font-size:11px;">Por confirmar</span>' : '')
+                            + '</td>'
+                            + '<td style="padding:8px;">' + label + '</td>'
+                            + '<td style="padding:8px;"><label><input type="radio" name="unlink-code-' + c.id + '" value="local"' + (sug === 'local' ? ' checked' : '') + '> Local</label></td>'
+                            + '<td style="padding:8px;"><label><input type="radio" name="unlink-code-' + c.id + '" value="online"' + (sug === 'online' ? ' checked' : '') + '> Online</label></td>'
+                            + '</tr>';
+                    });
+                    codesRows += '</tbody></table>'
+                        + '<p style="font-size:12px;color:#666;margin:10px 0 0 0;">La tarea de confirmar viaja con el código.</p>';
+                }
+
+                const wooLabel = (woo.variation_id
+                    ? ('Padre ' + (woo.product_id || '?') + ' · Var ' + woo.variation_id)
+                    : (woo.product_id || '-'));
+
+                const html = `
+<div id="unlink-modal-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,0.3);padding:28px;max-width:640px;width:92%;max-height:80vh;overflow-y:auto;">
+    <h2 style="margin:0 0 16px 0;">Desvincular WooCommerce</h2>
+    <p style="margin:0 0 14px 0;font-size:13px;color:#555;">Se creará un producto Solo Online con el Woo. Elige dónde queda cada código.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+      <div style="border:1px solid #ddd;padding:12px;border-radius:6px;background:#f9f9f9;">
+        <h4 style="margin:0 0 8px 0;color:#1976d2;">Local (se queda)</h4>
+        <div style="font-size:12px;line-height:1.6;">
+          <div><strong>ID:</strong> #` + (local.id || '?') + `</div>
+          <div><strong>SKU:</strong> ` + esc(local.canonical_sku || '—') + `</div>
+          <div><strong>Nombre:</strong> ` + esc(local.nombre_canonico || '—') + `</div>
+        </div>
+      </div>
+      <div style="border:1px solid #ddd;padding:12px;border-radius:6px;background:#f9f9f9;">
+        <h4 style="margin:0 0 8px 0;color:#2e7d32;">Online (nuevo stub)</h4>
+        <div style="font-size:12px;line-height:1.6;">
+          <div><strong>Woo:</strong> ` + esc(String(wooLabel)) + `</div>
+          <div><strong>SKU Online:</strong> ` + esc(woo.sku || '—') + `</div>
+          <div><strong>Nombre:</strong> ` + esc(woo.name || '—') + `</div>
+        </div>
+      </div>
+    </div>
+    <div>` + codesRows + `</div>
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid #ddd;display:flex;gap:10px;justify-content:flex-end;">
+      <button type="button" id="unlink-modal-cancel" class="btn-small">Cancelar</button>
+      <button type="button" id="unlink-modal-confirm" class="btn-small success">Confirmar desvínculo</button>
+    </div>
+  </div>
+</div>`;
+
+                $('body').append(html);
+
+                const finish = (result) => {
+                    $('#unlink-modal-overlay').remove();
+                    $(document).off('keydown.unlink-modal');
+                    resolve(result);
+                };
+
+                $('#unlink-modal-cancel').on('click', () => finish(null));
+                $('#unlink-modal-confirm').on('click', function() {
+                    const destinations = {};
+                    codes.forEach(c => {
+                        const val = $('input[name="unlink-code-' + c.id + '"]:checked').val() || 'local';
+                        destinations[c.id] = val;
+                    });
+                    finish(destinations);
+                });
+                $(document).on('keydown.unlink-modal', function(e) {
+                    if (e.key === 'Escape') finish(null);
+                });
+                $('#unlink-modal-overlay').on('click', function(e) {
+                    if (e.target === this) finish(null);
+                });
+            });
+        }
+
+        $('#online-unlink-btn').click(function() {
+            if (!currentProduct || !currentProduct.id) return;
+
+            post('riverso_products_preview_unlink', {
+                product_id: currentProduct.id
+            }).done(function(r) {
+                if (!r.success) {
+                    alert('Error: ' + ((r.data && r.data.message) ? r.data.message : 'No se pudo preparar el desvínculo'));
+                    return;
+                }
+                openUnlinkSplitModalPortal(r.data.preview).then(function(destinations) {
+                    if (destinations === null) return;
+                    post('riverso_products_unlink_online', {
+                        product_id: currentProduct.id,
+                        code_destinations: JSON.stringify(destinations)
+                    }).done(function(r2) {
+                        if (r2.success) {
+                            alert(r2.data.message || 'Producto desvinculado');
+                            openDetail(currentProduct.id);
+                            loadProducts(currentOffset);
+                        } else {
+                            alert('Error: ' + ((r2.data && r2.data.message) ? r2.data.message : 'No se pudo desvincular'));
+                        }
+                    });
+                });
+            });
+        });
+
         $('#online-create-btn').click(function() {
             const name = currentProduct.nombre_canonico;
             if (!name) {
@@ -2019,8 +2268,8 @@ $can_manage_families = current_user_can('riverso_manage_families');
             const nombre = $('#family-nombre').val().trim();
             const tipo = $('#family-tipo').val();
 
-            if (!codigo || !nombre) {
-                alert('Ingrese código y nombre');
+            if (!nombre) {
+                alert('Ingrese el nombre de la familia');
                 return;
             }
 
@@ -2030,7 +2279,8 @@ $can_manage_families = current_user_can('riverso_manage_families');
                 tipo_sustitucion: tipo
             }).done(function(r) {
                 if (r.success) {
-                    alert('Familia creada');
+                    const codigoFinal = (r.data && r.data.family && r.data.family.codigo_grupo) || '';
+                    alert('Familia creada' + (codigoFinal ? ' (' + codigoFinal + ')' : ''));
                     $('#family-codigo').val('');
                     $('#family-nombre').val('');
                     $('#family-create-form').hide();
@@ -2210,8 +2460,15 @@ $can_manage_families = current_user_can('riverso_manage_families');
             'codigo_faltante': 'suppliers',
             'validar_categoria': 'online',
             'autorizar_publicacion': 'online',
-            'confirmar_estructura_atributos': 'online'
+            'confirmar_estructura_atributos': 'online',
+            'preguntar_familia': 'local',
+            'asignar_familia': 'local'
         };
+        if (tipo === 'asignar_familia') {
+            switchDetailTab('local');
+            $('#familia-edit-toggle').trigger('click');
+            return;
+        }
         if (tipo === 'crear_contraparte_local') {
             switchDetailTab('local');
             if (canManage) {
@@ -2225,7 +2482,12 @@ $can_manage_families = current_user_can('riverso_manage_families');
 
     $(document).on('click', '.task-goto', function(e) {
         e.preventDefault();
-        switchDetailTab($(this).data('tab'));
+        const tab = $(this).data('tab');
+        const focusEdit = $(this).data('focus-edit') === 1 || $(this).data('focus-edit') === '1';
+        switchDetailTab(tab);
+        if (focusEdit && tab === 'local') {
+            $('#familia-edit-toggle').trigger('click');
+        }
     });
 
     $(document).on('click', '.task-edit-local', function(e) {
@@ -2760,6 +3022,21 @@ $can_manage_families = current_user_can('riverso_manage_families');
 
     // Initial load
     loadCatalogs();
-    loadProducts(0);
+    const deepLinkParams = new URLSearchParams(window.location.search);
+    const deepProductId = parseInt(deepLinkParams.get('id') || '0', 10);
+    if (deepProductId) {
+        const deepTab = deepLinkParams.get('tab') || 'local';
+        const deepEdit = deepLinkParams.get('edit') === '1';
+        loadProducts(0);
+        openDetail(deepProductId, function() {
+            switchDetailTab(deepTab);
+            if (deepEdit && deepTab === 'local' && canManage) {
+                enterEditMode();
+                setTimeout(function() { $('#local-sku-edit').focus().select(); }, 100);
+            }
+        });
+    } else {
+        loadProducts(0);
+    }
 });
 </script>

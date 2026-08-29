@@ -94,12 +94,18 @@ function riverso_get_scan_config($key, $default = '') {
 
     $settings_key = 'scan_' . $key;
     $from_settings = riverso_get_setting($settings_key, null);
+    if (is_string($from_settings)) {
+        $from_settings = trim($from_settings);
+    }
     if ($from_settings !== null && $from_settings !== '' && !riverso_is_masked_secret($from_settings)) {
         $value = $from_settings;
     }
 
     if (isset($const_map[$key]) && defined($const_map[$key])) {
         $val = constant($const_map[$key]);
+        if (is_string($val)) {
+            $val = trim($val);
+        }
         if ($val !== '') {
             $value = $val;
         }
@@ -110,6 +116,13 @@ function riverso_get_scan_config($key, $default = '') {
     }
 
     return $value;
+}
+
+/**
+ * True si hay API key Gemini usable (no vacía ni valor enmascarado de UI).
+ */
+function riverso_scan_gemini_configured() {
+    return trim((string) riverso_get_scan_config('gemini_api_key', '')) !== '';
 }
 
 /**

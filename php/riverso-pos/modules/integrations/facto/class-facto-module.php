@@ -12,6 +12,7 @@ if (!defined('ABSPATH')) {
 require_once __DIR__ . '/class-facto-client.php';
 require_once __DIR__ . '/class-facto-product-sync.php';
 require_once __DIR__ . '/class-facto-inbox-import.php';
+require_once __DIR__ . '/class-facto-export-service.php';
 
 class Riverso_Facto_Module {
 
@@ -25,6 +26,9 @@ class Riverso_Facto_Module {
     /** @var Riverso_Facto_Inbox_Import */
     private $inbox_import;
 
+    /** @var Riverso_Facto_Export_Service */
+    private $export_service;
+
     public static function get_instance() {
         if (null === self::$instance) {
             self::$instance = new self();
@@ -35,6 +39,7 @@ class Riverso_Facto_Module {
     public function init() {
         $this->sync = new Riverso_Facto_Product_Sync();
         $this->inbox_import = new Riverso_Facto_Inbox_Import();
+        $this->export_service = new Riverso_Facto_Export_Service(new Riverso_Facto_Client());
 
         add_action('wp_ajax_riverso_save_facto_settings', [$this, 'ajax_save_settings']);
         add_action('wp_ajax_riverso_facto_test_connection', [$this, 'ajax_test_connection']);
@@ -43,6 +48,13 @@ class Riverso_Facto_Module {
         add_action('wp_ajax_riverso_facto_inbox_estimate', [$this, 'ajax_inbox_estimate']);
         add_action('wp_ajax_riverso_facto_inbox_import', [$this, 'ajax_inbox_import']);
         add_action('wp_ajax_riverso_facto_inbox_runs', [$this, 'ajax_inbox_runs']);
+        add_action('wp_ajax_riverso_facto_export_preview', [$this, 'ajax_export_preview']);
+        add_action('wp_ajax_riverso_facto_export_pending', [$this, 'ajax_export_pending']);
+        add_action('wp_ajax_riverso_facto_export_download', [$this, 'ajax_export_download']);
+        add_action('wp_ajax_riverso_facto_export_mark_applied', [$this, 'ajax_export_mark_applied']);
+        add_action('wp_ajax_riverso_facto_export_unmark_applied', [$this, 'ajax_export_unmark_applied']);
+        add_action('wp_ajax_riverso_facto_export_batch_diff', [$this, 'ajax_export_batch_diff']);
+        add_action('wp_ajax_riverso_facto_export_batches', [$this, 'ajax_export_batches']);
 
         add_action(self::CRON_HOOK, [$this, 'cron_process_outbox']);
         add_filter('cron_schedules', [$this, 'add_cron_schedules']);
@@ -143,6 +155,123 @@ class Riverso_Facto_Module {
 
     private function can_manage() {
         return current_user_can('riverso_manage_settings') || current_user_can('manage_options');
+    }
+
+    private function can_export_facto() {
+        return current_user_can('riverso_export_facto')
+            || current_user_can('riverso_manage_settings')
+            || current_user_can('manage_options');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function parse_export_filters() {
+        return [
+            'modo'              => sanitize_key(wp_unslash($_POST['modo'] ?? $_GET['modo'] ?? 'upsert')),
+            'tanda'             => absint($_POST['tanda'] ?? $_GET['tanda'] ?? 1),
+            'sku'               => sanitize_text_field(wp_unslash($_POST['sku'] ?? $_GET['sku'] ?? '')),
+            'include_archived'  => !empty($_POST['include_archived'] ?? $_GET['include_archived'] ?? false),
+            'include_stock'     => !empty($_POST['include_stock'] ?? $_GET['include_stock'] ?? false),
+            'only_changed'      => !empty($_POST['only_changed'] ?? $_GET['only_changed'] ?? false),
+            'pending_only'      => !empty($_POST['pending_only'] ?? $_GET['pending_only'] ?? false),
+            'hydrate_from_facto' => !empty($_POST['hydrate_from_facto'] ?? $_GET['hydrate_from_facto'] ?? false),
+        ];
+    }
+
+    public function ajax_export_pending() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!$this->can_export_facto()) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        wp_send_json_success($this->export_service->get_pending_crud_summary(30));
+    }
+
+    public function ajax_export_preview() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!$this->can_export_facto()) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $filters = $this->parse_export_filters();
+        wp_send_json_success($this->export_service->preview($filters));
+    }
+
+    public function ajax_export_download() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!$this->can_export_facto()) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        $filters = $this->parse_export_filters();
+        $result = $this->export_service->generate_batch($filters);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message(), 'data' => $result->get_error_data()]);
+        }
+
+        $filename = $result['filename'];
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . strlen($result['binary']));
+        header('X-Riverso-Batch-Id: ' . (int) $result['batch_id']);
+        echo $result['binary'];
+        exit;
+    }
+
+    public function ajax_export_mark_applied() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!$this->can_export_facto()) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $batch_id = absint($_POST['batch_id'] ?? 0);
+        $notas = sanitize_textarea_field(wp_unslash($_POST['notas'] ?? ''));
+        if (!$batch_id) {
+            wp_send_json_error(['message' => 'batch_id requerido']);
+        }
+        $result = $this->export_service->mark_batch_applied($batch_id, $notas);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['message' => 'Lote marcado como aplicado en FACTO']);
+    }
+
+    public function ajax_export_unmark_applied() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!$this->can_export_facto()) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $batch_id = absint($_POST['batch_id'] ?? 0);
+        if (!$batch_id) {
+            wp_send_json_error(['message' => 'batch_id requerido']);
+        }
+        $result = $this->export_service->unmark_batch_applied($batch_id);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['message' => 'Lote desmarcado; SKUs vuelven a pendiente si no están en otro lote aplicado']);
+    }
+
+    public function ajax_export_batch_diff() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!$this->can_export_facto()) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $batch_id = absint($_POST['batch_id'] ?? $_GET['batch_id'] ?? 0);
+        if (!$batch_id) {
+            wp_send_json_error(['message' => 'batch_id requerido']);
+        }
+        $result = $this->export_service->get_batch_diff($batch_id);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success($result);
+    }
+
+    public function ajax_export_batches() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!$this->can_export_facto()) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        wp_send_json_success(['batches' => $this->export_service->list_recent_batches(30)]);
     }
 
     private function can_import_invoices() {

@@ -29,6 +29,7 @@ class Riverso_POS_Audit {
         'online_match_evaluated'=> 'Match online evaluado',
         'online_match_reviewed' => 'Match online revisado',
         'product_online_linked' => 'Producto online vinculado',
+        'product_online_unlinked' => 'Producto online desvinculado',
         'product_merged'        => 'Merge producto (Online→Local)',
         'product_merge_undone'  => 'Merge deshecho',
         'product_merge_redone'  => 'Merge rehecho',

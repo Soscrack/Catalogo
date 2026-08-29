@@ -331,6 +331,11 @@ class Riverso_POS_Activator {
         self::create_phase34_facto_inbox_import($prefix, $charset_collate);
         self::create_phase35_tecbolt_unify($prefix);
         self::create_phase35b_catalog_mapping_confirm($prefix);
+        self::create_phase36_unit_product($prefix, $charset_collate);
+        self::normalize_phase36_unit_defaults($prefix);
+        self::cleanup_orphan_unidad_minima($prefix);
+        self::create_phase37_facto_export($prefix, $charset_collate);
+        self::create_phase38_family_decision($prefix);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -420,6 +425,7 @@ class Riverso_POS_Activator {
             ['path' => 'modules/pricing/class-pricing-module.php', 'class' => 'Riverso_Pricing_Module'],
             ['path' => 'modules/publish/class-woo-publisher-module.php', 'class' => 'Riverso_Woo_Publisher_Module'],
             ['path' => 'modules/packaging/class-packaging-module.php', 'class' => 'Riverso_Packaging_Module'],
+            ['path' => 'modules/manufacturing/class-manufacturing-module.php', 'class' => 'Riverso_Manufacturing_Module'],
             ['path' => 'modules/print-orders/class-print-order-module.php', 'class' => 'Riverso_Print_Order_Module'],
             ['path' => 'modules/inventory/class-inventory-module.php', 'class' => 'Riverso_Inventory_Count_Module'],
         ];
@@ -3592,5 +3598,349 @@ class Riverso_POS_Activator {
                 ]
             );
         }
+    }
+
+    /**
+     * Fase 36: producto unitario por familia, referencia legacy y órdenes de manufactura.
+     */
+    private static function create_phase36_unit_product($prefix, $charset_collate) {
+        if (get_option('riverso_pos_phase36_unit_product') === '1') {
+            return;
+        }
+
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        self::add_column_if_missing(
+            "{$prefix}equivalence_groups",
+            'es_producto_unitario',
+            "es_producto_unitario TINYINT(1) NOT NULL DEFAULT 0"
+        );
+        self::add_column_if_missing(
+            "{$prefix}equivalence_groups",
+            'unit_producto_base_id',
+            "unit_producto_base_id BIGINT UNSIGNED NULL DEFAULT NULL"
+        );
+        self::add_column_if_missing(
+            "{$prefix}equivalence_groups",
+            'unit_config_at',
+            "unit_config_at DATETIME NULL DEFAULT NULL"
+        );
+        self::add_column_if_missing(
+            "{$prefix}equivalence_groups",
+            'unit_config_by',
+            "unit_config_by BIGINT UNSIGNED NULL DEFAULT NULL"
+        );
+
+        self::add_column_if_missing(
+            "{$prefix}producto_base",
+            'es_unidad_minima',
+            "es_unidad_minima TINYINT(1) NOT NULL DEFAULT 0"
+        );
+        self::add_column_if_missing(
+            "{$prefix}producto_base",
+            'unit_of_grupo_id',
+            "unit_of_grupo_id BIGINT UNSIGNED NULL DEFAULT NULL"
+        );
+
+        $idx = $wpdb->get_results("SHOW INDEX FROM {$prefix}producto_base WHERE Key_name = 'idx_unit_of_grupo'");
+        if (empty($idx)) {
+            $wpdb->query("ALTER TABLE {$prefix}producto_base ADD KEY idx_unit_of_grupo (unit_of_grupo_id)");
+        }
+
+        $sql = "CREATE TABLE {$prefix}legacy_precio_ref (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            sku VARCHAR(100) NOT NULL,
+            nombre VARCHAR(255) DEFAULT NULL,
+            costo_neto DECIMAL(12,4) DEFAULT NULL,
+            precio_neto DECIMAL(12,2) DEFAULT NULL,
+            precio_total DECIMAL(12,2) DEFAULT NULL,
+            codigo_barras VARCHAR(50) DEFAULT NULL,
+            stock_bodega_general DECIMAL(12,4) DEFAULT NULL,
+            stock_bodega_cajas DECIMAL(12,4) DEFAULT NULL,
+            stock_otros DECIMAL(12,4) DEFAULT NULL,
+            unidad VARCHAR(20) DEFAULT NULL,
+            categoria VARCHAR(255) DEFAULT NULL,
+            fuente VARCHAR(64) NOT NULL DEFAULT 'legacy',
+            importado_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_sku_fuente (sku, fuente),
+            KEY idx_sku (sku)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}manufactura_ordenes (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            tipo_proceso VARCHAR(40) NOT NULL DEFAULT 'embolsar',
+            grupo_id BIGINT UNSIGNED DEFAULT NULL,
+            unit_producto_base_id BIGINT UNSIGNED DEFAULT NULL,
+            estado VARCHAR(20) NOT NULL DEFAULT 'borrador',
+            usuario_id BIGINT UNSIGNED DEFAULT NULL,
+            notas TEXT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_grupo (grupo_id),
+            KEY idx_unit (unit_producto_base_id),
+            KEY idx_estado (estado)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}manufactura_pasos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            orden_id BIGINT UNSIGNED NOT NULL,
+            paso VARCHAR(40) NOT NULL,
+            referencia_tipo VARCHAR(40) DEFAULT NULL,
+            referencia_id BIGINT UNSIGNED DEFAULT NULL,
+            detalle TEXT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_orden (orden_id),
+            KEY idx_paso (paso)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        update_option('riverso_pos_phase36_unit_product', '1');
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase36_unit_product', 'equivalence_groups', 0, [
+                'actor_type' => 'computer',
+                'details' => 'Fase 36: producto unitario, legacy_precio_ref, manufactura',
+            ]);
+        }
+    }
+
+    /**
+     * Normaliza defaults de producto unitario: familias sin unitario quedan desactivadas.
+     */
+    private static function normalize_phase36_unit_defaults($prefix) {
+        if (get_option('riverso_pos_phase36_unit_defaults_v2') === '1') {
+            return;
+        }
+
+        global $wpdb;
+
+        $wpdb->query(
+            "UPDATE {$prefix}equivalence_groups
+             SET es_producto_unitario = 0
+             WHERE unit_producto_base_id IS NULL"
+        );
+
+        update_option('riverso_pos_phase36_unit_defaults_v2', '1');
+    }
+
+    /**
+     * Limpia es_unidad_minima huérfano (sin familia unitaria asignada).
+     */
+    private static function cleanup_orphan_unidad_minima($prefix) {
+        if (get_option('riverso_pos_phase36_unit_defaults_v3') === '1') {
+            return;
+        }
+
+        global $wpdb;
+
+        $wpdb->query(
+            "UPDATE {$prefix}producto_base pb
+             SET pb.es_unidad_minima = 0
+             WHERE pb.unit_of_grupo_id IS NULL
+               AND pb.es_unidad_minima = 1
+               AND pb.deleted_at IS NULL
+               AND NOT EXISTS (
+                   SELECT 1 FROM {$prefix}equivalence_groups g
+                   WHERE g.unit_producto_base_id = pb.id
+               )"
+        );
+
+        update_option('riverso_pos_phase36_unit_defaults_v3', '1');
+    }
+
+    /**
+     * Fase 37: campos export Facto en producto_base + trazabilidad de lotes Excel.
+     */
+    private static function create_phase37_facto_export($prefix, $charset_collate) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        self::add_column_if_missing(
+            "{$prefix}producto_base",
+            'facto_iva_tipo',
+            "facto_iva_tipo VARCHAR(10) NOT NULL DEFAULT 'afecto'"
+        );
+        self::add_column_if_missing(
+            "{$prefix}producto_base",
+            'marca',
+            'marca VARCHAR(120) NULL DEFAULT NULL'
+        );
+        self::add_column_if_missing(
+            "{$prefix}producto_base",
+            'modelo',
+            'modelo VARCHAR(120) NULL DEFAULT NULL'
+        );
+        self::add_column_if_missing(
+            "{$prefix}producto_base",
+            'facto_categoria',
+            'facto_categoria VARCHAR(160) NULL DEFAULT NULL'
+        );
+        self::add_column_if_missing(
+            "{$prefix}producto_base",
+            'stock_minimo',
+            'stock_minimo DECIMAL(12,3) NULL DEFAULT NULL'
+        );
+        self::add_column_if_missing(
+            "{$prefix}producto_base",
+            'descripcion_facto',
+            'descripcion_facto TEXT NULL DEFAULT NULL'
+        );
+        self::add_column_if_missing(
+            "{$prefix}legacy_precio_ref",
+            'stock_minimo',
+            'stock_minimo DECIMAL(12,3) NULL DEFAULT NULL'
+        );
+
+        $sql = "CREATE TABLE {$prefix}facto_export_batches (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            modo VARCHAR(32) NOT NULL,
+            alcance LONGTEXT DEFAULT NULL,
+            total_filas INT UNSIGNED NOT NULL DEFAULT 0,
+            tanda INT UNSIGNED NOT NULL DEFAULT 1,
+            tandas_total INT UNSIGNED NOT NULL DEFAULT 1,
+            file_hash CHAR(64) DEFAULT NULL,
+            estado VARCHAR(20) NOT NULL DEFAULT 'generado',
+            created_by BIGINT UNSIGNED DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            applied_at DATETIME DEFAULT NULL,
+            notas TEXT DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_estado (estado),
+            KEY idx_created_at (created_at)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}facto_export_items (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            batch_id BIGINT UNSIGNED NOT NULL,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            sku VARCHAR(100) DEFAULT NULL,
+            row_hash CHAR(64) DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_batch (batch_id),
+            KEY idx_producto (producto_base_id),
+            KEY idx_sku (sku)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        self::add_column_if_missing(
+            "{$prefix}facto_export_batches",
+            'superseded_by_batch_id',
+            'superseded_by_batch_id BIGINT UNSIGNED NULL DEFAULT NULL'
+        );
+        self::add_column_if_missing(
+            "{$prefix}facto_export_items",
+            'payload_json',
+            'payload_json LONGTEXT NULL DEFAULT NULL'
+        );
+
+        if (get_option('riverso_pos_phase37_facto_export') !== '1') {
+            update_option('riverso_pos_phase37_facto_export', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase37_facto_export', 'facto', 0, [
+                    'actor_type' => 'computer',
+                    'details'    => 'Fase 37: export Excel FACTO (campos producto + lotes)',
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Fase 38: familia_decision + backfill por lotes (evita bloquear PHP-FPM).
+     */
+    private static function create_phase38_family_decision($prefix) {
+        self::add_column_if_missing(
+            "{$prefix}producto_base",
+            'familia_decision',
+            "familia_decision VARCHAR(20) NULL DEFAULT NULL"
+        );
+
+        if (get_option('riverso_pos_phase38_family_decision') === '1') {
+            return;
+        }
+
+        // Un solo proceso debe ejecutar el backfill (deploy CLI o primer request).
+        $lock = get_option('riverso_pos_phase38_backfill_lock');
+        if ($lock && (time() - (int) $lock) < 900) {
+            return;
+        }
+        update_option('riverso_pos_phase38_backfill_lock', (string) time(), false);
+
+        @set_time_limit(0);
+
+        $processed = 0;
+        while (self::run_phase38_backfill_batch($prefix, 250)) {
+            $processed += 250;
+            if ($processed >= 15000) {
+                break;
+            }
+        }
+
+        delete_option('riverso_pos_phase38_backfill_lock');
+    }
+
+    /**
+     * Procesa un lote del backfill preguntar_familia. Retorna true si quedan filas.
+     */
+    private static function run_phase38_backfill_batch($prefix, $batch_size = 250) {
+        if (get_option('riverso_pos_phase38_family_decision') === '1') {
+            return false;
+        }
+
+        global $wpdb;
+        $batch_size = max(1, min(500, (int) $batch_size));
+
+        $rows = $wpdb->get_col($wpdb->prepare(
+            "SELECT pb.id
+             FROM {$prefix}producto_base pb
+             LEFT JOIN {$prefix}equivalence_members em
+               ON em.producto_base_id = pb.id AND em.activo = 1
+             WHERE pb.deleted_at IS NULL
+               AND pb.archived_at IS NULL
+               AND pb.estado = 'activo'
+               AND pb.familia_decision IS NULL
+               AND em.id IS NULL
+               AND pb.unit_of_grupo_id IS NULL
+               AND NOT EXISTS (
+                   SELECT 1 FROM {$prefix}equivalence_groups eg2
+                   WHERE eg2.unit_producto_base_id = pb.id AND eg2.activo = 1
+               )
+             LIMIT %d",
+            $batch_size
+        ));
+
+        if (empty($rows)) {
+            update_option('riverso_pos_phase38_family_decision', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase38_family_decision', 'producto_base', 0, [
+                    'actor_type' => 'computer',
+                    'details'    => 'Fase 38: backfill preguntar_familia completado',
+                ]);
+            }
+            return false;
+        }
+
+        $product_file = RIVERSO_POS_PLUGIN_DIR . 'modules/products/class-product-module.php';
+        $task_file = RIVERSO_POS_PLUGIN_DIR . 'core/tasks/class-task-module.php';
+        if (file_exists($task_file)) {
+            require_once $task_file;
+        }
+        if (file_exists($product_file)) {
+            require_once $product_file;
+        }
+        if (class_exists('Riverso_Product_Module')) {
+            $mod = Riverso_Product_Module::get_instance();
+            foreach ($rows as $pid) {
+                $mod->ensure_family_tasks((int) $pid);
+            }
+        }
+
+        return count($rows) >= $batch_size;
     }
 }

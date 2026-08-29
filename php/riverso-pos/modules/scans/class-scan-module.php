@@ -99,6 +99,12 @@ class Riverso_Scan_Module {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
 
+        if (!riverso_scan_gemini_configured()) {
+            wp_send_json_error([
+                'message' => 'Gemini API no configurada. En Configuración pega la API Key real (deja en blanco el campo si ya está configurada; no guardes el valor con asteriscos).',
+            ]);
+        }
+
         if (empty($_FILES['scan_file'])) {
             wp_send_json_error(['message' => 'No se recibió archivo']);
         }
@@ -473,7 +479,7 @@ class Riverso_Scan_Module {
         if (!$gemini->is_configured()) {
             $wpdb->update($archivos_table, [
                 'estado'        => 'error',
-                'error_mensaje' => 'Gemini API no configurada',
+                'error_mensaje' => 'Gemini API no configurada. Revisa Configuración → Gemini API Key.',
             ], ['id' => $archivo_id]);
             $this->cleanup_temp_upload($tmp_path);
             return;

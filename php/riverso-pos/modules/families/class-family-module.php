@@ -14,6 +14,7 @@ if (!defined('ABSPATH')) {
 }
 
 require_once __DIR__ . '/class-family-suggestion-service.php';
+require_once __DIR__ . '/class-unit-product-service.php';
 
 class Riverso_Family_Module {
 
@@ -44,13 +45,23 @@ class Riverso_Family_Module {
         add_action('wp_ajax_riverso_families_get', [$this, 'ajax_get_family']);
         add_action('wp_ajax_riverso_families_create', [$this, 'ajax_create_family']);
         add_action('wp_ajax_riverso_families_update', [$this, 'ajax_update_family']);
+        add_action('wp_ajax_riverso_families_delete', [$this, 'ajax_delete_family']);
         add_action('wp_ajax_riverso_families_add_member', [$this, 'ajax_add_member']);
         add_action('wp_ajax_riverso_families_remove_member', [$this, 'ajax_remove_member']);
+        add_action('wp_ajax_riverso_families_set_member_envase', [$this, 'ajax_set_member_envase']);
         add_action('wp_ajax_riverso_families_search_candidates', [$this, 'ajax_search_candidates']);
+        add_action('wp_ajax_riverso_families_create_local_from_member', [$this, 'ajax_create_local_from_member']);
         add_action('wp_ajax_riverso_families_tree', [$this, 'ajax_family_tree']);
         add_action('wp_ajax_riverso_families_stock', [$this, 'ajax_family_stock']);
         add_action('wp_ajax_riverso_families_suggest', [$this, 'ajax_suggest_families']);
         add_action('wp_ajax_riverso_families_accept_suggestion', [$this, 'ajax_accept_suggestion']);
+        add_action('wp_ajax_riverso_families_unit_get', [$this, 'ajax_unit_get']);
+        add_action('wp_ajax_riverso_families_unit_configure', [$this, 'ajax_unit_configure']);
+        add_action('wp_ajax_riverso_families_unit_toggle', [$this, 'ajax_unit_toggle']);
+        add_action('wp_ajax_riverso_families_unit_convert', [$this, 'ajax_unit_convert']);
+        add_action('wp_ajax_riverso_families_unit_price_preview', [$this, 'ajax_unit_price_preview']);
+        add_action('wp_ajax_riverso_families_unit_link_preview', [$this, 'ajax_unit_link_preview']);
+        add_action('wp_ajax_riverso_families_suggest_names', [$this, 'ajax_suggest_names']);
     }
 
     /**
@@ -69,7 +80,7 @@ class Riverso_Family_Module {
     }
 
     /**
-     * AJAX: Listar todas las familias activas con conteo de miembros y stock.
+     * AJAX: Listar todas las familias activas con conteo de miembros, stock y preview compacto.
      */
     public function ajax_list_families() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
@@ -81,16 +92,108 @@ class Riverso_Family_Module {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
-        $families = $wpdb->get_results(
-            "SELECT g.id, g.codigo_grupo, g.nombre, g.tipo_sustitucion, g.activo,
+        $search = trim(sanitize_text_field($_POST['search'] ?? ''));
+        $has_search = ($search !== '' && (strlen($search) >= 2 || ctype_digit($search)));
+
+        $where_search = '';
+        $search_params = [];
+        if ($has_search) {
+            $like = '%' . $wpdb->esc_like($search) . '%';
+            $compact = preg_replace('/[\s\-\/]+/', '', $search);
+            $compact_like = '%' . $wpdb->esc_like($compact) . '%';
+
+            $where_search = " AND (
+                g.nombre LIKE %s
+                OR g.codigo_grupo LIKE %s
+                OR EXISTS (
+                    SELECT 1 FROM {$prefix}equivalence_members em_s
+                    INNER JOIN {$prefix}producto_base pb_s ON pb_s.id = em_s.producto_base_id
+                    WHERE em_s.grupo_id = g.id AND em_s.activo = 1
+                      AND pb_s.deleted_at IS NULL
+                      AND (
+                          pb_s.nombre_canonico LIKE %s
+                          OR pb_s.canonical_sku LIKE %s
+                          OR pb_s.canonical_sku = %s
+                          OR REPLACE(REPLACE(REPLACE(IFNULL(pb_s.canonical_sku, ''), '-', ''), ' ', ''), '/', '') LIKE %s
+                      )
+                )
+                OR EXISTS (
+                    SELECT 1 FROM {$prefix}producto_proveedor pp_s
+                    LEFT JOIN {$prefix}equivalence_members em_pp
+                        ON em_pp.producto_base_id = pp_s.producto_base_id AND em_pp.activo = 1
+                    WHERE pp_s.activo = 1
+                      AND (em_pp.grupo_id = g.id OR pp_s.grupo_id = g.id)
+                      AND (
+                          pp_s.codigo_proveedor LIKE %s
+                          OR pp_s.codigo_proveedor = %s
+                          OR REPLACE(REPLACE(REPLACE(IFNULL(pp_s.codigo_proveedor, ''), '-', ''), ' ', ''), '/', '') LIKE %s
+                      )
+                )
+                OR EXISTS (
+                    SELECT 1 FROM {$prefix}equivalence_members em_cb
+                    INNER JOIN {$prefix}producto_base pb_cb ON pb_cb.id = em_cb.producto_base_id
+                    INNER JOIN {$prefix}codigo_barra cb_s ON (
+                        cb_s.producto_base_id = pb_cb.id
+                        OR (
+                            cb_s.producto_base_id IS NULL
+                            AND pb_cb.canonical_sku IS NOT NULL AND pb_cb.canonical_sku <> ''
+                            AND (cb_s.sku_local = pb_cb.canonical_sku OR cb_s.pending_sku = pb_cb.canonical_sku)
+                        )
+                    )
+                    WHERE em_cb.grupo_id = g.id AND em_cb.activo = 1
+                      AND cb_s.activo = 1
+                      AND (
+                          cb_s.codigo = %s
+                          OR cb_s.codigo LIKE %s
+                          OR REPLACE(REPLACE(REPLACE(IFNULL(cb_s.codigo, ''), '-', ''), ' ', ''), '/', '') LIKE %s
+                      )
+                )
+                OR EXISTS (
+                    SELECT 1 FROM {$prefix}equivalence_members em_woo
+                    INNER JOIN {$prefix}producto_base pb_woo ON pb_woo.id = em_woo.producto_base_id
+                    INNER JOIN {$wpdb->postmeta} pm_woo ON pm_woo.meta_key = '_sku'
+                      AND pm_woo.post_id = COALESCE(NULLIF(pb_woo.woocommerce_variation_id, 0), pb_woo.woocommerce_product_id)
+                    WHERE em_woo.grupo_id = g.id AND em_woo.activo = 1
+                      AND (pm_woo.meta_value = %s OR pm_woo.meta_value LIKE %s)
+                )
+            )";
+            $search_params = [
+                $like,
+                $like,
+                $like,
+                $like,
+                $search,
+                $compact_like,
+                $like,
+                $search,
+                $compact_like,
+                $search,
+                $like,
+                $compact_like,
+                $search,
+                $like,
+            ];
+        }
+
+        $sql = "SELECT g.id, g.codigo_grupo, g.nombre, g.tipo_sustitucion, g.activo,
+                    g.unit_producto_base_id, g.es_producto_unitario,
+                    ub.canonical_sku AS unit_sku,
                     COUNT(em.id) as miembros_count
              FROM {$prefix}equivalence_groups g
              LEFT JOIN {$prefix}equivalence_members em ON em.grupo_id = g.id AND em.activo = 1
-             WHERE g.activo = 1
+             LEFT JOIN {$prefix}producto_base ub ON ub.id = g.unit_producto_base_id AND ub.deleted_at IS NULL
+             WHERE g.activo = 1{$where_search}
              GROUP BY g.id
-             ORDER BY g.nombre ASC",
-            ARRAY_A
-        );
+             ORDER BY g.nombre ASC";
+
+        if ($has_search) {
+            $families = $wpdb->get_results($wpdb->prepare($sql, $search_params), ARRAY_A);
+        } else {
+            $families = $wpdb->get_results($sql, ARRAY_A);
+        }
+
+        $family_ids = array_map('intval', array_column($families ?: [], 'id'));
+        $members_by_group = $this->batch_list_family_members($family_ids);
 
         foreach ($families as &$family) {
             $family['tipo_sustitucion'] = self::normalize_tipo($family['tipo_sustitucion'] ?? 'exacta');
@@ -98,10 +201,133 @@ class Riverso_Family_Module {
             $family['stock_unidades'] = $stock['stock_unidades'];
             $family['stock_warnings'] = $stock['warnings'];
             $family['stock_completo'] = empty($stock['warnings']);
+            $family['unit_sku'] = $family['unit_sku'] ?: null;
+            $unit_id = !empty($family['unit_producto_base_id'])
+                ? intval($family['unit_producto_base_id']) : 0;
+            $family['unit_producto_base_id'] = $unit_id ?: null;
+
+            $members = $members_by_group[intval($family['id'])] ?? [];
+            foreach ($members as &$member) {
+                $member['es_unitario_familia'] = $unit_id > 0
+                    && intval($member['producto_base_id']) === $unit_id;
+            }
+            unset($member);
+            $family['members'] = $members;
         }
         unset($family);
 
-        wp_send_json_success(['families' => $families ?: []]);
+        wp_send_json_success([
+            'families' => $families ?: [],
+            'search' => $has_search ? $search : '',
+            'total' => count($families ?: []),
+        ]);
+    }
+
+    /**
+     * Miembros compactos por familia (batch, sin N+1).
+     *
+     * @param int[] $grupo_ids
+     * @return array<int, array<int, array>>
+     */
+    private function batch_list_family_members(array $grupo_ids) {
+        $grupo_ids = array_values(array_filter(array_map('intval', $grupo_ids)));
+        if (!$grupo_ids) {
+            return [];
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $placeholders = implode(',', array_fill(0, count($grupo_ids), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT em.grupo_id, em.producto_base_id, pb.canonical_sku, pb.nombre_canonico,
+                    pb.woocommerce_product_id, pb.woocommerce_variation_id
+             FROM {$prefix}equivalence_members em
+             INNER JOIN {$prefix}producto_base pb ON pb.id = em.producto_base_id
+             WHERE em.grupo_id IN ({$placeholders})
+               AND em.activo = 1
+               AND pb.deleted_at IS NULL
+             ORDER BY em.grupo_id ASC, em.prioridad DESC, pb.nombre_canonico ASC",
+            $grupo_ids
+        ), ARRAY_A) ?: [];
+
+        $sku_online_map = $this->batch_list_online_skus($rows);
+        $by_group = [];
+
+        foreach ($rows as $row) {
+            $gid = intval($row['grupo_id']);
+            $pid = intval($row['producto_base_id']);
+            $sku_local = trim((string) ($row['canonical_sku'] ?? ''));
+            $sku_online = (string) ($sku_online_map[$pid] ?? '');
+
+            if (!isset($by_group[$gid])) {
+                $by_group[$gid] = [];
+            }
+
+            $by_group[$gid][] = [
+                'producto_base_id' => $pid,
+                'nombre_canonico' => (string) ($row['nombre_canonico'] ?? ''),
+                'sku_local' => $sku_local,
+                'sku_online' => $sku_online,
+                'es_local' => $sku_local !== '',
+                'es_online' => $sku_online !== ''
+                    || absint($row['woocommerce_product_id'] ?? 0) > 0
+                    || absint($row['woocommerce_variation_id'] ?? 0) > 0,
+            ];
+        }
+
+        return $by_group;
+    }
+
+    /**
+     * SKUs Woo batch para filas de producto_base (clave: producto_base_id).
+     *
+     * @param array $items
+     * @return array<int, string>
+     */
+    private function batch_list_online_skus(array $items) {
+        global $wpdb;
+        $map = [];
+        $woo_to_pb = [];
+
+        foreach ($items as $item) {
+            $pb_id = (int) ($item['producto_base_id'] ?? $item['id'] ?? 0);
+            if ($pb_id <= 0) {
+                continue;
+            }
+            $map[$pb_id] = '';
+            $variation_id = (int) ($item['woocommerce_variation_id'] ?? 0);
+            $product_id = (int) ($item['woocommerce_product_id'] ?? 0);
+            $woo_id = $variation_id > 0 ? $variation_id : $product_id;
+            if ($woo_id > 0) {
+                $woo_to_pb[$woo_id] = $pb_id;
+            }
+        }
+
+        if (!$woo_to_pb) {
+            return $map;
+        }
+
+        $woo_ids = array_keys($woo_to_pb);
+        $placeholders = implode(',', array_fill(0, count($woo_ids), '%d'));
+        $query_params = array_merge(['_sku'], $woo_ids);
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT post_id, meta_value
+             FROM {$wpdb->postmeta}
+             WHERE meta_key = %s
+               AND post_id IN ({$placeholders})",
+            $query_params
+        ), ARRAY_A) ?: [];
+
+        foreach ($rows as $row) {
+            $woo_id = (int) ($row['post_id'] ?? 0);
+            $pb_id = $woo_to_pb[$woo_id] ?? 0;
+            if ($pb_id > 0) {
+                $map[$pb_id] = (string) ($row['meta_value'] ?? '');
+            }
+        }
+
+        return $map;
     }
 
     /**
@@ -136,7 +362,8 @@ class Riverso_Family_Module {
         $members = $wpdb->get_results($wpdb->prepare(
             "SELECT em.id, em.producto_base_id, em.prioridad, em.es_reemplazo_preferido,
                     pb.canonical_sku, pb.nombre_canonico, pb.stock_abierto,
-                    pb.woocommerce_product_id, pb.woocommerce_variation_id
+                    pb.woocommerce_product_id, pb.woocommerce_variation_id,
+                    pb.es_unidad_minima, pb.unit_of_grupo_id
              FROM {$prefix}equivalence_members em
              LEFT JOIN {$prefix}producto_base pb ON pb.id = em.producto_base_id
              WHERE em.grupo_id = %d AND em.activo = 1
@@ -144,6 +371,7 @@ class Riverso_Family_Module {
             $grupo_id
         ), ARRAY_A);
 
+        $unit_id = intval($family['unit_producto_base_id'] ?? 0);
         $stock = $this->compute_family_stock($grupo_id, $members);
         $by_id = [];
         foreach ($stock['members'] as $sm) {
@@ -155,10 +383,12 @@ class Riverso_Family_Module {
                 $m = array_merge($m, $by_id[$sid]);
             }
             $this->enrich_product_sku_flags($m);
+            $m['es_unitario_familia'] = $unit_id > 0 && $sid === $unit_id;
         }
         unset($m);
 
         $family['members'] = $members;
+        $family['unit_producto_base_id'] = $unit_id ?: null;
         $family['pending'] = $this->get_pending_suppliers($grupo_id);
         $family['stock'] = $stock;
         wp_send_json_success(['family' => $family]);
@@ -179,19 +409,17 @@ class Riverso_Family_Module {
         $tipo_sustitucion = self::normalize_tipo($_POST['tipo_sustitucion'] ?? 'exacta');
         $notas = sanitize_textarea_field($_POST['notas'] ?? '');
 
-        if (!$codigo_grupo || !$nombre) {
-            wp_send_json_error(['message' => 'Código y nombre son requeridos']);
+        if (!$nombre) {
+            wp_send_json_error(['message' => 'El nombre es requerido']);
+        }
+
+        $codigo_grupo = $this->make_unique_codigo_grupo($nombre, $codigo_grupo);
+        if (is_wp_error($codigo_grupo)) {
+            wp_send_json_error(['message' => $codigo_grupo->get_error_message()]);
         }
 
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
-
-        if ($wpdb->get_var($wpdb->prepare(
-            "SELECT id FROM {$prefix}equivalence_groups WHERE codigo_grupo = %s",
-            $codigo_grupo
-        ))) {
-            wp_send_json_error(['message' => 'El código de grupo ya existe']);
-        }
 
         $wpdb->insert(
             "{$prefix}equivalence_groups",
@@ -206,6 +434,9 @@ class Riverso_Family_Module {
         );
 
         $grupo_id = $wpdb->insert_id;
+        if (!$grupo_id) {
+            wp_send_json_error(['message' => 'No se pudo crear la familia']);
+        }
 
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('family_created', 'equivalence_groups', $grupo_id, [
@@ -221,6 +452,57 @@ class Riverso_Family_Module {
         ), ARRAY_A);
 
         wp_send_json_success(['family' => $family]);
+    }
+
+    /**
+     * Genera codigo_grupo único. Si $codigo está vacío, usa slug del nombre.
+     *
+     * @param string $nombre
+     * @param string $codigo
+     * @return string|WP_Error
+     */
+    private function make_unique_codigo_grupo($nombre, $codigo = '') {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $codigo = trim((string) $codigo);
+        if ($codigo !== '') {
+            $base = strtoupper(preg_replace('/[^A-Z0-9_\-]/i', '', $codigo));
+            $base = substr($base, 0, 80);
+            if ($base === '') {
+                return new WP_Error('invalid_codigo', 'El código no es válido (usa letras, números, _ o -)');
+            }
+            $exists = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}equivalence_groups WHERE codigo_grupo = %s LIMIT 1",
+                $base
+            ));
+            if ($exists) {
+                return new WP_Error('codigo_exists', 'El código de grupo ya existe');
+            }
+            return $base;
+        }
+
+        $slug = sanitize_title((string) $nombre);
+        $slug = strtoupper(preg_replace('/[^A-Z0-9_\-]/i', '', str_replace('-', '_', $slug)));
+        $slug = substr($slug, 0, 80);
+        if ($slug === '') {
+            return new WP_Error('invalid_slug', 'No se pudo generar un código desde el nombre. Escribe un código manualmente.');
+        }
+
+        $candidate = $slug;
+        $n = 2;
+        while ($wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}equivalence_groups WHERE codigo_grupo = %s LIMIT 1",
+            $candidate
+        ))) {
+            $suffix = '-' . $n;
+            $candidate = substr($slug, 0, max(1, 80 - strlen($suffix))) . $suffix;
+            $n++;
+            if ($n > 9999) {
+                return new WP_Error('slug_exhausted', 'No hay códigos disponibles para ese nombre');
+            }
+        }
+        return $candidate;
     }
 
     /**
@@ -283,6 +565,140 @@ class Riverso_Family_Module {
         ), ARRAY_A);
 
         wp_send_json_success(['family' => $family]);
+    }
+
+    /**
+     * AJAX: Eliminar (desactivar) familia con confirmación previa en UI.
+     */
+    public function ajax_delete_family() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        if (!$grupo_id) {
+            wp_send_json_error(['message' => 'grupo_id requerido']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $family = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}equivalence_groups WHERE id = %d",
+            $grupo_id
+        ), ARRAY_A);
+        if (!$family) {
+            wp_send_json_error(['message' => 'Familia no encontrada']);
+        }
+        if (empty($family['activo'])) {
+            wp_send_json_success(['message' => 'La familia ya estaba eliminada', 'grupo_id' => $grupo_id]);
+        }
+
+        $members_count = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$prefix}equivalence_members WHERE grupo_id = %d AND activo = 1",
+            $grupo_id
+        ));
+
+        $unit_id = intval($family['unit_producto_base_id'] ?? 0);
+        if ($unit_id > 0) {
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}producto_base
+                 SET es_unidad_minima = 0, unit_of_grupo_id = NULL
+                 WHERE id = %d",
+                $unit_id
+            ));
+        }
+
+        $wpdb->update(
+            "{$prefix}equivalence_members",
+            ['activo' => 0],
+            ['grupo_id' => $grupo_id, 'activo' => 1],
+            ['%d'],
+            ['%d', '%d']
+        );
+
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}equivalence_groups
+             SET activo = 0, es_producto_unitario = 0, unit_producto_base_id = NULL
+             WHERE id = %d",
+            $grupo_id
+        ));
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('family_deleted', 'equivalence_groups', $grupo_id, [
+                'nombre' => $family['nombre'] ?? '',
+                'codigo_grupo' => $family['codigo_grupo'] ?? '',
+                'members_count' => $members_count,
+                'unit_producto_base_id' => $unit_id ?: null,
+            ]);
+        }
+
+        wp_send_json_success([
+            'message' => 'Familia eliminada',
+            'grupo_id' => $grupo_id,
+            'members_deactivated' => $members_count,
+        ]);
+    }
+
+    /**
+     * AJAX: Definir/actualizar cantidad_unidades de envase de un miembro.
+     */
+    public function ajax_set_member_envase() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $producto_base_id = absint($_POST['producto_base_id'] ?? 0);
+        $cantidad = floatval($_POST['cantidad_unidades'] ?? 0);
+
+        if (!$grupo_id || !$producto_base_id) {
+            wp_send_json_error(['message' => 'grupo_id y producto_base_id requeridos']);
+        }
+        if ($cantidad <= 0) {
+            wp_send_json_error(['message' => 'cantidad_unidades debe ser mayor a 0']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $is_member = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}equivalence_members
+             WHERE grupo_id = %d AND producto_base_id = %d AND activo = 1 LIMIT 1",
+            $grupo_id,
+            $producto_base_id
+        ));
+        if (!$is_member) {
+            wp_send_json_error(['message' => 'El producto no es miembro activo de esta familia']);
+        }
+
+        $envase_id = $this->upsert_envase_for_member([
+            'producto_base_id' => $producto_base_id,
+            'cantidad_unidades' => $cantidad,
+            'origen_datos' => 'family_editor',
+        ]);
+        if (!$envase_id) {
+            wp_send_json_error(['message' => 'No se pudo guardar el envase']);
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('family_member_envase_set', 'equivalence_groups', $grupo_id, [
+                'producto_base_id' => $producto_base_id,
+                'cantidad_unidades' => $cantidad,
+                'envase_id' => $envase_id,
+            ]);
+        }
+
+        $stock = $this->compute_family_stock($grupo_id);
+        wp_send_json_success([
+            'envase_id' => $envase_id,
+            'cantidad_unidades' => $cantidad,
+            'stock' => $stock,
+            'message' => 'Cantidad de envase guardada',
+        ]);
     }
 
     /**
@@ -375,6 +791,10 @@ class Riverso_Family_Module {
             ]);
         }
 
+        if (class_exists('Riverso_Product_Module')) {
+            Riverso_Product_Module::get_instance()->resolve_family_assigned($producto_base_id);
+        }
+
         $member = $wpdb->get_row($wpdb->prepare(
             "SELECT em.*, pb.canonical_sku, pb.nombre_canonico
              FROM {$prefix}equivalence_members em
@@ -432,6 +852,7 @@ class Riverso_Family_Module {
 
         $q = trim(sanitize_text_field($_POST['q'] ?? $_POST['search'] ?? ''));
         $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $for_unit = !empty($_POST['for_unit']);
         $limit = min(30, max(5, absint($_POST['limit'] ?? 15)));
 
         if ($q === '') {
@@ -449,7 +870,8 @@ class Riverso_Family_Module {
 
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT DISTINCT pb.id, pb.canonical_sku, pb.nombre_canonico,
-                    pb.woocommerce_product_id, pb.woocommerce_variation_id
+                    pb.woocommerce_product_id, pb.woocommerce_variation_id,
+                    pb.es_unidad_minima, pb.unit_of_grupo_id
              FROM {$prefix}producto_base pb
              LEFT JOIN {$prefix}codigo_barra cb ON (
                 cb.producto_base_id = pb.id
@@ -461,6 +883,8 @@ class Riverso_Family_Module {
              )
              LEFT JOIN {$prefix}producto_proveedor pp ON pp.producto_base_id = pb.id AND pp.activo = 1
              WHERE pb.deleted_at IS NULL
+               AND pb.archived_at IS NULL
+               " . ($for_unit ? "AND pb.canonical_sku IS NOT NULL AND pb.canonical_sku <> ''" : '') . "
                AND (
                     pb.id = %d
                     OR pb.canonical_sku = %s
@@ -502,6 +926,11 @@ class Riverso_Family_Module {
             $limit * 3
         ), ARRAY_A) ?: [];
 
+        // Complementar con productos solo-online hallados por SKU Woo / IDs Woo.
+        if (!$for_unit) {
+            $rows = $this->merge_woo_sku_candidate_rows($rows, $q, $limit * 3);
+        }
+
         $items = [];
         foreach ($rows as $row) {
             $pid = absint($row['id']);
@@ -509,6 +938,52 @@ class Riverso_Family_Module {
             $sku = (string) ($row['sku_local'] ?? '');
             $es_local = !empty($row['es_local']);
             $es_online = !empty($row['es_online']);
+
+            if ($for_unit) {
+                if (!$es_local) {
+                    continue;
+                }
+
+                $unit_of_grupo = absint($row['unit_of_grupo_id'] ?? 0);
+                $unit_familia_nombre = null;
+                if ($unit_of_grupo > 0) {
+                    $unit_familia_nombre = (string) $wpdb->get_var($wpdb->prepare(
+                        "SELECT nombre FROM {$prefix}equivalence_groups WHERE id = %d",
+                        $unit_of_grupo
+                    ));
+                }
+
+                $can_select = true;
+                $aviso = null;
+                if ($unit_of_grupo > 0 && $grupo_id && $unit_of_grupo === $grupo_id) {
+                    $aviso = 'Ya es el producto unitario de esta familia';
+                } elseif ($unit_of_grupo > 0 && $grupo_id && $unit_of_grupo !== $grupo_id) {
+                    $can_select = false;
+                    $aviso = 'Unidad mínima de la familia «' . ($unit_familia_nombre ?: $unit_of_grupo) . '»';
+                } elseif (!empty($row['es_unidad_minima'])) {
+                    $aviso = 'Ya es unidad mínima (sin familia unitaria asignada)';
+                }
+
+                $items[] = [
+                    'id' => $pid,
+                    'canonical_sku' => $sku,
+                    'sku_local' => $sku,
+                    'sku_online' => (string) ($row['sku_online'] ?? ''),
+                    'nombre_canonico' => (string) ($row['nombre_canonico'] ?? ''),
+                    'es_local' => $es_local,
+                    'es_online' => $es_online,
+                    'es_unidad_minima' => (int) ($row['es_unidad_minima'] ?? 0),
+                    'unit_of_grupo_id' => $unit_of_grupo ?: null,
+                    'unit_familia_nombre' => $unit_familia_nombre,
+                    'can_select' => $can_select,
+                    'aviso' => $aviso,
+                ];
+
+                if (count($items) >= $limit) {
+                    break;
+                }
+                continue;
+            }
 
             $exact = $this->is_exact_candidate_match($pid, $sku, $q, (string) ($row['sku_online'] ?? ''));
 
@@ -581,6 +1056,271 @@ class Riverso_Family_Module {
         $row['es_online'] = $sku_online !== ''
             || absint($row['woocommerce_product_id'] ?? 0) > 0
             || absint($row['woocommerce_variation_id'] ?? 0) > 0;
+    }
+
+    /**
+     * Complementa candidatos locales con producto_base vinculados a SKU/ID Woo.
+     *
+     * @param array  $rows
+     * @param string $q
+     * @param int    $limit
+     * @return array
+     */
+    private function merge_woo_sku_candidate_rows(array $rows, $q, $limit = 45) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $q = trim((string) $q);
+        if ($q === '') {
+            return $rows;
+        }
+
+        $seen = [];
+        foreach ($rows as $r) {
+            $seen[absint($r['id'] ?? 0)] = true;
+        }
+
+        $woo_ids = [];
+        if (function_exists('wc_get_product_id_by_sku')) {
+            $exact_woo = absint(wc_get_product_id_by_sku($q));
+            if ($exact_woo > 0) {
+                $woo_ids[] = $exact_woo;
+            }
+        }
+
+        // ID Woo numérico directo.
+        if (ctype_digit($q)) {
+            $woo_ids[] = absint($q);
+        }
+
+        // LIKE en postmeta _sku (parcial), acotado.
+        if (function_exists('wc_get_product') && strlen($q) >= 2) {
+            $like = '%' . $wpdb->esc_like($q) . '%';
+            $meta_ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT post_id FROM {$wpdb->postmeta} pm
+                 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+                 WHERE pm.meta_key = '_sku'
+                   AND pm.meta_value LIKE %s
+                   AND p.post_type IN ('product','product_variation')
+                   AND p.post_status NOT IN ('trash','auto-draft')
+                 ORDER BY (pm.meta_value = %s) DESC, pm.meta_value ASC
+                 LIMIT 20",
+                $like,
+                $q
+            )) ?: [];
+            foreach ($meta_ids as $mid) {
+                $woo_ids[] = absint($mid);
+            }
+        }
+
+        $woo_ids = array_values(array_unique(array_filter(array_map('absint', $woo_ids))));
+        if (!$woo_ids) {
+            return $rows;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($woo_ids), '%d'));
+        $sql = "SELECT pb.id, pb.canonical_sku, pb.nombre_canonico,
+                       pb.woocommerce_product_id, pb.woocommerce_variation_id,
+                       pb.es_unidad_minima, pb.unit_of_grupo_id
+                FROM {$prefix}producto_base pb
+                WHERE pb.deleted_at IS NULL
+                  AND pb.archived_at IS NULL
+                  AND (
+                    pb.woocommerce_product_id IN ($placeholders)
+                    OR pb.woocommerce_variation_id IN ($placeholders)
+                  )
+                LIMIT %d";
+        $params = array_merge($woo_ids, $woo_ids, [max(5, min(45, (int) $limit))]);
+        $extra = $wpdb->get_results($wpdb->prepare($sql, ...$params), ARRAY_A) ?: [];
+
+        foreach ($extra as $row) {
+            $id = absint($row['id'] ?? 0);
+            if ($id <= 0 || isset($seen[$id])) {
+                continue;
+            }
+            $seen[$id] = true;
+            // Preferir coincidencias Woo al inicio.
+            array_unshift($rows, $row);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * AJAX: Asigna SKU local numérico a un producto solo-online (misma fila producto_base).
+     */
+    public function ajax_create_local_from_member() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $producto_base_id = absint($_POST['producto_base_id'] ?? 0);
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $sku = sanitize_text_field($_POST['canonical_sku'] ?? '');
+
+        if ($producto_base_id <= 0) {
+            wp_send_json_error(['message' => 'producto_base_id requerido']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $pb = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, canonical_sku, nombre_canonico,
+                    woocommerce_product_id, woocommerce_variation_id,
+                    deleted_at, archived_at
+             FROM {$prefix}producto_base
+             WHERE id = %d",
+            $producto_base_id
+        ), ARRAY_A);
+
+        if (!$pb || !empty($pb['deleted_at'])) {
+            wp_send_json_error(['message' => 'Producto no encontrado']);
+        }
+        if (!empty($pb['archived_at'])) {
+            wp_send_json_error(['message' => 'El producto está archivado']);
+        }
+
+        $this->enrich_product_sku_flags($pb);
+        if (empty($pb['es_online'])) {
+            wp_send_json_error(['message' => 'El producto no está vinculado a WooCommerce (online)']);
+        }
+        if (!empty($pb['es_local'])) {
+            wp_send_json_error(['message' => 'El producto ya tiene SKU local: ' . $pb['sku_local']]);
+        }
+
+        if ($sku === '') {
+            $sku = $this->allocate_next_local_sku();
+            if (is_wp_error($sku)) {
+                wp_send_json_error(['message' => $sku->get_error_message()]);
+            }
+        }
+
+        if (!preg_match('/^\d{1,6}$/', $sku)) {
+            wp_send_json_error(['message' => 'SKU Local debe ser numérico y máximo 6 dígitos']);
+        }
+
+        $existing = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}producto_base WHERE canonical_sku = %s AND id <> %d LIMIT 1",
+            $sku,
+            $producto_base_id
+        ));
+        if ($existing) {
+            wp_send_json_error(['message' => 'El SKU Local ' . $sku . ' ya existe']);
+        }
+
+        $ok = $wpdb->update(
+            "{$prefix}producto_base",
+            [
+                'canonical_sku' => $sku,
+                'updated_at' => current_time('mysql'),
+            ],
+            ['id' => $producto_base_id],
+            ['%s', '%s'],
+            ['%d']
+        );
+        if ($ok === false) {
+            wp_send_json_error(['message' => 'No se pudo asignar el SKU local']);
+        }
+
+        if (class_exists('Riverso_Product_Module')) {
+            Riverso_Product_Module::get_instance()->close_counterpart_task(
+                $producto_base_id,
+                'crear_contraparte_local'
+            );
+        } else {
+            $wpdb->update(
+                "{$prefix}tareas",
+                ['estado' => 'completada'],
+                [
+                    'referencia_tipo' => 'producto_base',
+                    'referencia_id' => $producto_base_id,
+                    'tipo' => 'crear_contraparte_local',
+                ],
+                ['%s'],
+                ['%s', '%d', '%s']
+            );
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('family_member_local_created', 'producto_base', $producto_base_id, [
+                'grupo_id' => $grupo_id ?: null,
+                'canonical_sku' => $sku,
+                'nombre_canonico' => $pb['nombre_canonico'] ?? '',
+            ]);
+        }
+
+        // Dispara sync Facto (y otros listeners): sin esto el SKU local no entra al outbox.
+        $event_payload = [
+            'id' => $producto_base_id,
+            'canonical_sku' => $sku,
+            'nombre_canonico' => (string) ($pb['nombre_canonico'] ?? ''),
+        ];
+        if (function_exists('riverso_event_publish')) {
+            riverso_event_publish('product.updated', $event_payload, [
+                'source' => 'families_create_local_from_member',
+            ]);
+        } else {
+            do_action('riverso_product_updated', $event_payload, [
+                'source' => 'families_create_local_from_member',
+            ]);
+        }
+
+        $fresh = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, canonical_sku, nombre_canonico,
+                    woocommerce_product_id, woocommerce_variation_id
+             FROM {$prefix}producto_base WHERE id = %d",
+            $producto_base_id
+        ), ARRAY_A);
+        $this->enrich_product_sku_flags($fresh);
+
+        wp_send_json_success([
+            'message' => 'SKU local asignado: ' . $sku,
+            'product' => [
+                'id' => absint($fresh['id']),
+                'producto_base_id' => absint($fresh['id']),
+                'canonical_sku' => (string) ($fresh['sku_local'] ?? ''),
+                'sku_local' => (string) ($fresh['sku_local'] ?? ''),
+                'sku_online' => (string) ($fresh['sku_online'] ?? ''),
+                'nombre_canonico' => (string) ($fresh['nombre_canonico'] ?? ''),
+                'es_local' => !empty($fresh['es_local']),
+                'es_online' => !empty($fresh['es_online']),
+            ],
+        ]);
+    }
+
+    /**
+     * Siguiente SKU local numérico disponible (1–6 dígitos).
+     *
+     * @return string|WP_Error
+     */
+    private function allocate_next_local_sku() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $max_sku = $wpdb->get_var(
+            "SELECT MAX(CAST(canonical_sku AS UNSIGNED))
+             FROM {$prefix}producto_base
+             WHERE canonical_sku REGEXP '^[0-9]+$'
+               AND CHAR_LENGTH(canonical_sku) <= 6"
+        );
+        $next = $max_sku ? ((int) $max_sku + 1) : 1;
+        if ($next > 999999) {
+            return new WP_Error('sku_exhausted', 'No hay SKUs locales disponibles');
+        }
+
+        for ($i = $next; $i <= 999999; $i++) {
+            $taken = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}producto_base WHERE canonical_sku = %s LIMIT 1",
+                (string) $i
+            ));
+            if (!$taken) {
+                return (string) $i;
+            }
+        }
+
+        return new WP_Error('sku_exhausted', 'No hay SKUs locales disponibles');
     }
 
     /**
@@ -936,6 +1676,9 @@ class Riverso_Family_Module {
                     ['%d']
                 );
             }
+            if (class_exists('Riverso_Product_Module')) {
+                Riverso_Product_Module::get_instance()->resolve_family_assigned($producto_base_id);
+            }
             return intval($existing['id']);
         }
 
@@ -950,6 +1693,9 @@ class Riverso_Family_Module {
             ],
             ['%d', '%d', '%d', '%d', '%d']
         );
+        if (class_exists('Riverso_Product_Module')) {
+            Riverso_Product_Module::get_instance()->resolve_family_assigned($producto_base_id);
+        }
         return intval($wpdb->insert_id);
     }
 
@@ -1240,7 +1986,7 @@ class Riverso_Family_Module {
             'es_vendible' => 1,
             'lleva_stock_propio' => 1,
             'permite_apertura' => 1,
-            'origen_datos' => 'familia_mamut_suggestion',
+            'origen_datos' => sanitize_text_field($member['origen_datos'] ?? 'familia_mamut_suggestion') ?: 'familia_mamut_suggestion',
             'requires_human_review' => 0,
             'review_status' => 'aprobado',
             'activo' => 1,
@@ -1335,7 +2081,7 @@ class Riverso_Family_Module {
                 : 0.0;
 
             $envase = $wpdb->get_row($wpdb->prepare(
-                "SELECT id, cantidad_unidades, tipo_envase, codigo_proveedor
+                "SELECT id, cantidad_unidades, tipo_envase, codigo_proveedor, origen_datos
                  FROM {$prefix}envases
                  WHERE producto_base_id = %d AND activo = 1
                  ORDER BY (cantidad_unidades > 1) DESC, cantidad_unidades DESC
@@ -1344,6 +2090,54 @@ class Riverso_Family_Module {
             ), ARRAY_A);
 
             $cantidad = $envase ? floatval($envase['cantidad_unidades']) : 0.0;
+
+            // Revalidar auto-imports Woo erróneos (ej. calibre "#8" guardado como envase 8).
+            $origen = (string) ($envase['origen_datos'] ?? '');
+            if ($envase && $origen === 'woo_attr_envase') {
+                $woo_qty = $this->resolve_envase_qty_from_woocommerce($base_id);
+                if ($woo_qty > 1 && abs($woo_qty - $cantidad) > 0.0001) {
+                    $wpdb->update(
+                        "{$prefix}envases",
+                        ['cantidad_unidades' => $woo_qty],
+                        ['id' => intval($envase['id'])],
+                        ['%f'],
+                        ['%d']
+                    );
+                    $cantidad = $woo_qty;
+                    $envase['cantidad_unidades'] = $woo_qty;
+                } elseif ($woo_qty <= 0 && $cantidad > 0 && $cantidad <= 16) {
+                    // Quedó un falso positivo (#8): invalidar para no heredar mal.
+                    $wpdb->update(
+                        "{$prefix}envases",
+                        ['activo' => 0],
+                        ['id' => intval($envase['id'])],
+                        ['%d'],
+                        ['%d']
+                    );
+                    $cantidad = 0.0;
+                    $envase = null;
+                }
+            }
+
+            // Fallback: atributo WooCommerce "envase" (ej. "100 U") → persistir en riverso_envases.
+            if ($cantidad <= 0) {
+                $woo_qty = $this->resolve_envase_qty_from_woocommerce($base_id);
+                if ($woo_qty > 1) {
+                    $envase_id = $this->upsert_envase_for_member([
+                        'producto_base_id' => $base_id,
+                        'cantidad_unidades' => $woo_qty,
+                        'origen_datos' => 'woo_attr_envase',
+                    ]);
+                    if ($envase_id) {
+                        $cantidad = $woo_qty;
+                        $envase = [
+                            'id' => $envase_id,
+                            'cantidad_unidades' => $woo_qty,
+                        ];
+                    }
+                }
+            }
+
             $abierto = floatval($m['stock_abierto'] ?? $wpdb->get_var($wpdb->prepare(
                 "SELECT stock_abierto FROM {$prefix}producto_base WHERE id = %d",
                 $base_id
@@ -1362,7 +2156,10 @@ class Riverso_Family_Module {
             ];
 
             if ($cantidad <= 0) {
-                $warnings[] = 'SKU ' . ($m['canonical_sku'] ?: $base_id) . ' sin cantidad_unidades de envase; no se suma al stock de familia.';
+                $label = !empty($m['canonical_sku'])
+                    ? ('SKU ' . $m['canonical_sku'])
+                    : ('producto #' . $base_id);
+                $warnings[] = $label . ' sin cantidad de envase en Riverso (no en WooCommerce); no se suma al stock de familia. Define la cantidad en Editar familia.';
                 $detail[] = $row;
                 continue;
             }
@@ -1380,6 +2177,114 @@ class Riverso_Family_Module {
             'warnings' => $warnings,
             'members' => $detail,
         ];
+    }
+
+    /**
+     * Lee cantidad de envase desde atributo WooCommerce (envase / packaging / unidades).
+     * Ej.: "100 U", "500u", "caja 250".
+     *
+     * @param int $producto_base_id
+     * @return float
+     */
+    private function resolve_envase_qty_from_woocommerce($producto_base_id) {
+        if (!function_exists('wc_get_product')) {
+            return 0.0;
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $pb = $wpdb->get_row($wpdb->prepare(
+            "SELECT woocommerce_product_id, woocommerce_variation_id
+             FROM {$prefix}producto_base WHERE id = %d",
+            intval($producto_base_id)
+        ), ARRAY_A);
+        if (!$pb) {
+            return 0.0;
+        }
+
+        $woo_id = intval($pb['woocommerce_variation_id'] ?: $pb['woocommerce_product_id']);
+        if ($woo_id <= 0) {
+            return 0.0;
+        }
+
+        $product = wc_get_product($woo_id);
+        if (!$product) {
+            return 0.0;
+        }
+
+        $candidates = [];
+        $attrs = $product->get_attributes();
+        if (is_array($attrs)) {
+            foreach ($attrs as $key => $attr) {
+                $name = is_object($attr) && method_exists($attr, 'get_name')
+                    ? (string) $attr->get_name()
+                    : (string) $key;
+                $val = '';
+                if (is_object($attr) && method_exists($attr, 'get_options')) {
+                    $opts = $attr->get_options();
+                    $val = is_array($opts) ? implode(' ', $opts) : (string) $opts;
+                } elseif (is_string($attr)) {
+                    $val = $attr;
+                } elseif (is_array($attr)) {
+                    $val = isset($attr['options']) ? implode(' ', (array) $attr['options']) : '';
+                }
+                // Variaciones: get_attribute('pa_envase') / 'envase'
+                $candidates[$name] = $val;
+            }
+        }
+
+        foreach (['envase', 'pa_envase', 'packaging', 'unidades', 'cantidad', 'pack'] as $slug) {
+            $v = $product->get_attribute($slug);
+            if ($v) {
+                $candidates[$slug] = $v;
+            }
+        }
+
+        foreach ($candidates as $name => $val) {
+            $hay = strtolower($name . ' ' . $val);
+            $looks_envase_attr = strpos($hay, 'envase') !== false
+                || strpos($hay, 'pack') !== false
+                || strpos($hay, 'packaging') !== false;
+            // Solo atributos de envase/pack. Nunca parsear calibre "#8" u otros.
+            if (!$looks_envase_attr) {
+                continue;
+            }
+            $qty = $this->parse_envase_qty_text((string) $val);
+            if ($qty > 1) {
+                return $qty;
+            }
+        }
+
+        // Segunda pasada: valor explícito tipo "100 U" / "500u" en cualquier attr de envase ya filtrado arriba.
+        return 0.0;
+    }
+
+    /**
+     * @param string $text
+     * @return float
+     */
+    private function parse_envase_qty_text($text) {
+        $text = trim((string) $text);
+        if ($text === '') {
+            return 0.0;
+        }
+        // Preferir "100 U", "500u", "caja 250"
+        if (preg_match('/(\d+(?:[.,]\d+)?)\s*u\b/i', $text, $m)) {
+            return floatval(str_replace(',', '.', $m[1]));
+        }
+        if (preg_match('/\b(?:caja|pack|envase)\s*[:=]?\s*(\d+(?:[.,]\d+)?)/i', $text, $m)) {
+            return floatval(str_replace(',', '.', $m[1]));
+        }
+        // Número solo si el texto es casi solo eso (ej. "100"), no "#8 x 1/2"
+        if (preg_match('/^#?\s*(\d+(?:[.,]\d+)?)\s*$/', $text, $m)) {
+            $n = floatval(str_replace(',', '.', $m[1]));
+            // Calibres de tornillo (#6,#8,#10,#12) no son envase
+            if ($n <= 16 && strpos($text, '#') !== false) {
+                return 0.0;
+            }
+            return $n > 1 ? $n : 0.0;
+        }
+        return 0.0;
     }
 
     /**
@@ -1424,4 +2329,451 @@ class Riverso_Family_Module {
             intval($grupo_id)
         ), ARRAY_A);
     }
+
+    /* ===================== Producto unitario ===================== */
+
+    private function unit_service() {
+        return Riverso_Unit_Product_Service::get_instance();
+    }
+
+    public function ajax_unit_get() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        if (!$grupo_id) {
+            wp_send_json_error(['message' => 'grupo_id requerido']);
+        }
+        $snapshot = $this->unit_service()->get_unit_snapshot($grupo_id);
+        if (is_wp_error($snapshot)) {
+            wp_send_json_error(['message' => $snapshot->get_error_message()]);
+        }
+        wp_send_json_success(['unit' => $snapshot]);
+    }
+
+    public function ajax_unit_configure() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        if (!$grupo_id) {
+            wp_send_json_error(['message' => 'grupo_id requerido']);
+        }
+
+        $opts = [
+            'nombre' => sanitize_text_field($_POST['nombre'] ?? ''),
+            'canonical_sku' => sanitize_text_field($_POST['canonical_sku'] ?? ''),
+            'p_asignado' => isset($_POST['p_asignado']) && $_POST['p_asignado'] !== ''
+                ? floatval($_POST['p_asignado']) : null,
+            'es_producto_unitario' => !isset($_POST['es_producto_unitario']) || !empty($_POST['es_producto_unitario']),
+        ];
+
+        $convert_id = absint($_POST['convert_producto_base_id'] ?? 0);
+        if ($convert_id) {
+            $result = $this->unit_service()->convert_member_to_unit($grupo_id, $convert_id, $opts);
+        } else {
+            $result = $this->unit_service()->ensure_unit_product($grupo_id, $opts);
+        }
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+
+        if (!empty($_POST['confirm_r1']) && class_exists('Riverso_Price_Rules_Module')) {
+            $assign = $this->unit_service()->assign_default_rule($grupo_id, absint($_POST['rule_id'] ?? 0));
+            if (is_wp_error($assign)) {
+                wp_send_json_error(['message' => $assign->get_error_message(), 'unit' => $result]);
+            }
+        }
+
+        if ($opts['p_asignado'] !== null) {
+            $unit_id = intval($result['unit_producto_base_id'] ?? ($result['unit']['id'] ?? 0));
+            if ($unit_id && class_exists('Riverso_Pricing_Module')) {
+                $pricing = Riverso_Pricing_Module::get_instance();
+                $row = $pricing->get_local_price($unit_id);
+                if ($row && !empty($row['id'])) {
+                    $pricing->set_assigned_price((int) $row['id'], $opts['p_asignado']);
+                }
+            }
+        }
+
+        $snapshot = $this->unit_service()->get_unit_snapshot($grupo_id);
+        if (is_wp_error($snapshot)) {
+            wp_send_json_error(['message' => $snapshot->get_error_message()]);
+        }
+        $linked_id = intval($snapshot['unit_producto_base_id'] ?? 0);
+        $expected = $convert_id ?: intval($result['unit_producto_base_id'] ?? ($result['unit']['id'] ?? 0));
+        if ($expected && $linked_id !== $expected) {
+            wp_send_json_error([
+                'message' => 'El guardado no persistió el producto unitario (unit_producto_base_id). Reintenta o revisa el log.',
+                'unit' => $snapshot,
+            ]);
+        }
+        wp_send_json_success(['unit' => $snapshot, 'message' => 'Producto unitario configurado']);
+    }
+
+    public function ajax_unit_toggle() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $enabled = !empty($_POST['enabled']);
+        $result = $this->unit_service()->toggle_unit_product($grupo_id, $enabled);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['enabled' => $enabled]);
+    }
+
+    public function ajax_unit_convert() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $producto_base_id = absint($_POST['producto_base_id'] ?? 0);
+        if (!$grupo_id || !$producto_base_id) {
+            wp_send_json_error(['message' => 'grupo_id y producto_base_id requeridos']);
+        }
+        $result = $this->unit_service()->convert_member_to_unit($grupo_id, $producto_base_id, [
+            'nombre' => sanitize_text_field($_POST['nombre'] ?? ''),
+        ]);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['unit' => $result]);
+    }
+
+    public function ajax_unit_price_preview() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $p = isset($_POST['p_asignado']) && $_POST['p_asignado'] !== ''
+            ? floatval($_POST['p_asignado']) : null;
+        $preview = $this->unit_service()->preview_member_prices($grupo_id, $p);
+        if (is_wp_error($preview)) {
+            wp_send_json_error(['message' => $preview->get_error_message()]);
+        }
+        wp_send_json_success(['preview' => $preview]);
+    }
+
+    public function ajax_unit_link_preview() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $producto_base_id = absint($_POST['producto_base_id'] ?? 0);
+        if (!$grupo_id || !$producto_base_id) {
+            wp_send_json_error(['message' => 'grupo_id y producto_base_id requeridos']);
+        }
+        $preview = $this->unit_service()->build_link_preview($grupo_id, $producto_base_id);
+        if (is_wp_error($preview)) {
+            wp_send_json_error(['message' => $preview->get_error_message()]);
+        }
+        wp_send_json_success(['preview' => $preview]);
+    }
+
+    /**
+     * AJAX: Sugerencias de nombre de familia a partir de productos miembros / unitario.
+     */
+    public function ajax_suggest_names() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_families') && !current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $ids = [];
+        if (isset($_POST['producto_base_ids']) && is_array($_POST['producto_base_ids'])) {
+            $ids = array_map('absint', $_POST['producto_base_ids']);
+        } elseif (!empty($_POST['producto_base_ids'])) {
+            $raw = sanitize_text_field((string) $_POST['producto_base_ids']);
+            $ids = array_map('absint', preg_split('/[\s,;]+/', $raw) ?: []);
+        }
+        $ids = array_values(array_unique(array_filter($ids)));
+        if (!$ids) {
+            wp_send_json_success(['suggestions' => []]);
+        }
+
+        $suggestions = $this->suggest_family_names_from_products($ids);
+        wp_send_json_success(['suggestions' => $suggestions]);
+    }
+
+    /**
+     * Construye sugerencias de nombre: producto + Nominal x Largo / otros atributos (sin envase).
+     *
+     * @param int[] $producto_base_ids
+     * @return array<int, array{label:string,source:string,producto_base_id:int}>
+     */
+    public function suggest_family_names_from_products(array $producto_base_ids) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $out = [];
+        $seen = [];
+
+        foreach ($producto_base_ids as $pid) {
+            $pid = absint($pid);
+            if (!$pid) {
+                continue;
+            }
+            $pb = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, canonical_sku, nombre_canonico, woocommerce_product_id, woocommerce_variation_id
+                 FROM {$prefix}producto_base WHERE id = %d AND deleted_at IS NULL",
+                $pid
+            ), ARRAY_A);
+            if (!$pb) {
+                continue;
+            }
+
+            foreach ($this->build_name_suggestions_for_product($pb) as $sug) {
+                $label = trim((string) ($sug['label'] ?? ''));
+                if ($label === '') {
+                    continue;
+                }
+                $key = mb_strtolower($label);
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $out[] = [
+                    'label' => $label,
+                    'source' => (string) ($sug['source'] ?? 'producto'),
+                    'producto_base_id' => $pid,
+                ];
+            }
+        }
+
+        return array_slice($out, 0, 12);
+    }
+
+    /**
+     * @param array $pb producto_base row
+     * @return array<int, array{label:string,source:string}>
+     */
+    private function build_name_suggestions_for_product(array $pb) {
+        $suggestions = [];
+        $nombre = trim((string) ($pb['nombre_canonico'] ?? ''));
+        $attrs = $this->collect_product_display_attributes($pb);
+        $base = $this->infer_base_product_name($pb, $attrs, $nombre);
+
+        $nominal = $this->attr_value($attrs, ['nominal', 'calibre', 'diámetro', 'diametro', 'medida']);
+        $largo = $this->attr_value($attrs, ['largo', 'longitud', 'length']);
+        $acabado = $this->attr_value($attrs, ['acabado', 'finish', 'recubrimiento', 'material']);
+
+        $dim = '';
+        if ($nominal !== '' && $largo !== '') {
+            $dim = $nominal . ' x ' . $largo;
+        } elseif ($nominal !== '') {
+            $dim = $nominal;
+        } elseif ($largo !== '') {
+            $dim = $largo;
+        }
+
+        $other_bits = [];
+        foreach ($attrs as $a) {
+            $slug = strtolower((string) ($a['slug'] ?? ''));
+            $name = strtolower((string) ($a['name'] ?? ''));
+            $val = trim((string) ($a['value'] ?? ''));
+            if ($val === '' || $this->is_envase_attr($slug, $name)) {
+                continue;
+            }
+            if ($this->attr_matches($slug, $name, ['nominal', 'calibre', 'diámetro', 'diametro', 'medida', 'largo', 'longitud', 'length', 'acabado', 'finish', 'recubrimiento', 'material', 'envase', 'pack'])) {
+                continue;
+            }
+            // Evitar atributos muy ruidosos
+            if (strlen($val) > 40) {
+                continue;
+            }
+            $other_bits[] = $val;
+        }
+        $other_bits = array_slice(array_unique($other_bits), 0, 3);
+
+        if ($base !== '') {
+            $parts = [$base];
+            if ($dim !== '') {
+                $parts[] = $dim;
+            }
+            if ($acabado !== '' && strcasecmp($acabado, 'Sin acabado') !== 0) {
+                $parts[] = $acabado;
+            }
+            $suggestions[] = [
+                'label' => implode(' · ', $parts),
+                'source' => 'base+attrs',
+            ];
+            if ($dim !== '' && $other_bits) {
+                $suggestions[] = [
+                    'label' => implode(' · ', array_merge([$base, $dim], $other_bits)),
+                    'source' => 'base+attrs+extra',
+                ];
+            }
+        }
+
+        if ($nombre !== '' && (!$base || strcasecmp($nombre, $base) !== 0)) {
+            $suggestions[] = [
+                'label' => $this->strip_envase_from_name($nombre),
+                'source' => 'nombre_canonico',
+            ];
+        }
+
+        if ($base !== '' && $dim === '' && $other_bits) {
+            $suggestions[] = [
+                'label' => $base . ' · ' . implode(' · ', $other_bits),
+                'source' => 'base+extra',
+            ];
+        }
+
+        return $suggestions;
+    }
+
+    /**
+     * @param array $pb
+     * @return array<int, array{name:string,slug:string,value:string}>
+     */
+    private function collect_product_display_attributes(array $pb) {
+        if (!function_exists('wc_get_product')) {
+            return [];
+        }
+        $var_id = absint($pb['woocommerce_variation_id'] ?? 0);
+        $prod_id = absint($pb['woocommerce_product_id'] ?? 0);
+        $woo_id = $var_id ?: $prod_id;
+        if (!$woo_id) {
+            return [];
+        }
+        $product = wc_get_product($woo_id);
+        if (!$product) {
+            return [];
+        }
+
+        $out = [];
+        if ($product->is_type('variation')) {
+            foreach ($product->get_attributes() as $slug => $value) {
+                $label = function_exists('wc_attribute_label') ? wc_attribute_label($slug) : $slug;
+                $val = is_string($value) ? $value : (string) $value;
+                if ($val === '') {
+                    continue;
+                }
+                // Términos taxonomy a veces vienen como slug
+                if (taxonomy_exists($slug)) {
+                    $term = get_term_by('slug', $val, $slug);
+                    if ($term && !is_wp_error($term)) {
+                        $val = $term->name;
+                    }
+                }
+                $out[] = [
+                    'name' => (string) $label,
+                    'slug' => (string) $slug,
+                    'value' => trim((string) $val),
+                ];
+            }
+        } else {
+            foreach ($product->get_attributes() as $slug => $attr) {
+                $name = is_object($attr) && method_exists($attr, 'get_name')
+                    ? (string) $attr->get_name()
+                    : (string) $slug;
+                $val = '';
+                if (is_object($attr) && method_exists($attr, 'get_options')) {
+                    $opts = $attr->get_options();
+                    if (is_array($opts) && $opts) {
+                        if (is_object($attr) && method_exists($attr, 'is_taxonomy') && $attr->is_taxonomy()) {
+                            $names = [];
+                            foreach ($opts as $term_id) {
+                                $term = get_term((int) $term_id);
+                                if ($term && !is_wp_error($term)) {
+                                    $names[] = $term->name;
+                                }
+                            }
+                            $val = implode(', ', $names);
+                        } else {
+                            $val = implode(', ', array_map('strval', $opts));
+                        }
+                    }
+                } elseif (is_string($attr)) {
+                    $val = $attr;
+                }
+                if (trim($val) === '') {
+                    continue;
+                }
+                $out[] = [
+                    'name' => $name,
+                    'slug' => (string) $slug,
+                    'value' => trim($val),
+                ];
+            }
+        }
+        return $out;
+    }
+
+    private function infer_base_product_name(array $pb, array $attrs, $nombre) {
+        if (!function_exists('wc_get_product')) {
+            return $this->strip_envase_from_name($nombre);
+        }
+        $var_id = absint($pb['woocommerce_variation_id'] ?? 0);
+        $prod_id = absint($pb['woocommerce_product_id'] ?? 0);
+        if ($var_id) {
+            $variation = wc_get_product($var_id);
+            if ($variation && $variation->is_type('variation')) {
+                $parent = wc_get_product((int) $variation->get_parent_id());
+                if ($parent) {
+                    return trim((string) $parent->get_name());
+                }
+            }
+        }
+        if ($prod_id) {
+            $product = wc_get_product($prod_id);
+            if ($product && !$product->is_type('variation')) {
+                return trim((string) $product->get_name());
+            }
+        }
+        // Quitar valores de atributos del nombre canónico
+        $clean = $this->strip_envase_from_name($nombre);
+        foreach ($attrs as $a) {
+            $val = trim((string) ($a['value'] ?? ''));
+            if ($val === '' || strlen($val) < 2) {
+                continue;
+            }
+            $clean = preg_replace('/\s*[-–·,]\s*' . preg_quote($val, '/') . '\s*$/iu', '', $clean);
+            $clean = preg_replace('/\b' . preg_quote($val, '/') . '\b/iu', '', $clean);
+        }
+        $clean = trim(preg_replace('/\s{2,}/', ' ', (string) $clean));
+        return $clean !== '' ? $clean : $this->strip_envase_from_name($nombre);
+    }
+
+    private function strip_envase_from_name($nombre) {
+        $nombre = trim((string) $nombre);
+        // "… (caja 100 u)", "… 100 U", "… - 500u"
+        $nombre = preg_replace('/\s*[\(\[]?\s*(caja|pack|envase)?\s*\d+(?:[.,]\d+)?\s*u\.?\s*[\)\]]?\s*$/iu', '', $nombre);
+        return trim((string) $nombre);
+    }
+
+    private function attr_value(array $attrs, array $keys) {
+        foreach ($attrs as $a) {
+            if ($this->attr_matches((string) ($a['slug'] ?? ''), (string) ($a['name'] ?? ''), $keys)) {
+                return trim((string) ($a['value'] ?? ''));
+            }
+        }
+        return '';
+    }
+
+    private function attr_matches($slug, $name, array $keys) {
+        $hay = strtolower($slug . ' ' . $name);
+        $hay = str_replace(['pa_', '-', '_'], ' ', $hay);
+        foreach ($keys as $k) {
+            $k = strtolower((string) $k);
+            if ($k !== '' && strpos($hay, $k) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function is_envase_attr($slug, $name) {
+        return $this->attr_matches($slug, $name, ['envase', 'pack', 'packaging', 'unidades', 'cantidad']);
+    }
 }
+

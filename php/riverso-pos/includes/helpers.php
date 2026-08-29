@@ -105,23 +105,66 @@ function riverso_get_task_statuses() {
 }
 
 /**
- * Obtiene tipos de tarea
+ * Obtiene tipos de tarea (etiquetas e iconos para UI).
  */
 function riverso_get_task_types() {
     return [
-        'cotizacion' => ['label' => 'Cotización pendiente', 'icon' => 'cart'],
-        'picking' => ['label' => 'Picking para venta', 'icon' => 'clipboard'],
-        'reposicion' => ['label' => 'Reposición de stock', 'icon' => 'update'],
-        'recepcion' => ['label' => 'Recepción de mercadería', 'icon' => 'download'],
-        'inventario' => ['label' => 'Conteo de inventario', 'icon' => 'list-view'],
-        'ubicacion' => ['label' => 'Cambio de ubicación', 'icon' => 'move'],
-        'etiquetado' => ['label' => 'Etiquetado de productos', 'icon' => 'tag'],
-        'devolucion' => ['label' => 'Procesamiento de devolución', 'icon' => 'undo'],
-        'codigo_faltante' => ['label' => 'Vincular código proveedor', 'icon' => 'warning'],
-        'barcode_faltante' => ['label' => 'Asignar código de barra', 'icon' => 'tag'],
-        'confirmar_barcode_legacy' => ['label' => 'Confirmar código legacy', 'icon' => 'warning'],
-        'confirmar_codigo_proveedor' => ['label' => 'Confirmar código proveedor (legacy)', 'icon' => 'warning'],
+        'cotizacion' => ['label' => 'Cotización pendiente', 'icon' => 'cart', 'categoria' => 'precios'],
+        'picking' => ['label' => 'Picking para venta', 'icon' => 'clipboard', 'categoria' => 'inventario'],
+        'reposicion' => ['label' => 'Reposición de stock', 'icon' => 'update', 'categoria' => 'inventario'],
+        'recepcion' => ['label' => 'Recepción de mercadería', 'icon' => 'download', 'categoria' => 'inventario'],
+        'inventario' => ['label' => 'Conteo de inventario', 'icon' => 'list-view', 'categoria' => 'inventario'],
+        'ubicacion' => ['label' => 'Cambio de ubicación', 'icon' => 'move', 'categoria' => 'inventario'],
+        'etiquetado' => ['label' => 'Etiquetado de productos', 'icon' => 'tag', 'categoria' => 'inventario'],
+        'bodegaje' => ['label' => 'Ubicar en bodega', 'icon' => 'archive', 'categoria' => 'inventario'],
+        'devolucion' => ['label' => 'Procesamiento de devolución', 'icon' => 'undo', 'categoria' => 'inventario'],
+        'codigo_faltante' => ['label' => 'Vincular código proveedor', 'icon' => 'warning', 'categoria' => 'productos'],
+        'barcode_faltante' => ['label' => 'Asignar código de barra', 'icon' => 'tag', 'categoria' => 'productos'],
+        'confirmar_barcode_legacy' => ['label' => 'Confirmar código legacy', 'icon' => 'warning', 'categoria' => 'productos'],
+        'confirmar_codigo_proveedor' => ['label' => 'Confirmar código proveedor (legacy)', 'icon' => 'warning', 'categoria' => 'productos'],
+        'confirmar_tipo_documento' => ['label' => 'Confirmar tipo de documento', 'icon' => 'media-text', 'categoria' => 'administracion'],
+        'revisar_relacion' => ['label' => 'Revisar relación de producto', 'icon' => 'randomize', 'categoria' => 'productos'],
+        'validar_categoria' => ['label' => 'Validar categoría', 'icon' => 'category', 'categoria' => 'productos'],
+        'verificar_etiquetado' => ['label' => 'Verificar etiquetado', 'icon' => 'tag', 'categoria' => 'productos'],
+        'aprobar_lista_precios' => ['label' => 'Aprobar lista de precios', 'icon' => 'money-alt', 'categoria' => 'precios'],
+        'relacionar_producto_proveedor' => ['label' => 'Relacionar producto proveedor', 'icon' => 'admin-links', 'categoria' => 'productos'],
+        'confirmar_relacion_online' => ['label' => 'Confirmar relación online', 'icon' => 'cloud', 'categoria' => 'productos'],
+        'crear_contraparte_online' => ['label' => 'Crear contraparte online', 'icon' => 'cloud-upload', 'categoria' => 'productos'],
+        'crear_contraparte_local' => ['label' => 'Crear contraparte local', 'icon' => 'admin-home', 'categoria' => 'productos'],
+        'preguntar_familia' => ['label' => '¿Necesita familia?', 'icon' => 'groups', 'categoria' => 'productos'],
+        'asignar_familia' => ['label' => 'Asignar familia', 'icon' => 'groups', 'categoria' => 'productos'],
+        'confirmar_estructura_atributos' => ['label' => 'Confirmar estructura de atributos', 'icon' => 'editor-ul', 'categoria' => 'administracion'],
+        'autorizar_publicacion' => ['label' => 'Autorizar publicación', 'icon' => 'visibility', 'categoria' => 'administracion'],
+        'revisar_calidad_catalogo' => ['label' => 'Revisar salud del catálogo', 'icon' => 'heart', 'categoria' => 'administracion'],
     ];
+}
+
+/**
+ * Categorías de tareas para filtros y agrupación.
+ *
+ * @return array<string,string>
+ */
+function riverso_get_task_categories() {
+    if (class_exists('Riverso_Task_Module')) {
+        return Riverso_Task_Module::TASK_CATEGORIES;
+    }
+    return [
+        'administracion' => 'Administración',
+        'productos' => 'Productos',
+        'precios' => 'Precios',
+        'inventario' => 'Inventario',
+        'otros' => 'Otros',
+    ];
+}
+
+/**
+ * Modo de cierre de una tarea: guided | manual.
+ */
+function riverso_task_completion_mode($tipo) {
+    if (class_exists('Riverso_Task_Module')) {
+        return Riverso_Task_Module::get_completion_mode($tipo);
+    }
+    return 'guided';
 }
 
 /**
@@ -305,105 +348,261 @@ function riverso_set_setting($key, $value) {
 /**
  * Resuelve la URL de destino de una tarea basada en su tipo de referencia.
  *
- * Mapea referencia_tipo -> URL para shortcuts "Ir a la tarea".
- * Prioriza el Hub de Productos (admin.php?page=riverso-pos-products) para producto_base.
- *
- * @param array $task Fila de tarea con campos: id, tipo, referencia_tipo, referencia_id, datos_extra
+ * @param array|object $task    Fila de tarea.
+ * @param string       $context 'admin' (wp-admin) o 'portal' (/interno/...).
  * @return string|null URL de destino o null si no resolvible
  */
-function riverso_resolve_task_target($task) {
-    global $wpdb;
-    $tipo = $task['referencia_tipo'] ?? null;
-    $id = $task['referencia_id'] ?? null;
+function riverso_resolve_task_target($task, $context = 'admin') {
+    $task = is_object($task) ? (array) $task : $task;
+    $referencia_tipo = $task['referencia_tipo'] ?? null;
+    $referencia_id = isset($task['referencia_id']) ? (int) $task['referencia_id'] : 0;
+    $task_tipo = $task['tipo'] ?? '';
 
-    if (!$tipo || !$id) {
+    $extra = $task['datos_extra'] ?? [];
+    if (is_string($extra)) {
+        $extra = json_decode($extra, true) ?: [];
+    }
+
+    if ($referencia_tipo && $referencia_id) {
+        $url = riverso_resolve_task_target_by_reference($task_tipo, $referencia_tipo, $referencia_id, $extra, $context);
+        if ($url) {
+            return $url;
+        }
+    }
+
+    return riverso_resolve_task_target_by_type($task_tipo, $extra, $referencia_id, $context);
+}
+
+/**
+ * Query args de tab/edición para el Hub de productos según tipo de tarea.
+ *
+ * @return array<string,string>
+ */
+function riverso_task_product_hub_tab_args($task_tipo) {
+    $args = [];
+    if ($task_tipo === 'crear_contraparte_local') {
+        $args['tab'] = 'local';
+        $args['edit'] = '1';
+    } elseif (in_array($task_tipo, ['validar_categoria', 'crear_contraparte_online', 'confirmar_relacion_online', 'autorizar_publicacion', 'confirmar_estructura_atributos'], true)) {
+        $args['tab'] = 'online';
+        if ($task_tipo === 'confirmar_estructura_atributos') {
+            $args['scroll'] = 'attributes';
+        }
+    } elseif (in_array($task_tipo, ['relacionar_producto_proveedor', 'codigo_faltante', 'confirmar_codigo_proveedor', 'revisar_relacion'], true)) {
+        $args['tab'] = 'suppliers';
+    } elseif (in_array($task_tipo, ['preguntar_familia', 'asignar_familia'], true)) {
+        $args['tab'] = 'local';
+    } elseif (in_array($task_tipo, ['barcode_faltante', 'confirmar_barcode_legacy'], true)) {
+        $args['tab'] = 'barcodes';
+    } elseif ($task_tipo === 'aprobar_lista_precios') {
+        $args['tab'] = 'pricing';
+    }
+    return $args;
+}
+
+/**
+ * URL al Hub de productos (admin o portal).
+ */
+function riverso_build_task_product_hub_url($producto_base_id, $task_tipo, $context = 'admin') {
+    $producto_base_id = (int) $producto_base_id;
+    if (!$producto_base_id) {
         return null;
     }
 
-    $task_tipo = $task['tipo'] ?? '';
+    $args = array_merge(['id' => $producto_base_id], riverso_task_product_hub_tab_args($task_tipo));
+    if ($context === 'portal') {
+        return add_query_arg($args, home_url('/interno/products/'));
+    }
 
-    switch ($tipo) {
+    $args['action'] = 'detail';
+    return add_query_arg($args, admin_url('admin.php?page=riverso-pos-products'));
+}
+
+/**
+ * URL de módulo portal interno.
+ */
+function riverso_task_portal_module_url($module, array $args = []) {
+    $base = home_url('/interno/' . trim($module, '/') . '/');
+    return empty($args) ? $base : add_query_arg($args, $base);
+}
+
+/**
+ * Resuelve destino por entidad referenciada.
+ */
+function riverso_resolve_task_target_by_reference($task_tipo, $referencia_tipo, $referencia_id, array $extra = [], $context = 'admin') {
+    global $wpdb;
+
+    switch ($referencia_tipo) {
         case 'producto_base':
-            // Deep link al Hub de Productos (admin) con action=detail
-            $args = ['action' => 'detail', 'id' => (int) $id];
-            if ($task_tipo === 'crear_contraparte_local') {
-                $args['tab'] = 'local';
-                $args['edit'] = '1';
-            } elseif (in_array($task_tipo, ['validar_categoria', 'crear_contraparte_online', 'confirmar_relacion_online', 'autorizar_publicacion'], true)) {
-                $args['tab'] = 'online';
-            } elseif (in_array($task_tipo, ['relacionar_producto_proveedor', 'codigo_faltante', 'confirmar_codigo_proveedor'], true)) {
-                $args['tab'] = 'suppliers';
-            } elseif (in_array($task_tipo, ['barcode_faltante', 'confirmar_barcode_legacy'], true)) {
-                $args['tab'] = 'barcodes';
-            }
-            return add_query_arg($args, admin_url('admin.php?page=riverso-pos-products'));
+            return riverso_build_task_product_hub_url((int) $referencia_id, $task_tipo, $context);
 
         case 'codigo_barra':
             $pb_id = $wpdb->get_var($wpdb->prepare(
                 "SELECT producto_base_id FROM {$wpdb->prefix}riverso_codigo_barra WHERE id = %d",
-                (int) $id
+                (int) $referencia_id
             ));
             if (!$pb_id) {
-                $extra = $task['datos_extra'] ?? [];
-                if (is_string($extra)) {
-                    $extra = json_decode($extra, true) ?: [];
-                }
                 $pb_id = absint($extra['producto_base_id'] ?? 0);
             }
             if ($pb_id) {
-                return add_query_arg(
-                    ['action' => 'detail', 'id' => (int) $pb_id, 'tab' => 'barcodes'],
-                    admin_url('admin.php?page=riverso-pos-products')
-                );
+                return riverso_build_task_product_hub_url((int) $pb_id, 'barcode_faltante', $context);
             }
-            return home_url('/interno/barcodes/');
+            return $context === 'portal'
+                ? riverso_task_portal_module_url('barcodes')
+                : home_url('/interno/barcodes/');
 
         case 'producto_proveedor':
             $pb_id = $wpdb->get_var($wpdb->prepare(
                 "SELECT producto_base_id FROM {$wpdb->prefix}riverso_producto_proveedor WHERE id = %d",
-                (int) $id
+                (int) $referencia_id
             ));
             if (!$pb_id) {
-                $extra = $task['datos_extra'] ?? [];
-                if (is_string($extra)) {
-                    $extra = json_decode($extra, true) ?: [];
-                }
                 $pb_id = absint($extra['producto_base_id'] ?? 0);
             }
             if ($pb_id) {
-                return add_query_arg(
-                    ['action' => 'detail', 'id' => (int) $pb_id, 'tab' => 'suppliers'],
-                    admin_url('admin.php?page=riverso-pos-products')
-                );
+                return riverso_build_task_product_hub_url((int) $pb_id, 'relacionar_producto_proveedor', $context);
             }
-            return add_query_arg('pp', (int) $id, admin_url('admin.php?page=riverso-pos-codes'));
+            if ($context === 'portal') {
+                return riverso_task_portal_module_url('codes', ['pp' => (int) $referencia_id]);
+            }
+            return add_query_arg('pp', (int) $referencia_id, admin_url('admin.php?page=riverso-pos-codes'));
 
         case 'producto':
         case 'product':
-            // Resolver WooCommerce product_id -> producto_base_id
             $pb_id = $wpdb->get_var($wpdb->prepare(
                 "SELECT id FROM {$wpdb->prefix}riverso_producto_base WHERE woocommerce_product_id = %d OR woocommerce_variation_id = %d LIMIT 1",
-                (int) $id,
-                (int) $id
+                (int) $referencia_id,
+                (int) $referencia_id
             ));
+            if (!$pb_id) {
+                $pb_id = absint($extra['producto_base_id'] ?? 0);
+            }
             if ($pb_id) {
-                $args = ['action' => 'detail', 'id' => (int) $pb_id];
-                if ($task_tipo === 'crear_contraparte_local') {
-                    $args['tab'] = 'local';
-                    $args['edit'] = '1';
-                }
-                return add_query_arg($args, admin_url('admin.php?page=riverso-pos-products'));
+                return riverso_build_task_product_hub_url((int) $pb_id, $task_tipo, $context);
             }
             return null;
 
         case 'factura_item':
-            return add_query_arg('factura_item', (int) $id, admin_url('admin.php?page=riverso-pos-codes'));
+            if ($context === 'portal') {
+                return riverso_task_portal_module_url('codes', ['factura_item' => (int) $referencia_id]);
+            }
+            return add_query_arg('factura_item', (int) $referencia_id, admin_url('admin.php?page=riverso-pos-codes'));
 
         case 'factura':
-            return add_query_arg('factura', (int) $id, admin_url('admin.php?page=riverso-pos-invoices'));
+            if ($context === 'portal') {
+                return riverso_task_portal_module_url('invoices', ['factura' => (int) $referencia_id]);
+            }
+            return add_query_arg('factura', (int) $referencia_id, admin_url('admin.php?page=riverso-pos-invoices'));
+
+        case 'precio':
+            $pb_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT producto_base_id FROM {$wpdb->prefix}riverso_precios WHERE id = %d",
+                (int) $referencia_id
+            ));
+            if ($pb_id) {
+                return riverso_build_task_product_hub_url((int) $pb_id, 'aprobar_lista_precios', $context);
+            }
+            if ($context === 'portal') {
+                return admin_url('admin.php?page=riverso-pos-pricing');
+            }
+            return admin_url('admin.php?page=riverso-pos-pricing');
+
+        case 'data_gap_rule':
+            $args = ['page' => 'riverso-pos-catalog-health'];
+            if (!empty($extra['regla'])) {
+                $args['regla'] = sanitize_key($extra['regla']);
+            }
+            return add_query_arg($args, admin_url('admin.php'));
+
+        case 'bolsa':
+            $args = ['page' => 'riverso-pos-packaging'];
+            if ($referencia_id) {
+                $args['bolsa'] = (int) $referencia_id;
+            }
+            return add_query_arg($args, admin_url('admin.php'));
 
         default:
             return null;
     }
+}
+
+/**
+ * Fallback: página del módulo según tipo de tarea.
+ */
+function riverso_resolve_task_target_by_type($task_tipo, array $extra = [], $referencia_id = 0, $context = 'admin') {
+    $admin_pages = [
+        'recepcion' => 'riverso-pos-reception',
+        'inventario' => 'riverso-pos-warehouse',
+        'ubicacion' => 'riverso-pos-warehouse',
+        'bodegaje' => 'riverso-pos-warehouse',
+        'picking' => 'riverso-pos-warehouse',
+        'reposicion' => 'riverso-pos-warehouse',
+        'etiquetado' => 'riverso-pos-packaging',
+        'verificar_etiquetado' => 'riverso-pos-packaging',
+        'cotizacion' => 'riverso-pos-received-quotes',
+        'devolucion' => 'riverso-pos-invoices',
+        'aprobar_lista_precios' => 'riverso-pos-pricing',
+        'revisar_calidad_catalogo' => 'riverso-pos-catalog-health',
+        'confirmar_tipo_documento' => 'riverso-pos-invoices',
+        'autorizar_publicacion' => 'riverso-pos-publish',
+        'confirmar_estructura_atributos' => 'riverso-pos-publish',
+        'codigo_faltante' => 'riverso-pos-codes',
+        'barcode_faltante' => 'riverso-pos-barcodes',
+        'confirmar_barcode_legacy' => 'riverso-pos-barcodes',
+        'confirmar_codigo_proveedor' => 'riverso-pos-codes',
+        'preguntar_familia' => 'riverso-pos-categories',
+        'asignar_familia' => 'riverso-pos-categories',
+    ];
+
+    $portal_modules = [
+        'inventario' => 'warehouse',
+        'ubicacion' => 'warehouse',
+        'bodegaje' => 'warehouse',
+        'picking' => 'warehouse',
+        'reposicion' => 'warehouse',
+        'cotizacion' => 'received-quotes',
+        'devolucion' => 'invoices',
+        'confirmar_tipo_documento' => 'invoices',
+        'codigo_faltante' => 'codes',
+        'barcode_faltante' => 'barcodes',
+        'confirmar_barcode_legacy' => 'barcodes',
+        'confirmar_codigo_proveedor' => 'codes',
+        'preguntar_familia' => 'categories',
+        'asignar_familia' => 'categories',
+    ];
+
+    $pb_id = absint($extra['producto_base_id'] ?? $extra['product_id'] ?? 0);
+    if ($pb_id && in_array($task_tipo, [
+        'validar_categoria', 'relacionar_producto_proveedor', 'crear_contraparte_local',
+        'crear_contraparte_online', 'barcode_faltante', 'confirmar_barcode_legacy',
+    ], true)) {
+        return riverso_build_task_product_hub_url($pb_id, $task_tipo, $context);
+    }
+
+    if ($context === 'portal' && isset($portal_modules[$task_tipo])) {
+        $args = [];
+        if (in_array($task_tipo, ['devolucion', 'confirmar_tipo_documento'], true) && $referencia_id) {
+            $args['factura'] = (int) $referencia_id;
+        }
+        return riverso_task_portal_module_url($portal_modules[$task_tipo], $args);
+    }
+
+    if (!isset($admin_pages[$task_tipo])) {
+        return null;
+    }
+
+    $args = ['page' => $admin_pages[$task_tipo]];
+
+    if ($task_tipo === 'revisar_calidad_catalogo' && !empty($extra['regla'])) {
+        $args['regla'] = sanitize_key($extra['regla']);
+    }
+    if ($task_tipo === 'confirmar_tipo_documento' && $referencia_id) {
+        $args['factura'] = (int) $referencia_id;
+    }
+    if (in_array($task_tipo, ['etiquetado', 'bodegaje', 'recepcion', 'devolucion'], true) && $referencia_id) {
+        $args['factura'] = (int) $referencia_id;
+    }
+
+    return add_query_arg($args, admin_url('admin.php'));
 }
 

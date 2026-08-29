@@ -218,12 +218,18 @@ class Riverso_Facto_Product_Sync {
         }
 
         $hash = sha1(wp_json_encode($payload));
-        $this->upsert_map((int) $product['id'], $facto_id, $sku, 'synced', null, $hash);
+        $this->upsert_map((int) $product['id'], $facto_id, $sku, 'pendiente_excel', 'Completar precio/IVA/stock vía export Excel', $hash);
         return true;
     }
 
     private function push_update(array $product, ?array $map) {
         if (!$map || empty($map['facto_product_id'])) {
+            return $this->push_create($product);
+        }
+
+        // Mapa huérfano: producto borrado en FACTO → recrear con POST.
+        if ($this->is_orphan_map($map)) {
+            $this->clear_map((int) $product['id']);
             return $this->push_create($product);
         }
 
@@ -242,6 +248,15 @@ class Riverso_Facto_Product_Sync {
 
         $updated = $this->client->update_product((int) $map['facto_product_id'], $payload);
         if (is_wp_error($updated)) {
+            $status = 0;
+            $data = $updated->get_error_data();
+            if (is_array($data) && !empty($data['status'])) {
+                $status = (int) $data['status'];
+            }
+            if (in_array($status, [404, 410], true)) {
+                $this->clear_map((int) $product['id']);
+                return $this->push_create($product);
+            }
             return $updated;
         }
 
@@ -258,11 +273,37 @@ class Riverso_Facto_Product_Sync {
             (int) $product['id'],
             (int) $map['facto_product_id'],
             $sku_facto !== '' ? $sku_facto : $sku_local,
-            $warning ? 'sku_drift' : 'synced',
-            $warning,
+            $warning ? 'sku_drift' : 'pendiente_excel',
+            $warning ?: 'Completar precio/IVA/stock vía export Excel',
             $hash
         );
         return true;
+    }
+
+    /**
+     * ¿El mapa apunta a un product_id que ya no existe en FACTO?
+     */
+    private function is_orphan_map(array $map) {
+        $facto_id = absint($map['facto_product_id'] ?? 0);
+        if ($facto_id <= 0) {
+            return true;
+        }
+        $remote = $this->client->get_product($facto_id);
+        if (is_wp_error($remote)) {
+            $data = $remote->get_error_data();
+            $status = is_array($data) ? (int) ($data['status'] ?? 0) : 0;
+            return in_array($status, [404, 410], true);
+        }
+        return empty($remote['product_id']) && empty($remote['sku']);
+    }
+
+    private function clear_map($producto_base_id) {
+        global $wpdb;
+        $wpdb->delete(
+            $this->table('facto_producto_map'),
+            ['producto_base_id' => absint($producto_base_id)],
+            ['%d']
+        );
     }
 
     private function push_archive($producto_id, ?array $map, ?array $product) {
@@ -275,6 +316,12 @@ class Riverso_Facto_Product_Sync {
             'status' => 0,
         ]);
         if (is_wp_error($updated)) {
+            $data = $updated->get_error_data();
+            $status = is_array($data) ? (int) ($data['status'] ?? 0) : 0;
+            if (in_array($status, [404, 410], true)) {
+                $this->clear_map((int) $producto_id);
+                return true;
+            }
             return $updated;
         }
         $this->upsert_map($producto_id, (int) $map['facto_product_id'], $map['facto_sku'] ?? null, 'archived', null);
@@ -282,57 +329,121 @@ class Riverso_Facto_Product_Sync {
     }
 
     private function build_create_payload(array $product) {
-        $currency   = (int) riverso_get_facto_config('currency_id', 39);
-        $tax_type   = (string) riverso_get_facto_config('tax_type_id', '387');
-        $price_list = (int) riverso_get_facto_config('price_list_id', 1);
-        $location   = (int) riverso_get_facto_config('location_id', 1);
-
         $name = (string) ($product['nombre_canonico'] ?? '');
         $sku  = (string) ($product['canonical_sku'] ?? '');
         $unit = $this->map_unit($product['unidad_base'] ?? 'UN');
+        $brand = trim((string) ($product['marca'] ?? ''));
+        $model = trim((string) ($product['modelo'] ?? ''));
 
-        $price_total = $this->guess_local_price((int) $product['id']);
-        $net = $price_total > 0 ? round($price_total / 1.19, 6) : 0;
-        $tax = $price_total > 0 ? round($price_total - $net, 6) : 0;
-
+        // Alta mínima vía API: solo vincular id en FACTO. Precio/stock/IVA van por Excel.
         return [
             'name'                => $name,
-            'invoicing_details'   => '',
+            'invoicing_details'   => trim((string) ($product['descripcion_facto'] ?? '')),
             'additional_details'  => '',
-            'model'               => '',
-            'brand'               => '',
-            'status'              => (($product['estado'] ?? '') === 'activo') ? '1' : '0',
+            'model'               => $model,
+            'brand'               => $brand,
+            'status'              => (($product['estado'] ?? '') === 'activo' || ($product['estado'] ?? '') === '') ? '1' : '0',
             'sku'                 => $sku,
             'measure_unit'        => $unit,
             'type'                => '1',
             'favorite'            => 0,
             'product_category_id' => null,
-            'cost' => [
-                'currency_id' => $currency,
-                'value'       => 0,
-            ],
-            'price' => [[
-                'price_list_id' => (string) $price_list,
-                'unit_net'      => $net,
-                'unit_tax'      => $tax,
-                'unit_total'    => $price_total,
-                'currency_id'   => (string) $currency,
-                'sales_commission_percentage' => null,
-                'taxes' => [[
-                    'tax_type_id'    => $tax_type,
-                    'tax_percentage' => 19,
-                    'tax_amount'     => $tax,
-                ]],
-            ]],
-            'inventories' => [
-                'details' => [[
-                    'product_location_id' => $location,
-                    'available_quantity'  => 0,
-                ]],
-                'total_available' => 0,
-                'total_reserved'  => 0,
-            ],
         ];
+    }
+
+    /**
+     * Resuelve product_location_id de "Bodega General" (cache 1h).
+     * Fallback: setting facto_location_id (default 1).
+     *
+     * @return string
+     */
+    private function resolve_bodega_general_location_id() {
+        $cached = get_transient('riverso_facto_bodega_general_id');
+        if (is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+
+        $fallback = (string) riverso_get_facto_config('location_id', 1);
+        $resp = $this->client->list_product_locations();
+        if (is_wp_error($resp)) {
+            return $fallback;
+        }
+
+        $items = Riverso_Facto_Client::embed_collection($resp, 'product_locations');
+        if (!$items && isset($resp[0]) && is_array($resp[0])) {
+            $items = $resp;
+        }
+
+        $found = null;
+        foreach ((array) $items as $loc) {
+            if (!is_array($loc)) {
+                continue;
+            }
+            $name = trim((string) ($loc['name'] ?? ''));
+            $id = isset($loc['product_location_id']) ? (string) $loc['product_location_id'] : '';
+            if ($id === '' || $name === '') {
+                continue;
+            }
+            // Preferir activa.
+            $status = isset($loc['status']) ? (int) $loc['status'] : 1;
+            $norm = mb_strtolower($name, 'UTF-8');
+            $norm = str_replace(['á', 'é', 'í', 'ó', 'ú'], ['a', 'e', 'i', 'o', 'u'], $norm);
+            if (preg_match('/bodega\s*general/', $norm)) {
+                if ($status === 1) {
+                    $found = $id;
+                    break;
+                }
+                if ($found === null) {
+                    $found = $id;
+                }
+            }
+        }
+
+        $resolved = $found !== null ? $found : $fallback;
+        set_transient('riverso_facto_bodega_general_id', $resolved, HOUR_IN_SECONDS);
+        return $resolved;
+    }
+
+    /**
+     * Tras POST, confirma inventario en la bodega esperada con qty ~ 0.
+     *
+     * @return string|null mensaje de warning o null si OK
+     */
+    private function verify_remote_inventory($facto_product_id, array $payload) {
+        $expected_loc = (string) ($payload['inventories']['details'][0]['product_location_id'] ?? '');
+        $remote = $this->client->get_product($facto_product_id);
+        if (is_wp_error($remote)) {
+            return 'No se pudo verificar inventario remoto: ' . $remote->get_error_message();
+        }
+
+        $details = $remote['inventories']['details'] ?? [];
+        if (!is_array($details) || !$details) {
+            return 'FACTO no devolvió inventories.details tras el alta (bodega/stock no confirmados)';
+        }
+
+        foreach ($details as $d) {
+            if (!is_array($d)) {
+                continue;
+            }
+            $loc = (string) ($d['product_location_id'] ?? '');
+            $qty = isset($d['available_quantity']) ? (float) $d['available_quantity'] : null;
+            if ($expected_loc !== '' && $loc === $expected_loc && $qty !== null && abs($qty) < 0.0001) {
+                return null;
+            }
+        }
+
+        // Si hay al menos una línea con qty 0 en alguna bodega, avisar con detalle.
+        $summary = [];
+        foreach ($details as $d) {
+            if (!is_array($d)) {
+                continue;
+            }
+            $summary[] = 'loc=' . ($d['product_location_id'] ?? '?')
+                . ' qty=' . ($d['available_quantity'] ?? '?');
+        }
+        return 'Inventario remoto no coincide con Bodega General / qty 0. Remoto: '
+            . implode('; ', $summary)
+            . ' (esperado loc=' . $expected_loc . ' qty=0)';
     }
 
     private function build_update_payload(array $product) {
@@ -395,10 +506,16 @@ class Riverso_Facto_Product_Sync {
     }
 
     private function map_unit($unit) {
+        if (class_exists('Riverso_Facto_Export_Service')) {
+            $svc = new Riverso_Facto_Export_Service();
+            return $svc->map_unit($unit);
+        }
         $unit = strtoupper(trim((string) $unit));
         $map = [
             'UNIDAD' => 'UN', 'UN' => 'UN', 'U' => 'UN',
-            'KG' => 'KG', 'KILO' => 'KG',
+            'CAJA' => 'CAJA', 'DOCENA' => 'PAR',
+            'KG' => 'KG', 'KILO' => 'KG', 'KILOGRAMO' => 'KG',
+            'LITRO' => 'LT', 'LT' => 'LT', 'LTS' => 'LTS',
             'M' => 'MTS', 'MT' => 'MTS', 'MTS' => 'MTS', 'METRO' => 'MTS',
         ];
         return $map[$unit] ?? 'UN';

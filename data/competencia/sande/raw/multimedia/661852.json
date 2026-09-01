@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 661852,
+    "idMultimedia": 16384,
+    "adjunto": "perno-hexagonal-grado-8-unc-114-7-5_13011.jpg",
+    "nombre": "661852sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

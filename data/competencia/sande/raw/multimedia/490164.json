@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 490164,
+    "idMultimedia": 14051,
+    "adjunto": "punta-pozidrive-3-50mm-5_85014.jpg",
+    "nombre": "490164sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 490164,
+    "idMultimedia": 14065,
+    "adjunto": "https://www.mamutstore.com/producto/pta-pz-puntas-pozidrive/?srsltid=AfmBOorN9TTqsIwtXz4O0apfhxHcvQqRh3GoILp4s2esdD3oUHtiwNlx",
+    "nombre": "973915sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

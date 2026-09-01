@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 648907,
+    "idMultimedia": 13046,
+    "adjunto": "tornillo-roscalata-hexagonal-cgol-ab-1_59061.jpg",
+    "nombre": "648907sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 648907,
+    "idMultimedia": 13042,
+    "adjunto": "https://www.mamutstore.com/producto/roscalata-hexagonal-ab-con-golilla-integrada/?srsltid=AfmBOorPwDeU4mY8C-lSSNu8QioKVNZJvOQwUpxSAqzJu2tht-sx9EJC",
+    "nombre": "973807sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

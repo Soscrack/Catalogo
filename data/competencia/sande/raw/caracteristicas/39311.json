@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973817,
+    "idProducto": 39311,
+    "codigoProducto": "06GPFU",
+    "nombreProducto": "GOLILLA PLANA CORRIENTE 9/16\" 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.008 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973817,
+    "idProducto": 39311,
+    "codigoProducto": "06GPFU",
+    "nombreProducto": "GOLILLA PLANA CORRIENTE 9/16\" 100",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973933,
+    "idProducto": 37085,
+    "codigoProducto": "116RTPS",
+    "nombreProducto": "REMACHE POP ABIERTO ACERO/ACERO 4.8MM 17.1MM 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.004 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973933,
+    "idProducto": 37085,
+    "codigoProducto": "116RTPS",
+    "nombreProducto": "REMACHE POP ABIERTO ACERO/ACERO 4.8MM 17.1MM 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 39261,
+    "idMultimedia": 13150,
+    "adjunto": "golilla-plana-calibrada-18-200_90402.jpg",
+    "nombre": "39261sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

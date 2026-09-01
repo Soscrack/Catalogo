@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973863,
+    "idProducto": 5371,
+    "codigoProducto": "08GTE",
+    "nombreProducto": "GANCHO DE CANAL HOJALATA UNC #1/4-20X5\" ZINC 100U",
+    "idTitulo": 900399,
+    "valorTitulo": "0.03 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973863,
+    "idProducto": 5371,
+    "codigoProducto": "08GTE",
+    "nombreProducto": "GANCHO DE CANAL HOJALATA UNC #1/4-20X5\" ZINC 100U",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

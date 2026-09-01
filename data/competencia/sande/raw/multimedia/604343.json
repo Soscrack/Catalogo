@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 604343,
+    "idMultimedia": 1743,
+    "adjunto": "101374.jpg",
+    "nombre": "s/n",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 604343,
+    "idMultimedia": 12695,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-para-madera-cabeza-plana-ranura-phillips/?srsltid=AfmBOoqH4dOtKxfJ5k4tYINfYAZm5sAEHdJ1AIrDnwGawJrlnxwUbQ9k",
+    "nombre": "973776sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 604343,
+    "idMultimedia": 12697,
+    "adjunto": "tornillo-madera-madera-cabeza-plana_59412.pdf",
+    "nombre": "973776sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

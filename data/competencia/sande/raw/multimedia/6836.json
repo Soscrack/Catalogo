@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 6836,
+    "idMultimedia": 263,
+    "adjunto": "96559.jpg",
+    "nombre": "s/n",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 6836,
+    "idMultimedia": 14432,
+    "adjunto": "roscalata-cabeza-oval_27077.pdf",
+    "nombre": "973970sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

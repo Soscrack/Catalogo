@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 490156,
+    "idMultimedia": 14040,
+    "adjunto": "punta-phillips-2-50mm-1_32110.jpg",
+    "nombre": "490156sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 490156,
+    "idMultimedia": 14052,
+    "adjunto": "https://www.mamutstore.com/producto/puntas-phillips-y-pozidrive/?srsltid=AfmBOookU0HUGdI8YOTlnBhLdOVnnrzjZ3BVGJ_oIMzTzEyBFe817biP",
+    "nombre": "973914sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

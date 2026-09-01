@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973261,
+    "idProducto": 620983,
+    "codigoProducto": "KG01THL",
+    "nombreProducto": "T.HEX.A194.NC 5/8-11",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973261,
+    "idProducto": 620983,
+    "codigoProducto": "KG01THL",
+    "nombreProducto": "T.HEX.A194.NC 5/8-11",
+    "idTitulo": 900412,
+    "valorTitulo": "500",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

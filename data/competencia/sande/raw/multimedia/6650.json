@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 6650,
+    "idMultimedia": 14179,
+    "adjunto": "remache-hierro-redonda-31mm-158mm-5_82093.jpg",
+    "nombre": "6650sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 6650,
+    "idMultimedia": 14187,
+    "adjunto": "https://www.mamutstore.com/producto/remache-de-hierro-cabeza-redonda/?srsltid=AfmBOop72TzAectrlKZl3gV33aNa_1ATQrCyRL2KUwsy4Wps0HIaXS6s",
+    "nombre": "973932sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

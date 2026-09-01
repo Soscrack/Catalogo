@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 603676,
+    "idMultimedia": 4739,
+    "adjunto": "TFCW.jpg",
+    "nombre": "603676 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 603676,
+    "idMultimedia": 14814,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-avellanante-fibrocemento-internit-punta-espada/?srsltid=AfmBOoqeYxh2XbjaGpjYS2x3Z9AaeVDb_ayBa2QgOQgocJU4Zx7dUo5e",
+    "nombre": "973924sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

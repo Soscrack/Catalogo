@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974004,
+    "idProducto": 650683,
+    "codigoProducto": "20CLIPOM",
+    "nombreProducto": "CLIP OMEGA H=50MM E=1.0 SOPORTE TECHO 250U",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974004,
+    "idProducto": 650683,
+    "codigoProducto": "20CLIPOM",
+    "nombreProducto": "CLIP OMEGA H=50MM E=1.0 SOPORTE TECHO 250U",
+    "idTitulo": 900412,
+    "valorTitulo": "200",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

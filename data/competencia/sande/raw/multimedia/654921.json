@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 654921,
+    "idMultimedia": 13416,
+    "adjunto": "perno-cocina-plana-phillips_61110.jpg",
+    "nombre": "654921sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 654921,
+    "idMultimedia": 13364,
+    "adjunto": "perno-cocina-plana-phillips_89331.pdf",
+    "nombre": "973504sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 654921,
+    "idMultimedia": 13783,
+    "adjunto": "https://www.mamutstore.com/producto/pcpp-perno-cocina-unc-cabeza-plana-ranura-phillips/?srsltid=AfmBOoobL1bVJFSE91e4-lbdGDMfQCpARcESvYcJilCYuD2dOYa2vQun",
+    "nombre": "973504sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

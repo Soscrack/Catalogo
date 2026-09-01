@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973905,
+    "idProducto": 731728,
+    "codigoProducto": "06PEU",
+    "nombreProducto": "PERNO U PLET Y TCA 5/16X5\"-2.1/2",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973905,
+    "idProducto": 731728,
+    "codigoProducto": "06PEU",
+    "nombreProducto": "PERNO U PLET Y TCA 5/16X5\"-2.1/2",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

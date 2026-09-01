@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973962,
+    "idProducto": 7592,
+    "codigoProducto": "05TSN",
+    "nombreProducto": "T.HEX.NYLOCK.NC 1/2-13",
+    "idTitulo": 900399,
+    "valorTitulo": "0.02 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973962,
+    "idProducto": 7592,
+    "codigoProducto": "05TSN",
+    "nombreProducto": "T.HEX.NYLOCK.NC 1/2-13",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

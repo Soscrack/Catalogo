@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 6843,
+    "idMultimedia": 14428,
+    "adjunto": "tornillo-roscalata-oval-recta-8-41mm_38382.jpg",
+    "nombre": "6843sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 6843,
+    "idMultimedia": 14432,
+    "adjunto": "roscalata-cabeza-oval_27077.pdf",
+    "nombre": "973970sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

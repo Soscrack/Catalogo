@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 667057,
+    "idMultimedia": 13726,
+    "adjunto": "perno-hexagonal-a325-nc-34-10x3-14_20820.jpg",
+    "nombre": "667057sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 667057,
+    "idMultimedia": 13708,
+    "adjunto": "https://www.mamutstore.com/producto/perno-hexagonal-astm-a325/?srsltid=AfmBOor3zmBPhvidsk7WqXcjJFdmMk2wV1xOEyXa7NM9ueGoxZNWfrKa",
+    "nombre": "973382sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

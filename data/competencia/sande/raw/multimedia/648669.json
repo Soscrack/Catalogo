@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 648669,
+    "idMultimedia": 13311,
+    "adjunto": "abrazadera-para-cable-inox-316-316_95068.jpg",
+    "nombre": "648669sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 648669,
+    "idMultimedia": 13338,
+    "adjunto": "https://www.mamutstore.com/producto/abrazadera-para-cable-inoxidable/?srsltid=AfmBOoorh52N1Re8KaYZc2hjqSC3tdcX6e19me4qd5g-pLLB4dcof-2a",
+    "nombre": "972668sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

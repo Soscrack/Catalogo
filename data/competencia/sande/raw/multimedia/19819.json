@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 19819,
+    "idMultimedia": 547,
+    "adjunto": "POLVORA CLAVO_7.jpg",
+    "nombre": "s/n",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 19819,
+    "idMultimedia": 12868,
+    "adjunto": "https://www.mamutstore.com/producto/clavo-polvora-tipo-sdm/?srsltid=AfmBOorDZlkGAINma3eRs3I6TZN_kbXyeMh8ClRW5byv_3wVuYAjJFWt",
+    "nombre": "973801sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 19819,
+    "idMultimedia": 12869,
+    "adjunto": "clavo-plvora-tipo-sdm_75278.pdf",
+    "nombre": "973801sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

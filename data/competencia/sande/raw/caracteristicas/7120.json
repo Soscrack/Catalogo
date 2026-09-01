@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973961,
+    "idProducto": 7120,
+    "codigoProducto": "03THM8",
+    "nombreProducto": "TUERCA HEXAGONAL MT C8 M10-1.50",
+    "idTitulo": 900399,
+    "valorTitulo": "0.009 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973961,
+    "idProducto": 7120,
+    "codigoProducto": "03THM8",
+    "nombreProducto": "TUERCA HEXAGONAL MT C8 M10-1.50",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

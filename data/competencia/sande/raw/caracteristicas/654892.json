@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974015,
+    "idProducto": 654892,
+    "codigoProducto": "03TSNI",
+    "nombreProducto": "TUERCA INOX. SG.NYLON 5/16-18 50U",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974015,
+    "idProducto": 654892,
+    "codigoProducto": "03TSNI",
+    "nombreProducto": "TUERCA INOX. SG.NYLON 5/16-18 50U",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

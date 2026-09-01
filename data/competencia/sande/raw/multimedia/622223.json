@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 622223,
+    "idMultimedia": 14727,
+    "adjunto": "remache-pop-inoxinox-32mm-8mm-100_23337.jpg",
+    "nombre": "622223sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 622223,
+    "idMultimedia": 14732,
+    "adjunto": "https://mamutstore.com.pe/producto/remache-tipo-pop-inoxidable-inoxidable/",
+    "nombre": "973941sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

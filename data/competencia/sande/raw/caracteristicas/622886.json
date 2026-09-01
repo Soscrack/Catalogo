@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973867,
+    "idProducto": 622886,
+    "codigoProducto": "06GRI",
+    "nombreProducto": "GRILLETE RECTO 3/8 (10.0)X0",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973867,
+    "idProducto": 622886,
+    "codigoProducto": "06GRI",
+    "nombreProducto": "GRILLETE RECTO 3/8 (10.0)X0",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

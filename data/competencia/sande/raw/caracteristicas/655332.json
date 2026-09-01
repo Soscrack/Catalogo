@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974003,
+    "idProducto": 655332,
+    "codigoProducto": "10CTP",
+    "nombreProducto": "CLAVO TECHO PARAGUA BWG9 (3.76M) 2.1/2\" ZINC 0.5KG",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974003,
+    "idProducto": 655332,
+    "codigoProducto": "10CTP",
+    "nombreProducto": "CLAVO TECHO PARAGUA BWG9 (3.76M) 2.1/2\" ZINC 0.5KG",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 654838,
+    "idMultimedia": 13824,
+    "adjunto": "perno-hexagonal-1-12-x6-grado-8_22767.jpg",
+    "nombre": "654838sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

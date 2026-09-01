@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973903,
+    "idProducto": 503976,
+    "codigoProducto": "125PPK",
+    "nombreProducto": "PERNO PARKER UNC ISO 12.9 5/8-11 2\"",
+    "idTitulo": 900399,
+    "valorTitulo": "0.04 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973903,
+    "idProducto": 503976,
+    "codigoProducto": "125PPK",
+    "nombreProducto": "PERNO PARKER UNC ISO 12.9 5/8-11 2\"",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 731518,
+    "idMultimedia": 16370,
+    "adjunto": "perno-hexagonal-g8nc-1-8x3_37785.jpg",
+    "nombre": "731518sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

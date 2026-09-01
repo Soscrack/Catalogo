@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973802,
+    "idProducto": 662255,
+    "codigoProducto": "KR214RHPV",
+    "nombreProducto": "AUTOPERFORANTE PANEL GOL-EPDM # 1/4-20 600U",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973802,
+    "idProducto": 662255,
+    "codigoProducto": "KR214RHPV",
+    "nombreProducto": "AUTOPERFORANTE PANEL GOL-EPDM # 1/4-20 600U",
+    "idTitulo": 900412,
+    "valorTitulo": "250",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

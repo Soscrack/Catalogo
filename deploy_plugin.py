@@ -58,7 +58,7 @@ def build_zip(source=None):
     return str(out)
 
 
-def main(source=None):
+def main(source=None, skip_migration=False):
     if not PASSWORD:
         raise RuntimeError(
             'Falta la contraseña de deploy. Crea .env.deploy en la raíz del repo '
@@ -83,8 +83,10 @@ def main(source=None):
 
     # Preflight, backup, deploy and migrate. A PHP syntax failure stops before
     # touching the active plugin; a migration failure restores the backup.
+    skip_flag = '1' if skip_migration else '0'
     commands = f'''
 set -e
+SKIP_MIGRATION={skip_flag}
 cd /tmp
 rm -rf /tmp/riverso-pos-extract 2>/dev/null
 mkdir -p /tmp/riverso-pos-extract
@@ -116,7 +118,10 @@ chown -R riverso.cl_1xybiw6rlcq:psacln {PLUGIN_PATH}
 chmod -R 755 {PLUGIN_PATH}
 
 # Trigger idempotent migrations as the site owner.
-if ! sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -d memory_limit=512M -r '
+if [ "$SKIP_MIGRATION" = "1" ]; then
+  echo 'Skipping wp-load migration (SKIP_MIGRATION=1)'
+else
+if ! sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -d memory_limit=1024M -r '
   require "{WP_PATH}/wp-load.php";
   Riverso_POS_Activator::update_database();
   echo get_option("riverso_pos_db_version"), PHP_EOL;
@@ -127,13 +132,21 @@ if ! sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -d memory_limit=512M -r '
   echo 'Migration failed; backup restored' >&2
   exit 1
 fi
+fi
 
+if [ "$SKIP_MIGRATION" = "1" ]; then
+  VERSION=$(grep -E "define\\s*\\(\\s*'RIVERSO_POS_VERSION'" {PLUGIN_PATH}/riverso-pos.php | sed -E "s/.*'([0-9.]+)'.*/\\1/" | head -1)
+else
 VERSION=$(sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   require "{WP_PATH}/wp-load.php";
   echo defined("RIVERSO_POS_VERSION") ? RIVERSO_POS_VERSION : "missing";
 ')
-test "$VERSION" = "1.6.47"
+fi
+test "$VERSION" = "1.6.55"
 
+if [ "$SKIP_MIGRATION" = "1" ]; then
+  echo "schema-skip competencia tables should be applied via tools/migrate_competencia_remote.py"
+else
 sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   require "{WP_PATH}/wp-load.php";
   global $wpdb;
@@ -222,6 +235,7 @@ sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   ));
   echo "schema-ok costs-filled=$filled catalog-linked=$linked catalog-activo=$activo local-confused=$confused catalog-empty-local=$empty_local local-sku-tasks=$local_tasks", PHP_EOL;
 '
+fi
 
 # Cleanup only after successful verification.
 rm -rf /tmp/riverso-pos-extract /tmp/riverso-pos-deploy.zip
@@ -250,4 +264,10 @@ if __name__ == '__main__':
         '--source',
         help='Directorio del plugin a empaquetar (por defecto php/riverso-pos)'
     )
-    main(parser.parse_args().source)
+    parser.add_argument(
+        '--skip-migration',
+        action='store_true',
+        help='Solo copia archivos; omite wp-load.php (útil si activator agota memoria)',
+    )
+    args = parser.parse_args()
+    main(args.source, skip_migration=args.skip_migration)

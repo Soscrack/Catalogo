@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973962,
+    "idProducto": 491893,
+    "codigoProducto": "205TSN",
+    "nombreProducto": "T.HEX.NYLOCK.MET. M12-1.75",
+    "idTitulo": 900399,
+    "valorTitulo": "0.009 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973962,
+    "idProducto": 491893,
+    "codigoProducto": "205TSN",
+    "nombreProducto": "T.HEX.NYLOCK.MET. M12-1.75",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 622883,
+    "idMultimedia": 10225,
+    "adjunto": "10-grillete_17642.jpg",
+    "nombre": "237184sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 622883,
+    "idMultimedia": 13264,
+    "adjunto": "https://mamutstore.com.pe/producto/grillete-recto/",
+    "nombre": "973867sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

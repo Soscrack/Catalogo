@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 731892,
+    "idMultimedia": 6074,
+    "adjunto": "01SGM.jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 731892,
+    "idMultimedia": 14692,
+    "adjunto": "https://www.mamutstore.com/producto/gancho-multiuso-movil/?srsltid=AfmBOoq5RgsjFcjOD3rYwwnqEGnLjMbveLxI7Neo44JtDzLagh_CNjCq",
+    "nombre": "973946sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -336,6 +336,8 @@ class Riverso_POS_Activator {
         self::cleanup_orphan_unidad_minima($prefix);
         self::create_phase37_facto_export($prefix, $charset_collate);
         self::create_phase38_family_decision($prefix);
+        self::create_phase39_competencia($prefix, $charset_collate);
+        self::create_phase40_competencia_precios_historial($prefix, $charset_collate);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -3942,5 +3944,286 @@ class Riverso_POS_Activator {
         }
 
         return count($rows) >= $batch_size;
+    }
+
+    /**
+     * Fase 39: staging catálogo competencia (Sande) + matching supervisado.
+     */
+    private static function create_phase39_competencia($prefix, $charset_collate) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $tables = [
+            "CREATE TABLE {$prefix}competencia_fuentes (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                slug VARCHAR(50) NOT NULL,
+                nombre VARCHAR(120) NOT NULL,
+                base_url VARCHAR(255) DEFAULT NULL,
+                activo TINYINT(1) NOT NULL DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY ux_slug (slug)
+            ) $charset_collate;",
+            "CREATE TABLE {$prefix}competencia_categorias (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                fuente_id BIGINT UNSIGNED NOT NULL,
+                id_division VARCHAR(32) NOT NULL DEFAULT '',
+                id_seccion VARCHAR(32) NOT NULL DEFAULT '',
+                id_categoria VARCHAR(32) NOT NULL,
+                nombre_division VARCHAR(255) DEFAULT NULL,
+                nombre_seccion VARCHAR(255) DEFAULT NULL,
+                nombre_categoria VARCHAR(255) DEFAULT NULL,
+                link_imagen VARCHAR(500) DEFAULT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY ux_fuente_categoria (fuente_id, id_categoria),
+                KEY idx_seccion (fuente_id, id_seccion)
+            ) $charset_collate;",
+            "CREATE TABLE {$prefix}competencia_productos (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                fuente_id BIGINT UNSIGNED NOT NULL,
+                id_externo VARCHAR(32) NOT NULL,
+                codigo_externo VARCHAR(100) DEFAULT NULL,
+                codigo_normalizado VARCHAR(100) DEFAULT NULL,
+                nombre VARCHAR(500) DEFAULT NULL,
+                slug VARCHAR(255) DEFAULT NULL,
+                url_producto VARCHAR(500) DEFAULT NULL,
+                marca VARCHAR(120) DEFAULT NULL,
+                id_marca VARCHAR(32) DEFAULT NULL,
+                fabricante VARCHAR(120) DEFAULT NULL,
+                categoria_id BIGINT UNSIGNED DEFAULT NULL,
+                id_division VARCHAR(32) DEFAULT NULL,
+                id_seccion VARCHAR(32) DEFAULT NULL,
+                id_categoria VARCHAR(32) DEFAULT NULL,
+                nombre_division VARCHAR(255) DEFAULT NULL,
+                nombre_seccion VARCHAR(255) DEFAULT NULL,
+                nombre_categoria VARCHAR(255) DEFAULT NULL,
+                unidad_min_venta VARCHAR(32) DEFAULT NULL,
+                tipo_unidad VARCHAR(20) DEFAULT NULL,
+                peso VARCHAR(64) DEFAULT NULL,
+                stock VARCHAR(64) DEFAULT NULL,
+                situacion VARCHAR(20) DEFAULT NULL,
+                imagen_principal VARCHAR(500) DEFAULT NULL,
+                capturado_at DATE DEFAULT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY ux_fuente_externo (fuente_id, id_externo),
+                KEY idx_codigo_norm (codigo_normalizado),
+                KEY idx_marca (marca),
+                KEY idx_categoria (categoria_id)
+            ) $charset_collate;",
+            "CREATE TABLE {$prefix}competencia_precios (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                producto_id BIGINT UNSIGNED NOT NULL,
+                snapshot_fecha DATE NOT NULL,
+                precio DECIMAL(18,6) DEFAULT NULL,
+                precio_lista DECIMAL(18,6) DEFAULT NULL,
+                precio_bruto_unitario DECIMAL(18,6) DEFAULT NULL,
+                precio_bruto_total DECIMAL(18,6) DEFAULT NULL,
+                cantidad_min INT UNSIGNED DEFAULT NULL,
+                iva DECIMAL(8,4) DEFAULT NULL,
+                costo DECIMAL(18,6) DEFAULT NULL,
+                moneda VARCHAR(10) DEFAULT 'CLP',
+                oculto TINYINT(1) NOT NULL DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY ux_producto_snapshot (producto_id, snapshot_fecha),
+                KEY idx_snapshot (snapshot_fecha)
+            ) $charset_collate;",
+            "CREATE TABLE {$prefix}competencia_medios (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                sha256 CHAR(64) NOT NULL,
+                tipo VARCHAR(20) NOT NULL DEFAULT 'foto',
+                subtipo VARCHAR(32) DEFAULT NULL,
+                url_origen VARCHAR(1000) DEFAULT NULL,
+                ruta_local VARCHAR(500) DEFAULT NULL,
+                r2_key VARCHAR(500) DEFAULT NULL,
+                bytes BIGINT UNSIGNED DEFAULT 0,
+                mime VARCHAR(120) DEFAULT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY ux_sha256 (sha256),
+                KEY idx_tipo (tipo)
+            ) $charset_collate;",
+            "CREATE TABLE {$prefix}competencia_producto_medio (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                producto_id BIGINT UNSIGNED NOT NULL,
+                medio_id BIGINT UNSIGNED NOT NULL,
+                es_principal TINYINT(1) NOT NULL DEFAULT 0,
+                tipo_multimedia VARCHAR(20) DEFAULT NULL,
+                subtipo VARCHAR(32) DEFAULT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY ux_producto_medio (producto_id, medio_id),
+                KEY idx_medio (medio_id)
+            ) $charset_collate;",
+            "CREATE TABLE {$prefix}competencia_atributos (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                producto_id BIGINT UNSIGNED NOT NULL,
+                titulo VARCHAR(120) NOT NULL,
+                valor VARCHAR(500) DEFAULT NULL,
+                orden INT NOT NULL DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY idx_producto (producto_id),
+                KEY idx_titulo (producto_id, titulo),
+                UNIQUE KEY ux_producto_titulo_orden (producto_id, titulo, orden)
+            ) $charset_collate;",
+            "CREATE TABLE {$prefix}competencia_match (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                producto_competencia_id BIGINT UNSIGNED NOT NULL,
+                producto_base_id BIGINT UNSIGNED DEFAULT NULL,
+                metodo VARCHAR(32) NOT NULL DEFAULT 'manual',
+                score DECIMAL(5,2) DEFAULT NULL,
+                estado VARCHAR(20) NOT NULL DEFAULT 'sugerido',
+                revisado_por BIGINT UNSIGNED DEFAULT NULL,
+                revisado_at DATETIME DEFAULT NULL,
+                nota TEXT DEFAULT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY ux_producto_competencia (producto_competencia_id),
+                KEY idx_estado (estado),
+                KEY idx_producto_base (producto_base_id),
+                KEY idx_metodo (metodo)
+            ) $charset_collate;",
+        ];
+
+        foreach ($tables as $sql) {
+            dbDelta($sql);
+        }
+
+        $prod_table = "{$prefix}competencia_productos";
+        $col = $wpdb->get_results("SHOW COLUMNS FROM {$prod_table} LIKE 'url_producto'");
+        if (empty($col)) {
+            $wpdb->query("ALTER TABLE {$prod_table} ADD url_producto VARCHAR(500) DEFAULT NULL AFTER slug");
+        }
+        $wpdb->query(
+            "UPDATE {$prod_table}
+             SET url_producto = CONCAT('https://www.sande.cl/producto/', slug)
+             WHERE (url_producto IS NULL OR url_producto = '')
+               AND slug IS NOT NULL AND slug <> ''"
+        );
+
+        $precio_table = "{$prefix}competencia_precios";
+        foreach ([
+            'precio_bruto_unitario DECIMAL(18,6) DEFAULT NULL AFTER precio_lista',
+            'precio_bruto_total DECIMAL(18,6) DEFAULT NULL AFTER precio_bruto_unitario',
+            'cantidad_min INT UNSIGNED DEFAULT NULL AFTER precio_bruto_total',
+            'iva DECIMAL(8,4) DEFAULT NULL AFTER cantidad_min',
+        ] as $col_sql) {
+            $col_name = explode(' ', $col_sql, 2)[0];
+            $has = $wpdb->get_results("SHOW COLUMNS FROM {$precio_table} LIKE '{$col_name}'");
+            if (empty($has)) {
+                $wpdb->query("ALTER TABLE {$precio_table} ADD {$col_sql}");
+            }
+        }
+
+        $fuente_table = "{$prefix}competencia_fuentes";
+        $exists = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$fuente_table} WHERE slug = %s",
+            'sande'
+        ));
+        if ($exists === 0) {
+            $wpdb->insert($fuente_table, [
+                'slug'     => 'sande',
+                'nombre'   => 'Sande Distribución Industrial',
+                'base_url' => 'https://www.sande.cl/mcatalogo',
+                'activo'   => 1,
+            ]);
+        }
+
+        if (get_option('riverso_pos_phase39_competencia') !== '1') {
+            update_option('riverso_pos_phase39_competencia', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase39_competencia', 'competencia', 0, [
+                    'actor_type' => 'computer',
+                    'details'    => 'Fase 39: staging catálogo competencia + matching',
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Fase 40: precio vigente 1:1 + historial (hoy + 01/16 permanentes).
+     */
+    private static function create_phase40_competencia_precios_historial($prefix, $charset_collate) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $precio_table = "{$prefix}competencia_precios";
+        $hist_table = "{$prefix}competencia_precios_historial";
+
+        if (!self::table_exists($precio_table)) {
+            return;
+        }
+
+        dbDelta("CREATE TABLE {$hist_table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            producto_id BIGINT UNSIGNED NOT NULL,
+            snapshot_fecha DATE NOT NULL,
+            precio DECIMAL(18,6) DEFAULT NULL,
+            precio_lista DECIMAL(18,6) DEFAULT NULL,
+            precio_bruto_unitario DECIMAL(18,6) DEFAULT NULL,
+            precio_bruto_total DECIMAL(18,6) DEFAULT NULL,
+            cantidad_min INT UNSIGNED DEFAULT NULL,
+            iva DECIMAL(8,4) DEFAULT NULL,
+            moneda VARCHAR(10) DEFAULT 'CLP',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_producto_snapshot (producto_id, snapshot_fecha),
+            KEY idx_snapshot (snapshot_fecha)
+        ) $charset_collate;");
+
+        // Compactar a 1 fila por producto (la más reciente).
+        $wpdb->query(
+            "DELETE p FROM {$precio_table} p
+             INNER JOIN {$precio_table} newer
+               ON newer.producto_id = p.producto_id
+              AND (
+                    newer.snapshot_fecha > p.snapshot_fecha
+                 OR (newer.snapshot_fecha = p.snapshot_fecha AND newer.id > p.id)
+              )"
+        );
+
+        self::drop_index_if_exists($precio_table, 'ux_producto_snapshot');
+        self::add_index_if_missing($precio_table, 'ux_producto_id', 'UNIQUE KEY ux_producto_id (producto_id)');
+        self::add_column_if_missing($precio_table, 'actualizado_at', 'actualizado_at DATETIME DEFAULT NULL AFTER oculto');
+
+        $wpdb->query(
+            "UPDATE {$precio_table}
+             SET actualizado_at = COALESCE(actualizado_at, created_at, NOW())
+             WHERE actualizado_at IS NULL"
+        );
+
+        $wpdb->query(
+            "INSERT INTO {$hist_table}
+                (producto_id, snapshot_fecha, precio, precio_lista,
+                 precio_bruto_unitario, precio_bruto_total, cantidad_min, iva, moneda)
+             SELECT producto_id, snapshot_fecha, precio, precio_lista,
+                    precio_bruto_unitario, precio_bruto_total, cantidad_min, iva, moneda
+             FROM {$precio_table}
+             ON DUPLICATE KEY UPDATE
+                precio=VALUES(precio),
+                precio_lista=VALUES(precio_lista),
+                precio_bruto_unitario=VALUES(precio_bruto_unitario),
+                precio_bruto_total=VALUES(precio_bruto_total),
+                cantidad_min=VALUES(cantidad_min),
+                iva=VALUES(iva),
+                moneda=VALUES(moneda)"
+        );
+
+        if (get_option('riverso_pos_phase40_precios_historial') !== '1') {
+            update_option('riverso_pos_phase40_precios_historial', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase40_precios_historial', 'competencia', 0, [
+                    'actor_type' => 'computer',
+                    'details'    => 'Fase 40: precio vigente 1:1 + historial diario (conserva 01/16)',
+                ]);
+            }
+        }
     }
 }

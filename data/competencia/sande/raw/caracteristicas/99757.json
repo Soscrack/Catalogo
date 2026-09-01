@@ -1,0 +1,122 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972669,
+    "idProducto": 99757,
+    "codigoProducto": "K46ATPF",
+    "nombreProducto": "TORNILLO CAB/ LENTEJA C/GOL PTA BROCA #8 4.1MM 1\" ZINCADO",
+    "idTitulo": 13183,
+    "valorTitulo": "",
+    "titulo": "NOMBRE",
+    "orden": 1
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972669,
+    "idProducto": 99757,
+    "codigoProducto": "K46ATPF",
+    "nombreProducto": "TORNILLO CAB/ LENTEJA C/GOL PTA BROCA #8 4.1MM 1\" ZINCADO",
+    "idTitulo": 398,
+    "valorTitulo": "",
+    "titulo": "CABEZA",
+    "orden": 2
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972669,
+    "idProducto": 99757,
+    "codigoProducto": "K46ATPF",
+    "nombreProducto": "TORNILLO CAB/ LENTEJA C/GOL PTA BROCA #8 4.1MM 1\" ZINCADO",
+    "idTitulo": 900321,
+    "valorTitulo": "",
+    "titulo": "D NOMINAL",
+    "orden": 3
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972669,
+    "idProducto": 99757,
+    "codigoProducto": "K46ATPF",
+    "nombreProducto": "TORNILLO CAB/ LENTEJA C/GOL PTA BROCA #8 4.1MM 1\" ZINCADO",
+    "idTitulo": 12447,
+    "valorTitulo": "",
+    "titulo": "D CABEZA",
+    "orden": 4
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972669,
+    "idProducto": 99757,
+    "codigoProducto": "K46ATPF",
+    "nombreProducto": "TORNILLO CAB/ LENTEJA C/GOL PTA BROCA #8 4.1MM 1\" ZINCADO",
+    "idTitulo": 12730,
+    "valorTitulo": "",
+    "titulo": "LARGO",
+    "orden": 5
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972669,
+    "idProducto": 99757,
+    "codigoProducto": "K46ATPF",
+    "nombreProducto": "TORNILLO CAB/ LENTEJA C/GOL PTA BROCA #8 4.1MM 1\" ZINCADO",
+    "idTitulo": 13534,
+    "valorTitulo": "",
+    "titulo": "PUNTA",
+    "orden": 6
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972669,
+    "idProducto": 99757,
+    "codigoProducto": "K46ATPF",
+    "nombreProducto": "TORNILLO CAB/ LENTEJA C/GOL PTA BROCA #8 4.1MM 1\" ZINCADO",
+    "idTitulo": 900329,
+    "valorTitulo": "",
+    "titulo": "RECUBRIMIENTO",
+    "orden": 7
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972669,
+    "idProducto": 99757,
+    "codigoProducto": "K46ATPF",
+    "nombreProducto": "TORNILLO CAB/ LENTEJA C/GOL PTA BROCA #8 4.1MM 1\" ZINCADO",
+    "idTitulo": 13973,
+    "valorTitulo": "",
+    "titulo": "TIPO",
+    "orden": 8
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972669,
+    "idProducto": 99757,
+    "codigoProducto": "K46ATPF",
+    "nombreProducto": "TORNILLO CAB/ LENTEJA C/GOL PTA BROCA #8 4.1MM 1\" ZINCADO",
+    "idTitulo": 900399,
+    "valorTitulo": "0.002 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972669,
+    "idProducto": 99757,
+    "codigoProducto": "K46ATPF",
+    "nombreProducto": "TORNILLO CAB/ LENTEJA C/GOL PTA BROCA #8 4.1MM 1\" ZINCADO",
+    "idTitulo": 900412,
+    "valorTitulo": "6000",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

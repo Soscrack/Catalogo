@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973897,
+    "idProducto": 506155,
+    "codigoProducto": "08HB7",
+    "nombreProducto": "HILO X METRO A193 B7 1/2-13 3.7MT",
+    "idTitulo": 900399,
+    "valorTitulo": "2.92 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973897,
+    "idProducto": 506155,
+    "codigoProducto": "08HB7",
+    "nombreProducto": "HILO X METRO A193 B7 1/2-13 3.7MT",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

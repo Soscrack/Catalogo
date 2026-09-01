@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 655291,
+    "idMultimedia": 6426,
+    "adjunto": "01GHH.jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 655291,
+    "idMultimedia": 13249,
+    "adjunto": "https://www.mamutstore.com/producto/gancho-hamaca/?srsltid=AfmBOoqdpNsKnwdVxvgiHodtYJQ4a-80lu4_j8ZZb_5ew1azT4GlRS_w",
+    "nombre": "973864sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

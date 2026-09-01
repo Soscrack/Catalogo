@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 500185,
+    "idMultimedia": 17433,
+    "adjunto": "tornillo-fibrocemento-6-114-fina_93448.jpg",
+    "nombre": "500185sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 500185,
+    "idMultimedia": 14082,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-avellanante-fibrocemento-internit/?srsltid=AfmBOorNZzasU9AfZZixEQ_466abCgUdu_piL2dbbwQP_KP--_LqJhJm",
+    "nombre": "973873sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

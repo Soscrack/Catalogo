@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 731888,
+    "idMultimedia": 17310,
+    "adjunto": "union-rapida-532-40x40_62916.jpg",
+    "nombre": "731888sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 731888,
+    "idMultimedia": 17312,
+    "adjunto": "https://www.mamutstore.com/producto/union-rapida/?srsltid=AfmBOorR4rCdVwEMwDQwa75QKzvOoY8PV9UuoPi681iYX-uimBICxf-Y",
+    "nombre": "974116sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

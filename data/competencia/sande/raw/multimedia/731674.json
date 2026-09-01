@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 731674,
+    "idMultimedia": 14928,
+    "adjunto": "thexg8nc-1-8_57520.jpg",
+    "nombre": "731674sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 731674,
+    "idMultimedia": 14101,
+    "adjunto": "https://www.mamutstore.com/producto/tuerca-hexagonal-grado-8-unc/?srsltid=AfmBOoodDhANUq_7T1I4vckJyu3MdREyrvs0ZNJnV_ykP4034O208V1m",
+    "nombre": "973927sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

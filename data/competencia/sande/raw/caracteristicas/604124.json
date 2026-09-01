@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973776,
+    "idProducto": 604124,
+    "codigoProducto": "05TMPP",
+    "nombreProducto": "TORNILLO MADERA C/PLANA PHILLIPS #4 3/4\" AMARILLO",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0006 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973776,
+    "idProducto": 604124,
+    "codigoProducto": "05TMPP",
+    "nombreProducto": "TORNILLO MADERA C/PLANA PHILLIPS #4 3/4\" AMARILLO",
+    "idTitulo": 900412,
+    "valorTitulo": "141",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

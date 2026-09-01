@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 638758,
+    "idMultimedia": 6438,
+    "adjunto": "03TER.jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 638758,
+    "idMultimedia": 13218,
+    "adjunto": "https://www.mamutstore.com/producto/tope-de-aluminio-para-cables/?srsltid=AfmBOoq9sOoH7mkJup6gmRFX_FN6faN_3W6EWY_lTKWNmHyHYoRXvg-5",
+    "nombre": "973862sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

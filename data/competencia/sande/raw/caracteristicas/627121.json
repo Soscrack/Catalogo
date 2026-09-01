@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973790,
+    "idProducto": 627121,
+    "codigoProducto": "107CECM",
+    "nombreProducto": "CAD E.CORTO D-766 8MM[20X1]",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973790,
+    "idProducto": 627121,
+    "codigoProducto": "107CECM",
+    "nombreProducto": "CAD E.CORTO D-766 8MM[20X1]",
+    "idTitulo": 900412,
+    "valorTitulo": "15",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

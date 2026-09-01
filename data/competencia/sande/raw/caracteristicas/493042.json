@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973940,
+    "idProducto": 493042,
+    "codigoProducto": "108RTPI",
+    "nombreProducto": "REMACHE POP INOX 4.0MM 10MM",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973940,
+    "idProducto": 493042,
+    "codigoProducto": "108RTPI",
+    "nombreProducto": "REMACHE POP INOX 4.0MM 10MM",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

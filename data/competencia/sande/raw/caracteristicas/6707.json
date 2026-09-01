@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973984,
+    "idProducto": 6707,
+    "codigoProducto": "18RLB",
+    "nombreProducto": "TORNILLO ROSCALATA PAN RECTA #8 4.1MM 1/2\" FINA ZINC",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973984,
+    "idProducto": 6707,
+    "codigoProducto": "18RLB",
+    "nombreProducto": "TORNILLO ROSCALATA PAN RECTA #8 4.1MM 1/2\" FINA ZINC",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

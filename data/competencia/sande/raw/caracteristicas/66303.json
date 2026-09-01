@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973987,
+    "idProducto": 66303,
+    "codigoProducto": "20RLBI",
+    "nombreProducto": "TORNILLO ROSCALATA PAN PHILLIPS #8 3/4\" FINA INOX 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973987,
+    "idProducto": 66303,
+    "codigoProducto": "20RLBI",
+    "nombreProducto": "TORNILLO ROSCALATA PAN PHILLIPS #8 3/4\" FINA INOX 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

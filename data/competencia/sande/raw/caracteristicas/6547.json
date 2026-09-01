@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973902,
+    "idProducto": 6547,
+    "codigoProducto": "67PPK",
+    "nombreProducto": "PERNO PARKER.NC 1/2-13X3\"",
+    "idTitulo": 900399,
+    "valorTitulo": "0.09 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973902,
+    "idProducto": 6547,
+    "codigoProducto": "67PPK",
+    "nombreProducto": "PERNO PARKER.NC 1/2-13X3\"",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

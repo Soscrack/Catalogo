@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 503413,
+    "idMultimedia": 12190,
+    "adjunto": "tornillo-fibrocemento-7-134-fina_68452.jpg",
+    "nombre": "503413sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 503413,
+    "idMultimedia": 14089,
+    "adjunto": "https://www.mamutstore.com/producto/tfcf-tornillo-avellanante-fibrocemento-internit-punta-fina-hilo-hi-lo/?srsltid=AfmBOoonWCUC0FRNdHGKm_8qGV3sJXdzMx2T4O5YlCd1pzFEEV2wOJwy",
+    "nombre": "973921sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

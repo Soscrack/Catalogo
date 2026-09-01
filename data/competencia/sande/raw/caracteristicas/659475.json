@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973810,
+    "idProducto": 659475,
+    "codigoProducto": "70DAF",
+    "nombreProducto": "VARILLA ROSCADA P/ AMPOLLA QUIMICA M20 L260 CÓDIGO DIAMETRO LARGO REC CAJA 20DAF M10 130 BRILLANTE 10 U 30DAF M12 160 BRILLANTE 10 U 70DAF M20 260 BRILLANTE 5 U",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973810,
+    "idProducto": 659475,
+    "codigoProducto": "70DAF",
+    "nombreProducto": "VARILLA ROSCADA P/ AMPOLLA QUIMICA M20 L260 CÓDIGO DIAMETRO LARGO REC CAJA 20DAF M10 130 BRILLANTE 10 U 30DAF M12 160 BRILLANTE 10 U 70DAF M20 260 BRILLANTE 5 U",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

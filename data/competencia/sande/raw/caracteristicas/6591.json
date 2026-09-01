@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973931,
+    "idProducto": 6591,
+    "codigoProducto": "13RAR",
+    "nombreProducto": "REMACHE ALUMINIO REDONDA 3MM 16MM 500",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0003 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973931,
+    "idProducto": 6591,
+    "codigoProducto": "13RAR",
+    "nombreProducto": "REMACHE ALUMINIO REDONDA 3MM 16MM 500",
+    "idTitulo": 900412,
+    "valorTitulo": "500",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

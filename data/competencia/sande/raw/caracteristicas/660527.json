@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973896,
+    "idProducto": 660527,
+    "codigoProducto": "08HPMI",
+    "nombreProducto": "HILO X METRO 1/2\"-13 1MT C304",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973896,
+    "idProducto": 660527,
+    "codigoProducto": "08HPMI",
+    "nombreProducto": "HILO X METRO 1/2\"-13 1MT C304",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

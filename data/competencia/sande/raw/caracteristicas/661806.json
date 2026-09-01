@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973892,
+    "idProducto": 661806,
+    "codigoProducto": "04APH",
+    "nombreProducto": "ANCLAJE PARED HUECA. 1/8(L) X 16-24MM",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973892,
+    "idProducto": 661806,
+    "codigoProducto": "04APH",
+    "nombreProducto": "ANCLAJE PARED HUECA. 1/8(L) X 16-24MM",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

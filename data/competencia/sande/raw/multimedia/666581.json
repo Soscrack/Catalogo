@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 666581,
+    "idMultimedia": 17239,
+    "adjunto": "pernoojostca-10mmx17mm_73148.jpg",
+    "nombre": "666581sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666581,
+    "idMultimedia": 17238,
+    "adjunto": "https://www.mamutstore.com/producto/post-perno-de-ojo/?srsltid=AfmBOopjGXACWHASpCdmU_IQBJ8a3zLTKZMLbtXEBtIqHoxEvMZT8xUI",
+    "nombre": "974114sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

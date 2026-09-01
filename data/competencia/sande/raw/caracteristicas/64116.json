@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973497,
+    "idProducto": 64116,
+    "codigoProducto": "104PCRB",
+    "nombreProducto": "PERNO COCINA CAB. REDONDA PCRB #5-40[1/8] 1/2PULG 100U",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0009 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973497,
+    "idProducto": 64116,
+    "codigoProducto": "104PCRB",
+    "nombreProducto": "PERNO COCINA CAB. REDONDA PCRB #5-40[1/8] 1/2PULG 100U",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

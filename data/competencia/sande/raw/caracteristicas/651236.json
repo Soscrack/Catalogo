@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973928,
+    "idProducto": 651236,
+    "codigoProducto": "05TAM",
+    "nombreProducto": "T.ANCLAJE MUEBLE 5/16-18",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973928,
+    "idProducto": 651236,
+    "codigoProducto": "05TAM",
+    "nombreProducto": "T.ANCLAJE MUEBLE 5/16-18",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

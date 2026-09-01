@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973959,
+    "idProducto": 491864,
+    "codigoProducto": "03TRV",
+    "nombreProducto": "TARUGO VOLCANITA 8MM (HASTA 16-19MM) 50",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973959,
+    "idProducto": 491864,
+    "codigoProducto": "03TRV",
+    "nombreProducto": "TARUGO VOLCANITA 8MM (HASTA 16-19MM) 50",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 666975,
+    "idMultimedia": 13493,
+    "adjunto": "pcocrda-inox-14-20x34_80367.jpg",
+    "nombre": "666975sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666975,
+    "idMultimedia": 13500,
+    "adjunto": "https://www.mamutstore.com/producto/perno-cocina-unc-cabeza-redonda-inoxidable/?srsltid=AfmBOorGcXES0XmyQ7lTIvm1SWwX-Hmv3AQx5ZRLzSDxh5jeT4ruc7kZ",
+    "nombre": "973502sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974005,
+    "idProducto": 500727,
+    "codigoProducto": "208TTCG",
+    "nombreProducto": "TORNILLO TECHO C/GOLILLA PVC #12X4 1/2",
+    "idTitulo": 900399,
+    "valorTitulo": "0.02 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974005,
+    "idProducto": 500727,
+    "codigoProducto": "208TTCG",
+    "nombreProducto": "TORNILLO TECHO C/GOLILLA PVC #12X4 1/2",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

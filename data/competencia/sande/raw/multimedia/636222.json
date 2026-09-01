@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 636222,
+    "idMultimedia": 13639,
+    "adjunto": "cancamometcerra-m8x40_19290.jpg",
+    "nombre": "636222sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 636222,
+    "idMultimedia": 12893,
+    "adjunto": "https://www.mamutstore.com/producto/cancamo-cerrado-rosca-madera/?srsltid=AfmBOoreg_BTZkAf1ahRLd6WK5Xm28Kv0k7Y_JhdNcspBXOvCMeT29U1",
+    "nombre": "973700sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973817,
+    "idProducto": 39305,
+    "codigoProducto": "03GPFU",
+    "nombreProducto": "GOLILLA PLANA CORRIENTE GPFU 3/8PULG 100U",
+    "idTitulo": 900399,
+    "valorTitulo": "0.008 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973817,
+    "idProducto": 39305,
+    "codigoProducto": "03GPFU",
+    "nombreProducto": "GOLILLA PLANA CORRIENTE GPFU 3/8PULG 100U",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

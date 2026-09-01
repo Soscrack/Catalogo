@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974240,
+    "idProducto": 7470,
+    "codigoProducto": "I209TMP",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO #4 3/4\" 1",
+    "idTitulo": 900399,
+    "valorTitulo": "6 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974240,
+    "idProducto": 7470,
+    "codigoProducto": "I209TMP",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO #4 3/4\" 1",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

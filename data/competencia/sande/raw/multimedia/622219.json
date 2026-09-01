@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 622219,
+    "idMultimedia": 14731,
+    "adjunto": "remache-pop-inxinox-48mm-140mm_45576.jpg",
+    "nombre": "622219sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 622219,
+    "idMultimedia": 14732,
+    "adjunto": "https://mamutstore.com.pe/producto/remache-tipo-pop-inoxidable-inoxidable/",
+    "nombre": "973941sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

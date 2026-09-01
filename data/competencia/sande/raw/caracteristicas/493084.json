@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973902,
+    "idProducto": 493084,
+    "codigoProducto": "15PPKP",
+    "nombreProducto": "PERNO PARKER UNC CBZ/PLANA ISO 12.9 5/16-18 5/8\"",
+    "idTitulo": 900399,
+    "valorTitulo": "0.008 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973902,
+    "idProducto": 493084,
+    "codigoProducto": "15PPKP",
+    "nombreProducto": "PERNO PARKER UNC CBZ/PLANA ISO 12.9 5/16-18 5/8\"",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

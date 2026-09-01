@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973860,
+    "idProducto": 639426,
+    "codigoProducto": "101CPLC",
+    "nombreProducto": "CABLE AC PVC 1/8-3/16 CRT 100M",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973860,
+    "idProducto": 639426,
+    "codigoProducto": "101CPLC",
+    "nombreProducto": "CABLE AC PVC 1/8-3/16 CRT 100M",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

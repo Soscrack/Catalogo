@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973875,
+    "idProducto": 490136,
+    "codigoProducto": "08ADC",
+    "nombreProducto": "PERNO DE ANCLAJE CAMISA UNC 5/16\"-18 2.1/2\" 50",
+    "idTitulo": 900399,
+    "valorTitulo": "0.03 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973875,
+    "idProducto": 490136,
+    "codigoProducto": "08ADC",
+    "nombreProducto": "PERNO DE ANCLAJE CAMISA UNC 5/16\"-18 2.1/2\" 50",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

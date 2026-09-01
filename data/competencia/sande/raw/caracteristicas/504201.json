@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973546,
+    "idProducto": 504201,
+    "codigoProducto": "01ATPT",
+    "nombreProducto": "ATERRAJADOR CABEZA PLANA RANURA TORX 1/4-20 2\" NEGRO",
+    "idTitulo": 900399,
+    "valorTitulo": "0.009 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973546,
+    "idProducto": 504201,
+    "codigoProducto": "01ATPT",
+    "nombreProducto": "ATERRAJADOR CABEZA PLANA RANURA TORX 1/4-20 2\" NEGRO",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

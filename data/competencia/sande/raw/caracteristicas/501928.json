@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973263,
+    "idProducto": 501928,
+    "codigoProducto": "208TH5",
+    "nombreProducto": "TUERCA HEXAGONAL G5 UNF 7/8-14 10U",
+    "idTitulo": 900399,
+    "valorTitulo": "0.08 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973263,
+    "idProducto": 501928,
+    "codigoProducto": "208TH5",
+    "nombreProducto": "TUERCA HEXAGONAL G5 UNF 7/8-14 10U",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

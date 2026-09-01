@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973989,
+    "idProducto": 626422,
+    "codigoProducto": "14RLPR",
+    "nombreProducto": "TORNILLO ROSCALATA PLANA/REBAJADA PHILLIPS #8 1\" FINA ZINC 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973989,
+    "idProducto": 626422,
+    "codigoProducto": "14RLPR",
+    "nombreProducto": "TORNILLO ROSCALATA PLANA/REBAJADA PHILLIPS #8 1\" FINA ZINC 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

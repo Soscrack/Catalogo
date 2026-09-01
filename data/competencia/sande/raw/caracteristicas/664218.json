@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974236,
+    "idProducto": 664218,
+    "codigoProducto": "10INS",
+    "nombreProducto": "INSERTO PARA MADERA M8 15MM ZINCADO IRISDICENTE",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974236,
+    "idProducto": 664218,
+    "codigoProducto": "10INS",
+    "nombreProducto": "INSERTO PARA MADERA M8 15MM ZINCADO IRISDICENTE",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

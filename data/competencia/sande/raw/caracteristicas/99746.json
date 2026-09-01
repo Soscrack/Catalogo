@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973934,
+    "idProducto": 99746,
+    "codigoProducto": "16RTPA",
+    "nombreProducto": "REMACHE POP ALA ANCHA 4.8MM 18MM 250",
+    "idTitulo": 900399,
+    "valorTitulo": "0.003 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973934,
+    "idProducto": 99746,
+    "codigoProducto": "16RTPA",
+    "nombreProducto": "REMACHE POP ALA ANCHA 4.8MM 18MM 250",
+    "idTitulo": 900412,
+    "valorTitulo": "250",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973382,
+    "idProducto": 667062,
+    "codigoProducto": "21PHS",
+    "nombreProducto": "PERNO HEXAGONAL A325 NC 7/8\"-9X3 1/2",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973382,
+    "idProducto": 667062,
+    "codigoProducto": "21PHS",
+    "nombreProducto": "PERNO HEXAGONAL A325 NC 7/8\"-9X3 1/2",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

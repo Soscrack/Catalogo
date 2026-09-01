@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973802,
+    "idProducto": 655521,
+    "codigoProducto": "R212RHPV",
+    "nombreProducto": "AUTOPERFORANTE PANEL GOL-EPDM # 1/4-20 81/2",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973802,
+    "idProducto": 655521,
+    "codigoProducto": "R212RHPV",
+    "nombreProducto": "AUTOPERFORANTE PANEL GOL-EPDM # 1/4-20 81/2",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

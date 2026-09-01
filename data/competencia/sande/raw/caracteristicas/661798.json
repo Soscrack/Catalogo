@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973365,
+    "idProducto": 661798,
+    "codigoProducto": "R05PVCC-K",
+    "nombreProducto": "TORNILLO TORX M7.5/6.5X100/25MM VENTANA-MURO RUSPERT",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973365,
+    "idProducto": 661798,
+    "codigoProducto": "R05PVCC-K",
+    "nombreProducto": "TORNILLO TORX M7.5/6.5X100/25MM VENTANA-MURO RUSPERT",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

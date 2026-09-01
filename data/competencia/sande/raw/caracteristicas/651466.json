@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973922,
+    "idProducto": 651466,
+    "codigoProducto": "20TFRT",
+    "nombreProducto": "TORNILLO AVELLANANTE FIBROCEMENTO A MADERA #8-18 1.5/8 PUNTA FINA RUSPERT",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973922,
+    "idProducto": 651466,
+    "codigoProducto": "20TFRT",
+    "nombreProducto": "TORNILLO AVELLANANTE FIBROCEMENTO A MADERA #8-18 1.5/8 PUNTA FINA RUSPERT",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

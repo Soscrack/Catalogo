@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973953,
+    "idProducto": 622873,
+    "codigoProducto": "02TGO",
+    "nombreProducto": "TENSOR GANCHO OJO 3/16X5.11/16",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973953,
+    "idProducto": 622873,
+    "codigoProducto": "02TGO",
+    "nombreProducto": "TENSOR GANCHO OJO 3/16X5.11/16",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

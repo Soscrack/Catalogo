@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 664203,
+    "idMultimedia": 10230,
+    "adjunto": "01-VRMM-1_79139.jpg",
+    "nombre": "237184sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 664203,
+    "idMultimedia": 12603,
+    "adjunto": "https://www.mamutstore.com/producto/vrmm-esparrago-conector-madera-metal/?srsltid=AfmBOopcss-s_XGmnzLoSh37x4PlgfRfFUveV0wFmulFk7Y3WBBHcgf_",
+    "nombre": "973767sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

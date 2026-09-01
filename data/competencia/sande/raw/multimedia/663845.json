@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 663845,
+    "idMultimedia": 14062,
+    "adjunto": "punta-con-tope-phillips-2-x-25mm_75866.jpg",
+    "nombre": "663845sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 663845,
+    "idMultimedia": 14058,
+    "adjunto": "https://www.mamutstore.com/producto/pta-ph-t-puntas-phillips-con-tope/?srsltid=AfmBOor1do3yWB9PabW6BTo3oIlBK4eGuCphArovo78cOeU5pbKvRL17",
+    "nombre": "973913sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

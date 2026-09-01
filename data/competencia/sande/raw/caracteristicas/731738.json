@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973700,
+    "idProducto": 731738,
+    "codigoProducto": "06CCM",
+    "nombreProducto": "CANCAMO CERRADO ROSCA MADERA MADERA 3/8\" 4.1/2\" ZINC 5",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973700,
+    "idProducto": 731738,
+    "codigoProducto": "06CCM",
+    "nombreProducto": "CANCAMO CERRADO ROSCA MADERA MADERA 3/8\" 4.1/2\" ZINC 5",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 636763,
+    "idMultimedia": 13687,
+    "adjunto": "hilo-x-metro-m6-100-1mt-1_12604.jpg",
+    "nombre": "636763sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 636763,
+    "idMultimedia": 13685,
+    "adjunto": "https://www.mamutstore.com/producto/esparrago-de-1-mt-metrico/?srsltid=AfmBOopZ6BPCi8wruVL-7P2C-obRj5eZrDVx2w4fLIn5qhxtPbmlnHdb",
+    "nombre": "973898sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 666037,
+    "idMultimedia": 16396,
+    "adjunto": "perno-hex-grado-8-unc-916-12-3-_45968.jpg",
+    "nombre": "666037sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

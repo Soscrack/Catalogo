@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973859,
+    "idProducto": 633880,
+    "codigoProducto": "103CAPC",
+    "nombreProducto": "CABLE AC GALV CRT 3/16(6X7 FC)[200",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973859,
+    "idProducto": 633880,
+    "codigoProducto": "103CAPC",
+    "nombreProducto": "CABLE AC GALV CRT 3/16(6X7 FC)[200",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

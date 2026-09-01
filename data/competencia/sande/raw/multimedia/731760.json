@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 731760,
+    "idMultimedia": 13235,
+    "adjunto": "golilla-acero-pvc-12-35mm-galv-1_58632.jpg",
+    "nombre": "731760sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 731760,
+    "idMultimedia": 13232,
+    "adjunto": "https://www.mamutstore.com/producto/gpvc-golillas-de-acero-pvc/?srsltid=AfmBOorQ2k-TVjvCaVeKWJLaMSRZE_zNv5nFrv3iBDJ9-vjIOTcr_UOp",
+    "nombre": "973848sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

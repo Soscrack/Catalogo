@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 6498,
+    "idMultimedia": 13914,
+    "adjunto": "perno-parkernc-14-20x1-12_50181.jpg",
+    "nombre": "6498sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 6498,
+    "idMultimedia": 13900,
+    "adjunto": "https://www.mamutstore.com/producto/perno-parker-rosca-unc-grado-iso-12-9/?srsltid=AfmBOoqSKHXncOycjWZoJ8vrmcgHjd0SRtW52qNMJ96JkDNUy_lYDbmn",
+    "nombre": "973903sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

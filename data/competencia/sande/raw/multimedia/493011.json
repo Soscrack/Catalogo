@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 493011,
+    "idMultimedia": 14864,
+    "adjunto": "golilla-acero-epdm-12-16mm-galv-12000_71940.jpg",
+    "nombre": "493011sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 493011,
+    "idMultimedia": 13177,
+    "adjunto": "https://www.mamutstore.com/producto/golillas-para-techo/?srsltid=AfmBOopUxxujxfJEFstBxFV2sQ3ECcG4obyIdwlQg6C3yynz38Bbjs13",
+    "nombre": "973816sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

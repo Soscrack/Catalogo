@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973892,
+    "idProducto": 666551,
+    "codigoProducto": "06APH",
+    "nombreProducto": "ANC.P.HUECA. 3/16(S)X3-16",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973892,
+    "idProducto": 666551,
+    "codigoProducto": "06APH",
+    "nombreProducto": "ANC.P.HUECA. 3/16(S)X3-16",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

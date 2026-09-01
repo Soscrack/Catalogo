@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973930,
+    "idProducto": 37056,
+    "codigoProducto": "AD32BS",
+    "nombreProducto": "REMACHE POP ABIERTO DURALUM/ACERO 2.4MM 5.7MM 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0005 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973930,
+    "idProducto": 37056,
+    "codigoProducto": "AD32BS",
+    "nombreProducto": "REMACHE POP ABIERTO DURALUM/ACERO 2.4MM 5.7MM 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

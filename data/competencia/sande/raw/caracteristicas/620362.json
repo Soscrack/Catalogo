@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973546,
+    "idProducto": 620362,
+    "codigoProducto": "03ATPT",
+    "nombreProducto": "ATERRAJADOR CABEZA PLANA RANURA TORX M8-1.25 50 NEGRO",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973546,
+    "idProducto": 620362,
+    "codigoProducto": "03ATPT",
+    "nombreProducto": "ATERRAJADOR CABEZA PLANA RANURA TORX M8-1.25 50 NEGRO",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

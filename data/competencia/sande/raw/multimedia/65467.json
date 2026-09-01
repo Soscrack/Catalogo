@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 65467,
+    "idMultimedia": 8759,
+    "adjunto": "01-ATPFVI_36096.jpg",
+    "nombre": "237184sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 65467,
+    "idMultimedia": 14846,
+    "adjunto": "https://www.mamutstore.com/producto/autoperforante-hexagonal-para-viga/?srsltid=AfmBOopW_beBH7rdwxK-yH4gMvNwVVjUj2aFMisvy9WGQ0nu_GLP7bZy",
+    "nombre": "974000sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 65467,
+    "idMultimedia": 14849,
+    "adjunto": "autoperforante-hexagonal-para-viga_36229.pdf",
+    "nombre": "974000sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

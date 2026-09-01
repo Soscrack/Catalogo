@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 651466,
+    "idMultimedia": 14083,
+    "adjunto": "tornillo-avellanante-fibrocemento-a_76736.jpg",
+    "nombre": "651466sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 651466,
+    "idMultimedia": 14085,
+    "adjunto": "tornillo-avellanante-de-fibrocemento-a_49222.pdf",
+    "nombre": "973922sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

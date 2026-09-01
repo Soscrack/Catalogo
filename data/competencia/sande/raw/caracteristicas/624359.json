@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973795,
+    "idProducto": 624359,
+    "codigoProducto": "105CELM",
+    "nombreProducto": "CAD E.LARGO D-763 4MM[30X1]",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973795,
+    "idProducto": 624359,
+    "codigoProducto": "105CELM",
+    "nombreProducto": "CAD E.LARGO D-763 4MM[30X1]",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 626418,
+    "idMultimedia": 13632,
+    "adjunto": "cad-ecorto-d-766-4mm38x1_98485.jpg",
+    "nombre": "626418sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 626418,
+    "idMultimedia": 13638,
+    "adjunto": "cadena-eslabon-corto-d-766_31609.pdf",
+    "nombre": "973790sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

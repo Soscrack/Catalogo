@@ -11,6 +11,12 @@ pymupdf>=1.24.0      # Lectura de PDF (PyMuPDF/fitz)
 # pip install llmwhisperer-client
 # Variables de entorno: LLMWHISPERER_API_KEY, LLMWHISPERER_BASE_URL_V2
 
+# Scraping / deploy / import remoto
+requests>=2.28.0
+paramiko>=3.0.0
+pymysql>=1.0.0
+python-dotenv>=1.0.0
+
 # Opcional para desarrollo
 pytest>=7.0         # Testing
 black>=22.0         # Formateo de código

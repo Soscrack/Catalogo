@@ -1,0 +1,50 @@
+[
+  {
+    "idProducto": 667306,
+    "idMultimedia": 12607,
+    "adjunto": "tornillo-roscalata-barril-ph-8x38_67481.jpg",
+    "nombre": "667306sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 667306,
+    "idMultimedia": 12608,
+    "adjunto": "https://www.mamutstore.com/producto/roscalata-cabeza-barril-ranura-recta/?srsltid=AfmBOorr9KxcV8eWnDjgGig6Dgi9CoukuQ2j8h_1wO8A8eva5JCUF1es",
+    "nombre": "667306sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 667306,
+    "idMultimedia": 14860,
+    "adjunto": "https://mamutstore.com.pe/producto/roscalata-cabeza-barril-ranura-combinada/",
+    "nombre": "973375sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 667306,
+    "idMultimedia": 14861,
+    "adjunto": "tornillo-roscalata-barril_21713.pdf",
+    "nombre": "973375sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

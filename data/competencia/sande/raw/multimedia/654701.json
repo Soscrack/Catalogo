@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 654701,
+    "idMultimedia": 14549,
+    "adjunto": "tuerca-remache-10-24_24917.jpg",
+    "nombre": "654701sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 654701,
+    "idMultimedia": 14552,
+    "adjunto": "https://www.mamutstore.com/producto/tuerca-remachable/?srsltid=AfmBOopjwoF01KKeotvwMb-NqhV4DrjRAa7zgHY0fAzk1gV1FSUoQ1K0",
+    "nombre": "973981sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

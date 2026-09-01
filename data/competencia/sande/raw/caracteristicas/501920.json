@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973857,
+    "idProducto": 501920,
+    "codigoProducto": "06CAN",
+    "nombreProducto": "CANCAMO.MET.ABIER M12X70",
+    "idTitulo": 900399,
+    "valorTitulo": "0.1 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973857,
+    "idProducto": 501920,
+    "codigoProducto": "06CAN",
+    "nombreProducto": "CANCAMO.MET.ABIER M12X70",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

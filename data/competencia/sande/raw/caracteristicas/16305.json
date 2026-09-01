@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973966,
+    "idProducto": 16305,
+    "codigoProducto": "G209TH1",
+    "nombreProducto": "TUERCA HEXAGONAL UNC G2 3/4\"-10 GALV 25",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973966,
+    "idProducto": 16305,
+    "codigoProducto": "G209TH1",
+    "nombreProducto": "TUERCA HEXAGONAL UNC G2 3/4\"-10 GALV 25",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

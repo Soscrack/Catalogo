@@ -1,0 +1,122 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973784,
+    "idProducto": 90699,
+    "codigoProducto": "K120ATHN",
+    "nombreProducto": "AUTOPERFORANTE PUNTA \"S\" LATA-MADERA (TAPFAST) #10-12 1.1/2\" S RUSPERT",
+    "idTitulo": 13183,
+    "valorTitulo": "",
+    "titulo": "NOMBRE",
+    "orden": 1
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973784,
+    "idProducto": 90699,
+    "codigoProducto": "K120ATHN",
+    "nombreProducto": "AUTOPERFORANTE PUNTA \"S\" LATA-MADERA (TAPFAST) #10-12 1.1/2\" S RUSPERT",
+    "idTitulo": 13973,
+    "valorTitulo": "",
+    "titulo": "TIPO",
+    "orden": 2
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973784,
+    "idProducto": 90699,
+    "codigoProducto": "K120ATHN",
+    "nombreProducto": "AUTOPERFORANTE PUNTA \"S\" LATA-MADERA (TAPFAST) #10-12 1.1/2\" S RUSPERT",
+    "idTitulo": 900321,
+    "valorTitulo": "#10-12",
+    "titulo": "D NOMINAL",
+    "orden": 3
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973784,
+    "idProducto": 90699,
+    "codigoProducto": "K120ATHN",
+    "nombreProducto": "AUTOPERFORANTE PUNTA \"S\" LATA-MADERA (TAPFAST) #10-12 1.1/2\" S RUSPERT",
+    "idTitulo": 12730,
+    "valorTitulo": "1.1/2\"",
+    "titulo": "LARGO",
+    "orden": 4
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973784,
+    "idProducto": 90699,
+    "codigoProducto": "K120ATHN",
+    "nombreProducto": "AUTOPERFORANTE PUNTA \"S\" LATA-MADERA (TAPFAST) #10-12 1.1/2\" S RUSPERT",
+    "idTitulo": 12447,
+    "valorTitulo": "",
+    "titulo": "D CABEZA",
+    "orden": 5
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973784,
+    "idProducto": 90699,
+    "codigoProducto": "K120ATHN",
+    "nombreProducto": "AUTOPERFORANTE PUNTA \"S\" LATA-MADERA (TAPFAST) #10-12 1.1/2\" S RUSPERT",
+    "idTitulo": 13534,
+    "valorTitulo": "PUNTA S",
+    "titulo": "PUNTA",
+    "orden": 6
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973784,
+    "idProducto": 90699,
+    "codigoProducto": "K120ATHN",
+    "nombreProducto": "AUTOPERFORANTE PUNTA \"S\" LATA-MADERA (TAPFAST) #10-12 1.1/2\" S RUSPERT",
+    "idTitulo": 900329,
+    "valorTitulo": "RUSPERT",
+    "titulo": "RECUBRIMIENTO",
+    "orden": 7
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973784,
+    "idProducto": 90699,
+    "codigoProducto": "K120ATHN",
+    "nombreProducto": "AUTOPERFORANTE PUNTA \"S\" LATA-MADERA (TAPFAST) #10-12 1.1/2\" S RUSPERT",
+    "idTitulo": 398,
+    "valorTitulo": "",
+    "titulo": "CABEZA",
+    "orden": 8
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973784,
+    "idProducto": 90699,
+    "codigoProducto": "K120ATHN",
+    "nombreProducto": "AUTOPERFORANTE PUNTA \"S\" LATA-MADERA (TAPFAST) #10-12 1.1/2\" S RUSPERT",
+    "idTitulo": 900399,
+    "valorTitulo": "0.005 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973784,
+    "idProducto": 90699,
+    "codigoProducto": "K120ATHN",
+    "nombreProducto": "AUTOPERFORANTE PUNTA \"S\" LATA-MADERA (TAPFAST) #10-12 1.1/2\" S RUSPERT",
+    "idTitulo": 900412,
+    "valorTitulo": "2500",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 620362,
+    "idMultimedia": 12831,
+    "adjunto": "aterrajador-plana-torx-m8-125-50-plana_80258.jpg",
+    "nombre": "620362sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 620362,
+    "idMultimedia": 12828,
+    "adjunto": "https://www.mamutstore.com/producto/aterrajador-cabeza-plana-ranura-torx/?srsltid=AfmBOoow57YNg5uZbSrVbqLf8bVVDwsUtOFlsRrngJpVlMPOcwQvchVn",
+    "nombre": "973546sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 620362,
+    "idMultimedia": 12830,
+    "adjunto": "aterrajador-plana-torx_75745.pdf",
+    "nombre": "973546sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

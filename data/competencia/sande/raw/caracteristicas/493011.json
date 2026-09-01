@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973816,
+    "idProducto": 493011,
+    "codigoProducto": "K04GNE",
+    "nombreProducto": "GOLILLA ACERO EPDM #12 16MM GALV 12000",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973816,
+    "idProducto": 493011,
+    "codigoProducto": "K04GNE",
+    "nombreProducto": "GOLILLA ACERO EPDM #12 16MM GALV 12000",
+    "idTitulo": 900412,
+    "valorTitulo": "12000",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

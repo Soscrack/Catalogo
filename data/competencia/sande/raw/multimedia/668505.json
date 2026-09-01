@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 668505,
+    "idMultimedia": 18639,
+    "adjunto": "golilla-acero-edpm-25mm_95833.jpg",
+    "nombre": "668505sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 668505,
+    "idMultimedia": 13229,
+    "adjunto": "https://www.mamutstore.com/producto/golillas-para-techo/?srsltid=AfmBOopc93CKtqYLAlMCeHZ0t-ydtYg5FLqJdZ-BmSawjv87hGTgx5QO",
+    "nombre": "973845sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

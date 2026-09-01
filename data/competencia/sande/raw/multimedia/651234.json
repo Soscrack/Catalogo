@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 651234,
+    "idMultimedia": 14122,
+    "adjunto": "rem-pop-ala-ancha-4816x27mm-200u_37108.jpg",
+    "nombre": "651234sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 651234,
+    "idMultimedia": 14289,
+    "adjunto": "remache-tipo-pop-ala-ancha_42685.pdf",
+    "nombre": "973934sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 651234,
+    "idMultimedia": 14290,
+    "adjunto": "https://www.mamutstore.com/producto/remache-tipo-pop-ala-ancha/?srsltid=AfmBOop2evN4GMalXTa_g9KPCEdTMo9XB-dkqWlaCxrH693SFJkafCrL",
+    "nombre": "973934sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

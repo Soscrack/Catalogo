@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973733,
+    "idProducto": 650574,
+    "codigoProducto": "02CRNX",
+    "nombreProducto": "CORNAMUSA DE AMARRE 5\" INOX 316, ENVASE DE 5 UNIDADES",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973733,
+    "idProducto": 650574,
+    "codigoProducto": "02CRNX",
+    "nombreProducto": "CORNAMUSA DE AMARRE 5\" INOX 316, ENVASE DE 5 UNIDADES",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

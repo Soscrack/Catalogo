@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973817,
+    "idProducto": 506177,
+    "codigoProducto": "B09GPFU",
+    "nombreProducto": "GOLILLA PLANA CORRIENTE 7/8\" ZINC 10",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973817,
+    "idProducto": 506177,
+    "codigoProducto": "B09GPFU",
+    "nombreProducto": "GOLILLA PLANA CORRIENTE 7/8\" ZINC 10",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

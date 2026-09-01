@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973896,
+    "idProducto": 503399,
+    "codigoProducto": "04HPMI",
+    "nombreProducto": "HILO X METRO INOX 1/4-20 1MT",
+    "idTitulo": 900399,
+    "valorTitulo": "0.19 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973896,
+    "idProducto": 503399,
+    "codigoProducto": "04HPMI",
+    "nombreProducto": "HILO X METRO INOX 1/4-20 1MT",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

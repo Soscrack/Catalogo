@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 491867,
+    "idMultimedia": 4443,
+    "adjunto": "PCRC.jpg",
+    "nombre": "491867 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 491867,
+    "idMultimedia": 13489,
+    "adjunto": "https://www.mamutstore.com/producto/perno-cocina-unc-cabeza-redonda-ranura-combinada/?srsltid=AfmBOor2Idmp60oHShktjUiVMWEpUNFWXlHwo_dIo5ruWZLAMngj2_VR",
+    "nombre": "973496sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

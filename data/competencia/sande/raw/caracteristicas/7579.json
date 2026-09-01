@@ -1,0 +1,122 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 7579,
+    "codigoProducto": "17TMPA",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO AGLOMERADA #9 40MM ZINC IRIDISCENTE",
+    "idTitulo": 13183,
+    "valorTitulo": "",
+    "titulo": "NOMBRE",
+    "orden": 1
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 7579,
+    "codigoProducto": "17TMPA",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO AGLOMERADA #9 40MM ZINC IRIDISCENTE",
+    "idTitulo": 900321,
+    "valorTitulo": "",
+    "titulo": "D NOMINAL",
+    "orden": 2
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 7579,
+    "codigoProducto": "17TMPA",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO AGLOMERADA #9 40MM ZINC IRIDISCENTE",
+    "idTitulo": 12730,
+    "valorTitulo": "40MM",
+    "titulo": "LARGO",
+    "orden": 3
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 7579,
+    "codigoProducto": "17TMPA",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO AGLOMERADA #9 40MM ZINC IRIDISCENTE",
+    "idTitulo": 12447,
+    "valorTitulo": "#9",
+    "titulo": "D CABEZA",
+    "orden": 4
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 7579,
+    "codigoProducto": "17TMPA",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO AGLOMERADA #9 40MM ZINC IRIDISCENTE",
+    "idTitulo": 13534,
+    "valorTitulo": "",
+    "titulo": "PUNTA",
+    "orden": 5
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 7579,
+    "codigoProducto": "17TMPA",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO AGLOMERADA #9 40MM ZINC IRIDISCENTE",
+    "idTitulo": 900329,
+    "valorTitulo": "ZINC IRIDISCENTE",
+    "titulo": "RECUBRIMIENTO",
+    "orden": 6
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 7579,
+    "codigoProducto": "17TMPA",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO AGLOMERADA #9 40MM ZINC IRIDISCENTE",
+    "idTitulo": 398,
+    "valorTitulo": "",
+    "titulo": "CABEZA",
+    "orden": 7
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 7579,
+    "codigoProducto": "17TMPA",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO AGLOMERADA #9 40MM ZINC IRIDISCENTE",
+    "idTitulo": 13973,
+    "valorTitulo": "",
+    "titulo": "TIPO",
+    "orden": 8
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 7579,
+    "codigoProducto": "17TMPA",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO AGLOMERADA #9 40MM ZINC IRIDISCENTE",
+    "idTitulo": 900399,
+    "valorTitulo": "0.00278 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 7579,
+    "codigoProducto": "17TMPA",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO AGLOMERADA #9 40MM ZINC IRIDISCENTE",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

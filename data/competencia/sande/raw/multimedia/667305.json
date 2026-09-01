@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 667305,
+    "idMultimedia": 14453,
+    "adjunto": "tornillo-roscalata-barril-ph-8x38_53001.jpg",
+    "nombre": "667305sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 667305,
+    "idMultimedia": 14454,
+    "adjunto": "https://www.mamutstore.com/producto/rlbap-roscalata-cabeza-barril-ranura-phillips/?srsltid=AfmBOorPWE6buz7_bMTGv2lnkfjyw-_Hx74xk5IGv5WoTVCvzLlCIlQ0",
+    "nombre": "973978sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

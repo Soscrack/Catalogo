@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973915,
+    "idProducto": 490164,
+    "codigoProducto": "62PTA",
+    "nombreProducto": "PUNTA POZIDRIVE #3 50MM 5",
+    "idTitulo": 900399,
+    "valorTitulo": "0.01 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973915,
+    "idProducto": 490164,
+    "codigoProducto": "62PTA",
+    "nombreProducto": "PUNTA POZIDRIVE #3 50MM 5",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

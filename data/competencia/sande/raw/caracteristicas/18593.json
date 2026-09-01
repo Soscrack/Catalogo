@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973382,
+    "idProducto": 18593,
+    "codigoProducto": "G01PHS",
+    "nombreProducto": "PERNO HEXAGONAL A325 NC 5/8\"\"-11X1 1/2",
+    "idTitulo": 900399,
+    "valorTitulo": "0.09 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973382,
+    "idProducto": 18593,
+    "codigoProducto": "G01PHS",
+    "nombreProducto": "PERNO HEXAGONAL A325 NC 5/8\"\"-11X1 1/2",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973732,
+    "idProducto": 501540,
+    "codigoProducto": "KB30ATHN",
+    "nombreProducto": "ATPF.HX.ITG.PF #9-15X2",
+    "idTitulo": 900399,
+    "valorTitulo": "0.004 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973732,
+    "idProducto": 501540,
+    "codigoProducto": "KB30ATHN",
+    "nombreProducto": "ATPF.HX.ITG.PF #9-15X2",
+    "idTitulo": 900412,
+    "valorTitulo": "2200",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

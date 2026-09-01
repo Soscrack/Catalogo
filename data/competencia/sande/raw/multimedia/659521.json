@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 659521,
+    "idMultimedia": 14798,
+    "adjunto": "tarugo-atpf-volcanita-hasta-10mm_18571.jpg",
+    "nombre": "659521sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 659521,
+    "idMultimedia": 14799,
+    "adjunto": "https://www.mamutstore.com/producto/tarugo-para-volcanita/?srsltid=AfmBOooUd-eF_oAf_oRYQXNzoma-McxtOZtpzTWhPSJe-aLq0mmi4WCx",
+    "nombre": "973991sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

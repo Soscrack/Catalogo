@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974006,
+    "idProducto": 498816,
+    "codigoProducto": "206TTBC",
+    "nombreProducto": "TORNILLO TECHO PAN COMB #12X3\" ZINC",
+    "idTitulo": 900399,
+    "valorTitulo": "0.009 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974006,
+    "idProducto": 498816,
+    "codigoProducto": "206TTBC",
+    "nombreProducto": "TORNILLO TECHO PAN COMB #12X3\" ZINC",
+    "idTitulo": 900412,
+    "valorTitulo": "144",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973983,
+    "idProducto": 6984,
+    "codigoProducto": "01TCH",
+    "nombreProducto": "TUERCA COCINA HEXAGONAL NC #5-40[1/8]-CHICA",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0003 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973983,
+    "idProducto": 6984,
+    "codigoProducto": "01TCH",
+    "nombreProducto": "TUERCA COCINA HEXAGONAL NC #5-40[1/8]-CHICA",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

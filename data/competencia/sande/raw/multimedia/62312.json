@@ -1,0 +1,62 @@
+[
+  {
+    "idProducto": 62312,
+    "idMultimedia": 781,
+    "adjunto": "WING - copia_1.PNG",
+    "nombre": "s/n",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 62312,
+    "idMultimedia": 18692,
+    "adjunto": "autoperforante-cbzwafer-calas-14-14_92606.jpg",
+    "nombre": "62312sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 62312,
+    "idMultimedia": 18693,
+    "adjunto": "autoperforante-cbzwafer-calas-14-14_33798.jpg",
+    "nombre": "62312sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 62312,
+    "idMultimedia": 12839,
+    "adjunto": "https://www.youtube.com/watch?v=zVr6AyCrxss",
+    "nombre": "973510sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 62312,
+    "idMultimedia": 12204,
+    "adjunto": "https://www.mamutstore.com/producto/autoperforante-phillips-con-alas-cabeza-plana/?srsltid=AfmBOorGBFxA648B18A2yjI3FYuWDTJh4iHMA3CaCstjuKWTU_EujuV4",
+    "nombre": "973510sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

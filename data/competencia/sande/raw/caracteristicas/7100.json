@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974013,
+    "idProducto": 7100,
+    "codigoProducto": "205THM",
+    "nombreProducto": "TUERCA HEXAGONAL MÉTRICA ISO C/5 M12-1.75 100U",
+    "idTitulo": 900399,
+    "valorTitulo": "0.02 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974013,
+    "idProducto": 7100,
+    "codigoProducto": "205THM",
+    "nombreProducto": "TUERCA HEXAGONAL MÉTRICA ISO C/5 M12-1.75 100U",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

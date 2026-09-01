@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 651173,
+    "idMultimedia": 13061,
+    "adjunto": "atpfhexgneop-inoxruspert-12-14x2_55551.jpg",
+    "nombre": "651173sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 651173,
+    "idMultimedia": 13053,
+    "adjunto": "https://www.mamutstore.com/producto/rlhni-autoperforante-hexagonal-inoxidable-golilla-metal-epdm/?srsltid=AfmBOoqkGGUnLlVT50gwIKwrd8HyDd7piwcWltV9nn2exLjeY3eMtejJ",
+    "nombre": "973808sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

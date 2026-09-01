@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 651382,
+    "idMultimedia": 13110,
+    "adjunto": "gol-pna-inox-316-1-14_87317.jpg",
+    "nombre": "651382sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 651382,
+    "idMultimedia": 13107,
+    "adjunto": "https://www.mamutstore.com/producto/golilla-plana-corriente-inoxidable/?srsltid=AfmBOooAZqxxeYa7sf-XrY3Kkk7ENjvlrWnLdWBSHsj02b_lKv8mRTEp",
+    "nombre": "973812sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

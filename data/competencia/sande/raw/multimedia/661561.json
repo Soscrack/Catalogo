@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 661561,
+    "idMultimedia": 5829,
+    "adjunto": "02CHPA.jpg",
+    "nombre": "661561 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 661561,
+    "idMultimedia": 13819,
+    "adjunto": "https://www.mamutstore.com/producto/chpa-chaveta-partida/?srsltid=AfmBOopAG-V5Hyeolk_Fcbs8UyCf-_LaEsMstjkHB2Snysn5gpYGqfnq",
+    "nombre": "973895sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

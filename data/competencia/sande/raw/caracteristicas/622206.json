@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973365,
+    "idProducto": 622206,
+    "codigoProducto": "02PVCC-K",
+    "nombreProducto": "TORNILLO TORX M7.5/6.5X70/25MM VENTANA-MURO ZINC1",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973365,
+    "idProducto": 622206,
+    "codigoProducto": "02PVCC-K",
+    "nombreProducto": "TORNILLO TORX M7.5/6.5X70/25MM VENTANA-MURO ZINC1",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

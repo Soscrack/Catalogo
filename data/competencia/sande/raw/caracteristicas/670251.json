@@ -1,0 +1,98 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972688,
+    "idProducto": 670251,
+    "codigoProducto": "K55PH8",
+    "nombreProducto": "P. HEX. G8.NC 5/8-11 X 3.1/2",
+    "idTitulo": 13327,
+    "valorTitulo": "",
+    "titulo": "NOMBRE",
+    "orden": 1
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972688,
+    "idProducto": 670251,
+    "codigoProducto": "K55PH8",
+    "nombreProducto": "P. HEX. G8.NC 5/8-11 X 3.1/2",
+    "idTitulo": 900399,
+    "valorTitulo": "",
+    "titulo": "PESO",
+    "orden": 2
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972688,
+    "idProducto": 670251,
+    "codigoProducto": "K55PH8",
+    "nombreProducto": "P. HEX. G8.NC 5/8-11 X 3.1/2",
+    "idTitulo": 900314,
+    "valorTitulo": "",
+    "titulo": "UMV",
+    "orden": 3
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972688,
+    "idProducto": 670251,
+    "codigoProducto": "K55PH8",
+    "nombreProducto": "P. HEX. G8.NC 5/8-11 X 3.1/2",
+    "idTitulo": 900412,
+    "valorTitulo": "",
+    "titulo": "EPQ",
+    "orden": 4
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972688,
+    "idProducto": 670251,
+    "codigoProducto": "K55PH8",
+    "nombreProducto": "P. HEX. G8.NC 5/8-11 X 3.1/2",
+    "idTitulo": 900352,
+    "valorTitulo": "",
+    "titulo": "UMC",
+    "orden": 5
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972688,
+    "idProducto": 670251,
+    "codigoProducto": "K55PH8",
+    "nombreProducto": "P. HEX. G8.NC 5/8-11 X 3.1/2",
+    "idTitulo": 900345,
+    "valorTitulo": "",
+    "titulo": "C ANTERIOR",
+    "orden": 6
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972688,
+    "idProducto": 670251,
+    "codigoProducto": "K55PH8",
+    "nombreProducto": "P. HEX. G8.NC 5/8-11 X 3.1/2",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972688,
+    "idProducto": 670251,
+    "codigoProducto": "K55PH8",
+    "nombreProducto": "P. HEX. G8.NC 5/8-11 X 3.1/2",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

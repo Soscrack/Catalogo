@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 666762,
+    "idMultimedia": 11178,
+    "adjunto": "Screenshot_1_70749.jpg",
+    "nombre": "666762sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666762,
+    "idMultimedia": 11174,
+    "adjunto": "ccpg_84468.pdf",
+    "nombre": "973547sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 666762,
+    "idMultimedia": 11176,
+    "adjunto": "https://www.mamutstore.com/producto/ccpg-clavo-para-concreto-uso-pistola-a-gas/?srsltid=AfmBOop7dEdCXSyITPZfkeA8qjbM1xklLeoEuh5jmm5KGhkEXO18tUvl",
+    "nombre": "973547sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

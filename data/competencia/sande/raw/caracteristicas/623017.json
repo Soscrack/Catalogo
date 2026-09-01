@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973953,
+    "idProducto": 623017,
+    "codigoProducto": "06TGO",
+    "nombreProducto": "TENSOR GANCHO OJO 1/2X15",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973953,
+    "idProducto": 623017,
+    "codigoProducto": "06TGO",
+    "nombreProducto": "TENSOR GANCHO OJO 1/2X15",
+    "idTitulo": 900412,
+    "valorTitulo": "2",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

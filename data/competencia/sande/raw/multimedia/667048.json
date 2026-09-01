@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 667048,
+    "idMultimedia": 19019,
+    "adjunto": "phexg8nc-916-12x5_25089.jpg",
+    "nombre": "667048sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

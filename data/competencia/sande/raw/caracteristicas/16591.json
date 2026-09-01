@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973496,
+    "idProducto": 16591,
+    "codigoProducto": "107PCRC",
+    "nombreProducto": "PERNO COCINA REDONDA COMBINADA UNC #5-40 1\" 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973496,
+    "idProducto": 16591,
+    "codigoProducto": "107PCRC",
+    "nombreProducto": "PERNO COCINA REDONDA COMBINADA UNC #5-40 1\" 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

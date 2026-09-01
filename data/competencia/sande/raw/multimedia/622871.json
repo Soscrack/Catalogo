@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 622871,
+    "idMultimedia": 8396,
+    "adjunto": "01-ABC_54035.jpg",
+    "nombre": "237184sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 622871,
+    "idMultimedia": 12240,
+    "adjunto": "https://www.mamutstore.com/producto/abrazadera-para-cable/?srsltid=AfmBOoqU9LkgxJ-MGpEQYlc6M_KlczMRkjTMS1xFiIP0xczhJQilPSx1",
+    "nombre": "973257sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

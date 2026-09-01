@@ -1,0 +1,50 @@
+[
+  {
+    "idProducto": 667351,
+    "idMultimedia": 13036,
+    "adjunto": "ratpfhexgneop-10-16x1-12_62779.jpg",
+    "nombre": "667351sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 667351,
+    "idMultimedia": 11912,
+    "adjunto": "https://www.mamutstore.com/producto/autoperforante-hexagonal-con-golilla-metal-epdm/?srsltid=AfmBOooe1G2LezsICHbQh2zckgXFQYNTFbWK5ss4Jd0PKIGqSP0zUqVy",
+    "nombre": "973513sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 667351,
+    "idMultimedia": 11915,
+    "adjunto": "https://www.youtube.com/watch?v=_-I_WI_RQbk",
+    "nombre": "973513sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 667351,
+    "idMultimedia": 11916,
+    "adjunto": "autoperforante-hexagonal-golilla-epdm_80323.pdf",
+    "nombre": "973513sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

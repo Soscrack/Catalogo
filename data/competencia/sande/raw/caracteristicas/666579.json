@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974114,
+    "idProducto": 666579,
+    "codigoProducto": "06POST",
+    "nombreProducto": "PERNO.OJO.S/TCA. 6MMX13MM",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974114,
+    "idProducto": 666579,
+    "codigoProducto": "06POST",
+    "nombreProducto": "PERNO.OJO.S/TCA. 6MMX13MM",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

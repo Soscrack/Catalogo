@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 626738,
+    "idMultimedia": 6014,
+    "adjunto": "111CELM.jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 36841,
+    "idMultimedia": 14205,
+    "adjunto": "remache-pop-abierto-duralumacero-48mm_42516.jpg",
+    "nombre": "36841sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 36841,
+    "idMultimedia": 14209,
+    "adjunto": "https://www.mamutstore.com/producto/remache-pop-abierto-duraluminio-acero/?srsltid=AfmBOoqgNHFBiGWOFHYN0EkejK4P6TRxJhISp7mF2o50f-NdzQlovOhX",
+    "nombre": "973930sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

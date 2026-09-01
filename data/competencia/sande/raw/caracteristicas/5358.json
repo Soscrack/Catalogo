@@ -1,0 +1,98 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972681,
+    "idProducto": 5358,
+    "codigoProducto": "B08GPR",
+    "nombreProducto": "GOLILLA PRESION 1/2\" ZINC 100",
+    "idTitulo": 13327,
+    "valorTitulo": "",
+    "titulo": "NOMBRE",
+    "orden": 1
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972681,
+    "idProducto": 5358,
+    "codigoProducto": "B08GPR",
+    "nombreProducto": "GOLILLA PRESION 1/2\" ZINC 100",
+    "idTitulo": 900399,
+    "valorTitulo": "",
+    "titulo": "PESO",
+    "orden": 2
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972681,
+    "idProducto": 5358,
+    "codigoProducto": "B08GPR",
+    "nombreProducto": "GOLILLA PRESION 1/2\" ZINC 100",
+    "idTitulo": 900314,
+    "valorTitulo": "",
+    "titulo": "UMV",
+    "orden": 3
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972681,
+    "idProducto": 5358,
+    "codigoProducto": "B08GPR",
+    "nombreProducto": "GOLILLA PRESION 1/2\" ZINC 100",
+    "idTitulo": 900412,
+    "valorTitulo": "",
+    "titulo": "EPQ",
+    "orden": 4
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972681,
+    "idProducto": 5358,
+    "codigoProducto": "B08GPR",
+    "nombreProducto": "GOLILLA PRESION 1/2\" ZINC 100",
+    "idTitulo": 900352,
+    "valorTitulo": "",
+    "titulo": "UMC",
+    "orden": 5
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972681,
+    "idProducto": 5358,
+    "codigoProducto": "B08GPR",
+    "nombreProducto": "GOLILLA PRESION 1/2\" ZINC 100",
+    "idTitulo": 900345,
+    "valorTitulo": "",
+    "titulo": "C ANTERIOR",
+    "orden": 6
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972681,
+    "idProducto": 5358,
+    "codigoProducto": "B08GPR",
+    "nombreProducto": "GOLILLA PRESION 1/2\" ZINC 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.005 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972681,
+    "idProducto": 5358,
+    "codigoProducto": "B08GPR",
+    "nombreProducto": "GOLILLA PRESION 1/2\" ZINC 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

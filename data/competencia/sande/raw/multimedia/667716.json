@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 667716,
+    "idMultimedia": 10880,
+    "adjunto": "Libro1_79719.pdf",
+    "nombre": "667716sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 667716,
+    "idMultimedia": 10878,
+    "adjunto": "CLIP_10934.jpg",
+    "nombre": "667716sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 667716,
+    "idMultimedia": 14893,
+    "adjunto": "https://www.mamutstore.com/producto/clip-omega/?srsltid=AfmBOoqpTE6ql9H1-IUDBObvpjzI4c2YC3euUnfYr1W86a3sNUBjGvLB",
+    "nombre": "974004sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

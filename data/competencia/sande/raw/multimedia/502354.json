@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 502354,
+    "idMultimedia": 6506,
+    "adjunto": "PAC.jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 502354,
+    "idMultimedia": 13937,
+    "adjunto": "https://www.mamutstore.com/producto/prisionero-allen-unc-grado-iso-12-9/?srsltid=AfmBOoor_Plrn6ASwtXhoaoSeq64DIBgQyy4L6Wu3MBUy03ZAFFvUH37",
+    "nombre": "973901sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

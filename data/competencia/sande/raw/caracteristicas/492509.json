@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973986,
+    "idProducto": 492509,
+    "codigoProducto": "30RLBB",
+    "nombreProducto": "TORNILLO ROSCALATA PAN PHILLIPS #10 1.1/2\" BROCA ZINC 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.004 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973986,
+    "idProducto": 492509,
+    "codigoProducto": "30RLBB",
+    "nombreProducto": "TORNILLO ROSCALATA PAN PHILLIPS #10 1.1/2\" BROCA ZINC 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

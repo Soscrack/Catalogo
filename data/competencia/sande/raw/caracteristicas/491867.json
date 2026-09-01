@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973496,
+    "idProducto": 491867,
+    "codigoProducto": "126PCRC",
+    "nombreProducto": "PERNO COCINA REDONDA COMBINADA UNC #10-24 5/8\" 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.002 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973496,
+    "idProducto": 491867,
+    "codigoProducto": "126PCRC",
+    "nombreProducto": "PERNO COCINA REDONDA COMBINADA UNC #10-24 5/8\" 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

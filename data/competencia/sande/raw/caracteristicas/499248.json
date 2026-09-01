@@ -1,0 +1,122 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973070,
+    "idProducto": 499248,
+    "codigoProducto": "B57PCO",
+    "nombreProducto": "PERNO COCHE UNC / BSW 1/4\"-20 5\" ZINC 100",
+    "idTitulo": 13183,
+    "valorTitulo": "PERNO COCHE",
+    "titulo": "NOMBRE",
+    "orden": 1
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973070,
+    "idProducto": 499248,
+    "codigoProducto": "B57PCO",
+    "nombreProducto": "PERNO COCHE UNC / BSW 1/4\"-20 5\" ZINC 100",
+    "idTitulo": 900321,
+    "valorTitulo": "1/4\"-20",
+    "titulo": "D NOMINAL",
+    "orden": 2
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973070,
+    "idProducto": 499248,
+    "codigoProducto": "B57PCO",
+    "nombreProducto": "PERNO COCHE UNC / BSW 1/4\"-20 5\" ZINC 100",
+    "idTitulo": 12730,
+    "valorTitulo": "5\"",
+    "titulo": "LARGO",
+    "orden": 3
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973070,
+    "idProducto": 499248,
+    "codigoProducto": "B57PCO",
+    "nombreProducto": "PERNO COCHE UNC / BSW 1/4\"-20 5\" ZINC 100",
+    "idTitulo": 12447,
+    "valorTitulo": "6.4MM",
+    "titulo": "D CABEZA",
+    "orden": 4
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973070,
+    "idProducto": 499248,
+    "codigoProducto": "B57PCO",
+    "nombreProducto": "PERNO COCHE UNC / BSW 1/4\"-20 5\" ZINC 100",
+    "idTitulo": 13534,
+    "valorTitulo": "",
+    "titulo": "PUNTA",
+    "orden": 5
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973070,
+    "idProducto": 499248,
+    "codigoProducto": "B57PCO",
+    "nombreProducto": "PERNO COCHE UNC / BSW 1/4\"-20 5\" ZINC 100",
+    "idTitulo": 900329,
+    "valorTitulo": "ZINC",
+    "titulo": "RECUBRIMIENTO",
+    "orden": 6
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973070,
+    "idProducto": 499248,
+    "codigoProducto": "B57PCO",
+    "nombreProducto": "PERNO COCHE UNC / BSW 1/4\"-20 5\" ZINC 100",
+    "idTitulo": 398,
+    "valorTitulo": "14.3MM",
+    "titulo": "CABEZA",
+    "orden": 7
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973070,
+    "idProducto": 499248,
+    "codigoProducto": "B57PCO",
+    "nombreProducto": "PERNO COCHE UNC / BSW 1/4\"-20 5\" ZINC 100",
+    "idTitulo": 13973,
+    "valorTitulo": "",
+    "titulo": "TIPO",
+    "orden": 8
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973070,
+    "idProducto": 499248,
+    "codigoProducto": "B57PCO",
+    "nombreProducto": "PERNO COCHE UNC / BSW 1/4\"-20 5\" ZINC 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0288 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973070,
+    "idProducto": 499248,
+    "codigoProducto": "B57PCO",
+    "nombreProducto": "PERNO COCHE UNC / BSW 1/4\"-20 5\" ZINC 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

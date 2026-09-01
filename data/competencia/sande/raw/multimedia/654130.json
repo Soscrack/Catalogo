@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 654130,
+    "idMultimedia": 14865,
+    "adjunto": "golilla-diamante-cfiel-14_61386.jpg",
+    "nombre": "654130sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 654130,
+    "idMultimedia": 13222,
+    "adjunto": "https://www.mamutstore.com/producto/gdi-golilla-diamante-con-fieltro/?srsltid=AfmBOorG-6hIDoRh2j1r8q7lhVvh0uWtS_7SnlB1kKQ8CZV8DlH4JKsR",
+    "nombre": "973853sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

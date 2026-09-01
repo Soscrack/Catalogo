@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973496,
+    "idProducto": 665468,
+    "codigoProducto": "KN130PCRC",
+    "nombreProducto": "PERNO COCINA NEGRO #10-24( 3/16 ) X 1-1/2\"",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973496,
+    "idProducto": 665468,
+    "codigoProducto": "KN130PCRC",
+    "nombreProducto": "PERNO COCINA NEGRO #10-24( 3/16 ) X 1-1/2\"",
+    "idTitulo": 900412,
+    "valorTitulo": "3500",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

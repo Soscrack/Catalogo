@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 666721,
+    "idMultimedia": 12896,
+    "adjunto": "canc-cerr-mad-inx-14x334_28909.jpg",
+    "nombre": "666721sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666721,
+    "idMultimedia": 12894,
+    "adjunto": "https://www.mamutstore.com/producto/cancamo-cerrado-inoxidable-rosca-madera/?srsltid=AfmBOop6S1aHTUvqn4gm5kWHTgfZcfZQlbY0NBI9idKKWnwz4LlG06wc",
+    "nombre": "973805sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

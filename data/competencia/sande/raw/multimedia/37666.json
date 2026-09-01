@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 37666,
+    "idMultimedia": 13011,
+    "adjunto": "autoperforante-hex-gol-epdm-12-14-58_12415.jpg",
+    "nombre": "37666sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

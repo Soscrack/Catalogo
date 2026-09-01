@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 731800,
+    "idMultimedia": 6420,
+    "adjunto": "04CMA.jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 731800,
+    "idMultimedia": 13199,
+    "adjunto": "https://www.mamutstore.com/producto/cancamo-abierto-rosca-madera/?srsltid=AfmBOoqASUcS5rPZ6SbVyTcpR3rZATeu44md4Hdokl3B3CdPJ4q-uwWL",
+    "nombre": "973856sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

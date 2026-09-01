@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973974,
+    "idProducto": 662900,
+    "codigoProducto": "30RLBP",
+    "nombreProducto": "TORNILLO ROSCALATA BINDING PHILLIPS #10 L 1-1/2",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973974,
+    "idProducto": 662900,
+    "codigoProducto": "30RLBP",
+    "nombreProducto": "TORNILLO ROSCALATA BINDING PHILLIPS #10 L 1-1/2",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 506638,
+    "idMultimedia": 15022,
+    "adjunto": "tuerca-hex-astm-a-194-unc-78-gran_54504.jpg",
+    "nombre": "506638sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 506638,
+    "idMultimedia": 14508,
+    "adjunto": "https://www.mamutstore.com/producto/tuerca-hexagonal-astm-a194/?srsltid=AfmBOopIGd0KtSmvuUx9m1GGO9Yg-A__QRPKgLjNndxAJlokEyCNKapS",
+    "nombre": "973261sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

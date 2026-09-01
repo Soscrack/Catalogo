@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 6986,
+    "idMultimedia": 14500,
+    "adjunto": "tuerca-cocina-hexagonal-nc-10-24316_25473.jpg",
+    "nombre": "6986sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

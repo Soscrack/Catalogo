@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973934,
+    "idProducto": 99745,
+    "codigoProducto": "17RTPA",
+    "nombreProducto": "REMACHE POP ALA ANCHA 4.8MM 21MM 200",
+    "idTitulo": 900399,
+    "valorTitulo": "0.003 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973934,
+    "idProducto": 99745,
+    "codigoProducto": "17RTPA",
+    "nombreProducto": "REMACHE POP ALA ANCHA 4.8MM 21MM 200",
+    "idTitulo": 900412,
+    "valorTitulo": "200",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

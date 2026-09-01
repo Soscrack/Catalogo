@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 731902,
+    "idMultimedia": 13970,
+    "adjunto": "perno-j-con-tca-51680x412_27572.jpg",
+    "nombre": "731902sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 731902,
+    "idMultimedia": 13971,
+    "adjunto": "https://www.mamutstore.com/producto/perno-j-con-tuerca/?srsltid=AfmBOooTomw9CgXCj66TINXyh-iYUgokV72bTBFNmiGOr__e7JIe94sV",
+    "nombre": "973904sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

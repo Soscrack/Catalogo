@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 631285,
+    "idMultimedia": 5733,
+    "adjunto": "PMB.jpg",
+    "nombre": "631285 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 631285,
+    "idMultimedia": 13339,
+    "adjunto": "https://www.mamutstore.com/producto/perno-cocina-rosca-metrica-cabeza-binding/?srsltid=AfmBOop9eARwa1cRjziH2APdRTishnAE72dU5RjCKL-yvMPh3zkK5Ghx",
+    "nombre": "973498sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

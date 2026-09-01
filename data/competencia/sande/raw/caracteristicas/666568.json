@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974119,
+    "idProducto": 666568,
+    "codigoProducto": "06ARG",
+    "nombreProducto": "ARGOLLA 5X30MM",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974119,
+    "idProducto": 666568,
+    "codigoProducto": "06ARG",
+    "nombreProducto": "ARGOLLA 5X30MM",
+    "idTitulo": 900412,
+    "valorTitulo": "15",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

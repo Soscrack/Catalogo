@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 498818,
+    "idMultimedia": 14899,
+    "adjunto": "tornillo-techo-pan-comb-12x412-zinc_15945.jpg",
+    "nombre": "498818sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 498818,
+    "idMultimedia": 14900,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-para-techo-cabeza-pan-ranura-combinada/?srsltid=AfmBOooNZocbo5H4FRAha7ViXI5zxX7R8QWTIwLG6usV-sXhRkKyZrF6",
+    "nombre": "498818sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 498818,
+    "idMultimedia": 14901,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-para-techo-cabeza-pan-ranura-combinada/?srsltid=AfmBOooNZocbo5H4FRAha7ViXI5zxX7R8QWTIwLG6usV-sXhRkKyZrF6",
+    "nombre": "974006sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

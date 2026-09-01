@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 622884,
+    "idMultimedia": 4500,
+    "adjunto": "TOO.jpg",
+    "nombre": "622884 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 622884,
+    "idMultimedia": 14896,
+    "adjunto": "https://www.mamutstore.com/producto/tensor-ojo-ojo/?srsltid=AfmBOopIe4AhWmmKvrdfoihIfDVF8awHrjxbJzsUzPk-O3blPQkAFOJ7",
+    "nombre": "973952sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 622884,
+    "idMultimedia": 14898,
+    "adjunto": "tensor-ojo-ojo_84379.pdf",
+    "nombre": "973952sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

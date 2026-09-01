@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973953,
+    "idProducto": 622877,
+    "codigoProducto": "03TGO",
+    "nombreProducto": "TENSOR GANCHO OJO 1/4X8.7/16",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973953,
+    "idProducto": 622877,
+    "codigoProducto": "03TGO",
+    "nombreProducto": "TENSOR GANCHO OJO 1/4X8.7/16",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

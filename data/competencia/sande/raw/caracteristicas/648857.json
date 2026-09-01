@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973807,
+    "idProducto": 648857,
+    "codigoProducto": "39RLHG",
+    "nombreProducto": "TORNILLO ROSCALATA HEXAGONAL C/GOLILLA 1/4-14 1\" FINA ZINC",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973807,
+    "idProducto": 648857,
+    "codigoProducto": "39RLHG",
+    "nombreProducto": "TORNILLO ROSCALATA HEXAGONAL C/GOLILLA 1/4-14 1\" FINA ZINC",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

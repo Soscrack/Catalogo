@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973795,
+    "idProducto": 625262,
+    "codigoProducto": "107CELM",
+    "nombreProducto": "CAD E.LARGO D-763 5MM[27X1]",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973795,
+    "idProducto": 625262,
+    "codigoProducto": "107CELM",
+    "nombreProducto": "CAD E.LARGO D-763 5MM[27X1]",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

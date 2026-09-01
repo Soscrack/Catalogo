@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 501313,
+    "idMultimedia": 5618,
+    "adjunto": "TRN.jpg",
+    "nombre": "501313 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 501313,
+    "idMultimedia": 14329,
+    "adjunto": "tarugo-de-nylon_56848.pdf",
+    "nombre": "973960sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 501313,
+    "idMultimedia": 14330,
+    "adjunto": "https://www.mamutstore.com/producto/tarugo-de-nylon/?srsltid=AfmBOoq90qZdVfsWntz4420xrghkBfE6D1zJr4kBH9obQ27S9V9kln9a",
+    "nombre": "973960sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

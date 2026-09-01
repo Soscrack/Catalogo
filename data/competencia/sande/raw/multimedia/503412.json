@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 503412,
+    "idMultimedia": 6240,
+    "adjunto": "120TFCA.jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 503412,
+    "idMultimedia": 14071,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-avellanante-fibrocemento-internit-punta-broca/?srsltid=AfmBOoqGtI8bCn8jlQsUR4eTYODhV3CsQzFwfRdrFBlpZw9T0USYUvpi",
+    "nombre": "973920sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

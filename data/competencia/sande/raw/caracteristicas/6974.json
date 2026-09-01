@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974012,
+    "idProducto": 6974,
+    "codigoProducto": "02TCC",
+    "nombreProducto": "TUERCA COCINA CUADRADA NC #8-32[5/32]",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974012,
+    "idProducto": 6974,
+    "codigoProducto": "02TCC",
+    "nombreProducto": "TUERCA COCINA CUADRADA NC #8-32[5/32]",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

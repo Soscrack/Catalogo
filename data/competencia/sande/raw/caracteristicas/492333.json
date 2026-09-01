@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973872,
+    "idProducto": 492333,
+    "codigoProducto": "K08TMPA",
+    "nombreProducto": "TOR.MAD.AGDA #6[3.5]X40",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973872,
+    "idProducto": 492333,
+    "codigoProducto": "K08TMPA",
+    "nombreProducto": "TOR.MAD.AGDA #6[3.5]X40",
+    "idTitulo": 900412,
+    "valorTitulo": "63",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

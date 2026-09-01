@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 665596,
+    "idMultimedia": 12231,
+    "adjunto": "abrazadera-cable-oval-2mm-zincado_73941.jpg",
+    "nombre": "665596sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 665596,
+    "idMultimedia": 12236,
+    "adjunto": "https://www.mamutstore.com/producto/apco-abrazaderas-cable-oval/?srsltid=AfmBOoq-QDZTlVhJm9ocyXNqpxU06x1ujr6QJUAJMT-9MiEPiS90EfCu",
+    "nombre": "973453sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

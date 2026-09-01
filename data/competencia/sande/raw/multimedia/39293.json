@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 39293,
+    "idMultimedia": 13149,
+    "adjunto": "golilla-plana-calibrada-14-zinc-100_30331.jpg",
+    "nombre": "39293sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

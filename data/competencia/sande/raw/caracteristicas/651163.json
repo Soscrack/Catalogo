@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973961,
+    "idProducto": 651163,
+    "codigoProducto": "10THM8",
+    "nombreProducto": "TUERCA HEXAGONAL M20-2.5 8.8",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973961,
+    "idProducto": 651163,
+    "codigoProducto": "10THM8",
+    "nombreProducto": "TUERCA HEXAGONAL M20-2.5 8.8",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 6968,
+    "idMultimedia": 14104,
+    "adjunto": "taco-anclaje-14-20-100_56296.jpg",
+    "nombre": "6968sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 6968,
+    "idMultimedia": 14110,
+    "adjunto": "https://www.mamutstore.com/producto/taco-de-anclaje-unc/?srsltid=AfmBOooMvPkbVy0RUMyWas0c0xrdla0C6ycpFqwJdAE84D9xjBle6_FE",
+    "nombre": "973083sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

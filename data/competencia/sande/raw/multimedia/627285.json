@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 627285,
+    "idMultimedia": 8863,
+    "adjunto": "D_NQ_NP_916997-MLC73027625576_112023-O_27136.jpg",
+    "nombre": "237184sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

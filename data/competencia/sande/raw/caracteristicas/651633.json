@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973802,
+    "idProducto": 651633,
+    "codigoProducto": "KR102RHPV",
+    "nombreProducto": "AUTOPERFORANTE PANEL GOL-EPDM 12-14 1.1/4 50MM BROCA RUSPERT 2000",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973802,
+    "idProducto": 651633,
+    "codigoProducto": "KR102RHPV",
+    "nombreProducto": "AUTOPERFORANTE PANEL GOL-EPDM 12-14 1.1/4 50MM BROCA RUSPERT 2000",
+    "idTitulo": 900412,
+    "valorTitulo": "0",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 659842,
+    "idMultimedia": 13239,
+    "adjunto": "clavo-losa-colaborante-tspit-37x1_15727.jpg",
+    "nombre": "659842sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 659842,
+    "idMultimedia": 13206,
+    "adjunto": "conector-losa-colaborante_17635.pdf",
+    "nombre": "973559sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

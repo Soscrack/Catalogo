@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973896,
+    "idProducto": 666838,
+    "codigoProducto": "10HPMI",
+    "nombreProducto": "HILO X METRO INOXIDABLE 5/8\"-11 1MT",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973896,
+    "idProducto": 666838,
+    "codigoProducto": "10HPMI",
+    "nombreProducto": "HILO X METRO INOXIDABLE 5/8\"-11 1MT",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

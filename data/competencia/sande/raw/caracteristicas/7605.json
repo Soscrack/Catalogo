@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974009,
+    "idProducto": 7605,
+    "codigoProducto": "204TTR",
+    "nombreProducto": "TORNILLO TECHO PAN RECTA #12X2\" ZINC 1GRUESA(144U)",
+    "idTitulo": 900399,
+    "valorTitulo": "0.008 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974009,
+    "idProducto": 7605,
+    "codigoProducto": "204TTR",
+    "nombreProducto": "TORNILLO TECHO PAN RECTA #12X2\" ZINC 1GRUESA(144U)",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

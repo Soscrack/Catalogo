@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 490147,
+    "idMultimedia": 4126,
+    "adjunto": "ATM.jpg",
+    "nombre": "490147 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 490147,
+    "idMultimedia": 13282,
+    "adjunto": "https://www.mamutstore.com/producto/anclaje-tipo-mariposa/?srsltid=AfmBOopODAGRscuX0ZuiAUKxxKBYxSUlX3QzBGvmdGAqVkFYC9kkQ79q",
+    "nombre": "973874sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

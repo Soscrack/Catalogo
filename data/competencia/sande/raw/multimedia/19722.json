@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 19722,
+    "idMultimedia": 4207,
+    "adjunto": "05FV27.jpg",
+    "nombre": "19722 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 19722,
+    "idMultimedia": 16444,
+    "adjunto": "https://www.youtube.com/watch?v=1ebslA1hjZQ",
+    "nombre": "19722sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 19722,
+    "idMultimedia": 13286,
+    "adjunto": "https://www.mamutstore.com/producto/fv27-fulminante-en-vaina-calibre-27/?srsltid=AfmBOorayTVJQqiCjhTL-SgDbKfqgWZYyvFPmfB3JYSIy2v-TESMrgNC",
+    "nombre": "973555sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

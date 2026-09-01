@@ -1,0 +1,122 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973344,
+    "idProducto": 63831,
+    "codigoProducto": "F05TAD-S",
+    "nombreProducto": "TORNILLO VOLCANITA CRS #6-18 2.1/4\" 3.4MM FOSF 200",
+    "idTitulo": 13183,
+    "valorTitulo": "TORNILLO VOLCANITA",
+    "titulo": "NOMBRE",
+    "orden": 1
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973344,
+    "idProducto": 63831,
+    "codigoProducto": "F05TAD-S",
+    "nombreProducto": "TORNILLO VOLCANITA CRS #6-18 2.1/4\" 3.4MM FOSF 200",
+    "idTitulo": 13973,
+    "valorTitulo": "",
+    "titulo": "TIPO",
+    "orden": 2
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973344,
+    "idProducto": 63831,
+    "codigoProducto": "F05TAD-S",
+    "nombreProducto": "TORNILLO VOLCANITA CRS #6-18 2.1/4\" 3.4MM FOSF 200",
+    "idTitulo": 900321,
+    "valorTitulo": "#6-18",
+    "titulo": "D NOMINAL",
+    "orden": 3
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973344,
+    "idProducto": 63831,
+    "codigoProducto": "F05TAD-S",
+    "nombreProducto": "TORNILLO VOLCANITA CRS #6-18 2.1/4\" 3.4MM FOSF 200",
+    "idTitulo": 12730,
+    "valorTitulo": "2.1/4\"",
+    "titulo": "LARGO",
+    "orden": 4
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973344,
+    "idProducto": 63831,
+    "codigoProducto": "F05TAD-S",
+    "nombreProducto": "TORNILLO VOLCANITA CRS #6-18 2.1/4\" 3.4MM FOSF 200",
+    "idTitulo": 12447,
+    "valorTitulo": "3.4MM",
+    "titulo": "D CABEZA",
+    "orden": 5
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973344,
+    "idProducto": 63831,
+    "codigoProducto": "F05TAD-S",
+    "nombreProducto": "TORNILLO VOLCANITA CRS #6-18 2.1/4\" 3.4MM FOSF 200",
+    "idTitulo": 13534,
+    "valorTitulo": "FINA",
+    "titulo": "PUNTA",
+    "orden": 6
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973344,
+    "idProducto": 63831,
+    "codigoProducto": "F05TAD-S",
+    "nombreProducto": "TORNILLO VOLCANITA CRS #6-18 2.1/4\" 3.4MM FOSF 200",
+    "idTitulo": 900329,
+    "valorTitulo": "FOSF",
+    "titulo": "RECUBRIMIENTO",
+    "orden": 7
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973344,
+    "idProducto": 63831,
+    "codigoProducto": "F05TAD-S",
+    "nombreProducto": "TORNILLO VOLCANITA CRS #6-18 2.1/4\" 3.4MM FOSF 200",
+    "idTitulo": 398,
+    "valorTitulo": "",
+    "titulo": "CABEZA",
+    "orden": 8
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973344,
+    "idProducto": 63831,
+    "codigoProducto": "F05TAD-S",
+    "nombreProducto": "TORNILLO VOLCANITA CRS #6-18 2.1/4\" 3.4MM FOSF 200",
+    "idTitulo": 900399,
+    "valorTitulo": "0.002 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973344,
+    "idProducto": 63831,
+    "codigoProducto": "F05TAD-S",
+    "nombreProducto": "TORNILLO VOLCANITA CRS #6-18 2.1/4\" 3.4MM FOSF 200",
+    "idTitulo": 900412,
+    "valorTitulo": "200",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

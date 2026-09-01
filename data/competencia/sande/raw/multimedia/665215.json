@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 665215,
+    "idMultimedia": 13831,
+    "adjunto": "perno-hexagonal-g8-unc-1-8-2-12_89644.jpg",
+    "nombre": "665215sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

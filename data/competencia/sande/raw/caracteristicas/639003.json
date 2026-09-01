@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973951,
+    "idProducto": 639003,
+    "codigoProducto": "09SPC",
+    "nombreProducto": "SOPORTE MULTIUSO 19 X 20",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973951,
+    "idProducto": 639003,
+    "codigoProducto": "09SPC",
+    "nombreProducto": "SOPORTE MULTIUSO 19 X 20",
+    "idTitulo": 900412,
+    "valorTitulo": "20",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

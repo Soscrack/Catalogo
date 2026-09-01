@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 654917,
+    "codigoProducto": "15PCPP",
+    "nombreProducto": "PERNO COCINA PLANA PHILLIPS #8-32[5/32]X3/8",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 654917,
+    "codigoProducto": "15PCPP",
+    "nombreProducto": "PERNO COCINA PLANA PHILLIPS #8-32[5/32]X3/8",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

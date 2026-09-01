@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973803,
+    "idProducto": 627664,
+    "codigoProducto": "R10RHPVI",
+    "nombreProducto": "ROSCALATA AUTOPERFORANTE CABEZA HEXAGONAL 12-24 1/4-14 0.00",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973803,
+    "idProducto": 627664,
+    "codigoProducto": "R10RHPVI",
+    "nombreProducto": "ROSCALATA AUTOPERFORANTE CABEZA HEXAGONAL 12-24 1/4-14 0.00",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

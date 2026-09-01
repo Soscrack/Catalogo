@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973765,
+    "idProducto": 633642,
+    "codigoProducto": "K01TACT",
+    "nombreProducto": "TAPA NYLON C/TUERCA 79X3/8-16 200U",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973765,
+    "idProducto": 633642,
+    "codigoProducto": "K01TACT",
+    "nombreProducto": "TAPA NYLON C/TUERCA 79X3/8-16 200U",
+    "idTitulo": 900412,
+    "valorTitulo": "200",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

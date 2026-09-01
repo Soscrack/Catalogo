@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973254,
+    "idProducto": 6991,
+    "codigoProducto": "204TCH",
+    "nombreProducto": "T.COC.HEX.MT M6-1.0",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973254,
+    "idProducto": 6991,
+    "codigoProducto": "204TCH",
+    "nombreProducto": "T.COC.HEX.MT M6-1.0",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

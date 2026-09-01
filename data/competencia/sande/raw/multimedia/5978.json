@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 5978,
+    "idMultimedia": 4677,
+    "adjunto": "PH2 01-12 Y 161-167.jpg",
+    "nombre": "5978 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 5978,
+    "idMultimedia": 13752,
+    "adjunto": "https://www.mamutstore.com/producto/perno-hexagonal-grado-2-uncbsw/?srsltid=AfmBOopGr7XPGDIdmBf3_5mJJDx4ZmQSMdaPc1fw6oRQx0VeD4lpufVv",
+    "nombre": "972654sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

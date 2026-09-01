@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973802,
+    "idProducto": 661968,
+    "codigoProducto": "KR212RHPV",
+    "nombreProducto": "AUTOPERFORANTE PANEL GOL-EPDM 1/4-20 216MM BROCA RUSPERT",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973802,
+    "idProducto": 661968,
+    "codigoProducto": "KR212RHPV",
+    "nombreProducto": "AUTOPERFORANTE PANEL GOL-EPDM 1/4-20 216MM BROCA RUSPERT",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

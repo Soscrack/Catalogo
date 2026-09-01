@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973557,
+    "idProducto": 655469,
+    "codigoProducto": "05FS22",
+    "nombreProducto": "FULMINANTE SUELTO CALIBRE .22 CALIBRE 22 ROJO",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973557,
+    "idProducto": 655469,
+    "codigoProducto": "05FS22",
+    "nombreProducto": "FULMINANTE SUELTO CALIBRE .22 CALIBRE 22 ROJO",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

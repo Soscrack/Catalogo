@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973941,
+    "idProducto": 622222,
+    "codigoProducto": "112RTPX",
+    "nombreProducto": "REMACHE POP INOX/INOX 4.0MM 8MM 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973941,
+    "idProducto": 622222,
+    "codigoProducto": "112RTPX",
+    "nombreProducto": "REMACHE POP INOX/INOX 4.0MM 8MM 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

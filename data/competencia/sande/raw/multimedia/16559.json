@@ -1,0 +1,50 @@
+[
+  {
+    "idProducto": 16559,
+    "idMultimedia": 17744,
+    "adjunto": "tornillo-roscalata-pan-combinada-6_76644.jpg",
+    "nombre": "16559sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 16559,
+    "idMultimedia": 14478,
+    "adjunto": "https://www.youtube.com/watch?v=reg55ajBYGA",
+    "nombre": "973971sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 16559,
+    "idMultimedia": 14474,
+    "adjunto": "https://www.mamutstore.com/producto/roscalata-cabeza-pan-ranura-combinada/?srsltid=AfmBOooN1S7KiOH5t-44_16sfeTKkdYaRf9clPLJlqQuGYYsavmgev01",
+    "nombre": "973971sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 16559,
+    "idMultimedia": 14477,
+    "adjunto": "roscalata-cabeza-pan-ranura-combinada_32387.pdf",
+    "nombre": "973971sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

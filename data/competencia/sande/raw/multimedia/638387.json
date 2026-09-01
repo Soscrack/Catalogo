@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 638387,
+    "idMultimedia": 12854,
+    "adjunto": "cadena-decorativa-eslabn-cuadrado_84059.jpg",
+    "nombre": "638387sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 638387,
+    "idMultimedia": 12855,
+    "adjunto": "cadena-decorativa-eslabn-cuadrado_50056.jpg",
+    "nombre": "638387sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 638387,
+    "idMultimedia": 13630,
+    "adjunto": "cadena-decorativa-eslabn-cuadrado_99015.pdf",
+    "nombre": "973789sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

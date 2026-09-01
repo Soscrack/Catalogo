@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 5400,
+    "idMultimedia": 17784,
+    "adjunto": "perno-de-anclaje-de-cua-58-11-8-20_16618.jpg",
+    "nombre": "5400sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 5400,
+    "idMultimedia": 13512,
+    "adjunto": "https://www.mamutstore.com/producto/perno-de-anclaje-de-cuna-unc/?srsltid=AfmBOopCb8GAoaFh7js4wtuaaH2LotqqX1GM486XixKy1nXpARiOXNSe",
+    "nombre": "973877sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

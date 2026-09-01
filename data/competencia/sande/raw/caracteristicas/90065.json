@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973812,
+    "idProducto": 90065,
+    "codigoProducto": "04GPI",
+    "nombreProducto": "GOLILLA PLANA INOX 1/4",
+    "idTitulo": 900399,
+    "valorTitulo": "0.002 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973812,
+    "idProducto": 90065,
+    "codigoProducto": "04GPI",
+    "nombreProducto": "GOLILLA PLANA INOX 1/4",
+    "idTitulo": 900412,
+    "valorTitulo": "20",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

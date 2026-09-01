@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973909,
+    "idProducto": 490174,
+    "codigoProducto": "150PTA",
+    "nombreProducto": "INSERTO MAGNETICO 1/4\" 60MM 1",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973909,
+    "idProducto": 490174,
+    "codigoProducto": "150PTA",
+    "nombreProducto": "INSERTO MAGNETICO 1/4\" 60MM 1",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

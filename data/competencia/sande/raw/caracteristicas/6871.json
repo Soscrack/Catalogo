@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973954,
+    "idProducto": 6871,
+    "codigoProducto": "16RLP",
+    "nombreProducto": "TORNILLO ROSCALATA PLANA RECTA #10 3/4\" ZINC 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.002 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973954,
+    "idProducto": 6871,
+    "codigoProducto": "16RLP",
+    "nombreProducto": "TORNILLO ROSCALATA PLANA RECTA #10 3/4\" ZINC 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

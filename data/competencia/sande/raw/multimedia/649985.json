@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 649985,
+    "idMultimedia": 13246,
+    "adjunto": "gancho-canal-hojalata-110mm-h80mm-zinc_15383.jpg",
+    "nombre": "649985sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 649985,
+    "idMultimedia": 13243,
+    "adjunto": "https://www.mamutstore.com/producto/gancho-de-canal-hojalata/?srsltid=AfmBOorrDW9ljm0hqZVnG2s-bTR-7zqZmFrX-80vFAQgpd0pmHJbI1dx",
+    "nombre": "973087sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 622799,
+    "idMultimedia": 16368,
+    "adjunto": "perno-hexagonal-g8nc-58-11x2-12_52771.jpg",
+    "nombre": "622799sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

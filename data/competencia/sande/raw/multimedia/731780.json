@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 731780,
+    "idMultimedia": 14222,
+    "adjunto": "roldana-simple-11431x516-79_83142.jpg",
+    "nombre": "731780sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 731780,
+    "idMultimedia": 14736,
+    "adjunto": "https://www.mamutstore.com/producto/roldana-simple/?srsltid=AfmBOop95cyQdLekzqaK1OcXBPKxg8RDiida3D2T2Q4EsG01HwAHgUcN",
+    "nombre": "973950sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

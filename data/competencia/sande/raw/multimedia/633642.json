@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 633642,
+    "idMultimedia": 12589,
+    "adjunto": "tapa-nylon-ctca-79x38-16-200u_77173.jpg",
+    "nombre": "633642sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 633642,
+    "idMultimedia": 12590,
+    "adjunto": "https://www.mamutstore.com/producto/tapa-nylon-con-tuerca/?srsltid=AfmBOopzOSA9w_7Uvj6h_foK_8H3vFUeTtni5oXHNt8hHl1wcBrZNsyR",
+    "nombre": "973765sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

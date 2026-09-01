@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973700,
+    "idProducto": 731718,
+    "codigoProducto": "07CCM",
+    "nombreProducto": "CANCAMO CERRADO ROSCA MADERA 1/2 X 6.3/4\" BRILLANTE",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973700,
+    "idProducto": 731718,
+    "codigoProducto": "07CCM",
+    "nombreProducto": "CANCAMO CERRADO ROSCA MADERA 1/2 X 6.3/4\" BRILLANTE",
+    "idTitulo": 900412,
+    "valorTitulo": "2",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

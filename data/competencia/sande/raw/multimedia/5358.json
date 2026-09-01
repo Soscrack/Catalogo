@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 5358,
+    "idMultimedia": 153,
+    "adjunto": "BGPR.JPG",
+    "nombre": "s/n",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 5358,
+    "idMultimedia": 13196,
+    "adjunto": "https://www.mamutstore.com/producto/golilla-de-presion/?srsltid=AfmBOorGmWE9vfDR0lfCowKiB3xFWNFLX83nPwhVXLeDUIT7e2v5y0T7",
+    "nombre": "972681sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

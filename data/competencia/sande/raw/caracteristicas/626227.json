@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973790,
+    "idProducto": 626227,
+    "codigoProducto": "104CECM",
+    "nombreProducto": "CAD E.CORTO D-766 5MM[26X1]",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973790,
+    "idProducto": 626227,
+    "codigoProducto": "104CECM",
+    "nombreProducto": "CAD E.CORTO D-766 5MM[26X1]",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

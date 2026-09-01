@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 659841,
+    "idMultimedia": 13204,
+    "adjunto": "conector-losa-colaborante-50x95-zinc_31000.jpg",
+    "nombre": "659841sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 659841,
+    "idMultimedia": 13206,
+    "adjunto": "conector-losa-colaborante_17635.pdf",
+    "nombre": "973559sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

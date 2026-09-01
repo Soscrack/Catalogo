@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 631306,
+    "idMultimedia": 14839,
+    "adjunto": "autoperforante-hex-viga-gol-epdm-12-24_41636.jpg",
+    "nombre": "631306sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 631306,
+    "idMultimedia": 14851,
+    "adjunto": "https://www.mamutstore.com/producto/autoperforante-hexagonal-para-viga-inoxidable/?srsltid=AfmBOoqmQ1g8CE5sWifVWYP8mQ-7eU9SwfgtFJP0q0S79OzODD_HIQxC",
+    "nombre": "974001sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

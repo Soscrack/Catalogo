@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 666612,
+    "idMultimedia": 12227,
+    "adjunto": "abrazadera-cable-duplex-6mmx60mm_26274.jpg",
+    "nombre": "666612sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666612,
+    "idMultimedia": 12229,
+    "adjunto": "https://www.mamutstore.com/producto/adpc-abrazaderas-cable-duplex/",
+    "nombre": "973452sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

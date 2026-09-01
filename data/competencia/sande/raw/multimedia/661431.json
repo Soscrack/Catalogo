@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 661431,
+    "idMultimedia": 6465,
+    "adjunto": "03TPVC.jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 661431,
+    "idMultimedia": 12593,
+    "adjunto": "https://www.mamutstore.com/producto/tapa-tornillo-pvc/?srsltid=AfmBOorJ3LP5qfbqnUsEydIOuWcUPGdVizL-UJ9e14aTDjx3Zf1xR3F8",
+    "nombre": "973766sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 661431,
+    "idMultimedia": 12596,
+    "adjunto": "tapa-tornillo-pvc_41673.pdf",
+    "nombre": "973766sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

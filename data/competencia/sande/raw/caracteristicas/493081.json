@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973902,
+    "idProducto": 493081,
+    "codigoProducto": "05PPKP",
+    "nombreProducto": "PERNO PARKER UNC CBZ/PLANA ISO 12.9 1/4-20 1\"",
+    "idTitulo": 900399,
+    "valorTitulo": "0.006 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973902,
+    "idProducto": 493081,
+    "codigoProducto": "05PPKP",
+    "nombreProducto": "PERNO PARKER UNC CBZ/PLANA ISO 12.9 1/4-20 1\"",
+    "idTitulo": 900412,
+    "valorTitulo": "20",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

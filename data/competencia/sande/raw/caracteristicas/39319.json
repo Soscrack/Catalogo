@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973817,
+    "idProducto": 39319,
+    "codigoProducto": "10GPFU",
+    "nombreProducto": "GOLILLA PLANA CORRIENTE 1\" 10",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973817,
+    "idProducto": 39319,
+    "codigoProducto": "10GPFU",
+    "nombreProducto": "GOLILLA PLANA CORRIENTE 1\" 10",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

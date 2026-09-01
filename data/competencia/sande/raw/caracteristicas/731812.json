@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973950,
+    "idProducto": 731812,
+    "codigoProducto": "03ROS",
+    "nombreProducto": "ROLDANA SIMPLE 1\"[25]X1/4 [6.0]",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973950,
+    "idProducto": 731812,
+    "codigoProducto": "03ROS",
+    "nombreProducto": "ROLDANA SIMPLE 1\"[25]X1/4 [6.0]",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

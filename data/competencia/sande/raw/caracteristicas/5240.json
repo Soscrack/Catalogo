@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973972,
+    "idProducto": 5240,
+    "codigoProducto": "01ATP",
+    "nombreProducto": "TORNILLO ATERRAJADOR TIPO F PLANA RECTA #10-32 3/8\" ZINC 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973972,
+    "idProducto": 5240,
+    "codigoProducto": "01ATP",
+    "nombreProducto": "TORNILLO ATERRAJADOR TIPO F PLANA RECTA #10-32 3/8\" ZINC 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

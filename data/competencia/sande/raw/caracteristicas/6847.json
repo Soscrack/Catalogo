@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973970,
+    "idProducto": 6847,
+    "codigoProducto": "15RLO",
+    "nombreProducto": "ROSC OVAL RECTA #8X1\" ZINC 100U",
+    "idTitulo": 900399,
+    "valorTitulo": "0.002 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973970,
+    "idProducto": 6847,
+    "codigoProducto": "15RLO",
+    "nombreProducto": "ROSC OVAL RECTA #8X1\" ZINC 100U",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

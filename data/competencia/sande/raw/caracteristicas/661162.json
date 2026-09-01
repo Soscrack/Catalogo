@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974237,
+    "idProducto": 661162,
+    "codigoProducto": "170TT02",
+    "nombreProducto": "TORNILLO MADERA TORX C/ FRESA Y ROSCA ESPECIAL D 8 L 80/50 100U",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974237,
+    "idProducto": 661162,
+    "codigoProducto": "170TT02",
+    "nombreProducto": "TORNILLO MADERA TORX C/ FRESA Y ROSCA ESPECIAL D 8 L 80/50 100U",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

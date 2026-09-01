@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973386,
+    "idProducto": 664468,
+    "codigoProducto": "07TAC",
+    "nombreProducto": "TUERCA ACOPLE UNC 1/2X11/16X1 3/4",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973386,
+    "idProducto": 664468,
+    "codigoProducto": "07TAC",
+    "nombreProducto": "TUERCA ACOPLE UNC 1/2X11/16X1 3/4",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

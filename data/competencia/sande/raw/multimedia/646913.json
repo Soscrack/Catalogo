@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 646913,
+    "idMultimedia": 17119,
+    "adjunto": "anclaje-hex-sismico-10-80mm10mm-50_78736.png",
+    "nombre": "646913sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 646913,
+    "idMultimedia": 15966,
+    "adjunto": "https://www.mamutstore.com/producto/anclaje-para-hormigon-cab-hexagonal-antisismico/?srsltid=AfmBOoqR1zVdAvrIHRHQs_lArxqo6T7R7tO_gGSfpvzJ2zhjwkW7rRjC",
+    "nombre": "974073sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

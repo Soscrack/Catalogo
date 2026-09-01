@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 506155,
+    "idMultimedia": 13700,
+    "adjunto": "hilo-x-metro-a193-b7-12-13-37mt_56479.jpg",
+    "nombre": "506155sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 506155,
+    "idMultimedia": 13694,
+    "adjunto": "https://www.mamutstore.com/producto/esparrago-de-3-7-mt-a193-b7/?srsltid=AfmBOoqvgXWcW2D9Rp80cPoGgpLYiOl3vUIui2uwQzXolBPcILRk1f6S",
+    "nombre": "973897sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

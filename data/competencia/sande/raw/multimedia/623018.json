@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 623018,
+    "idMultimedia": 6445,
+    "adjunto": "05TGO.jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 623018,
+    "idMultimedia": 14802,
+    "adjunto": "https://www.mamutstore.com/producto/tensor-gancho-ojo/?srsltid=AfmBOoo43i6mkhah-XOMwjjvrwyC_yKeEQXarTZEHvAwJ480iOs40mFQ",
+    "nombre": "973953sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

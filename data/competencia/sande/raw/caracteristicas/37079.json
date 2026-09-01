@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973933,
+    "idProducto": 37079,
+    "codigoProducto": "105RTPS",
+    "nombreProducto": "REMACHE POP ABIERTO ACERO/ACERO 3.2MM 15.9MM 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973933,
+    "idProducto": 37079,
+    "codigoProducto": "105RTPS",
+    "nombreProducto": "REMACHE POP ABIERTO ACERO/ACERO 3.2MM 15.9MM 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

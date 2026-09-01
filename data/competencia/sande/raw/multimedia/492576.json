@@ -1,0 +1,50 @@
+[
+  {
+    "idProducto": 492576,
+    "idMultimedia": 1008,
+    "adjunto": "HEX SGOL PBROCA 8.png",
+    "nombre": "s/n",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 492576,
+    "idMultimedia": 12749,
+    "adjunto": "https://www.mamutstore.com/producto/autoperforante-hexagonal-sin-golilla/",
+    "nombre": "973550sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 492576,
+    "idMultimedia": 12751,
+    "adjunto": "autoperforante-hexagonal-sgolilla_87145.pdf",
+    "nombre": "973550sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 492576,
+    "idMultimedia": 11203,
+    "adjunto": "https://www.youtube.com/watch?v=cvuEkyqmhm4",
+    "nombre": "973550sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

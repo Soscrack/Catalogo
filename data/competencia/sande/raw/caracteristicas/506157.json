@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973897,
+    "idProducto": 506157,
+    "codigoProducto": "12HB7",
+    "nombreProducto": "HILO X METRO A193 B7 7/8-9X3.7 MT",
+    "idTitulo": 900399,
+    "valorTitulo": "9.35 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973897,
+    "idProducto": 506157,
+    "codigoProducto": "12HB7",
+    "nombreProducto": "HILO X METRO A193 B7 7/8-9X3.7 MT",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

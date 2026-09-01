@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 6639,
+    "idMultimedia": 14195,
+    "adjunto": "remache-hojalata-plana-64mm-10mm-5_61855.jpg",
+    "nombre": "6639sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

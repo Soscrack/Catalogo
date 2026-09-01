@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 665463,
+    "idMultimedia": 14673,
+    "adjunto": "tornillo-roscalata-truss-phillips-8-18_11773.jpg",
+    "nombre": "665463sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 665463,
+    "idMultimedia": 14752,
+    "adjunto": "https://www.mamutstore.com/producto/rltp-roscalata-cabeza-truss-ranura-phillips/?srsltid=AfmBOorTutZ8t8j2p2ZlqpnAxtN8Z-3EwmK9BSzJGZ-e0_5fMsKxkAHo",
+    "nombre": "973990sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

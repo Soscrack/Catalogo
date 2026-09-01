@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 662653,
+    "idMultimedia": 14244,
+    "adjunto": "tuerca-hex-cflange-g5-14-20-brillante_32179.jpg",
+    "nombre": "662653sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 662653,
+    "idMultimedia": 14504,
+    "adjunto": "https://www.mamutstore.com/producto/tfa-tuerca-hexagonal-con-flange-grado-5/?srsltid=AfmBOopXlMhBb-uf_aXmUrDEyuIBQLJImW-niUU5en3TAh6LjCu3oyDF",
+    "nombre": "973964sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 666680,
+    "idMultimedia": 18384,
+    "adjunto": "tuerca-remachable-8-32x1150_55196.jpg",
+    "nombre": "666680sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666680,
+    "idMultimedia": 14552,
+    "adjunto": "https://www.mamutstore.com/producto/tuerca-remachable/?srsltid=AfmBOopjwoF01KKeotvwMb-NqhV4DrjRAa7zgHY0fAzk1gV1FSUoQ1K0",
+    "nombre": "973981sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

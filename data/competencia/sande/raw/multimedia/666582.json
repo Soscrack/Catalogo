@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 666582,
+    "idMultimedia": 17235,
+    "adjunto": "pernoojostca-12mmx20mm_65649.jpg",
+    "nombre": "666582sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666582,
+    "idMultimedia": 17236,
+    "adjunto": "https://www.mamutstore.com/producto/post-perno-de-ojo/?srsltid=AfmBOopjGXACWHASpCdmU_IQBJ8a3zLTKZMLbtXEBtIqHoxEvMZT8xUI",
+    "nombre": "666582sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 666582,
+    "idMultimedia": 17238,
+    "adjunto": "https://www.mamutstore.com/producto/post-perno-de-ojo/?srsltid=AfmBOopjGXACWHASpCdmU_IQBJ8a3zLTKZMLbtXEBtIqHoxEvMZT8xUI",
+    "nombre": "974114sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

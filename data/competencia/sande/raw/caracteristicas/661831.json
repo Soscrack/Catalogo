@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973987,
+    "idProducto": 661831,
+    "codigoProducto": "29RLBI",
+    "nombreProducto": "TORNILLO ROSCALATA PAN PHILLIPS #10 4.8MM 1.1/2\" FINA INOX",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973987,
+    "idProducto": 661831,
+    "codigoProducto": "29RLBI",
+    "nombreProducto": "TORNILLO ROSCALATA PAN PHILLIPS #10 4.8MM 1.1/2\" FINA INOX",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

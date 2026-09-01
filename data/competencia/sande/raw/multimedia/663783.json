@@ -1,0 +1,50 @@
+[
+  {
+    "idProducto": 663783,
+    "idMultimedia": 11088,
+    "adjunto": "TADB_66478.pdf",
+    "nombre": "663783sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 663783,
+    "idMultimedia": 11089,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-volcanita-punta-broca/?srsltid=AfmBOorl8rLLjZ4KjuIKAux0DEfXstJw7RQGqqSf5kGwCjawM4B8iHLe",
+    "nombre": "663783sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 663783,
+    "idMultimedia": 14068,
+    "adjunto": "tornillo-fibrocemento-6-114-broca_13159.jpg",
+    "nombre": "663783sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 663783,
+    "idMultimedia": 14069,
+    "adjunto": "https://www.mamutstore.com/producto/tadib-tornillo-avellanante-para-fibrocemento-punta-broca/?srsltid=AfmBOoqNtDiGYssx85OgZIoXgYLqKwJtEYN_mEe5xAYUCemhrS_U6it3",
+    "nombre": "973919sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

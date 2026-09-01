@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973802,
+    "idProducto": 628355,
+    "codigoProducto": "R108RHPV",
+    "nombreProducto": "AUTOPERFORANTE PANEL GOL-EPDM 12-14 1/4-14 155MM BROCA RUSPERT",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973802,
+    "idProducto": 628355,
+    "codigoProducto": "R108RHPV",
+    "nombreProducto": "AUTOPERFORANTE PANEL GOL-EPDM 12-14 1/4-14 155MM BROCA RUSPERT",
+    "idTitulo": 900412,
+    "valorTitulo": "0",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

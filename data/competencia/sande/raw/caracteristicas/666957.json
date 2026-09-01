@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 666957,
+    "codigoProducto": "27PCPP",
+    "nombreProducto": "P.COC.PNA.PH #10-24[3/16]X5/8",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 666957,
+    "codigoProducto": "27PCPP",
+    "nombreProducto": "P.COC.PNA.PH #10-24[3/16]X5/8",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

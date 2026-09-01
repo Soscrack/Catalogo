@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 622842,
+    "idMultimedia": 14766,
+    "adjunto": "tarugo-nylon-8x40mm-1000_71792.jpg",
+    "nombre": "622842sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 622842,
+    "idMultimedia": 14329,
+    "adjunto": "tarugo-de-nylon_56848.pdf",
+    "nombre": "973960sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 622842,
+    "idMultimedia": 14330,
+    "adjunto": "https://www.mamutstore.com/producto/tarugo-de-nylon/?srsltid=AfmBOoq90qZdVfsWntz4420xrghkBfE6D1zJr4kBH9obQ27S9V9kln9a",
+    "nombre": "973960sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

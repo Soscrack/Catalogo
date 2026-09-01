@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973955,
+    "idProducto": 667948,
+    "codigoProducto": "32TCMH",
+    "nombreProducto": "TIRAFONDO TURBO 10.0X80",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973955,
+    "idProducto": 667948,
+    "codigoProducto": "32TCMH",
+    "nombreProducto": "TIRAFONDO TURBO 10.0X80",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

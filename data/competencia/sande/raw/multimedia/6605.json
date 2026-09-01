@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 6605,
+    "idMultimedia": 14116,
+    "adjunto": "rem-alum-redonda-40x25mm-100u_51083.jpg",
+    "nombre": "6605sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 6605,
+    "idMultimedia": 14177,
+    "adjunto": "https://www.mamutstore.com/producto/remache-de-aluminio-cabeza-redonda/?srsltid=AfmBOoo1_6rfldi4QsWgkz6oxprv0M8leZnIHppJ1gNCzAplIGNT1B2h",
+    "nombre": "973931sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

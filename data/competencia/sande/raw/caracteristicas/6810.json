@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973984,
+    "idProducto": 6810,
+    "codigoProducto": "N29RLB",
+    "nombreProducto": "TORNILLO ROSCALATA PAN RECTA #10 1.1/4\" ZINC-N 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.003 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973984,
+    "idProducto": 6810,
+    "codigoProducto": "N29RLB",
+    "nombreProducto": "TORNILLO ROSCALATA PAN RECTA #10 1.1/4\" ZINC-N 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 6129,
+    "idMultimedia": 13803,
+    "adjunto": "perno-hexagonal-g5nc-38-16x12_92285.jpg",
+    "nombre": "6129sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 6129,
+    "idMultimedia": 13787,
+    "adjunto": "https://www.mamutstore.com/producto/perno-hexagonal-grado-5-unc/?srsltid=AfmBOorDt42rESuVQgOHhk7JDz4vbmNmJcMc6ZzTA-iKJrue5TsFedgW",
+    "nombre": "973072sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

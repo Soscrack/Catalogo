@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 650606,
+    "idMultimedia": 13828,
+    "adjunto": "perno-hexagonal-g8nc-34-10x2_22242.jpg",
+    "nombre": "650606sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

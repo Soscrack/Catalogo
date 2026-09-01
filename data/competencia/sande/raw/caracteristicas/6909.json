@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973954,
+    "idProducto": 6909,
+    "codigoProducto": "N04RLP",
+    "nombreProducto": "ROSCALATA PLANA RECTA #6 3/8\" ZINC-N 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0005 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973954,
+    "idProducto": 6909,
+    "codigoProducto": "N04RLP",
+    "nombreProducto": "ROSCALATA PLANA RECTA #6 3/8\" ZINC-N 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

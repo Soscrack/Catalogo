@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973995,
+    "idProducto": 665700,
+    "codigoProducto": "03ATB",
+    "nombreProducto": "ATERRAJADOR TIPO F CABEZA PAN #8-32 X 3/8\" ZINC",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973995,
+    "idProducto": 665700,
+    "codigoProducto": "03ATB",
+    "nombreProducto": "ATERRAJADOR TIPO F CABEZA PAN #8-32 X 3/8\" ZINC",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

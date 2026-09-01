@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974013,
+    "idProducto": 12800,
+    "codigoProducto": "B201THM",
+    "nombreProducto": "TUERCA HEXAGONAL MÉTRICA ISO C/5 M5-0.8 ZINC 100U",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974013,
+    "idProducto": 12800,
+    "codigoProducto": "B201THM",
+    "nombreProducto": "TUERCA HEXAGONAL MÉTRICA ISO C/5 M5-0.8 ZINC 100U",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

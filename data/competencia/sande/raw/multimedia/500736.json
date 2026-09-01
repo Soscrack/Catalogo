@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 500736,
+    "idMultimedia": 6024,
+    "adjunto": "30RLPP.jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 500736,
+    "idMultimedia": 14761,
+    "adjunto": "roscalata-cabeza-plana-ranura-phillips_70255.pdf",
+    "nombre": "973973sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 500736,
+    "idMultimedia": 14756,
+    "adjunto": "https://www.mamutstore.com/producto/roscalata-cabeza-plana-ranura-phillips/?srsltid=AfmBOoqD5XfJlyvYXcq7-bzmmsoakoOPpfcnNDmnFXePml45eReYQ2Zn",
+    "nombre": "973973sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

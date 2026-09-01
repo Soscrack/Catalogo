@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 636855,
+    "idMultimedia": 8973,
+    "adjunto": "01-GCMA_74458.jpg",
+    "nombre": "237184sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 636855,
+    "idMultimedia": 13105,
+    "adjunto": "https://www.mamutstore.com/producto/gancho-costanera-madera/?srsltid=AfmBOooaNUVOATgiCAgo_pJ3lnr9AK20ikmaKAcnZOeW9JlHAuSQVD6N",
+    "nombre": "973811sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973931,
+    "idProducto": 6599,
+    "codigoProducto": "21RAR",
+    "nombreProducto": "REM ALUM REDONDA #4.0X6MM 100U",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0004 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973931,
+    "idProducto": 6599,
+    "codigoProducto": "21RAR",
+    "nombreProducto": "REM ALUM REDONDA #4.0X6MM 100U",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

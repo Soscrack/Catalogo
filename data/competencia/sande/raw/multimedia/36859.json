@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 36859,
+    "idMultimedia": 14121,
+    "adjunto": "rem-pop-abierto-40x102mm-acero-acero_36682.jpg",
+    "nombre": "36859sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 36859,
+    "idMultimedia": 14720,
+    "adjunto": "https://www.mamutstore.com/producto/remache-tipo-pop-acero/?srsltid=AfmBOooWCcjC-STtxevLciFiFOvfL7qtFu7Yklj7G-Abby_kvvbO_bXr",
+    "nombre": "973933sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,98 @@
+[
+  {
+    "idProducto": 654493,
+    "idMultimedia": 17684,
+    "adjunto": "tornillo-volcanita-rosca-madera-crs_22985.jpg",
+    "nombre": "654493sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 654493,
+    "idMultimedia": 11221,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-volcanita-rosca-madera-crs/?srsltid=AfmBOoq45YZJzp5-YCmm1taxN0Yg4G7LmvkPbJto9i4hvVMCbgRn6EuM",
+    "nombre": "973344sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 654493,
+    "idMultimedia": 11222,
+    "adjunto": "tornillo-volcanita-rosca-madera-crs_66450.pdf",
+    "nombre": "973344sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 654493,
+    "idMultimedia": 11223,
+    "adjunto": "tornillo-volcanita-rosca-madera-crs_78095.pdf",
+    "nombre": "973344sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 654493,
+    "idMultimedia": 11224,
+    "adjunto": "tornillo-volcanita-rosca-madera-crs_57353.pdf",
+    "nombre": "973344sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 654493,
+    "idMultimedia": 11225,
+    "adjunto": "tornillo-volcanita-rosca-madera-crs_47991.pdf",
+    "nombre": "973344sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 654493,
+    "idMultimedia": 11226,
+    "adjunto": "tornillo-volcanita-rosca-madera-crs_37891.pdf",
+    "nombre": "973344sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 654493,
+    "idMultimedia": 11227,
+    "adjunto": "tornillo-volcanita-rosca-madera-crs_65528.pdf",
+    "nombre": "973344sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

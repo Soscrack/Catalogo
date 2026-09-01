@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973874,
+    "idProducto": 506178,
+    "codigoProducto": "K18ATM",
+    "nombreProducto": "ANCLAJE MARIPOSA 1/4X6",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973874,
+    "idProducto": 506178,
+    "codigoProducto": "K18ATM",
+    "nombreProducto": "ANCLAJE MARIPOSA 1/4X6",
+    "idTitulo": 900412,
+    "valorTitulo": "400",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

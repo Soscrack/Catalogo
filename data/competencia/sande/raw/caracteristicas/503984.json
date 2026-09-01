@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973903,
+    "idProducto": 503984,
+    "codigoProducto": "130PPK",
+    "nombreProducto": "PERNO PARKER.NC 3/4-10X1 1/2[5X2]",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973903,
+    "idProducto": 503984,
+    "codigoProducto": "130PPK",
+    "nombreProducto": "PERNO PARKER.NC 3/4-10X1 1/2[5X2]",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

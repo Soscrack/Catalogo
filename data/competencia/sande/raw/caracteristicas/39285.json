@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973444,
+    "idProducto": 39285,
+    "codigoProducto": "13GPCU",
+    "nombreProducto": "GOLILLA PLANA CALIBRADA 1\" 10",
+    "idTitulo": 900399,
+    "valorTitulo": "0.03 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973444,
+    "idProducto": 39285,
+    "codigoProducto": "13GPCU",
+    "nombreProducto": "GOLILLA PLANA CALIBRADA 1\" 10",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

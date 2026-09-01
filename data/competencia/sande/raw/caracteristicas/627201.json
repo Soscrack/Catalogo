@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973867,
+    "idProducto": 627201,
+    "codigoProducto": "K04GRI",
+    "nombreProducto": "GRILLETE RECTO 1/4 (6.0)X0 K",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973867,
+    "idProducto": 627201,
+    "codigoProducto": "K04GRI",
+    "nombreProducto": "GRILLETE RECTO 1/4 (6.0)X0 K",
+    "idTitulo": 900412,
+    "valorTitulo": "1000",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

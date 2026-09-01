@@ -1,0 +1,50 @@
+[
+  {
+    "idProducto": 5564,
+    "idMultimedia": 13458,
+    "adjunto": "perno-cocina-plana-5-4018x2_43267.jpg",
+    "nombre": "5564sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 5564,
+    "idMultimedia": 11108,
+    "adjunto": "PCP PERNO COCINA PLANA UNF_90842.pdf",
+    "nombre": "5564sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 5564,
+    "idMultimedia": 11110,
+    "adjunto": "PCP PERNO COCINA PLANA UNF_67330.pdf",
+    "nombre": "5564sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 5564,
+    "idMultimedia": 13457,
+    "adjunto": "https://www.mamutstore.com/producto/perno-cocina-unc-cabeza-plana/?srsltid=AfmBOoormqs_h8kyowWgh-PJKYLdXP43WoS765nqwcRd2L-GByJa7xx-",
+    "nombre": "973506sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

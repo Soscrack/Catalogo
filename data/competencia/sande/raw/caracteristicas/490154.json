@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973914,
+    "idProducto": 490154,
+    "codigoProducto": "04PTA",
+    "nombreProducto": "PUNTA PHILLIPS #1 50MM 1",
+    "idTitulo": 900399,
+    "valorTitulo": "0.01 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973914,
+    "idProducto": 490154,
+    "codigoProducto": "04PTA",
+    "nombreProducto": "PUNTA PHILLIPS #1 50MM 1",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

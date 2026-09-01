@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973496,
+    "idProducto": 16612,
+    "codigoProducto": "146PCRC",
+    "nombreProducto": "PERNO COCINA REDONDA COMBINADA UNC 5/16\"-18 3/4\" 100",
+    "idTitulo": 900399,
+    "valorTitulo": "9 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973496,
+    "idProducto": 16612,
+    "codigoProducto": "146PCRC",
+    "nombreProducto": "PERNO COCINA REDONDA COMBINADA UNC 5/16\"-18 3/4\" 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

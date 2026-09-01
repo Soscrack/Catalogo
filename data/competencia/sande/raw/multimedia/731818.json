@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 731818,
+    "idMultimedia": 14219,
+    "adjunto": "mosqueton-aluminio-50x50-verde_58735.jpg",
+    "nombre": "731818sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 731818,
+    "idMultimedia": 17348,
+    "adjunto": "https://www.mamutstore.com/producto/mosqueton-aluminio/?srsltid=AfmBOoo7oWQJNtpJFQxdP0dpnh0xsdhDOjpCTLCrSUGc7TBa8uHNBeBD",
+    "nombre": "973948sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

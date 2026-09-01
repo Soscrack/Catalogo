@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 504077,
+    "idMultimedia": 4205,
+    "adjunto": "CTE.jpg",
+    "nombre": "504077 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 504077,
+    "idMultimedia": 14885,
+    "adjunto": "https://www.mamutstore.com/producto/624/?srsltid=AfmBOopJzrLhkfbv8avkIkmQ_HgiOGVnf-EAWJ1kokhvgSr8qoLsRhWg",
+    "nombre": "974002sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 504077,
+    "idMultimedia": 14888,
+    "adjunto": "https://www.youtube.com/watch?v=-bLMo15NGqQ",
+    "nombre": "974002sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

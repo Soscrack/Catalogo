@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973813,
+    "idProducto": 503360,
+    "codigoProducto": "12GPS",
+    "nombreProducto": "GOL.PLANA.F-436 2\"",
+    "idTitulo": 900399,
+    "valorTitulo": "0.18 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973813,
+    "idProducto": 503360,
+    "codigoProducto": "12GPS",
+    "nombreProducto": "GOL.PLANA.F-436 2\"",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

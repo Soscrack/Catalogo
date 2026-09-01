@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973980,
+    "idProducto": 7024,
+    "codigoProducto": "03TH1",
+    "nombreProducto": "TUERCA HEXAGONAL UNF G2 3/8\"-24 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.006 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973980,
+    "idProducto": 7024,
+    "codigoProducto": "03TH1",
+    "nombreProducto": "TUERCA HEXAGONAL UNF G2 3/8\"-24 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

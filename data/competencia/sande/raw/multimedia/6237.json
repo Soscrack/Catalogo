@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 6237,
+    "idMultimedia": 4726,
+    "adjunto": "PHM200.jpg",
+    "nombre": "6228 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 6237,
+    "idMultimedia": 13545,
+    "adjunto": "https://www.mamutstore.com/producto/perno-hexagonal-metrico-iso-4-8/?srsltid=AfmBOopKJpSj79wYHtYycoZb716Pq3vV43Z5mergGGs1qPUY0JYwsC4n",
+    "nombre": "973069sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 7217,
+    "idMultimedia": 14536,
+    "adjunto": "tmaripnc-5-4018_23917.jpg",
+    "nombre": "7217sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 7217,
+    "idMultimedia": 14538,
+    "adjunto": "https://www.mamutstore.com/producto/tuerca-mariposa-unc/?srsltid=AfmBOoqmPkD2YAUDLGwiZDvX9vrNp6HsJGpbvGwSzh47UkROEPvOBsPD",
+    "nombre": "973963sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

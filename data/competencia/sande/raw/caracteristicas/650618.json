@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973505,
+    "idProducto": 650618,
+    "codigoProducto": "28PCPM",
+    "nombreProducto": "PERNO COCINA PLANA.PH M5-0.8X30",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973505,
+    "idProducto": 650618,
+    "codigoProducto": "28PCPM",
+    "nombreProducto": "PERNO COCINA PLANA.PH M5-0.8X30",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

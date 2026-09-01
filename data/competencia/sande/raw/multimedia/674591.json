@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 674591,
+    "idMultimedia": 19428,
+    "adjunto": "turbo-screw-torx-dimetro-10-50_21710.png",
+    "nombre": "674591sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 674591,
+    "idMultimedia": 12755,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-turbo-screw-torx/?srsltid=AfmBOor0n_KeN-G8CslDZtXtF_Gt7kIzBQIb1ozmGT6UHC1rn-uca1J1",
+    "nombre": "973783sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

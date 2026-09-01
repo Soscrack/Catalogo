@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973343,
+    "idProducto": 731866,
+    "codigoProducto": "02DCA",
+    "nombreProducto": "DESTORC P/CABLE 5/8[15]X2.1/2[63]",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973343,
+    "idProducto": 731866,
+    "codigoProducto": "02DCA",
+    "nombreProducto": "DESTORC P/CABLE 5/8[15]X2.1/2[63]",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

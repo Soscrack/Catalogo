@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 624352,
+    "idMultimedia": 14830,
+    "adjunto": "autoperforante-cbzplana-calas-12-24_22548.jpg",
+    "nombre": "624352sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

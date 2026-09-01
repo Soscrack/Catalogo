@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973862,
+    "idProducto": 638758,
+    "codigoProducto": "03TER",
+    "nombreProducto": "TOPE AL P/CABLES 1/8",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973862,
+    "idProducto": 638758,
+    "codigoProducto": "03TER",
+    "nombreProducto": "TOPE AL P/CABLES 1/8",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

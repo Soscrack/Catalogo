@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973812,
+    "idProducto": 17300,
+    "codigoProducto": "05GPI",
+    "nombreProducto": "GOL.PNA.INOX 5/16",
+    "idTitulo": 900399,
+    "valorTitulo": "0.002 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973812,
+    "idProducto": 17300,
+    "codigoProducto": "05GPI",
+    "nombreProducto": "GOL.PNA.INOX 5/16",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 625284,
+    "idMultimedia": 14671,
+    "adjunto": "tornillo-roscalata-planarebajada_37949.jpg",
+    "nombre": "625284sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 625284,
+    "idMultimedia": 14677,
+    "adjunto": "https://www.mamutstore.com/producto/roscalata-cabeza-plana-rebajada-ranura-phillips/?srsltid=AfmBOoqP8_oh_7L28Lj7-Eas8QNO1TSek-j6CbAB6UtB56RwdhYnuigJ",
+    "nombre": "973989sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

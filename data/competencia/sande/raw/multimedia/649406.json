@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 649406,
+    "idMultimedia": 17381,
+    "adjunto": "golk-35-ac-epdm-65-x-rl5010_89576.jpg",
+    "nombre": "649406sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 649406,
+    "idMultimedia": 13219,
+    "adjunto": "https://www.mamutstore.com/producto/golilla-k-capelote-con-junta-de-polietileno/?srsltid=AfmBOoqdK47b2OVAOUN2H7xncbfKLm1e5Epbqe82yh0B8Swkrj9FI9_r",
+    "nombre": "973852sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

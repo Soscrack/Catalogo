@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974239,
+    "idProducto": 621748,
+    "codigoProducto": "02TMPAC",
+    "nombreProducto": "TOR.MAD.AGDA.CORR #6[3.5]X15 1",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974239,
+    "idProducto": 621748,
+    "codigoProducto": "02TMPAC",
+    "nombreProducto": "TOR.MAD.AGDA.CORR #6[3.5]X15 1",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

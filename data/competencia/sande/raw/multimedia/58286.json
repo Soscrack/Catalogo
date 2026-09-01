@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 58286,
+    "idMultimedia": 13090,
+    "adjunto": "clav-de-acero-20x30_62716.jpg",
+    "nombre": "58286sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

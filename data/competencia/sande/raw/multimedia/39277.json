@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 39277,
+    "idMultimedia": 13165,
+    "adjunto": "golilla-plana-calibrada-916-25_29539.jpg",
+    "nombre": "39277sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

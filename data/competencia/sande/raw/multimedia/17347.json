@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 17347,
+    "idMultimedia": 492,
+    "adjunto": "GOLPRESION INOX 2.PNG",
+    "nombre": "s/n",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 17347,
+    "idMultimedia": 13225,
+    "adjunto": "https://www.mamutstore.com/producto/golilla-de-presion-inoxidable/?srsltid=AfmBOopeRmo_HRNit_Vx_8OoDzSRn6zkuzi_oIy8qP4C0piM_lhucQii",
+    "nombre": "973854sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

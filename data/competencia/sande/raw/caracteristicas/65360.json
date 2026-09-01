@@ -1,0 +1,122 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 65360,
+    "codigoProducto": "34TFC",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO TIRAFONDO 1/4\"-10 1\" PAVONADO",
+    "idTitulo": 13183,
+    "valorTitulo": "",
+    "titulo": "NOMBRE",
+    "orden": 1
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 65360,
+    "codigoProducto": "34TFC",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO TIRAFONDO 1/4\"-10 1\" PAVONADO",
+    "idTitulo": 900321,
+    "valorTitulo": "",
+    "titulo": "D NOMINAL",
+    "orden": 2
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 65360,
+    "codigoProducto": "34TFC",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO TIRAFONDO 1/4\"-10 1\" PAVONADO",
+    "idTitulo": 12730,
+    "valorTitulo": "1\"",
+    "titulo": "LARGO",
+    "orden": 3
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 65360,
+    "codigoProducto": "34TFC",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO TIRAFONDO 1/4\"-10 1\" PAVONADO",
+    "idTitulo": 12447,
+    "valorTitulo": "1/4\"-10",
+    "titulo": "D CABEZA",
+    "orden": 4
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 65360,
+    "codigoProducto": "34TFC",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO TIRAFONDO 1/4\"-10 1\" PAVONADO",
+    "idTitulo": 13534,
+    "valorTitulo": "",
+    "titulo": "PUNTA",
+    "orden": 5
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 65360,
+    "codigoProducto": "34TFC",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO TIRAFONDO 1/4\"-10 1\" PAVONADO",
+    "idTitulo": 900329,
+    "valorTitulo": "PAVONADO",
+    "titulo": "RECUBRIMIENTO",
+    "orden": 6
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 65360,
+    "codigoProducto": "34TFC",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO TIRAFONDO 1/4\"-10 1\" PAVONADO",
+    "idTitulo": 398,
+    "valorTitulo": "",
+    "titulo": "CABEZA",
+    "orden": 7
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 65360,
+    "codigoProducto": "34TFC",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO TIRAFONDO 1/4\"-10 1\" PAVONADO",
+    "idTitulo": 13973,
+    "valorTitulo": "",
+    "titulo": "TIPO",
+    "orden": 8
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 65360,
+    "codigoProducto": "34TFC",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO TIRAFONDO 1/4\"-10 1\" PAVONADO",
+    "idTitulo": 900399,
+    "valorTitulo": "0.00658 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972700,
+    "idProducto": 65360,
+    "codigoProducto": "34TFC",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO TIRAFONDO 1/4\"-10 1\" PAVONADO",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

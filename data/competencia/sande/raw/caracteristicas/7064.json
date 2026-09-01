@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973262,
+    "idProducto": 7064,
+    "codigoProducto": "07TH5",
+    "nombreProducto": "TUERCA HEXAGONAL G5 UNC 3/4-10 25U",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973262,
+    "idProducto": 7064,
+    "codigoProducto": "07TH5",
+    "nombreProducto": "TUERCA HEXAGONAL G5 UNC 3/4-10 25U",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

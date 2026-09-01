@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 666639,
+    "idMultimedia": 12921,
+    "adjunto": "lentejapfina-8x2_32851.jpg",
+    "nombre": "666639sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666639,
+    "idMultimedia": 12908,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-cabeza-lenteja-con-golilla-punta-fina/?srsltid=AfmBOopTX7UPzcekwkqfdetEMDJ-xu1itMI5dr1eXvZwZ1j8hELbL-RX",
+    "nombre": "973806sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 666639,
+    "idMultimedia": 12909,
+    "adjunto": "https://www.youtube.com/watch?v=7UsHEvLvSpQ",
+    "nombre": "973806sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

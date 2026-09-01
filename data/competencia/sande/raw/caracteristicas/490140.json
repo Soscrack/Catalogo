@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973875,
+    "idProducto": 490140,
+    "codigoProducto": "14ADC",
+    "nombreProducto": "PERNO DE ANCLAJE CAMISA UNC 1/2\"-13 2.3/4\" 25",
+    "idTitulo": 900399,
+    "valorTitulo": "0.07 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973875,
+    "idProducto": 490140,
+    "codigoProducto": "14ADC",
+    "nombreProducto": "PERNO DE ANCLAJE CAMISA UNC 1/2\"-13 2.3/4\" 25",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

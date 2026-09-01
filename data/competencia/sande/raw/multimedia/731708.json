@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 731708,
+    "idMultimedia": 13958,
+    "adjunto": "perno-u-plet-y-tca-38x434-312_70207.jpg",
+    "nombre": "731708sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 731708,
+    "idMultimedia": 13973,
+    "adjunto": "https://www.mamutstore.com/producto/pernos-u-con-pletina-y-tuercas/?srsltid=AfmBOoratwOw5AJTlRHaB3-vvgsDEFxcEvneCFzsNVJrKi_dWarrsaV-",
+    "nombre": "973905sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 731708,
+    "idMultimedia": 13975,
+    "adjunto": "pernos-u-con-pletina-y-tuercas_19305.pdf",
+    "nombre": "973905sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973776,
+    "idProducto": 667632,
+    "codigoProducto": "17TMPP",
+    "nombreProducto": "TORNILLO MADERA C/PLANA PHILLIPS #7 1 1/2 AMARILLO",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973776,
+    "idProducto": 667632,
+    "codigoProducto": "17TMPP",
+    "nombreProducto": "TORNILLO MADERA C/PLANA PHILLIPS #7 1 1/2 AMARILLO",
+    "idTitulo": 900412,
+    "valorTitulo": "144",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

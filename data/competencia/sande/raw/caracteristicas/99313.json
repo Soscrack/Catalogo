@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973959,
+    "idProducto": 99313,
+    "codigoProducto": "02TRV",
+    "nombreProducto": "TARUGO INTERNIT 8MM (HASTA 3-6MM) 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973959,
+    "idProducto": 99313,
+    "codigoProducto": "02TRV",
+    "nombreProducto": "TARUGO INTERNIT 8MM (HASTA 3-6MM) 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "idProducto": 664470,
+    "idMultimedia": 8443,
+    "adjunto": "01-INS_64506.jpg",
+    "nombre": "26sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 664470,
+    "idMultimedia": 14032,
+    "adjunto": "inserto-pmadera-m6x20mm_20125.jpg",
+    "nombre": "664470sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 664470,
+    "idMultimedia": 14025,
+    "adjunto": "insertos-para-madera_91760.pdf",
+    "nombre": "973912sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 664470,
+    "idMultimedia": 14029,
+    "adjunto": "https://www.mamutstore.com/producto/ins-inserto-para-madera/?srsltid=AfmBOorItYIyHZ7574JBmMXpyhfIW33VitXuNPIun5lrsDOSE8EgcNcO",
+    "nombre": "973912sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

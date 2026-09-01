@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973902,
+    "idProducto": 6518,
+    "codigoProducto": "34PPK",
+    "nombreProducto": "PERNO PARKER.NC 3/8-16X2 1/2",
+    "idTitulo": 900399,
+    "valorTitulo": "0.04 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973902,
+    "idProducto": 6518,
+    "codigoProducto": "34PPK",
+    "nombreProducto": "PERNO PARKER.NC 3/8-16X2 1/2",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

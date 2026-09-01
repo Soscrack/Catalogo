@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973452,
+    "idProducto": 666609,
+    "codigoProducto": "02ADPC",
+    "nombreProducto": "ABRAZADERA CABLE DUPLEX 3MMX40MM",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973452,
+    "idProducto": 666609,
+    "codigoProducto": "02ADPC",
+    "nombreProducto": "ABRAZADERA CABLE DUPLEX 3MMX40MM",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

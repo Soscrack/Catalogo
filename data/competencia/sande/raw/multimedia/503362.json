@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 503362,
+    "idMultimedia": 14905,
+    "adjunto": "thexa194nc-1-38-8_12207.jpg",
+    "nombre": "503362sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 503362,
+    "idMultimedia": 14508,
+    "adjunto": "https://www.mamutstore.com/producto/tuerca-hexagonal-astm-a194/?srsltid=AfmBOopIGd0KtSmvuUx9m1GGO9Yg-A__QRPKgLjNndxAJlokEyCNKapS",
+    "nombre": "973261sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973904,
+    "idProducto": 731852,
+    "codigoProducto": "02PEJ",
+    "nombreProducto": "PERNO J CON TCA 3/8[10]X4.3/8 [152]",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973904,
+    "idProducto": 731852,
+    "codigoProducto": "02PEJ",
+    "nombreProducto": "PERNO J CON TCA 3/8[10]X4.3/8 [152]",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

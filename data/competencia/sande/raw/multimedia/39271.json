@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 39271,
+    "idMultimedia": 10083,
+    "adjunto": "1730720448609_76045.png",
+    "nombre": "237184sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

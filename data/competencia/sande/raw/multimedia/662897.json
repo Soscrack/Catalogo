@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 662897,
+    "idMultimedia": 14436,
+    "adjunto": "tornillo-roscalata-bindign-phillips-8_26161.jpg",
+    "nombre": "662897sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 662897,
+    "idMultimedia": 14743,
+    "adjunto": "https://www.mamutstore.com/producto/roscalata-cabeza-pan-ranura-phillips/?srsltid=AfmBOoqBn4rIouJMg0NQaxE3Kn1LpPFDy--QvKIa5U3rOVewqghRiS9I",
+    "nombre": "973974sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

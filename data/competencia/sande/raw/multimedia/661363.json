@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 661363,
+    "idMultimedia": 5816,
+    "adjunto": "04CAN.jpg",
+    "nombre": "661363 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 661363,
+    "idMultimedia": 13201,
+    "adjunto": "https://www.mamutstore.com/producto/cancamo-metrico-abierto/?srsltid=AfmBOopxJ0eLA7nTQ-iA3zhoMjd5ohqljV_H04gzW_1_oJwnrukNU8Gl",
+    "nombre": "973857sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973262,
+    "idProducto": 19224,
+    "codigoProducto": "B06TH5",
+    "nombreProducto": "TUERCA HEXAGONAL G5 UNC 5/8-11 ZINC 25U",
+    "idTitulo": 900399,
+    "valorTitulo": "3 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973262,
+    "idProducto": 19224,
+    "codigoProducto": "B06TH5",
+    "nombreProducto": "TUERCA HEXAGONAL G5 UNC 5/8-11 ZINC 25U",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 17355,
+    "idMultimedia": 16070,
+    "adjunto": "thexmtinox-m6-100_86053.jpg",
+    "nombre": "17355sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 17355,
+    "idMultimedia": 16072,
+    "adjunto": "https://www.mamutstore.com/producto/thmi-tuerca-hexagonal-metrica-inoxidable/?srsltid=AfmBOorJkqHgLtmqptNWNMd-GaX-Pdry-lpisO4yQgyeSAkov7oK2K3E",
+    "nombre": "974080sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

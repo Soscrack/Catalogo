@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 654892,
+    "idMultimedia": 15043,
+    "adjunto": "tuerca-inox-sgnylon-516-18-50u_45795.jpg",
+    "nombre": "654892sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 654892,
+    "idMultimedia": 15053,
+    "adjunto": "https://www.mamutstore.com/producto/tuerca-hexagonal-con-seguro-de-nylon-unc-inoxidable/?srsltid=AfmBOooNcVzLO7YoOyQktNEzPjBDHoByZaskSlXh50PDmzMRsxBvPqPo",
+    "nombre": "974015sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

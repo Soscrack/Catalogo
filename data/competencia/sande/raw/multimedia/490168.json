@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 490168,
+    "idMultimedia": 905,
+    "adjunto": "dado1.PNG",
+    "nombre": "s/n",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 490168,
+    "idMultimedia": 13977,
+    "adjunto": "https://www.mamutstore.com/producto/dado-magnetico-hexagonal/?srsltid=AfmBOopIslYm1VcrnPoqhMeYjTOj4qU9Yhz5azBHJxNcsayePwV-5FPM",
+    "nombre": "973906sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 490168,
+    "idMultimedia": 13978,
+    "adjunto": "dado-magntico-hexagonal_22740.pdf",
+    "nombre": "973906sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

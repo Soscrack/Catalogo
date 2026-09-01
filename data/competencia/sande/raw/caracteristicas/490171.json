@@ -1,0 +1,122 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973906,
+    "idProducto": 490171,
+    "codigoProducto": "110PTA",
+    "nombreProducto": "INSERTO DADO HEXAGONAL 3/8\" 45MM 1 MAGNETICO",
+    "idTitulo": 13183,
+    "valorTitulo": "DADO MAGNETICO HEXAGONAL",
+    "titulo": "NOMBRE",
+    "orden": 1
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973906,
+    "idProducto": 490171,
+    "codigoProducto": "110PTA",
+    "nombreProducto": "INSERTO DADO HEXAGONAL 3/8\" 45MM 1 MAGNETICO",
+    "idTitulo": 13973,
+    "valorTitulo": "",
+    "titulo": "TIPO",
+    "orden": 2
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973906,
+    "idProducto": 490171,
+    "codigoProducto": "110PTA",
+    "nombreProducto": "INSERTO DADO HEXAGONAL 3/8\" 45MM 1 MAGNETICO",
+    "idTitulo": 900321,
+    "valorTitulo": "",
+    "titulo": "D NOMINAL",
+    "orden": 3
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973906,
+    "idProducto": 490171,
+    "codigoProducto": "110PTA",
+    "nombreProducto": "INSERTO DADO HEXAGONAL 3/8\" 45MM 1 MAGNETICO",
+    "idTitulo": 12730,
+    "valorTitulo": "45MM",
+    "titulo": "LARGO",
+    "orden": 4
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973906,
+    "idProducto": 490171,
+    "codigoProducto": "110PTA",
+    "nombreProducto": "INSERTO DADO HEXAGONAL 3/8\" 45MM 1 MAGNETICO",
+    "idTitulo": 12447,
+    "valorTitulo": "3/8\"",
+    "titulo": "D CABEZA",
+    "orden": 5
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973906,
+    "idProducto": 490171,
+    "codigoProducto": "110PTA",
+    "nombreProducto": "INSERTO DADO HEXAGONAL 3/8\" 45MM 1 MAGNETICO",
+    "idTitulo": 13534,
+    "valorTitulo": "",
+    "titulo": "PUNTA",
+    "orden": 6
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973906,
+    "idProducto": 490171,
+    "codigoProducto": "110PTA",
+    "nombreProducto": "INSERTO DADO HEXAGONAL 3/8\" 45MM 1 MAGNETICO",
+    "idTitulo": 900329,
+    "valorTitulo": "",
+    "titulo": "RECUBRIMIENTO",
+    "orden": 7
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973906,
+    "idProducto": 490171,
+    "codigoProducto": "110PTA",
+    "nombreProducto": "INSERTO DADO HEXAGONAL 3/8\" 45MM 1 MAGNETICO",
+    "idTitulo": 398,
+    "valorTitulo": "",
+    "titulo": "CABEZA",
+    "orden": 8
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973906,
+    "idProducto": 490171,
+    "codigoProducto": "110PTA",
+    "nombreProducto": "INSERTO DADO HEXAGONAL 3/8\" 45MM 1 MAGNETICO",
+    "idTitulo": 900399,
+    "valorTitulo": "0.02 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973906,
+    "idProducto": 490171,
+    "codigoProducto": "110PTA",
+    "nombreProducto": "INSERTO DADO HEXAGONAL 3/8\" 45MM 1 MAGNETICO",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

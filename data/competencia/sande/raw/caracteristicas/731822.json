@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973947,
+    "idProducto": 731822,
+    "codigoProducto": "03MAD",
+    "nombreProducto": "MOSQUET ARG/DEST 3/4[19]X3.1/2[88]",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973947,
+    "idProducto": 731822,
+    "codigoProducto": "03MAD",
+    "nombreProducto": "MOSQUET ARG/DEST 3/4[19]X3.1/2[88]",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

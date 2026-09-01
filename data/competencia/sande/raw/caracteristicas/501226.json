@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973973,
+    "idProducto": 501226,
+    "codigoProducto": "N11RLPP",
+    "nombreProducto": "TORNILLO ROSCALATA PLANA PHILLIPS #6 2.8MM 3/8\" FINA ZINC-N",
+    "idTitulo": 900399,
+    "valorTitulo": "6 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973973,
+    "idProducto": 501226,
+    "codigoProducto": "N11RLPP",
+    "nombreProducto": "TORNILLO ROSCALATA PLANA PHILLIPS #6 2.8MM 3/8\" FINA ZINC-N",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

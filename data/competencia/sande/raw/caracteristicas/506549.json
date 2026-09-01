@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973779,
+    "idProducto": 506549,
+    "codigoProducto": "KR108RLIN",
+    "nombreProducto": "AUTOPERFORANTE HEX GOL-INT #12-14 1\" BROCA RUSPERT",
+    "idTitulo": 900399,
+    "valorTitulo": "0.006 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973779,
+    "idProducto": 506549,
+    "codigoProducto": "KR108RLIN",
+    "nombreProducto": "AUTOPERFORANTE HEX GOL-INT #12-14 1\" BROCA RUSPERT",
+    "idTitulo": 900412,
+    "valorTitulo": "3800",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

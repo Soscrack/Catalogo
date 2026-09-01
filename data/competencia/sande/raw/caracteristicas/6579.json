@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973931,
+    "idProducto": 6579,
+    "codigoProducto": "01RAR",
+    "nombreProducto": "REMACHE ALUMINIO REDONDA 2MM 4MM 1000",
+    "idTitulo": 900399,
+    "valorTitulo": "6 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973931,
+    "idProducto": 6579,
+    "codigoProducto": "01RAR",
+    "nombreProducto": "REMACHE ALUMINIO REDONDA 2MM 4MM 1000",
+    "idTitulo": 900412,
+    "valorTitulo": "1000",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

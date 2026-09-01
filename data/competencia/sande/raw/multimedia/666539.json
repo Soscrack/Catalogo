@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 666539,
+    "idMultimedia": 13576,
+    "adjunto": "amcabadhesajus-nat-22x25mm_48633.jpg",
+    "nombre": "666539sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666539,
+    "idMultimedia": 13579,
+    "adjunto": "https://www.mamutstore.com/producto/amarra-cables-de-nylon-adhesivo-y-ajustable/?srsltid=AfmBOorvv7Maeabq34-QtMsGIWvWd9ej0Syv8Y1ahzKJ6hJTi4tNVnwj",
+    "nombre": "973890sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 654309,
+    "idMultimedia": 4702,
+    "adjunto": "RLPB.jpg",
+    "nombre": "654309 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 654309,
+    "idMultimedia": 14422,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-refuerzo/?srsltid=AfmBOorxdUxM1o4YDv_l47bwwrQv7Ka9rwJ_ByIINRbktfL5eFelY0PI",
+    "nombre": "973364sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 654309,
+    "idMultimedia": 14423,
+    "adjunto": "tornillo-refuerzo_66238.pdf",
+    "nombre": "973364sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

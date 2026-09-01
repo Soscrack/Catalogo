@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973498,
+    "idProducto": 631026,
+    "codigoProducto": "34PMB",
+    "nombreProducto": "P.COC.MT.BINDING M6-1.0X12",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973498,
+    "idProducto": 631026,
+    "codigoProducto": "34PMB",
+    "nombreProducto": "P.COC.MT.BINDING M6-1.0X12",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

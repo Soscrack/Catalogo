@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973510,
+    "idProducto": 58050,
+    "codigoProducto": "60ATPF",
+    "nombreProducto": "AUTOPERFORANTE CBZ/WAFER C/ALAS 1/4\"-14 2.3/4\" BROCA ZINC",
+    "idTitulo": 900399,
+    "valorTitulo": "0.01 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973510,
+    "idProducto": 58050,
+    "codigoProducto": "60ATPF",
+    "nombreProducto": "AUTOPERFORANTE CBZ/WAFER C/ALAS 1/4\"-14 2.3/4\" BROCA ZINC",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

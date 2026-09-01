@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 17531,
+    "idMultimedia": 14270,
+    "adjunto": "tuerca-hexagonal-unc-g2-78-9-zinc-10_90890.jpg",
+    "nombre": "17531sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 17531,
+    "idMultimedia": 14484,
+    "adjunto": "https://www.mamutstore.com/producto/tuerca-hexagonal-grado-2-unc/?srsltid=AfmBOoqhCiqblv7GwqHDXE7KYyaiEOlXdjyQkjHLEF3oeRZKULOyQa0T",
+    "nombre": "973966sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

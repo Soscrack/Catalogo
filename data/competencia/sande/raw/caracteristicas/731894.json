@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973945,
+    "idProducto": 731894,
+    "codigoProducto": "01SCG",
+    "nombreProducto": "GANCHO MULTIUSO FIJO 8X50",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973945,
+    "idProducto": 731894,
+    "codigoProducto": "01SCG",
+    "nombreProducto": "GANCHO MULTIUSO FIJO 8X50",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

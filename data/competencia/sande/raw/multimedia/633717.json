@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 633717,
+    "idMultimedia": 19604,
+    "adjunto": "tescuadra-3_71655.jpg",
+    "nombre": "633717sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 633717,
+    "idMultimedia": 19605,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-escuadra/?srsltid=AfmBOorQguano6UPTB_RRZU5eovmrmvUMJUiJplN0XgFOaIBqTl5mUp1",
+    "nombre": "633717sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

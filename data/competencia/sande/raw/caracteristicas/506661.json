@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973438,
+    "idProducto": 506661,
+    "codigoProducto": "05BRN",
+    "nombreProducto": "TUERCA REMACHABLE #4-0.7X11.6MM ZINC 100U",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973438,
+    "idProducto": 506661,
+    "codigoProducto": "05BRN",
+    "nombreProducto": "TUERCA REMACHABLE #4-0.7X11.6MM ZINC 100U",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

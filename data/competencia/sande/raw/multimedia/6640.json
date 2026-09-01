@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 6640,
+    "idMultimedia": 14190,
+    "adjunto": "remache-hojalata-plana-28mm-48mm-zinc_60550.jpg",
+    "nombre": "6640sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

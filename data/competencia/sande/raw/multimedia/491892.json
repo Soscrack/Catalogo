@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 491892,
+    "idMultimedia": 14974,
+    "adjunto": "thexnylockmet-m12-150_33425.jpg",
+    "nombre": "491892sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 491892,
+    "idMultimedia": 14494,
+    "adjunto": "https://www.mamutstore.com/producto/tuerca-hexagonal-con-seguro-de-nylon-metrica/?srsltid=AfmBOopT9S84lo-SlNkINUwhwEABNwYBL4Uv4q0hB3QxsIbaGXUnEcfT",
+    "nombre": "973962sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

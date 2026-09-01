@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974013,
+    "idProducto": 7102,
+    "codigoProducto": "207THM",
+    "nombreProducto": "TUERCA HEXAGONAL MÉTRICA ISO C/5 M16-2.00 25U",
+    "idTitulo": 900399,
+    "valorTitulo": "0.03 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974013,
+    "idProducto": 7102,
+    "codigoProducto": "207THM",
+    "nombreProducto": "TUERCA HEXAGONAL MÉTRICA ISO C/5 M16-2.00 25U",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

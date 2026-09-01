@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973930,
+    "idProducto": 37088,
+    "codigoProducto": "SSD46BS",
+    "nombreProducto": "REMACHE POP ABIERTO INOX 3.2MM 12.7MM 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973930,
+    "idProducto": 37088,
+    "codigoProducto": "SSD46BS",
+    "nombreProducto": "REMACHE POP ABIERTO INOX 3.2MM 12.7MM 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

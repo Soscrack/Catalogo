@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973929,
+    "idProducto": 636964,
+    "codigoProducto": "KB04PVCA",
+    "nombreProducto": "TOR.HILO.PTA FINA #8(4.2)X38",
+    "idTitulo": 900399,
+    "valorTitulo": "5 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973929,
+    "idProducto": 636964,
+    "codigoProducto": "KB04PVCA",
+    "nombreProducto": "TOR.HILO.PTA FINA #8(4.2)X38",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

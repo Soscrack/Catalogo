@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 666877,
+    "idMultimedia": 17325,
+    "adjunto": "priallen-metrico-m6-100x20mm_35100.jpg",
+    "nombre": "666877sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666877,
+    "idMultimedia": 17318,
+    "adjunto": "https://www.mamutstore.com/producto/pacm-prisionero-allen-grado-iso-12-9-metrico/?srsltid=AfmBOorEsORjuCQYV0aZu2TpSHT4Zb2P0ueQjpWfnwfN5Q9olWXmJKqp",
+    "nombre": "974117sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

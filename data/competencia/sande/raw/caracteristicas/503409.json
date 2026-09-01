@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973262,
+    "idProducto": 503409,
+    "codigoProducto": "10TH5",
+    "nombreProducto": "T.HEX.G5.NC 9/16-12",
+    "idTitulo": 900399,
+    "valorTitulo": "0.03 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973262,
+    "idProducto": 503409,
+    "codigoProducto": "10TH5",
+    "nombreProducto": "T.HEX.G5.NC 9/16-12",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

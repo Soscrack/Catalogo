@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 623517,
+    "idMultimedia": 15892,
+    "adjunto": "tornillo-herraje-739x25mm_15845.jpg",
+    "nombre": "623517sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 623517,
+    "idMultimedia": 14112,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-colocacion-de-herrajes/?srsltid=AfmBOor8FuZBpZqd7jXHh_yQBfGoZM1VCvwq7s7_FqX8C6oZw0xcxFoz",
+    "nombre": "973929sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

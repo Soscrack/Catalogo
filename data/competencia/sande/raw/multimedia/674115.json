@@ -1,0 +1,50 @@
+[
+  {
+    "idProducto": 674115,
+    "idMultimedia": 18690,
+    "adjunto": "autoperforante-cbzwafer-calas-14-14_75558.jpg",
+    "nombre": "674115sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 674115,
+    "idMultimedia": 18691,
+    "adjunto": "autoperforante-cbzwafer-calas-14-14_54328.jpg",
+    "nombre": "674115sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 674115,
+    "idMultimedia": 12839,
+    "adjunto": "https://www.youtube.com/watch?v=zVr6AyCrxss",
+    "nombre": "973510sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 674115,
+    "idMultimedia": 12204,
+    "adjunto": "https://www.mamutstore.com/producto/autoperforante-phillips-con-alas-cabeza-plana/?srsltid=AfmBOorGBFxA648B18A2yjI3FYuWDTJh4iHMA3CaCstjuKWTU_EujuV4",
+    "nombre": "973510sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

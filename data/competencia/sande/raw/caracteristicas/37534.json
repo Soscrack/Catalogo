@@ -1,0 +1,122 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973786,
+    "idProducto": 37534,
+    "codigoProducto": "20ATPF",
+    "nombreProducto": "AUTOPERFORANTE CBZ/WAFER C/ALAS #10-24 1.7/16\" BROCA ZINC",
+    "idTitulo": 13183,
+    "valorTitulo": "",
+    "titulo": "NOMBRE",
+    "orden": 1
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973786,
+    "idProducto": 37534,
+    "codigoProducto": "20ATPF",
+    "nombreProducto": "AUTOPERFORANTE CBZ/WAFER C/ALAS #10-24 1.7/16\" BROCA ZINC",
+    "idTitulo": 13973,
+    "valorTitulo": "",
+    "titulo": "TIPO",
+    "orden": 2
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973786,
+    "idProducto": 37534,
+    "codigoProducto": "20ATPF",
+    "nombreProducto": "AUTOPERFORANTE CBZ/WAFER C/ALAS #10-24 1.7/16\" BROCA ZINC",
+    "idTitulo": 900321,
+    "valorTitulo": "#10-24",
+    "titulo": "D NOMINAL",
+    "orden": 3
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973786,
+    "idProducto": 37534,
+    "codigoProducto": "20ATPF",
+    "nombreProducto": "AUTOPERFORANTE CBZ/WAFER C/ALAS #10-24 1.7/16\" BROCA ZINC",
+    "idTitulo": 12730,
+    "valorTitulo": "1.7/16\"",
+    "titulo": "LARGO",
+    "orden": 4
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973786,
+    "idProducto": 37534,
+    "codigoProducto": "20ATPF",
+    "nombreProducto": "AUTOPERFORANTE CBZ/WAFER C/ALAS #10-24 1.7/16\" BROCA ZINC",
+    "idTitulo": 12447,
+    "valorTitulo": "",
+    "titulo": "D CABEZA",
+    "orden": 5
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973786,
+    "idProducto": 37534,
+    "codigoProducto": "20ATPF",
+    "nombreProducto": "AUTOPERFORANTE CBZ/WAFER C/ALAS #10-24 1.7/16\" BROCA ZINC",
+    "idTitulo": 13534,
+    "valorTitulo": "BROCA",
+    "titulo": "PUNTA",
+    "orden": 6
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973786,
+    "idProducto": 37534,
+    "codigoProducto": "20ATPF",
+    "nombreProducto": "AUTOPERFORANTE CBZ/WAFER C/ALAS #10-24 1.7/16\" BROCA ZINC",
+    "idTitulo": 900329,
+    "valorTitulo": "ZINC",
+    "titulo": "RECUBRIMIENTO",
+    "orden": 7
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973786,
+    "idProducto": 37534,
+    "codigoProducto": "20ATPF",
+    "nombreProducto": "AUTOPERFORANTE CBZ/WAFER C/ALAS #10-24 1.7/16\" BROCA ZINC",
+    "idTitulo": 398,
+    "valorTitulo": "",
+    "titulo": "CABEZA",
+    "orden": 8
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973786,
+    "idProducto": 37534,
+    "codigoProducto": "20ATPF",
+    "nombreProducto": "AUTOPERFORANTE CBZ/WAFER C/ALAS #10-24 1.7/16\" BROCA ZINC",
+    "idTitulo": 900399,
+    "valorTitulo": "0.004 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973786,
+    "idProducto": 37534,
+    "codigoProducto": "20ATPF",
+    "nombreProducto": "AUTOPERFORANTE CBZ/WAFER C/ALAS #10-24 1.7/16\" BROCA ZINC",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

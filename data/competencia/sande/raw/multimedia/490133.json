@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 490133,
+    "idMultimedia": 13273,
+    "adjunto": "perno-anclaje-camisa-14-20-138-100_83273.jpg",
+    "nombre": "490133sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

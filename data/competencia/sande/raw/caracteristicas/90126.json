@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973901,
+    "idProducto": 90126,
+    "codigoProducto": "22PAC",
+    "nombreProducto": "PERNO PARKER PRISIONERO UNC ISO 12.9 1/4-20 3/4",
+    "idTitulo": 900399,
+    "valorTitulo": "0.003 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973901,
+    "idProducto": 90126,
+    "codigoProducto": "22PAC",
+    "nombreProducto": "PERNO PARKER PRISIONERO UNC ISO 12.9 1/4-20 3/4",
+    "idTitulo": 900412,
+    "valorTitulo": "20",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

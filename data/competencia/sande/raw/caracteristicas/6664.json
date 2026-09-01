@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973932,
+    "idProducto": 6664,
+    "codigoProducto": "18RFR",
+    "nombreProducto": "REMACHE HIERRO C/REDONDA #1/4 X 1/2\" 5KILOS",
+    "idTitulo": 900399,
+    "valorTitulo": "0.005 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973932,
+    "idProducto": 6664,
+    "codigoProducto": "18RFR",
+    "nombreProducto": "REMACHE HIERRO C/REDONDA #1/4 X 1/2\" 5KILOS",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

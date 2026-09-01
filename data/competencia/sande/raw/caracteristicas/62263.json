@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974014,
+    "idProducto": 62263,
+    "codigoProducto": "07TSN",
+    "nombreProducto": "T.HEX.NYLOCK.NC 3/4-10 25UN",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974014,
+    "idProducto": 62263,
+    "codigoProducto": "07TSN",
+    "nombreProducto": "T.HEX.NYLOCK.NC 3/4-10 25UN",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

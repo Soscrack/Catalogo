@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 665579,
+    "idMultimedia": 13849,
+    "adjunto": "perno-hexagonal-unc-inox-34-10-2_79356.jpg",
+    "nombre": "665579sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 665579,
+    "idMultimedia": 13841,
+    "adjunto": "https://www.mamutstore.com/producto/perno-hexagonal-unc-inoxidable/?srsltid=AfmBOoq01sps7ireNfhbntT6tUE8MQB3Je3TbUfm472PipYrcTBzyP4c",
+    "nombre": "973089sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

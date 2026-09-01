@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973257,
+    "idProducto": 622888,
+    "codigoProducto": "08ABC",
+    "nombreProducto": "ABRAZADERA P/CABLE 1/2 (13)X0",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973257,
+    "idProducto": 622888,
+    "codigoProducto": "08ABC",
+    "nombreProducto": "ABRAZADERA P/CABLE 1/2 (13)X0",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 5370,
+    "idMultimedia": 13259,
+    "adjunto": "gancho-de-canal-hojalata-unc_95438.jpg",
+    "nombre": "5370sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 5370,
+    "idMultimedia": 13251,
+    "adjunto": "https://www.mamutstore.com/producto/gancho-techo-unc/?srsltid=AfmBOorW4L2WrPx1MBU3vighe7_50_SpQfmljhq8KGNT3IN7sP6VdDpd",
+    "nombre": "973863sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 5370,
+    "idMultimedia": 13252,
+    "adjunto": "https://www.youtube.com/watch?v=KA57QcSudDU",
+    "nombre": "973863sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 666632,
+    "idMultimedia": 17384,
+    "adjunto": "lentejapbroca-8x34_84216.jpg",
+    "nombre": "666632sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666632,
+    "idMultimedia": 13320,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-cabeza-lenteja-con-golilla-punta-broca/?srsltid=AfmBOoqLnr0BJuzgEjh1e36ibY5Fzx1TC9IbRdLttHJYF0GsB8eRBezb",
+    "nombre": "972669sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 666632,
+    "idMultimedia": 13321,
+    "adjunto": "https://www.youtube.com/watch?v=c-t8_yl4Fos",
+    "nombre": "972669sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

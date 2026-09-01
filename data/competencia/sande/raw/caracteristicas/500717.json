@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973961,
+    "idProducto": 500717,
+    "codigoProducto": "13THM8",
+    "nombreProducto": "T.HEX.MT.C/8 M5-0.8",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973961,
+    "idProducto": 500717,
+    "codigoProducto": "13THM8",
+    "nombreProducto": "T.HEX.MT.C/8 M5-0.8",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

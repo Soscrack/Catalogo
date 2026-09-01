@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 5241,
+    "idMultimedia": 14444,
+    "adjunto": "aterrajador-tipo-f-plana-recta-10-32_37630.jpg",
+    "nombre": "5241sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 5241,
+    "idMultimedia": 14446,
+    "adjunto": "aterrajador-tipo-f-cabeza-plana-atp_37241.pdf",
+    "nombre": "973972sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

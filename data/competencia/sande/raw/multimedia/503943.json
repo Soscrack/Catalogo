@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 503943,
+    "idMultimedia": 14346,
+    "adjunto": "taco-golpe-zamac-14x2_91784.jpg",
+    "nombre": "503943sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 503943,
+    "idMultimedia": 14350,
+    "adjunto": "https://www.mamutstore.com/producto/tarugo-metalico-zamac/?srsltid=AfmBOorzRdWvO_BeebOCxw2iKR_xjZcb0xWUdOqIWTBW7EMEr10AVWLO",
+    "nombre": "973968sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 503943,
+    "idMultimedia": 14351,
+    "adjunto": "tarugo-metlico-zamac_17371.pdf",
+    "nombre": "973968sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

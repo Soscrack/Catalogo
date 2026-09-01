@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973902,
+    "idProducto": 90106,
+    "codigoProducto": "13PPKP",
+    "nombreProducto": "PERNO PARKER.C/PLANA 5/16-18X1\"",
+    "idTitulo": 900399,
+    "valorTitulo": "0.008 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973902,
+    "idProducto": 90106,
+    "codigoProducto": "13PPKP",
+    "nombreProducto": "PERNO PARKER.C/PLANA 5/16-18X1\"",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

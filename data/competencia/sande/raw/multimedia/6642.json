@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 6642,
+    "idMultimedia": 14198,
+    "adjunto": "remache-hojalata-plana-36mm-69mm-zinc_68316.jpg",
+    "nombre": "6642sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

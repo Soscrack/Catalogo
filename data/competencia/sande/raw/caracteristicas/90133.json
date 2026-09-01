@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973966,
+    "idProducto": 90133,
+    "codigoProducto": "KB203TH1",
+    "nombreProducto": "TUERCA HEXAGONAL UNC G2 3/8\"-16 ZINC 4000",
+    "idTitulo": 900399,
+    "valorTitulo": "0.006 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973966,
+    "idProducto": 90133,
+    "codigoProducto": "KB203TH1",
+    "nombreProducto": "TUERCA HEXAGONAL UNC G2 3/8\"-16 ZINC 4000",
+    "idTitulo": 900412,
+    "valorTitulo": "4000",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

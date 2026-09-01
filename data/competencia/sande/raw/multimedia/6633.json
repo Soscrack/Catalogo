@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 6633,
+    "idMultimedia": 14188,
+    "adjunto": "remache-hojalata-plana-28mm-48mm-5_17533.jpg",
+    "nombre": "6633sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

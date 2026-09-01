@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 666550,
+    "idMultimedia": 13618,
+    "adjunto": "bujepresionnylo-neg-25mm_78378.jpg",
+    "nombre": "666550sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666550,
+    "idMultimedia": 13611,
+    "adjunto": "https://www.mamutstore.com/producto/buje-a-presion-de-nylon/?srsltid=AfmBOopWHt7tRGPqX1C1TV3h_JD8A0jFiK6catSgorqmOvOdU3bcmTlq",
+    "nombre": "973889sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 90365,
+    "idMultimedia": 13160,
+    "adjunto": "golilla-plana-calibrada-716-zinc-100_71181.jpg",
+    "nombre": "90365sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

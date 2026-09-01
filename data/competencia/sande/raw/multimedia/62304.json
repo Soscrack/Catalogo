@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 62304,
+    "idMultimedia": 19471,
+    "adjunto": "tornillo-madera-tirafondo-bronce-7_75602.jpg",
+    "nombre": "62304sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 62304,
+    "idMultimedia": 19474,
+    "adjunto": "https://www.mamutstore.com/producto/tmpb-tornillo-para-madera-de-bronce/?srsltid=AfmBOorJLWOWIrf60wbVK3NsyyaqwgUtQoBLukEqRz1uhxbQLSF5pYF2",
+    "nombre": "62304sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

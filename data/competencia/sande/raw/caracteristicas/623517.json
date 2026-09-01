@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973929,
+    "idProducto": 623517,
+    "codigoProducto": "B01PVCA",
+    "nombreProducto": "TORNILLO HERRAJE #7(3.9)X25MM PUNTA-FINA ZINC-BRILL 500U",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973929,
+    "idProducto": 623517,
+    "codigoProducto": "B01PVCA",
+    "nombreProducto": "TORNILLO HERRAJE #7(3.9)X25MM PUNTA-FINA ZINC-BRILL 500U",
+    "idTitulo": 900412,
+    "valorTitulo": "500",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

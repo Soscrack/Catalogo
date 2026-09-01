@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 19775,
+    "idMultimedia": 12858,
+    "adjunto": "cl-polv-tnk-37x1-14_48969.jpg",
+    "nombre": "19775sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 19775,
+    "idMultimedia": 12859,
+    "adjunto": "https://www.mamutstore.com/producto/clavo-polvora-tipo-nk/?srsltid=AfmBOopCqKW-xvofuZJ_oCJI2ljxCm1ka88TjKwzjDU13m4mDNjl1j32",
+    "nombre": "973800sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 19775,
+    "idMultimedia": 12861,
+    "adjunto": "clavo-plvora-tipo-nk_82293.pdf",
+    "nombre": "973800sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

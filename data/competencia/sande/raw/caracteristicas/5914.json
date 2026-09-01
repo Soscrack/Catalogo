@@ -1,0 +1,122 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972654,
+    "idProducto": 5914,
+    "codigoProducto": "32PH2",
+    "nombreProducto": "PERNO HEXAGONAL  UNC G2 3/8\"-16 2\" PAV",
+    "idTitulo": 13183,
+    "valorTitulo": "",
+    "titulo": "NOMBRE",
+    "orden": 1
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972654,
+    "idProducto": 5914,
+    "codigoProducto": "32PH2",
+    "nombreProducto": "PERNO HEXAGONAL  UNC G2 3/8\"-16 2\" PAV",
+    "idTitulo": 900321,
+    "valorTitulo": "",
+    "titulo": "D NOMINAL",
+    "orden": 2
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972654,
+    "idProducto": 5914,
+    "codigoProducto": "32PH2",
+    "nombreProducto": "PERNO HEXAGONAL  UNC G2 3/8\"-16 2\" PAV",
+    "idTitulo": 12730,
+    "valorTitulo": "",
+    "titulo": "LARGO",
+    "orden": 3
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972654,
+    "idProducto": 5914,
+    "codigoProducto": "32PH2",
+    "nombreProducto": "PERNO HEXAGONAL  UNC G2 3/8\"-16 2\" PAV",
+    "idTitulo": 12447,
+    "valorTitulo": "",
+    "titulo": "D CABEZA",
+    "orden": 4
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972654,
+    "idProducto": 5914,
+    "codigoProducto": "32PH2",
+    "nombreProducto": "PERNO HEXAGONAL  UNC G2 3/8\"-16 2\" PAV",
+    "idTitulo": 13534,
+    "valorTitulo": "",
+    "titulo": "PUNTA",
+    "orden": 5
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972654,
+    "idProducto": 5914,
+    "codigoProducto": "32PH2",
+    "nombreProducto": "PERNO HEXAGONAL  UNC G2 3/8\"-16 2\" PAV",
+    "idTitulo": 900329,
+    "valorTitulo": "",
+    "titulo": "RECUBRIMIENTO",
+    "orden": 6
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972654,
+    "idProducto": 5914,
+    "codigoProducto": "32PH2",
+    "nombreProducto": "PERNO HEXAGONAL  UNC G2 3/8\"-16 2\" PAV",
+    "idTitulo": 398,
+    "valorTitulo": "",
+    "titulo": "CABEZA",
+    "orden": 7
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972654,
+    "idProducto": 5914,
+    "codigoProducto": "32PH2",
+    "nombreProducto": "PERNO HEXAGONAL  UNC G2 3/8\"-16 2\" PAV",
+    "idTitulo": 13973,
+    "valorTitulo": "",
+    "titulo": "TIPO",
+    "orden": 8
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972654,
+    "idProducto": 5914,
+    "codigoProducto": "32PH2",
+    "nombreProducto": "PERNO HEXAGONAL  UNC G2 3/8\"-16 2\" PAV",
+    "idTitulo": 900399,
+    "valorTitulo": "0.03226 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972654,
+    "idProducto": 5914,
+    "codigoProducto": "32PH2",
+    "nombreProducto": "PERNO HEXAGONAL  UNC G2 3/8\"-16 2\" PAV",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

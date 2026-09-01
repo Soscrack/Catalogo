@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973852,
+    "idProducto": 649178,
+    "codigoProducto": "40AE09",
+    "nombreProducto": "GOL.K-35.AC.EPDM 6.5XRL3009",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973852,
+    "idProducto": 649178,
+    "codigoProducto": "40AE09",
+    "nombreProducto": "GOL.K-35.AC.EPDM 6.5XRL3009",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

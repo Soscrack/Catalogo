@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973979,
+    "idProducto": 649439,
+    "codigoProducto": "302TTPH",
+    "nombreProducto": "TORNILLO POLICARBONATO C GOLILLA ACERO MKAS PVC #12X1 1/2",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973979,
+    "idProducto": 649439,
+    "codigoProducto": "302TTPH",
+    "nombreProducto": "TORNILLO POLICARBONATO C GOLILLA ACERO MKAS PVC #12X1 1/2",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

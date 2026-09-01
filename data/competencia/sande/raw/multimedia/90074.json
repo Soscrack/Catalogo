@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 90074,
+    "idMultimedia": 14308,
+    "adjunto": "tarugo-clavo-6x35mm-50_26995.jpg",
+    "nombre": "90074sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 90074,
+    "idMultimedia": 14318,
+    "adjunto": "tarugo-clavo-nylon_89139.pdf",
+    "nombre": "973958sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 90074,
+    "idMultimedia": 14319,
+    "adjunto": "https://www.mamutstore.com/producto/tarugo-clavo-nylon/?srsltid=AfmBOoplZF6MVAHIkxcnvXH79DHi5ybgqeDW1nLv-UdheuJHbdvOGlf_",
+    "nombre": "973958sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

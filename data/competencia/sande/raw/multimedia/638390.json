@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 638390,
+    "idMultimedia": 18836,
+    "adjunto": "atpfplanaalas-12-24x2-12_18947.jpg",
+    "nombre": "638390sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974234,
+    "idProducto": 633717,
+    "codigoProducto": "05TESC",
+    "nombreProducto": "T.ESCUADRA 3\"",
+    "idTitulo": 900399,
+    "valorTitulo": "5 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974234,
+    "idProducto": 633717,
+    "codigoProducto": "05TESC",
+    "nombreProducto": "T.ESCUADRA 3\"",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

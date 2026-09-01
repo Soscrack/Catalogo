@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 626498,
+    "idMultimedia": 13950,
+    "adjunto": "perno-ojo-ctca-12x4_49446.jpg",
+    "nombre": "626498sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 626498,
+    "idMultimedia": 13944,
+    "adjunto": "https://www.mamutstore.com/producto/perno-ojo-con-tuerca/?srsltid=AfmBOopZLnn8unsYi0S6HvkpF-kDtJrIZVGf3EXJwZRdbo_T26Vt9JDe",
+    "nombre": "973081sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

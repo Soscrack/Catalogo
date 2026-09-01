@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 659474,
+    "idMultimedia": 10946,
+    "adjunto": "Screenshot_3_51063.jpg",
+    "nombre": "659474sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 659474,
+    "idMultimedia": 13063,
+    "adjunto": "ampolla-quimica-resina-vinilister_42946.pdf",
+    "nombre": "973809sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 665081,
+    "idMultimedia": 13815,
+    "adjunto": "perno-hexagonal-1-x-3-12-galvanizado_23761.jpg",
+    "nombre": "665081sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 665081,
+    "idMultimedia": 13708,
+    "adjunto": "https://www.mamutstore.com/producto/perno-hexagonal-astm-a325/?srsltid=AfmBOor3zmBPhvidsk7WqXcjJFdmMk2wV1xOEyXa7NM9ueGoxZNWfrKa",
+    "nombre": "973382sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

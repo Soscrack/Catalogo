@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973924,
+    "idProducto": 501323,
+    "codigoProducto": "10TFCW",
+    "nombreProducto": "TORNILLO FIBROCEMENTO #10 1.1/4\" ESPADA RUSPERT",
+    "idTitulo": 900399,
+    "valorTitulo": "0.003 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973924,
+    "idProducto": 501323,
+    "codigoProducto": "10TFCW",
+    "nombreProducto": "TORNILLO FIBROCEMENTO #10 1.1/4\" ESPADA RUSPERT",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

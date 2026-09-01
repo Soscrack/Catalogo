@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 655907,
+    "idMultimedia": 14790,
+    "adjunto": "tarugo-nylon-universal-m-8_68632.jpg",
+    "nombre": "655907sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 655907,
+    "idMultimedia": 14811,
+    "adjunto": "https://www.mamutstore.com/producto/tarugo-nylon-universal/?srsltid=AfmBOopL3RbZwNKdziC26CHi6ulWf0MHzt5UoX0Jh1I_lfDzNC1dYeSl",
+    "nombre": "973994sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

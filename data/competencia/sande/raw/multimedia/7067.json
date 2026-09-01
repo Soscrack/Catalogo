@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 7067,
+    "idMultimedia": 14921,
+    "adjunto": "thexg5nf-12-20_55856.jpg",
+    "nombre": "7067sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 7067,
+    "idMultimedia": 14488,
+    "adjunto": "https://www.mamutstore.com/producto/tuerca-hexagonal-grado-5-unf/?srsltid=AfmBOooW7GfkS9PhH_qpa3BOSJueStbfnk-sZQr5XJ9UTxYdLD1_f7C6",
+    "nombre": "973263sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

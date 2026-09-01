@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 6638,
+    "idMultimedia": 14192,
+    "adjunto": "remache-hojalata-plana-54mm-85mm-5_87955.jpg",
+    "nombre": "6638sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973973,
+    "idProducto": 500733,
+    "codigoProducto": "26RLPP",
+    "nombreProducto": "TORNILLO ROSCALATA PLANA PHILLIPS #8 4.1MM 1\" FINA ZINC",
+    "idTitulo": 900399,
+    "valorTitulo": "2 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973973,
+    "idProducto": 500733,
+    "codigoProducto": "26RLPP",
+    "nombreProducto": "TORNILLO ROSCALATA PLANA PHILLIPS #8 4.1MM 1\" FINA ZINC",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

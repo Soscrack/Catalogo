@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 501290,
+    "idMultimedia": 13482,
+    "adjunto": "pcocrdabce-10-24316x114_92543.jpg",
+    "nombre": "501290sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 501290,
+    "idMultimedia": 13820,
+    "adjunto": "https://www.mamutstore.com/producto/pcrb-perno-cocina-cabeza-redonda-de-bronce/?srsltid=AfmBOoq9NVJCFL7zzqxN6XV9YXg73JqPDvXAZYFOf-jUBHU1K17NlrWC",
+    "nombre": "973497sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

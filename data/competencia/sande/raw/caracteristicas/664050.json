@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973928,
+    "idProducto": 664050,
+    "codigoProducto": "K04TAM",
+    "nombreProducto": "TUERCA ANCLAJE P. MUEBLES 1/4-20 8.7MM ZINCADO",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973928,
+    "idProducto": 664050,
+    "codigoProducto": "K04TAM",
+    "nombreProducto": "TUERCA ANCLAJE P. MUEBLES 1/4-20 8.7MM ZINCADO",
+    "idTitulo": 900412,
+    "valorTitulo": "1000",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

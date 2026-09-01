@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 649986,
+    "idMultimedia": 12260,
+    "adjunto": "https://www.mamutstore.com/producto/cornamusa-de-amarre-inoxidable/?srsltid=AfmBOophP9ybnO9weHN7FqleHUBQQ7BEjWeEhtVO_sDP7Ffmiwv09D2J",
+    "nombre": "sin nombre",
+    "idTipoMultimedia": 0,
+    "tipoMultimedia": "",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "",
+    "rutaLogica": ""
+  },
+  {
+    "idProducto": 649986,
+    "idMultimedia": 6638,
+    "adjunto": "01-CRNX.jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 649986,
+    "idMultimedia": 12264,
+    "adjunto": "https://www.mamutstore.com/producto/cornamusa-de-amarre-inoxidable/?srsltid=AfmBOophP9ybnO9weHN7FqleHUBQQ7BEjWeEhtVO_sDP7Ffmiwv09D2J",
+    "nombre": "973733sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

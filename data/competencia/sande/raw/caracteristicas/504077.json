@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974002,
+    "idProducto": 504077,
+    "codigoProducto": "40CTE",
+    "nombreProducto": "CLAVO TECHO.C/G 5.0X4 3/4",
+    "idTitulo": 900399,
+    "valorTitulo": "0.02 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974002,
+    "idProducto": 504077,
+    "codigoProducto": "40CTE",
+    "nombreProducto": "CLAVO TECHO.C/G 5.0X4 3/4",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

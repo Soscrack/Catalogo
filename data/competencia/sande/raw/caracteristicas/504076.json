@@ -1,0 +1,122 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972992,
+    "idProducto": 504076,
+    "codigoProducto": "39PPMP",
+    "nombreProducto": "PERNO PARKER.C/PLANA M10-1.50X20",
+    "idTitulo": 13183,
+    "valorTitulo": "",
+    "titulo": "NOMBRE",
+    "orden": 1
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972992,
+    "idProducto": 504076,
+    "codigoProducto": "39PPMP",
+    "nombreProducto": "PERNO PARKER.C/PLANA M10-1.50X20",
+    "idTitulo": 13973,
+    "valorTitulo": "",
+    "titulo": "TIPO",
+    "orden": 2
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972992,
+    "idProducto": 504076,
+    "codigoProducto": "39PPMP",
+    "nombreProducto": "PERNO PARKER.C/PLANA M10-1.50X20",
+    "idTitulo": 900321,
+    "valorTitulo": "",
+    "titulo": "D NOMINAL",
+    "orden": 3
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972992,
+    "idProducto": 504076,
+    "codigoProducto": "39PPMP",
+    "nombreProducto": "PERNO PARKER.C/PLANA M10-1.50X20",
+    "idTitulo": 12730,
+    "valorTitulo": "",
+    "titulo": "LARGO",
+    "orden": 4
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972992,
+    "idProducto": 504076,
+    "codigoProducto": "39PPMP",
+    "nombreProducto": "PERNO PARKER.C/PLANA M10-1.50X20",
+    "idTitulo": 12447,
+    "valorTitulo": "",
+    "titulo": "D CABEZA",
+    "orden": 5
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972992,
+    "idProducto": 504076,
+    "codigoProducto": "39PPMP",
+    "nombreProducto": "PERNO PARKER.C/PLANA M10-1.50X20",
+    "idTitulo": 13534,
+    "valorTitulo": "",
+    "titulo": "PUNTA",
+    "orden": 6
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972992,
+    "idProducto": 504076,
+    "codigoProducto": "39PPMP",
+    "nombreProducto": "PERNO PARKER.C/PLANA M10-1.50X20",
+    "idTitulo": 900329,
+    "valorTitulo": "",
+    "titulo": "RECUBRIMIENTO",
+    "orden": 7
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972992,
+    "idProducto": 504076,
+    "codigoProducto": "39PPMP",
+    "nombreProducto": "PERNO PARKER.C/PLANA M10-1.50X20",
+    "idTitulo": 398,
+    "valorTitulo": "",
+    "titulo": "CABEZA",
+    "orden": 8
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972992,
+    "idProducto": 504076,
+    "codigoProducto": "39PPMP",
+    "nombreProducto": "PERNO PARKER.C/PLANA M10-1.50X20",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0117 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972992,
+    "idProducto": 504076,
+    "codigoProducto": "39PPMP",
+    "nombreProducto": "PERNO PARKER.C/PLANA M10-1.50X20",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

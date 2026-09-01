@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974119,
+    "idProducto": 623139,
+    "codigoProducto": "01ARG",
+    "nombreProducto": "ARGOLLA 6X40 BRILLANTE 5U",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974119,
+    "idProducto": 623139,
+    "codigoProducto": "01ARG",
+    "nombreProducto": "ARGOLLA 6X40 BRILLANTE 5U",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

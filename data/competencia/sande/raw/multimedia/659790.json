@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 659790,
+    "idMultimedia": 6290,
+    "adjunto": "R01PVCC-K.jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 659790,
+    "idMultimedia": 14463,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-instalacion-obra/?srsltid=AfmBOopLafPbjvQ8rfEUhh3HYZgH4KkUU6JP6O21TC6slAr0V0bWziy0",
+    "nombre": "973365sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

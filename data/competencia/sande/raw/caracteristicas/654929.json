@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 654929,
+    "codigoProducto": "43PCPP",
+    "nombreProducto": "PERNO COCINA PLANA PHILLIPS 1/4-25X2.5",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 654929,
+    "codigoProducto": "43PCPP",
+    "nombreProducto": "PERNO COCINA PLANA PHILLIPS 1/4-25X2.5",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

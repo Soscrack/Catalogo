@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973872,
+    "idProducto": 639599,
+    "codigoProducto": "58TMPA",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO AGLOMERADA #10 70MM ZINC IRIDISCENTE",
+    "idTitulo": 900399,
+    "valorTitulo": "5 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973872,
+    "idProducto": 639599,
+    "codigoProducto": "58TMPA",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO AGLOMERADA #10 70MM ZINC IRIDISCENTE",
+    "idTitulo": 900412,
+    "valorTitulo": "144",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

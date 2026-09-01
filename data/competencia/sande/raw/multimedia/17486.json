@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 17486,
+    "idMultimedia": 15922,
+    "adjunto": "perno-hexagonal-unc-g2-34-10-3-zinc_28998.jpg",
+    "nombre": "17486sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 17486,
+    "idMultimedia": 13752,
+    "adjunto": "https://www.mamutstore.com/producto/perno-hexagonal-grado-2-uncbsw/?srsltid=AfmBOopGr7XPGDIdmBf3_5mJJDx4ZmQSMdaPc1fw6oRQx0VeD4lpufVv",
+    "nombre": "972654sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

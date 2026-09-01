@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973856,
+    "idProducto": 655288,
+    "codigoProducto": "02CMA",
+    "nombreProducto": "CANCAMO ABIERTO MAD 1/4(6.0MM) X 4(100MM)",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973856,
+    "idProducto": 655288,
+    "codigoProducto": "02CMA",
+    "nombreProducto": "CANCAMO ABIERTO MAD 1/4(6.0MM) X 4(100MM)",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

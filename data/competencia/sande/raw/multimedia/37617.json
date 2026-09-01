@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 37617,
+    "idMultimedia": 13141,
+    "adjunto": "golilla-plana-astm-f-436-1pulg-10u-gca_42999.jpg",
+    "nombre": "37617sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 37617,
+    "idMultimedia": 13129,
+    "adjunto": "https://www.mamutstore.com/producto/golilla-astm-f436/?srsltid=AfmBOoqjojCPGlK-ucXtFl-gtIDoi-mUYrsATpJzFk_9ucDjbzw2VpJ8",
+    "nombre": "973813sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

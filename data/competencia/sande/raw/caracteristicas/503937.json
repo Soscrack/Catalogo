@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973968,
+    "idProducto": 503937,
+    "codigoProducto": "03TGZ",
+    "nombreProducto": "TACO GOLPE ZAMAC 1/4X1 1/2",
+    "idTitulo": 900399,
+    "valorTitulo": "0.01 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973968,
+    "idProducto": 503937,
+    "codigoProducto": "03TGZ",
+    "nombreProducto": "TACO GOLPE ZAMAC 1/4X1 1/2",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

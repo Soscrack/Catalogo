@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973932,
+    "idProducto": 6649,
+    "codigoProducto": "03RFR",
+    "nombreProducto": "REMACHE HIERRO REDONDA 3.1MM 12.7MM 5",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973932,
+    "idProducto": 6649,
+    "codigoProducto": "03RFR",
+    "nombreProducto": "REMACHE HIERRO REDONDA 3.1MM 12.7MM 5",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

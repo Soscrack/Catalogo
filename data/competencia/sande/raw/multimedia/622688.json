@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 622688,
+    "idMultimedia": 14124,
+    "adjunto": "remestruacinox-316x1054-100_73917.jpg",
+    "nombre": "622688sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 622688,
+    "idMultimedia": 14123,
+    "adjunto": "https://mamutstore.com.pe/producto/remaches-estructurales-magna-lock/",
+    "nombre": "622688sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 622688,
+    "idMultimedia": 14735,
+    "adjunto": "https://mamutstore.com.pe/producto/remaches-estructurales-magna-lock/",
+    "nombre": "973935sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

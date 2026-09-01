@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 649384,
+    "idMultimedia": 14097,
+    "adjunto": "soporte-al-suelo-para-vigas-de-madera-1_38695.jpg",
+    "nombre": "649384sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 649384,
+    "idMultimedia": 14099,
+    "adjunto": "https://www.mamutstore.com/producto/soporte-al-suelo-para-vigas-de-madera/?srsltid=AfmBOooRfbLKzdUMh7RxBTMU883shENE2B9EMAj2q1a5R5nV_A0GcmHU",
+    "nombre": "973926sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

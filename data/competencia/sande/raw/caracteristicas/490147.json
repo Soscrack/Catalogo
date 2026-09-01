@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973874,
+    "idProducto": 490147,
+    "codigoProducto": "10ATM",
+    "nombreProducto": "ANCLAJE MARIPOSA 3/16X4",
+    "idTitulo": 900399,
+    "valorTitulo": "0.02 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973874,
+    "idProducto": 490147,
+    "codigoProducto": "10ATM",
+    "nombreProducto": "ANCLAJE MARIPOSA 3/16X4",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973957,
+    "idProducto": 498629,
+    "codigoProducto": "03TRT",
+    "nombreProducto": "TARUGO C/TOPE M-8X40",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973957,
+    "idProducto": 498629,
+    "codigoProducto": "03TRT",
+    "nombreProducto": "TARUGO C/TOPE M-8X40",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

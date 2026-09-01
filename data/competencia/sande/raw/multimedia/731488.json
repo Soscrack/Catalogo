@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 731488,
+    "idMultimedia": 13985,
+    "adjunto": "punta-atorn-torx-s2-t30x25mm_54294.jpg",
+    "nombre": "731488sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 731488,
+    "idMultimedia": 13986,
+    "adjunto": "https://www.mamutstore.com/producto/punta-ranura-torx/?srsltid=AfmBOopMnImsQyUNXSLAC0fSwYbKgwI4pgKIjVgX7xr2v2b0Pb74fvFJ",
+    "nombre": "973910sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 731488,
+    "idMultimedia": 13989,
+    "adjunto": "punta-atornillador-ranura-torx-s2_88398.pdf",
+    "nombre": "973910sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

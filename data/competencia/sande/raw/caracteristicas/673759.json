@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974195,
+    "idProducto": 673759,
+    "codigoProducto": "K65TMCS",
+    "nombreProducto": "TORN.MAD.C/FRESA 6.0X160MM ZBR 900 UNID",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974195,
+    "idProducto": 673759,
+    "codigoProducto": "K65TMCS",
+    "nombreProducto": "TORN.MAD.C/FRESA 6.0X160MM ZBR 900 UNID",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

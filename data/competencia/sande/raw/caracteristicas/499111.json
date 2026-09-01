@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973382,
+    "idProducto": 499111,
+    "codigoProducto": "K41PHS",
+    "nombreProducto": "PERNO HEXAGONAL A325.NC 1/2-13X1 1/2",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973382,
+    "idProducto": 499111,
+    "codigoProducto": "K41PHS",
+    "nombreProducto": "PERNO HEXAGONAL A325.NC 1/2-13X1 1/2",
+    "idTitulo": 900412,
+    "valorTitulo": "450",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

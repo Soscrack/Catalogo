@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974080,
+    "idProducto": 17355,
+    "codigoProducto": "202THMI",
+    "nombreProducto": "T.HEX.MT.INOX M6-1.00",
+    "idTitulo": 900399,
+    "valorTitulo": "5 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974080,
+    "idProducto": 17355,
+    "codigoProducto": "202THMI",
+    "nombreProducto": "T.HEX.MT.INOX M6-1.00",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

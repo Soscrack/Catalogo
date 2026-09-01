@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 503158,
+    "idMultimedia": 13679,
+    "adjunto": "hilo-x-metro-unc-12-13-3mt-zinc-1_38947.jpg",
+    "nombre": "503158sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 503158,
+    "idMultimedia": 13678,
+    "adjunto": "https://www.mamutstore.com/producto/esparrago-de-3-mt-unc/?srsltid=AfmBOort8lY3SNlt16XVHYHtcgx2q32XrUIoN8n5qubp8ikVSZenfPi_",
+    "nombre": "973899sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

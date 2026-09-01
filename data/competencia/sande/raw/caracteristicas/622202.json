@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973365,
+    "idProducto": 622202,
+    "codigoProducto": "06PVCC-K",
+    "nombreProducto": "TOR TORX M7.5/6.5X110/25MM VENTANA-MURO ZINC 100U",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973365,
+    "idProducto": 622202,
+    "codigoProducto": "06PVCC-K",
+    "nombreProducto": "TOR TORX M7.5/6.5X110/25MM VENTANA-MURO ZINC 100U",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

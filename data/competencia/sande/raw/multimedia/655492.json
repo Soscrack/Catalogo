@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 655492,
+    "idMultimedia": 16366,
+    "adjunto": "perno-hexagonal-1-x-5-gr-8_80609.jpg",
+    "nombre": "655492sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

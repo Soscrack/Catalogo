@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 7023,
+    "idMultimedia": 14971,
+    "adjunto": "tuerca-hexagonal-unf-g2-516-24-100_69021.jpg",
+    "nombre": "7023sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 7023,
+    "idMultimedia": 14844,
+    "adjunto": "https://www.mamutstore.com/producto/tuerca-hexagonal-grado-2-unf/?srsltid=AfmBOorSxlVCJv9awOUl-xQelFxnADdNw_ZLt2QNdwNCoH1vTSm4DyiU",
+    "nombre": "973980sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

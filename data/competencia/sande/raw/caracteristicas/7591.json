@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973962,
+    "idProducto": 7591,
+    "codigoProducto": "04TSN",
+    "nombreProducto": "T.HEX.NYLOCK.NC 3/8-16",
+    "idTitulo": 900399,
+    "valorTitulo": "0.007 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973962,
+    "idProducto": 7591,
+    "codigoProducto": "04TSN",
+    "nombreProducto": "T.HEX.NYLOCK.NC 3/8-16",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

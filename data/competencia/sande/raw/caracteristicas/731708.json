@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973905,
+    "idProducto": 731708,
+    "codigoProducto": "07PEU",
+    "nombreProducto": "PERNO U PLET Y TCA 3/8X4.3/4-3.1/2",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973905,
+    "idProducto": 731708,
+    "codigoProducto": "07PEU",
+    "nombreProducto": "PERNO U PLET Y TCA 3/8X4.3/4-3.1/2",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

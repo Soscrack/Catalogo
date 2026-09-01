@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972993,
+    "idProducto": 503856,
+    "codigoProducto": "HN02",
+    "nombreProducto": "REMACHADORA MANUAL HN02",
+    "idTitulo": 900399,
+    "valorTitulo": "16 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972993,
+    "idProducto": 503856,
+    "codigoProducto": "HN02",
+    "nombreProducto": "REMACHADORA MANUAL HN02",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

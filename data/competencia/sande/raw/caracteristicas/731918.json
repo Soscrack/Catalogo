@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973944,
+    "idProducto": 731918,
+    "codigoProducto": "01GAB",
+    "nombreProducto": "GANCHO MULTIUSO 12X120",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973944,
+    "idProducto": 731918,
+    "codigoProducto": "01GAB",
+    "nombreProducto": "GANCHO MULTIUSO 12X120",
+    "idTitulo": 900412,
+    "valorTitulo": "2",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

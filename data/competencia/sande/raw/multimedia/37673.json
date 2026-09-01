@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 37673,
+    "idMultimedia": 17734,
+    "adjunto": "tornillo-metalcom-framer-7-38mm-716_97618.jpg",
+    "nombre": "37673sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 37673,
+    "idMultimedia": 12198,
+    "adjunto": "https://www.mamutstore.com/producto/framer-punta-broca/?srsltid=AfmBOorFO5_6iv3KatuM1DWjbUu9ngh-2M_cHrhEMhwDdsWz3arzMv3W",
+    "nombre": "sin nombre",
+    "idTipoMultimedia": 0,
+    "tipoMultimedia": "",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "",
+    "rutaLogica": ""
+  },
+  {
+    "idProducto": 37673,
+    "idMultimedia": 12202,
+    "adjunto": "https://www.mamutstore.com/producto/framer-punta-broca/?srsltid=AfmBOorFO5_6iv3KatuM1DWjbUu9ngh-2M_cHrhEMhwDdsWz3arzMv3W",
+    "nombre": "973729sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

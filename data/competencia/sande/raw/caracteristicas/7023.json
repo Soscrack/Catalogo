@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973980,
+    "idProducto": 7023,
+    "codigoProducto": "02TH1",
+    "nombreProducto": "TUERCA HEXAGONAL UNF G2 5/16\"-24 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.004 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973980,
+    "idProducto": 7023,
+    "codigoProducto": "02TH1",
+    "nombreProducto": "TUERCA HEXAGONAL UNF G2 5/16\"-24 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

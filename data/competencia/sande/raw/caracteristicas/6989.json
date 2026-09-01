@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973254,
+    "idProducto": 6989,
+    "codigoProducto": "202TCH",
+    "nombreProducto": "TUERCA COCINA HEXAGONAL MT",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0005 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973254,
+    "idProducto": 6989,
+    "codigoProducto": "202TCH",
+    "nombreProducto": "TUERCA COCINA HEXAGONAL MT",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973852,
+    "idProducto": 650434,
+    "codigoProducto": "90AE09",
+    "nombreProducto": "GOLILLA \"K\" (CAPELOTE) C/ JUNTA POLIETILENO, AGUJERO DE 6.5MM, ZINCADA, COLOR GRIS",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973852,
+    "idProducto": 650434,
+    "codigoProducto": "90AE09",
+    "nombreProducto": "GOLILLA \"K\" (CAPELOTE) C/ JUNTA POLIETILENO, AGUJERO DE 6.5MM, ZINCADA, COLOR GRIS",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974116,
+    "idProducto": 731888,
+    "codigoProducto": "01URA",
+    "nombreProducto": "UNION RAPIDA 5/32 (4.0)X40",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974116,
+    "idProducto": 731888,
+    "codigoProducto": "01URA",
+    "nombreProducto": "UNION RAPIDA 5/32 (4.0)X40",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

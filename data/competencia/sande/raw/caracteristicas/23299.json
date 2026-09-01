@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973961,
+    "idProducto": 23299,
+    "codigoProducto": "B02THM8",
+    "nombreProducto": "T.HEX.MT.C/8 M8-1.25",
+    "idTitulo": 900399,
+    "valorTitulo": "0.004 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973961,
+    "idProducto": 23299,
+    "codigoProducto": "B02THM8",
+    "nombreProducto": "T.HEX.MT.C/8 M8-1.25",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 652144,
+    "idMultimedia": 13878,
+    "adjunto": "perno-parker-rmetrica-cbzplana-iso_18545.jpg",
+    "nombre": "652144sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 652144,
+    "idMultimedia": 13894,
+    "adjunto": "https://www.mamutstore.com/producto/perno-parker-rosca-metrica-grado-iso-12-9/?srsltid=AfmBOoo2XDqxw7gBQPiFAnow4eDoOtNVf0_EBZFfVdt4c7YJAZrpHW0q",
+    "nombre": "972992sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

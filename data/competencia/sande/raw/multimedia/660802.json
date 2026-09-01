@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 660802,
+    "idMultimedia": 12782,
+    "adjunto": "turbo-screw-torx-14-80mm60mm_83653.jpg",
+    "nombre": "660802sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 660802,
+    "idMultimedia": 12783,
+    "adjunto": "turbo-screw-torx-14-80mm60mm_93869.jpg",
+    "nombre": "660802sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 660802,
+    "idMultimedia": 12755,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-turbo-screw-torx/?srsltid=AfmBOor0n_KeN-G8CslDZtXtF_Gt7kIzBQIb1ozmGT6UHC1rn-uca1J1",
+    "nombre": "973783sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

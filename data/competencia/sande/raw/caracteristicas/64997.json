@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973779,
+    "idProducto": 64997,
+    "codigoProducto": "R107RLIN",
+    "nombreProducto": "AUTOPERFORANTE HEX GOL/INTEGRADA #12-14 3/4\" BROCA RUSPERT",
+    "idTitulo": 900399,
+    "valorTitulo": "0.005 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973779,
+    "idProducto": 64997,
+    "codigoProducto": "R107RLIN",
+    "nombreProducto": "AUTOPERFORANTE HEX GOL/INTEGRADA #12-14 3/4\" BROCA RUSPERT",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 654118,
+    "idMultimedia": 13188,
+    "adjunto": "golilla-plana-corriente-1-zinc-10_99737.jpg",
+    "nombre": "654118sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 654118,
+    "idMultimedia": 13182,
+    "adjunto": "https://www.mamutstore.com/producto/golilla-plana-corriente/?srsltid=AfmBOorCTGYnp6VcgiHc-VdTJ7NZgsTduE3gwuEQ5avNOljL57W0JX2I",
+    "nombre": "973817sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 654118,
+    "idMultimedia": 13183,
+    "adjunto": "golilla-plana-corriente_36476.pdf",
+    "nombre": "973817sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

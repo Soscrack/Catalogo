@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974202,
+    "idProducto": 667746,
+    "codigoProducto": "120QE01",
+    "nombreProducto": "GORRO HEXAGONAL HDPE 10.0XRL9010",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974202,
+    "idProducto": 667746,
+    "codigoProducto": "120QE01",
+    "nombreProducto": "GORRO HEXAGONAL HDPE 10.0XRL9010",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

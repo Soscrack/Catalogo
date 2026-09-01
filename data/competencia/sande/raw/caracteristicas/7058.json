@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973262,
+    "idProducto": 7058,
+    "codigoProducto": "01TH5",
+    "nombreProducto": "TUERCA HEXAGONAL G5 UNC 1/4-20 100U",
+    "idTitulo": 900399,
+    "valorTitulo": "0.003 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973262,
+    "idProducto": 7058,
+    "codigoProducto": "01TH5",
+    "nombreProducto": "TUERCA HEXAGONAL G5 UNC 1/4-20 100U",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

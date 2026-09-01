@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 42482,
+    "idMultimedia": 13161,
+    "adjunto": "golilla-plana-calibrada-78-zinc-10_73278.jpg",
+    "nombre": "42482sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

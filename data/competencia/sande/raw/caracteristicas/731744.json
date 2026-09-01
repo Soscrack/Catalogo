@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973927,
+    "idProducto": 731744,
+    "codigoProducto": "05TH8",
+    "nombreProducto": "T.HEX.G8.NC 9/16-12",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973927,
+    "idProducto": 731744,
+    "codigoProducto": "05TH8",
+    "nombreProducto": "T.HEX.G8.NC 9/16-12",
+    "idTitulo": 900412,
+    "valorTitulo": "20",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

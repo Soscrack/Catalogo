@@ -1,0 +1,62 @@
+[
+  {
+    "idProducto": 19290,
+    "idMultimedia": 17576,
+    "adjunto": "tornillo-volcanita-frs-6-18-34mm_51872.jpg",
+    "nombre": "19290sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 19290,
+    "idMultimedia": 11880,
+    "adjunto": "https://sandeonline.cl/sistema/abastec/maestro/mcatalogo/23601103?categoria=973345&type=q",
+    "nombre": "973345sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 19290,
+    "idMultimedia": 11655,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-volcanita-rosca-metal/?srsltid=AfmBOorypj_TGCiVEMy9XSgZ3IKSxBIWCNicq_NFfRBrKb0qNR7YvUQO",
+    "nombre": "973345sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 19290,
+    "idMultimedia": 11656,
+    "adjunto": "tornillo-volcanita-frs_33626.pdf",
+    "nombre": "973345sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 19290,
+    "idMultimedia": 11660,
+    "adjunto": "https://www.youtube.com/watch?v=lpDXWetTAIw",
+    "nombre": "973345sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

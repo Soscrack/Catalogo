@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 490140,
+    "idMultimedia": 13501,
+    "adjunto": "perno-de-anclaje-camisa-unc-12-13_45028.jpg",
+    "nombre": "490140sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 99122,
+    "idMultimedia": 4832,
+    "adjunto": "ETJA.jpg",
+    "nombre": "99122 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 99122,
+    "idMultimedia": 15968,
+    "adjunto": "https://www.mamutstore.com/producto/tuerca-jaula/?srsltid=AfmBOooxYLEi3IIlnIZepgYr5uQ7lNKiAckgvdFor2bCsYpPW2B9Jaez",
+    "nombre": "972690sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

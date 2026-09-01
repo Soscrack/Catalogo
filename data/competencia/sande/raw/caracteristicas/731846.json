@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973950,
+    "idProducto": 731846,
+    "codigoProducto": "02ROS",
+    "nombreProducto": "ROLDANA SIMPLE 3/4[19]X3/16 [4.7]",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973950,
+    "idProducto": 731846,
+    "codigoProducto": "02ROS",
+    "nombreProducto": "ROLDANA SIMPLE 3/4[19]X3/16 [4.7]",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

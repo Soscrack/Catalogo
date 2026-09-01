@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973902,
+    "idProducto": 662495,
+    "codigoProducto": "23PPKP",
+    "nombreProducto": "PERNO PARKER ROSCA UNC #8-32 5/32 1 25U",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973902,
+    "idProducto": 662495,
+    "codigoProducto": "23PPKP",
+    "nombreProducto": "PERNO PARKER ROSCA UNC #8-32 5/32 1 25U",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

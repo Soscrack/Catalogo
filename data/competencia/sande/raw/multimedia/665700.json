@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 665700,
+    "idMultimedia": 14818,
+    "adjunto": "aterrajador-tipo-f-cabeza-pan-8-32-x_91623.jpg",
+    "nombre": "665700sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 665700,
+    "idMultimedia": 14820,
+    "adjunto": "https://www.mamutstore.com/producto/aterrajador-tipo-f-cabeza-pan/?srsltid=AfmBOoqJzeGz32f3EsguQ5hAxuMRLlvsugHMoPcP1RT3-tiT9OJJ0bKF",
+    "nombre": "973995sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

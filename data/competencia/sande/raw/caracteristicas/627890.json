@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973365,
+    "idProducto": 627890,
+    "codigoProducto": "07PVCC-K",
+    "nombreProducto": "TORNILLO TORX C/PLANA PVC/CONCRETO M7.5/6.5 120/25",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973365,
+    "idProducto": 627890,
+    "codigoProducto": "07PVCC-K",
+    "nombreProducto": "TORNILLO TORX C/PLANA PVC/CONCRETO M7.5/6.5 120/25",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

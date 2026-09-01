@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 6717,
+    "idMultimedia": 14651,
+    "adjunto": "tornillo-roscalata-pan-recta-10-48mm_35479.jpg",
+    "nombre": "6717sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 6717,
+    "idMultimedia": 14679,
+    "adjunto": "https://www.mamutstore.com/producto/roscalata-cabeza-pan-ranura-recta/?srsltid=AfmBOopUafPFn9_AxRtvqScZ0LoZknMfEK2kYnO55FQB-TsQbtq0OzAg",
+    "nombre": "973984sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 6717,
+    "idMultimedia": 14681,
+    "adjunto": "roscalata-cabeza-pan-ranura-recta_53187.pdf",
+    "nombre": "973984sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

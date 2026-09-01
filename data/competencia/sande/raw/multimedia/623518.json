@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 623518,
+    "idMultimedia": 15057,
+    "adjunto": "tor-herrajes-739x38mm-punta-fina_68433.jpg",
+    "nombre": "623518sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 623518,
+    "idMultimedia": 14112,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-colocacion-de-herrajes/?srsltid=AfmBOor8FuZBpZqd7jXHh_yQBfGoZM1VCvwq7s7_FqX8C6oZw0xcxFoz",
+    "nombre": "973929sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

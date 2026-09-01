@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 666793,
+    "idMultimedia": 13172,
+    "adjunto": "golplana-cda-516_71176.jpg",
+    "nombre": "666793sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

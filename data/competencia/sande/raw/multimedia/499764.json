@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 499764,
+    "idMultimedia": 13645,
+    "adjunto": "hilo-x-metro-unc-1-8-1mt-zinc-1_86331.jpg",
+    "nombre": "499764sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 499764,
+    "idMultimedia": 13641,
+    "adjunto": "https://www.mamutstore.com/producto/esparrago-de-1-metro-unc/?srsltid=AfmBOoryRsQ0UDnEWvD9xWnn5PY-z7HfYZbQ3EygoSXniczu1TrWSKAz",
+    "nombre": "972650sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

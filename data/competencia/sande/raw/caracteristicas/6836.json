@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973970,
+    "idProducto": 6836,
+    "codigoProducto": "04RLO",
+    "nombreProducto": "TORNILLO ROSCALATA OVAL RECTA #4 2.8MM 3/4\" FINA ZINC",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0007 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973970,
+    "idProducto": 6836,
+    "codigoProducto": "04RLO",
+    "nombreProducto": "TORNILLO ROSCALATA OVAL RECTA #4 2.8MM 3/4\" FINA ZINC",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

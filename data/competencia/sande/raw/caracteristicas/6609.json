@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973931,
+    "idProducto": 6609,
+    "codigoProducto": "31RAR",
+    "nombreProducto": "REMACHE ALUMINIO REDONDA 4.5MM 13MM 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0008 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973931,
+    "idProducto": 6609,
+    "codigoProducto": "31RAR",
+    "nombreProducto": "REMACHE ALUMINIO REDONDA 4.5MM 13MM 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

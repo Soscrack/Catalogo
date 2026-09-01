@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973879,
+    "idProducto": 731886,
+    "codigoProducto": "02ATA",
+    "nombreProducto": "ABRAZ TUBULAR ALUM 1/8 [3.1]",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973879,
+    "idProducto": 731886,
+    "codigoProducto": "02ATA",
+    "nombreProducto": "ABRAZ TUBULAR ALUM 1/8 [3.1]",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

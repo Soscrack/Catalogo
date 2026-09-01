@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973966,
+    "idProducto": 17531,
+    "codigoProducto": "B210TH1",
+    "nombreProducto": "TUERCA HEXAGONAL UNC G2 7/8\"-9 ZINC 10",
+    "idTitulo": 900399,
+    "valorTitulo": "0.08 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973966,
+    "idProducto": 17531,
+    "codigoProducto": "B210TH1",
+    "nombreProducto": "TUERCA HEXAGONAL UNC G2 7/8\"-9 ZINC 10",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 655097,
+    "idMultimedia": 14833,
+    "adjunto": "autoperforante-cbzwafer-calas-12-24_95818.jpg",
+    "nombre": "655097sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

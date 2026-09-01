@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973990,
+    "idProducto": 665463,
+    "codigoProducto": "24RLTP",
+    "nombreProducto": "TORNILLO ROSCALATA TRUSS PHILLIPS #8-18 1.1/2",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973990,
+    "idProducto": 665463,
+    "codigoProducto": "24RLTP",
+    "nombreProducto": "TORNILLO ROSCALATA TRUSS PHILLIPS #8-18 1.1/2",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

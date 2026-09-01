@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974015,
+    "idProducto": 667691,
+    "codigoProducto": "06TSNI",
+    "nombreProducto": "TCA.INOX.SG.NYLON 5/8-11",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974015,
+    "idProducto": 667691,
+    "codigoProducto": "06TSNI",
+    "nombreProducto": "TCA.INOX.SG.NYLON 5/8-11",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 490181,
+    "idMultimedia": 10240,
+    "adjunto": "Picsart_25-01-20_13-50-01-661_89993.png",
+    "nombre": "237184sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

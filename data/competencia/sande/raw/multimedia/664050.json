@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 664050,
+    "idMultimedia": 15019,
+    "adjunto": "tuerca-anclaje-p-muebles-14-20-87mm_10620.jpg",
+    "nombre": "664050sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 664050,
+    "idMultimedia": 14950,
+    "adjunto": "https://mamutstore.com.pe/producto/tuerca-anclaje-para-muebles/",
+    "nombre": "973928sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

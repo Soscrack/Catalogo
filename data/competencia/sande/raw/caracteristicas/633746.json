@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973967,
+    "idProducto": 633746,
+    "codigoProducto": "02TGA",
+    "nombreProducto": "TUERCA.GORRO.UNC. #8-32[5/32]",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973967,
+    "idProducto": 633746,
+    "codigoProducto": "02TGA",
+    "nombreProducto": "TUERCA.GORRO.UNC. #8-32[5/32]",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

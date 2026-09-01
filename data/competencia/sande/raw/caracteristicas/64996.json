@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974000,
+    "idProducto": 64996,
+    "codigoProducto": "120ATPF",
+    "nombreProducto": "AUTOPERFORANTE HEX VIGA GOL-EPDM #12-24 1.1/4\" BROCA RUSPERT",
+    "idTitulo": 900399,
+    "valorTitulo": "4 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974000,
+    "idProducto": 64996,
+    "codigoProducto": "120ATPF",
+    "nombreProducto": "AUTOPERFORANTE HEX VIGA GOL-EPDM #12-24 1.1/4\" BROCA RUSPERT",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

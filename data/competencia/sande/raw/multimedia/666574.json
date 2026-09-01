@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 666574,
+    "idMultimedia": 17245,
+    "adjunto": "tuerca-de-ojo-10mm_45238.jpg",
+    "nombre": "666574sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666574,
+    "idMultimedia": 17244,
+    "adjunto": "https://www.mamutstore.com/producto/toj-tuerca-de-ojo/?srsltid=AfmBOoo6lo2FKseX8AYDyWZ9PwT0rME9y-vnRDkbVrFq6S8hSIMlJdTx",
+    "nombre": "974115sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

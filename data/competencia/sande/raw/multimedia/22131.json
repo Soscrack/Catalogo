@@ -1,0 +1,50 @@
+[
+  {
+    "idProducto": 22131,
+    "idMultimedia": 14147,
+    "adjunto": "remache-pop-40mm-12mm-100_52195.jpg",
+    "nombre": "22131sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 22131,
+    "idMultimedia": 14292,
+    "adjunto": "remache-tipo-pop-aluminio_23558.pdf",
+    "nombre": "973936sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 22131,
+    "idMultimedia": 14293,
+    "adjunto": "https://www.mamutstore.com/producto/remache-tipo-pop-aluminio/?srsltid=AfmBOopeQQnOew5KS0LaTfFrGEwYw5bCrtQL2nuuxdBo6qxRy1s7jRz1",
+    "nombre": "973936sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 22131,
+    "idMultimedia": 14294,
+    "adjunto": "https://www.youtube.com/watch?v=9Ycnq1ki31E",
+    "nombre": "973936sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

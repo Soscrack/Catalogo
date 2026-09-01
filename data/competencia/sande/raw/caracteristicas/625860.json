@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973790,
+    "idProducto": 625860,
+    "codigoProducto": "102CECM",
+    "nombreProducto": "CAD E.CORTO D-766 3MM[80X1]",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973790,
+    "idProducto": 625860,
+    "codigoProducto": "102CECM",
+    "nombreProducto": "CAD E.CORTO D-766 3MM[80X1]",
+    "idTitulo": 900412,
+    "valorTitulo": "70",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973964,
+    "idProducto": 661573,
+    "codigoProducto": "06TFA",
+    "nombreProducto": "T. HEX FLANGE G5 1/2-13 BRILLANTE 50U",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973964,
+    "idProducto": 661573,
+    "codigoProducto": "06TFA",
+    "nombreProducto": "T. HEX FLANGE G5 1/2-13 BRILLANTE 50U",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

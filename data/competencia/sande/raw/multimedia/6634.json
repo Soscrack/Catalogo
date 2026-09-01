@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 6634,
+    "idMultimedia": 14189,
+    "adjunto": "remache-hojalata-plana-31mm-56mm-5_41869.jpg",
+    "nombre": "6634sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

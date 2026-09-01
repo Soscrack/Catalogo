@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973901,
+    "idProducto": 661576,
+    "codigoProducto": "29PAC",
+    "nombreProducto": "PERNO PARKER PRISIONERO UNC ISO 12.9 5/16-18 5/8",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973901,
+    "idProducto": 661576,
+    "codigoProducto": "29PAC",
+    "nombreProducto": "PERNO PARKER PRISIONERO UNC ISO 12.9 5/16-18 5/8",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973859,
+    "idProducto": 639083,
+    "codigoProducto": "105CAPC",
+    "nombreProducto": "CABLE AC GALV 6X7+FC 5/16 CRT 100M",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973859,
+    "idProducto": 639083,
+    "codigoProducto": "105CAPC",
+    "nombreProducto": "CABLE AC GALV 6X7+FC 5/16 CRT 100M",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

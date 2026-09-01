@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973898,
+    "idProducto": 636676,
+    "codigoProducto": "B110HPMM",
+    "nombreProducto": "HILO X METRO M16-2.00 1MT",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973898,
+    "idProducto": 636676,
+    "codigoProducto": "B110HPMM",
+    "nombreProducto": "HILO X METRO M16-2.00 1MT",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

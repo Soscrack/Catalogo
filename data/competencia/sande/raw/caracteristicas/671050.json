@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973437,
+    "idProducto": 671050,
+    "codigoProducto": "06GPAF",
+    "nombreProducto": "GOLILLA PLANA ANCHA 3/8\" X 1.1/4\" ZIN BRILLANTE 50",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973437,
+    "idProducto": 671050,
+    "codigoProducto": "06GPAF",
+    "nombreProducto": "GOLILLA PLANA ANCHA 3/8\" X 1.1/4\" ZIN BRILLANTE 50",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

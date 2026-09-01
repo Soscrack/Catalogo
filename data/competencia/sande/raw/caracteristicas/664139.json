@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973992,
+    "idProducto": 664139,
+    "codigoProducto": "02TRE",
+    "nombreProducto": "TARUGO ESPIGA M6 X 30",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973992,
+    "idProducto": 664139,
+    "codigoProducto": "02TRE",
+    "nombreProducto": "TARUGO ESPIGA M6 X 30",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 664200,
+    "idMultimedia": 10229,
+    "adjunto": "01-VRMM-1_40774.jpg",
+    "nombre": "237184sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

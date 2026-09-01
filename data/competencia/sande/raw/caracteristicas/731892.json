@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973946,
+    "idProducto": 731892,
+    "codigoProducto": "01SGM",
+    "nombreProducto": "GANCHO MULTIUSO MOVIL 10X90 [5X1]",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973946,
+    "idProducto": 731892,
+    "codigoProducto": "01SGM",
+    "nombreProducto": "GANCHO MULTIUSO MOVIL 10X90 [5X1]",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

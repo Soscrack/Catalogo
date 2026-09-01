@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 20131,
+    "idMultimedia": 13086,
+    "adjunto": "clavo-acero-25x40_29623.jpg",
+    "nombre": "20131sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

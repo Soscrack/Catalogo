@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 498673,
+    "idMultimedia": 13663,
+    "adjunto": "hilo-x-metro-unc-516-18-1mt-1_31902.jpg",
+    "nombre": "498673sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 498673,
+    "idMultimedia": 13641,
+    "adjunto": "https://www.mamutstore.com/producto/esparrago-de-1-metro-unc/?srsltid=AfmBOoryRsQ0UDnEWvD9xWnn5PY-z7HfYZbQ3EygoSXniczu1TrWSKAz",
+    "nombre": "972650sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973966,
+    "idProducto": 7039,
+    "codigoProducto": "207TH1",
+    "nombreProducto": "TUERCA HEXAGONAL UNC G2 9/16\"-12 25",
+    "idTitulo": 900399,
+    "valorTitulo": "0.03 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973966,
+    "idProducto": 7039,
+    "codigoProducto": "207TH1",
+    "nombreProducto": "TUERCA HEXAGONAL UNC G2 9/16\"-12 25",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -290,6 +290,16 @@ class Riverso_POS_Admin_Menu {
             [$this, 'render_reports']
         );
         
+        // Export FACTO
+        add_submenu_page(
+            'riverso-pos',
+            __('Competencia', 'riverso-pos'),
+            __('Competencia', 'riverso-pos'),
+            'riverso_manage_competencia',
+            'riverso-pos-competencia',
+            [$this, 'render_competencia']
+        );
+
         // Configuración
         add_submenu_page(
             'riverso-pos',
@@ -531,6 +541,13 @@ class Riverso_POS_Admin_Menu {
 
     public function render_facto_export() {
         $this->render_page('facto-export');
+    }
+
+    public function render_competencia() {
+        if (!current_user_can('riverso_manage_competencia')) {
+            wp_die(esc_html__('No tienes permisos para acceder a esta página.', 'riverso-pos'));
+        }
+        $this->render_page('competencia-matching');
     }
     
     /**

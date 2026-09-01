@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973732,
+    "idProducto": 501364,
+    "codigoProducto": "B30ATHN",
+    "nombreProducto": "AUTOPERFORANTE TRUEGRIP GOL-EPDM #9-15 2\" FINA ZINC",
+    "idTitulo": 900399,
+    "valorTitulo": "0.004 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973732,
+    "idProducto": 501364,
+    "codigoProducto": "B30ATHN",
+    "nombreProducto": "AUTOPERFORANTE TRUEGRIP GOL-EPDM #9-15 2\" FINA ZINC",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

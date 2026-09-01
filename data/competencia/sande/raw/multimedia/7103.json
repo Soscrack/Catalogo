@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 7103,
+    "idMultimedia": 10964,
+    "adjunto": "Screenshot_2_56545.jpg",
+    "nombre": "7103sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 7103,
+    "idMultimedia": 10965,
+    "adjunto": "Screenshot_3_92330.jpg",
+    "nombre": "7103sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 7103,
+    "idMultimedia": 15067,
+    "adjunto": "https://www.mamutstore.com/producto/tuerca-hexagonal-metrica-iso-clase-5/?srsltid=AfmBOooPvrH4y8Pw34PSGOOgQpbIODmXEiYVvYvQ958cXVx-FuZd7rdE",
+    "nombre": "974013sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

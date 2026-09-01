@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 490135,
+    "idMultimedia": 13274,
+    "adjunto": "perno-anclaje-camisa-516-18-112-50_80506.jpg",
+    "nombre": "490135sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

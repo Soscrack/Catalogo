@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 498652,
+    "idMultimedia": 14787,
+    "adjunto": "tarugo-nylon-pamar-m-6x30_76094.jpg",
+    "nombre": "498652sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 498652,
+    "idMultimedia": 14793,
+    "adjunto": "https://www.mamutstore.com/producto/trac-tarugo-de-nylon-para-amarra/?srsltid=AfmBOooClSTA3YyxMPgyrKZhRzw_tZXIZp4f9wjNiPt6n28hgps6cO3a",
+    "nombre": "973993sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

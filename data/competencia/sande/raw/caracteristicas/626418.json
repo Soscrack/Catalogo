@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973790,
+    "idProducto": 626418,
+    "codigoProducto": "103CECM",
+    "nombreProducto": "CAD E.CORTO D-766 4MM[38X1]",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973790,
+    "idProducto": 626418,
+    "codigoProducto": "103CECM",
+    "nombreProducto": "CAD E.CORTO D-766 4MM[38X1]",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

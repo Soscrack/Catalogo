@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 42089,
+    "idMultimedia": 17733,
+    "adjunto": "tornillo-metalcom-framer-7-38mm-716_19379.jpg",
+    "nombre": "42089sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 42089,
+    "idMultimedia": 12201,
+    "adjunto": "https://www.mamutstore.com/producto/framer-punta-fina/?srsltid=AfmBOopoIOSyJiNWKnljRVv0QO3rDm5XpzIFcjadtgqwSD-nzl-sMkES",
+    "nombre": "973730sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

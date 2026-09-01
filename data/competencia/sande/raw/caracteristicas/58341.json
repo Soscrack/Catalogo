@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972993,
+    "idProducto": 58341,
+    "codigoProducto": "SRC502H",
+    "nombreProducto": "REMACHADORA MANUAL 502H/HR702 [4.8] 1",
+    "idTitulo": 900399,
+    "valorTitulo": "0.62 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 972993,
+    "idProducto": 58341,
+    "codigoProducto": "SRC502H",
+    "nombreProducto": "REMACHADORA MANUAL 502H/HR702 [4.8] 1",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973974,
+    "idProducto": 662897,
+    "codigoProducto": "22RLBP",
+    "nombreProducto": "TORNILLO ROSCALATA BINDIGN PHILLIPS #8 L 1",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973974,
+    "idProducto": 662897,
+    "codigoProducto": "22RLBP",
+    "nombreProducto": "TORNILLO ROSCALATA BINDIGN PHILLIPS #8 L 1",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

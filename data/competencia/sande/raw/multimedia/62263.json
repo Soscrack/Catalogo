@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 62263,
+    "idMultimedia": 19649,
+    "adjunto": "thexnylocknc-34-10-25un_17444.jpg",
+    "nombre": "62263sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 62263,
+    "idMultimedia": 14979,
+    "adjunto": "https://www.mamutstore.com/producto/tuerca-hexagonal-con-seguro-de-nylon-unc/?srsltid=AfmBOopm28A6pUOmQg6AZsmouLC9Q1WPAyFlV3UavBtlEnH334VZmd9p",
+    "nombre": "974014sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 54272,
+    "idMultimedia": 14831,
+    "adjunto": "autoperforante-cbzwafer-calas-10-24_10896.jpg",
+    "nombre": "54272sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 54272,
+    "idMultimedia": 12844,
+    "adjunto": "https://www.mamutstore.com/producto/autoperforante-phillips-con-alas/?srsltid=AfmBOooaGNAZZ3aPopNYskYI0yv4mv81g13im1MFYKgUsiZqwGQjvXfZ",
+    "nombre": "973786sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 54272,
+    "idMultimedia": 12845,
+    "adjunto": "https://www.youtube.com/watch?v=zVr6AyCrxss",
+    "nombre": "973786sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

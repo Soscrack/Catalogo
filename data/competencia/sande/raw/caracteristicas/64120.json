@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973497,
+    "idProducto": 64120,
+    "codigoProducto": "117PCRB",
+    "nombreProducto": "PERNO COCINA CAB. REDONDA PCRB #8-32[5/32] 3/4PULG 100U",
+    "idTitulo": 900399,
+    "valorTitulo": "0.002 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973497,
+    "idProducto": 64120,
+    "codigoProducto": "117PCRB",
+    "nombreProducto": "PERNO COCINA CAB. REDONDA PCRB #8-32[5/32] 3/4PULG 100U",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

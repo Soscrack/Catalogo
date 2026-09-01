@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973875,
+    "idProducto": 490138,
+    "codigoProducto": "12ADC",
+    "nombreProducto": "PERNO DE ANCLAJE CAMISA UNC 3/8\"-16 3\" 50",
+    "idTitulo": 900399,
+    "valorTitulo": "0.04 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973875,
+    "idProducto": 490138,
+    "codigoProducto": "12ADC",
+    "nombreProducto": "PERNO DE ANCLAJE CAMISA UNC 3/8\"-16 3\" 50",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

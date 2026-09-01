@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973901,
+    "idProducto": 493057,
+    "codigoProducto": "27PAC",
+    "nombreProducto": "PRI.ALLEN UNC 5/16-18X1/2",
+    "idTitulo": 900399,
+    "valorTitulo": "0.002 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973901,
+    "idProducto": 493057,
+    "codigoProducto": "27PAC",
+    "nombreProducto": "PRI.ALLEN UNC 5/16-18X1/2",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

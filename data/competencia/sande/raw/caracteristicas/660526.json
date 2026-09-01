@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973896,
+    "idProducto": 660526,
+    "codigoProducto": "06HPMI",
+    "nombreProducto": "HILO X METRO 3/8\"-16 1MT C304",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973896,
+    "idProducto": 660526,
+    "codigoProducto": "06HPMI",
+    "nombreProducto": "HILO X METRO 3/8\"-16 1MT C304",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973901,
+    "idProducto": 63880,
+    "codigoProducto": "07PAC",
+    "nombreProducto": "PRI.ALLEN UNC #10-24[3/16]X3/8",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0008 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973901,
+    "idProducto": 63880,
+    "codigoProducto": "07PAC",
+    "nombreProducto": "PRI.ALLEN UNC #10-24[3/16]X3/8",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973961,
+    "idProducto": 36590,
+    "codigoProducto": "B03THM8",
+    "nombreProducto": "T.HEX.MT.C/8 M10-1.50",
+    "idTitulo": 900399,
+    "valorTitulo": "0.01 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973961,
+    "idProducto": 36590,
+    "codigoProducto": "B03THM8",
+    "nombreProducto": "T.HEX.MT.C/8 M10-1.50",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

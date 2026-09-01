@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 663307,
+    "idMultimedia": 10231,
+    "adjunto": "Captura de pantalla 2025-01-08 112306_79962.png",
+    "nombre": "237184sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 663307,
+    "idMultimedia": 14095,
+    "adjunto": "https://www.mamutstore.com/producto/tcop-tornillos-para-concreto-cabeza-plana/?srsltid=AfmBOopGnylhzU6EEeHqDA4nHTXVWn5JetF-MofZCFM90VfiDIAZU06E",
+    "nombre": "973925sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

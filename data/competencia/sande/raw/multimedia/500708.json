@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 500708,
+    "idMultimedia": 13233,
+    "adjunto": "golilla-acero-pvc-10-18mm-galv-1_57663.jpg",
+    "nombre": "500708sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 500708,
+    "idMultimedia": 6023,
+    "adjunto": "03GPVC.jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 500708,
+    "idMultimedia": 13232,
+    "adjunto": "https://www.mamutstore.com/producto/gpvc-golillas-de-acero-pvc/?srsltid=AfmBOorQ2k-TVjvCaVeKWJLaMSRZE_zNv5nFrv3iBDJ9-vjIOTcr_UOp",
+    "nombre": "973848sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973765,
+    "idProducto": 638632,
+    "codigoProducto": "01TACT",
+    "nombreProducto": "TAPA NYLON C/TCA 79X3/8-16",
+    "idTitulo": 900399,
+    "valorTitulo": "5 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973765,
+    "idProducto": 638632,
+    "codigoProducto": "01TACT",
+    "nombreProducto": "TAPA NYLON C/TCA 79X3/8-16",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

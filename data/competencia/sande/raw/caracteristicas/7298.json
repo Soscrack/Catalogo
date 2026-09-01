@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974240,
+    "idProducto": 7298,
+    "codigoProducto": "227TMP",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO #8 1.1/4\" 1",
+    "idTitulo": 900399,
+    "valorTitulo": "2 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974240,
+    "idProducto": 7298,
+    "codigoProducto": "227TMP",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO #8 1.1/4\" 1",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 666969,
+    "idMultimedia": 13462,
+    "adjunto": "pcocpnaph-m4-07x150_13880.jpg",
+    "nombre": "666969sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666969,
+    "idMultimedia": 13478,
+    "adjunto": "https://www.mamutstore.com/producto/perno-cocina-rosca-metrica-cabeza-plana/?srsltid=AfmBOooqyS8dafT4Exxqx_-0fsAot5hpDb5zM68UvpGBoUeeIchQGCC3",
+    "nombre": "973505sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973904,
+    "idProducto": 731902,
+    "codigoProducto": "01PEJ",
+    "nombreProducto": "PERNO J CON TCA 5/16[8.0]X4.1/2\"",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973904,
+    "idProducto": 731902,
+    "codigoProducto": "01PEJ",
+    "nombreProducto": "PERNO J CON TCA 5/16[8.0]X4.1/2\"",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

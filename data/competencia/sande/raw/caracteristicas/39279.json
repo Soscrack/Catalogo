@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973444,
+    "idProducto": 39279,
+    "codigoProducto": "10GPCU",
+    "nombreProducto": "GOLILLA PLANA CALIBRADA 5/8\" 25",
+    "idTitulo": 900399,
+    "valorTitulo": "0.009 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973444,
+    "idProducto": 39279,
+    "codigoProducto": "10GPCU",
+    "nombreProducto": "GOLILLA PLANA CALIBRADA 5/8\" 25",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

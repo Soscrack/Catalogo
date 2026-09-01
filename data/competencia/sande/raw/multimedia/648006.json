@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 648006,
+    "idMultimedia": 4600,
+    "adjunto": "110RHPV.jpg",
+    "nombre": "648006 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 648006,
+    "idMultimedia": 12881,
+    "adjunto": "autoperforante-panel-gol-epdm-12-14_28798.jpg",
+    "nombre": "648006sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 648006,
+    "idMultimedia": 12874,
+    "adjunto": "https://www.mamutstore.com/producto/autoperforante-hexagonal-con-golilla-para-cubiertas/?srsltid=AfmBOooIHfls1cjzXOjkE1kr23vFdQCBJShyhIBRG-cvXu6t0Q6a5eHO",
+    "nombre": "973802sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

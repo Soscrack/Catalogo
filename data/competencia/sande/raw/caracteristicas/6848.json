@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973970,
+    "idProducto": 6848,
+    "codigoProducto": "16RLO",
+    "nombreProducto": "TORNILLO ROSCALATA OVAL RECTA #10 5/8\" ZINC 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.002 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973970,
+    "idProducto": 6848,
+    "codigoProducto": "16RLO",
+    "nombreProducto": "TORNILLO ROSCALATA OVAL RECTA #10 5/8\" ZINC 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

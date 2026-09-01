@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 490184,
+    "idMultimedia": 13438,
+    "adjunto": "perno-cocina-redonda-combinada-unc_15532.jpg",
+    "nombre": "490184sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 490184,
+    "idMultimedia": 13489,
+    "adjunto": "https://www.mamutstore.com/producto/perno-cocina-unc-cabeza-redonda-ranura-combinada/?srsltid=AfmBOor2Idmp60oHShktjUiVMWEpUNFWXlHwo_dIo5ruWZLAMngj2_VR",
+    "nombre": "973496sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

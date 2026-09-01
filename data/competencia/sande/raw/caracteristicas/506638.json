@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973261,
+    "idProducto": 506638,
+    "codigoProducto": "KG03THL",
+    "nombreProducto": "TUERCA HEX. ASTM A-194 UNC 7/8 GRAN",
+    "idTitulo": 900399,
+    "valorTitulo": "0.12 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973261,
+    "idProducto": 506638,
+    "codigoProducto": "KG03THL",
+    "nombreProducto": "TUERCA HEX. ASTM A-194 UNC 7/8 GRAN",
+    "idTitulo": 900412,
+    "valorTitulo": "160",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

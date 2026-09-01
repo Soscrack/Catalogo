@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 654930,
+    "codigoProducto": "46PCPP",
+    "nombreProducto": "PERNO COCINA PLANA PHILLIPS 5/16-18X5/8",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 654930,
+    "codigoProducto": "46PCPP",
+    "nombreProducto": "PERNO COCINA PLANA PHILLIPS 5/16-18X5/8",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

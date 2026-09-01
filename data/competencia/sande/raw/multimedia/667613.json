@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 667613,
+    "idMultimedia": 17494,
+    "adjunto": "tormadagdatorx-1050x75_98826.jpg",
+    "nombre": "667613sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 667613,
+    "idMultimedia": 17495,
+    "adjunto": "https://www.mamutstore.com/producto/tmpx-tornillo-para-madera-aglomerada-torx/?srsltid=AfmBOooCgmB7PXkHv0xVdyhK4_2G16Vf8wpvUi1PEcXXmyQNKAoDK7vm",
+    "nombre": "667613sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

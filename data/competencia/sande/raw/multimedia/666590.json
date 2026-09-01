@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 666590,
+    "idMultimedia": 11318,
+    "adjunto": "anillo-en-d-5mmx40x37_28462.jpg",
+    "nombre": "666590sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666590,
+    "idMultimedia": 12743,
+    "adjunto": "https://mamutstore.com.pe/producto/and-anillo-en-d/",
+    "nombre": "973734sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

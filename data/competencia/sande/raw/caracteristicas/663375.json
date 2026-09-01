@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973382,
+    "idProducto": 663375,
+    "codigoProducto": "06PHS",
+    "nombreProducto": "PERNO HEXAGONAL A325.NC 3/4-10X1.3/4\"",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973382,
+    "idProducto": 663375,
+    "codigoProducto": "06PHS",
+    "nombreProducto": "PERNO HEXAGONAL A325.NC 3/4-10X1.3/4\"",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973932,
+    "idProducto": 6665,
+    "codigoProducto": "19RFR",
+    "nombreProducto": "REMACHE HIERRO REDONDA 6.3MM 15.8MM 5",
+    "idTitulo": 900399,
+    "valorTitulo": "0.006 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973932,
+    "idProducto": 6665,
+    "codigoProducto": "19RFR",
+    "nombreProducto": "REMACHE HIERRO REDONDA 6.3MM 15.8MM 5",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

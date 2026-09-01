@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 492957,
+    "idMultimedia": 13074,
+    "adjunto": "barra-ampolla-quimica-38-16x5-18_10692.jpg",
+    "nombre": "492957sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 492957,
+    "idMultimedia": 13075,
+    "adjunto": "barra-ampolla-quimica_86158.pdf",
+    "nombre": "973435sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

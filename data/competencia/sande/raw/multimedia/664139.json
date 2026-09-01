@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 664139,
+    "idMultimedia": 14784,
+    "adjunto": "tarugo-espiga-m6-x-30_97517.jpg",
+    "nombre": "664139sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 664139,
+    "idMultimedia": 14794,
+    "adjunto": "https://www.mamutstore.com/producto/tarugo-espiga/?srsltid=AfmBOooOWoAGuUyX7TP_Nd9TsnCfNS8iJ3qb2rqj2T6DNX34HRhbdUQs",
+    "nombre": "973992sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 639000,
+    "idMultimedia": 6458,
+    "adjunto": "02SPC.jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 639000,
+    "idMultimedia": 14762,
+    "adjunto": "https://www.mamutstore.com/producto/soportes-multiuso/?srsltid=AfmBOooGhIezXw5vqVanSz50eehOdEZHUQjXYfe1DE_-JQjgZuWPYICY",
+    "nombre": "973951sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

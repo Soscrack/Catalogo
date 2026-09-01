@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973993,
+    "idProducto": 498652,
+    "codigoProducto": "02TRAC",
+    "nombreProducto": "TARUGO NYLON P/AMAR M-6X30",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0005 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973993,
+    "idProducto": 498652,
+    "codigoProducto": "02TRAC",
+    "nombreProducto": "TARUGO NYLON P/AMAR M-6X30",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

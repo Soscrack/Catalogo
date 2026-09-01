@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973559,
+    "idProducto": 659842,
+    "codigoProducto": "01CLC",
+    "nombreProducto": "CLAVO LOSA COLABORANTE (T/SPIT) 3.7X1\" ZINC",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973559,
+    "idProducto": 659842,
+    "codigoProducto": "01CLC",
+    "nombreProducto": "CLAVO LOSA COLABORANTE (T/SPIT) 3.7X1\" ZINC",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

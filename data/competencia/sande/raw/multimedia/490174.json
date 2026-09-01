@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 490174,
+    "idMultimedia": 909,
+    "adjunto": "INSERTO.PNG",
+    "nombre": "s/n",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 490174,
+    "idMultimedia": 14000,
+    "adjunto": "https://www.mamutstore.com/producto/pta-inserto-magnetico/?srsltid=AfmBOoqWozLphzshopA90bO_MFFampVoTyp7sSp9WqMrwvm2kxo8rDyw",
+    "nombre": "973909sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

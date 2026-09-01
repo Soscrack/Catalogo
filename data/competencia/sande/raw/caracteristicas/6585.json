@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973931,
+    "idProducto": 6585,
+    "codigoProducto": "07RAR",
+    "nombreProducto": "REMACHE ALUMINIO REDONDA 2.5MM 8MM 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973931,
+    "idProducto": 6585,
+    "codigoProducto": "07RAR",
+    "nombreProducto": "REMACHE ALUMINIO REDONDA 2.5MM 8MM 100",
+    "idTitulo": 900412,
+    "valorTitulo": "1000",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

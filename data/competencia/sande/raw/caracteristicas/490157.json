@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973914,
+    "idProducto": 490157,
+    "codigoProducto": "10PTA",
+    "nombreProducto": "PUNTA PHILLIPS #3 25MM 50",
+    "idTitulo": 900399,
+    "valorTitulo": "0.005 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973914,
+    "idProducto": 490157,
+    "codigoProducto": "10PTA",
+    "nombreProducto": "PUNTA PHILLIPS #3 25MM 50",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

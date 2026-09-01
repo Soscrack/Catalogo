@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973942,
+    "idProducto": 661569,
+    "codigoProducto": "03CHR",
+    "nombreProducto": "CHAVETA R. TIPO R 3MM 25U",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973942,
+    "idProducto": 661569,
+    "codigoProducto": "03CHR",
+    "nombreProducto": "CHAVETA R. TIPO R 3MM 25U",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

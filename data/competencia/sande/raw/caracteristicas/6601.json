@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973931,
+    "idProducto": 6601,
+    "codigoProducto": "23RAR",
+    "nombreProducto": "REMACHE ALUMINIO REDONDA 4MM 10MM 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.0005 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973931,
+    "idProducto": 6601,
+    "codigoProducto": "23RAR",
+    "nombreProducto": "REMACHE ALUMINIO REDONDA 4MM 10MM 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

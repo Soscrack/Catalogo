@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974013,
+    "idProducto": 7098,
+    "codigoProducto": "203THM",
+    "nombreProducto": "TUERCA HEXAGONAL MÉTRICA ISO C/5 M8-1.25 100U",
+    "idTitulo": 900399,
+    "valorTitulo": "0.004 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974013,
+    "idProducto": 7098,
+    "codigoProducto": "203THM",
+    "nombreProducto": "TUERCA HEXAGONAL MÉTRICA ISO C/5 M8-1.25 100U",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

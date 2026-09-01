@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 58492,
+    "idMultimedia": 13169,
+    "adjunto": "golilla-plana-calibrada-34-zinc-25_77782.jpg",
+    "nombre": "58492sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973776,
+    "idProducto": 653443,
+    "codigoProducto": "K37TMPP",
+    "nombreProducto": "TORNILLO MADERA C/PLANA PHILLIPS #12 3\" AMARILLO",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973776,
+    "idProducto": 653443,
+    "codigoProducto": "K37TMPP",
+    "nombreProducto": "TORNILLO MADERA C/PLANA PHILLIPS #12 3\" AMARILLO",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

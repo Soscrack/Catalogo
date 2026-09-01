@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 667492,
+    "idMultimedia": 15885,
+    "adjunto": "drywall-pta-broca-6-20x1-58_81589.jpg",
+    "nombre": "667492sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 667492,
+    "idMultimedia": 12186,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-volcanita-punta-broca/?srsltid=AfmBOoqFvycjNH5jrcLW4zGitIj2Gl2TUNdOKxCcK6QnSci__qZUURTd",
+    "nombre": "973727sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

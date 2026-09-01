@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 17273,
+    "idMultimedia": 13859,
+    "adjunto": "perno-hexagonal-mtinox-m-6x20_56021.jpg",
+    "nombre": "17273sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 17273,
+    "idMultimedia": 13861,
+    "adjunto": "https://www.mamutstore.com/producto/phmi-perno-hexagonal-metrico-a2-70-din933/?srsltid=AfmBOooO7xNPUwqX_ZboPRQMx9gV67bk-LsuW4gRk_aFs_11Noe_YZHV",
+    "nombre": "973870sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

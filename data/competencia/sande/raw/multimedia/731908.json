@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 731908,
+    "idMultimedia": 14214,
+    "adjunto": "mosquet-argdest-3810x250_60140.jpg",
+    "nombre": "731908sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 731908,
+    "idMultimedia": 14695,
+    "adjunto": "https://www.mamutstore.com/producto/mosqueton-con-argolla-y-destorcedor/?srsltid=AfmBOorYErMAqF58z7eLG0O3xkMWJXkorWdxC5yQEsbD5hh0B0aYC-Ee",
+    "nombre": "973947sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

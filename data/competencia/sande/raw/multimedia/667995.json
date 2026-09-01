@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 667995,
+    "idMultimedia": 17327,
+    "adjunto": "pbton-allen-inx-m4x12_41892.jpg",
+    "nombre": "667995sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 667995,
+    "idMultimedia": 17328,
+    "adjunto": "https://www.mamutstore.com/producto/pcbi-pernos-cabeza-button-inoxidables/?srsltid=AfmBOorEdz-fn9XUH6SxtFQWf11go4T3hksgwBKVbUDK2L-_Lz9LalfJ",
+    "nombre": "974118sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974118,
+    "idProducto": 667999,
+    "codigoProducto": "22PCBI",
+    "nombreProducto": "P.BTON ALLEN INX M5X8",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974118,
+    "idProducto": 667999,
+    "codigoProducto": "22PCBI",
+    "nombreProducto": "P.BTON ALLEN INX M5X8",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

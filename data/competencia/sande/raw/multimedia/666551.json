@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 666551,
+    "idMultimedia": 13622,
+    "adjunto": "ancphueca-316sx3-16_78451.jpg",
+    "nombre": "666551sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 666551,
+    "idMultimedia": 13621,
+    "adjunto": "https://www.mamutstore.com/producto/anclaje-para-paredes-huecas/?srsltid=AfmBOoqQEZDtSSByMN1YwEluS6rOiJoisoCiuutw8og44u_0Fl_LRrNa",
+    "nombre": "973892sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

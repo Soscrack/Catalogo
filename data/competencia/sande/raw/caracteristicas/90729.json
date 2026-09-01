@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973732,
+    "idProducto": 90729,
+    "codigoProducto": "20ATHN",
+    "nombreProducto": "AUTOPERFORANTE EPDM #9-15 1.1/2\" FINA RUSPERT 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.004 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973732,
+    "idProducto": 90729,
+    "codigoProducto": "20ATHN",
+    "nombreProducto": "AUTOPERFORANTE EPDM #9-15 1.1/2\" FINA RUSPERT 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

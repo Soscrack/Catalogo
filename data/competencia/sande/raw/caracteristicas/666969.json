@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973505,
+    "idProducto": 666969,
+    "codigoProducto": "16PCPM",
+    "nombreProducto": "P.COC.PNA.PH M4-0.7X15.0",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973505,
+    "idProducto": 666969,
+    "codigoProducto": "16PCPM",
+    "nombreProducto": "P.COC.PNA.PH M4-0.7X15.0",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

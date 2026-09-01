@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973498,
+    "idProducto": 666395,
+    "codigoProducto": "51PMB",
+    "nombreProducto": "PERNO COCINA METRICO CAB.BINDING M8-1.25 50MM ZBR",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973498,
+    "idProducto": 666395,
+    "codigoProducto": "51PMB",
+    "nombreProducto": "PERNO COCINA METRICO CAB.BINDING M8-1.25 50MM ZBR",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

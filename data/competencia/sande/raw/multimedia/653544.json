@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 653544,
+    "idMultimedia": 17382,
+    "adjunto": "golilla-k-polietileno-65mm-ral9002_16407.jpg",
+    "nombre": "653544sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 653544,
+    "idMultimedia": 13219,
+    "adjunto": "https://www.mamutstore.com/producto/golilla-k-capelote-con-junta-de-polietileno/?srsltid=AfmBOoqdK47b2OVAOUN2H7xncbfKLm1e5Epbqe82yh0B8Swkrj9FI9_r",
+    "nombre": "973852sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

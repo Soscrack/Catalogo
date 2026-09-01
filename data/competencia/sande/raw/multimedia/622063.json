@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 622063,
+    "idMultimedia": 6299,
+    "adjunto": "01PVCB.jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 622063,
+    "idMultimedia": 14461,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-cabeza-barril/?srsltid=AfmBOoq1-pScPZWSfyWFpIsACm-sXs6YiMaM-YumQ6lHP0qM8o1R93Kf",
+    "nombre": "973977sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973813,
+    "idProducto": 37617,
+    "codigoProducto": "G04GPS",
+    "nombreProducto": "GOLILLA PLANA ASTM-F-436 1PULG 10U GCA",
+    "idTitulo": 900399,
+    "valorTitulo": "0.04 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973813,
+    "idProducto": 37617,
+    "codigoProducto": "G04GPS",
+    "nombreProducto": "GOLILLA PLANA ASTM-F-436 1PULG 10U GCA",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

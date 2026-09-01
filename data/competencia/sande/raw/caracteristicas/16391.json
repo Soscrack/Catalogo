@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973966,
+    "idProducto": 16391,
+    "codigoProducto": "B208TH1",
+    "nombreProducto": "TUERCA HEXAGONAL UNC G2 5/8\"-11 ZINC 1",
+    "idTitulo": 900399,
+    "valorTitulo": "0.03 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973966,
+    "idProducto": 16391,
+    "codigoProducto": "B208TH1",
+    "nombreProducto": "TUERCA HEXAGONAL UNC G2 5/8\"-11 ZINC 1",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

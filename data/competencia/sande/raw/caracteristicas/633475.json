@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973988,
+    "idProducto": 633475,
+    "codigoProducto": "24RLPI",
+    "nombreProducto": "TORNILLO ROSCALATA PLANA PHILLIPS #8 4.8MM 3/4\" FINA INOX",
+    "idTitulo": 900399,
+    "valorTitulo": "0.05 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973988,
+    "idProducto": 633475,
+    "codigoProducto": "24RLPI",
+    "nombreProducto": "TORNILLO ROSCALATA PLANA PHILLIPS #8 4.8MM 3/4\" FINA INOX",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

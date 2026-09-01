@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 654728,
+    "codigoProducto": "28PCPP",
+    "nombreProducto": "PERNO COCINA PLANA PHILLIPS #10-24[3/16]X3/4",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 654728,
+    "codigoProducto": "28PCPP",
+    "nombreProducto": "PERNO COCINA PLANA PHILLIPS #10-24[3/16]X3/4",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

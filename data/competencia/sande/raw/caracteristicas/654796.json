@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 654796,
+    "codigoProducto": "25PCPP",
+    "nombreProducto": "PERNO COCINA PLANA #10-24[3/16]X3/8",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 654796,
+    "codigoProducto": "25PCPP",
+    "nombreProducto": "PERNO COCINA PLANA #10-24[3/16]X3/8",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

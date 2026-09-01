@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973261,
+    "idProducto": 503015,
+    "codigoProducto": "09THL",
+    "nombreProducto": "T.HEX.A194.NC 1 1/2-8",
+    "idTitulo": 900399,
+    "valorTitulo": "0.53 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973261,
+    "idProducto": 503015,
+    "codigoProducto": "09THL",
+    "nombreProducto": "T.HEX.A194.NC 1 1/2-8",
+    "idTitulo": 900412,
+    "valorTitulo": "5",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

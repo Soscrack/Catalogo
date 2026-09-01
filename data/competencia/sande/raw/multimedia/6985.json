@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 6985,
+    "idMultimedia": 14499,
+    "adjunto": "tuerca-cocina-hexagonal-nc-8-32532_92676.jpg",
+    "nombre": "6985sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973506,
+    "idProducto": 5564,
+    "codigoProducto": "11PCP",
+    "nombreProducto": "PERNO COCINA PLANA #5-40[1/8]X2\" BRILLANTE",
+    "idTitulo": 900399,
+    "valorTitulo": "0.002 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973506,
+    "idProducto": 5564,
+    "codigoProducto": "11PCP",
+    "nombreProducto": "PERNO COCINA PLANA #5-40[1/8]X2\" BRILLANTE",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

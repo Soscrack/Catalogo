@@ -1,0 +1,50 @@
+[
+  {
+    "idProducto": 665301,
+    "idMultimedia": 11662,
+    "adjunto": "tirafondo-turbo-8-x-200-ruspert_86558.jpg",
+    "nombre": "665301sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 665301,
+    "idMultimedia": 11663,
+    "adjunto": "tirafondo-turbo-8-x-200-ruspert_63279.jpg",
+    "nombre": "665301sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 665301,
+    "idMultimedia": 11664,
+    "adjunto": "https://www.mamutstore.com/producto/tmah-tirafondo-turbo/?srsltid=AfmBOoreSx0hKxfSiEQcRzH1L5ceYmJRqgJrJSBkIVHGCpKdSpzTadsZ",
+    "nombre": "665301sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 665301,
+    "idMultimedia": 14808,
+    "adjunto": "https://www.mamutstore.com/producto/tmah-tirafondo-turbo/?srsltid=AfmBOoriNz4CEMqXplLUJvC_I1rF54tfvZmhMXmSKn9KiElLmbVWSIe0",
+    "nombre": "973955sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

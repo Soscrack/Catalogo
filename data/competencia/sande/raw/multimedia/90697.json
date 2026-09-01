@@ -1,0 +1,62 @@
+[
+  {
+    "idProducto": 90697,
+    "idMultimedia": 12207,
+    "adjunto": "https://www.mamutstore.com/producto/autoperforante-punta-fina-lata-madera-truegrip/?srsltid=AfmBOopOJGaLbI7kqPboHwivMOkWw5WtZrTx_z9zvFKpIrw3uYoykjG3",
+    "nombre": "sin nombre",
+    "idTipoMultimedia": 0,
+    "tipoMultimedia": "",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "",
+    "rutaLogica": ""
+  },
+  {
+    "idProducto": 90697,
+    "idMultimedia": 12208,
+    "adjunto": "atpfhexitg9-15x1-12-trugrip_60443.jpg",
+    "nombre": "90697sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 90697,
+    "idMultimedia": 12219,
+    "adjunto": "atpfhexitg9-15x1-12-trugrip_26829.jpg",
+    "nombre": "90697sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 90697,
+    "idMultimedia": 12209,
+    "adjunto": "https://www.mamutstore.com/producto/autoperforante-punta-fina-lata-madera-truegrip/?srsltid=AfmBOopOJGaLbI7kqPboHwivMOkWw5WtZrTx_z9zvFKpIrw3uYoykjG3",
+    "nombre": "973732sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 90697,
+    "idMultimedia": 12820,
+    "adjunto": "autoperforante-punta-fina-lata-madera_78528.pdf",
+    "nombre": "973732sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

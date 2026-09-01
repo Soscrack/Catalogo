@@ -1,0 +1,38 @@
+[
+  {
+    "idProducto": 5504,
+    "idMultimedia": 186,
+    "adjunto": "PCO8.JPG",
+    "nombre": "s/n",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 5504,
+    "idMultimedia": 13294,
+    "adjunto": "https://www.mamutstore.com/producto/perno-coche-unc-bsw/?srsltid=AfmBOoqeYEbrbjVGXUkxsKZh1ZWgL2ZZwcuGA86qxGLi4p8zZg02qpqo",
+    "nombre": "973070sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 5504,
+    "idMultimedia": 13295,
+    "adjunto": "perno-coche_63484.pdf",
+    "nombre": "973070sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973973,
+    "idProducto": 500759,
+    "codigoProducto": "71RLPP",
+    "nombreProducto": "TORNILLO ROSCALATA PLANA PHILLIPS 1/4\" 1\" FINA ZINC 100",
+    "idTitulo": 900399,
+    "valorTitulo": "6 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973973,
+    "idProducto": 500759,
+    "codigoProducto": "71RLPP",
+    "nombreProducto": "TORNILLO ROSCALATA PLANA PHILLIPS 1/4\" 1\" FINA ZINC 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

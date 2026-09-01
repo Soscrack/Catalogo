@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973789,
+    "idProducto": 638387,
+    "codigoProducto": "114CADF",
+    "nombreProducto": "CADENA DECORATIVA ESLABÓN CUADRADO RETORCIDO 1.5X20 BRONCE",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973789,
+    "idProducto": 638387,
+    "codigoProducto": "114CADF",
+    "nombreProducto": "CADENA DECORATIVA ESLABÓN CUADRADO RETORCIDO 1.5X20 BRONCE",
+    "idTitulo": 900412,
+    "valorTitulo": "30",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

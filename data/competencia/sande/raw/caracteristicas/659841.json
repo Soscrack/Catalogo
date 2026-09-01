@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973559,
+    "idProducto": 659841,
+    "codigoProducto": "01CNL",
+    "nombreProducto": "CONECTOR LOSA COLABORANTE 50X95 ZINC",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973559,
+    "idProducto": 659841,
+    "codigoProducto": "01CNL",
+    "nombreProducto": "CONECTOR LOSA COLABORANTE 50X95 ZINC",
+    "idTitulo": 900412,
+    "valorTitulo": "50",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

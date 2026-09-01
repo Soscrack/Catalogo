@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973510,
+    "idProducto": 663027,
+    "codigoProducto": "59ATPF",
+    "nombreProducto": "AUTOPERFORANTE CBZ/PLANA C/ALAS #8-18 1.5/8\" BROCA ZINC",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973510,
+    "idProducto": 663027,
+    "codigoProducto": "59ATPF",
+    "nombreProducto": "AUTOPERFORANTE CBZ/PLANA C/ALAS #8-18 1.5/8\" BROCA ZINC",
+    "idTitulo": 900412,
+    "valorTitulo": "500",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

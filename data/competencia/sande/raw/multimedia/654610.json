@@ -1,0 +1,50 @@
+[
+  {
+    "idProducto": 654610,
+    "idMultimedia": 12816,
+    "adjunto": "autoperforante-tapfast-gol-epdm-10-12_27677.jpg",
+    "nombre": "654610sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 654610,
+    "idMultimedia": 16458,
+    "adjunto": "https://www.youtube.com/watch?v=m7sub1uhbt4",
+    "nombre": "654610sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 654610,
+    "idMultimedia": 12789,
+    "adjunto": "https://www.mamutstore.com/producto/autoperforante-punta-s-lata-madera-tapfast/?srsltid=AfmBOoqvA4ePZ9oNpR5JpCfQKlpjSfwRZW53rhc_QB7wFER4e6l3aE9x",
+    "nombre": "973784sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 654610,
+    "idMultimedia": 12790,
+    "adjunto": "autoperforante-punta-s-lata-madera_13475.pdf",
+    "nombre": "973784sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

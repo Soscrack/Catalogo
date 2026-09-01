@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973895,
+    "idProducto": 661561,
+    "codigoProducto": "02CHPA",
+    "nombreProducto": "CHAVETA PARTIDA D2.5 L25 BRILLANTE 10U",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973895,
+    "idProducto": 661561,
+    "codigoProducto": "02CHPA",
+    "nombreProducto": "CHAVETA PARTIDA D2.5 L25 BRILLANTE 10U",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

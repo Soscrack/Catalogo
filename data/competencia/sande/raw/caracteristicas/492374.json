@@ -1,0 +1,122 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973549,
+    "idProducto": 492374,
+    "codigoProducto": "K42TMTS",
+    "nombreProducto": "TORNILLO MADERA TURBO SCREW #14 100/60MM ZINC IRIDISCENTE",
+    "idTitulo": 13183,
+    "valorTitulo": "",
+    "titulo": "NOMBRE",
+    "orden": 1
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973549,
+    "idProducto": 492374,
+    "codigoProducto": "K42TMTS",
+    "nombreProducto": "TORNILLO MADERA TURBO SCREW #14 100/60MM ZINC IRIDISCENTE",
+    "idTitulo": 13973,
+    "valorTitulo": "",
+    "titulo": "TIPO",
+    "orden": 2
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973549,
+    "idProducto": 492374,
+    "codigoProducto": "K42TMTS",
+    "nombreProducto": "TORNILLO MADERA TURBO SCREW #14 100/60MM ZINC IRIDISCENTE",
+    "idTitulo": 900321,
+    "valorTitulo": "",
+    "titulo": "D NOMINAL",
+    "orden": 3
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973549,
+    "idProducto": 492374,
+    "codigoProducto": "K42TMTS",
+    "nombreProducto": "TORNILLO MADERA TURBO SCREW #14 100/60MM ZINC IRIDISCENTE",
+    "idTitulo": 12730,
+    "valorTitulo": "100/60MM",
+    "titulo": "LARGO",
+    "orden": 4
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973549,
+    "idProducto": 492374,
+    "codigoProducto": "K42TMTS",
+    "nombreProducto": "TORNILLO MADERA TURBO SCREW #14 100/60MM ZINC IRIDISCENTE",
+    "idTitulo": 12447,
+    "valorTitulo": "#14",
+    "titulo": "D CABEZA",
+    "orden": 5
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973549,
+    "idProducto": 492374,
+    "codigoProducto": "K42TMTS",
+    "nombreProducto": "TORNILLO MADERA TURBO SCREW #14 100/60MM ZINC IRIDISCENTE",
+    "idTitulo": 13534,
+    "valorTitulo": "",
+    "titulo": "PUNTA",
+    "orden": 6
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973549,
+    "idProducto": 492374,
+    "codigoProducto": "K42TMTS",
+    "nombreProducto": "TORNILLO MADERA TURBO SCREW #14 100/60MM ZINC IRIDISCENTE",
+    "idTitulo": 900329,
+    "valorTitulo": "ZINC IRIDISCENTE",
+    "titulo": "RECUBRIMIENTO",
+    "orden": 7
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973549,
+    "idProducto": 492374,
+    "codigoProducto": "K42TMTS",
+    "nombreProducto": "TORNILLO MADERA TURBO SCREW #14 100/60MM ZINC IRIDISCENTE",
+    "idTitulo": 398,
+    "valorTitulo": "",
+    "titulo": "CABEZA",
+    "orden": 8
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973549,
+    "idProducto": 492374,
+    "codigoProducto": "K42TMTS",
+    "nombreProducto": "TORNILLO MADERA TURBO SCREW #14 100/60MM ZINC IRIDISCENTE",
+    "idTitulo": 900399,
+    "valorTitulo": "0.01 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973549,
+    "idProducto": 492374,
+    "codigoProducto": "K42TMTS",
+    "nombreProducto": "TORNILLO MADERA TURBO SCREW #14 100/60MM ZINC IRIDISCENTE",
+    "idTitulo": 900412,
+    "valorTitulo": "7",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

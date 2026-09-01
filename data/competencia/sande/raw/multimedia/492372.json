@@ -1,0 +1,50 @@
+[
+  {
+    "idProducto": 492372,
+    "idMultimedia": 1002,
+    "adjunto": "108142.jpg",
+    "nombre": "s/n",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 492372,
+    "idMultimedia": 11199,
+    "adjunto": "tornillo-madera-turbo-screw_44244.pdf",
+    "nombre": "973549sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 492372,
+    "idMultimedia": 11200,
+    "adjunto": "https://www.youtube.com/watch?v=u5qvvaa8zb0",
+    "nombre": "973549sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  },
+  {
+    "idProducto": 492372,
+    "idMultimedia": 12689,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-turbo-screw-se-utiliza-especialmente-para-la-union-de-maderas-estructurales/?srsltid=AfmBOopreTYfWuIuER6YDWT7zt9Lqkt1OeNOZNz-v8fGaZsOKEeluzcg",
+    "nombre": "973549sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

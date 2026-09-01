@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 90133,
+    "idMultimedia": 15032,
+    "adjunto": "tuerca-hexagonal-unc-g2-38-16-zinc_64810.jpg",
+    "nombre": "90133sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 90133,
+    "idMultimedia": 14484,
+    "adjunto": "https://www.mamutstore.com/producto/tuerca-hexagonal-grado-2-unc/?srsltid=AfmBOoqhCiqblv7GwqHDXE7KYyaiEOlXdjyQkjHLEF3oeRZKULOyQa0T",
+    "nombre": "973966sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

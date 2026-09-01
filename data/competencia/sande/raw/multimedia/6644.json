@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 6644,
+    "idMultimedia": 14196,
+    "adjunto": "remache-hojalata-plana-44mm-97mm-zinc_51035.jpg",
+    "nombre": "6644sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

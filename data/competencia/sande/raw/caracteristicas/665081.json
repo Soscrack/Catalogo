@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973382,
+    "idProducto": 665081,
+    "codigoProducto": "G27PHS",
+    "nombreProducto": "PERNO HEXAGONAL 1\" X 3-1/2\" GALVANIZADO",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973382,
+    "idProducto": 665081,
+    "codigoProducto": "G27PHS",
+    "nombreProducto": "PERNO HEXAGONAL 1\" X 3-1/2\" GALVANIZADO",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

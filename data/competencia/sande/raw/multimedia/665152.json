@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 665152,
+    "idMultimedia": 8858,
+    "adjunto": "1719437181774_96764.png",
+    "nombre": "26sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 665152,
+    "idMultimedia": 14808,
+    "adjunto": "https://www.mamutstore.com/producto/tmah-tirafondo-turbo/?srsltid=AfmBOoriNz4CEMqXplLUJvC_I1rF54tfvZmhMXmSKn9KiElLmbVWSIe0",
+    "nombre": "973955sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

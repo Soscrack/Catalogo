@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 500722,
+    "idMultimedia": 7083,
+    "adjunto": "descarga (6).jpg",
+    "nombre": "237184 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 500722,
+    "idMultimedia": 14868,
+    "adjunto": "https://www.mamutstore.com/producto/tornillo-para-techo-con-golilla-pvc/?srsltid=AfmBOor2XmKSLHu73EWSHiVaHpJEc9nhaFoFC5UXzT1jBznRlikijiVx",
+    "nombre": "974005sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

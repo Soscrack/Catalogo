@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973862,
+    "idProducto": 661430,
+    "codigoProducto": "05TER",
+    "nombreProducto": "TOPE CABLES DE ALUMINIO 3/16",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973862,
+    "idProducto": 661430,
+    "codigoProducto": "05TER",
+    "nombreProducto": "TOPE CABLES DE ALUMINIO 3/16",
+    "idTitulo": 900412,
+    "valorTitulo": "30",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

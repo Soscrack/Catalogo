@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973903,
+    "idProducto": 6544,
+    "codigoProducto": "64PPK",
+    "nombreProducto": "PERNO PARKER.NC 1/2-13X1 3/4",
+    "idTitulo": 900399,
+    "valorTitulo": "0.06 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973903,
+    "idProducto": 6544,
+    "codigoProducto": "64PPK",
+    "nombreProducto": "PERNO PARKER.NC 1/2-13X1 3/4",
+    "idTitulo": 900412,
+    "valorTitulo": "25",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

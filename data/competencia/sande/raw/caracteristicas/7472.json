@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974240,
+    "idProducto": 7472,
+    "codigoProducto": "I211TMP",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO #5 5/8\" 1",
+    "idTitulo": 900399,
+    "valorTitulo": "7 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 974240,
+    "idProducto": 7472,
+    "codigoProducto": "I211TMP",
+    "nombreProducto": "TORNILLO MADERA TIRAFONDO #5 5/8\" 1",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

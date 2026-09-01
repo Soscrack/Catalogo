@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973506,
+    "idProducto": 5568,
+    "codigoProducto": "15PCP",
+    "nombreProducto": "PERNO COCINA PLANA #8-32[5/32]X3/8 BRILLANTE",
+    "idTitulo": 900399,
+    "valorTitulo": "0.001 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973506,
+    "idProducto": 5568,
+    "codigoProducto": "15PCP",
+    "nombreProducto": "PERNO COCINA PLANA #8-32[5/32]X3/8 BRILLANTE",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

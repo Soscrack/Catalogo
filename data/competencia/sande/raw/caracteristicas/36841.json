@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973930,
+    "idProducto": 36841,
+    "codigoProducto": "AD610BS",
+    "nombreProducto": "REMACHE POP ABIERTO DURALUM/ACERO 4.8MM 20.3MM 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0.003 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973930,
+    "idProducto": 36841,
+    "codigoProducto": "AD610BS",
+    "nombreProducto": "REMACHE POP ABIERTO DURALUM/ACERO 4.8MM 20.3MM 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

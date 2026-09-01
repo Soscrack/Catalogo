@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 666962,
+    "codigoProducto": "51PCPP",
+    "nombreProducto": "P.COC.PNA.PH 5/16-18X2\"",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 666962,
+    "codigoProducto": "51PCPP",
+    "nombreProducto": "P.COC.PNA.PH 5/16-18X2\"",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

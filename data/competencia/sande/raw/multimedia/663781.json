@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 663781,
+    "idMultimedia": 14067,
+    "adjunto": "tornillo-fibrocemento-6-1-broca_32698.jpg",
+    "nombre": "663781sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 663781,
+    "idMultimedia": 14069,
+    "adjunto": "https://www.mamutstore.com/producto/tadib-tornillo-avellanante-para-fibrocemento-punta-broca/?srsltid=AfmBOoqNtDiGYssx85OgZIoXgYLqKwJtEYN_mEe5xAYUCemhrS_U6it3",
+    "nombre": "973919sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

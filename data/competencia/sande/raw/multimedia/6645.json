@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 6645,
+    "idMultimedia": 14193,
+    "adjunto": "remache-hojalata-plana-54mm-85mm-zinc_86224.jpg",
+    "nombre": "6645sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

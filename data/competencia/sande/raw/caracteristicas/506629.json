@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973262,
+    "idProducto": 506629,
+    "codigoProducto": "KB06TH5",
+    "nombreProducto": "TUERCA HEXAGONAL G5 5/8-11 ZINC GRANEL",
+    "idTitulo": 900399,
+    "valorTitulo": "5 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973262,
+    "idProducto": 506629,
+    "codigoProducto": "KB06TH5",
+    "nombreProducto": "TUERCA HEXAGONAL G5 5/8-11 ZINC GRANEL",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973498,
+    "idProducto": 650380,
+    "codigoProducto": "20PMB",
+    "nombreProducto": "P.COC.MT. M4-0.7 X 35",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973498,
+    "idProducto": 650380,
+    "codigoProducto": "20PMB",
+    "nombreProducto": "P.COC.MT. M4-0.7 X 35",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

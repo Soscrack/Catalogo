@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 655469,
+    "idMultimedia": 13240,
+    "adjunto": "fulminante-suelto-calibre-22-rojo_27514.jpg",
+    "nombre": "655469sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 655469,
+    "idMultimedia": 13241,
+    "adjunto": "https://www.mamutstore.com/producto/fs22-fulminante-suelto-calibre-22/?srsltid=AfmBOoqovpFDoRpnXYh_TwLzPv7IsIr2i1laqCg-cHzo-0K3QtRlDFzT",
+    "nombre": "973557sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

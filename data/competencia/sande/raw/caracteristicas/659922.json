@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973902,
+    "idProducto": 659922,
+    "codigoProducto": "K125PPK",
+    "nombreProducto": "PERNOS PARKERT NC 5/8-11 X 2 (5X2)",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973902,
+    "idProducto": 659922,
+    "codigoProducto": "K125PPK",
+    "nombreProducto": "PERNOS PARKERT NC 5/8-11 X 2 (5X2)",
+    "idTitulo": 900412,
+    "valorTitulo": "250",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 659475,
+    "idMultimedia": 13065,
+    "adjunto": "varilla-roscada-p-ampolla-quimica-m20_56970.jpg",
+    "nombre": "659475sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 659475,
+    "idMultimedia": 13067,
+    "adjunto": "varilla-roscada-p-ampolla-quimica_17149.pdf",
+    "nombre": "973810sin nombre",
+    "idTipoMultimedia": 2,
+    "tipoMultimedia": "PDF",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

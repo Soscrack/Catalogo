@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 648910,
+    "idMultimedia": 13043,
+    "adjunto": "roshexcgol-ab-2_49152.jpg",
+    "nombre": "648910sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 648910,
+    "idMultimedia": 13042,
+    "adjunto": "https://www.mamutstore.com/producto/roscalata-hexagonal-ab-con-golilla-integrada/?srsltid=AfmBOorPwDeU4mY8C-lSSNu8QioKVNZJvOQwUpxSAqzJu2tht-sx9EJC",
+    "nombre": "973807sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

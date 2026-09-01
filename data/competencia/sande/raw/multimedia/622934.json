@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 622934,
+    "idMultimedia": 14210,
+    "adjunto": "destorc-pcable-1212x21457_92942.jpg",
+    "nombre": "622934sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 622934,
+    "idMultimedia": 13236,
+    "adjunto": "https://www.mamutstore.com/producto/destorcedor-para-cable/?srsltid=AfmBOop7rlf_XlaULR-wd_BhJAz9dtRy60ywyz-AyWcRfW8KDKTy6Ou2",
+    "nombre": "973343sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

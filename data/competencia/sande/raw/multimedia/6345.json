@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 6345,
+    "idMultimedia": 5623,
+    "adjunto": "PHM8.jpg",
+    "nombre": "6345 sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 0,
+    "tipoAdjunto": "",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 6345,
+    "idMultimedia": 13542,
+    "adjunto": "https://www.mamutstore.com/producto/perno-hexagonal-iso-8-8/?srsltid=AfmBOooE1Vlu7pl6eous6ynpHvvjsNIFLKmfHDnG2ftii1y5f_-UpVLl",
+    "nombre": "973095sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

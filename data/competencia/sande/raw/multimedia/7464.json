@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 7464,
+    "idMultimedia": 19619,
+    "adjunto": "tornillo-madera-tirafondo-3-38-1_32108.jpg",
+    "nombre": "7464sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

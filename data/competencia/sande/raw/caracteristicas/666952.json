@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 666952,
+    "codigoProducto": "09PCPP",
+    "nombreProducto": "P.COC.PNA.PH #5-40[1/8]X1 1/4",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973504,
+    "idProducto": 666952,
+    "codigoProducto": "09PCPP",
+    "nombreProducto": "P.COC.PNA.PH #5-40[1/8]X1 1/4",
+    "idTitulo": 900412,
+    "valorTitulo": "1",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

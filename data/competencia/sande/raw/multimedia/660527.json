@@ -1,0 +1,26 @@
+[
+  {
+    "idProducto": 660527,
+    "idMultimedia": 13705,
+    "adjunto": "hilo-x-metro-12-13-1mt-c304_12282.jpg",
+    "nombre": "660527sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  },
+  {
+    "idProducto": 660527,
+    "idMultimedia": 13703,
+    "adjunto": "https://www.mamutstore.com/producto/esparrago-inoxidable-de-1-metro-unc/?srsltid=AfmBOorhaRXji0kPjRkvivoYKbYiV6ar6JDs_fovZPRzrWXV8Hn6B78j",
+    "nombre": "973896sin nombre",
+    "idTipoMultimedia": 3,
+    "tipoMultimedia": "LINK",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Fichas",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\fichas"
+  }
+]

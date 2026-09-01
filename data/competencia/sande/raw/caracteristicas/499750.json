@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973700,
+    "idProducto": 499750,
+    "codigoProducto": "01CAN",
+    "nombreProducto": "CANCAMO CERRADO ROSCA MADERA M8 50MM ZINC 10",
+    "idTitulo": 900399,
+    "valorTitulo": "0.02 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973700,
+    "idProducto": 499750,
+    "codigoProducto": "01CAN",
+    "nombreProducto": "CANCAMO CERRADO ROSCA MADERA M8 50MM ZINC 10",
+    "idTitulo": 900412,
+    "valorTitulo": "10",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

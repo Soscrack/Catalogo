@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 7463,
+    "idMultimedia": 19618,
+    "adjunto": "tornillo-madera-tirafondo-2-58-1_33709.jpg",
+    "nombre": "7463sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

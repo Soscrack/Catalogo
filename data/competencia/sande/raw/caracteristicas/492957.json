@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973435,
+    "idProducto": 492957,
+    "codigoProducto": "02BRA",
+    "nombreProducto": "BARRA AMPOLLA QUIMICA  3/8-16X5 1/8",
+    "idTitulo": 900399,
+    "valorTitulo": "0.06 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973435,
+    "idProducto": 492957,
+    "codigoProducto": "02BRA",
+    "nombreProducto": "BARRA AMPOLLA QUIMICA  3/8-16X5 1/8",
+    "idTitulo": 900412,
+    "valorTitulo": "4",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

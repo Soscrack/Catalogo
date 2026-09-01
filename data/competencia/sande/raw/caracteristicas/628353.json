@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973802,
+    "idProducto": 628353,
+    "codigoProducto": "R104RHPV",
+    "nombreProducto": "AUTOPERFORANTE HEX GOL-EPDM 105MM BROCA R1000 100",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973802,
+    "idProducto": 628353,
+    "codigoProducto": "R104RHPV",
+    "nombreProducto": "AUTOPERFORANTE HEX GOL-EPDM 105MM BROCA R1000 100",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

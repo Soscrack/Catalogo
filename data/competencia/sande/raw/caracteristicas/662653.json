@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973964,
+    "idProducto": 662653,
+    "codigoProducto": "02TFA",
+    "nombreProducto": "TUERCA HEX C/FLANGE G5 1/4-20 BRILLANTE 100U",
+    "idTitulo": 900399,
+    "valorTitulo": "0 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973964,
+    "idProducto": 662653,
+    "codigoProducto": "02TFA",
+    "nombreProducto": "TUERCA HEX C/FLANGE G5 1/4-20 BRILLANTE 100U",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

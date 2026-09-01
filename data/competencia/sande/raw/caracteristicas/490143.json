@@ -1,0 +1,26 @@
+[
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973874,
+    "idProducto": 490143,
+    "codigoProducto": "02ATM",
+    "nombreProducto": "ANCLAJE MARIPOSA 1/8X2",
+    "idTitulo": 900399,
+    "valorTitulo": "0.006 KG",
+    "titulo": "PESO",
+    "orden": 11
+  },
+  {
+    "idDivision": 0,
+    "idSeccion": 237184,
+    "idCategoria": 973874,
+    "idProducto": 490143,
+    "codigoProducto": "02ATM",
+    "nombreProducto": "ANCLAJE MARIPOSA 1/8X2",
+    "idTitulo": 900412,
+    "valorTitulo": "100",
+    "titulo": "EPQ",
+    "orden": 12
+  }
+]

@@ -107,6 +107,7 @@ class Riverso_POS_Permissions {
 
         // === MATCHING / EMPAREJAMIENTO ===
         'riverso_manage_matching'    => 'Gestionar emparejamiento de productos',
+        'riverso_manage_competencia' => 'Gestionar catálogo competencia y matching Sande',
 
         // === EMBOLSADO / EAN13 ===
         'riverso_manage_packaging'   => 'Gestionar embolsado y bolsas',
@@ -225,6 +226,7 @@ class Riverso_POS_Permissions {
         ],
         'Matching' => [
             'riverso_manage_matching',
+            'riverso_manage_competencia',
         ],
         'Embolsado / EAN13' => [
             'riverso_manage_packaging',
@@ -346,6 +348,7 @@ class Riverso_POS_Permissions {
                 'riverso_view_costs',
                 'riverso_view_prices',
                 'riverso_manage_matching',
+                'riverso_manage_competencia',
                 'riverso_view_tasks',
                 'riverso_create_tasks',
                 'riverso_complete_tasks',
@@ -408,6 +411,7 @@ class Riverso_POS_Permissions {
                 'riverso_review_products',
                 'riverso_publish_products',
                 'riverso_manage_matching',
+                'riverso_manage_competencia',
                 'riverso_manage_packaging',
                 'riverso_manage_manufacturing',
                 'riverso_generate_ean13',

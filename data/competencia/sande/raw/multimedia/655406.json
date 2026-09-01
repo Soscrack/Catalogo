@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 655406,
+    "idMultimedia": 16367,
+    "adjunto": "perno-hexagonal-34-10-x-2-12-_20061.jpg",
+    "nombre": "655406sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

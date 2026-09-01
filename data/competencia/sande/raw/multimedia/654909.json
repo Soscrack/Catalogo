@@ -1,0 +1,14 @@
+[
+  {
+    "idProducto": 654909,
+    "idMultimedia": 16380,
+    "adjunto": "perno-hexagonal-g8-38-x-34_63002.jpg",
+    "nombre": "654909sin nombre",
+    "idTipoMultimedia": 1,
+    "tipoMultimedia": "FOTO",
+    "idTipoAdjunto": 1,
+    "tipoAdjunto": "FICHA",
+    "rutaFisica": "\\\\192.168.10.228\\Images\\Productos",
+    "rutaLogica": "https:\\\\sandeonline.cl\\images\\productos"
+  }
+]

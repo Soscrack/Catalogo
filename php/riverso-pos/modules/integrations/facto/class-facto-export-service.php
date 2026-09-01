@@ -177,9 +177,11 @@ class Riverso_Facto_Export_Service {
                AND pb.canonical_sku <> ''"
         );
 
+        $pending_create = max(0, $total - $pending_mapped);
+
         $sample_limit = max(1, min(50, absint($sample_limit)));
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT fm.facto_sku, pb.canonical_sku, pb.nombre_canonico, pb.marca, fm.updated_at
+            "SELECT fm.facto_sku, fm.facto_product_id, pb.canonical_sku, pb.nombre_canonico, pb.marca, fm.updated_at
              FROM {$map_table} fm
              INNER JOIN {$pb_table} pb ON pb.id = fm.producto_base_id
              WHERE fm.sync_state = 'pendiente_excel'
@@ -198,18 +200,29 @@ class Riverso_Facto_Export_Service {
                 'nombre'  => (string) ($row['nombre_canonico'] ?? ''),
                 'marca'   => (string) ($row['marca'] ?? ''),
                 'updated' => (string) ($row['updated_at'] ?? ''),
+                'accion'  => !empty($row['facto_product_id']) ? 'EDITAR' : 'CREAR',
             ];
+        }
+
+        if ($pending_create > 0) {
+            $recommended_modo = self::MODE_UPSERT;
+        } elseif ($pending_mapped > 0) {
+            $recommended_modo = self::MODE_UPDATE_ONLY;
+        } else {
+            $recommended_modo = self::MODE_UPSERT;
         }
 
         return [
             'pending_total'    => $total,
             'pending_mapped'   => $pending_mapped,
-            'recommended_modo' => $pending_mapped > 0 ? self::MODE_UPDATE_ONLY : ($total > 0 ? self::MODE_UPSERT : self::MODE_UPDATE_ONLY),
+            'pending_create'   => $pending_create,
+            'recommended_modo' => $recommended_modo,
             'samples'          => $samples,
             'message'        => $total > 0
                 ? sprintf(
-                    '%d producto(s) con cambios locales pendientes de export a FACTO (%d listos para «Solo actualizar»).',
+                    '%d producto(s) pendientes de export a FACTO (%d CREAR, %d EDITAR).',
                     $total,
+                    $pending_create,
                     $pending_mapped
                 )
                 : 'No hay productos marcados como pendientes de export.',
@@ -773,13 +786,16 @@ class Riverso_Facto_Export_Service {
             $batch_id
         ), ARRAY_A);
 
+        $map_table = $this->table('facto_producto_map');
         foreach ($items as $item) {
             $pid = (int) ($item['producto_base_id'] ?? 0);
+            $sku = trim((string) ($item['sku'] ?? ''));
             if ($pid <= 0) {
                 continue;
             }
-            $wpdb->update(
-                $this->table('facto_producto_map'),
+
+            $updated = $wpdb->update(
+                $map_table,
                 [
                     'sync_state'     => 'synced',
                     'last_synced_at' => $now,
@@ -788,6 +804,32 @@ class Riverso_Facto_Export_Service {
                 ],
                 ['producto_base_id' => $pid]
             );
+
+            if ($updated === 0) {
+                if ($sku === '') {
+                    $sku = (string) $wpdb->get_var($wpdb->prepare(
+                        "SELECT canonical_sku FROM {$this->table('producto_base')} WHERE id = %d",
+                        $pid
+                    ));
+                    $sku = trim($sku);
+                }
+                if ($sku === '') {
+                    continue;
+                }
+                $wpdb->insert(
+                    $map_table,
+                    [
+                        'producto_base_id' => $pid,
+                        'facto_product_id' => null,
+                        'facto_sku'        => $sku,
+                        'sync_state'       => 'synced',
+                        'last_synced_at'   => $now,
+                        'last_error'       => null,
+                        'created_at'       => $now,
+                        'updated_at'       => $now,
+                    ]
+                );
+            }
         }
 
         $this->recompute_superseded_batches();

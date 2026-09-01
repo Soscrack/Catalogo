@@ -338,6 +338,7 @@ class Riverso_POS_Activator {
         self::create_phase38_family_decision($prefix);
         self::create_phase39_competencia($prefix, $charset_collate);
         self::create_phase40_competencia_precios_historial($prefix, $charset_collate);
+        self::create_phase41_tpv_export($prefix, $charset_collate);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -4222,6 +4223,63 @@ class Riverso_POS_Activator {
                 Riverso_POS_Audit::log('schema.phase40_precios_historial', 'competencia', 0, [
                     'actor_type' => 'computer',
                     'details'    => 'Fase 40: precio vigente 1:1 + historial diario (conserva 01/16)',
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Fase 41: export TPV (catálogo XLSX) + facto_product_id nullable para altas pendientes.
+     */
+    private static function create_phase41_tpv_export($prefix, $charset_collate) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $map_table = "{$prefix}facto_producto_map";
+        if (self::table_exists($map_table)) {
+            $wpdb->query("ALTER TABLE {$map_table} MODIFY facto_product_id BIGINT UNSIGNED NULL DEFAULT NULL");
+        }
+
+        $sql = "CREATE TABLE {$prefix}tpv_export_batches (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            alcance LONGTEXT DEFAULT NULL,
+            total_productos INT UNSIGNED NOT NULL DEFAULT 0,
+            total_barcodes INT UNSIGNED NOT NULL DEFAULT 0,
+            file_hash CHAR(64) DEFAULT NULL,
+            estado VARCHAR(20) NOT NULL DEFAULT 'generado',
+            created_by BIGINT UNSIGNED DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            applied_at DATETIME DEFAULT NULL,
+            notas TEXT DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_estado (estado),
+            KEY idx_created_at (created_at)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}tpv_export_items (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            batch_id BIGINT UNSIGNED NOT NULL,
+            entity_type VARCHAR(20) NOT NULL,
+            entity_key VARCHAR(200) NOT NULL,
+            producto_base_id BIGINT UNSIGNED DEFAULT NULL,
+            sku VARCHAR(100) DEFAULT NULL,
+            accion VARCHAR(20) DEFAULT NULL,
+            row_hash CHAR(64) DEFAULT NULL,
+            payload_json LONGTEXT DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_batch (batch_id),
+            KEY idx_entity (entity_type, entity_key),
+            KEY idx_sku (sku)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        if (get_option('riverso_pos_phase41_tpv_export') !== '1') {
+            update_option('riverso_pos_phase41_tpv_export', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase41_tpv_export', 'tpv', 0, [
+                    'actor_type' => 'computer',
+                    'details'    => 'Fase 41: export catálogo TPV + facto_product_id nullable',
                 ]);
             }
         }

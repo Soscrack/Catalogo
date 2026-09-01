@@ -310,6 +310,15 @@ class Riverso_POS_Admin_Menu {
             [$this, 'render_facto_export']
         );
 
+        add_submenu_page(
+            'riverso-pos',
+            __('Export TPV', 'riverso-pos'),
+            __('Export TPV', 'riverso-pos'),
+            'riverso_export_facto',
+            'riverso-pos-tpv-export',
+            [$this, 'render_tpv_export']
+        );
+
         // Configuración
         add_submenu_page(
             'riverso-pos',
@@ -541,6 +550,10 @@ class Riverso_POS_Admin_Menu {
 
     public function render_facto_export() {
         $this->render_page('facto-export');
+    }
+
+    public function render_tpv_export() {
+        $this->render_page('tpv-export');
     }
 
     public function render_competencia() {

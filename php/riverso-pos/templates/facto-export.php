@@ -18,6 +18,7 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
         Genera archivos <code>.xlsx</code> en el formato de importación de FACTO.
         Máximo <?php echo (int) $chunk_size; ?> productos por archivo.
         El modo <strong>Reemplazar</strong> solo está disponible si el catálogo completo cabe en un solo archivo.
+        <strong>CREAR</strong> y <strong>EDITAR</strong> se cubren con los modos de abajo; <strong>ELIMINAR</strong> en FACTO no va en este Excel (queda fuera de alcance).
     </p>
 
     <div id="fe-pending-panel" class="card" style="max-width:920px;padding:16px 20px;margin-top:16px;display:none;border-left:4px solid #d63638;">
@@ -36,8 +37,8 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
                 <th scope="row"><label for="fe-modo">Modo FACTO</label></th>
                 <td>
                     <select id="fe-modo" class="regular-text">
-                        <option value="update_only">Solo actualizar (SKUs ya en FACTO)</option>
-                        <option value="upsert" selected>Agregar y actualizar</option>
+                        <option value="update_only">EDITAR — Solo actualizar (SKUs ya en FACTO)</option>
+                        <option value="upsert" selected>CREAR + EDITAR — Agregar y actualizar</option>
                         <option value="replace">Reemplazar (catálogo completo ≤ <?php echo (int) $chunk_size; ?>)</option>
                     </select>
                     <p class="description" id="fe-modo-help"></p>
@@ -131,8 +132,8 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
     let lastPendingData = null;
 
     const modoHelp = {
-        update_only: 'Actualiza productos que ya tienen mapa Riverso ↔ FACTO.',
-        upsert: 'Crea productos nuevos y actualiza los existentes. Use tandas si supera <?php echo (int) $chunk_size; ?> filas.',
+        update_only: 'EDITAR: actualiza productos que ya tienen mapa Riverso ↔ FACTO.',
+        upsert: 'CREAR + EDITAR: crea productos nuevos y actualiza los existentes. Use tandas si supera <?php echo (int) $chunk_size; ?> filas.',
         replace: 'Reemplaza todo el catálogo FACTO por el del archivo. Bloqueado si hay más de <?php echo (int) $chunk_size; ?> productos.'
     };
 
@@ -161,9 +162,11 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
         }
         $('#fe-pending-panel').show();
         $('#fe-pending-message').text(data.message || '');
-        let html = '<table class="widefat striped" style="max-width:100%;"><thead><tr><th>SKU</th><th>Nombre</th><th>Marca</th></tr></thead><tbody>';
+        let html = '<table class="widefat striped" style="max-width:100%;"><thead><tr><th>Acción</th><th>SKU</th><th>Nombre</th><th>Marca</th></tr></thead><tbody>';
         (data.samples || []).forEach(function(row) {
-            html += '<tr><td><code>' + esc(row.sku) + '</code></td><td>' + esc(row.nombre) + '</td><td>' + esc(row.marca || '—') + '</td></tr>';
+            const accion = row.accion || '—';
+            const accionStyle = accion === 'CREAR' ? 'color:#2271b1;font-weight:600;' : (accion === 'EDITAR' ? 'color:#00a32a;font-weight:600;' : '');
+            html += '<tr><td><span style="' + accionStyle + '">' + esc(accion) + '</span></td><td><code>' + esc(row.sku) + '</code></td><td>' + esc(row.nombre) + '</td><td>' + esc(row.marca || '—') + '</td></tr>';
         });
         html += '</tbody></table>';
         if (total > (data.samples || []).length) {
@@ -176,7 +179,8 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
         pending = pending || {};
         const total = parseInt(pending.pending_total || 0, 10);
         const mapped = parseInt(pending.pending_mapped || 0, 10);
-        const modo = pending.recommended_modo || (mapped > 0 ? 'update_only' : (total > 0 ? 'upsert' : 'update_only'));
+        const createCount = parseInt(pending.pending_create || 0, 10);
+        const modo = pending.recommended_modo || (createCount > 0 ? 'upsert' : (mapped > 0 ? 'update_only' : 'upsert'));
 
         $('#fe-sku').val('');
         $('#fe-tanda').val(1);
@@ -337,7 +341,9 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
                 html += '<p style="color:#b32d2e;margin-top:10px;"><strong>Reemplazar bloqueado:</strong> ' + esc(d.replace_reason) + '</p>';
             }
             if (d.pending && d.pending.pending_total > 0) {
-                html += '<p style="margin-top:10px;"><strong>Pendientes de export:</strong> ' + d.pending.pending_total + '</p>';
+                const pc = parseInt(d.pending.pending_create || 0, 10);
+                const pe = parseInt(d.pending.pending_mapped || 0, 10);
+                html += '<p style="margin-top:10px;"><strong>Pendientes de export:</strong> ' + d.pending.pending_total + ' (' + pc + ' CREAR, ' + pe + ' EDITAR)</p>';
             }
             if ((d.hydrated_count || 0) > 0) {
                 html += '<p style="margin-top:10px;"><strong>Filas completadas desde FACTO:</strong> ' + d.hydrated_count + ' (precio/marca/categoría remota + tus cambios locales encima).</p>';

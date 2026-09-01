@@ -1298,16 +1298,48 @@ class Riverso_Product_Module {
         if ($producto_base_id <= 0) {
             return;
         }
-        $wpdb->update(
+
+        $sku = $wpdb->get_var($wpdb->prepare(
+            "SELECT canonical_sku FROM {$wpdb->prefix}riverso_producto_base WHERE id = %d",
+            $producto_base_id
+        ));
+        $sku = trim((string) $sku);
+        if ($sku === '') {
+            return;
+        }
+
+        $now = current_time('mysql');
+        $map_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$table} WHERE producto_base_id = %d",
+            $producto_base_id
+        ));
+
+        if ($map_id) {
+            $wpdb->update(
+                $table,
+                [
+                    'sync_state' => 'pendiente_excel',
+                    'last_error' => 'Cambios locales pendientes de export Excel',
+                    'updated_at' => $now,
+                ],
+                ['producto_base_id' => $producto_base_id],
+                ['%s', '%s', '%s'],
+                ['%d']
+            );
+            return;
+        }
+
+        $wpdb->insert(
             $table,
             [
-                'sync_state' => 'pendiente_excel',
-                'last_error' => 'Cambios locales pendientes de export Excel',
-                'updated_at' => current_time('mysql'),
-            ],
-            ['producto_base_id' => $producto_base_id],
-            ['%s', '%s', '%s'],
-            ['%d']
+                'producto_base_id' => $producto_base_id,
+                'facto_product_id' => null,
+                'facto_sku'        => $sku,
+                'sync_state'       => 'pendiente_excel',
+                'last_error'       => 'Alta pendiente de export Excel',
+                'created_at'       => $now,
+                'updated_at'       => $now,
+            ]
         );
     }
 

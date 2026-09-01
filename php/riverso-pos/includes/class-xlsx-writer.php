@@ -11,21 +11,46 @@ if (!defined('ABSPATH')) {
 
 class Riverso_Xlsx_Writer {
 
-    /** @var string */
-    private $sheet_name;
-
-    /** @var array<int, array<int, mixed>> */
-    private $rows = [];
+    /**
+     * @var array<int, array{name: string, rows: array<int, array<int, mixed>>}>
+     */
+    private $sheets = [];
 
     public function __construct($sheet_name = 'Datos de producto') {
-        $this->sheet_name = (string) $sheet_name;
+        $this->sheets = [
+            [
+                'name' => (string) $sheet_name,
+                'rows' => [],
+            ],
+        ];
     }
 
     /**
      * @param array<int, array<int, mixed>> $rows
      */
     public function set_rows(array $rows) {
-        $this->rows = $rows;
+        if (empty($this->sheets)) {
+            $this->sheets[] = ['name' => 'Sheet1', 'rows' => []];
+        }
+        $this->sheets[0]['rows'] = $rows;
+    }
+
+    /**
+     * @param array<int, array{name: string, rows: array<int, array<int, mixed>>}> $sheets
+     */
+    public function set_sheets(array $sheets) {
+        $normalized = [];
+        foreach ($sheets as $idx => $sheet) {
+            $name = trim((string) ($sheet['name'] ?? ('Sheet' . ($idx + 1))));
+            if ($name === '') {
+                $name = 'Sheet' . ($idx + 1);
+            }
+            $normalized[] = [
+                'name' => $name,
+                'rows' => is_array($sheet['rows'] ?? null) ? $sheet['rows'] : [],
+            ];
+        }
+        $this->sheets = $normalized ?: [['name' => 'Sheet1', 'rows' => []]];
     }
 
     /**
@@ -33,6 +58,9 @@ class Riverso_Xlsx_Writer {
      */
     public function to_string() {
         if (!class_exists('ZipArchive')) {
+            return false;
+        }
+        if (empty($this->sheets)) {
             return false;
         }
 
@@ -47,12 +75,19 @@ class Riverso_Xlsx_Writer {
             return false;
         }
 
-        $sheet_xml = $this->build_sheet_xml();
         $zip->addFromString('[Content_Types].xml', $this->content_types_xml());
         $zip->addFromString('_rels/.rels', $this->root_rels_xml());
         $zip->addFromString('xl/_rels/workbook.xml.rels', $this->workbook_rels_xml());
         $zip->addFromString('xl/workbook.xml', $this->workbook_xml());
-        $zip->addFromString('xl/worksheets/sheet1.xml', $sheet_xml);
+
+        foreach ($this->sheets as $idx => $sheet) {
+            $sheet_num = $idx + 1;
+            $zip->addFromString(
+                'xl/worksheets/sheet' . $sheet_num . '.xml',
+                $this->build_sheet_xml($sheet['rows'] ?? [])
+            );
+        }
+
         $zip->close();
 
         $data = file_get_contents($tmp);
@@ -61,13 +96,21 @@ class Riverso_Xlsx_Writer {
     }
 
     private function content_types_xml() {
-        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            . '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-            . '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-            . '<Default Extension="xml" ContentType="application/xml"/>'
-            . '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-            . '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-            . '</Types>';
+        $parts = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
+            '<Default Extension="xml" ContentType="application/xml"/>',
+            '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>',
+        ];
+
+        foreach ($this->sheets as $idx => $sheet) {
+            $sheet_num = $idx + 1;
+            $parts[] = '<Override PartName="/xl/worksheets/sheet' . $sheet_num . '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+        }
+
+        $parts[] = '</Types>';
+        return implode('', $parts);
     }
 
     private function root_rels_xml() {
@@ -78,35 +121,46 @@ class Riverso_Xlsx_Writer {
     }
 
     private function workbook_rels_xml() {
-        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-            . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-            . '</Relationships>';
+        $parts = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+        ];
+        foreach ($this->sheets as $idx => $sheet) {
+            $sheet_num = $idx + 1;
+            $parts[] = '<Relationship Id="rId' . $sheet_num . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' . $sheet_num . '.xml"/>';
+        }
+        $parts[] = '</Relationships>';
+        return implode('', $parts);
     }
 
     private function workbook_xml() {
-        $name = htmlspecialchars($this->sheet_name, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            . '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
-            . 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-            . '<sheets><sheet name="' . $name . '" sheetId="1" r:id="rId1"/></sheets>'
-            . '</workbook>';
-    }
+        $parts = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+            '<sheets>',
+        ];
 
-    private function build_sheet_xml() {
-        $row_count = count($this->rows);
-        $col_count = 0;
-        foreach ($this->rows as $row) {
-            $col_count = max($col_count, count($row));
+        foreach ($this->sheets as $idx => $sheet) {
+            $sheet_num = $idx + 1;
+            $name = htmlspecialchars((string) ($sheet['name'] ?? ('Sheet' . $sheet_num)), ENT_XML1 | ENT_QUOTES, 'UTF-8');
+            $parts[] = '<sheet name="' . $name . '" sheetId="' . $sheet_num . '" r:id="rId' . $sheet_num . '"/>';
         }
 
+        $parts[] = '</sheets></workbook>';
+        return implode('', $parts);
+    }
+
+    /**
+     * @param array<int, array<int, mixed>> $rows
+     */
+    private function build_sheet_xml(array $rows) {
         $parts = [
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
             '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
             '<sheetData>',
         ];
 
-        foreach ($this->rows as $r_idx => $row) {
+        foreach ($rows as $r_idx => $row) {
             $r_num = $r_idx + 1;
             $parts[] = '<row r="' . $r_num . '">';
             foreach ($row as $c_idx => $value) {

@@ -17,14 +17,17 @@ En la UI (Historial → Serie) se ve: precio de hoy + 01/16 de meses anteriores.
 
 ## Crontab en Plesk (servidor)
 
-WP-Cron **no** sirve: no garantiza la hora. La tarea está en Plesk (suscripción `riverso.cl`, id **164**):
+WP-Cron **no** sirve: no garantiza la hora.
 
-- Horario: `0 2 * * *` (zona del servidor; el script usa `America/Santiago` internamente)
-- Tipo: **Run a PHP script** (`-type php`), versión **8.4.25**
+El horario real está en **`/etc/cron.d/riverso-sande-precios`** con `CRON_TZ=America/Santiago` (`0 2 * * *` = 02:00 Chile, con horario de verano).
+
+La tarea Plesk id **164** queda **inactiva** a propósito: el panel programa en UTC del servidor, y `0 2 * * *` corría a las **22:00 de Chile**. Sigue sirviendo para pulsar **Ejecutar ahora**.
+
+- PHP: `/opt/plesk/php/8.4/bin/php`
 - Script: `httpdocs/wp-content/plugins/riverso-pos/cli/sande-precios-refresh.php`
-- Log (escrito por el CLI): `httpdocs/wp-content/uploads/riverso-logs/sande-precios.log`
+- Log: `httpdocs/wp-content/uploads/riverso-logs/sande-precios.log`
 
-Visible en Plesk → **Websites & Domains** → riverso.cl → **Scheduled Tasks**.
+Para recrear el cron (idempotente vía SSH root):
 
 ### Cómo comprobar que corre bien
 
@@ -36,7 +39,7 @@ Visible en Plesk → **Websites & Domains** → riverso.cl → **Scheduled Tasks
    - Si todo OK: `OK productos_api=… historial_affected=…`
 4. En WP Admin → Competencia → Sande → **Historial**, la columna «Actualizado» debería ser de hoy.
 
-**Nota:** la tarea antigua usaba `type exec` con redirección a un log en `logs/`; en el chroot de Plesk no hay PHP y fallaba silenciosamente (`> /dev/null` en crontab). Debe ser **tipo PHP**, no «Run a command».
+**Nota:** no reactivar la tarea Plesk 164 con horario `0 2 * * *`: el servidor está en UTC y duplicaría/adelantaría la corrida.
 
 Para recrearla (idempotente vía SSH root, sin usuario admin de Plesk):
 

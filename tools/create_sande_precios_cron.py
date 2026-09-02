@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Crea o repara (idempotente) la tarea Plesk de precios Sande a las 02:00 America/Santiago."""
+"""Instala el cron de precios Sande a las 02:00 America/Santiago.
+
+Plesk programa en UTC del servidor, así que `0 2 * * *` en la tarea 164
+corría a las 22:00 de Chile. La fuente de verdad es /etc/cron.d con CRON_TZ.
+La tarea Plesk se deja inactiva para poder usar «Ejecutar ahora» sin duplicar.
+"""
 import json
 import os
 from pathlib import Path
@@ -7,13 +12,21 @@ from pathlib import Path
 import paramiko
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT_REL = "httpdocs/wp-content/plugins/riverso-pos/cli/sande-precios-refresh.php"
-LOG_DIR = (
-    "/var/www/vhosts/riverso.cl/httpdocs/wp-content/uploads/riverso-logs"
+PHP_BIN = "/opt/plesk/php/8.4/bin/php"
+SCRIPT = (
+    "/var/www/vhosts/riverso.cl/httpdocs/wp-content/plugins/"
+    "riverso-pos/cli/sande-precios-refresh.php"
 )
+LOG_DIR = "/var/www/vhosts/riverso.cl/httpdocs/wp-content/uploads/riverso-logs"
+CRON_FILE = "/etc/cron.d/riverso-sande-precios"
+USER = "riverso.cl_1xybiw6rlcq"
 DESC = "Sande precios 02:00 America/Santiago"
-# Plesk subscription cron: usar -type php con versión completa (chroot no tiene /opt/plesk/php)
-PHP_VERSION = os.environ.get("RIVERSO_SANDE_PHP_VERSION", "8.4.25")
+CRON_BODY = f"""# Precios Sande: 02:00 America/Santiago (respeta horario de verano)
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin
+CRON_TZ=America/Santiago
+0 2 * * * {USER} {PHP_BIN} {SCRIPT}
+"""
 
 
 def load_env():
@@ -54,49 +67,34 @@ def main():
     print("=== prepare log dir ===")
     code, out, err = run(
         ssh,
-        f"mkdir -p {LOG_DIR} && chown riverso.cl_1xybiw6rlcq:psacln {LOG_DIR} && chmod 775 {LOG_DIR} && echo ok",
+        f"mkdir -p {LOG_DIR} && chown {USER}:psacln {LOG_DIR} && chmod 775 {LOG_DIR} && echo ok",
     )
     print(out.strip(), err.strip(), "exit", code)
 
-    print("=== list tasks ===")
+    print("=== write cron.d ===")
+    sftp = ssh.open_sftp()
+    with sftp.file(CRON_FILE, "w") as handle:
+        handle.write(CRON_BODY)
+    sftp.close()
+    run(ssh, f"chmod 644 {CRON_FILE} && echo installed {CRON_FILE}")
+    _, out, _ = run(ssh, f"cat {CRON_FILE}")
+    print(out.strip())
+
+    print("=== deactivate Plesk duplicate (keep for Run now) ===")
     code, out, err = run(ssh, "plesk bin scheduler --list -subscription riverso.cl -json")
     rows = json.loads(out) if out.strip() else []
     task_id = find_task(rows)
-    print("existing id:", task_id or "(ninguna)")
-
-    script_arg = json.dumps(SCRIPT_REL)
-    desc_arg = json.dumps(DESC)
-
     if task_id:
-        print(f"=== update task {task_id} → type php {PHP_VERSION} ===")
-        cmd = (
-            f"plesk bin scheduler --update {task_id} "
-            f"-subscription riverso.cl "
-            f"-type php -php {PHP_VERSION} "
-            f"-schedule '0 2 * * *' -active true -notify errors "
-            f"-description {desc_arg} -command {script_arg}"
+        code, out, err = run(
+            ssh,
+            f"plesk bin scheduler --update {task_id} -active false 2>&1",
         )
+        print((out or err).strip()[:800], "exit", code)
     else:
-        print("=== create task ===")
-        cmd = (
-            "plesk bin scheduler --create "
-            f"-subscription riverso.cl "
-            f"-type php -php {PHP_VERSION} "
-            f"-schedule '0 2 * * *' -active true -notify errors "
-            f"-description {desc_arg} -command {script_arg}"
-        )
+        print("no Plesk task found")
 
-    code, out, err = run(ssh, cmd)
-    print(out.strip())
-    if err.strip():
-        print("STDERR:", err.strip()[:2000])
-    print("exit", code)
-
-    print("=== list after ===")
-    code2, out2, _ = run(ssh, "plesk bin scheduler --list -subscription riverso.cl -json")
-    print(out2[:2500] if out2 else "")
     ssh.close()
-    return 0 if code == 0 else code
+    return 0
 
 
 if __name__ == "__main__":

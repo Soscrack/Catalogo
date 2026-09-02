@@ -15,7 +15,7 @@ $nonce = wp_create_nonce('riverso_pos_nonce');
     <h1><?php esc_html_e('Export catálogo TPV', 'riverso-pos'); ?></h1>
     <p class="description">
         Genera un archivo <code>.xlsx</code> con dos hojas (<strong>Productos</strong> y <strong>CodigosBarra</strong>)
-        para el programa TPV local (ventas sin conexión). Incluye nombres, marcas, proveedores, precios y códigos de barra.
+        para el programa TPV local (ventas sin conexión). Incluye nombres, códigos de proveedor, precios y códigos de barra.
         <strong>No incluye inventario.</strong> La columna <strong>Accion</strong> indica CREAR, EDITAR o ELIMINAR respecto al último lote aplicado.
     </p>
 

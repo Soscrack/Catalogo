@@ -297,9 +297,10 @@ try {
     }
 
     $today = date('Y-m-d');
+    $now_scl = date('Y-m-d H:i:s');
     $day = (int) date('j');
     $keep_as_quincenal = ($day === 1 || $day === 16);
-    log_msg("Hoy={$today} día={$day} historial=diario" . ($keep_as_quincenal ? ' (se conserva 01/16)' : ' (se rotará)'));
+    log_msg("Hoy={$today} {$now_scl} América/Santiago día={$day} historial=diario" . ($keep_as_quincenal ? ' (se conserva 01/16)' : ' (se rotará)'));
 
     if ($opts['dry_run']) {
         $sample = $rows[0];
@@ -415,7 +416,7 @@ try {
              " . sql_escape($db, $costo) . ",
              " . sql_escape($db, $moneda) . ",
              {$oculto},
-             NOW()
+             " . sql_escape($db, $now_scl) . "
             FROM `{$prefix}competencia_productos` cp
             WHERE cp.fuente_id = {$fuente_id} AND cp.id_externo = " . sql_escape($db, $ext_id) . "
             ON DUPLICATE KEY UPDATE
@@ -437,12 +438,11 @@ try {
     $sql_hist = "INSERT INTO `{$prefix}competencia_precios_historial`
         (producto_id, snapshot_fecha, precio, precio_lista, precio_bruto_unitario, precio_bruto_total,
          cantidad_min, iva, moneda)
-        SELECT pr.producto_id, pr.snapshot_fecha, pr.precio, pr.precio_lista,
+        SELECT pr.producto_id, " . sql_escape($db, $today) . ", pr.precio, pr.precio_lista,
                pr.precio_bruto_unitario, pr.precio_bruto_total, pr.cantidad_min, pr.iva, pr.moneda
         FROM `{$prefix}competencia_precios` pr
         INNER JOIN `{$prefix}competencia_productos` cp ON cp.id = pr.producto_id
         WHERE cp.fuente_id = {$fuente_id}
-          AND pr.snapshot_fecha = " . sql_escape($db, $today) . "
         ON DUPLICATE KEY UPDATE
          precio=VALUES(precio),
          precio_lista=VALUES(precio_lista),

@@ -24,8 +24,6 @@ class Riverso_Tpv_Export_Service {
         'Accion',
         'SKU',
         'Nombre',
-        'Marca',
-        'Proveedor',
         'CodigoProveedor',
         'Precio',
     ];
@@ -119,8 +117,6 @@ class Riverso_Tpv_Export_Service {
                 $row['_accion'],
                 $row['SKU'],
                 $row['Nombre'],
-                $row['Marca'],
-                $row['Proveedor'],
                 $row['CodigoProveedor'],
                 $row['Precio'],
             ];
@@ -262,8 +258,6 @@ class Riverso_Tpv_Export_Service {
                         '_entity_key'     => $sku,
                         'SKU'             => $sku,
                         'Nombre'          => (string) ($prev['payload']['Nombre'] ?? ''),
-                        'Marca'           => (string) ($prev['payload']['Marca'] ?? ''),
-                        'Proveedor'       => (string) ($prev['payload']['Proveedor'] ?? ''),
                         'CodigoProveedor' => (string) ($prev['payload']['CodigoProveedor'] ?? ''),
                         'Precio'          => $prev['payload']['Precio'] ?? '',
                     ];
@@ -333,15 +327,7 @@ class Riverso_Tpv_Export_Service {
                 pb.id,
                 pb.canonical_sku,
                 pb.nombre_canonico,
-                pb.marca,
                 pl.p_asignado,
-                (
-                    SELECT pp.nombre_proveedor
-                    FROM {$prefix}producto_proveedor pp
-                    WHERE pp.producto_base_id = pb.id AND pp.activo = 1
-                    ORDER BY pp.es_preferido DESC, pp.id ASC
-                    LIMIT 1
-                ) AS proveedor_nombre,
                 (
                     SELECT pp.codigo_proveedor
                     FROM {$prefix}producto_proveedor pp
@@ -375,8 +361,6 @@ class Riverso_Tpv_Export_Service {
                 '_entity_key'       => $sku,
                 'SKU'               => $sku,
                 'Nombre'            => trim((string) ($item['nombre_canonico'] ?? '')),
-                'Marca'             => trim((string) ($item['marca'] ?? '')),
-                'Proveedor'         => trim((string) ($item['proveedor_nombre'] ?? '')),
                 'CodigoProveedor'   => trim((string) ($item['codigo_proveedor'] ?? '')),
                 'Precio'            => $precio !== null && $precio !== '' ? round((float) $precio, 2) : '',
             ];
@@ -495,8 +479,6 @@ class Riverso_Tpv_Export_Service {
         $payload = [
             'SKU'             => $row['SKU'] ?? '',
             'Nombre'          => $row['Nombre'] ?? '',
-            'Marca'           => $row['Marca'] ?? '',
-            'Proveedor'       => $row['Proveedor'] ?? '',
             'CodigoProveedor' => $row['CodigoProveedor'] ?? '',
             'Precio'          => $row['Precio'] ?? '',
         ];
@@ -598,8 +580,6 @@ class Riverso_Tpv_Export_Service {
             $payload = [
                 'SKU'             => $row['SKU'] ?? '',
                 'Nombre'          => $row['Nombre'] ?? '',
-                'Marca'           => $row['Marca'] ?? '',
-                'Proveedor'       => $row['Proveedor'] ?? '',
                 'CodigoProveedor' => $row['CodigoProveedor'] ?? '',
                 'Precio'          => $row['Precio'] ?? '',
             ];

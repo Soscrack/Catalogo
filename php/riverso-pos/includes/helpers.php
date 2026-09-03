@@ -127,6 +127,7 @@ function riverso_get_task_types() {
         'validar_categoria' => ['label' => 'Validar categoría', 'icon' => 'category', 'categoria' => 'productos'],
         'verificar_etiquetado' => ['label' => 'Verificar etiquetado', 'icon' => 'tag', 'categoria' => 'productos'],
         'aprobar_lista_precios' => ['label' => 'Aprobar lista de precios', 'icon' => 'money-alt', 'categoria' => 'precios'],
+        'asignar_regla_precio' => ['label' => 'Asignar regla de precio', 'icon' => 'chart-area', 'categoria' => 'precios'],
         'relacionar_producto_proveedor' => ['label' => 'Relacionar producto proveedor', 'icon' => 'admin-links', 'categoria' => 'productos'],
         'confirmar_relacion_online' => ['label' => 'Confirmar relación online', 'icon' => 'cloud', 'categoria' => 'productos'],
         'crear_contraparte_online' => ['label' => 'Crear contraparte online', 'icon' => 'cloud-upload', 'categoria' => 'productos'],
@@ -507,6 +508,15 @@ function riverso_resolve_task_target_by_reference($task_tipo, $referencia_tipo, 
             }
             return admin_url('admin.php?page=riverso-pos-pricing');
 
+        case 'familia':
+        case 'equivalence_group':
+            return add_query_arg([
+                'page' => 'riverso-pos-price-rules',
+                'assign' => 'familia',
+                'target_id' => (int) $referencia_id,
+                'grupo_id' => (int) $referencia_id,
+            ], admin_url('admin.php'));
+
         case 'data_gap_rule':
             $args = ['page' => 'riverso-pos-catalog-health'];
             if (!empty($extra['regla'])) {
@@ -542,6 +552,7 @@ function riverso_resolve_task_target_by_type($task_tipo, array $extra = [], $ref
         'cotizacion' => 'riverso-pos-received-quotes',
         'devolucion' => 'riverso-pos-invoices',
         'aprobar_lista_precios' => 'riverso-pos-pricing',
+        'asignar_regla_precio' => 'riverso-pos-price-rules',
         'revisar_calidad_catalogo' => 'riverso-pos-catalog-health',
         'confirmar_tipo_documento' => 'riverso-pos-invoices',
         'autorizar_publicacion' => 'riverso-pos-publish',
@@ -595,6 +606,14 @@ function riverso_resolve_task_target_by_type($task_tipo, array $extra = [], $ref
 
     if ($task_tipo === 'revisar_calidad_catalogo' && !empty($extra['regla'])) {
         $args['regla'] = sanitize_key($extra['regla']);
+    }
+    if ($task_tipo === 'asignar_regla_precio') {
+        $gid = absint($extra['grupo_id'] ?? $referencia_id);
+        if ($gid) {
+            $args['assign'] = 'familia';
+            $args['target_id'] = $gid;
+            $args['grupo_id'] = $gid;
+        }
     }
     if ($task_tipo === 'confirmar_tipo_documento' && $referencia_id) {
         $args['factura'] = (int) $referencia_id;

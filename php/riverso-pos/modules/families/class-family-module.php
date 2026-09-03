@@ -62,6 +62,8 @@ class Riverso_Family_Module {
         add_action('wp_ajax_riverso_families_unit_price_preview', [$this, 'ajax_unit_price_preview']);
         add_action('wp_ajax_riverso_families_unit_link_preview', [$this, 'ajax_unit_link_preview']);
         add_action('wp_ajax_riverso_families_suggest_names', [$this, 'ajax_suggest_names']);
+        add_action('wp_ajax_riverso_families_pack_merge_preview', [$this, 'ajax_pack_merge_preview']);
+        add_action('wp_ajax_riverso_families_pack_merge_confirm', [$this, 'ajax_pack_merge_confirm']);
     }
 
     /**
@@ -194,6 +196,18 @@ class Riverso_Family_Module {
 
         $family_ids = array_map('intval', array_column($families ?: [], 'id'));
         $members_by_group = $this->batch_list_family_members($family_ids);
+        $families_with_rule = [];
+        if ($family_ids && class_exists('Riverso_Price_Rules_Module')) {
+            global $wpdb;
+            $prefix = $wpdb->prefix . 'riverso_';
+            $placeholders = implode(',', array_fill(0, count($family_ids), '%d'));
+            $assigned = $wpdb->get_col($wpdb->prepare(
+                "SELECT target_id FROM {$prefix}price_rule_assignments
+                 WHERE target_tipo = 'familia' AND target_id IN ({$placeholders})",
+                ...$family_ids
+            ));
+            $families_with_rule = array_fill_keys(array_map('intval', $assigned ?: []), true);
+        }
 
         foreach ($families as &$family) {
             $family['tipo_sustitucion'] = self::normalize_tipo($family['tipo_sustitucion'] ?? 'exacta');
@@ -205,6 +219,8 @@ class Riverso_Family_Module {
             $unit_id = !empty($family['unit_producto_base_id'])
                 ? intval($family['unit_producto_base_id']) : 0;
             $family['unit_producto_base_id'] = $unit_id ?: null;
+            $family['falta_regla_precio'] = !empty($family['es_producto_unitario'])
+                && empty($families_with_rule[intval($family['id'])]);
 
             $members = $members_by_group[intval($family['id'])] ?? [];
             foreach ($members as &$member) {
@@ -391,6 +407,7 @@ class Riverso_Family_Module {
         $family['unit_producto_base_id'] = $unit_id ?: null;
         $family['pending'] = $this->get_pending_suppliers($grupo_id);
         $family['stock'] = $stock;
+        $family['pack_conflicts'] = $this->detect_pack_qty_conflicts($grupo_id, $members);
         wp_send_json_success(['family' => $family]);
     }
 
@@ -626,6 +643,13 @@ class Riverso_Family_Module {
             $grupo_id
         ));
 
+        if (class_exists('Riverso_Unit_Product_Service')) {
+            Riverso_Unit_Product_Service::get_instance()->cancel_missing_rule_tasks(
+                $grupo_id,
+                'Familia eliminada'
+            );
+        }
+
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('family_deleted', 'equivalence_groups', $grupo_id, [
                 'nombre' => $family['nombre'] ?? '',
@@ -693,10 +717,12 @@ class Riverso_Family_Module {
         }
 
         $stock = $this->compute_family_stock($grupo_id);
+        $members = $this->load_family_members_enriched($grupo_id);
         wp_send_json_success([
             'envase_id' => $envase_id,
             'cantidad_unidades' => $cantidad,
             'stock' => $stock,
+            'pack_conflicts' => $this->detect_pack_qty_conflicts($grupo_id, $members),
             'message' => 'Cantidad de envase guardada',
         ]);
     }
@@ -795,6 +821,12 @@ class Riverso_Family_Module {
             Riverso_Product_Module::get_instance()->resolve_family_assigned($producto_base_id);
         }
 
+        $parked_suggestions = 0;
+        if (class_exists('Riverso_Unit_Product_Service')) {
+            $parked_suggestions = Riverso_Unit_Product_Service::get_instance()
+                ->annotate_parked_barcode_tasks_for_family($grupo_id);
+        }
+
         $member = $wpdb->get_row($wpdb->prepare(
             "SELECT em.*, pb.canonical_sku, pb.nombre_canonico
              FROM {$prefix}equivalence_members em
@@ -803,7 +835,12 @@ class Riverso_Family_Module {
             $member_id
         ), ARRAY_A);
 
-        wp_send_json_success(['member' => $member]);
+        $members = $this->load_family_members_enriched($grupo_id);
+        wp_send_json_success([
+            'member' => $member,
+            'parked_barcode_suggestions' => $parked_suggestions,
+            'pack_conflicts' => $this->detect_pack_qty_conflicts($grupo_id, $members),
+        ]);
     }
 
     /**
@@ -1696,6 +1733,10 @@ class Riverso_Family_Module {
         if (class_exists('Riverso_Product_Module')) {
             Riverso_Product_Module::get_instance()->resolve_family_assigned($producto_base_id);
         }
+        if (class_exists('Riverso_Unit_Product_Service')) {
+            Riverso_Unit_Product_Service::get_instance()
+                ->annotate_parked_barcode_tasks_for_family($grupo_id);
+        }
         return intval($wpdb->insert_id);
     }
 
@@ -2385,8 +2426,11 @@ class Riverso_Family_Module {
         if (!empty($_POST['confirm_r1']) && class_exists('Riverso_Price_Rules_Module')) {
             $assign = $this->unit_service()->assign_default_rule($grupo_id, absint($_POST['rule_id'] ?? 0));
             if (is_wp_error($assign)) {
+                $this->unit_service()->ensure_missing_rule_task($grupo_id);
                 wp_send_json_error(['message' => $assign->get_error_message(), 'unit' => $result]);
             }
+        } else {
+            $this->unit_service()->ensure_missing_rule_task($grupo_id);
         }
 
         if ($opts['p_asignado'] !== null) {
@@ -2426,7 +2470,11 @@ class Riverso_Family_Module {
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
         }
-        wp_send_json_success(['enabled' => $enabled]);
+        $snapshot = $this->unit_service()->get_unit_snapshot($grupo_id);
+        wp_send_json_success([
+            'enabled' => $enabled,
+            'unit' => is_wp_error($snapshot) ? null : $snapshot,
+        ]);
     }
 
     public function ajax_unit_convert() {
@@ -2774,6 +2822,359 @@ class Riverso_Family_Module {
 
     private function is_envase_attr($slug, $name) {
         return $this->attr_matches($slug, $name, ['envase', 'pack', 'packaging', 'unidades', 'cantidad']);
+    }
+
+    /**
+     * Miembros activos enriquecidos (flags SKU, envase, unitario).
+     *
+     * @param int $grupo_id
+     * @return array
+     */
+    private function load_family_members_enriched($grupo_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $grupo_id = absint($grupo_id);
+        if (!$grupo_id) {
+            return [];
+        }
+
+        $family = $wpdb->get_row($wpdb->prepare(
+            "SELECT unit_producto_base_id FROM {$prefix}equivalence_groups WHERE id = %d",
+            $grupo_id
+        ), ARRAY_A);
+        $unit_id = intval($family['unit_producto_base_id'] ?? 0);
+
+        $members = $wpdb->get_results($wpdb->prepare(
+            "SELECT em.id, em.producto_base_id, em.prioridad, em.es_reemplazo_preferido,
+                    pb.canonical_sku, pb.nombre_canonico, pb.stock_abierto,
+                    pb.woocommerce_product_id, pb.woocommerce_variation_id,
+                    pb.es_unidad_minima, pb.unit_of_grupo_id
+             FROM {$prefix}equivalence_members em
+             LEFT JOIN {$prefix}producto_base pb ON pb.id = em.producto_base_id
+             WHERE em.grupo_id = %d AND em.activo = 1
+             ORDER BY em.prioridad DESC, pb.nombre_canonico ASC",
+            $grupo_id
+        ), ARRAY_A) ?: [];
+
+        $stock = $this->compute_family_stock($grupo_id, $members);
+        $by_id = [];
+        foreach ($stock['members'] as $sm) {
+            $by_id[intval($sm['producto_base_id'])] = $sm;
+        }
+        foreach ($members as &$m) {
+            $sid = intval($m['producto_base_id']);
+            if (isset($by_id[$sid])) {
+                $m = array_merge($m, $by_id[$sid]);
+            }
+            $this->enrich_product_sku_flags($m);
+            $m['es_unitario_familia'] = $unit_id > 0 && $sid === $unit_id;
+        }
+        unset($m);
+
+        return $members;
+    }
+
+    /**
+     * Detecta hijos con la misma cantidad de envase en una familia.
+     *
+     * @param int   $grupo_id
+     * @param array $members
+     * @return array
+     */
+    public function detect_pack_qty_conflicts($grupo_id, array $members) {
+        unset($grupo_id);
+        $by_qty = [];
+        foreach ($members as $m) {
+            if (!empty($m['es_unitario_familia'])) {
+                continue;
+            }
+            $qty = floatval($m['cantidad_unidades'] ?? 0);
+            if ($qty <= 1.0001) {
+                continue;
+            }
+            $key = $this->format_pack_qty_key($qty);
+            if (!isset($by_qty[$key])) {
+                $by_qty[$key] = [];
+            }
+            $by_qty[$key][] = $this->format_pack_conflict_member($m);
+        }
+
+        $conflicts = [];
+        foreach ($by_qty as $group) {
+            if (count($group) < 2) {
+                continue;
+            }
+            $qty = floatval($group[0]['cantidad_unidades'] ?? 0);
+            $conflict = $this->evaluate_pack_qty_conflict_group($group, $qty);
+            if ($conflict) {
+                $conflicts[] = $conflict;
+            }
+        }
+
+        return $conflicts;
+    }
+
+    /**
+     * @param float $qty
+     * @return string
+     */
+    private function format_pack_qty_key($qty) {
+        return number_format(round(floatval($qty), 4), 4, '.', '');
+    }
+
+    /**
+     * @param float $qty
+     * @return string
+     */
+    private function format_pack_qty_label($qty) {
+        return rtrim(rtrim(number_format(floatval($qty), 4, '.', ''), '0'), '.');
+    }
+
+    /**
+     * @param array $m
+     * @return array
+     */
+    private function format_pack_conflict_member(array $m) {
+        return [
+            'producto_base_id' => intval($m['producto_base_id'] ?? 0),
+            'nombre_canonico' => (string) ($m['nombre_canonico'] ?? ''),
+            'sku_local' => (string) ($m['sku_local'] ?? $m['canonical_sku'] ?? ''),
+            'sku_online' => (string) ($m['sku_online'] ?? ''),
+            'es_local' => !empty($m['es_local']),
+            'es_online' => !empty($m['es_online']),
+            'cantidad_unidades' => floatval($m['cantidad_unidades'] ?? 0),
+            'woocommerce_product_id' => absint($m['woocommerce_product_id'] ?? 0),
+            'woocommerce_variation_id' => absint($m['woocommerce_variation_id'] ?? 0),
+        ];
+    }
+
+    /**
+     * @param array $members
+     * @param float $qty
+     * @return array|null
+     */
+    private function evaluate_pack_qty_conflict_group(array $members, $qty) {
+        $online_stubs = [];
+        $local_only = [];
+        $complete = [];
+
+        foreach ($members as $m) {
+            $is_local = !empty($m['es_local']);
+            $is_online = !empty($m['es_online']);
+            if ($is_online && !$is_local) {
+                $online_stubs[] = $m;
+            } elseif ($is_local && !$is_online) {
+                $local_only[] = $m;
+            } elseif ($is_local && $is_online) {
+                $complete[] = $m;
+            }
+        }
+
+        if (!empty($complete) && empty($online_stubs) && empty($local_only)) {
+            return null;
+        }
+
+        $qty_label = $this->format_pack_qty_label($qty);
+        $conflict = [
+            'qty' => $qty,
+            'qty_label' => $qty_label,
+            'members' => $members,
+            'mergeable' => false,
+            'source_id' => null,
+            'target_id' => null,
+            'message' => '',
+        ];
+
+        if (count($online_stubs) === 1 && count($local_only) === 1 && count($members) === 2) {
+            $conflict['mergeable'] = true;
+            $conflict['source_id'] = intval($online_stubs[0]['producto_base_id']);
+            $conflict['target_id'] = intval($local_only[0]['producto_base_id']);
+            $conflict['message'] = sprintf(
+                'Mismo envase %s u: el producto online puede fusionarse en el local.',
+                $qty_label
+            );
+            return $conflict;
+        }
+
+        $conflict['message'] = sprintf(
+            'Varios miembros con envase de %s u (%d productos). Revisa duplicados.',
+            $qty_label,
+            count($members)
+        );
+        return $conflict;
+    }
+
+    /**
+     * Valida par online (origen) + local (destino) para merge en familia.
+     *
+     * @param int $grupo_id
+     * @param int $source_id
+     * @param int $target_id
+     * @return array|WP_Error
+     */
+    private function validate_family_pack_merge_pair($grupo_id, $source_id, $target_id) {
+        $grupo_id = absint($grupo_id);
+        $source_id = absint($source_id);
+        $target_id = absint($target_id);
+
+        if (!$grupo_id || !$source_id || !$target_id || $source_id === $target_id) {
+            return new WP_Error('invalid_ids', 'IDs de familia o productos inválidos');
+        }
+
+        $members = $this->load_family_members_enriched($grupo_id);
+        $member_ids = array_map(function ($m) {
+            return intval($m['producto_base_id']);
+        }, $members);
+
+        if (!in_array($source_id, $member_ids, true) || !in_array($target_id, $member_ids, true)) {
+            return new WP_Error('not_member', 'Ambos productos deben ser miembros activos de esta familia');
+        }
+
+        $conflicts = $this->detect_pack_qty_conflicts($grupo_id, $members);
+        foreach ($conflicts as $conflict) {
+            if (empty($conflict['mergeable'])) {
+                continue;
+            }
+            if (intval($conflict['source_id']) === $source_id && intval($conflict['target_id']) === $target_id) {
+                $source = null;
+                $target = null;
+                foreach ($members as $m) {
+                    if (intval($m['producto_base_id']) === $source_id) {
+                        $source = $m;
+                    }
+                    if (intval($m['producto_base_id']) === $target_id) {
+                        $target = $m;
+                    }
+                }
+                if (!$source || !$target) {
+                    return new WP_Error('not_found', 'Productos no encontrados en la familia');
+                }
+                if (empty($source['es_online']) || !empty($source['es_local'])) {
+                    return new WP_Error('invalid_source', 'El origen debe ser un producto solo online');
+                }
+                if (empty($target['es_local']) || !empty($target['es_online'])) {
+                    return new WP_Error('invalid_target', 'El destino debe ser un producto solo local');
+                }
+                $woo_id = absint($source['woocommerce_variation_id'] ?? 0)
+                    ?: absint($source['woocommerce_product_id'] ?? 0);
+                if (!$woo_id) {
+                    return new WP_Error('no_woo', 'El producto online no tiene WooCommerce vinculado');
+                }
+                return array_merge($conflict, [
+                    'source' => $source,
+                    'target' => $target,
+                    'woo_id' => $woo_id,
+                ]);
+            }
+        }
+
+        return new WP_Error('invalid_pair', 'No hay un conflicto fusionable para este par en la familia');
+    }
+
+    /**
+     * AJAX: Preview de merge online→local por mismo envase en familia.
+     */
+    public function ajax_pack_merge_preview() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $source_id = absint($_POST['source_id'] ?? 0);
+        $target_id = absint($_POST['target_id'] ?? 0);
+
+        $validation = $this->validate_family_pack_merge_pair($grupo_id, $source_id, $target_id);
+        if (is_wp_error($validation)) {
+            wp_send_json_error(['message' => $validation->get_error_message()]);
+        }
+
+        if (!class_exists('Riverso_Product_Module')) {
+            wp_send_json_error(['message' => 'Módulo de productos no disponible']);
+        }
+
+        $prod_mod = Riverso_Product_Module::get_instance();
+        $woo_id = absint($validation['woo_id']);
+        $preview = $prod_mod->build_online_merge_preview($woo_id, $target_id);
+        $preview['source_id'] = $source_id;
+        $preview['target_id'] = $target_id;
+        $preview['needs_merge'] = true;
+        $preview['pack_qty'] = floatval($validation['qty']);
+        $preview['pack_qty_label'] = (string) $validation['qty_label'];
+        $preview['warnings'][] = [
+            'type' => 'same_pack_qty',
+            'message' => sprintf(
+                'Ambos miembros tienen envase de %s u en esta familia.',
+                $validation['qty_label']
+            ),
+            'severity' => 'info',
+        ];
+
+        if (!empty($preview['block_merge'])) {
+            wp_send_json_error([
+                'message' => $preview['family']['message'] ?? 'Merge bloqueado',
+                'block_merge' => true,
+                'merge' => $preview,
+            ]);
+        }
+
+        wp_send_json_success(['merge' => $preview]);
+    }
+
+    /**
+     * AJAX: Confirmar merge online→local por mismo envase en familia.
+     */
+    public function ajax_pack_merge_confirm() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $source_id = absint($_POST['source_id'] ?? 0);
+        $target_id = absint($_POST['target_id'] ?? 0);
+
+        $validation = $this->validate_family_pack_merge_pair($grupo_id, $source_id, $target_id);
+        if (is_wp_error($validation)) {
+            wp_send_json_error(['message' => $validation->get_error_message()]);
+        }
+
+        if (!class_exists('Riverso_Product_Module')) {
+            wp_send_json_error(['message' => 'Módulo de productos no disponible']);
+        }
+
+        $prod_mod = Riverso_Product_Module::get_instance();
+        $result = $prod_mod->merge_stub_into_local($source_id, $target_id, [
+            'force_replace_target_woo' => true,
+        ]);
+
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('family_pack_merge', 'equivalence_groups', $grupo_id, [
+                'source_id' => $source_id,
+                'target_id' => $target_id,
+                'qty' => floatval($validation['qty']),
+                'transferred' => $result['transferred'] ?? [],
+            ]);
+        }
+
+        $members = $this->load_family_members_enriched($grupo_id);
+        wp_send_json_success([
+            'message' => sprintf(
+                'Merge completado: Woo + %d código(s) y %d barcode(s) heredados; origen #%d eliminado.',
+                intval($result['transferred']['codes'] ?? 0),
+                intval($result['transferred']['barcodes'] ?? 0),
+                $source_id
+            ),
+            'transferred' => $result['transferred'] ?? [],
+            'target_id' => $target_id,
+            'pack_conflicts' => $this->detect_pack_qty_conflicts($grupo_id, $members),
+        ]);
     }
 }
 

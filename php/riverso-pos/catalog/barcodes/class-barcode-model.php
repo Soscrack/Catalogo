@@ -404,8 +404,56 @@ class Riverso_Barcode_Model {
             'sku' => 'SKU',
             'name' => 'Nombre',
         ];
+
+        $units_per_pack = 1.0;
+        if (is_array($mapping)) {
+            $qty = floatval($mapping['cantidad'] ?? $mapping['cantidad_unidades'] ?? 0);
+            $factor = floatval($mapping['factor_a_unidad_base'] ?? 0);
+            if ($qty > 0) {
+                $units_per_pack = $qty;
+            } elseif ($factor > 0) {
+                $units_per_pack = $factor;
+            }
+        }
+
+        $unitario = null;
+        $grupo_id = null;
+        $base_id = intval($pb['id']);
+        if ($base_id > 0 && class_exists('Riverso_Unit_Product_Service')) {
+            $svc = Riverso_Unit_Product_Service::get_instance();
+            $ctx = $svc->resolve_family_unit_for_base($base_id);
+            if ($ctx && !empty($ctx['unit_producto_base_id'])) {
+                $grupo_id = intval($ctx['grupo_id']);
+                $unit_id = intval($ctx['unit_producto_base_id']);
+                if ($unit_id !== $base_id) {
+                    global $wpdb;
+                    $prefix = $wpdb->prefix . 'riverso_';
+                    $unit_pb = $wpdb->get_row($wpdb->prepare(
+                        "SELECT id, canonical_sku, nombre_canonico
+                         FROM {$prefix}producto_base WHERE id = %d",
+                        $unit_id
+                    ), ARRAY_A);
+                    if ($unit_pb) {
+                        $unitario = [
+                            'id' => intval($unit_pb['id']),
+                            'producto_base_id' => intval($unit_pb['id']),
+                            'canonical_sku' => $unit_pb['canonical_sku'] ?? '',
+                            'nombre_canonico' => $unit_pb['nombre_canonico'] ?? '',
+                        ];
+                    }
+                } else {
+                    $unitario = [
+                        'id' => $base_id,
+                        'producto_base_id' => $base_id,
+                        'canonical_sku' => $pb['canonical_sku'] ?? '',
+                        'nombre_canonico' => $pb['nombre_canonico'] ?? ($pb['canonical_sku'] ?? ''),
+                    ];
+                }
+            }
+        }
+
         return [
-            'producto_base_id' => intval($pb['id']),
+            'producto_base_id' => $base_id,
             'canonical_sku' => $pb['canonical_sku'] ?? '',
             'nombre_canonico' => $pb['nombre_canonico'] ?? ($pb['canonical_sku'] ?? ''),
             'woocommerce_product_id' => $woo_product,
@@ -415,6 +463,9 @@ class Riverso_Barcode_Model {
             'source' => $source,
             'barcode' => $mapping,
             'match_source' => $labels[$source] ?? $source,
+            'units_per_pack' => $units_per_pack,
+            'unitario' => $unitario,
+            'grupo_id' => $grupo_id,
         ];
     }
 

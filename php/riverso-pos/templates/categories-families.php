@@ -293,12 +293,16 @@ jQuery(function($) {
         $('#tab-families-content').hide();
     });
 
-    $('#tab-families-btn').on('click', function() {
+    function showFamiliesTab() {
         $('#tab-families-btn').addClass('nav-tab-active');
         $('#tab-categories-btn').removeClass('nav-tab-active');
         $('#tab-families-content').show();
         $('#tab-categories-content').hide();
         loadFamilies();
+    }
+
+    $('#tab-families-btn').on('click', function() {
+        showFamiliesTab();
     });
 
     // ===== CATEGORÍAS =====
@@ -807,6 +811,9 @@ jQuery(function($) {
             const unitSku = fam.unit_sku
                 ? ` | Unitario: <code>${esc(fam.unit_sku)}</code>`
                 : '';
+            const ruleWarn = fam.falta_regla_precio
+                ? ' <span title="Falta asignar regla de precio" style="color:#c62828;font-weight:700;">⚠ Sin regla de precio</span>'
+                : '';
             const memberSkus = renderFamilySkusInline(fam.members, search);
             const preview = renderFamilyPreview(fam.members, search);
             return `
@@ -814,7 +821,7 @@ jQuery(function($) {
                 <div class="family-item-main">
                     <div>
                         <strong>${esc(fam.nombre)}</strong><br>
-                        <small style="color:#666;">Tipo: ${esc(fam.tipo_sustitucion || '-')} | Miembros: ${fam.miembros_count || 0} | Stock familia: ${stock} u${warn}${unitSku}${memberSkus}</small>
+                        <small style="color:#666;">Tipo: ${esc(fam.tipo_sustitucion || '-')} | Miembros: ${fam.miembros_count || 0} | Stock familia: ${stock} u${warn}${unitSku}${ruleWarn}${memberSkus}</small>
                     </div>
                     <div style="display:flex; gap:4px; flex-shrink:0;">
                         <button class="button button-small family-view" data-family-id="${fam.id}">Ver</button>
@@ -1025,5 +1032,24 @@ jQuery(function($) {
 
     // Cargar categorías inicialmente
     loadCategories();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlTab = urlParams.get('tab');
+    const urlGrupoId = parseInt(urlParams.get('grupo_id') || '0', 10);
+    if (urlTab === 'families' || urlGrupoId) {
+        showFamiliesTab();
+        if (urlGrupoId) {
+            const openFromUrl = function(tries) {
+                if (window.RiversoFamilyEditor && typeof RiversoFamilyEditor.openView === 'function') {
+                    RiversoFamilyEditor.openView(urlGrupoId);
+                    return;
+                }
+                if (tries > 0) {
+                    setTimeout(function() { openFromUrl(tries - 1); }, 150);
+                }
+            };
+            openFromUrl(20);
+        }
+    }
 });
 </script>

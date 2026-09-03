@@ -314,6 +314,7 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
                             <span id="familia-display">-</span>
                             <button class="button button-small" id="familia-view-btn" style="margin-left:8px; display:none;">Ver familia</button>
                             <button class="button button-small" id="familia-edit-toggle" style="margin-left:8px;">Editar familia</button>
+                            <div id="familia-preview" style="display:none; margin-top:10px; padding:10px; background:#fafafa; border:1px solid #e0e0e0; border-radius:4px;"></div>
                         </div>
                         <div id="local-familia-edit" style="display:none; background:#f9f9f9; padding:10px; border-radius:4px;">
                             <label><strong>Seleccionar familia:</strong></label><br>
@@ -1503,6 +1504,22 @@ jQuery(function($){
 
     function renderBarcodes(barcodes) {
         let html = '';
+        const remapCtx = (currentProduct && currentProduct.barcode_remap_context) || {};
+        if (remapCtx.show_wizard) {
+            html += '<p style="font-size:12px;color:#555;">Este producto es o puede ser unitario: puedes mapear barcodes a hijos/envases.</p>';
+        }
+        const parked = (remapCtx.parked_suggestions || []).filter(function(x){ return x.can_resume; });
+        if (parked.length) {
+            html += '<div style="background:#fff8e1;border:1px solid #ffe082;padding:10px;border-radius:4px;margin-bottom:12px;font-size:12px;">'
+                + '<strong>Tareas aparcadas con destino sugerido</strong><ul style="margin:6px 0 0 18px;">';
+            parked.forEach(function(item) {
+                const dest = item.suggested_destino || {};
+                html += `<li><code>${esc(item.codigo)}</code> → ${esc(dest.canonical_sku || '')} (${esc(String(dest.cantidad_unidades || item.cantidad_pack || ''))} u)
+                    <button type="button" class="button button-small barcode-resume-parked" data-barcode-id="${item.barcode_id}" data-from-product="${item.producto_base_id || ''}" data-destino="${dest.producto_base_id || ''}" data-qty="${item.cantidad_pack || dest.cantidad_unidades || ''}">Mapear ahora</button>
+                </li>`;
+            });
+            html += '</ul></div>';
+        }
         if (barcodes && barcodes.length > 0) {
             // Agrupar por tipo
             const byType = {
@@ -1523,13 +1540,24 @@ jQuery(function($){
             });
 
             const renderBarcodeActions = (b) => {
+                const showWizard = !!(currentProduct && currentProduct.barcode_remap_context && currentProduct.barcode_remap_context.show_wizard);
                 if (isLegacyBarcode(b)) {
+                    if (showWizard) {
+                        return `<div style="margin-top:6px;">
+                            <button type="button" class="button button-small button-primary barcode-remap" data-id="${b.id}">Mapear…</button>
+                            <button type="button" class="button button-small barcode-reject-legacy" data-id="${b.id}">Rechazar</button>
+                        </div>`;
+                    }
                     return `<div style="margin-top:6px;">
                         <button type="button" class="button button-small button-primary barcode-accept-legacy" data-id="${b.id}">Aceptar</button>
                         <button type="button" class="button button-small barcode-reject-legacy" data-id="${b.id}">Rechazar</button>
                     </div>`;
                 }
-                return `<br><button class="button button-small barcode-remove" data-barcode="${esc(b.codigo)}" style="margin-top:4px;">Desactivar</button>`;
+                let extra = '';
+                if (showWizard && Number(b.cantidad || 1) <= 1) {
+                    extra = `<button type="button" class="button button-small barcode-remap" data-id="${b.id}" style="margin-top:4px;margin-right:4px;">Mapear a hijo…</button>`;
+                }
+                return `<br>${extra}<button class="button button-small barcode-remove" data-barcode="${esc(b.codigo)}" style="margin-top:4px;">Desactivar</button>`;
             };
 
             const pendingBadge = '<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:3px;font-size:11px;margin-left:6px;">Por confirmar</span>';
@@ -3372,6 +3400,11 @@ jQuery(function($){
 
     $(document).on('click', '.barcode-accept-legacy', function(){
         const barcodeId = $(this).data('id');
+        const ctx = (currentProduct && currentProduct.barcode_remap_context) || {};
+        if (ctx.show_wizard) {
+            openBarcodeRemapWizardAdmin(barcodeId);
+            return;
+        }
         if (!confirm('¿Aceptar este código legacy como Código de Proveedor?\nQuedará en el mapeo interno y será editable.')) {
             return;
         }
@@ -3390,6 +3423,208 @@ jQuery(function($){
             showDetail(r.data.item);
         });
     });
+
+    $(document).on('click', '.barcode-remap', function(){
+        openBarcodeRemapWizardAdmin($(this).data('id'));
+    });
+
+    $(document).on('click', '.barcode-resume-parked', function(){
+        const barcodeId = $(this).data('barcode-id');
+        const fromProduct = $(this).data('from-product');
+        const destino = $(this).data('destino');
+        const qty = $(this).data('qty');
+        if (!currentProduct || !barcodeId || !destino) return;
+        if (!confirm('¿Mapear este código aparcado al hijo sugerido y confirmarlo?')) return;
+        $.post(ajaxurl, {
+            action: 'riverso_products_barcode_remap',
+            nonce,
+            barcode_id: barcodeId,
+            product_id: fromProduct || currentProduct.id,
+            accion: 'move_child',
+            destino_producto_base_id: destino,
+            cantidad_pack: qty || 0,
+            verify: 1,
+            audit_reason: 'Reanudado desde tarea aparcada (admin)'
+        }, function(r){
+            if (!r.success) {
+                alert('Error: ' + ((r.data && r.data.message) ? r.data.message : 'No se pudo mapear'));
+                return;
+            }
+            alert(r.data.message || 'Código mapeado');
+            showDetail(r.data.item || currentProduct);
+        });
+    });
+
+    function openBarcodeRemapWizardAdmin(barcodeId) {
+        if (!currentProduct || !barcodeId) return;
+        $.post(ajaxurl, {
+            action: 'riverso_products_barcode_remap_preview',
+            nonce,
+            barcode_id: barcodeId,
+            product_id: currentProduct.id
+        }, function(r){
+            if (!r.success) {
+                alert('Error: ' + ((r.data && r.data.message) ? r.data.message : 'No se pudo cargar preview'));
+                return;
+            }
+            showBarcodeRemapModalAdmin(r.data.preview || {});
+        });
+    }
+
+    function showBarcodeRemapModalAdmin(preview) {
+        $('#barcode-remap-overlay-admin').remove();
+        const bc = preview.barcode || {};
+        const members = preview.members_caja || [];
+        const suggested = preview.suggested_destino || null;
+        let optionsHtml = '';
+        members.forEach(function(m) {
+            const selected = suggested && Number(suggested.producto_base_id) === Number(m.producto_base_id) ? ' selected' : '';
+            optionsHtml += '<option value="' + m.producto_base_id + '" data-qty="' + m.cantidad_unidades + '"' + selected + '>'
+                + esc(m.canonical_sku || '') + ' · ' + esc(String(m.cantidad_unidades)) + ' u · '
+                + esc(m.nombre_canonico || '') + '</option>';
+        });
+        const canCreate = !!preview.can_create_child;
+        const canAssign = !!preview.can_assign_child;
+        const canMove = !!preview.can_move_child && members.length > 0;
+        const familyNote = preview.family && preview.family.grupo_id
+            ? ('Familia #' + preview.family.grupo_id)
+            : 'Sin familia: confirma aquí, rechaza o aparca (no crear/asignar hijo).';
+        const excludeIds = [Number(currentProduct.id)].concat(members.map(function(m){ return Number(m.producto_base_id); }));
+
+        const html = '<div id="barcode-remap-overlay-admin" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:100000;display:flex;align-items:center;justify-content:center;">'
+            + '<div style="background:#fff;max-width:560px;width:94%;max-height:90vh;overflow:auto;border-radius:6px;padding:18px;">'
+            + '<h2 style="margin-top:0;">Mapear código de barra</h2>'
+            + '<p>Código <code>' + esc(bc.codigo || '') + '</code> · qty ' + esc(String(bc.cantidad != null ? bc.cantidad : 1))
+            + '<br><small>' + esc(familyNote) + '</small></p>'
+            + '<p><label>Acción<br><select id="bc-remap-accion-admin" style="width:100%;">'
+            + '<option value="keep_unit">Confirmar aquí (unitario, qty 1)</option>'
+            + (canMove ? '<option value="move_child"' + (suggested ? ' selected' : '') + '>Mover a hijo de la familia</option>' : '')
+            + (canAssign ? '<option value="assign_child">Asignar hijo (buscar SKU y vincular a familia)</option>' : '')
+            + (canCreate ? '<option value="create_child">Crear hijo/envase y mapear</option>' : '')
+            + '<option value="park_presentacion"' + (preview.parked ? ' selected' : '') + '>Aparcar (pendiente de presentación)</option>'
+            + '<option value="reject">Rechazar</option>'
+            + '</select></label></p>'
+            + '<div id="bc-remap-move-wrap-admin" style="display:none;"><p><label>Hijo destino (ya en familia)<br><select id="bc-remap-destino-admin" style="width:100%;">'
+            + (optionsHtml || '<option value="">— Sin hijos —</option>') + '</select></label></p></div>'
+            + '<div id="bc-remap-assign-wrap-admin" style="display:none;">'
+            + '<p><label>Buscar producto hijo<br><input type="text" id="bc-remap-assign-search-admin" placeholder="SKU o nombre…" style="width:100%;"></label></p>'
+            + '<div id="bc-remap-assign-results-admin" style="display:none;border:1px solid #ddd;max-height:160px;overflow:auto;font-size:12px;"></div>'
+            + '<div id="bc-remap-assign-selected-admin" style="display:none;margin:8px 0;padding:8px;background:#e8f5e9;border-radius:4px;font-size:12px;"></div>'
+            + '<input type="hidden" id="bc-remap-assign-id-admin" value="">'
+            + '</div>'
+            + '<div id="bc-remap-qty-wrap-admin" style="display:none;"><p><label>Cantidad del envase (&gt; 1)<br>'
+            + '<input type="number" id="bc-remap-qty-admin" min="2" step="1" value="'
+            + (suggested ? Number(suggested.cantidad_unidades) : (Number(bc.cantidad) > 1 ? Number(bc.cantidad) : ''))
+            + '" style="width:100%;"></label></p></div>'
+            + '<p style="text-align:right;"><button type="button" class="button" id="bc-remap-cancel-admin">Cancelar</button> '
+            + '<button type="button" class="button button-primary" id="bc-remap-confirm-admin">Confirmar</button></p>'
+            + '</div></div>';
+        $('body').append(html);
+
+        let assignSearchTimerAdmin = null;
+        function syncFields() {
+            const accion = $('#bc-remap-accion-admin').val();
+            $('#bc-remap-move-wrap-admin').toggle(accion === 'move_child');
+            $('#bc-remap-assign-wrap-admin').toggle(accion === 'assign_child');
+            $('#bc-remap-qty-wrap-admin').toggle(
+                accion === 'create_child' || accion === 'park_presentacion'
+                || accion === 'move_child' || accion === 'assign_child'
+            );
+            if (accion === 'move_child') {
+                const q = $('#bc-remap-destino-admin option:selected').data('qty');
+                if (q) $('#bc-remap-qty-admin').val(q);
+            }
+        }
+        $('#bc-remap-accion-admin, #bc-remap-destino-admin').on('change', syncFields);
+        syncFields();
+
+        $('#bc-remap-assign-search-admin').on('input', function() {
+            const q = $(this).val().trim();
+            clearTimeout(assignSearchTimerAdmin);
+            if (q.length < 2) {
+                $('#bc-remap-assign-results-admin').hide().empty();
+                return;
+            }
+            assignSearchTimerAdmin = setTimeout(function() {
+                $.post(ajaxurl, {
+                    action: 'riverso_products_list',
+                    nonce,
+                    search: q,
+                    limit: 12,
+                    status: 'active'
+                }, function(r) {
+                    if (!r.success) {
+                        $('#bc-remap-assign-results-admin').html('<div style="padding:8px;color:#c62828;">Error de búsqueda</div>').show();
+                        return;
+                    }
+                    const items = (r.data.items || []).filter(function(p) {
+                        return excludeIds.indexOf(Number(p.id)) < 0;
+                    });
+                    if (!items.length) {
+                        $('#bc-remap-assign-results-admin').html('<div style="padding:8px;color:#999;">Sin resultados</div>').show();
+                        return;
+                    }
+                    let htmlRes = '';
+                    items.forEach(function(p) {
+                        htmlRes += '<div class="bc-remap-assign-option-admin" data-id="' + p.id + '" data-sku="' + esc(p.canonical_sku || '') + '" data-name="' + esc(p.nombre_canonico || '') + '" style="padding:8px;border-bottom:1px solid #eee;cursor:pointer;">'
+                            + '<code>' + esc(p.canonical_sku || '—') + '</code> · ' + esc(p.nombre_canonico || '')
+                            + '</div>';
+                    });
+                    $('#bc-remap-assign-results-admin').html(htmlRes).show();
+                });
+            }, 280);
+        });
+        $(document).off('click.bcRemapAssignAdmin').on('click.bcRemapAssignAdmin', '.bc-remap-assign-option-admin', function() {
+            const id = $(this).data('id');
+            const sku = $(this).data('sku');
+            const name = $(this).data('name');
+            $('#bc-remap-assign-id-admin').val(id);
+            $('#bc-remap-assign-selected-admin').html('Seleccionado: <code>' + esc(String(sku)) + '</code> · ' + esc(String(name))).show();
+            $('#bc-remap-assign-results-admin').hide();
+            $('#bc-remap-assign-search-admin').val(sku || name);
+        });
+
+        $('#bc-remap-cancel-admin').on('click', function(){
+            $(document).off('click.bcRemapAssignAdmin');
+            $('#barcode-remap-overlay-admin').remove();
+        });
+        $('#bc-remap-confirm-admin').on('click', function(){
+            const accion = $('#bc-remap-accion-admin').val();
+            let destino = $('#bc-remap-destino-admin').val() || 0;
+            if (accion === 'assign_child') {
+                destino = $('#bc-remap-assign-id-admin').val() || 0;
+                if (!destino) {
+                    alert('Busca y selecciona el producto hijo a asignar');
+                    return;
+                }
+            }
+            const $btn = $(this).prop('disabled', true).text('Guardando…');
+            $.post(ajaxurl, {
+                action: 'riverso_products_barcode_remap',
+                nonce,
+                barcode_id: bc.id,
+                product_id: currentProduct.id,
+                accion: accion,
+                destino_producto_base_id: destino,
+                cantidad_pack: parseFloat($('#bc-remap-qty-admin').val() || '0') || 0,
+                verify: 1,
+                audit_reason: 'Remapeo desde hub de productos (admin)'
+            }, function(resp){
+                if (!resp.success) {
+                    alert('Error: ' + ((resp.data && resp.data.message) ? resp.data.message : 'No se pudo guardar'));
+                    $btn.prop('disabled', false).text('Confirmar');
+                    return;
+                }
+                $(document).off('click.bcRemapAssignAdmin');
+                $('#barcode-remap-overlay-admin').remove();
+                alert(resp.data.message || 'Listo');
+                showDetail(resp.data.item || currentProduct);
+            }).fail(function(){
+                alert('Error de red');
+                $btn.prop('disabled', false).text('Confirmar');
+            });
+        });
+    }
 
     $(document).on('click', '.barcode-reject-legacy', function(){
         const barcodeId = $(this).data('id');
@@ -4642,16 +4877,104 @@ jQuery(function($){
         };
     }
 
+    function renderFamiliaPreview(family, currentId) {
+        const $box = $('#familia-preview');
+        if (!$box.length || !family) {
+            $box.hide().empty();
+            return;
+        }
+        const members = (family.members || []).slice();
+        const unitId = Number(family.unit_producto_base_id || 0);
+        members.sort(function(a, b) {
+            const aUnit = Number(a.es_unitario_familia) || (Number(a.producto_base_id) === unitId) ? 1 : 0;
+            const bUnit = Number(b.es_unitario_familia) || (Number(b.producto_base_id) === unitId) ? 1 : 0;
+            if (aUnit !== bUnit) return bUnit - aUnit;
+            const aq = parseFloat(a.cantidad_unidades != null ? a.cantidad_unidades : -1);
+            const bq = parseFloat(b.cantidad_unidades != null ? b.cantidad_unidades : -1);
+            if (aq !== bq) return bq - aq;
+            return String(a.nombre_canonico || '').localeCompare(String(b.nombre_canonico || ''), 'es');
+        });
+        const stock = family.stock && (family.stock.stock_unidades != null ? family.stock.stock_unidades : family.stock.total_unidades);
+        const stockLabel = stock != null ? Number(stock).toLocaleString('es-CL') : '—';
+        let rows = members.map(function(m) {
+            const mid = Number(m.producto_base_id);
+            const isUnit = !!m.es_unitario_familia || (unitId > 0 && mid === unitId);
+            const isCurrent = mid === Number(currentId);
+            const rol = isUnit ? 'Unitario' : 'Envase';
+            const local = (m.sku_local || m.canonical_sku || '').toString().trim() || '—';
+            const online = (m.sku_online || '').toString().trim() || '—';
+            const qty = m.cantidad_unidades != null && m.cantidad_unidades !== ''
+                ? (String(m.cantidad_unidades) + ' u')
+                : '—';
+            const rowStyle = isCurrent
+                ? 'background:#fff8e1; border-left:3px solid #f9a825;'
+                : '';
+            const badge = isCurrent
+                ? ' <span style="background:#f9a825;color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;margin-left:4px;">Este producto</span>'
+                : '';
+            return '<tr style="' + rowStyle + '">'
+                + '<td style="padding:6px 8px;white-space:nowrap;"><strong>' + esc(rol) + '</strong>' + badge + '</td>'
+                + '<td style="padding:6px 8px;"><code>' + esc(local) + '</code></td>'
+                + '<td style="padding:6px 8px;"><code>' + esc(online) + '</code></td>'
+                + '<td style="padding:6px 8px;">' + esc(qty) + '</td>'
+                + '<td style="padding:6px 8px;">' + esc(m.nombre_canonico || '') + '</td>'
+                + '</tr>';
+        }).join('');
+        if (!rows) {
+            rows = '<tr><td colspan="5" style="padding:8px;color:#999;">Sin miembros</td></tr>';
+        }
+        const summary = esc(family.nombre || family.codigo_grupo || 'Familia')
+            + ' · ' + esc(family.tipo_sustitucion || '')
+            + ' · ' + members.length + ' miembro(s)'
+            + ' · stock ' + esc(stockLabel) + ' u';
+        $box.html(
+            '<div style="font-size:12px;color:#555;margin-bottom:8px;">' + summary + '</div>'
+            + '<div style="overflow-x:auto;">'
+            + '<table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;">'
+            + '<thead><tr style="background:#f0f0f0;text-align:left;">'
+            + '<th style="padding:6px 8px;">Rol</th>'
+            + '<th style="padding:6px 8px;">Local</th>'
+            + '<th style="padding:6px 8px;">Online</th>'
+            + '<th style="padding:6px 8px;">Envase</th>'
+            + '<th style="padding:6px 8px;">Nombre</th>'
+            + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+        ).show();
+    }
+
+    function loadFamiliaPreview(product) {
+        const $box = $('#familia-preview');
+        if (!product || !product.familia || !product.familia.id) {
+            $box.hide().empty();
+            return;
+        }
+        $box.html('<p style="margin:0;font-size:12px;color:#999;">Cargando integrantes…</p>').show();
+        $.post(ajaxurl, {
+            action: 'riverso_families_get',
+            nonce: nonce,
+            grupo_id: product.familia.id
+        }, function(r) {
+            if (!r.success || !r.data || !r.data.family) {
+                $box.html('<p style="margin:0;font-size:12px;color:#c62828;">No se pudo cargar la preview de familia</p>').show();
+                return;
+            }
+            renderFamiliaPreview(r.data.family, product.id);
+        }).fail(function() {
+            $box.html('<p style="margin:0;font-size:12px;color:#c62828;">Error de red al cargar familia</p>').show();
+        });
+    }
+
     function renderFamiliaHub(product) {
         $('.familia-decision-ui, .familia-assign-warn').remove();
         if (product.familia) {
             const fam = product.familia;
             $('#familia-display').html(`<strong>${esc(fam.nombre)}</strong> <small style="color:#666;">(${esc(fam.tipo_sustitucion)})</small>`);
             $('#familia-view-btn').show().data('familia-id', fam.id);
+            loadFamiliaPreview(product);
             return;
         }
 
         $('#familia-view-btn').hide().data('familia-id', '');
+        $('#familia-preview').hide().empty();
         const ft = getPendingFamilyTasks(product);
 
         if (ft.ask) {

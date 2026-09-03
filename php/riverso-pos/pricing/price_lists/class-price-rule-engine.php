@@ -2,27 +2,12 @@
 /**
  * Motor de evaluación de reglas de precio por tramos - Riverso POS.
  *
- * Evaluación pura (sin acceso a BD y sin eval) de reglas modeladas como tramos
- * de cantidad. Cada tramo deriva el precio unitario a partir del precio
- * asignado (P / p_asignado).
- *
- * Modo fórmula (preferido):
- *   Expresión tipo calculadora, p.ej. T10(P*3), T50(P+4), MAX(T100(P*1.7), 30)
- *
- *   Atajos visuales:
- *     T10()  = techo_decena      ceil(x / 10)  * 10
- *     T50()  = techo_cincuentena ceil(x / 50)  * 50
- *     T100() = techo_centena     ceil(x / 100) * 100
- *
- *   También se aceptan los nombres largos: techo_decena(), techo_cincuentena(),
- *   techo_centena() y el alias techo_centana().
- *
- * Modo estructurado (legado):
- *   - multiplicador: precio = P * multiplicador
- *   - suma:          precio = P + addendo
- *   - rango:         precio = P * multiplicador
- *
- * total_minimo: piso de precio unitario para el tramo (después de la fórmula).
+ * Pipeline por tramo:
+ *   1. unitario0 = fórmula(P) + piso unitario (total_minimo)
+ *   2. T0 = unitario0 × Q
+ *   3. T1 = fórmula_total(T) si existe (T = total de línea antes del ajuste)
+ *   4. T_final = max(T1, piso_total) si hay piso de total
+ *   5. unitario = T_final / Q (hasta 4 decimales si hubo ajuste de total)
  *
  * @package Riverso_POS
  */
@@ -39,10 +24,6 @@ class Riverso_Price_Rule_Engine {
     const FORMULA_MAX_TOKENS = 200;
     const FORMULA_MAX_DEPTH = 32;
 
-    /**
-     * Funciones permitidas (nombre canónico => metadatos).
-     * Las claves son minúsculas.
-     */
     const FUNCS = [
         't10' => ['arity' => 1, 'alias_of' => 't10'],
         't50' => ['arity' => 1, 'alias_of' => 't50'],
@@ -55,37 +36,25 @@ class Riverso_Price_Rule_Engine {
         'min' => ['arity' => 0, 'alias_of' => 'min'],
     ];
 
-    /**
-     * Redondea al techo de la decena superior.
-     */
+    /** @var bool */
+    private static $allow_total_var = false;
+
     public static function techo_decena($valor) {
         return self::techo_multiplo($valor, 10);
     }
 
-    /**
-     * Redondea al techo de la cincuentena superior.
-     */
     public static function techo_cincuentena($valor) {
         return self::techo_multiplo($valor, 50);
     }
 
-    /**
-     * Redondea al techo de la centena superior.
-     */
     public static function techo_centena($valor) {
         return self::techo_multiplo($valor, 100);
     }
 
-    /**
-     * Alias de techo_centena (grafía frecuente).
-     */
     public static function techo_centana($valor) {
         return self::techo_centena($valor);
     }
 
-    /**
-     * Techo al múltiplo superior indicado (10 / 50 / 100).
-     */
     public static function techo_multiplo($valor, $multiplo) {
         $valor = (float) $valor;
         $multiplo = (float) $multiplo;
@@ -95,9 +64,6 @@ class Riverso_Price_Rule_Engine {
         return (float) (ceil($valor / $multiplo) * $multiplo);
     }
 
-    /**
-     * Limpia una fórmula para almacenamiento (sin HTML, recortada).
-     */
     public static function sanitize_formula($formula) {
         $formula = wp_strip_all_tags((string) $formula);
         $formula = str_replace(["\r", "\n", "\t"], '', $formula);
@@ -105,11 +71,28 @@ class Riverso_Price_Rule_Engine {
     }
 
     /**
-     * Valida una fórmula. Cadena vacía es válida (se usa el modo legado).
+     * Valida fórmula de precio unitario (solo P).
      *
      * @return true|WP_Error
      */
     public static function validate_formula($formula) {
+        return self::validate_formula_mode($formula, 'unit');
+    }
+
+    /**
+     * Valida fórmula sobre total de línea (permite T).
+     *
+     * @return true|WP_Error
+     */
+    public static function validate_formula_total($formula) {
+        return self::validate_formula_mode($formula, 'total');
+    }
+
+    /**
+     * @param string $mode 'unit'|'total'
+     * @return true|WP_Error
+     */
+    private static function validate_formula_mode($formula, $mode) {
         $formula = self::sanitize_formula($formula);
         if ($formula === '') {
             return true;
@@ -118,17 +101,17 @@ class Riverso_Price_Rule_Engine {
             return new WP_Error('too_long', 'La fórmula no puede superar ' . self::FORMULA_MAX_LEN . ' caracteres');
         }
         try {
-            self::evaluate_formula($formula, 10.0);
+            if ($mode === 'total') {
+                self::evaluate_formula($formula, 10.0, 100.0, true);
+            } else {
+                self::evaluate_formula($formula, 10.0, null, false);
+            }
             return true;
         } catch (Exception $e) {
             return new WP_Error('invalid_formula', $e->getMessage());
         }
     }
 
-    /**
-     * Reconstruye una fórmula visual a partir de un tramo legado
-     * (multiplicador / suma / redondeo) si aún no hay texto de fórmula.
-     */
     public static function formula_from_tier(array $tier) {
         $existing = isset($tier['formula']) ? self::sanitize_formula($tier['formula']) : '';
         if ($existing !== '') {
@@ -167,13 +150,6 @@ class Riverso_Price_Rule_Engine {
         return $expr;
     }
 
-    /**
-     * Selecciona el tramo aplicable según la cantidad.
-     *
-     * @param array $tiers Lista de tramos (cada uno: qty_min, qty_max, ...)
-     * @param float $qty
-     * @return array|null
-     */
     public static function select_tier(array $tiers, $qty) {
         $qty = (float) $qty;
         foreach ($tiers as $tier) {
@@ -190,58 +166,58 @@ class Riverso_Price_Rule_Engine {
     }
 
     /**
-     * Aplica un tramo concreto a un precio asignado.
+     * Calcula desglose completo del tramo.
      *
-     * @param array $tier
-     * @param float $p_asignado
-     * @return float Precio unitario resultante
+     * @return array{unitario0:float,t0:float,t_after_formula:float|null,t_final:float,unitario:float,qty:float,adjusted:bool}
      */
-    public static function apply_tier(array $tier, $p_asignado) {
-        $p_asignado = (float) $p_asignado;
-        $formula_txt = isset($tier['formula']) ? self::sanitize_formula($tier['formula']) : '';
-
-        if ($formula_txt !== '') {
-            try {
-                $precio = self::evaluate_formula($formula_txt, $p_asignado);
-            } catch (Exception $e) {
-                $precio = self::apply_structured_tier($tier, $p_asignado);
-            }
-        } else {
-            $precio = self::apply_structured_tier($tier, $p_asignado);
-        }
-
-        if (isset($tier['total_minimo']) && $tier['total_minimo'] !== null && $tier['total_minimo'] !== '') {
-            $precio = max($precio, (float) $tier['total_minimo']);
-        }
-
-        return round($precio, 2);
+    public static function explain_tier(array $tier, $p_asignado, $qty) {
+        return self::compute_tier($tier, $p_asignado, $qty);
     }
 
     /**
-     * Evalúa una regla completa: selecciona el tramo por cantidad y aplica la fórmula.
-     *
-     * @param array $tiers      Tramos ordenados por 'orden'
-     * @param float $p_asignado Precio asignado base
-     * @param float $qty        Cantidad (puede ser agregada de lotes equivalentes)
-     * @return float|null       Precio unitario o null si no hay tramo aplicable
+     * @param array $tier
+     * @param float $p_asignado
+     * @param float $qty
+     * @return float Precio unitario resultante
      */
+    public static function apply_tier(array $tier, $p_asignado, $qty = 1.0) {
+        $result = self::compute_tier($tier, $p_asignado, $qty);
+        return $result['unitario'];
+    }
+
     public static function evaluate(array $tiers, $p_asignado, $qty) {
         $tier = self::select_tier($tiers, $qty);
         if ($tier === null) {
             return null;
         }
-        return self::apply_tier($tier, $p_asignado);
+        return self::apply_tier($tier, $p_asignado, $qty);
     }
 
     /**
-     * Evalúa una fórmula tipo calculadora. Sin eval()/create_function().
+     * Evalúa regla y devuelve unitario + total de línea (T_final).
      *
+     * @return array{price:float|null,total:float|null,breakdown:array|null}
+     */
+    public static function evaluate_with_total(array $tiers, $p_asignado, $qty) {
+        $tier = self::select_tier($tiers, $qty);
+        if ($tier === null) {
+            return ['price' => null, 'total' => null, 'breakdown' => null];
+        }
+        $breakdown = self::compute_tier($tier, $p_asignado, $qty);
+        return [
+            'price' => $breakdown['unitario'],
+            'total' => $breakdown['t_final'],
+            'breakdown' => $breakdown,
+        ];
+    }
+
+    /**
      * @param string $formula
      * @param float  $p_asignado
-     * @return float
-     * @throws InvalidArgumentException
+     * @param float|null $t_total
+     * @param bool   $allow_total_var
      */
-    public static function evaluate_formula($formula, $p_asignado) {
+    public static function evaluate_formula($formula, $p_asignado, $t_total = null, $allow_total_var = false) {
         $formula = self::sanitize_formula($formula);
         if ($formula === '') {
             throw new InvalidArgumentException('Fórmula vacía');
@@ -249,6 +225,8 @@ class Riverso_Price_Rule_Engine {
         if (strlen($formula) > self::FORMULA_MAX_LEN) {
             throw new InvalidArgumentException('Fórmula demasiado larga');
         }
+
+        self::$allow_total_var = (bool) $allow_total_var;
 
         $tokens = self::tokenize($formula);
         if (count($tokens) > self::FORMULA_MAX_TOKENS) {
@@ -262,12 +240,90 @@ class Riverso_Price_Rule_Engine {
             throw new InvalidArgumentException('Fórmula incompleta o carácter sobrante' . ($got !== '' && $got !== null ? ': ' . $got : ''));
         }
 
-        return (float) self::eval_ast($ast, (float) $p_asignado);
+        $ctx = [
+            'p' => (float) $p_asignado,
+            't' => $t_total !== null ? (float) $t_total : 0.0,
+        ];
+
+        return (float) self::eval_ast($ast, $ctx);
     }
 
-    /**
-     * Modo legado: multiplicador / suma / rango + redondeo de columna.
-     */
+    private static function compute_tier(array $tier, $p_asignado, $qty) {
+        $p_asignado = (float) $p_asignado;
+        $qty = (float) $qty;
+        if ($qty <= 0) {
+            $qty = 1.0;
+        }
+
+        $unitario0 = self::compute_unitario0($tier, $p_asignado);
+        if (isset($tier['total_minimo']) && $tier['total_minimo'] !== null && $tier['total_minimo'] !== '') {
+            $unitario0 = max($unitario0, (float) $tier['total_minimo']);
+        }
+
+        $t0 = round($unitario0 * $qty, 2);
+        $formula_total = isset($tier['formula_total']) ? self::sanitize_formula($tier['formula_total']) : '';
+        $piso_total = (isset($tier['piso_total']) && $tier['piso_total'] !== null && $tier['piso_total'] !== '')
+            ? (float) $tier['piso_total'] : null;
+
+        $has_total_stage = ($formula_total !== '') || ($piso_total !== null);
+
+        if (!$has_total_stage) {
+            $unitario = round($unitario0, 2);
+            return [
+                'unitario0' => round($unitario0, 4),
+                't0' => round($unitario * $qty, 2),
+                't_after_formula' => null,
+                't_final' => round($unitario * $qty, 2),
+                'unitario' => $unitario,
+                'qty' => $qty,
+                'adjusted' => false,
+            ];
+        }
+
+        $t_work = $t0;
+        $t_after_formula = null;
+        if ($formula_total !== '') {
+            try {
+                $t_after_formula = self::evaluate_formula($formula_total, $p_asignado, $t0, true);
+                $t_work = round($t_after_formula, 2);
+            } catch (Exception $e) {
+                $t_work = $t0;
+            }
+        }
+
+        $t_final = $t_work;
+        if ($piso_total !== null) {
+            $t_final = max($t_work, $piso_total);
+        }
+        $t_final = round($t_final, 2);
+
+        $unitario = round($t_final / $qty, 4);
+
+        return [
+            'unitario0' => round($unitario0, 4),
+            't0' => $t0,
+            't_after_formula' => $t_after_formula !== null ? round($t_after_formula, 2) : null,
+            't_final' => $t_final,
+            'unitario' => $unitario,
+            'qty' => $qty,
+            'adjusted' => true,
+        ];
+    }
+
+    private static function compute_unitario0(array $tier, $p_asignado) {
+        $formula_txt = isset($tier['formula']) ? self::sanitize_formula($tier['formula']) : '';
+
+        if ($formula_txt !== '') {
+            try {
+                return (float) self::evaluate_formula($formula_txt, $p_asignado, null, false);
+            } catch (Exception $e) {
+                return self::apply_structured_tier($tier, $p_asignado);
+            }
+        }
+
+        return self::apply_structured_tier($tier, $p_asignado);
+    }
+
     private static function apply_structured_tier(array $tier, $p_asignado) {
         $formula = isset($tier['formula_tipo']) ? $tier['formula_tipo'] : 'multiplicador';
         $multiplicador = isset($tier['multiplicador']) && $tier['multiplicador'] !== null && $tier['multiplicador'] !== ''
@@ -413,10 +469,16 @@ class Riverso_Price_Rule_Engine {
         if ($tok['type'] === 'id') {
             $pos++;
             $name = (string) $tok['value'];
-            if (!in_array($name, ['p', 'p_asignado', 'precio'], true)) {
-                throw new InvalidArgumentException('Identificador no permitido: ' . $name . ' (usa P = precio asignado)');
+            if (in_array($name, ['p', 'p_asignado', 'precio'], true)) {
+                return ['kind' => 'p'];
             }
-            return ['kind' => 'p'];
+            if (in_array($name, ['t', 'total'], true)) {
+                if (!self::$allow_total_var) {
+                    throw new InvalidArgumentException('T (total de línea) solo se usa en la fórmula de total, no en la de unitario');
+                }
+                return ['kind' => 't'];
+            }
+            throw new InvalidArgumentException('Identificador no permitido: ' . $name);
         }
 
         if ($tok['type'] === 'func') {
@@ -477,18 +539,20 @@ class Riverso_Price_Rule_Engine {
         }
     }
 
-    private static function eval_ast(array $node, $p_asignado) {
+    private static function eval_ast(array $node, array $ctx) {
         $kind = $node['kind'] ?? '';
         switch ($kind) {
             case 'num':
                 return (float) $node['value'];
             case 'p':
-                return (float) $p_asignado;
+                return (float) $ctx['p'];
+            case 't':
+                return (float) $ctx['t'];
             case 'neg':
-                return -1 * self::eval_ast($node['arg'], $p_asignado);
+                return -1 * self::eval_ast($node['arg'], $ctx);
             case 'bin':
-                $left = self::eval_ast($node['left'], $p_asignado);
-                $right = self::eval_ast($node['right'], $p_asignado);
+                $left = self::eval_ast($node['left'], $ctx);
+                $right = self::eval_ast($node['right'], $ctx);
                 if ($node['op'] === '+') {
                     return $left + $right;
                 }
@@ -505,7 +569,7 @@ class Riverso_Price_Rule_Engine {
             case 'call':
                 $vals = [];
                 foreach ($node['args'] as $arg) {
-                    $vals[] = self::eval_ast($arg, $p_asignado);
+                    $vals[] = self::eval_ast($arg, $ctx);
                 }
                 $fn = $node['fn'];
                 if ($fn === 't10') {

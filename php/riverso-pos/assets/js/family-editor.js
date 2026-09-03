@@ -29,6 +29,16 @@
         return $('<div>').text(v === null || v === undefined ? '' : String(v)).html();
     }
 
+    function fmtMoney3(n) {
+        if (n === null || n === undefined || n === '' || isNaN(Number(n))) {
+            return '—';
+        }
+        return Number(n).toLocaleString('es-CL', {
+            minimumFractionDigits: 3,
+            maximumFractionDigits: 3
+        });
+    }
+
     function post(action, data) {
         return $.post(ajaxUrl(), Object.assign({ action: action, nonce: nonce() }, data || {}));
     }
@@ -59,7 +69,10 @@
             '.riverso-family-list-preview .sku-local code{color:#1565c0;}' +
             '.riverso-family-list-preview .sku-online code{color:#2e7d32;}' +
             '.riverso-fp-inline-skus .sku-local code{color:#1565c0;}' +
-            '.riverso-fp-inline-skus .sku-online code{color:#2e7d32;}';
+            '.riverso-fp-inline-skus .sku-online code{color:#2e7d32;}' +
+            '.riverso-family-modal-panel .unit-rule-suggest{border:1px solid #c3c4c7;background:#fff;max-height:180px;overflow-y:auto;margin-top:6px;}' +
+            '.riverso-family-modal-panel .unit-rule-item{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid #f0f0f1;padding:7px 10px;cursor:pointer;}' +
+            '.riverso-family-modal-panel .unit-rule-item:hover{background:#f0f6fc;}';
         document.head.appendChild(css);
     }
 
@@ -226,7 +239,14 @@
         });
     }
 
-    function renderMembersList(members, editable) {
+    function renderMembersList(members, editable, packConflicts) {
+        packConflicts = packConflicts || [];
+        var mergeBySource = {};
+        packConflicts.forEach(function (c) {
+            if (c.mergeable && c.source_id) {
+                mergeBySource[parseInt(c.source_id, 10)] = c;
+            }
+        });
         if (!members || !members.length) {
             return '<p style="color:#999;margin:8px 0;">Sin miembros</p>';
         }
@@ -253,12 +273,28 @@
                     '</div>';
             }
             var createLocalBtn = '';
+            var linkLocalBtn = '';
             if (editable && canManage() && !!m.es_online && !m.es_local) {
-                createLocalBtn =
-                    '<button type="button" class="button button-small riverso-family-create-local" ' +
-                    'data-product-id="' + esc(String(m.producto_base_id || m.id || '')) + '" ' +
-                    'data-nombre="' + esc(m.nombre_canonico || '') + '" ' +
-                    'style="margin-left:8px;border-color:#1565c0;color:#1565c0;">Crear SKU local</button>';
+                var memberId = parseInt(m.producto_base_id || m.id, 10);
+                var conflict = mergeBySource[memberId];
+                if (conflict && conflict.target_id) {
+                    linkLocalBtn =
+                        '<button type="button" class="button button-small button-primary riverso-family-link-local" ' +
+                        'data-source-id="' + esc(String(conflict.source_id)) + '" ' +
+                        'data-target-id="' + esc(String(conflict.target_id)) + '" ' +
+                        'style="margin-left:8px;">Vincular con local</button>';
+                    createLocalBtn =
+                        '<button type="button" class="button button-small riverso-family-create-local" ' +
+                        'data-product-id="' + esc(String(m.producto_base_id || m.id || '')) + '" ' +
+                        'data-nombre="' + esc(m.nombre_canonico || '') + '" ' +
+                        'style="margin-left:8px;font-size:11px;color:#666;border-color:#ccc;">Crear SKU nuevo</button>';
+                } else {
+                    createLocalBtn =
+                        '<button type="button" class="button button-small riverso-family-create-local" ' +
+                        'data-product-id="' + esc(String(m.producto_base_id || m.id || '')) + '" ' +
+                        'data-nombre="' + esc(m.nombre_canonico || '') + '" ' +
+                        'style="margin-left:8px;border-color:#1565c0;color:#1565c0;">Crear SKU local</button>';
+                }
             }
             var removeBtn = editable && canManage()
                 ? '<button type="button" class="button button-small riverso-family-remove-member" data-member-id="' +
@@ -273,9 +309,182 @@
                 '<span style="color:#666;">' + esc(units + stockU) + '</span>' +
                 missingWarn + envaseEdit +
                 '</div><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">' +
-                createLocalBtn + removeBtn +
+                linkLocalBtn + createLocalBtn + removeBtn +
                 '</div></li>';
         }).join('') + '</ul>';
+    }
+
+    function renderPackConflictsBanner(packConflicts, familyId) {
+        if (!packConflicts || !packConflicts.length) {
+            return '';
+        }
+        var blocks = packConflicts.map(function (c) {
+            var membersTxt = (c.members || []).map(function (m) {
+                var bits = [];
+                if (m.sku_local) {
+                    bits.push('L:' + m.sku_local);
+                }
+                if (m.sku_online) {
+                    bits.push('O:' + m.sku_online);
+                }
+                if (!bits.length) {
+                    bits.push('#' + m.producto_base_id);
+                }
+                return esc(m.nombre_canonico || '-') + ' (' + bits.join(' · ') + ')';
+            }).join(' · ');
+            var btn = '';
+            if (c.mergeable && c.source_id && c.target_id && canManage()) {
+                btn = '<button type="button" class="button button-small button-primary riverso-family-pack-merge-review" ' +
+                    'data-source-id="' + esc(String(c.source_id)) + '" ' +
+                    'data-target-id="' + esc(String(c.target_id)) + '" ' +
+                    'data-family-id="' + esc(String(familyId || '')) + '">Revisar merge</button>';
+            }
+            var color = c.mergeable ? '#1565c0' : '#e65100';
+            var bg = c.mergeable ? '#e3f2fd' : '#fff3e0';
+            var border = c.mergeable ? '#90caf9' : '#ffb74d';
+            return '<div style="margin-bottom:8px;padding:10px;background:' + bg + ';border:1px solid ' + border + ';border-radius:4px;font-size:13px;">' +
+                '<strong style="color:' + color + ';">Envase ' + esc(c.qty_label || String(c.qty)) + ' u</strong> — ' +
+                esc(c.message || '') + '<br><span style="font-size:12px;color:#555;">' + membersTxt + '</span>' +
+                (btn ? ('<div style="margin-top:8px;">' + btn + '</div>') : '') +
+                '</div>';
+        }).join('');
+        return '<div class="riverso-family-pack-conflicts">' + blocks + '</div>';
+    }
+
+    function updatePackConflictsBanner($modal, packConflicts, familyId) {
+        packConflicts = packConflicts || [];
+        $modal.data('packConflicts', packConflicts);
+        var $wrap = $modal.find('.riverso-family-pack-conflicts-wrap');
+        if ($wrap.length) {
+            $wrap.html(renderPackConflictsBanner(packConflicts, familyId));
+        }
+    }
+
+    function openPackMergeModal(merge) {
+        return new Promise(function (resolve) {
+            if (!merge) {
+                resolve(false);
+                return;
+            }
+            var src = merge.source || {};
+            var tgt = merge.target || {};
+            var woo = merge.woo || {};
+            var codes = (merge.codes_to_transfer || []).map(function (c) { return c.codigo_proveedor; }).filter(Boolean);
+            var barcodes = (merge.barcodes_to_transfer || []).map(function (b) { return b.codigo; }).filter(Boolean);
+            var codesHTML = '';
+            if (codes.length) {
+                codesHTML = '<div style="margin-top:10px;"><strong>Códigos a heredar:</strong><br>' +
+                    codes.map(function (c) {
+                        return '<code style="background:#f0f0f0;padding:2px 6px;border-radius:3px;margin-right:4px;">' + esc(c) + '</code>';
+                    }).join(' ') + '</div>';
+            }
+            var barcodesHTML = '';
+            if (barcodes.length) {
+                barcodesHTML = '<div style="margin-top:10px;"><strong>Barcodes a heredar:</strong><br>' +
+                    barcodes.map(function (b) {
+                        return '<code style="background:#f0f0f0;padding:2px 6px;border-radius:3px;margin-right:4px;">' + esc(b) + '</code>';
+                    }).join(' ') + '</div>';
+            }
+            var warningsHTML = '';
+            (merge.warnings || []).forEach(function (w) {
+                var sev = w.severity || 'info';
+                var color = sev === 'error' ? '#f8d7da' : (sev === 'warning' ? '#fff3cd' : '#d1ecf1');
+                var borderColor = sev === 'error' ? '#dc3545' : (sev === 'warning' ? '#ffc107' : '#17a2b8');
+                warningsHTML += '<div style="background:' + color + ';border-left:4px solid ' + borderColor + ';padding:10px;margin-top:8px;border-radius:2px;font-size:13px;">' + esc(w.message) + '</div>';
+            });
+            var blocked = !!merge.block_merge;
+            var packNote = merge.pack_qty_label
+                ? '<div style="background:#e3f2fd;border:1px solid #90caf9;padding:10px;border-radius:4px;margin-bottom:12px;font-size:13px;"><strong>Envase en familia:</strong> ' + esc(merge.pack_qty_label) + ' u</div>'
+                : '';
+            var confirmBtn = blocked
+                ? '<button type="button" class="button" disabled style="opacity:0.5;cursor:not-allowed;">Merge bloqueado</button>'
+                : '<button type="button" id="riverso-family-merge-confirm" class="button button-primary" style="cursor:pointer;">Confirmar merge</button>';
+            var html =
+                '<div id="riverso-family-merge-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:100010;display:flex;align-items:center;justify-content:center;">' +
+                '<div style="background:#fff;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,0.3);padding:24px;max-width:620px;width:92%;max-height:85vh;overflow-y:auto;">' +
+                '<h2 style="margin:0 0 16px 0;color:#1d2327;">' + (blocked ? 'Merge bloqueado' : 'Revisar merge de productos') + '</h2>' +
+                packNote +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">' +
+                '<div style="border:1px solid #ddd;padding:12px;border-radius:6px;background:#f9f9f9;">' +
+                '<h4 style="margin:0 0 8px 0;color:#d32f2f;">Origen (online, se elimina)</h4>' +
+                '<div style="font-size:12px;line-height:1.6;">' +
+                '<div><strong>ID:</strong> #' + esc(String(merge.source_id || '?')) + '</div>' +
+                '<div><strong>SKU Local:</strong> ' + (src.canonical_sku || '<em style="color:#999;">sin SKU</em>') + '</div>' +
+                '<div><strong>Nombre:</strong> ' + esc(src.nombre_canonico || 'Sin nombre') + '</div>' +
+                '</div></div>' +
+                '<div style="border:1px solid #ddd;padding:12px;border-radius:6px;background:#f9f9f9;">' +
+                '<h4 style="margin:0 0 8px 0;color:#1976d2;">Destino (local, receptor)</h4>' +
+                '<div style="font-size:12px;line-height:1.6;">' +
+                '<div><strong>ID:</strong> #' + esc(String(merge.target_id || '?')) + '</div>' +
+                '<div><strong>SKU Local:</strong> ' + (tgt.canonical_sku || '<em style="color:#999;">sin SKU</em>') + '</div>' +
+                '<div><strong>Nombre:</strong> ' + esc(tgt.nombre_canonico || 'Sin nombre') + '</div>' +
+                '</div></div></div>' +
+                '<div style="background:#e8f5e9;border:1px solid #4caf50;padding:10px;border-radius:6px;margin-bottom:12px;font-size:13px;">' +
+                '<strong style="color:#2e7d32;">SKU Online:</strong> <code>' + esc(woo.sku || 'N/A') + '</code></div>' +
+                codesHTML + barcodesHTML + warningsHTML +
+                '<div style="margin-top:16px;padding-top:12px;border-top:1px solid #ddd;display:flex;gap:8px;justify-content:flex-end;">' +
+                '<button type="button" id="riverso-family-merge-cancel" class="button">' + (blocked ? 'Cerrar' : 'Cancelar') + '</button>' +
+                confirmBtn +
+                '</div></div></div>';
+            $('body').append(html);
+            $('#riverso-family-merge-cancel').on('click', function () {
+                $('#riverso-family-merge-overlay').remove();
+                $(document).off('keydown.riversoFamilyMerge');
+                resolve(false);
+            });
+            $('#riverso-family-merge-confirm').on('click', function () {
+                $('#riverso-family-merge-overlay').remove();
+                $(document).off('keydown.riversoFamilyMerge');
+                resolve(true);
+            });
+            $(document).on('keydown.riversoFamilyMerge', function (e) {
+                if (e.key === 'Escape') {
+                    $('#riverso-family-merge-overlay').remove();
+                    $(document).off('keydown.riversoFamilyMerge');
+                    resolve(false);
+                }
+            });
+        });
+    }
+
+    function runPackMergeFlow($modal, familyId, sourceId, targetId) {
+        post('riverso_families_pack_merge_preview', {
+            grupo_id: familyId,
+            source_id: sourceId,
+            target_id: targetId
+        }).done(function (resp) {
+            var merge = resp.data && resp.data.merge;
+            if (!resp.success) {
+                if (merge) {
+                    openPackMergeModal(merge);
+                    return;
+                }
+                alert((resp.data && resp.data.message) || 'No se pudo obtener preview del merge');
+                return;
+            }
+            openPackMergeModal(merge).then(function (confirmed) {
+                if (!confirmed) {
+                    return;
+                }
+                post('riverso_families_pack_merge_confirm', {
+                    grupo_id: familyId,
+                    source_id: sourceId,
+                    target_id: targetId
+                }).done(function (r2) {
+                    if (!r2.success) {
+                        alert((r2.data && r2.data.message) || 'Merge falló');
+                        return;
+                    }
+                    alert(r2.data.message || 'Merge completado');
+                    refreshEditMembers($modal, familyId);
+                    loadUnitPanelIntoModal($modal, familyId);
+                }).fail(function () {
+                    alert('Error de red al confirmar merge');
+                });
+            });
+        }).fail(function () {
+            alert('Error de red al obtener preview del merge');
+        });
     }
 
     function renderPending(pending) {
@@ -430,6 +639,38 @@
             '</ul>';
     }
 
+    function ruleLabel(rule) {
+        if (!rule) {
+            return '';
+        }
+        return (rule.codigo || '') + ' v' + (rule.version || '') + ' · ' + (rule.nombre || '');
+    }
+
+    function renderUnitRulePicker(unit) {
+        var current = unit && unit.rule_assignment;
+        var currentTxt = current
+            ? ('Actual: <strong>' + esc(ruleLabel(current)) + '</strong> <span style="color:#666;">(' + esc(current.estado || '') + ')</span>')
+            : 'Sin regla asignada a la familia.';
+        var preId = current && current.id ? String(current.id) : '';
+        var preLabel = current ? ruleLabel(current) : '';
+        var checkAssign = false;
+        var warnRule = (unit && unit.falta_regla_precio)
+            ? '<div class="unit-rule-warning" style="margin:0 0 8px;padding:8px;background:#fff3cd;border-left:4px solid #ffc107;border-radius:4px;color:#7a5b00;font-size:12px;"><strong>Falta regla de precio.</strong> Se crea una tarea para asignarla. Búscala en Tareas → categoría Precios, o asígnala aquí.</div>'
+            : '';
+        return '<div class="unit-rule-box" style="margin-top:10px;padding:8px;background:#fff;border:1px solid #90caf9;border-radius:4px;">' +
+            warnRule +
+            '<p style="margin:0 0 6px;font-size:12px;">' + currentTxt + '</p>' +
+            '<label style="display:block;margin-bottom:6px;font-size:12px;">Buscar regla de precio<br>' +
+            '<input type="search" class="unit-rule-q regular-text" placeholder="Código o nombre (ej. R-1)…" style="width:100%;max-width:100%;box-sizing:border-box;"></label>' +
+            '<div class="unit-rule-suggest" style="display:none;"></div>' +
+            '<input type="hidden" class="unit-rule-id" value="' + esc(preId) + '">' +
+            '<p class="unit-rule-selected" style="margin:6px 0;font-size:12px;">' +
+            (preLabel ? ('Seleccionada: <strong>' + esc(preLabel) + '</strong>') : 'Ninguna seleccionada') +
+            '</p>' +
+            '<label style="font-size:13px;"><input type="checkbox" class="unit-confirm-r1"' + (checkAssign ? ' checked' : '') + '> Asignar la regla seleccionada a la familia al guardar</label>' +
+            '</div>';
+    }
+
     function renderUnitPanel(unit, familyId, members) {
         var enabled = isUnitEnabled(unit);
         var u = unit && unit.unit;
@@ -438,10 +679,13 @@
         if (legacy) {
             var costoTxt = legacy.costo_sin_dato
                 ? '<span style="color:#999;">sin dato (referencia)</span>'
-                : ('$' + Number(legacy.costo_neto).toLocaleString('es-CL'));
+                : ('$' + fmtMoney3(legacy.costo_neto));
+            var precioTxt = legacy.precio_total != null || legacy.precio_neto != null
+                ? ('$' + fmtMoney3(legacy.precio_total != null ? legacy.precio_total : legacy.precio_neto))
+                : '—';
             legacyHtml = '<div style="background:#f5f5f5;padding:8px;border-radius:4px;font-size:12px;margin-top:8px;">' +
-                '<strong>Legacy (solo referencia):</strong> costo ' + costoTxt +
-                ' · precio $' + Number(legacy.precio_total || 0).toLocaleString('es-CL') + '</div>';
+                '<strong>Legacy (sugerencia):</strong> costo ' + costoTxt +
+                ' · precio ' + precioTxt + '</div>';
         }
         var selectedSku = u && u.canonical_sku ? u.canonical_sku : '';
         var selectedId = u && u.id ? u.id : '';
@@ -484,8 +728,7 @@
             (unit && unit.stock != null ? Number(unit.stock).toLocaleString('es-CL') : '—') + '</strong>' +
             (unit && unit.ubicacion ? (' · Lugar: ' + esc(unit.ubicacion.codigo || unit.ubicacion.nombre || '')) : '') + '</p>' +
             legacyHtml +
-            '<div style="margin-top:8px;">' +
-            '<label><input type="checkbox" class="unit-confirm-r1"' + (unit && unit.needs_r1_confirmation ? ' checked' : '') + '> Asignar regla <strong>R-1</strong> a la familia (confirmación requerida)</label></div>' +
+            renderUnitRulePicker(unit) +
             '<button type="button" class="button button-primary unit-save" style="margin-top:8px;">Guardar producto unitario</button> ' +
             '<button type="button" class="button unit-preview-prices">Previsualizar precios</button>' +
             '<div class="unit-preview-table" style="margin-top:10px;overflow-x:auto;"></div>' +
@@ -502,6 +745,7 @@
             p_asignado: $modal.find('.unit-precio').val(),
             es_producto_unitario: $modal.find('.unit-toggle-enabled').is(':checked') ? 1 : 0,
             confirm_r1: $modal.find('.unit-confirm-r1').is(':checked') ? 1 : 0,
+            rule_id: $modal.find('.unit-rule-id').val() || 0,
             confirm_link_preview: 1
         };
         if (convertId) {
@@ -558,9 +802,12 @@
             d.reject({ message: blockMsg });
             return d.promise();
         }
-        if ($modal.find('.unit-confirm-r1').is(':checked') && !confirm('¿Confirmas asignar la regla R-1 a esta familia?')) {
-            d.reject({ message: 'Guardado cancelado (R-1).' });
-            return d.promise();
+        if ($modal.find('.unit-confirm-r1').is(':checked')) {
+            var ruleName = $modal.find('.unit-rule-selected strong').text() || 'R-1';
+            if (!confirm('¿Confirmas asignar ' + ruleName + ' a esta familia?')) {
+                d.reject({ message: 'Guardado cancelado (asignación de regla).' });
+                return d.promise();
+            }
         }
 
         post('riverso_families_unit_configure', buildUnitSavePayload($modal, familyId))
@@ -917,7 +1164,19 @@
             if (!fid) {
                 return;
             }
-            post('riverso_families_unit_toggle', { grupo_id: fid, enabled: enabled ? 1 : 0 });
+            post('riverso_families_unit_toggle', { grupo_id: fid, enabled: enabled ? 1 : 0 })
+                .done(function (r) {
+                    if (!r.success) {
+                        alert((r.data && r.data.message) || 'No se pudo cambiar producto unitario');
+                        $modal.find('.unit-toggle-enabled').prop('checked', !enabled);
+                        applyUnitPanelState($panel, !enabled);
+                        return;
+                    }
+                    if (r.data && r.data.unit) {
+                        $modal.find('.riverso-unit-panel').replaceWith(renderUnitPanel(r.data.unit, fid, []));
+                        bindUnitPanel($modal);
+                    }
+                });
         });
 
         $modal.find('.unit-next-sku').off('click.unit').on('click.unit', function () {
@@ -1008,6 +1267,64 @@
                     });
                 }
             });
+        });
+
+        var ruleSearchTimer = null;
+        var cachedRules = null;
+
+        function loadRules(cb) {
+            if (cachedRules) {
+                cb(cachedRules);
+                return;
+            }
+            post('riverso_price_rules_list', {}).done(function (r) {
+                cachedRules = (r.success && r.data && r.data.rules) ? r.data.rules : [];
+                cb(cachedRules);
+            }).fail(function () {
+                cb([]);
+            });
+        }
+
+        function renderRuleSuggest(q) {
+            var $box = $modal.find('.unit-rule-suggest');
+            loadRules(function (rules) {
+                var query = (q || '').toLowerCase().trim();
+                var list = (rules || []).filter(function (rl) {
+                    if (rl.estado === 'archivada') {
+                        return false;
+                    }
+                    if (!query) {
+                        return true;
+                    }
+                    var hay = ((rl.codigo || '') + ' ' + (rl.nombre || '') + ' v' + (rl.version || '')).toLowerCase();
+                    return hay.indexOf(query) !== -1;
+                }).slice(0, 20);
+                if (!list.length) {
+                    $box.html('<div style="padding:8px 10px;color:#666;">Sin reglas</div>').show();
+                    return;
+                }
+                $box.html(list.map(function (rl) {
+                    return '<button type="button" class="unit-rule-item" data-id="' + esc(String(rl.id)) + '" data-label="' + esc(ruleLabel(rl)) + '">' +
+                        esc(ruleLabel(rl)) + ' <span style="color:#666;">(' + esc(rl.estado || '') + ')</span></button>';
+                }).join('')).show();
+            });
+        }
+
+        $modal.find('.unit-rule-q').off('focus.unit input.unit').on('focus.unit input.unit', function () {
+            var q = $(this).val();
+            clearTimeout(ruleSearchTimer);
+            ruleSearchTimer = setTimeout(function () {
+                renderRuleSuggest(q);
+            }, 200);
+        });
+        $modal.off('click.unitRule').on('click.unitRule', '.unit-rule-item', function () {
+            var id = $(this).data('id');
+            var label = $(this).data('label') || '';
+            $modal.find('.unit-rule-id').val(id);
+            $modal.find('.unit-rule-selected').html('Seleccionada: <strong>' + esc(label) + '</strong>');
+            $modal.find('.unit-confirm-r1').prop('checked', true);
+            $modal.find('.unit-rule-suggest').hide().empty();
+            $modal.find('.unit-rule-q').val(label);
         });
 
         $modal.find('.unit-save').off('click.unit').on('click.unit', function () {
@@ -1133,12 +1450,23 @@
                 '<p><strong>Miembros</strong></p>' +
                 renderMembersList(members, false) +
                 renderPending(fam.pending) +
-                '<div style="margin-top:16px;text-align:right;">' +
+                '<div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px;">' +
                 '<button type="button" class="button riverso-family-modal-close">Cerrar</button>' +
+                (canManage()
+                    ? '<button type="button" class="button button-primary riverso-family-view-edit" data-family-id="' + esc(String(fam.id || familyId)) + '">Editar</button>'
+                    : '') +
                 '</div></div></div>'
             );
             $('body').append($modal);
             bindOverlay($modal);
+            $modal.find('.riverso-family-view-edit').on('click', function (ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                var id = parseInt($(this).data('family-id') || familyId, 10);
+                if (id) {
+                    openEdit(id);
+                }
+            });
         });
     }
 
@@ -1148,7 +1476,8 @@
                 return;
             }
             var fam = r.data.family;
-            $modal.find('.riverso-family-members-wrap').html(renderMembersList(fam.members || [], true));
+            $modal.find('.riverso-family-members-wrap').html(renderMembersList(fam.members || [], true, fam.pack_conflicts || []));
+            updatePackConflictsBanner($modal, fam.pack_conflicts || [], familyId);
             $modal.find('.riverso-family-pending-wrap').html(renderPending(fam.pending));
             var stock = fam.stock && fam.stock.stock_unidades != null
                 ? Number(fam.stock.stock_unidades).toLocaleString('es-CL') + ' u'
@@ -1301,7 +1630,8 @@
             '<p style="margin:0 0 8px;color:#666;font-size:13px;">Stock familia: <strong class="riverso-family-stock-label">' + esc(stock) +
             '</strong> · <span class="riverso-family-member-count">' + (fam.members || []).length + '</span> miembro(s)</p>' +
             '<p style="margin:12px 0 6px;"><strong>Miembros</strong></p>' +
-            '<div class="riverso-family-members-wrap">' + renderMembersList(fam.members || [], true) + '</div>' +
+            '<div class="riverso-family-pack-conflicts-wrap">' + renderPackConflictsBanner(fam.pack_conflicts || [], familyId) + '</div>' +
+            '<div class="riverso-family-members-wrap">' + renderMembersList(fam.members || [], true, fam.pack_conflicts || []) + '</div>' +
             '<div class="riverso-family-pending-wrap">' + renderPending(fam.pending) + '</div>' +
             searchBlock +
             '<div style="display:flex;gap:8px;justify-content:space-between;margin-top:16px;padding-top:12px;border-top:1px solid #ddd;">' +
@@ -1352,6 +1682,18 @@
             });
             $modal.find('.family-edit-nombre').focus();
         }
+
+        $modal.on('click', '.riverso-family-pack-merge-review, .riverso-family-link-local', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            var sourceId = parseInt($(this).attr('data-source-id') || 0, 10);
+            var targetId = parseInt($(this).attr('data-target-id') || 0, 10);
+            var fid = currentFamilyId($modal) || parseInt($(this).attr('data-family-id') || 0, 10);
+            if (!fid || !sourceId || !targetId) {
+                return;
+            }
+            runPackMergeFlow($modal, fid, sourceId, targetId);
+        });
 
         $modal.on('click', '.riverso-family-remove-member', function (ev) {
             ev.preventDefault();

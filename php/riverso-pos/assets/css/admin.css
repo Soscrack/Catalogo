@@ -851,8 +851,205 @@
     margin-left: 8px;
 }
 
+.riverso-price-rules .rpr-editor-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.riverso-price-rules .rpr-help-icon {
+    cursor: pointer;
+    color: #2271b1;
+    font-size: 20px;
+}
+
+.riverso-price-rules .rpr-help-panel {
+    background: #f0f6fc;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    max-width: 720px;
+}
+
+.riverso-price-rules .rpr-help-panel ol {
+    margin: 8px 0 8px 20px;
+}
+
+.riverso-price-rules .rpr-tiers .t-formula-total-input {
+    width: 100%;
+    min-width: 120px;
+    font-family: Consolas, "SFMono-Regular", Menlo, Monaco, monospace;
+    font-size: 13px;
+    padding: 6px 8px;
+    border: 1px solid #8c8f94;
+    border-radius: 4px;
+    background: #faf8ff;
+}
+
+.riverso-price-rules .rpr-tiers .t-formula-total-input:focus {
+    background: #fff;
+    border-color: #7c3aed;
+    box-shadow: 0 0 0 1px #7c3aed;
+    outline: none;
+}
+
+.riverso-price-rules .rpr-tiers .t-formula-total-input.is-invalid {
+    border-color: #d63638;
+    background: #fcf0f1;
+}
+
+.riverso-price-rules .rpr-preview-line {
+    font-size: 11px;
+    line-height: 1.35;
+    display: block;
+    max-width: 220px;
+}
+
+.riverso-price-rules .rpr-calc-btn.rpr-calc-var-t {
+    background: #7c3aed;
+}
+
+.riverso-price-rules .rpr-calc-btn.rpr-calc-var-t:hover {
+    background: #6d28d9;
+}
+
 .riverso-price-rules .rpr-sim-total {
     font-size: 1.05em;
+}
+
+.riverso-price-rules .rpr-assign-list {
+    margin: 0 0 12px;
+    padding-left: 1.2em;
+}
+
+.riverso-price-rules .rpr-assign-list li {
+    margin-bottom: 6px;
+}
+
+#rpr-view-modal .rpr-view-rule-picker {
+    margin-bottom: 14px;
+    padding: 12px;
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+}
+
+#rpr-view-modal .rpr-view-rule-chip {
+    margin-bottom: 10px;
+}
+
+#rpr-view-modal .rpr-view-rule-chip.is-empty {
+    color: #646970;
+}
+
+#rpr-view-modal .rpr-view-rule-chip-main {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: baseline;
+    margin: 4px 0;
+    font-size: 14px;
+}
+
+#rpr-view-modal .rpr-view-rule-chip-name {
+    font-weight: 600;
+    color: #1d2327;
+}
+
+#rpr-view-modal .rpr-view-rule-chip-estado {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 3px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    font-size: 12px;
+    text-transform: lowercase;
+}
+
+#rpr-view-modal .rpr-view-rule-search-label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+#rpr-view-modal .rpr-view-rule-search-label input {
+    display: block;
+    margin-top: 4px;
+    width: 100%;
+    max-width: 420px;
+}
+
+#rpr-view-modal .rpr-view-rule-picker .rpr-assign-suggest {
+    margin-top: 6px;
+    max-width: 480px;
+}
+
+#rpr-assign-modal .rpr-assign-filters,
+.riverso-price-rules .rpr-assign-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+    align-items: center;
+}
+
+#rpr-assign-modal .rpr-assign-modal-content {
+    max-width: 920px;
+    width: 95%;
+}
+
+#rpr-assign-modal .rpr-assign-table,
+#rpr-view-modal .rpr-assign-table {
+    margin-top: 8px;
+}
+
+#rpr-view-modal .rpr-assign-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: 14px;
+}
+
+#rpr-view-modal #assign-name {
+    min-width: 160px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+#rpr-view-modal .rpr-assign-suggest {
+    border: 1px solid #c3c4c7;
+    background: #fff;
+    max-height: 220px;
+    overflow-y: auto;
+    margin-top: 6px;
+}
+
+#rpr-view-modal .rpr-suggest-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid #f0f0f1;
+    padding: 8px 10px;
+    cursor: pointer;
+}
+
+#rpr-view-modal .rpr-suggest-item:hover {
+    background: #f0f6fc;
+}
+
+#rpr-view-modal .rpr-suggest-empty {
+    padding: 8px 10px;
+    color: #646970;
+}
+
+#rpr-view-modal .rpr-assign-modal-content {
+    max-width: 920px;
+    width: 95%;
 }
 
 @media (max-width: 1100px) {

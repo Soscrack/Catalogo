@@ -1338,7 +1338,12 @@ jQuery(document).ready(function($) {
             return;
         }
         const channel = $('#pos-channel-select').val() || 'local';
-        const unitsPerPack = parseFloat(product.barcode_info?.cantidad) || 1;
+        const unitsPerPack = parseFloat(
+            product.units_per_pack
+            || product.barcode_info?.units_per_pack
+            || product.barcode_info?.cantidad
+            || product.barcode_info?.factor
+        ) || 1;
         const existingIndex = cart.findIndex(item => item.product_id === product.id);
         
         if (existingIndex > -1) {

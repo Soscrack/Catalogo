@@ -47,6 +47,9 @@ class Riverso_Product_Module {
         add_action('wp_ajax_riverso_products_remove_barcode', [$this, 'ajax_remove_barcode']);
         add_action('wp_ajax_riverso_products_accept_legacy_barcode', [$this, 'ajax_accept_legacy_barcode']);
         add_action('wp_ajax_riverso_products_reject_legacy_barcode', [$this, 'ajax_reject_legacy_barcode']);
+        add_action('wp_ajax_riverso_products_barcode_remap_preview', [$this, 'ajax_barcode_remap_preview']);
+        add_action('wp_ajax_riverso_products_barcode_remap', [$this, 'ajax_barcode_remap']);
+        add_action('wp_ajax_riverso_products_parked_barcode_suggestions', [$this, 'ajax_parked_barcode_suggestions']);
         add_action('wp_ajax_riverso_products_get_tasks', [$this, 'ajax_get_tasks']);
         add_action('wp_ajax_riverso_products_create_online', [$this, 'ajax_create_online']);
         add_action('wp_ajax_riverso_products_suggest_variable_parents', [$this, 'ajax_suggest_variable_parents']);
@@ -572,6 +575,31 @@ class Riverso_Product_Module {
                 "SELECT id, codigo_grupo, nombre FROM {$prefix}equivalence_groups WHERE id = %d",
                 intval($product['unit_of_grupo_id'])
             ), ARRAY_A);
+        }
+
+        $product['barcode_remap_context'] = null;
+        if (class_exists('Riverso_Unit_Product_Service')) {
+            $svc = Riverso_Unit_Product_Service::get_instance();
+            $family_ctx = $svc->resolve_family_context_for_remap($id);
+            $is_unitario = !empty($product['es_unidad_minima'])
+                || (!empty($family_ctx['unit_producto_base_id'])
+                    && intval($family_ctx['unit_producto_base_id']) === $id);
+            $decision = $product['familia_decision'] ?? null;
+            $can_be_unitario = $is_unitario
+                || empty($decision)
+                || $decision === 'requiere'
+                || (!empty($family_ctx['grupo_id']) && empty($family_ctx['unit_producto_base_id']));
+            $parked = [];
+            if (!empty($family_ctx['grupo_id'])) {
+                $parked = $svc->list_resumable_parked_barcode_tasks(intval($family_ctx['grupo_id']));
+            }
+            $product['barcode_remap_context'] = [
+                'show_wizard' => (bool) ($is_unitario || $can_be_unitario),
+                'is_unitario' => (bool) $is_unitario,
+                'can_be_unitario' => (bool) $can_be_unitario,
+                'family' => $family_ctx,
+                'parked_suggestions' => $parked,
+            ];
         }
 
         return $product;
@@ -3038,6 +3066,305 @@ class Riverso_Product_Module {
             'message' => 'Código legacy rechazado y eliminado',
             'item' => $item,
         ]);
+    }
+
+    /**
+     * Preview de remapeo barcode unitario → hijo/envase.
+     */
+    public function ajax_barcode_remap_preview() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $barcode_id = absint($_POST['barcode_id'] ?? 0);
+        $product_id = absint($_POST['product_id'] ?? 0);
+        if (!$barcode_id || !$product_id || !class_exists('Riverso_Unit_Product_Service')) {
+            wp_send_json_error(['message' => 'Parámetros inválidos']);
+        }
+
+        $preview = Riverso_Unit_Product_Service::get_instance()
+            ->build_barcode_remap_preview($product_id, $barcode_id);
+        if (is_wp_error($preview)) {
+            wp_send_json_error(['message' => $preview->get_error_message()]);
+        }
+
+        wp_send_json_success(['preview' => $preview]);
+    }
+
+    /**
+     * Ejecuta remapeo: keep_unit | move_child | assign_child | create_child | park_presentacion | reject.
+     */
+    public function ajax_barcode_remap() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $barcode_id = absint($_POST['barcode_id'] ?? 0);
+        $product_id = absint($_POST['product_id'] ?? 0);
+        $accion = sanitize_text_field($_POST['accion'] ?? '');
+        $destino_id = absint($_POST['destino_producto_base_id'] ?? 0);
+        $cantidad_pack = floatval($_POST['cantidad_pack'] ?? 0);
+        $motivo = sanitize_textarea_field($_POST['audit_reason'] ?? '');
+        $verify = !isset($_POST['verify']) || !empty($_POST['verify']);
+
+        if (!$barcode_id || !$product_id || $accion === '') {
+            wp_send_json_error(['message' => 'Parámetros inválidos']);
+        }
+        if (!class_exists('Riverso_Unit_Product_Service') || !class_exists('Riverso_Barcode_Model')) {
+            wp_send_json_error(['message' => 'Servicios no disponibles']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}codigo_barra WHERE id = %d",
+            $barcode_id
+        ), ARRAY_A);
+        if (!$row) {
+            wp_send_json_error(['message' => 'Código de barra no encontrado']);
+        }
+        if ((int) ($row['producto_base_id'] ?? 0) !== $product_id) {
+            wp_send_json_error(['message' => 'El código no pertenece a este producto']);
+        }
+
+        $svc = Riverso_Unit_Product_Service::get_instance();
+        $message = '';
+        $created = null;
+        $target_product_id = $product_id;
+        $requested_accion = $accion;
+
+        switch ($accion) {
+            case 'reject':
+                $ok = Riverso_Barcode_Model::reject_legacy(
+                    $barcode_id,
+                    $motivo !== '' ? $motivo : 'Rechazado desde remapeo barcode.'
+                );
+                if (!$ok) {
+                    wp_send_json_error(['message' => 'No se pudo rechazar el código']);
+                }
+                $svc->reassign_barcode_tasks($barcode_id, $product_id, [
+                    'mapeo_accion' => 'reject',
+                    'parked_until_presentacion' => 0,
+                ]);
+                $this->close_legacy_barcode_tasks($barcode_id, (string) ($row['codigo'] ?? ''), $product_id);
+                $message = 'Código rechazado';
+                break;
+
+            case 'keep_unit':
+                $wpdb->update(
+                    "{$prefix}codigo_barra",
+                    [
+                        'cantidad' => 1,
+                        'factor_a_unidad_base' => 1,
+                        'updated_at' => current_time('mysql'),
+                    ],
+                    ['id' => $barcode_id],
+                    ['%f', '%f', '%s'],
+                    ['%d']
+                );
+                $motivo_keep = $motivo !== '' ? $motivo : 'Confirmado en producto unitario (qty 1).';
+                if (Riverso_Barcode_Model::is_legacy_row($row)) {
+                    $ok = Riverso_Barcode_Model::accept_legacy_as_supplier($barcode_id, $motivo_keep);
+                } else {
+                    $ok = Riverso_Barcode_Model::set_status($barcode_id, 'verificado', $motivo_keep);
+                }
+                if (!$ok) {
+                    wp_send_json_error(['message' => 'No se pudo confirmar el código']);
+                }
+                $svc->reassign_barcode_tasks($barcode_id, $product_id, [
+                    'mapeo_accion' => 'keep_unit',
+                    'cantidad_pack' => 1,
+                    'parked_until_presentacion' => 0,
+                    'destino_producto_base_id' => $product_id,
+                ]);
+                $this->close_legacy_barcode_tasks($barcode_id, (string) ($row['codigo'] ?? ''), $product_id);
+                $message = 'Código confirmado en el unitario';
+                break;
+
+            case 'park_presentacion':
+                $qty = $cantidad_pack > 0 ? $cantidad_pack : null;
+                $park = $svc->park_barcode_presentacion($barcode_id, $qty, $product_id);
+                if (is_wp_error($park)) {
+                    wp_send_json_error(['message' => $park->get_error_message()]);
+                }
+                $message = 'Tarea aparcada hasta que exista la presentación/hijo';
+                break;
+
+            case 'assign_child':
+                if ($destino_id <= 0) {
+                    wp_send_json_error(['message' => 'Busca y selecciona el producto hijo a asignar']);
+                }
+                if ($cantidad_pack <= 1.0001) {
+                    wp_send_json_error(['message' => 'Indica la cantidad del envase (> 1)']);
+                }
+                $preview_assign = $svc->build_barcode_remap_preview($product_id, $barcode_id);
+                if (is_wp_error($preview_assign)) {
+                    wp_send_json_error(['message' => $preview_assign->get_error_message()]);
+                }
+                if (empty($preview_assign['can_assign_child'])) {
+                    wp_send_json_error([
+                        'message' => 'No se puede asignar hijo: hace falta familia y que este producto sea (o pueda ser) unitario.',
+                    ]);
+                }
+                $grupo_assign = intval($preview_assign['family']['grupo_id'] ?? 0);
+                if (!$grupo_assign) {
+                    wp_send_json_error(['message' => 'El producto no tiene familia']);
+                }
+                $created = $svc->assign_pack_member_for_qty(
+                    $grupo_assign,
+                    $product_id,
+                    $destino_id,
+                    $cantidad_pack,
+                    ['tipo_envase' => sanitize_text_field($_POST['tipo_envase'] ?? 'caja')]
+                );
+                if (is_wp_error($created)) {
+                    wp_send_json_error(['message' => $created->get_error_message()]);
+                }
+                $destino_id = intval($created['producto_base_id']);
+                $accion = 'move_child';
+                // fall through to move_child
+                // phpcs:ignore
+            case 'create_child':
+                if ($accion === 'create_child') {
+                    if ($cantidad_pack <= 1.0001) {
+                        wp_send_json_error(['message' => 'Indica la cantidad del envase (> 1)']);
+                    }
+                    $preview = $svc->build_barcode_remap_preview($product_id, $barcode_id);
+                    if (is_wp_error($preview)) {
+                        wp_send_json_error(['message' => $preview->get_error_message()]);
+                    }
+                    if (empty($preview['can_create_child'])) {
+                        wp_send_json_error([
+                            'message' => 'No se puede crear hijo: hace falta familia y que este producto sea (o pueda ser) unitario.',
+                        ]);
+                    }
+                    $grupo_id = intval($preview['family']['grupo_id'] ?? 0);
+                    if (!$grupo_id) {
+                        wp_send_json_error(['message' => 'El producto no tiene familia']);
+                    }
+                    $created = $svc->create_pack_member_for_qty($grupo_id, $product_id, $cantidad_pack, [
+                        'box_nombre' => sanitize_text_field($_POST['box_nombre'] ?? ''),
+                        'tipo_envase' => sanitize_text_field($_POST['tipo_envase'] ?? 'caja'),
+                    ]);
+                    if (is_wp_error($created)) {
+                        wp_send_json_error(['message' => $created->get_error_message()]);
+                    }
+                    $destino_id = intval($created['producto_base_id']);
+                    $accion = 'move_child';
+                }
+                // fall through intentionally after create/assign
+                // phpcs:ignore
+            case 'move_child':
+                if ($destino_id <= 0) {
+                    wp_send_json_error(['message' => 'Selecciona el hijo/envase destino']);
+                }
+                if ($cantidad_pack <= 0) {
+                    $env = $svc->get_canonical_envase($destino_id);
+                    $cantidad_pack = $env ? floatval($env['cantidad_unidades']) : floatval($row['cantidad'] ?? 1);
+                }
+                if ($cantidad_pack <= 1.0001) {
+                    $env = $svc->get_canonical_envase($destino_id);
+                    if ($env && floatval($env['cantidad_unidades']) > 1) {
+                        $cantidad_pack = floatval($env['cantidad_unidades']);
+                    } else {
+                        wp_send_json_error([
+                            'message' => 'Indica la cantidad del pack (> 1). No se auto-mueve qty 1.',
+                        ]);
+                    }
+                }
+
+                $moved = $svc->move_barcode_to_pack($barcode_id, $destino_id, $cantidad_pack, [
+                    'verify' => $verify,
+                    'motivo' => $motivo !== '' ? $motivo : 'Mapeado a hijo/envase desde unitario.',
+                    'envase_id' => intval($created['envase_id'] ?? 0),
+                ]);
+                if (is_wp_error($moved)) {
+                    wp_send_json_error(['message' => $moved->get_error_message()]);
+                }
+
+                if ($verify) {
+                    $this->close_legacy_barcode_tasks(
+                        $barcode_id,
+                        (string) ($row['codigo'] ?? ''),
+                        $destino_id
+                    );
+                    $this->close_legacy_barcode_tasks(
+                        $barcode_id,
+                        (string) ($row['codigo'] ?? ''),
+                        $product_id
+                    );
+                }
+
+                $target_product_id = $destino_id;
+                if ($requested_accion === 'create_child') {
+                    $message = 'Hijo creado y código mapeado al envase';
+                } elseif ($requested_accion === 'assign_child') {
+                    $message = 'Hijo asignado a la familia y código mapeado al envase';
+                } else {
+                    $message = 'Código movido al hijo/envase';
+                }
+                break;
+
+            default:
+                wp_send_json_error(['message' => 'Acción no reconocida: ' . $accion]);
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('barcode_remap', 'codigo_barra', $barcode_id, [
+                'actor_type' => 'human',
+                'accion' => $requested_accion,
+                'from_producto_base_id' => $product_id,
+                'destino_producto_base_id' => $destino_id ?: null,
+                'cantidad_pack' => $cantidad_pack ?: null,
+                'created' => $created,
+                'razon' => $motivo,
+            ]);
+        }
+
+        $item = $this->get_product($product_id);
+        $dest_item = ($target_product_id && $target_product_id !== $product_id)
+            ? $this->get_product($target_product_id)
+            : null;
+
+        wp_send_json_success([
+            'message' => $message,
+            'accion' => $requested_accion,
+            'created' => $created,
+            'destino_producto_base_id' => $destino_id ?: null,
+            'item' => $item,
+            'dest_item' => $dest_item,
+        ]);
+    }
+
+    /**
+     * Tareas barcode aparcadas con destino sugerido para la familia del producto.
+     */
+    public function ajax_parked_barcode_suggestions() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products') && !current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $product_id = absint($_POST['product_id'] ?? 0);
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        if (!class_exists('Riverso_Unit_Product_Service')) {
+            wp_send_json_error(['message' => 'Servicio no disponible']);
+        }
+
+        $svc = Riverso_Unit_Product_Service::get_instance();
+        if (!$grupo_id && $product_id) {
+            $ctx = $svc->resolve_family_context_for_remap($product_id);
+            $grupo_id = intval($ctx['grupo_id'] ?? 0);
+        }
+        if (!$grupo_id) {
+            wp_send_json_success(['items' => []]);
+        }
+
+        $svc->annotate_parked_barcode_tasks_for_family($grupo_id);
+        $items = $svc->list_resumable_parked_barcode_tasks($grupo_id);
+        wp_send_json_success(['items' => $items, 'grupo_id' => $grupo_id]);
     }
 
     public function ajax_get_tasks() {

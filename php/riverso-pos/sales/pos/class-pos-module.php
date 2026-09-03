@@ -660,7 +660,24 @@ class Riverso_POS_Module {
                 'factor' => $barcode['factor_a_unidad_base'] ?? 1,
                 'codigo_type' => $barcode['type'] ?? $barcode['tipo'] ?? 'ean13',
                 'trusted' => $trusted,
+                'units_per_pack' => floatval($hit['units_per_pack'] ?? $barcode['cantidad'] ?? $barcode['factor_a_unidad_base'] ?? 1),
+                'unitario' => $hit['unitario'] ?? null,
+                'grupo_id' => $hit['grupo_id'] ?? null,
             ];
+        } elseif (!empty($hit['unitario']) || !empty($hit['units_per_pack'])) {
+            $formatted['barcode_info'] = [
+                'producto_base_id' => intval($hit['producto_base_id'] ?? 0),
+                'units_per_pack' => floatval($hit['units_per_pack'] ?? 1),
+                'unitario' => $hit['unitario'] ?? null,
+                'grupo_id' => $hit['grupo_id'] ?? null,
+                'trusted' => $trusted,
+            ];
+        }
+        if (!empty($hit['unitario'])) {
+            $formatted['unitario'] = $hit['unitario'];
+        }
+        if (!empty($hit['units_per_pack'])) {
+            $formatted['units_per_pack'] = floatval($hit['units_per_pack']);
         }
         return $formatted;
     }

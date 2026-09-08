@@ -33,6 +33,11 @@ class Riverso_Competencia_Module {
         add_action('wp_ajax_riverso_competencia_stats', [$this, 'ajax_stats']);
         add_action('wp_ajax_riverso_competencia_price_history', [$this, 'ajax_price_history']);
         add_action('wp_ajax_riverso_competencia_price_series', [$this, 'ajax_price_series']);
+        add_action('wp_ajax_riverso_competencia_list_skus', [$this, 'ajax_list_skus']);
+        add_action('wp_ajax_riverso_competencia_manual_ingreso', [$this, 'ajax_manual_ingreso']);
+        add_action('wp_ajax_riverso_competencia_list_fuentes', [$this, 'ajax_list_fuentes']);
+        add_action('wp_ajax_riverso_competencia_list_sugerencias', [$this, 'ajax_list_sugerencias']);
+        add_action('wp_ajax_riverso_competencia_unit_context', [$this, 'ajax_unit_context']);
     }
 
     private function guard() {
@@ -70,7 +75,19 @@ class Riverso_Competencia_Module {
     public function ajax_suggest() {
         $this->guard();
         $limit = isset($_POST['limit']) ? (int) $_POST['limit'] : 500;
-        $result = Riverso_Competencia_Match_Service::run_suggestions(0, $limit);
+        $fuente_slug = isset($_POST['fuente']) ? sanitize_key(wp_unslash($_POST['fuente'])) : 'sande';
+        if ($fuente_slug === '') {
+            $fuente_slug = 'sande';
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $fuente_id = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}competencia_fuentes WHERE slug = %s LIMIT 1",
+            $fuente_slug
+        ));
+
+        $result = Riverso_Competencia_Match_Service::run_suggestions($fuente_id, $limit);
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('competencia.suggest', 'competencia', 0, [
                 'actor_type' => 'user',
@@ -99,16 +116,23 @@ class Riverso_Competencia_Module {
         $competencia_id = isset($_POST['producto_competencia_id']) ? (int) $_POST['producto_competencia_id'] : 0;
         $producto_base_id = isset($_POST['producto_base_id']) ? (int) $_POST['producto_base_id'] : 0;
         $nota = isset($_POST['nota']) ? sanitize_textarea_field(wp_unslash($_POST['nota'])) : '';
+        $tipo_match = isset($_POST['tipo_match']) ? sanitize_key(wp_unslash($_POST['tipo_match'])) : '';
 
         if ($competencia_id <= 0 || $producto_base_id <= 0) {
             wp_send_json_error(['message' => 'IDs inválidos'], 400);
+        }
+
+        $allowed_tipos = Riverso_Competencia_Match_Service::TIPOS_MATCH;
+        if (!in_array($tipo_match, $allowed_tipos, true)) {
+            wp_send_json_error(['message' => 'Debes seleccionar el tipo de match (Exacto, Exacto diferente U de envase, Similar u Otro).'], 400);
         }
 
         $match_id = Riverso_Competencia_Match_Service::confirm_match(
             $competencia_id,
             $producto_base_id,
             get_current_user_id(),
-            $nota
+            $nota,
+            $tipo_match
         );
 
         if (is_wp_error($match_id)) {
@@ -155,6 +179,7 @@ class Riverso_Competencia_Module {
         $competencia_id = isset($_POST['producto_competencia_id']) ? (int) $_POST['producto_competencia_id'] : 0;
         $producto_base_id = isset($_POST['producto_base_id']) ? (int) $_POST['producto_base_id'] : 0;
         $nota = isset($_POST['nota']) ? sanitize_textarea_field(wp_unslash($_POST['nota'])) : '';
+        $tipo_match = isset($_POST['tipo_match']) ? sanitize_key(wp_unslash($_POST['tipo_match'])) : '';
 
         if ($competencia_id <= 0 || $producto_base_id <= 0) {
             wp_send_json_error(['message' => 'IDs inválidos'], 400);
@@ -166,7 +191,8 @@ class Riverso_Competencia_Module {
             'manual',
             100,
             'sugerido',
-            $nota ?: 'Match manual pendiente de confirmación'
+            $nota ?: 'Match manual pendiente de confirmación',
+            $tipo_match
         );
 
         wp_send_json_success(['match_id' => $match_id]);
@@ -199,5 +225,92 @@ class Riverso_Competencia_Module {
             wp_send_json_error(['message' => 'Producto no encontrado'], 404);
         }
         wp_send_json_success($result);
+    }
+
+    public function ajax_list_skus() {
+        $this->guard();
+        $result = Riverso_Competencia_Match_Service::list_local_skus([
+            'filtro'   => isset($_POST['filtro']) ? sanitize_key(wp_unslash($_POST['filtro'])) : 'todos',
+            'search'   => isset($_POST['search']) ? sanitize_text_field(wp_unslash($_POST['search'])) : '',
+            'page'     => isset($_POST['page']) ? (int) $_POST['page'] : 1,
+            'per_page' => isset($_POST['per_page']) ? (int) $_POST['per_page'] : 25,
+        ]);
+        wp_send_json_success($result);
+    }
+
+    public function ajax_manual_ingreso() {
+        $this->guard();
+        $result = Riverso_Competencia_Match_Service::manual_ingreso([
+            'producto_base_id' => isset($_POST['producto_base_id']) ? (int) $_POST['producto_base_id'] : 0,
+            'url'              => isset($_POST['url']) ? esc_url_raw(wp_unslash($_POST['url'])) : '',
+            'precio_total'     => isset($_POST['precio_total']) ? (float) wp_unslash($_POST['precio_total']) : 0,
+            'unidad'           => isset($_POST['unidad']) ? (int) $_POST['unidad'] : 1,
+            'tipo_match'       => isset($_POST['tipo_match']) ? sanitize_key(wp_unslash($_POST['tipo_match'])) : '',
+            'nota'             => isset($_POST['nota']) ? sanitize_textarea_field(wp_unslash($_POST['nota'])) : '',
+            'user_id'          => get_current_user_id(),
+        ]);
+
+        if (is_wp_error($result)) {
+            $code = $result->get_error_code();
+            $status = ($code === 'familia_pendiente') ? 409 : 400;
+            wp_send_json_error([
+                'message'   => $result->get_error_message(),
+                'code'      => $code,
+                'blockers'  => $result->get_error_data()['blockers'] ?? [],
+                'unit_hint' => $result->get_error_data()['unit_hint'] ?? '',
+                'producto_base_id' => $result->get_error_data()['producto_base_id'] ?? null,
+                'canonical_sku'    => $result->get_error_data()['canonical_sku'] ?? null,
+            ], $status);
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('competencia.manual_ingreso', 'competencia', (int) ($result['producto_competencia_id'] ?? 0), [
+                'actor_type' => 'user',
+                'details'    => $result,
+            ]);
+        }
+
+        wp_send_json_success($result);
+    }
+
+    public function ajax_list_fuentes() {
+        $this->guard();
+        $result = Riverso_Competencia_Match_Service::list_vinculados_todas_fuentes([
+            'fuente'   => isset($_POST['fuente']) ? sanitize_key(wp_unslash($_POST['fuente'])) : '',
+            'search'   => isset($_POST['search']) ? sanitize_text_field(wp_unslash($_POST['search'])) : '',
+            'page'     => isset($_POST['page']) ? (int) $_POST['page'] : 1,
+            'per_page' => isset($_POST['per_page']) ? (int) $_POST['per_page'] : 25,
+        ]);
+        wp_send_json_success($result);
+    }
+
+    public function ajax_list_sugerencias() {
+        $this->guard();
+        $producto_base_id = isset($_POST['producto_base_id']) ? (int) $_POST['producto_base_id'] : 0;
+        if ($producto_base_id <= 0) {
+            wp_send_json_error(['message' => 'SKU inválido'], 400);
+        }
+        $result = Riverso_Competencia_Match_Service::list_sugerencias_for_sku($producto_base_id);
+        if (empty($result['producto'])) {
+            wp_send_json_error(['message' => 'SKU no encontrado'], 404);
+        }
+        wp_send_json_success($result);
+    }
+
+    public function ajax_unit_context() {
+        $this->guard();
+        $producto_base_id = isset($_POST['producto_base_id']) ? (int) $_POST['producto_base_id'] : 0;
+        $cantidad_min = isset($_POST['cantidad_min']) ? (int) $_POST['cantidad_min'] : 1;
+        if ($producto_base_id <= 0) {
+            wp_send_json_error(['message' => 'SKU inválido'], 400);
+        }
+        $family = Riverso_Competencia_Match_Service::family_confirm_blockers($producto_base_id, $cantidad_min);
+        wp_send_json_success([
+            'unit_context' => $family['unit_context'] ?? [],
+            'unit_hint'    => $family['unit_hint'] ?? '',
+            'blockers'     => $family['blockers'] ?? [],
+            'can_confirm'  => !empty($family['can_confirm']),
+            'message'      => $family['message'] ?? '',
+        ]);
     }
 }

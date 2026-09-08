@@ -55,7 +55,17 @@ class Riverso_Tpv_Module {
         if (!$this->can_export_tpv()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
-        wp_send_json_success($this->export_service->preview($this->parse_export_filters()));
+        // Evitar que warnings de otros plugins rompan el JSON del admin-ajax.
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        try {
+            wp_send_json_success($this->export_service->preview($this->parse_export_filters()));
+        } catch (Throwable $e) {
+            wp_send_json_error([
+                'message' => 'Error al calcular vista previa: ' . $e->getMessage(),
+            ]);
+        }
     }
 
     public function ajax_export_download() {

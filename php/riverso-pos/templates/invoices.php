@@ -26,6 +26,25 @@ $default_intake_mode = 'solo_costos';
         <?php endif; ?>
     </h1>
 
+    <?php
+    $from_precio = isset($_GET['from']) && sanitize_key(wp_unslash($_GET['from'])) === 'precio-folio';
+    if ($from_precio):
+        $codigo_hint = isset($_GET['codigo']) ? sanitize_text_field(wp_unslash($_GET['codigo'])) : '';
+    ?>
+    <div class="notice notice-info" id="riverso-from-precio-folio">
+        <p>
+            <strong>Venís de Procesar folios (precios).</strong>
+            <?php if ($codigo_hint !== ''): ?>
+                Vinculá el SKU al código proveedor <code><?php echo esc_html($codigo_hint); ?></code>.
+            <?php else: ?>
+                Vinculá el SKU local a cada código proveedor del folio.
+            <?php endif; ?>
+            Primero buscá el producto en el Hub; <em>esta pantalla no crea productos</em>.
+            Cuando termines, volvé a Centro de Precios y pulsá «Ya resolví — actualizar».
+        </p>
+    </div>
+    <?php endif; ?>
+
     <nav class="invoices-tab-nav">
         <button type="button" class="button invoices-main-tab active" data-panel="panel-xml">
             Facturas XML
@@ -33,7 +52,7 @@ $default_intake_mode = 'solo_costos';
         </button>
         <button type="button" class="button invoices-main-tab" data-panel="panel-scans">
             Escaneos (PDF/Imagen)
-            <span class="invoices-tab-badge" id="badge-scans-pendientes" title="Pendientes de confirmar" hidden>0</span>
+            <span class="invoices-tab-badge" id="badge-scans-pendientes" title="Falta guardar ingreso" hidden>0</span>
         </button>
         <?php if (current_user_can('riverso_process_invoices') || current_user_can('manage_options')): ?>
         <button type="button" class="button invoices-main-tab" data-panel="panel-facto-import">
@@ -84,7 +103,7 @@ $default_intake_mode = 'solo_costos';
             <option value="facto">FACTO Inbox</option>
         </select>
 
-        <input type="search" id="filter-search" class="invoices-search" placeholder="Buscar folio o monto…" autocomplete="off">
+        <input type="search" id="filter-search" class="invoices-search" placeholder="Buscar folio, monto o producto (SKU, barras, nombre…)" autocomplete="off">
         
         <button type="button" class="button" id="btn-filter">
             <span class="dashicons dashicons-filter"></span> Filtrar
@@ -488,6 +507,7 @@ $default_intake_mode = 'solo_costos';
                         <th style="width: 40px;">#</th>
                         <th style="width: 100px;">Código Prov.</th>
                         <th class="col-desc">Descripción</th>
+                        <th style="width: 100px;">Tipo</th>
                         <th style="width: 50px;">Cant.</th>
                         <th style="width: 90px;">Precio</th>
                         <th style="width: 70px;">Dsc/Rec</th>
@@ -1946,13 +1966,16 @@ jQuery(function($) {
         const isGastos = factura.documento_subtipo === 'gastos';
         const tbody = $('#detail-items');
         tbody.empty();
+        const canEditItemTipo = canEditTipo || canEditSku;
 
         (factura.items || []).forEach(function(item) {
-            const isGastoItem = isGastos || item.item_tipo === 'gasto' || item.estado === 'gasto';
+            const itemTipo = (item.item_tipo === 'flete') ? 'envio' : (item.item_tipo || 'producto');
+            const isGastoItem = isGastos || itemTipo === 'gasto' || item.estado === 'gasto';
+            const isEnvioItem = itemTipo === 'envio' || item.estado === 'envio';
             const conflict = item.sku_conflict;
             let skuCell;
-            if (isGastoItem) {
-                skuCell = '<span class="description">N/A (gasto)</span>';
+            if (isGastoItem || isEnvioItem) {
+                skuCell = '<span class="description">N/A (' + (isEnvioItem ? 'flete' : 'gasto') + ')</span>';
             } else {
                 const currentSku = item.sku_local || '';
                 const suggestedSku = item.sku_sugerido || '';
@@ -1983,7 +2006,7 @@ jQuery(function($) {
                     skuCell = (currentSku ? `<code>${escHtml(currentSku)}</code>` : '—') + suggest + warn;
                 }
             }
-            const actionsCell = (isGastoItem || item.estado === 'vinculado')
+            const actionsCell = (isGastoItem || isEnvioItem || item.estado === 'vinculado')
                 ? ''
                 : `<button class="button button-small btn-reject-item" data-item="${item.id}" title="Rechazar">
                         <span class="dashicons dashicons-no"></span>
@@ -1995,11 +2018,23 @@ jQuery(function($) {
                 : '—';
             const netoFinal = Number(item.costo_neto_final != null ? item.costo_neto_final : item.monto_total || 0);
             const brutoFinal = Number(item.costo_bruto_final != null ? item.costo_bruto_final : Math.round(netoFinal * 1.19));
+            let tipoCell;
+            if (canEditItemTipo && !isGastos) {
+                tipoCell = `<select class="detail-item-tipo" data-item="${item.id}" data-prev="${escAttr(itemTipo)}">
+                    <option value="producto"${itemTipo === 'producto' ? ' selected' : ''}>Producto</option>
+                    <option value="gasto"${itemTipo === 'gasto' ? ' selected' : ''}>Gasto</option>
+                    <option value="envio"${itemTipo === 'envio' ? ' selected' : ''}>Flete</option>
+                </select>`;
+            } else {
+                const label = itemTipo === 'envio' ? 'Flete' : (itemTipo === 'gasto' ? 'Gasto' : 'Producto');
+                tipoCell = `<span class="description">${escHtml(label)}</span>`;
+            }
             const row = $('<tr>');
             row.html(`
                 <td>${item.linea || item.numero_linea || ''}</td>
                 <td><code>${item.codigo_proveedor || '-'}</code></td>
                 <td class="col-desc">${item.nombre || item.descripcion || '—'}${item.impuesto_especifico_monto ? '<br><span class="description">Imp.esp: $' + Number(item.impuesto_especifico_monto).toLocaleString('es-CL') + '</span>' : ''}</td>
+                <td>${tipoCell}</td>
                 <td style="text-align: right;">${item.cantidad}</td>
                 <td style="text-align: right;" class="col-precio-unit">${formatUnitPrice(item.precio_unitario)}</td>
                 <td style="text-align: right;font-size:11px;">${dscRec}</td>
@@ -2018,6 +2053,47 @@ jQuery(function($) {
         if (currentDetailFactura) {
             renderDetailItems(currentDetailFactura);
         }
+    });
+
+    $(document).on('change', '.detail-item-tipo', function() {
+        const $sel = $(this);
+        const itemId = $sel.data('item');
+        const prev = $sel.data('prev');
+        const itemTipo = $sel.val();
+        $sel.prop('disabled', true);
+        $.post(ajaxurl, {
+            action: 'riverso_update_item_tipo',
+            nonce: nonce,
+            item_id: itemId,
+            item_tipo: itemTipo
+        }).done(function(r) {
+            if (!r.success) {
+                alert((r.data && r.data.message) || 'No se pudo actualizar el tipo');
+                $sel.val(prev);
+                $sel.prop('disabled', false);
+                return;
+            }
+            $sel.data('prev', itemTipo);
+            // Refrescar detalle completo para SKU/estado coherentes
+            if (currentDetailFactura && currentDetailFactura.id) {
+                $.post(ajaxurl, {
+                    action: 'riverso_get_invoice',
+                    nonce: nonce,
+                    factura_id: currentDetailFactura.id
+                }).done(function(resp) {
+                    if (resp.success) {
+                        currentDetailFactura = resp.data;
+                        renderDetailItems(currentDetailFactura);
+                    }
+                });
+            } else {
+                $sel.prop('disabled', false);
+            }
+        }).fail(function() {
+            alert('Error de red al actualizar tipo');
+            $sel.val(prev);
+            $sel.prop('disabled', false);
+        });
     });
 
     function renderDetailAudit(factura) {
@@ -2631,7 +2707,7 @@ jQuery(function($) {
         $.post(ajaxurl, { action: 'riverso_invoices_tab_counts', nonce: nonce }, function(r) {
             if (!r || !r.success || !r.data) return;
             setTabBadge($('#badge-xml-pendientes'), r.data.xml_pendientes, 'Tipo pendiente de confirmar');
-            setTabBadge($('#badge-scans-pendientes'), r.data.scans_pendientes, 'Escaneos pendientes de confirmar');
+            setTabBadge($('#badge-scans-pendientes'), r.data.scans_pendientes, 'Falta guardar ingreso');
         });
     }
     window.refreshInvoicesTabBadges = refreshInvoicesTabBadges;
@@ -2646,7 +2722,8 @@ jQuery(function($) {
     $('#badge-scans-pendientes').on('click', function(e) {
         e.stopPropagation();
         $('.invoices-main-tab[data-panel="panel-scans"]').trigger('click');
-        $('#scan-filter-estado').val('pendiente');
+        // Vaciar filtro para ver pendiente/revisado y duplicado-sobre-stub (badge en fila)
+        $('#scan-filter-estado').val('');
         if (typeof window.riversoReloadScans === 'function') {
             window.riversoReloadScans();
         }

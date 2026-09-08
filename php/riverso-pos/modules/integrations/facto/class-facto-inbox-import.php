@@ -346,6 +346,94 @@ class Riverso_Facto_Inbox_Import {
     }
 
     /**
+     * Busca facturas importadas/fusionadas desde Inbox FACTO por folio o producto contenido.
+     *
+     * @param string $search
+     * @param int    $limit
+     * @return array{rows:array,total:int}
+     */
+    public function search_imported_folios($search, $limit = 40) {
+        global $wpdb;
+
+        $search = trim((string) $search);
+        $limit = max(1, min(100, absint($limit)));
+        if ($search === '') {
+            return ['rows' => [], 'total' => 0];
+        }
+
+        $prefix = $wpdb->prefix . 'riverso_';
+        $like = '%' . $wpdb->esc_like($search) . '%';
+
+        $where = [
+            "m.state IN ('imported', 'merged', 'duplicate')",
+            'm.factura_id IS NOT NULL',
+            'm.factura_id > 0',
+        ];
+        $params = [];
+
+        $search_parts = [
+            'CAST(f.folio AS CHAR) LIKE %s',
+            'p.nombre LIKE %s',
+            'f.razon_social_emisor LIKE %s',
+            'CAST(m.folio AS CHAR) LIKE %s',
+        ];
+        $params[] = $like;
+        $params[] = $like;
+        $params[] = $like;
+        $params[] = $like;
+
+        if (class_exists('Riverso_Invoice_Module')) {
+            $product_match = Riverso_Invoice_Module::sql_factura_contains_product('f', $search);
+            if ($product_match) {
+                $search_parts[] = $product_match['sql'];
+                foreach ($product_match['params'] as $p) {
+                    $params[] = $p;
+                }
+            }
+        }
+
+        $where[] = '(' . implode(' OR ', $search_parts) . ')';
+        $where_sql = implode(' AND ', $where);
+
+        $from_sql = "FROM {$prefix}facturas f
+             INNER JOIN (
+                SELECT factura_id, MAX(id) AS map_id
+                FROM {$prefix}facto_inbox_map
+                WHERE state IN ('imported', 'merged', 'duplicate')
+                  AND factura_id IS NOT NULL
+                  AND factura_id > 0
+                GROUP BY factura_id
+             ) mx ON mx.factura_id = f.id
+             INNER JOIN {$prefix}facto_inbox_map m ON m.id = mx.map_id
+             LEFT JOIN {$prefix}proveedores p ON p.id = f.proveedor_id
+             WHERE {$where_sql}";
+
+        $count_sql = "SELECT COUNT(*) {$from_sql}";
+        $total = (int) $wpdb->get_var($wpdb->prepare($count_sql, $params));
+
+        $list_sql = "SELECT f.id, f.folio, f.tipo_dte, f.fecha_emision, f.estado, f.monto_total,
+                    f.origen_ingreso, f.created_at, p.nombre AS proveedor_nombre,
+                    m.state AS inbox_state, m.inbox_document_id
+             {$from_sql}
+             ORDER BY f.fecha_emision DESC, f.id DESC
+             LIMIT %d";
+        $list_params = array_merge($params, [$limit]);
+        $rows = $wpdb->get_results($wpdb->prepare($list_sql, $list_params), ARRAY_A) ?: [];
+
+        foreach ($rows as &$row) {
+            $row['id'] = (int) $row['id'];
+            $row['monto_total'] = (float) ($row['monto_total'] ?? 0);
+            $row['inbox_document_id'] = (int) ($row['inbox_document_id'] ?? 0);
+        }
+        unset($row);
+
+        return [
+            'rows'  => $rows,
+            'total' => $total,
+        ];
+    }
+
+    /**
      * @return array|WP_Error
      */
     private function import_single_document(array $item, $force_reprocess = false) {

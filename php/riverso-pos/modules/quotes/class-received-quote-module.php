@@ -766,6 +766,64 @@ class Riverso_POS_Received_Quote_Module {
             }
         }
 
+        // 1b. Mapeo canónico (producto_proveedor / supplier links / codigos)
+        if (empty($matches) && $item->codigo_proveedor && class_exists('Riverso_Supplier_Links_Module')) {
+            $proveedor_id = 0;
+            if (!empty($item->cotizacion_id)) {
+                $proveedor_id = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT proveedor_id FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+                    (int) $item->cotizacion_id
+                ));
+            }
+            $lookup = Riverso_Supplier_Links_Module::get_instance()->lookup_by_code(
+                $item->codigo_proveedor,
+                $proveedor_id ?: null
+            );
+            if (!empty($lookup['found'])) {
+                $sku = '';
+                $product_id = 0;
+                $variation_id = 0;
+                $nombre = '';
+                $domain = $lookup['domain'] ?? null;
+                if (is_array($domain) && !empty($domain['canonical_sku'])) {
+                    $sku = (string) $domain['canonical_sku'];
+                    $product_id = absint($domain['woocommerce_product_id'] ?? 0);
+                    $variation_id = absint($domain['woocommerce_variation_id'] ?? 0);
+                    $nombre = (string) ($domain['nombre_canonico'] ?? '');
+                }
+                if ($sku === '' && !empty($lookup['product'])) {
+                    $sku = (string) ($lookup['product']['sku'] ?? '');
+                    $product_id = absint($lookup['product']['id'] ?? 0);
+                    $nombre = (string) ($lookup['product']['name'] ?? '');
+                }
+                if ($sku === '' && !empty($lookup['legacy']['sku_local'])) {
+                    $sku = (string) $lookup['legacy']['sku_local'];
+                    $product_id = absint($lookup['legacy']['product_id'] ?? 0);
+                    $variation_id = absint($lookup['legacy']['variation_id'] ?? 0);
+                }
+                if ($sku === '' && !empty($lookup['link']['internal_sku'])) {
+                    $sku = (string) $lookup['link']['internal_sku'];
+                    $product_id = absint($lookup['link']['product_id'] ?? 0);
+                    $variation_id = absint($lookup['link']['variation_id'] ?? 0);
+                }
+                if ($sku !== '') {
+                    if (!$product_id && function_exists('wc_get_product_id_by_sku')) {
+                        $product_id = (int) wc_get_product_id_by_sku($sku);
+                    }
+                    $purchase_price = $product_id ? get_post_meta($product_id, '_purchase_price', true) : null;
+                    $matches[] = (object) [
+                        'product_id' => $product_id,
+                        'variation_id' => $variation_id,
+                        'nombre' => $nombre ?: $sku,
+                        'sku' => $sku,
+                        'purchase_price' => $purchase_price,
+                    ];
+                    $match_status = 'matched';
+                    $confidence = (!empty($lookup['source']) && $lookup['source'] === 'canonical_domain') ? 98 : 92;
+                }
+            }
+        }
+
         // 2. Buscar por código proveedor en enlaces existentes
         if (empty($matches) && $item->codigo_proveedor) {
             $code_match = $wpdb->get_row($wpdb->prepare("

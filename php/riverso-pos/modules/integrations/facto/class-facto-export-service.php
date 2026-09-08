@@ -66,12 +66,17 @@ class Riverso_Facto_Export_Service {
      * @return array<string, mixed>
      */
     public function preview(array $filters) {
+        @ini_set('memory_limit', '512M');
+        @set_time_limit(180);
+
         $modo = $this->normalize_mode($filters['modo'] ?? self::MODE_UPSERT);
         $rows = $this->build_rows($filters);
         $validation = $this->validate_rows($rows, $modo);
         $total = count($rows);
         $tandas = $total > 0 ? max(1, (int) ceil($total / self::CHUNK_SIZE)) : 0;
         $pending = $this->get_pending_crud_summary(15);
+        $include_stock = $this->resolve_include_stock_flag($filters, $rows);
+        $changes = $this->build_preview_changes($rows, $include_stock);
 
         $replace_blocked = false;
         $replace_reason = '';
@@ -96,12 +101,178 @@ class Riverso_Facto_Export_Service {
             'mapped_count'      => $this->count_mapped_skus($rows),
             'sample_errors'     => array_slice($validation['errors'], 0, 20),
             'pending'           => $pending,
+            'sku_changes'       => $this->get_sku_changes_summary(15),
             'empty_hint'        => $total > 0 ? '' : $this->build_empty_hint($filters, $pending),
             'hydrated_count'    => count(array_filter($rows, static function ($row) {
                 return !empty($row['_hydrated_from_facto']);
             })),
-            'include_stock'     => $this->resolve_include_stock_flag($filters, $rows),
+            'include_stock'     => $include_stock,
+            'has_baseline'      => !empty($changes['has_baseline']),
+            'changed_count'     => (int) ($changes['changed_count'] ?? 0),
+            'create_count'      => (int) ($changes['create_count'] ?? 0),
+            'update_count'      => (int) ($changes['update_count'] ?? 0),
+            'unchanged_count'   => (int) ($changes['unchanged_count'] ?? 0),
+            'preview_rows'      => $changes['preview_rows'] ?? [],
+            'preview_truncated'  => !empty($changes['preview_truncated']),
         ];
+    }
+
+    /**
+     * Compara filas del export vs último baseline aplicado y arma diffs por columna.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<string, mixed>
+     */
+    private function build_preview_changes(array $rows, $include_stock = false) {
+        $prev_by_sku = $this->get_last_applied_payloads();
+        $has_baseline = !empty($prev_by_sku);
+        $fields = $this->preview_diff_fields((bool) $include_stock);
+
+        $preview_limit = 120;
+        $preview_rows = [];
+        $create_count = 0;
+        $update_count = 0;
+        $unchanged_count = 0;
+        $changed_count = 0;
+
+        foreach ($rows as $row) {
+            $sku = trim((string) ($row['SKU'] ?? ''));
+            $snapshot = $this->build_row_snapshot($row);
+            $mapped = !empty($row['_facto_product_id']);
+            $prev = ($sku !== '' && isset($prev_by_sku[$sku])) ? $prev_by_sku[$sku] : null;
+
+            // CREAR = nunca exportado por Excel aplicado.
+            // facto_product_id solo indica sync API; no implica lote Excel previo.
+            if ($prev === null) {
+                $accion = 'CREAR';
+                $diffs = [];
+                foreach ($fields as $field) {
+                    $to = $snapshot[$field] ?? '';
+                    if ($this->normalize_diff_value($to) === '') {
+                        continue;
+                    }
+                    $diffs[] = [
+                        'campo'    => $field,
+                        'antes'    => '',
+                        'despues'  => $to,
+                    ];
+                }
+                $create_count++;
+                $changed_count++;
+            } else {
+                $raw_diffs = $this->diff_payloads($prev, $snapshot, $fields);
+                $diffs = [];
+                foreach ($raw_diffs as $d) {
+                    $diffs[] = [
+                        'campo'   => $d['field'],
+                        'antes'   => $d['before'],
+                        'despues' => $d['after'],
+                    ];
+                }
+                if (!empty($diffs)) {
+                    $accion = 'EDITAR';
+                    $update_count++;
+                    $changed_count++;
+                } else {
+                    $accion = 'EDITAR';
+                    $unchanged_count++;
+                    continue;
+                }
+            }
+
+            if (count($preview_rows) < $preview_limit) {
+                $preview_rows[] = [
+                    'accion'     => $accion,
+                    'sku'        => $sku,
+                    'sku_local'  => (string) ($row['_sku_local'] ?? $sku),
+                    'nombre'     => (string) ($row['Nombre'] ?? ''),
+                    'precio'     => (string) ($row['Venta: Precio total'] ?? ''),
+                    'mapped'     => $mapped,
+                    'diffs'      => $diffs,
+                ];
+            }
+        }
+
+        return [
+            'has_baseline'     => $has_baseline,
+            'changed_count'    => $changed_count,
+            'create_count'     => $create_count,
+            'update_count'     => $update_count,
+            'unchanged_count'  => $unchanged_count,
+            'preview_rows'     => $preview_rows,
+            'preview_truncated' => $changed_count > count($preview_rows),
+        ];
+    }
+
+    /**
+     * @return string[]
+     */
+    private function preview_diff_fields($include_stock = false) {
+        $fields = [
+            'Categoria',
+            'Nombre',
+            'SKU',
+            'Marca',
+            'Modelo',
+            'Unidad',
+            'Código de barras',
+            'Costo neto',
+            'Venta: Precio neto',
+            'Venta: afecto/exento de IVA',
+            'Venta: Monto IVA',
+            'Venta: Precio total',
+            'Stock mínimo',
+            'Descripción',
+            'Descripción ecommerce',
+        ];
+        if ($include_stock) {
+            $fields[] = 'Disponibilidad en: Bodega general';
+        }
+        return $fields;
+    }
+
+    /**
+     * Payloads del baseline FACTO por SKU: fusión de TODOS los lotes aplicados
+     * en orden cronológico (el más reciente gana por SKU).
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function get_last_applied_payloads() {
+        global $wpdb;
+        $batch_table = $this->table('facto_export_batches');
+        $items_table = $this->table('facto_export_items');
+
+        $batch_ids = $wpdb->get_col(
+            "SELECT id FROM {$batch_table}
+             WHERE estado = 'aplicado'
+             ORDER BY applied_at ASC, id ASC"
+        );
+        if (!$batch_ids) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($batch_ids as $batch_id) {
+            $batch_id = (int) $batch_id;
+            if ($batch_id <= 0) {
+                continue;
+            }
+            $rows = $wpdb->get_results($wpdb->prepare(
+                "SELECT sku, payload_json FROM {$items_table} WHERE batch_id = %d",
+                $batch_id
+            ), ARRAY_A) ?: [];
+            foreach ($rows as $row) {
+                $sku = trim((string) ($row['sku'] ?? ''));
+                if ($sku === '') {
+                    continue;
+                }
+                $payload = $this->decode_payload_json($row['payload_json'] ?? null);
+                if (!empty($payload)) {
+                    $out[$sku] = $payload;
+                }
+            }
+        }
+        return $out;
     }
 
     /**
@@ -156,31 +327,12 @@ class Riverso_Facto_Export_Service {
         $map_table = $this->table('facto_producto_map');
         $pb_table = $this->table('producto_base');
 
-        $total = (int) $wpdb->get_var(
-            "SELECT COUNT(*)
-             FROM {$map_table} fm
-             INNER JOIN {$pb_table} pb ON pb.id = fm.producto_base_id
-             WHERE fm.sync_state = 'pendiente_excel'
-               AND pb.deleted_at IS NULL
-               AND pb.canonical_sku IS NOT NULL
-               AND pb.canonical_sku <> ''"
-        );
+        // CREAR vs EDITAR según baseline Excel aplicado (no según facto_product_id de la API).
+        $applied_skus = $this->get_last_applied_payloads();
+        $pending_create = 0;
+        $pending_mapped = 0;
 
-        $pending_mapped = (int) $wpdb->get_var(
-            "SELECT COUNT(*)
-             FROM {$map_table} fm
-             INNER JOIN {$pb_table} pb ON pb.id = fm.producto_base_id
-             WHERE fm.sync_state = 'pendiente_excel'
-               AND fm.facto_product_id IS NOT NULL
-               AND pb.deleted_at IS NULL
-               AND pb.canonical_sku IS NOT NULL
-               AND pb.canonical_sku <> ''"
-        );
-
-        $pending_create = max(0, $total - $pending_mapped);
-
-        $sample_limit = max(1, min(50, absint($sample_limit)));
-        $rows = $wpdb->get_results($wpdb->prepare(
+        $all_pending = $wpdb->get_results(
             "SELECT fm.facto_sku, fm.facto_product_id, pb.canonical_sku, pb.nombre_canonico, pb.marca, fm.updated_at
              FROM {$map_table} fm
              INNER JOIN {$pb_table} pb ON pb.id = fm.producto_base_id
@@ -188,19 +340,33 @@ class Riverso_Facto_Export_Service {
                AND pb.deleted_at IS NULL
                AND pb.canonical_sku IS NOT NULL
                AND pb.canonical_sku <> ''
-             ORDER BY fm.updated_at DESC
-             LIMIT %d",
-            $sample_limit
-        ), ARRAY_A) ?: [];
+             ORDER BY fm.updated_at DESC",
+            ARRAY_A
+        ) ?: [];
+
+        $total = count($all_pending);
+
+        foreach ($all_pending as $row) {
+            $sku = trim((string) ($row['facto_sku'] ?: $row['canonical_sku'] ?? ''));
+            if ($sku !== '' && isset($applied_skus[$sku])) {
+                $pending_mapped++;
+            } else {
+                $pending_create++;
+            }
+        }
+
+        $sample_limit = max(1, min(50, absint($sample_limit)));
+        $rows = array_slice($all_pending, 0, $sample_limit);
 
         $samples = [];
         foreach ($rows as $row) {
+            $sku = trim((string) ($row['facto_sku'] ?: $row['canonical_sku'] ?? ''));
             $samples[] = [
-                'sku'     => trim((string) ($row['facto_sku'] ?: $row['canonical_sku'] ?? '')),
+                'sku'     => $sku,
                 'nombre'  => (string) ($row['nombre_canonico'] ?? ''),
                 'marca'   => (string) ($row['marca'] ?? ''),
                 'updated' => (string) ($row['updated_at'] ?? ''),
-                'accion'  => !empty($row['facto_product_id']) ? 'EDITAR' : 'CREAR',
+                'accion'  => ($sku !== '' && isset($applied_skus[$sku])) ? 'EDITAR' : 'CREAR',
             ];
         }
 
@@ -227,6 +393,151 @@ class Riverso_Facto_Export_Service {
                 )
                 : 'No hay productos marcados como pendientes de export.',
         ];
+    }
+
+    /**
+     * Cambios de SKU que FACTO no puede aplicar por Excel CRUD (rename manual).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function list_sku_changes($limit = 500) {
+        global $wpdb;
+        $map_table = $this->table('facto_producto_map');
+        $pb_table = $this->table('producto_base');
+        $limit = max(1, min(2000, absint($limit)));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT
+                pb.id AS producto_base_id,
+                pb.canonical_sku AS sku_nuevo,
+                pb.nombre_canonico,
+                pb.marca,
+                fm.facto_sku AS sku_anterior,
+                fm.facto_product_id,
+                fm.sync_state,
+                fm.last_error,
+                fm.updated_at
+             FROM {$map_table} fm
+             INNER JOIN {$pb_table} pb ON pb.id = fm.producto_base_id
+             WHERE pb.deleted_at IS NULL
+               AND pb.archived_at IS NULL
+               AND pb.canonical_sku IS NOT NULL AND pb.canonical_sku <> ''
+               AND fm.facto_sku IS NOT NULL AND fm.facto_sku <> ''
+               AND fm.facto_sku <> pb.canonical_sku
+               AND fm.facto_product_id IS NOT NULL
+             ORDER BY fm.updated_at DESC
+             LIMIT %d",
+            $limit
+        ), ARRAY_A) ?: [];
+
+        $out = [];
+        foreach ($rows as $row) {
+            $old = trim((string) ($row['sku_anterior'] ?? ''));
+            $new = trim((string) ($row['sku_nuevo'] ?? ''));
+            if ($old === '' || $new === '' || $old === $new) {
+                continue;
+            }
+            $out[] = [
+                'producto_base_id' => (int) ($row['producto_base_id'] ?? 0),
+                'sku_anterior'     => $old,
+                'sku_nuevo'        => $new,
+                'nombre'           => (string) ($row['nombre_canonico'] ?? ''),
+                'marca'            => (string) ($row['marca'] ?? ''),
+                'facto_product_id' => (int) ($row['facto_product_id'] ?? 0),
+                'sync_state'       => (string) ($row['sync_state'] ?? ''),
+                'last_error'       => (string) ($row['last_error'] ?? ''),
+                'updated_at'       => (string) ($row['updated_at'] ?? ''),
+                'instruccion'      => sprintf(
+                    'En FACTO, cambiar manualmente el SKU del producto (ID %d) de "%s" a "%s". El Excel CRUD no renombra SKUs.',
+                    (int) ($row['facto_product_id'] ?? 0),
+                    $old,
+                    $new
+                ),
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function get_sku_changes_summary($sample_limit = 25) {
+        $all = $this->list_sku_changes(2000);
+        $sample_limit = max(1, min(50, absint($sample_limit)));
+        return [
+            'total'   => count($all),
+            'samples' => array_slice($all, 0, $sample_limit),
+            'message' => count($all) > 0
+                ? sprintf(
+                    '%d cambio(s) de SKU requieren acción manual en FACTO (SKU anterior → SKU nuevo).',
+                    count($all)
+                )
+                : 'No hay cambios de SKU pendientes de acción manual en FACTO.',
+        ];
+    }
+
+    /**
+     * Excel aparte con instrucciones de rename (no es plantilla CRUD FACTO).
+     *
+     * @return array<string, mixed>|WP_Error
+     */
+    public function generate_sku_changes_file() {
+        $changes = $this->list_sku_changes(2000);
+        if (empty($changes)) {
+            return new WP_Error('no_sku_changes', 'No hay cambios de SKU para exportar.');
+        }
+
+        $headers = [
+            'SKU_Anterior',
+            'SKU_Nuevo',
+            'Nombre',
+            'Marca',
+            'FACTO_Product_ID',
+            'Instruccion',
+        ];
+        $sheet = [$headers];
+        foreach ($changes as $row) {
+            $sheet[] = [
+                $row['sku_anterior'],
+                $row['sku_nuevo'],
+                $row['nombre'],
+                $row['marca'],
+                $row['facto_product_id'] ?: '',
+                $row['instruccion'],
+            ];
+        }
+
+        $writer = new Riverso_Xlsx_Writer('Cambios de SKU');
+        $writer->set_rows($sheet);
+        $binary = $writer->to_string();
+        if ($binary === false) {
+            return new WP_Error('xlsx_failed', 'No se pudo generar el archivo Excel (ZipArchive).');
+        }
+
+        return [
+            'filename' => 'facto-cambios-sku_' . gmdate('Y-m-d') . '.xlsx',
+            'binary'   => $binary,
+            'total'    => count($changes),
+        ];
+    }
+
+    /**
+     * Mapa sku_anterior → sku_nuevo (para TPV y otros).
+     *
+     * @return array<string, array{sku_nuevo: string, producto_base_id: int, nombre: string}>
+     */
+    public function get_sku_remap_index() {
+        $index = [];
+        foreach ($this->list_sku_changes(2000) as $row) {
+            $old = $row['sku_anterior'];
+            $index[$old] = [
+                'sku_nuevo'        => $row['sku_nuevo'],
+                'producto_base_id' => $row['producto_base_id'],
+                'nombre'           => $row['nombre'],
+                'facto_product_id' => $row['facto_product_id'],
+            ];
+        }
+        return $index;
     }
 
     /**
@@ -344,6 +655,7 @@ class Riverso_Facto_Export_Service {
                 pl.c_ref,
                 pl.p_asignado,
                 fm.facto_product_id,
+                fm.facto_sku,
                 fm.sync_state AS facto_sync_state,
                 psc.stock_minimo AS stock_minimo_config,
                 lpr_min.stock_minimo AS legacy_stock_minimo,
@@ -448,10 +760,21 @@ class Riverso_Facto_Export_Service {
         $desc_ecommerce = $this->derive_ecommerce_description($item);
         $descripcion = trim((string) ($item['descripcion_facto'] ?? ''));
 
+        $sku_local = trim((string) ($item['canonical_sku'] ?? ''));
+        $sku_facto = trim((string) ($item['facto_sku'] ?? ''));
+        $sync_state = (string) ($item['facto_sync_state'] ?? '');
+        $sku_export = $sku_local;
+        $sku_drift = false;
+        // Con drift: el Excel CRUD debe apuntar al SKU que aún existe en FACTO (el anterior).
+        if ($sku_facto !== '' && $sku_local !== '' && $sku_facto !== $sku_local && !empty($item['facto_product_id'])) {
+            $sku_export = $sku_facto;
+            $sku_drift = true;
+        }
+
         return [
             'Categoria'                          => $categoria,
             'Nombre'                             => $this->sanitize_facto_name($item['nombre_canonico'] ?? ''),
-            'SKU'                                => trim((string) ($item['canonical_sku'] ?? '')),
+            'SKU'                                => $sku_export,
             'Marca'                              => trim((string) ($item['marca'] ?? '')),
             'Modelo'                             => trim((string) ($item['modelo'] ?? '')),
             'Unidad'                             => $this->map_unit($item['unidad_base'] ?? 'unidad'),
@@ -473,7 +796,10 @@ class Riverso_Facto_Export_Service {
             'Información Adicional 3'            => '',
             '_producto_base_id'                  => (int) ($item['id'] ?? 0),
             '_facto_product_id'                  => (int) ($item['facto_product_id'] ?? 0),
-            '_facto_sync_state'                  => (string) ($item['facto_sync_state'] ?? ''),
+            '_facto_sync_state'                  => $sync_state,
+            '_sku_local'                         => $sku_local,
+            '_sku_drift'                         => $sku_drift,
+            '_sku_nuevo'                         => $sku_drift ? $sku_local : '',
             '_stock_local_total'                 => $this->resolve_local_stock_total_from_item($item),
             '_stock_by_location'                 => [],
             '_local_has_price'                   => ($precio_total !== '' && $precio_total !== null),
@@ -772,6 +1098,19 @@ class Riverso_Facto_Export_Service {
         }
         if (($batch['estado'] ?? '') !== 'generado') {
             return new WP_Error('batch_not_markable', 'Solo se pueden marcar lotes en estado generado');
+        }
+
+        $newer_applied = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$table}
+             WHERE estado = 'aplicado' AND id > %d
+             ORDER BY id DESC LIMIT 1",
+            $batch_id
+        ));
+        if ($newer_applied > 0) {
+            return new WP_Error(
+                'batch_superseded',
+                'No se puede marcar el lote #' . $batch_id . ': ya hay un lote posterior aplicado (#' . $newer_applied . ').'
+            );
         }
 
         $wpdb->update($table, [
@@ -1117,8 +1456,12 @@ class Riverso_Facto_Export_Service {
             $rows_out[] = $row_out;
         }
 
+        $max_applied_id = (int) $wpdb->get_var(
+            "SELECT MAX(id) FROM {$batch_table} WHERE estado = 'aplicado'"
+        );
+
         return [
-            'batch'           => $this->format_batch_row($batch),
+            'batch'           => $this->format_batch_row($batch, $max_applied_id),
             'items'           => $rows_out,
             'total_items'     => count($rows_out),
             'changed_count'   => $changed_count,
@@ -1238,22 +1581,30 @@ class Riverso_Facto_Export_Service {
 
     /**
      * @param array<string, mixed> $batch
+     * @param int                  $max_applied_id ID del lote aplicado más reciente (0 si no hay)
      * @return array<string, mixed>
      */
-    private function format_batch_row(array $batch) {
+    private function format_batch_row(array $batch, $max_applied_id = 0) {
+        $id = (int) ($batch['id'] ?? 0);
+        $estado = (string) ($batch['estado'] ?? '');
+        $max_applied_id = (int) $max_applied_id;
+        // No marcar como aplicado un lote viejo si ya hay uno posterior aplicado.
+        $can_mark = $estado === 'generado' && ($max_applied_id <= 0 || $id > $max_applied_id);
+
         return [
-            'id'                     => (int) ($batch['id'] ?? 0),
+            'id'                     => $id,
             'modo'                   => (string) ($batch['modo'] ?? ''),
             'total_filas'            => (int) ($batch['total_filas'] ?? 0),
             'tanda'                  => (int) ($batch['tanda'] ?? 1),
             'tandas_total'           => (int) ($batch['tandas_total'] ?? 1),
-            'estado'                 => (string) ($batch['estado'] ?? ''),
+            'estado'                 => $estado,
             'created_at'             => (string) ($batch['created_at'] ?? ''),
             'applied_at'             => (string) ($batch['applied_at'] ?? ''),
             'notas'                  => (string) ($batch['notas'] ?? ''),
             'superseded_by_batch_id' => (int) ($batch['superseded_by_batch_id'] ?? 0) ?: null,
-            'can_mark_applied'       => ($batch['estado'] ?? '') === 'generado',
-            'can_unmark_applied'     => ($batch['estado'] ?? '') === 'aplicado',
+            'can_mark_applied'       => $can_mark,
+            'blocked_by_newer'       => $estado === 'generado' && $max_applied_id > 0 && $id < $max_applied_id,
+            'can_unmark_applied'     => $estado === 'aplicado',
         ];
     }
 
@@ -1333,8 +1684,12 @@ class Riverso_Facto_Export_Service {
             max(1, min(100, absint($limit)))
         ), ARRAY_A) ?: [];
 
-        return array_map(function ($batch) {
-            return $this->format_batch_row($batch);
+        $max_applied_id = (int) $wpdb->get_var(
+            "SELECT MAX(id) FROM {$table} WHERE estado = 'aplicado'"
+        );
+
+        return array_map(function ($batch) use ($max_applied_id) {
+            return $this->format_batch_row($batch, $max_applied_id);
         }, $rows);
     }
 
@@ -1690,7 +2045,10 @@ class Riverso_Facto_Export_Service {
 
     private function sanitize_facto_name($name) {
         $name = wp_strip_all_tags((string) $name);
-        return trim(preg_replace('/[^\p{L}\p{N}\s\.\,\-\_\/\(\)\+\'\"&]/u', '', $name));
+        $name = preg_replace('/[^\p{L}\p{N}\s\.\,\-\_\/\(\)\+\'\"&]/u', '', $name);
+        // FACTO no admite dos espacios seguidos: colapsa a uno.
+        $name = preg_replace('/\s+/u', ' ', (string) $name);
+        return trim((string) $name);
     }
 
     private function derive_categoria_from_woo($woo_id) {
@@ -1746,27 +2104,41 @@ class Riverso_Facto_Export_Service {
     }
 
     /**
+     * Hashes del baseline FACTO por SKU: fusión de TODOS los lotes aplicados
+     * en orden cronológico (el más reciente gana por SKU).
+     * Usar solo el último lote rompe «Solo filas cambiadas» tras Excel incrementales.
+     *
      * @return array<string, string> sku => row_hash
      */
     private function get_last_applied_row_hashes() {
         global $wpdb;
         $batch_table = $this->table('facto_export_batches');
         $items_table = $this->table('facto_export_items');
-        $last_id = (int) $wpdb->get_var(
-            "SELECT id FROM {$batch_table} WHERE estado = 'aplicado' ORDER BY applied_at DESC, id DESC LIMIT 1"
+
+        $batch_ids = $wpdb->get_col(
+            "SELECT id FROM {$batch_table}
+             WHERE estado = 'aplicado'
+             ORDER BY applied_at ASC, id ASC"
         );
-        if ($last_id <= 0) {
+        if (!$batch_ids) {
             return [];
         }
-        $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT sku, row_hash FROM {$items_table} WHERE batch_id = %d",
-            $last_id
-        ), ARRAY_A);
+
         $map = [];
-        foreach ($rows as $r) {
-            $sku = trim((string) ($r['sku'] ?? ''));
-            if ($sku !== '') {
-                $map[$sku] = (string) ($r['row_hash'] ?? '');
+        foreach ($batch_ids as $batch_id) {
+            $batch_id = (int) $batch_id;
+            if ($batch_id <= 0) {
+                continue;
+            }
+            $rows = $wpdb->get_results($wpdb->prepare(
+                "SELECT sku, row_hash FROM {$items_table} WHERE batch_id = %d",
+                $batch_id
+            ), ARRAY_A) ?: [];
+            foreach ($rows as $r) {
+                $sku = trim((string) ($r['sku'] ?? ''));
+                if ($sku !== '') {
+                    $map[$sku] = (string) ($r['row_hash'] ?? '');
+                }
             }
         }
         return $map;

@@ -1,6 +1,6 @@
 <?php
 /**
- * Competencia — pestañas por fuente + matching Sande supervisado.
+ * Competencia — matching por fuente + Ingreso Manual + Fuentes.
  *
  * @package Riverso_POS
  */
@@ -10,11 +10,24 @@ if (!defined('ABSPATH')) {
 }
 
 $nonce = wp_create_nonce('riverso_pos_nonce');
+$vista = isset($_GET['vista']) ? sanitize_key(wp_unslash($_GET['vista'])) : '';
 $fuente = isset($_GET['fuente']) ? sanitize_key(wp_unslash($_GET['fuente'])) : 'sande';
 if ($fuente === '') {
     $fuente = 'sande';
 }
+
+if (in_array($vista, ['ingreso', 'fuentes'], true)) {
+    $modo = $vista;
+} else {
+    $modo = 'matching';
+    $vista = '';
+}
+
+$fuente_nombre = ($fuente === 'dimafi') ? 'DIMAFI' : 'Sande';
 $base_url = admin_url('admin.php?page=riverso-pos-competencia');
+$ingreso_url = add_query_arg('vista', 'ingreso', $base_url);
+$fuentes_url = add_query_arg('vista', 'fuentes', $base_url);
+$now_display = current_time('Y-m-d H:i:s');
 ?>
 <div class="wrap riverso-competencia-wrap">
     <h1><?php esc_html_e('Competencia', 'riverso-pos'); ?></h1>
@@ -25,15 +38,988 @@ $base_url = admin_url('admin.php?page=riverso-pos-competencia');
 
     <h2 class="nav-tab-wrapper" style="margin-top:16px;">
         <a href="<?php echo esc_url(add_query_arg('fuente', 'sande', $base_url)); ?>"
-           class="nav-tab <?php echo $fuente === 'sande' ? 'nav-tab-active' : ''; ?>">Sande</a>
+           class="nav-tab <?php echo ($modo === 'matching' && $fuente === 'sande') ? 'nav-tab-active' : ''; ?>">Sande</a>
+        <a href="<?php echo esc_url(add_query_arg('fuente', 'dimafi', $base_url)); ?>"
+           class="nav-tab <?php echo ($modo === 'matching' && $fuente === 'dimafi') ? 'nav-tab-active' : ''; ?>">DIMAFI</a>
         <a href="#" class="nav-tab" style="opacity:.55;cursor:not-allowed;"
            title="<?php esc_attr_e('Próximamente', 'riverso-pos'); ?>"
            onclick="return false;">Otras fuentes <span class="description">[WIP]</span></a>
+        <a href="<?php echo esc_url($ingreso_url); ?>"
+           class="nav-tab <?php echo $modo === 'ingreso' ? 'nav-tab-active' : ''; ?>">Ingreso Manual</a>
+        <a href="<?php echo esc_url($fuentes_url); ?>"
+           class="nav-tab <?php echo $modo === 'fuentes' ? 'nav-tab-active' : ''; ?>">Fuentes</a>
     </h2>
 
-    <?php if ($fuente !== 'sande') : ?>
-        <div class="notice notice-info"><p><?php esc_html_e('Esta fuente aún no está disponible.', 'riverso-pos'); ?></p></div>
-    <?php else : ?>
+<?php if ($modo === 'ingreso') : ?>
+
+    <div class="card" style="max-width:1200px;padding:16px 20px;margin-top:12px;">
+        <h2 style="margin-top:0;">Ingreso Manual</h2>
+        <p class="description" style="margin-top:0;">
+            Vincula un SKU local con una URL de competidor y registra el precio. La fuente se detecta por el dominio (Sande, DIMAFI u otra → Manual).
+        </p>
+        <div id="ci-form-msg" style="display:none;margin-bottom:12px;"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;align-items:end;">
+            <label style="grid-column:1 / -1;">
+                Buscar SKU local
+                <input type="search" id="ci-sku-search" class="regular-text" style="width:100%;" placeholder="SKU, nombre o código…">
+            </label>
+            <ul id="ci-sku-results" style="grid-column:1 / -1;max-height:160px;overflow:auto;margin:0;padding-left:18px;display:none;"></ul>
+            <div style="grid-column:1 / -1;padding:10px 12px;background:#f6f7f7;border-left:4px solid #2271b1;">
+                <strong>SKU seleccionado:</strong>
+                <span id="ci-selected-label" class="description">Ninguno</span>
+                <input type="hidden" id="ci-producto-base-id" value="">
+                <input type="hidden" id="ci-producto-nombre" value="">
+            </div>
+            <label style="grid-column:1 / -1;">
+                URL del competidor
+                <input type="url" id="ci-url" class="regular-text" style="width:100%;" placeholder="https://…">
+            </label>
+            <label>
+                Precio total (bruto)
+                <input type="number" id="ci-precio" class="regular-text" style="width:100%;" min="0" step="1" placeholder="0">
+            </label>
+            <label>
+                Unidad (cantidad mín.)
+                <input type="number" id="ci-unidad" class="regular-text" style="width:100%;" min="1" step="1" value="1">
+            </label>
+            <label>
+                Tipo de match <span style="color:#d63638;">*</span>
+                <select id="ci-tipo-match" style="width:100%;">
+                    <option value="">— seleccionar —</option>
+                                        <option value="exacto">Exacto (mismo producto)</option>
+                    <option value="exacto_envase">Exacto diferente U de envase</option>
+                    <option value="similar">Similar (equivalente funcional)</option>
+                    <option value="otro">Otro</option>
+                </select>
+                <div id="ci-tipo-warnings" style="display:none;margin-top:8px;"></div>
+            </label>
+            <label>
+                Fecha de ingreso
+                <input type="text" class="regular-text" style="width:100%;" value="<?php echo esc_attr($now_display); ?>" readonly>
+            </label>
+            <label style="grid-column:1 / -1;">
+                Nota (opcional)
+                <textarea id="ci-nota" class="large-text" rows="2" style="width:100%;"></textarea>
+            </label>
+        </div>
+        <p style="margin:16px 0 0;">
+            <button type="button" class="button button-primary" id="ci-save-btn">Guardar y confirmar</button>
+            <button type="button" class="button" id="ci-google-btn">Buscar en Google</button>
+            <button type="button" class="button" id="ci-clear-btn">Limpiar</button>
+        </p>
+    </div>
+
+    <div class="card" style="max-width:1200px;padding:16px 20px;margin-top:16px;">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;">
+            <label>
+                Filtro
+                <select id="ci-filtro" class="regular-text">
+                    <option value="todos">Todos</option>
+                    <option value="sugerencias">Con sugerencias</option>
+                    <option value="sin_mapeo">Sin ningún mapeo</option>
+                    <option value="con_vinculo">Con al menos un vínculo</option>
+                </select>
+            </label>
+            <label style="flex:1;min-width:220px;">
+                Buscar en tabla
+                <input type="search" id="ci-table-search" class="regular-text" style="width:100%;" placeholder="SKU o nombre…">
+            </label>
+            <button type="button" class="button" id="ci-refresh-btn">Actualizar</button>
+        </div>
+    </div>
+
+    <div class="card" style="max-width:1200px;padding:0;margin-top:16px;overflow:hidden;">
+        <table class="widefat striped" id="ci-table">
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Nombre</th>
+                    <th>Marca</th>
+                    <th>Sugerencias</th>
+                    <th>Vinculados</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="ci-tbody">
+                <tr><td colspan="6">Cargando…</td></tr>
+            </tbody>
+        </table>
+        <p style="padding:12px 16px;margin:0;">
+            <button type="button" class="button" id="ci-prev-btn" disabled>Anterior</button>
+            <span id="ci-page-label" style="margin:0 12px;">Página 1</span>
+            <button type="button" class="button" id="ci-next-btn" disabled>Siguiente</button>
+        </p>
+    </div>
+
+<script>
+(function($) {
+    const nonce = <?php echo wp_json_encode($nonce); ?>;
+    let page = 1;
+    let searchTimer = null;
+    let skuTimer = null;
+    let listXhr = null;
+    let skuXhr = null;
+    const SEARCH_DEBOUNCE_MS = 800;
+    const SEARCH_MIN_CHARS = 2;
+
+    let ciUnitContext = null;
+    function tipoMatchLabel(t) {
+        const map = {
+            exacto: 'Exacto',
+            exacto_envase: 'Exacto diferente U de envase',
+            similar: 'Similar',
+            otro: 'Otro'
+        };
+        return map[t] || t || '—';
+    }
+    function badgeU(show) {
+        return show
+            ? ' <span style="display:inline-block;padding:0 6px;border-radius:8px;background:#2271b1;color:#fff;font-size:11px;font-weight:600;">U</span>'
+            : '';
+    }
+    function renderTipoWarnings($box, ctx, tipo) {
+        if (!$box || !$box.length) return;
+        ctx = ctx || {};
+        const parts = [];
+        if (tipo === 'exacto_envase') {
+            if (ctx.family_status === 'unknown' || ctx.family_status === 'missing') {
+                parts.push('<div style="padding:8px 10px;background:#fcf9e8;border-left:4px solid #dba617;">'
+                    + '<strong>Advertencia familia:</strong> ' + esc(ctx.family_warning || 'Revisa el estado de familia.')
+                    + '</div>');
+            }
+            if (ctx.badge_u || ctx.is_unitario) {
+                parts.push('<div style="padding:8px 10px;background:#edf5fb;border-left:4px solid #2271b1;">'
+                    + 'Producto local unitario' + badgeU(true)
+                    + ' — se puede relacionar con cualquier unidad de envase de competencia ('
+                    + esc(String(ctx.cantidad_min || 1)) + ' u) con este tipo.'
+                    + '</div>');
+            }
+        } else if (tipo && tipo !== 'exacto_envase' && ctx.units_differ) {
+            parts.push('<div style="padding:8px 10px;background:#fcf9e8;border-left:4px solid #dba617;">'
+                + '<strong>Unidades distintas:</strong> local '
+                + esc(ctx.local_unit_label || '1') + badgeU(!!ctx.badge_u)
+                + ' vs competencia ' + esc(String(ctx.cantidad_min || 1)) + ' u. '
+                + 'Si es el mismo producto con otro envase, usa “Exacto diferente U de envase”.'
+                + '</div>');
+        }
+        if (!parts.length) {
+            $box.hide().empty();
+            return;
+        }
+        $box.html(parts.join('')).show();
+    }
+    function confirmUnitsIfNeeded(tipo, ctx) {
+        ctx = ctx || {};
+        if (!tipo || tipo === 'exacto_envase' || !ctx.units_differ) {
+            return true;
+        }
+        return window.confirm(
+            'Las unidades son distintas (local ' + (ctx.local_unit_label || '1')
+            + ' vs competencia ' + (ctx.cantidad_min || 1)
+            + ' u). ¿Confirmas de todos modos?\n\nSi es el mismo producto con otro envase, cancela y elige “Exacto diferente U de envase”.'
+        );
+    }
+    function refreshCiUnitContext() {
+        const pb = parseInt($('#ci-producto-base-id').val() || '0', 10);
+        const unidad = parseInt($('#ci-unidad').val() || '1', 10) || 1;
+        const tipo = $('#ci-tipo-match').val() || '';
+        if (pb <= 0) {
+            ciUnitContext = null;
+            renderTipoWarnings($('#ci-tipo-warnings'), null, tipo);
+            return;
+        }
+        $.post(ajaxurl, {
+            action: 'riverso_competencia_unit_context',
+            nonce,
+            producto_base_id: pb,
+            cantidad_min: unidad
+        }).done(function(res) {
+            if (!res.success) return;
+            ciUnitContext = res.data.unit_context || null;
+            $('#ci-selected-u').html(badgeU(!!(ciUnitContext && ciUnitContext.badge_u)));
+            renderTipoWarnings($('#ci-tipo-warnings'), ciUnitContext, $('#ci-tipo-match').val() || '');
+        });
+    }
+    $(document).on('change input', '#ci-unidad, #ci-tipo-match', function() {
+        if ($(this).is('#ci-unidad')) {
+            refreshCiUnitContext();
+        } else {
+            renderTipoWarnings($('#ci-tipo-warnings'), ciUnitContext, $('#ci-tipo-match').val() || '');
+        }
+    });
+
+    function esc(s) {
+        return $('<div/>').text(s || '').html();
+    }
+    function escAttr(s) {
+        return String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;');
+    }
+    function abortXhr(xhr) {
+        if (xhr && xhr.readyState !== 4) xhr.abort();
+    }
+    function googleUrl(nombre) {
+        return 'https://www.google.com/search?q=' + encodeURIComponent(nombre || '');
+    }
+    function fuenteBadge(f) {
+        const slug = (f.slug || '').toLowerCase();
+        const label = f.nombre || f.slug || '?';
+        let color = '#646970';
+        if (slug === 'sande') color = '#2271b1';
+        else if (slug === 'dimafi') color = '#8c5e00';
+        else if (slug === 'manual') color = '#007017';
+        return '<span style="display:inline-block;margin:0 4px 4px 0;padding:1px 8px;border-radius:10px;background:' +
+            color + ';color:#fff;font-size:11px;">' + esc(label) + '</span>';
+    }
+    function selectSku(id, sku, nombre) {
+        $('#ci-producto-base-id').val(id);
+        $('#ci-producto-nombre').val(nombre || '');
+        $('#ci-selected-label').html('<code>' + esc(sku) + '</code> — ' + esc(nombre || '') + ' <span id="ci-selected-u"></span>');
+        $('#ci-sku-results').hide().empty();
+        $('#ci-sku-search').val('');
+        refreshCiUnitContext();
+    }
+    function showMsg(html, isError) {
+        const $m = $('#ci-form-msg').show().html(html);
+        $m.css({
+            padding: '10px 12px',
+            borderLeft: '4px solid ' + (isError ? '#d63638' : '#00a32a'),
+            background: isError ? '#fcf0f1' : '#edfaef'
+        });
+    }
+    function clearForm() {
+        $('#ci-producto-base-id').val('');
+        $('#ci-producto-nombre').val('');
+        $('#ci-selected-label').text('Ninguno').attr('class', 'description');
+        $('#ci-url').val('');
+        $('#ci-precio').val('');
+        $('#ci-unidad').val('1');
+        $('#ci-tipo-match').val('');
+        $('#ci-nota').val('');
+        $('#ci-form-msg').hide().empty();
+        $('#ci-sku-results').hide().empty();
+        $('#ci-tipo-warnings').hide().empty();
+        ciUnitContext = null;
+    }
+
+    function loadSkus() {
+        abortXhr(listXhr);
+        $('#ci-tbody').html('<tr><td colspan="6">Cargando…</td></tr>');
+        listXhr = $.post(ajaxurl, {
+            action: 'riverso_competencia_list_skus',
+            nonce,
+            filtro: $('#ci-filtro').val(),
+            search: $('#ci-table-search').val(),
+            page,
+            per_page: 25
+        }).done(function(res) {
+            if (!res.success) {
+                $('#ci-tbody').html('<tr><td colspan="6">' + esc((res.data && res.data.message) || 'Error') + '</td></tr>');
+                return;
+            }
+            const rows = res.data.rows || [];
+            const total = res.data.total || 0;
+            const perPage = res.data.per_page || 25;
+            const pages = Math.max(1, Math.ceil(total / perPage));
+            $('#ci-page-label').text('Página ' + page + ' / ' + pages + ' (' + total + ' SKUs)');
+            $('#ci-prev-btn').prop('disabled', page <= 1);
+            $('#ci-next-btn').prop('disabled', page >= pages);
+            if (!rows.length) {
+                $('#ci-tbody').html('<tr><td colspan="6">Sin resultados</td></tr>');
+                return;
+            }
+            const html = rows.map(function(r) {
+                const badges = (r.fuentes || []).map(fuenteBadge).join('') || '<span class="description">—</span>';
+                const skuLocal = r.sku_local || r.canonical_sku || '';
+                const skuOnline = r.sku_online || '';
+                const nombreCell =
+                    esc(r.nombre_canonico || '') +
+                    '<br><span class="description">SKU local: <code>' + esc(skuLocal || '—') + '</code></span>' +
+                    '<br><span class="description">SKU online: <code>' + esc(skuOnline || '—') + '</code></span>';
+                const sugCount = Number(r.sugerencias || 0);
+                const sugCell = sugCount > 0
+                    ? '<button type="button" class="button ci-ver-sug" data-id="' + r.id +
+                      '" data-sku="' + escAttr(skuLocal) +
+                      '" data-nombre="' + escAttr(r.nombre_canonico || '') + '">Ver (' + sugCount + ')</button>'
+                    : '<span class="description">0</span>';
+                return '<tr>' +
+                    '<td><code>' + esc(skuLocal) + '</code></td>' +
+                    '<td>' + nombreCell + '</td>' +
+                    '<td>' + esc(r.marca || '—') + '</td>' +
+                    '<td>' + sugCell + '</td>' +
+                    '<td>' + badges + (r.vinculados ? ' <span class="description">(' + r.vinculados + ')</span>' : '') + '</td>' +
+                    '<td style="white-space:nowrap;">' +
+                    '<button type="button" class="button button-primary ci-pick" data-id="' + r.id +
+                    '" data-sku="' + escAttr(skuLocal) +
+                    '" data-nombre="' + escAttr(r.nombre_canonico || '') + '">Seleccionar</button> ' +
+                    '<a class="button" href="' + escAttr(googleUrl(r.nombre_canonico)) +
+                    '" target="_blank" rel="noopener noreferrer">Google</a>' +
+                    '</td></tr>';
+            }).join('');
+            $('#ci-tbody').html(html);
+        }).fail(function() {
+            $('#ci-tbody').html('<tr><td colspan="6">Error al cargar SKUs</td></tr>');
+        });
+    }
+
+    function runSkuSearch(q) {
+        q = (q || '').trim();
+        if (!q || q.length < SEARCH_MIN_CHARS) {
+            $('#ci-sku-results').hide().empty();
+            return;
+        }
+        abortXhr(skuXhr);
+        skuXhr = $.post(ajaxurl, { action: 'riverso_competencia_search_local', nonce, search: q })
+            .done(function(res) {
+                if (!res.success) return;
+                const items = (res.data.products || []).map(function(p) {
+                    return '<li style="margin-bottom:6px;"><button type="button" class="button ci-pick" data-id="' + p.id +
+                        '" data-sku="' + escAttr(p.canonical_sku || '') +
+                        '" data-nombre="' + escAttr(p.nombre_canonico || '') + '">' +
+                        esc(p.canonical_sku) + ' — ' + esc(p.nombre_canonico) + '</button></li>';
+                }).join('');
+                $('#ci-sku-results').html(items || '<li>Sin resultados</li>').show();
+            });
+    }
+
+    $('#ci-sku-search').on('input', function() {
+        clearTimeout(skuTimer);
+        const q = $(this).val();
+        skuTimer = setTimeout(function() { runSkuSearch(q); }, SEARCH_DEBOUNCE_MS);
+    });
+    $('#ci-sku-search').on('keydown', function(e) {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            e.preventDefault();
+            clearTimeout(skuTimer);
+            runSkuSearch($(this).val());
+        }
+    });
+
+    $(document).on('click', '.ci-pick', function() {
+        const $b = $(this);
+        selectSku($b.data('id'), $b.data('sku'), $b.data('nombre'));
+    });
+
+    $('#ci-google-btn').on('click', function() {
+        const nombre = $('#ci-producto-nombre').val() || $('#ci-sku-search').val();
+        if (!nombre) {
+            alert('Selecciona un SKU o escribe un nombre para buscar.');
+            return;
+        }
+        window.open(googleUrl(nombre), '_blank', 'noopener,noreferrer');
+    });
+
+    $('#ci-clear-btn').on('click', clearForm);
+
+    $('#ci-save-btn').on('click', function() {
+        const $btn = $(this);
+        const tipo = $('#ci-tipo-match').val() || '';
+        if (!tipo) {
+            alert('Debes seleccionar el tipo de match.');
+            return;
+        }
+        const runSave = function() {
+        $btn.prop('disabled', true).text('Guardando…');
+        $('#ci-form-msg').hide();
+        $.post(ajaxurl, {
+            action: 'riverso_competencia_manual_ingreso',
+            nonce,
+            producto_base_id: $('#ci-producto-base-id').val(),
+            url: $('#ci-url').val(),
+            precio_total: $('#ci-precio').val(),
+            unidad: $('#ci-unidad').val() || 1,
+            tipo_match: $('#ci-tipo-match').val(),
+            nota: $('#ci-nota').val()
+        }).done(function(res) {
+            $btn.prop('disabled', false).text('Guardar y confirmar');
+            if (!res.success) {
+                let html = '<strong>' + esc((res.data && res.data.message) || 'Error al guardar') + '</strong>';
+                const blockers = (res.data && res.data.blockers) || [];
+                if (blockers.length) {
+                    html += '<ul style="margin:8px 0 0;padding-left:18px;">';
+                    blockers.forEach(function(b) {
+                        html += '<li>' + (b.url
+                            ? '<a href="' + escAttr(b.url) + '" target="_blank" rel="noopener noreferrer">' + esc(b.label || b.tipo) + '</a>'
+                            : esc(b.label || b.tipo)) + '</li>';
+                    });
+                    html += '</ul>';
+                }
+                if (res.data && res.data.unit_hint) {
+                    html += '<p class="description" style="margin:8px 0 0;">' + esc(res.data.unit_hint) + '</p>';
+                }
+                showMsg(html, true);
+                return;
+            }
+            const d = res.data || {};
+            showMsg(
+                'Vínculo confirmado (' + esc(d.fuente_slug || 'manual') + ')' +
+                (d.revisado_at ? ' · ' + esc(d.revisado_at) : '') + '.',
+                false
+            );
+            $('#ci-url').val('');
+            $('#ci-precio').val('');
+            $('#ci-unidad').val('1');
+            $('#ci-tipo-match').val('');
+            $('#ci-nota').val('');
+            loadSkus();
+        }).fail(function(xhr) {
+            $btn.prop('disabled', false).text('Guardar y confirmar');
+            let msg = 'Error de red al guardar.';
+            if (xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
+                msg = xhr.responseJSON.data.message;
+            }
+            showMsg(esc(msg), true);
+        });
+        };
+        const doConfirm = function() {
+            if (!confirmUnitsIfNeeded(tipo, ciUnitContext)) {
+                return;
+            }
+            runSave();
+        };
+        const pb = parseInt($('#ci-producto-base-id').val() || '0', 10);
+        const unidad = parseInt($('#ci-unidad').val() || '1', 10) || 1;
+        if (pb > 0 && !ciUnitContext) {
+            $.post(ajaxurl, {
+                action: 'riverso_competencia_unit_context',
+                nonce,
+                producto_base_id: pb,
+                cantidad_min: unidad
+            }).done(function(res) {
+                if (res.success) {
+                    ciUnitContext = res.data.unit_context || null;
+                    renderTipoWarnings($('#ci-tipo-warnings'), ciUnitContext, tipo);
+                }
+                doConfirm();
+            }).fail(function() { doConfirm(); });
+            return;
+        }
+        doConfirm();
+    });
+
+    $('#ci-filtro').on('change', function() { page = 1; loadSkus(); });
+    $('#ci-refresh-btn').on('click', function() { page = 1; loadSkus(); });
+    $('#ci-prev-btn').on('click', function() { if (page > 1) { page--; loadSkus(); } });
+    $('#ci-next-btn').on('click', function() { page++; loadSkus(); });
+    $('#ci-table-search').on('input', function() {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(function() { page = 1; loadSkus(); }, SEARCH_DEBOUNCE_MS);
+    });
+    $('#ci-table-search').on('keydown', function(e) {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            e.preventDefault();
+            clearTimeout(searchTimer);
+            page = 1;
+            loadSkus();
+        }
+    });
+
+    loadSkus();
+
+    let sugPbId = 0;
+    let sugAction = { type: '', id: 0, pb: 0 };
+    let sugUnitContext = null;
+
+    function fmtSugPrice(row) {
+        const brutoU = row.precio_bruto_unitario;
+        const brutoT = row.precio_bruto_total;
+        const qty = Number(row.cantidad_min || 0);
+        const parts = [];
+        if (brutoU !== null && brutoU !== undefined && brutoU !== '') {
+            const u = Number(brutoU);
+            if (!isNaN(u)) {
+                parts.push(u.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 3 }) + ' / u');
+            }
+        }
+        if (brutoT !== null && brutoT !== undefined && brutoT !== '') {
+            const t = Number(brutoT);
+            if (!isNaN(t)) {
+                const pack = qty > 1 ? ' / ' + qty.toLocaleString('es-CL') + ' u' : '';
+                parts.push(t.toLocaleString('es-CL', { maximumFractionDigits: 0 }) + pack);
+            }
+        }
+        return parts.join(' · ') || '—';
+    }
+
+    function renderSugBlockers(blockers, message, unitHint) {
+        const $box = $('#ci-sug-action-blockers').empty().hide();
+        const $hint = $('#ci-sug-action-hint').empty().hide();
+        if (message) {
+            $box.append('<p style="margin:0 0 8px;"><strong>' + esc(message) + '</strong></p>');
+        }
+        if (blockers && blockers.length) {
+            const ul = $('<ul style="margin:0;padding-left:18px;"></ul>');
+            blockers.forEach(function(b) {
+                const link = b.url
+                    ? '<a href="' + escAttr(b.url) + '" target="_blank" rel="noopener noreferrer">' + esc(b.label || b.tipo) + '</a>'
+                    : esc(b.label || b.tipo);
+                ul.append('<li>' + link + ' <span class="description">(' + esc(b.estado || '') + ')</span></li>');
+            });
+            $box.append(ul);
+            $box.show();
+        } else if (message) {
+            $box.show();
+        }
+        if (unitHint) {
+            $hint.text(unitHint).show();
+        }
+    }
+
+    function loadSugerencias(pbId, sku, nombre) {
+        sugPbId = pbId;
+        $('#ci-sug-title').text('Sugerencias — ' + (sku || ('#' + pbId)));
+        $('#ci-sug-meta').html(esc(nombre || '') + ' · Cargando…');
+        $('#ci-sug-tbody').html('<tr><td colspan="5">Cargando…</td></tr>');
+        $('#ci-sug-modal').show();
+        $.post(ajaxurl, {
+            action: 'riverso_competencia_list_sugerencias',
+            nonce,
+            producto_base_id: pbId
+        }).done(function(res) {
+            if (!res.success) {
+                $('#ci-sug-meta').text((res.data && res.data.message) || 'Error');
+                $('#ci-sug-tbody').html('<tr><td colspan="5">Sin datos</td></tr>');
+                return;
+            }
+            const p = res.data.producto || {};
+            const rows = res.data.rows || [];
+            $('#ci-sug-meta').html(
+                '<code>' + esc(p.canonical_sku || sku || '') + '</code> — ' + esc(p.nombre_canonico || nombre || '') +
+                ' · ' + rows.length + ' sugerencia(s)'
+            );
+            if (!rows.length) {
+                $('#ci-sug-tbody').html('<tr><td colspan="5">Sin sugerencias pendientes</td></tr>');
+                return;
+            }
+            const html = rows.map(function(r) {
+                const nombreComp = r.url_producto
+                    ? '<a href="' + escAttr(r.url_producto) + '" target="_blank" rel="noopener noreferrer">' + esc(r.nombre || '') + '</a>'
+                    : esc(r.nombre || '—');
+                const actions = [];
+                if (r.url_producto) {
+                    actions.push('<a class="button" href="' + escAttr(r.url_producto) + '" target="_blank" rel="noopener noreferrer">Ver</a>');
+                }
+                actions.push(
+                    '<button type="button" class="button button-primary ci-sug-confirm" data-id="' + r.id +
+                    '" data-pb="' + pbId +
+                    '" data-codigo="' + escAttr((r.codigo_externo || '').trim()) +
+                    '" data-nombre="' + escAttr(r.nombre || '') +
+                    '" data-fuente="' + escAttr(r.fuente_nombre || r.fuente_slug || '') +
+                    '">Confirmar</button>'
+                );
+                actions.push(
+                    '<button type="button" class="button ci-sug-reject" data-id="' + r.id +
+                    '" data-codigo="' + escAttr((r.codigo_externo || '').trim()) +
+                    '" data-nombre="' + escAttr(r.nombre || '') +
+                    '" data-fuente="' + escAttr(r.fuente_nombre || r.fuente_slug || '') +
+                    '">Rechazar</button>'
+                );
+                return '<tr>' +
+                    '<td>' + fuenteBadge({ slug: r.fuente_slug, nombre: r.fuente_nombre }) + '</td>' +
+                    '<td><code>' + esc((r.codigo_externo || '').trim()) + '</code><br>' + nombreComp +
+                    (r.nombre_categoria ? '<br><span class="description">' + esc(r.nombre_categoria) + '</span>' : '') +
+                    '</td>' +
+                    '<td>' + esc(fmtSugPrice(r)) + '</td>' +
+                    '<td>' + esc(r.score || '') + ' / ' + esc(r.metodo || '—') + '</td>' +
+                    '<td style="white-space:nowrap;">' + actions.join(' ') + '</td>' +
+                    '</tr>';
+            }).join('');
+            $('#ci-sug-tbody').html(html);
+        }).fail(function() {
+            $('#ci-sug-meta').text('Error al cargar sugerencias');
+            $('#ci-sug-tbody').html('<tr><td colspan="5">Error</td></tr>');
+        });
+    }
+
+    $(document).on('click', '.ci-ver-sug', function() {
+        const $b = $(this);
+        loadSugerencias($b.data('id'), $b.data('sku'), $b.data('nombre'));
+    });
+
+    $(document).on('click', '#ci-sug-close', function(e) {
+        e.preventDefault();
+        $('#ci-sug-modal').hide();
+    });
+    $(document).on('click', '#ci-sug-modal', function(e) {
+        if (e.target === this) {
+            $('#ci-sug-modal').hide();
+        }
+    });
+
+    function closeSugAction() {
+        $('#ci-sug-action-modal').hide();
+        sugAction = { type: '', id: 0, pb: 0 };
+    }
+
+    $(document).on('click', '.ci-sug-confirm', function() {
+        const $btn = $(this);
+        sugAction = { type: 'confirm', id: $btn.data('id'), pb: $btn.data('pb') };
+        $('#ci-sug-action-title').text('Confirmar vínculo');
+        $('#ci-sug-action-summary').html(
+            '<p><strong>' + esc($btn.data('fuente') || '') + ':</strong> <code>' + esc($btn.data('codigo') || '') + '</code> — ' + esc($btn.data('nombre') || '') + '</p>' +
+            '<p class="description">Cargando validación de familia…</p>'
+        );
+        $('#ci-sug-action-nota').val('');
+        $('#ci-sug-action-nota-wrap').show();
+        $('#ci-sug-action-tipo').val('');
+        $('#ci-sug-action-tipo-error').hide();
+        $('#ci-sug-action-tipo-wrap').show();
+        $('#ci-sug-action-submit').prop('disabled', true).text('Confirmar').show();
+        renderSugBlockers([], '', '');
+        $('#ci-sug-action-modal').show();
+
+        $.post(ajaxurl, {
+            action: 'riverso_competencia_confirm_preflight',
+            nonce,
+            producto_competencia_id: sugAction.id,
+            producto_base_id: sugAction.pb
+        }, function(res) {
+            if (!res.success) {
+                $('#ci-sug-action-summary').html('<p class="description">No se pudo validar el match.</p>');
+                return;
+            }
+            const d = res.data;
+            const sande = d.sande || {};
+            const local = d.local || {};
+            sugUnitContext = d.unit_context || null;
+            const localBadge = (local.badge_u || (sugUnitContext && sugUnitContext.badge_u)) ? badgeU(true) : '';
+            $('#ci-sug-action-summary').html(
+                '<p><strong>' + esc($btn.data('fuente') || '') + ':</strong> <code>' + esc(sande.codigo || $btn.data('codigo') || '') + '</code> — ' + esc(sande.nombre || $btn.data('nombre') || '')
+                + ' <span class="description">(' + esc(String((sande.cantidad_min || (sugUnitContext && sugUnitContext.cantidad_min) || 1))) + ' u)</span></p>' +
+                '<p><strong>Local:</strong> <code>' + esc(local.canonical_sku || '') + '</code> — ' + esc(local.nombre_canonico || '') + localBadge
+                + ' <span class="description">unidad ' + esc((local.unit_label || (sugUnitContext && sugUnitContext.local_unit_label) || '1')) + '</span></p>' +
+                (d.can_confirm ? '<p>¿Confirmas que es el mismo producto?</p>' : '')
+            );
+            renderSugBlockers(d.blockers || [], d.message || '', d.unit_hint || '');
+            renderTipoWarnings($('#ci-sug-action-tipo-warnings'), sugUnitContext, $('#ci-sug-action-tipo').val() || '');
+            if (d.can_confirm) {
+                $('#ci-sug-action-submit').prop('disabled', false).show();
+                $('#ci-sug-action-nota-wrap').show();
+            } else {
+                $('#ci-sug-action-submit').hide();
+                $('#ci-sug-action-nota-wrap').hide();
+            }
+        });
+    });
+
+    $(document).on('change', '#ci-sug-action-tipo', function() {
+        renderTipoWarnings($('#ci-sug-action-tipo-warnings'), sugUnitContext, $(this).val() || '');
+    });
+
+    $(document).on('click', '.ci-sug-reject', function() {
+        const $btn = $(this);
+        sugAction = { type: 'reject', id: $btn.data('id'), pb: 0 };
+        $('#ci-sug-action-title').text('Rechazar sugerencia');
+        $('#ci-sug-action-summary').html(
+            '<p><strong>' + esc($btn.data('fuente') || '') + ':</strong> <code>' + esc($btn.data('codigo') || '') + '</code> — ' + esc($btn.data('nombre') || '') + '</p>' +
+            '<p>Al rechazar, el producto sale de la bandeja y no se volverá a sugerir automáticamente.</p>'
+        );
+        renderSugBlockers([], '', '');
+        $('#ci-sug-action-nota').val('');
+        $('#ci-sug-action-nota-wrap').show();
+        $('#ci-sug-action-tipo-wrap').hide();
+        $('#ci-sug-action-submit').prop('disabled', false).text('Rechazar').show();
+        $('#ci-sug-action-modal').show();
+    });
+
+    $(document).on('click', '#ci-sug-action-cancel', function(e) {
+        e.preventDefault();
+        closeSugAction();
+    });
+    $(document).on('click', '#ci-sug-action-modal', function(e) {
+        if (e.target === this) closeSugAction();
+    });
+
+    $(document).on('click', '#ci-sug-action-submit', function() {
+        if (!sugAction.type || !sugAction.id) return;
+        const $btn = $(this).prop('disabled', true);
+        const nota = $('#ci-sug-action-nota').val();
+        if (sugAction.type === 'confirm') {
+            const tipo_match = $('#ci-sug-action-tipo').val();
+            if (!tipo_match) {
+                $('#ci-sug-action-tipo-error').show();
+                $btn.prop('disabled', false);
+                return;
+            }
+            $('#ci-sug-action-tipo-error').hide();
+            if (!confirmUnitsIfNeeded(tipo_match, sugUnitContext)) {
+                $btn.prop('disabled', false);
+                return;
+            }
+            $.post(ajaxurl, {
+                action: 'riverso_competencia_confirm_match',
+                nonce,
+                producto_competencia_id: sugAction.id,
+                producto_base_id: sugAction.pb,
+                nota,
+                tipo_match
+            }, function(res) {
+                $btn.prop('disabled', false);
+                if (!res.success) {
+                    renderSugBlockers(
+                        res.data && res.data.blockers ? res.data.blockers : [],
+                        (res.data && res.data.message) || 'Error al confirmar',
+                        (res.data && res.data.unit_hint) || ''
+                    );
+                    $btn.hide();
+                    return;
+                }
+                closeSugAction();
+                loadSugerencias(sugPbId, '', '');
+                loadSkus();
+            });
+            return;
+        }
+        $.post(ajaxurl, {
+            action: 'riverso_competencia_reject_match',
+            nonce,
+            producto_competencia_id: sugAction.id,
+            nota
+        }, function(res) {
+            $btn.prop('disabled', false);
+            if (!res.success) {
+                alert((res.data && res.data.message) || 'Error al rechazar');
+                return;
+            }
+            closeSugAction();
+            loadSugerencias(sugPbId, '', '');
+            loadSkus();
+        });
+    });
+})(jQuery);
+</script>
+
+<div id="ci-sug-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100000;">
+    <div style="background:#fff;max-width:960px;margin:5vh auto;padding:20px;border-radius:6px;max-height:90vh;overflow:auto;">
+        <h2 style="margin-top:0;" id="ci-sug-title">Sugerencias</h2>
+        <div id="ci-sug-meta" class="description" style="margin-bottom:12px;"></div>
+        <table class="widefat striped">
+            <thead>
+                <tr>
+                    <th>Fuente</th>
+                    <th>Producto competidor</th>
+                    <th>Precio</th>
+                    <th>Score / Método</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="ci-sug-tbody">
+                <tr><td colspan="5">Cargando…</td></tr>
+            </tbody>
+        </table>
+        <p style="margin-top:16px;">
+            <button type="button" class="button" id="ci-sug-close">Cerrar</button>
+        </p>
+    </div>
+</div>
+
+<div id="ci-sug-action-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100001;">
+    <div style="background:#fff;max-width:560px;margin:8vh auto;padding:20px;border-radius:6px;">
+        <h2 style="margin-top:0;" id="ci-sug-action-title">Confirmar match</h2>
+        <div id="ci-sug-action-summary" style="margin-bottom:12px;"></div>
+        <div id="ci-sug-action-blockers" style="display:none;margin-bottom:12px;padding:10px 12px;background:#fcf0f1;border-left:4px solid #d63638;"></div>
+        <div id="ci-sug-action-hint" class="description" style="display:none;margin-bottom:12px;"></div>
+        <label id="ci-sug-action-tipo-wrap" style="display:block;margin-bottom:12px;">
+            Tipo de match <span style="color:#d63638;">*</span>
+            <select id="ci-sug-action-tipo" style="width:100%;margin-top:4px;">
+                <option value="">— seleccionar —</option>
+                                <option value="exacto">Exacto (mismo producto)</option>
+                <option value="exacto_envase">Exacto diferente U de envase</option>
+                <option value="similar">Similar (equivalente funcional)</option>
+                <option value="otro">Otro</option>
+            </select>
+            <span id="ci-sug-action-tipo-error" style="display:none;color:#d63638;font-size:12px;">Debes seleccionar el tipo de match.</span>
+            <div id="ci-sug-action-tipo-warnings" style="display:none;margin-top:8px;"></div>
+        </label>
+        <label id="ci-sug-action-nota-wrap" style="display:block;margin-bottom:12px;">
+            Nota (opcional)
+            <textarea id="ci-sug-action-nota" class="large-text" rows="2" style="width:100%;"></textarea>
+        </label>
+        <p style="margin:0;">
+            <button type="button" class="button button-primary" id="ci-sug-action-submit">Confirmar</button>
+            <button type="button" class="button" id="ci-sug-action-cancel">Cancelar</button>
+        </p>
+    </div>
+</div>
+
+<?php elseif ($modo === 'fuentes') : ?>
+
+    <div class="card" style="max-width:1200px;padding:16px 20px;margin-top:12px;">
+        <h2 style="margin-top:0;">Fuentes vinculadas</h2>
+        <p class="description" style="margin-top:0;">
+            Todos los vínculos confirmados, con el tipo de fuente (Sande, DIMAFI, Manual u otras).
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;">
+            <label>
+                Fuente
+                <select id="cf-fuente" class="regular-text">
+                    <option value="">Todas</option>
+                    <option value="sande">Sande</option>
+                    <option value="dimafi">DIMAFI</option>
+                    <option value="manual">Manual</option>
+                </select>
+            </label>
+            <label style="flex:1;min-width:220px;">
+                Buscar
+                <input type="search" id="cf-search" class="regular-text" style="width:100%;" placeholder="SKU, nombre o URL…">
+            </label>
+            <button type="button" class="button" id="cf-refresh-btn">Actualizar</button>
+        </div>
+    </div>
+
+    <div class="card" style="max-width:1200px;padding:0;margin-top:16px;overflow:hidden;">
+        <table class="widefat striped" id="cf-table">
+            <thead>
+                <tr>
+                    <th>SKU local</th>
+                    <th>Nombre local</th>
+                    <th>Fuente</th>
+                    <th>Producto / URL</th>
+                    <th>Precio bruto</th>
+                    <th>Unidad</th>
+                    <th>Tipo</th>
+                    <th>Ingreso</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="cf-tbody">
+                <tr><td colspan="9">Cargando…</td></tr>
+            </tbody>
+        </table>
+        <p style="padding:12px 16px;margin:0;">
+            <button type="button" class="button" id="cf-prev-btn" disabled>Anterior</button>
+            <span id="cf-page-label" style="margin:0 12px;">Página 1</span>
+            <button type="button" class="button" id="cf-next-btn" disabled>Siguiente</button>
+        </p>
+    </div>
+
+<script>
+(function($) {
+    const nonce = <?php echo wp_json_encode($nonce); ?>;
+    let page = 1;
+    let searchTimer = null;
+    let listXhr = null;
+    const SEARCH_DEBOUNCE_MS = 800;
+
+    function esc(s) {
+        return $('<div/>').text(s || '').html();
+    }
+    function escAttr(s) {
+        return String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;');
+    }
+    function abortXhr(xhr) {
+        if (xhr && xhr.readyState !== 4) xhr.abort();
+    }
+    function fmtMoney(val) {
+        if (val === null || val === undefined || val === '') return '—';
+        const n = Number(val);
+        if (isNaN(n)) return '—';
+        return n.toLocaleString('es-CL', { maximumFractionDigits: 0 });
+    }
+    function fuenteLabel(slug, nombre) {
+        const s = (slug || '').toLowerCase();
+        let color = '#646970';
+        if (s === 'sande') color = '#2271b1';
+        else if (s === 'dimafi') color = '#8c5e00';
+        else if (s === 'manual') color = '#007017';
+        return '<span style="display:inline-block;padding:1px 8px;border-radius:10px;background:' +
+            color + ';color:#fff;font-size:11px;">' + esc(nombre || slug || '—') + '</span>';
+    }
+
+    function loadList() {
+        abortXhr(listXhr);
+        $('#cf-tbody').html('<tr><td colspan="9">Cargando…</td></tr>');
+        listXhr = $.post(ajaxurl, {
+            action: 'riverso_competencia_list_fuentes',
+            nonce,
+            fuente: $('#cf-fuente').val(),
+            search: $('#cf-search').val(),
+            page,
+            per_page: 25
+        }).done(function(res) {
+            if (!res.success) {
+                $('#cf-tbody').html('<tr><td colspan="9">' + esc((res.data && res.data.message) || 'Error') + '</td></tr>');
+                return;
+            }
+            const rows = res.data.rows || [];
+            const total = res.data.total || 0;
+            const perPage = res.data.per_page || 25;
+            const pages = Math.max(1, Math.ceil(total / perPage));
+            $('#cf-page-label').text('Página ' + page + ' / ' + pages + ' (' + total + ' vínculos)');
+            $('#cf-prev-btn').prop('disabled', page <= 1);
+            $('#cf-next-btn').prop('disabled', page >= pages);
+            if (!rows.length) {
+                $('#cf-tbody').html('<tr><td colspan="9">Sin resultados</td></tr>');
+                return;
+            }
+            const html = rows.map(function(r) {
+                const sku = r.url_local
+                    ? '<a href="' + escAttr(r.url_local) + '" target="_blank" rel="noopener noreferrer"><code>' + esc(r.canonical_sku) + '</code></a>'
+                    : '<code>' + esc(r.canonical_sku || '—') + '</code>';
+                const prod = r.url_producto
+                    ? '<a href="' + escAttr(r.url_producto) + '" target="_blank" rel="noopener noreferrer">' + esc(r.nombre_competencia || r.url_producto) + '</a>'
+                    : esc(r.nombre_competencia || '—');
+                const codigo = (r.codigo_externo || '').trim()
+                    ? '<br><code>' + esc(r.codigo_externo.trim()) + '</code>'
+                    : '';
+                const actions = [];
+                if (r.url_producto) {
+                    actions.push('<a class="button" href="' + escAttr(r.url_producto) + '" target="_blank" rel="noopener noreferrer">Abrir URL</a>');
+                }
+                if (r.url_local) {
+                    actions.push('<a class="button" href="' + escAttr(r.url_local) + '" target="_blank" rel="noopener noreferrer">Ver local</a>');
+                }
+                return '<tr>' +
+                    '<td>' + sku + '</td>' +
+                    '<td>' + esc(r.nombre_canonico || '—') + '</td>' +
+                    '<td>' + fuenteLabel(r.fuente_slug, r.fuente_nombre) + '</td>' +
+                    '<td>' + prod + codigo + '</td>' +
+                    '<td><strong>' + fmtMoney(r.precio_bruto_total) + '</strong>' +
+                    (r.precio_bruto_unitario ? '<br><span class="description">' + fmtMoney(r.precio_bruto_unitario) + ' / u</span>' : '') +
+                    '</td>' +
+                    '<td>' + esc(r.cantidad_min || '1') + '</td>' +
+                    '<td>' + esc(({exacto:'Exacto',exacto_envase:'Exacto diferente U de envase',similar:'Similar',otro:'Otro'}[r.tipo_match] || r.tipo_match || '—')) + '</td>' +
+                    '<td>' + esc(r.revisado_at || '—') + '</td>' +
+                    '<td style="white-space:nowrap;">' + (actions.join(' ') || '—') + '</td>' +
+                    '</tr>';
+            }).join('');
+            $('#cf-tbody').html(html);
+        }).fail(function() {
+            $('#cf-tbody').html('<tr><td colspan="9">Error al cargar</td></tr>');
+        });
+    }
+
+    $('#cf-fuente').on('change', function() { page = 1; loadList(); });
+    $('#cf-refresh-btn').on('click', function() { page = 1; loadList(); });
+    $('#cf-prev-btn').on('click', function() { if (page > 1) { page--; loadList(); } });
+    $('#cf-next-btn').on('click', function() { page++; loadList(); });
+    $('#cf-search').on('input', function() {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(function() { page = 1; loadList(); }, SEARCH_DEBOUNCE_MS);
+    });
+    $('#cf-search').on('keydown', function(e) {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            e.preventDefault();
+            clearTimeout(searchTimer);
+            page = 1;
+            loadList();
+        }
+    });
+
+    loadList();
+})(jQuery);
+</script>
+
+<?php elseif (!in_array($fuente, ['sande', 'dimafi'], true)) : ?>
+    <div class="notice notice-info"><p><?php esc_html_e('Esta fuente aún no está disponible.', 'riverso-pos'); ?></p></div>
+<?php else : ?>
 
     <nav class="nav-tab-wrapper" style="margin-top:8px;" id="cm-seccion-tabs">
         <a href="#" class="nav-tab nav-tab-active" data-seccion="revisar">Por revisar</a>
@@ -44,7 +1030,7 @@ $base_url = admin_url('admin.php?page=riverso-pos-competencia');
 
     <div class="card" style="max-width:1200px;padding:16px 20px;margin-top:12px;">
         <div id="cm-stats" class="description" style="margin-bottom:12px;">Cargando estadísticas…</div>
-        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;">
             <label id="cm-metodo-wrap">
                 Método
                 <select id="cm-metodo" class="regular-text">
@@ -76,15 +1062,15 @@ $base_url = admin_url('admin.php?page=riverso-pos-competencia');
         <table class="widefat striped" id="cm-table">
             <thead>
                 <tr id="cm-thead-match">
-                    <th>Sande</th>
-                    <th>Precio Sande</th>
+                    <th><?php echo esc_html($fuente_nombre); ?></th>
+                    <th>Precio <?php echo esc_html($fuente_nombre); ?></th>
                     <th id="cm-th-local">Sugerencia local</th>
                     <th>Score / Método</th>
                     <th>Estado</th>
                     <th>Acciones</th>
                 </tr>
                 <tr id="cm-thead-hist" style="display:none;">
-                    <th>Sande</th>
+                    <th><?php echo esc_html($fuente_nombre); ?></th>
                     <th>Vigente (bruto/u)</th>
                     <th>Actualizado</th>
                     <th>Último snapshot</th>
@@ -103,8 +1089,10 @@ $base_url = admin_url('admin.php?page=riverso-pos-competencia');
             <button type="button" class="button" id="cm-next-btn" disabled>Siguiente</button>
         </p>
     </div>
-    <?php endif; ?>
+<?php endif; ?>
 </div>
+
+<?php if ($modo === 'matching' && in_array($fuente, ['sande', 'dimafi'], true)) : ?>
 
 <div id="cm-manual-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100000;">
     <div style="background:#fff;max-width:560px;margin:8vh auto;padding:20px;border-radius:6px;">
@@ -123,6 +1111,18 @@ $base_url = admin_url('admin.php?page=riverso-pos-competencia');
         <div id="cm-action-summary" style="margin-bottom:12px;"></div>
         <div id="cm-action-blockers" style="display:none;margin-bottom:12px;padding:10px 12px;background:#fcf0f1;border-left:4px solid #d63638;"></div>
         <div id="cm-action-hint" class="description" style="display:none;margin-bottom:12px;"></div>
+        <label id="cm-action-tipo-wrap" style="display:block;margin-bottom:12px;">
+            Tipo de match <span style="color:#d63638;">*</span>
+            <select id="cm-action-tipo" style="width:100%;margin-top:4px;">
+                <option value="">— seleccionar —</option>
+                                <option value="exacto">Exacto (mismo producto)</option>
+                <option value="exacto_envase">Exacto diferente U de envase</option>
+                <option value="similar">Similar (equivalente funcional)</option>
+                <option value="otro">Otro</option>
+            </select>
+            <span id="cm-action-tipo-error" style="display:none;color:#d63638;font-size:12px;">Debes seleccionar el tipo de match.</span>
+            <div id="cm-action-tipo-warnings" style="display:none;margin-top:8px;"></div>
+        </label>
         <label id="cm-action-nota-wrap" style="display:block;margin-bottom:12px;">
             Nota (opcional)
             <textarea id="cm-action-nota" class="large-text" rows="2" style="width:100%;"></textarea>
@@ -158,11 +1158,11 @@ $base_url = admin_url('admin.php?page=riverso-pos-competencia');
     </div>
 </div>
 
-<?php if ($fuente === 'sande') : ?>
 <script>
 (function($) {
     const nonce = <?php echo wp_json_encode($nonce); ?>;
-    const fuente = 'sande';
+    const fuente = <?php echo wp_json_encode($fuente); ?>;
+    const fuenteNombre = <?php echo wp_json_encode($fuente_nombre); ?>;
     let page = 1;
     let seccion = 'revisar';
     let manualCompetenciaId = 0;
@@ -174,6 +1174,36 @@ $base_url = admin_url('admin.php?page=riverso-pos-competencia');
     let lastSearchKey = null;
     const SEARCH_DEBOUNCE_MS = 800;
     const SEARCH_MIN_CHARS = 2;
+    let cmUnitContext = null;
+    function tipoMatchLabel(t) {
+        const map = { exacto: 'Exacto', exacto_envase: 'Exacto diferente U de envase', similar: 'Similar', otro: 'Otro' };
+        return map[t] || t || '—';
+    }
+    function badgeU(show) {
+        return show ? ' <span style="display:inline-block;padding:0 6px;border-radius:8px;background:#2271b1;color:#fff;font-size:11px;font-weight:600;">U</span>' : '';
+    }
+    function renderTipoWarnings($box, ctx, tipo) {
+        if (!$box || !$box.length) return;
+        ctx = ctx || {};
+        const parts = [];
+        if (tipo === 'exacto_envase') {
+            if (ctx.family_status === 'unknown' || ctx.family_status === 'missing') {
+                parts.push('<div style="padding:8px 10px;background:#fcf9e8;border-left:4px solid #dba617;"><strong>Advertencia familia:</strong> ' + esc(ctx.family_warning || 'Revisa el estado de familia.') + '</div>');
+            }
+            if (ctx.badge_u || ctx.is_unitario) {
+                parts.push('<div style="padding:8px 10px;background:#edf5fb;border-left:4px solid #2271b1;">Producto local unitario' + badgeU(true) + ' — se puede relacionar con cualquier unidad de envase (' + esc(String(ctx.cantidad_min || 1)) + ' u) con este tipo.</div>');
+            }
+        } else if (tipo && tipo !== 'exacto_envase' && ctx.units_differ) {
+            parts.push('<div style="padding:8px 10px;background:#fcf9e8;border-left:4px solid #dba617;"><strong>Unidades distintas:</strong> local ' + esc(ctx.local_unit_label || '1') + badgeU(!!ctx.badge_u) + ' vs competencia ' + esc(String(ctx.cantidad_min || 1)) + ' u. Si es el mismo producto con otro envase, usa “Exacto diferente U de envase”.</div>');
+        }
+        if (!parts.length) { $box.hide().empty(); return; }
+        $box.html(parts.join('')).show();
+    }
+    function confirmUnitsIfNeeded(tipo, ctx) {
+        ctx = ctx || {};
+        if (!tipo || tipo === 'exacto_envase' || !ctx.units_differ) return true;
+        return window.confirm('Las unidades son distintas (local ' + (ctx.local_unit_label || '1') + ' vs competencia ' + (ctx.cantidad_min || 1) + ' u). ¿Confirmas de todos modos?\n\nSi es el mismo producto con otro envase, cancela y elige “Exacto diferente U de envase”.');
+    }
 
     function abortXhr(xhr) {
         if (xhr && xhr.readyState !== 4) {
@@ -297,7 +1327,7 @@ $base_url = admin_url('admin.php?page=riverso-pos-competencia');
             .done(function(res) {
                 if (!res.success) return;
                 const parts = (res.data.stats || []).map(s => esc(s.estado) + ': ' + s.total);
-                $('#cm-stats').html('Totales Sande — ' + (parts.join(' · ') || 'sin datos'));
+                $('#cm-stats').html('Totales ' + fuenteNombre + ' — ' + (parts.join(' · ') || 'sin datos'));
             })
             .fail(function(xhr) {
                 const msg = ajaxFailMessage(xhr, 'No se pudieron cargar las estadísticas.');
@@ -392,7 +1422,7 @@ $base_url = admin_url('admin.php?page=riverso-pos-competencia');
                     '<td>' + fmtPrice(r) + '</td>' +
                     '<td>' + localNombre + '</td>' +
                     '<td>' + esc(r.score || '') + ' / ' + esc(r.metodo || '—') + '</td>' +
-                    '<td>' + esc(r.match_estado || 'pendiente') + '</td>' +
+                    '<td>' + esc(r.match_estado || 'pendiente') + (r.tipo_match ? '<br><span class="description">' + esc(tipoMatchLabel(r.tipo_match)) + '</span>' : '') + '</td>' +
                     '<td style="white-space:nowrap;">' + actions.filter(Boolean).join(' ') + '</td>' +
                     '</tr>';
             }).join('');
@@ -602,7 +1632,7 @@ $base_url = admin_url('admin.php?page=riverso-pos-competencia');
 
     $('#cm-suggest-btn').on('click', function() {
         const $btn = $(this).prop('disabled', true).text('Generando…');
-        $.post(ajaxurl, { action: 'riverso_competencia_suggest', nonce, limit: 500 }, function(res) {
+        $.post(ajaxurl, { action: 'riverso_competencia_suggest', nonce, limit: 500, fuente }, function(res) {
             $btn.prop('disabled', false).text('Generar sugerencias');
             if (!res.success) {
                 alert(res.data && res.data.message ? res.data.message : 'Error');
@@ -624,12 +1654,15 @@ $base_url = admin_url('admin.php?page=riverso-pos-competencia');
         };
         $('#cm-action-title').text('Confirmar vínculo');
         $('#cm-action-summary').html(
-            '<p><strong>Sande:</strong> <code>' + esc($btn.data('codigo') || '') + '</code> — ' + esc($btn.data('nombre') || '') + '</p>' +
+            '<p><strong>' + esc(fuenteNombre) + ':</strong> <code>' + esc($btn.data('codigo') || '') + '</code> — ' + esc($btn.data('nombre') || '') + '</p>' +
             '<p><strong>Local:</strong> <code>' + esc($btn.data('sku') || '') + '</code> — ' + esc($btn.data('local') || '') + '</p>' +
             '<p class="description">Cargando validación de familia…</p>'
         );
         $('#cm-action-nota').val('');
         $('#cm-action-nota-wrap').show();
+        $('#cm-action-tipo').val('');
+        $('#cm-action-tipo-error').hide();
+        $('#cm-action-tipo-wrap').show();
         $('#cm-action-submit').prop('disabled', true).text('Confirmar').show();
         renderBlockers([], '', '');
         $('#cm-action-modal').show();
@@ -647,14 +1680,17 @@ $base_url = admin_url('admin.php?page=riverso-pos-competencia');
             const d = res.data;
             const sande = d.sande || {};
             const local = d.local || {};
+            cmUnitContext = d.unit_context || null;
+            const localBadge = (local.badge_u || (cmUnitContext && cmUnitContext.badge_u)) ? badgeU(true) : '';
             $('#cm-action-summary').html(
-                '<p><strong>Sande:</strong> <code>' + esc(sande.codigo || '') + '</code> — ' + esc(sande.nombre || '') + '</p>' +
-                '<p><strong>Local:</strong> <code>' + esc(local.canonical_sku || '') + '</code> — ' + esc(local.nombre_canonico || '') + '</p>' +
-                (d.can_confirm
-                    ? '<p>¿Confirmas que es el mismo producto?</p>'
-                    : '')
+                '<p><strong>' + esc(fuenteNombre) + ':</strong> <code>' + esc(sande.codigo || '') + '</code> — ' + esc(sande.nombre || '')
+                + ' <span class="description">(' + esc(String(sande.cantidad_min || (cmUnitContext && cmUnitContext.cantidad_min) || 1)) + ' u)</span></p>' +
+                '<p><strong>Local:</strong> <code>' + esc(local.canonical_sku || '') + '</code> — ' + esc(local.nombre_canonico || '') + localBadge
+                + ' <span class="description">unidad ' + esc(local.unit_label || (cmUnitContext && cmUnitContext.local_unit_label) || '1') + '</span></p>' +
+                (d.can_confirm ? '<p>¿Confirmas que es el mismo producto?</p>' : '')
             );
             renderBlockers(d.blockers || [], d.message || '', d.unit_hint || '');
+            renderTipoWarnings($('#cm-action-tipo-warnings'), cmUnitContext, $('#cm-action-tipo').val() || '');
             if (d.can_confirm) {
                 $('#cm-action-submit').prop('disabled', false).show();
                 $('#cm-action-nota-wrap').show();
@@ -665,17 +1701,22 @@ $base_url = admin_url('admin.php?page=riverso-pos-competencia');
         });
     });
 
+    $('#cm-action-tipo').on('change', function() {
+        renderTipoWarnings($('#cm-action-tipo-warnings'), cmUnitContext, $(this).val() || '');
+    });
+
     $(document).on('click', '.cm-reject', function() {
         const $btn = $(this);
         actionCtx = { type: 'reject', id: $btn.data('id'), pb: 0 };
         $('#cm-action-title').text('Rechazar sugerencia');
         $('#cm-action-summary').html(
-            '<p><strong>Sande:</strong> <code>' + esc($btn.data('codigo') || '') + '</code> — ' + esc($btn.data('nombre') || '') + '</p>' +
+            '<p><strong>' + esc(fuenteNombre) + ':</strong> <code>' + esc($btn.data('codigo') || '') + '</code> — ' + esc($btn.data('nombre') || '') + '</p>' +
             '<p>Al rechazar, el producto sale de la bandeja y no se volverá a sugerir automáticamente.</p>'
         );
         renderBlockers([], '', '');
         $('#cm-action-nota').val('');
         $('#cm-action-nota-wrap').show();
+        $('#cm-action-tipo-wrap').hide();
         $('#cm-action-submit').prop('disabled', false).text('Rechazar').show();
         $('#cm-action-modal').show();
     });
@@ -688,13 +1729,25 @@ $base_url = admin_url('admin.php?page=riverso-pos-competencia');
         if (!actionCtx.type || !actionCtx.id) return;
         const $btn = $(this).prop('disabled', true);
         const nota = $('#cm-action-nota').val();
-        if (actionCtx.type === 'confirm') {
+        if (actionCtx.type === 'confirm' || actionCtx.type === 'confirm_manual') {
+            const tipo_match = $('#cm-action-tipo').val();
+            if (!tipo_match) {
+                $('#cm-action-tipo-error').show();
+                $btn.prop('disabled', false);
+                return;
+            }
+            $('#cm-action-tipo-error').hide();
+            if (!confirmUnitsIfNeeded(tipo_match, cmUnitContext)) {
+                $btn.prop('disabled', false);
+                return;
+            }
             $.post(ajaxurl, {
                 action: 'riverso_competencia_confirm_match',
                 nonce,
                 producto_competencia_id: actionCtx.id,
                 producto_base_id: actionCtx.pb,
-                nota
+                nota,
+                tipo_match
             }, function(res) {
                 $btn.prop('disabled', false);
                 if (!res.success) {
@@ -772,17 +1825,22 @@ $base_url = admin_url('admin.php?page=riverso-pos-competencia');
 
     $(document).on('click', '.cm-pick-local', function() {
         const pb = $(this).data('pb');
-        $.post(ajaxurl, {
-            action: 'riverso_competencia_manual_match',
-            nonce,
-            producto_competencia_id: manualCompetenciaId,
-            producto_base_id: pb
-        }, function(res) {
-            if (!res.success) { alert('Error'); return; }
-            $('#cm-manual-modal').hide();
-            loadList();
-            loadStats();
-        });
+        const localLabel = $(this).text();
+        $('#cm-manual-modal').hide();
+        actionCtx = { type: 'confirm_manual', id: manualCompetenciaId, pb: pb };
+        $('#cm-action-title').text('Confirmar vínculo manual');
+        $('#cm-action-summary').html(
+            '<p><strong>Producto local seleccionado:</strong> ' + esc(localLabel) + '</p>' +
+            '<p>Elige el tipo de relación con el producto de ' + esc(fuenteNombre) + '.</p>'
+        );
+        $('#cm-action-nota').val('');
+        $('#cm-action-nota-wrap').show();
+        $('#cm-action-tipo').val('');
+        $('#cm-action-tipo-error').hide();
+        $('#cm-action-tipo-wrap').show();
+        renderBlockers([], '', '');
+        $('#cm-action-submit').prop('disabled', false).text('Confirmar').show();
+        $('#cm-action-modal').show();
     });
 
     syncSeccionUi();

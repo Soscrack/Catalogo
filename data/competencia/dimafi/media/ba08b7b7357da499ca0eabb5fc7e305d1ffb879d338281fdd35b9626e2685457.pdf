@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8"/>
+        <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+        <title>Odoo</title>
+        <link type="image/x-icon" rel="shortcut icon" href="/web/static/img/favicon.ico"/>
+        <script id="web.layout.odooscript" type="text/javascript">
+            var odoo = {
+                csrf_token: "5dd6fcebfc75054304f02eb7ce93dd85de1ec37eo1819984728",
+                debug: "",
+            };
+        </script>
+        
+                <script type="text/javascript">
+                    odoo.__session_info__ = {"is_admin": false, "is_system": false, "user_id": 4};
+                </script>
+
+                <link type="text/css" rel="stylesheet" href="/web/assets/e2eee03/web.assets_frontend.min.css"/>
+        <script type="text/javascript" src="/web/assets/1cfb277/web.assets_frontend.min.js" onerror="__odooAssetError=1"></script>
+                <link type="text/css" rel="stylesheet" href="/web/assets/5e8e2d9/documents.public_page_assets.min.css"/>
+
+                <style>
+                    html, body {
+                        overflow: auto;
+                    }
+                </style>
+
+                
+            
+    </head>
+    <body class="o_docs_share_page o_home_menu_background">
+        
+
+            <div id="wrap" class="h-100 flex-column flex-nowrap d-flex position-relative container o_share_files">
+                <header class="d-flex justify-content-between align-items-center mt-3">
+                    <span class="o_company_logo" alt="Logo of DISTRIBUIDORA DE MATERIALES DE FIJACION S A" title="DISTRIBUIDORA DE MATERIALES DE FIJACION S A"><img src="/web/image/res.company/1/logo/DISTRIBUIDORA%20DE%20MATERIALES%20DE%20FIJACION%20S%20A?unique=a067e06" class="img img-fluid" alt="DISTRIBUIDORA DE MATERIALES DE FIJACION S A"/></span>
+                    <ul class="list-inline mb-0">
+                        <li>
+                            <a class="o_docs_btn btn btn-secondary" href="/web/login?redirect=/documents/qvjzk_DUTNik1iiBb31LQAo1c7">Login</a>
+                        </li>
+                    </ul>
+                </header>
+                <main class="d-flex flex-column flex-nowrap">
+                    
+
+            <div class="shadow-lg text-center bg-white p-3 rounded-3">
+                <span class="fa-stack text-black-25 fa-3x">
+                  <i class="fa fa-circle-thin fa-stack-2x"></i>
+                  <i class="fa fa-arrow-down fa-stack-1x"></i>
+                </span>
+                <div class="fs-4 text-truncate">
+                    <b>TESTIGUERA FT V4.pdf</b>
+                </div>
+                <div>
+                    Size: 
+
+        979.46 kiB
+                </div>
+                <div class="mt16 mb8 d-flex flex-column gap-2">
+                    <a title="Download file" class="btn btn-primary rounded-pill" href="https://dimafi.odoo.com/documents/content/qvjzk_DUTNik1iiBb31LQAo1c7">
+                        <i class="fa fa-download fa-fw"></i> Download file
+                    </a>
+                    <a target="new" title="Preview files" class="btn btn-primary rounded-pill" href="https://dimafi.odoo.com/documents/content/qvjzk_DUTNik1iiBb31LQAo1c7?download=0">
+                        <i class="fa fa-eye"></i> Preview file
+                    </a>
+                </div>
+            </div>
+        
+                </main>
+                <footer class="flex-grow-0 flex-shrink-0 mb16 mt32 ">
+                    <div class="text-center col-sm-12">
+                        <br/>Powered by <a target="_blank" title="Odoo Website" href="http://www.odoo.com/app/documents" class="text-reset"><span class="bg-primary p-1 rounded"><img class="o_object_fit_cover align-text-top" height="15" src="/web/static/img/logo_inverse_white_206px.png" alt="Odoo Logo"/></span><span>&nbsp;Documents.</span></a>
+                    </div>
+                </footer>
+            </div>
+        
+    </body>
+</html>

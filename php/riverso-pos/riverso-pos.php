@@ -3,7 +3,7 @@
  * Plugin Name: Riverso POS
  * Plugin URI: https://riverso.cl
  * Description: Sistema POS/mini-ERP integrado con WooCommerce para gestión de productos, facturas, inventario y tareas operativas.
- * Version: 1.6.66
+ * Version: 1.6.90
  * Author: Riverso
  * Author URI: https://riverso.cl
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constantes del plugin
-define('RIVERSO_POS_VERSION', '1.6.66');
+define('RIVERSO_POS_VERSION', '1.6.90');
 define('RIVERSO_POS_PLUGIN_FILE', __FILE__);
 define('RIVERSO_POS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RIVERSO_POS_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -88,6 +88,7 @@ final class Riverso_POS {
         // Core
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-activator.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-deactivator.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'core/permissions/class-nav-registry.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-admin-menu.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-ajax.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-assets.php';
@@ -258,6 +259,13 @@ final class Riverso_POS {
             'quotes'    => ['file' => 'class-received-quote-module.php', 'class' => 'Riverso_POS_Received_Quote_Module'],
             'costs'     => ['file' => 'class-cost-history-module.php', 'class' => 'Riverso_Cost_History_Module'],
             'codes'     => ['file' => 'class-supplier-links-module.php', 'class' => 'Riverso_Supplier_Links_Module'],
+            'manual-mapping' => [
+                'file' => 'class-manual-mapping-module.php',
+                'class' => 'Riverso_Manual_Mapping_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'modules/codes/class-manual-mapping-module.php',
+                ],
+            ],
             'barcodes'  => ['file' => 'class-barcode-module.php', 'class' => 'Riverso_Barcode_Module'],
             'catalogs'  => ['file' => 'class-catalog-module.php', 'class' => 'Riverso_Supplier_Catalogs_Module'],
             'products'  => ['file' => 'class-product-module.php', 'class' => 'Riverso_Product_Module'],
@@ -280,6 +288,13 @@ final class Riverso_POS {
                 'paths' => [
                     RIVERSO_POS_PLUGIN_DIR . 'pricing/price_lists/class-pricing-module.php',
                     RIVERSO_POS_PLUGIN_DIR . 'modules/pricing/class-pricing-module.php',
+                ],
+            ],
+            'price-history' => [
+                'file' => 'class-price-history-module.php',
+                'class' => 'Riverso_Price_History_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'modules/pricing/class-price-history-module.php',
                 ],
             ],
             'publish'   => ['file' => 'class-woo-publisher-module.php', 'class' => 'Riverso_Woo_Publisher_Module'],

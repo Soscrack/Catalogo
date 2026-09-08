@@ -641,105 +641,20 @@ class Riverso_POS_Permissions {
      * Obtiene los módulos accesibles según los permisos del usuario
      */
     public static function get_accessible_modules($user_id = null) {
-        $modules = [];
-        $can = static function ($cap) use ($user_id) {
-            if ($user_id) {
-                return user_can($user_id, $cap);
-            }
-            return current_user_can($cap);
-        };
-        
-        // Dashboard siempre visible para empleados
-        if ($can('riverso_access_portal')) {
-            $modules['dashboard'] = ['icon' => 'dashboard', 'label' => 'Dashboard'];
+        if (!class_exists('Riverso_POS_Nav_Registry')) {
+            require_once __DIR__ . '/class-nav-registry.php';
         }
-        
-        // POS
-        if ($can('riverso_use_pos')) {
-            $modules['pos'] = ['icon' => 'cart', 'label' => 'Punto de Venta'];
-        }
-        
-        // Cotizaciones a clientes
-        if ($can('riverso_view_quotes')) {
-            $modules['customer-quotes'] = ['icon' => 'media-document', 'label' => 'Cotizaciones Clientes'];
-        }
-        
-        // Cotizaciones recibidas (proveedores)
-        if ($can('riverso_view_received_quotes')) {
-            $modules['received-quotes'] = ['icon' => 'download', 'label' => 'Cotizaciones Proveedores'];
-        }
-        
-        // Tareas
-        if ($can('riverso_view_tasks')) {
-            $modules['tasks'] = ['icon' => 'clipboard', 'label' => 'Tareas'];
-        }
+        return Riverso_POS_Nav_Registry::get_portal_modules($user_id);
+    }
 
-        // Catálogo MAMUT / publicación
-        if ($can('riverso_review_products') || $can('riverso_publish_products')) {
-            $modules['catalog'] = ['icon' => 'category', 'label' => 'Catálogo'];
+    /**
+     * Módulos del portal agrupados por categoría (omite grupos vacíos).
+     */
+    public static function get_accessible_modules_grouped($user_id = null) {
+        if (!class_exists('Riverso_POS_Nav_Registry')) {
+            require_once __DIR__ . '/class-nav-registry.php';
         }
-        
-        // Productos (Hub)
-        if ($can('riverso_view_products')) {
-            $modules['products'] = ['icon' => 'archive', 'label' => 'Productos'];
-        }
-        
-        // Categorías y Familias
-        if ($can('riverso_view_categories')) {
-            $modules['categories'] = ['icon' => 'category', 'label' => 'Categorías'];
-        }
-        
-        // Bodega
-        if ($can('riverso_view_warehouse')) {
-            $modules['warehouse'] = ['icon' => 'store', 'label' => 'Bodega'];
-        }
-        
-        // Facturas recibidas
-        if ($can('riverso_view_invoices')) {
-            $modules['invoices'] = ['icon' => 'media-spreadsheet', 'label' => 'Facturas'];
-        }
-        
-        // Códigos de Barra
-        if ($can('riverso_scan_barcodes') || $can('riverso_assign_barcodes')) {
-            $modules['barcodes'] = ['icon' => 'barcode', 'label' => 'Códigos de Barra'];
-        }
-
-        // Órdenes de impresión
-        if ($can('riverso_view_print_orders') || $can('riverso_print_labels')) {
-            $modules['impresiones'] = ['icon' => 'printer', 'label' => 'Impresiones'];
-        }
-        
-        // Códigos Proveedor / SKU Links
-        if ($can('riverso_manage_codes')) {
-            $modules['codes'] = ['icon' => 'admin-links', 'label' => 'Códigos Proveedor'];
-        }
-        
-        // Proveedores
-        if ($can('riverso_view_suppliers')) {
-            $modules['suppliers'] = ['icon' => 'groups', 'label' => 'Proveedores'];
-        }
-        
-        // Historial de Costos
-        if ($can('riverso_view_costs')) {
-            $modules['cost-history'] = ['icon' => 'chart-line', 'label' => 'Historial Costos'];
-        }
-        
-        // Empleados
-        if ($can('riverso_manage_users')) {
-            $modules['employees'] = ['icon' => 'admin-users', 'label' => 'Empleados'];
-        }
-        
-        // Reportes
-        if ($can('riverso_view_reports')) {
-            $modules['reports'] = ['icon' => 'chart-bar', 'label' => 'Reportes'];
-        }
-        
-        // Configuración
-        if ($can('riverso_manage_settings')) {
-            $modules['settings'] = ['icon' => 'admin-generic', 'label' => 'Configuración'];
-        }
-        
-        return $modules;
+        return Riverso_POS_Nav_Registry::get_grouped('portal', $user_id);
     }
     
     /**

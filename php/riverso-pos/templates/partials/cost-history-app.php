@@ -107,6 +107,14 @@ $riverso_cost_history_context = isset($riverso_cost_history_context) ? $riverso_
                     <input type="date" id="filter-date-to">
                 </div>
                 
+                <div class="filter-group">
+                    <label>Vista</label>
+                    <div class="rce-view-toggle" role="group" aria-label="Vista de costos" data-rce-cost-view id="history-cost-view-toggle">
+                        <button type="button" class="button rce-view-btn is-active" data-view="bruto">Bruto</button>
+                        <button type="button" class="button rce-view-btn" data-view="neto">Neto</button>
+                    </div>
+                </div>
+
                 <div class="filter-group filter-actions">
                     <button type="button" class="button" id="btn-filter-apply">
                         <span class="dashicons dashicons-search"></span> Filtrar
@@ -744,6 +752,27 @@ $riverso_cost_history_context = isset($riverso_cost_history_context) ? $riverso_
     gap: 5px;
     flex-direction: row;
     align-items: center;
+}
+
+/* Toggle Bruto/Neto (historial) — mismo patrón que explorer */
+.riverso-cost-history-app .rce-view-toggle {
+    display: inline-flex;
+    gap: 0;
+}
+.riverso-cost-history-app .rce-view-toggle .rce-view-btn {
+    margin: 0;
+    border-radius: 0;
+}
+.riverso-cost-history-app .rce-view-toggle .rce-view-btn:first-child {
+    border-radius: 4px 0 0 4px;
+}
+.riverso-cost-history-app .rce-view-toggle .rce-view-btn:last-child {
+    border-radius: 0 4px 4px 0;
+}
+.riverso-cost-history-app .rce-view-toggle .rce-view-btn.is-active {
+    background: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
 }
 
 /* Table */
@@ -1555,6 +1584,71 @@ jQuery(document).ready(function($) {
     let currentSort = { field: 'document_date', order: 'DESC' };
     let selectedProductId = null;
     let historyById = {};
+    let lastHistoryEntries = [];
+    let historyCostViewMode = 'bruto';
+
+    function getHistoryCostViewMode() {
+        if (window.riversoCostExplorer && typeof window.riversoCostExplorer.getCostViewMode === 'function') {
+            return window.riversoCostExplorer.getCostViewMode();
+        }
+        return historyCostViewMode;
+    }
+
+    function displayHistoryUnitCost(entry) {
+        const neto = Number(entry.unit_cost != null ? entry.unit_cost : entry.cost);
+        if (!isFinite(neto)) {
+            return null;
+        }
+        if (getHistoryCostViewMode() === 'bruto') {
+            return Math.round(neto * 1.19 * 10000) / 10000;
+        }
+        return neto;
+    }
+
+    function displayItemUnitCost(it) {
+        const neto = it.costo_unitario_neto != null ? Number(it.costo_unitario_neto)
+            : (it.costo_unitario != null ? Number(it.costo_unitario) : null);
+        if (neto == null || !isFinite(neto)) {
+            return null;
+        }
+        if (getHistoryCostViewMode() === 'bruto') {
+            if (it.costo_unitario_bruto != null) {
+                return Number(it.costo_unitario_bruto);
+            }
+            return Math.round(neto * 1.19 * 10000) / 10000;
+        }
+        return neto;
+    }
+
+    function syncHistoryCostViewToggle() {
+        const mode = getHistoryCostViewMode();
+        historyCostViewMode = mode;
+        $('#history-cost-view-toggle .rce-view-btn').removeClass('is-active');
+        $('#history-cost-view-toggle .rce-view-btn[data-view="' + mode + '"]').addClass('is-active');
+    }
+
+    $(document).on('click', '#history-cost-view-toggle .rce-view-btn', function(e) {
+        // Si el explorer JS ya maneja [data-rce-cost-view], no duplicar.
+        if (window.riversoCostExplorer && typeof window.riversoCostExplorer.setCostViewMode === 'function') {
+            return;
+        }
+        e.preventDefault();
+        historyCostViewMode = $(this).data('view') || 'bruto';
+        syncHistoryCostViewToggle();
+        if (lastHistoryEntries.length) {
+            renderHistory(lastHistoryEntries);
+        }
+    });
+
+    $(document).on('riverso:cost-view-mode', function(e, mode) {
+        historyCostViewMode = mode || 'bruto';
+        syncHistoryCostViewToggle();
+        if (lastHistoryEntries.length) {
+            renderHistory(lastHistoryEntries);
+        }
+    });
+
+    syncHistoryCostViewToggle();
     
     // Tab switching (scoped to this app)
     $('.riverso-cost-history-app > .nav-tab-wrapper .nav-tab').on('click', function(e) {
@@ -1637,7 +1731,8 @@ jQuery(document).ready(function($) {
             offset: (currentPage - 1) * 50
         }, function(response) {
             if (response.success) {
-                renderHistory(response.data.history);
+                lastHistoryEntries = response.data.history || [];
+                renderHistory(lastHistoryEntries);
                 updatePagination(response.data.total, response.data.pages);
             } else {
                 $tbody.html('<tr><td colspan="10">Error: ' + response.data + '</td></tr>');
@@ -1713,7 +1808,7 @@ jQuery(document).ready(function($) {
                 <td>${escapeHtml(entry.product_name || '-')}</td>
                 <td><code>${escapeHtml(entry.product_sku || '-')}</code></td>
                 <td>${escapeHtml(entry.supplier_name || '-')}</td>
-                <td style="text-align:right">$${formatNumber(entry.unit_cost || entry.cost)}</td>
+                <td style="text-align:right">$${formatNumber(displayHistoryUnitCost(entry))}</td>
                 <td style="text-align:right">${entry.current_price ? '$' + formatNumber(entry.current_price) : '-'}</td>
                 <td style="text-align:center">
                     ${entry.margin !== null ? 
@@ -1807,7 +1902,7 @@ jQuery(document).ready(function($) {
             html += '<td><code>' + escapeHtml(it.codigo_proveedor || '—') + '</code></td>';
             html += '<td>' + escapeHtml(it.nombre || '—') + '</td>';
             html += '<td style="text-align:right">' + escapeHtml(it.cantidad) + '</td>';
-            html += '<td style="text-align:right">$' + formatNumber(it.costo_unitario) + '</td>';
+            html += '<td style="text-align:right">$' + formatNumber(displayItemUnitCost(it)) + '</td>';
             html += '<td style="text-align:right">$' + formatNumber(it.monto_total) + '</td>';
             html += '</tr>';
         });
@@ -1839,7 +1934,7 @@ jQuery(document).ready(function($) {
         html += docField('SKU', entry.product_sku);
         html += docField('Proveedor', entry.supplier_name);
         html += docField('Código proveedor', entry.supplier_code);
-        html += docField('Costo', '$' + formatNumber(entry.unit_cost || entry.cost));
+        html += docField('Costo', '$' + formatNumber(displayHistoryUnitCost(entry)));
         html += docField('Fecha documento', entry.document_date);
         html += docField('Fecha ingreso', formatDateTime(entry.created_at));
         html += docField('Origen', sourceLabel(entry.source_type));

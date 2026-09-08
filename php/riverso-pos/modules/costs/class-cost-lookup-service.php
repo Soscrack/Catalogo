@@ -50,6 +50,71 @@ class Riverso_Cost_Lookup_Service {
     }
 
     /**
+     * Costo unitario bruto desde una fila de factura_items.
+     * Escala el landed neto con el factor bruto_final/neto_final (IVA + esp.),
+     * o ×1,19 si no hay breakdown. DTE 34 (exenta) → bruto = neto.
+     *
+     * @param object|array $row
+     * @return float|null
+     */
+    public static function unit_cost_bruto_from_item($row) {
+        $row = (array) $row;
+        $neto_unit = self::unit_cost_from_item($row);
+        if ($neto_unit === null) {
+            return null;
+        }
+        return self::neto_unit_to_bruto(
+            $neto_unit,
+            isset($row['tipo_dte']) ? (int) $row['tipo_dte'] : null,
+            isset($row['costo_neto_final']) ? floatval($row['costo_neto_final']) : 0,
+            isset($row['costo_bruto_final']) ? floatval($row['costo_bruto_final']) : 0
+        );
+    }
+
+    /**
+     * Convierte un costo unitario neto a bruto.
+     *
+     * @param float      $neto_unit
+     * @param int|null   $tipo_dte
+     * @param float      $neto_final  Total línea neto (opcional, para factor real)
+     * @param float      $bruto_final Total línea bruto (opcional)
+     * @return float
+     */
+    public static function neto_unit_to_bruto($neto_unit, $tipo_dte = null, $neto_final = 0, $bruto_final = 0) {
+        $neto_unit = (float) $neto_unit;
+        if ((int) $tipo_dte === 34) {
+            return round($neto_unit, 4);
+        }
+        $neto_final = (float) $neto_final;
+        $bruto_final = (float) $bruto_final;
+        if ($neto_final > 0 && $bruto_final > 0) {
+            return round($neto_unit * ($bruto_final / $neto_final), 4);
+        }
+        return round($neto_unit * 1.19, 4);
+    }
+
+    /**
+     * Empaqueta neto + bruto unitarios para un documento/ítem.
+     *
+     * @param float|null $neto
+     * @param float|null $bruto
+     * @return array{costo_unitario:?float,costo_unitario_neto:?float,costo_unitario_bruto:?float}
+     */
+    public static function pack_unit_costs($neto, $bruto = null) {
+        $neto = $neto !== null ? (float) $neto : null;
+        if ($bruto === null && $neto !== null) {
+            $bruto = self::neto_unit_to_bruto($neto);
+        } elseif ($bruto !== null) {
+            $bruto = (float) $bruto;
+        }
+        return [
+            'costo_unitario' => $neto,
+            'costo_unitario_neto' => $neto,
+            'costo_unitario_bruto' => $bruto,
+        ];
+    }
+
+    /**
      * Búsqueda unificada: SKU local, barcode, código proveedor, nombre.
      *
      * @param string $term
@@ -544,44 +609,61 @@ class Riverso_Cost_Lookup_Service {
             }
 
             $docs = $this->query_pair_documents($prov_id, $code, 500, null, $doc_type);
-            $costs = [];
+            $costs_neto = [];
+            $costs_bruto = [];
             foreach ($docs as $d) {
-                if ($d['costo_unitario'] !== null) {
-                    $costs[] = (float) $d['costo_unitario'];
+                if ($d['costo_unitario_neto'] !== null) {
+                    $costs_neto[] = (float) $d['costo_unitario_neto'];
+                }
+                if ($d['costo_unitario_bruto'] !== null) {
+                    $costs_bruto[] = (float) $d['costo_unitario_bruto'];
                 }
             }
 
             $latest = $docs[0] ?? null;
             $previous = $docs[1] ?? null;
             $variation = null;
-            if ($latest && $previous && $previous['costo_unitario'] > 0 && $latest['costo_unitario'] !== null) {
+            if ($latest && $previous && $previous['costo_unitario_neto'] > 0 && $latest['costo_unitario_neto'] !== null) {
                 $variation = round(
-                    (($latest['costo_unitario'] - $previous['costo_unitario']) / $previous['costo_unitario']) * 100,
+                    (($latest['costo_unitario_neto'] - $previous['costo_unitario_neto']) / $previous['costo_unitario_neto']) * 100,
                     2
                 );
             }
+
+            $ultimo_neto = $latest['costo_unitario_neto'] ?? null;
+            $ultimo_bruto = $latest['costo_unitario_bruto'] ?? null;
+            $prev_neto = $previous['costo_unitario_neto'] ?? null;
+            $prev_bruto = $previous['costo_unitario_bruto'] ?? null;
 
             $summary = [
                 'proveedor_id' => $prov_id,
                 'codigo_proveedor' => $code,
                 'proveedor_nombre' => $pair['proveedor_nombre'] ?? $this->get_proveedor_nombre($prov_id),
-                'ultimo_costo' => $latest ? $latest['costo_unitario'] : null,
+                'ultimo_costo' => $ultimo_neto,
+                'ultimo_costo_neto' => $ultimo_neto,
+                'ultimo_costo_bruto' => $ultimo_bruto,
                 'ultimo_fecha' => $latest ? $latest['fecha_emision'] : null,
                 'ultimo_folio' => $latest ? $latest['folio'] : null,
                 'ultimo_factura_id' => $latest ? ($latest['factura_id'] ?? null) : null,
                 'ultimo_item_id' => $latest ? $latest['item_id'] : null,
                 'ultimo_source_kind' => $latest ? ($latest['source_kind'] ?? 'invoice') : null,
-                'costo_previo' => $previous ? $previous['costo_unitario'] : null,
+                'costo_previo' => $prev_neto,
+                'costo_previo_neto' => $prev_neto,
+                'costo_previo_bruto' => $prev_bruto,
                 'variacion_pct' => $variation,
-                'min_costo' => $costs ? min($costs) : null,
-                'max_costo' => $costs ? max($costs) : null,
-                'avg_costo' => $costs ? round(array_sum($costs) / count($costs), 2) : null,
+                'min_costo' => $costs_neto ? min($costs_neto) : null,
+                'max_costo' => $costs_neto ? max($costs_neto) : null,
+                'avg_costo' => $costs_neto ? round(array_sum($costs_neto) / count($costs_neto), 2) : null,
+                'min_costo_neto' => $costs_neto ? min($costs_neto) : null,
+                'max_costo_neto' => $costs_neto ? max($costs_neto) : null,
+                'min_costo_bruto' => $costs_bruto ? min($costs_bruto) : null,
+                'max_costo_bruto' => $costs_bruto ? max($costs_bruto) : null,
                 'total_documentos' => count($docs),
                 'doc_type' => $doc_type,
             ];
             $summaries[] = $summary;
 
-            if ($latest && $latest['costo_unitario'] !== null) {
+            if ($latest && $ultimo_neto !== null) {
                 if (
                     $global_latest === null
                     || strcmp((string) $latest['fecha_emision'], (string) $global_latest['ultimo_fecha']) > 0
@@ -628,12 +710,14 @@ class Riverso_Cost_Lookup_Service {
             $docs = array_reverse($docs);
             $points = [];
             foreach ($docs as $d) {
-                if ($d['costo_unitario'] === null) {
+                if ($d['costo_unitario_neto'] === null) {
                     continue;
                 }
                 $points[] = [
                     'fecha' => $d['fecha_emision'],
-                    'costo_unitario' => $d['costo_unitario'],
+                    'costo_unitario' => $d['costo_unitario_neto'],
+                    'costo_unitario_neto' => $d['costo_unitario_neto'],
+                    'costo_unitario_bruto' => $d['costo_unitario_bruto'],
                     'folio' => $d['folio'],
                     'factura_id' => $d['factura_id'] ?? null,
                     'source_kind' => $d['source_kind'] ?? 'invoice',
@@ -662,15 +746,19 @@ class Riverso_Cost_Lookup_Service {
                 // Si hay varios el mismo día, quedarse con el último (más reciente en lista asc)
                 $by_date[$p['fecha']] = $p;
             }
-            $data = [];
+            $data_neto = [];
+            $data_bruto = [];
             foreach ($labels as $lab) {
-                $data[] = isset($by_date[$lab]) ? $by_date[$lab]['costo_unitario'] : null;
+                $data_neto[] = isset($by_date[$lab]) ? $by_date[$lab]['costo_unitario_neto'] : null;
+                $data_bruto[] = isset($by_date[$lab]) ? $by_date[$lab]['costo_unitario_bruto'] : null;
             }
             $datasets[] = [
                 'proveedor_id' => $s['proveedor_id'],
                 'codigo_proveedor' => $s['codigo_proveedor'],
                 'label' => $s['label'],
-                'data' => $data,
+                'data' => $data_neto,
+                'data_neto' => $data_neto,
+                'data_bruto' => $data_bruto,
                 'points' => $s['points'],
             ];
         }
@@ -715,7 +803,14 @@ class Riverso_Cost_Lookup_Service {
         ), ARRAY_A);
 
         foreach ($items as &$item) {
-            $item['costo_unitario'] = self::unit_cost_from_item($item);
+            $item['tipo_dte'] = (int) $factura['tipo_dte'];
+            $packed = self::pack_unit_costs(
+                self::unit_cost_from_item($item),
+                self::unit_cost_bruto_from_item($item)
+            );
+            $item['costo_unitario'] = $packed['costo_unitario'];
+            $item['costo_unitario_neto'] = $packed['costo_unitario_neto'];
+            $item['costo_unitario_bruto'] = $packed['costo_unitario_bruto'];
         }
         unset($item);
 
@@ -732,6 +827,83 @@ class Riverso_Cost_Lookup_Service {
             'monto_total' => floatval($factura['monto_total']),
             'estado' => $factura['estado'],
             'items' => $items,
+        ];
+    }
+
+    /**
+     * Referencia de costo del catálogo TPV legacy (legacy_precio_ref).
+     *
+     * @param string $sku
+     * @return array|null
+     */
+    private function get_legacy_cost_for_sku($sku) {
+        global $wpdb;
+
+        $sku = trim((string) $sku);
+        if ($sku === '') {
+            return null;
+        }
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT sku, nombre, costo_neto, precio_neto, precio_total, fuente, importado_at
+             FROM {$this->prefix}legacy_precio_ref
+             WHERE sku = %s
+             ORDER BY importado_at DESC
+             LIMIT 1",
+            $sku
+        ), ARRAY_A);
+
+        if (!$row) {
+            return null;
+        }
+
+        $costo = $row['costo_neto'] !== null ? (float) $row['costo_neto'] : null;
+        if ($costo === null || $costo <= 0) {
+            return null;
+        }
+
+        return [
+            'sku' => $row['sku'],
+            'nombre' => $row['nombre'],
+            'costo_neto' => $costo,
+            'costo_sin_dato' => false,
+            'precio_neto' => $row['precio_neto'] !== null ? (float) $row['precio_neto'] : null,
+            'precio_total' => $row['precio_total'] !== null ? (float) $row['precio_total'] : null,
+            'fuente' => $row['fuente'],
+            'importado_at' => $row['importado_at'] ?: null,
+            'referencia' => true,
+        ];
+    }
+
+    /**
+     * Highlight de fallback desde legacy cuando no hay costo de factura/cotización.
+     *
+     * @param array|null $product
+     * @return array{highlight:array|null,legacy_ref:array|null}
+     */
+    private function legacy_highlight_fallback($product) {
+        $sku = !empty($product['canonical_sku']) ? (string) $product['canonical_sku'] : '';
+        $legacy = $this->get_legacy_cost_for_sku($sku);
+        if (!$legacy) {
+            return ['highlight' => null, 'legacy_ref' => null];
+        }
+
+        $neto = (float) $legacy['costo_neto'];
+        $bruto = self::neto_unit_to_bruto($neto);
+        return [
+            'legacy_ref' => $legacy,
+            'highlight' => [
+                'ultimo_costo' => $neto,
+                'ultimo_costo_neto' => $neto,
+                'ultimo_costo_bruto' => $bruto,
+                'ultimo_fecha' => $legacy['importado_at'] ?? null,
+                'ultimo_folio' => null,
+                'proveedor_nombre' => 'Catálogo TPV legacy',
+                'codigo_proveedor' => $sku,
+                'ultimo_source_kind' => 'legacy',
+                'source' => 'legacy',
+                'variacion_pct' => null,
+            ],
         ];
     }
 
@@ -780,14 +952,30 @@ class Riverso_Cost_Lookup_Service {
         }
 
         if (empty($pares)) {
+            $legacy_fb = $this->legacy_highlight_fallback($product);
             return [
                 'product' => $product,
                 'pares' => [],
                 'timeline' => [],
-                'summary' => ['by_pair' => [], 'highlight' => null],
+                'summary' => [
+                    'by_pair' => [],
+                    'highlight' => $legacy_fb['highlight'],
+                ],
                 'chart' => ['labels' => [], 'datasets' => []],
                 'doc_type' => $doc_type,
+                'legacy_ref' => $legacy_fb['legacy_ref'],
             ];
+        }
+
+        $summary = $this->get_pair_summary($pares, $doc_type);
+        $legacy_ref = null;
+        $highlight = $summary['highlight'] ?? null;
+        if (!$highlight || $highlight['ultimo_costo'] === null) {
+            $legacy_fb = $this->legacy_highlight_fallback($product);
+            $legacy_ref = $legacy_fb['legacy_ref'];
+            if ($legacy_fb['highlight']) {
+                $summary['highlight'] = $legacy_fb['highlight'];
+            }
         }
 
         return [
@@ -797,9 +985,10 @@ class Riverso_Cost_Lookup_Service {
                 'limit_per_pair' => $limit_per_pair,
                 'doc_type' => $doc_type,
             ]),
-            'summary' => $this->get_pair_summary($pares, $doc_type),
+            'summary' => $summary,
             'chart' => $this->get_chart_series($pares, $months, $doc_type),
             'doc_type' => $doc_type,
+            'legacy_ref' => $legacy_ref,
         ];
     }
 
@@ -1579,7 +1768,7 @@ class Riverso_Cost_Lookup_Service {
         $sql = "SELECT f.id AS factura_id, f.tipo_dte, f.folio, f.fecha_emision, f.estado,
                        f.documento_subtipo, f.proveedor_id, p.nombre AS proveedor_nombre,
                        fi.id AS item_id, fi.numero_linea, fi.nombre, fi.cantidad, fi.unidad,
-                       fi.precio_unitario, fi.costo_neto_final, fi.costo_landed_unitario,
+                       fi.precio_unitario, fi.costo_neto_final, fi.costo_bruto_final, fi.costo_landed_unitario,
                        fi.codigo_proveedor, fi.sku_local, fi.monto_total
                 FROM {$this->prefix}factura_items fi
                 INNER JOIN {$this->prefix}facturas f ON f.id = fi.factura_id
@@ -1605,6 +1794,10 @@ class Riverso_Cost_Lookup_Service {
             $doc_label = $tipo === 52 || ($row['documento_subtipo'] ?? '') === 'guia_despacho'
                 ? 'Guía'
                 : ($tipo === 34 ? 'Exenta' : ($tipo === 33 ? 'Factura' : ('DTE ' . $tipo)));
+            $packed = self::pack_unit_costs(
+                self::unit_cost_from_item($row),
+                self::unit_cost_bruto_from_item($row)
+            );
             $out[] = [
                 'source_kind' => 'invoice',
                 'factura_id' => (int) $row['factura_id'],
@@ -1624,7 +1817,9 @@ class Riverso_Cost_Lookup_Service {
                 'unidad' => $row['unidad'],
                 'codigo_proveedor' => $row['codigo_proveedor'],
                 'sku_local' => $row['sku_local'],
-                'costo_unitario' => self::unit_cost_from_item($row),
+                'costo_unitario' => $packed['costo_unitario'],
+                'costo_unitario_neto' => $packed['costo_unitario_neto'],
+                'costo_unitario_bruto' => $packed['costo_unitario_bruto'],
                 'monto_total' => floatval($row['monto_total']),
             ];
         }
@@ -1661,6 +1856,8 @@ class Riverso_Cost_Lookup_Service {
         $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
         $out = [];
         foreach ($rows ?: [] as $row) {
+            $neto = $row['costo_neto'] !== null ? floatval($row['costo_neto']) : null;
+            $packed = self::pack_unit_costs($neto);
             $out[] = [
                 'source_kind' => 'quote',
                 'factura_id' => null,
@@ -1680,7 +1877,9 @@ class Riverso_Cost_Lookup_Service {
                 'unidad' => $row['unidad'],
                 'codigo_proveedor' => $row['codigo_proveedor'],
                 'sku_local' => null,
-                'costo_unitario' => $row['costo_neto'] !== null ? floatval($row['costo_neto']) : null,
+                'costo_unitario' => $packed['costo_unitario'],
+                'costo_unitario_neto' => $packed['costo_unitario_neto'],
+                'costo_unitario_bruto' => $packed['costo_unitario_bruto'],
                 'monto_total' => floatval($row['costo_total']),
             ];
         }

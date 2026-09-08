@@ -180,8 +180,12 @@ $facto_tax_type_id = riverso_get_facto_config('tax_type_id', 387);
                 <td>
                     <label>
                         <input type="checkbox" name="facto_sync_enabled" value="1" <?php checked($facto_sync_enabled, 1); ?>>
-                        Encolar create/update/archive de productos hacia FACTO
+                        Permitir drenar outbox legacy (cron / “Procesar outbox ahora”)
                     </label>
+                    <p class="description" style="margin-top:6px;">
+                        El alta o edición de productos <strong>ya no</strong> encola create/update hacia la API.
+                        El ingreso a FACTO es solo por <strong>export Excel</strong> (mapa en <code>pendiente_excel</code>).
+                    </p>
                 </td>
             </tr>
             <tr>

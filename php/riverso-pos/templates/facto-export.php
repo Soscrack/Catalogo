@@ -19,6 +19,7 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
         Máximo <?php echo (int) $chunk_size; ?> productos por archivo.
         El modo <strong>Reemplazar</strong> solo está disponible si el catálogo completo cabe en un solo archivo.
         <strong>CREAR</strong> y <strong>EDITAR</strong> se cubren con los modos de abajo; <strong>ELIMINAR</strong> en FACTO no va en este Excel (queda fuera de alcance).
+        Un <strong>cambio de SKU</strong> (SKU anterior → SKU nuevo) no se aplica por CRUD: usa el panel <em>Cambios de SKU</em> y el archivo de instrucciones aparte.
     </p>
 
     <div id="fe-pending-panel" class="card" style="max-width:920px;padding:16px 20px;margin-top:16px;display:none;border-left:4px solid #d63638;">
@@ -27,6 +28,28 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
         <div id="fe-pending-samples" style="margin-top:10px;"></div>
         <p style="margin-top:12px;">
             <button type="button" class="button button-primary" id="fe-export-pending-btn">Exportar solo pendientes</button>
+        </p>
+    </div>
+
+    <div id="fe-sku-changes-panel" class="card" style="max-width:920px;padding:16px 20px;margin-top:16px;display:none;border-left:4px solid #f9a825;background:#fffdf5;">
+        <h2 style="margin-top:0;">Cambios de SKU (manual en FACTO)</h2>
+        <p class="description" style="margin-bottom:8px;">
+            FACTO no permite renombrar SKU por API ni por el Excel CRUD. Estos casos van en un <strong>archivo aparte</strong>:
+            debes cambiar <code>SKU_Anterior</code> → <code>SKU_Nuevo</code> a mano en FACTO.
+        </p>
+        <p id="fe-sku-changes-message" class="description"></p>
+        <div id="fe-sku-changes-samples" style="margin-top:10px;"></div>
+        <p style="margin-top:12px;">
+            <button type="button" class="button" id="fe-view-sku-changes-btn">Ver cambios de SKU</button>
+            <button type="button" class="button button-primary" id="fe-download-sku-changes-btn">Descargar instrucciones SKU</button>
+        </p>
+    </div>
+
+    <div id="fe-sku-changes-detail" class="card" style="max-width:920px;padding:16px 20px;margin-top:16px;display:none;">
+        <h2 style="margin-top:0;">Detalle cambios de SKU</h2>
+        <div id="fe-sku-changes-detail-table" style="max-height:420px;overflow:auto;"></div>
+        <p style="margin-top:12px;">
+            <button type="button" class="button" id="fe-sku-changes-detail-close">Cerrar</button>
         </p>
     </div>
 
@@ -70,17 +93,40 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
                 </td>
             </tr>
         </table>
-        <p>
-            <button type="button" class="button" id="fe-preview-btn">Vista previa</button>
-            <button type="button" class="button button-primary" id="fe-download-btn" disabled>Descargar Excel</button>
-        </p>
+        <div style="margin-top:8px;padding:14px 16px;border:1px solid #c3c4c7;border-left:4px solid #2271b1;background:#f0f6fc;border-radius:2px;">
+            <p style="margin:0 0 10px;"><strong>Ver qué columnas cambian</strong></p>
+            <p class="description" style="margin:0 0 12px;">
+                Compara el export actual con el último lote FACTO marcado como aplicado y muestra
+                <strong>antes → después</strong> por columna (Nombre, Precio, Categoría, Stock mínimo, etc.).
+            </p>
+            <p style="margin:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                <button type="button" class="button button-primary button-hero" id="fe-view-changes-btn" style="font-size:14px;min-height:36px;">
+                    Ver cambios
+                </button>
+                <button type="button" class="button" id="fe-preview-btn">Vista previa (mismo cálculo)</button>
+                <button type="button" class="button button-primary" id="fe-download-btn" disabled>Descargar Excel</button>
+            </p>
+        </div>
+        <p class="description" id="fe-status-line" style="margin-top:8px;"></p>
     </div>
 
-    <div id="fe-preview-panel" class="card" style="max-width:920px;padding:16px 20px;margin-top:16px;display:none;">
-        <h2 style="margin-top:0;">Vista previa</h2>
+    <div id="fe-preview-panel" class="card" style="max-width:1100px;padding:16px 20px;margin-top:16px;display:none;border-left:4px solid #2271b1;">
+        <h2 style="margin-top:0;">Cambios detectados (columnas)</h2>
         <div id="fe-preview-summary"></div>
+        <div id="fe-preview-toolbar" style="display:none;margin-top:12px;flex-wrap:wrap;gap:8px;align-items:center;">
+            <input type="search" id="fe-change-q" class="regular-text" placeholder="Buscar SKU o nombre" style="max-width:280px;">
+            <span class="button-group">
+                <button type="button" class="button button-primary fe-accion-filter" data-accion="">Todos</button>
+                <button type="button" class="button fe-accion-filter" data-accion="CREAR">CREAR</button>
+                <button type="button" class="button fe-accion-filter" data-accion="EDITAR">EDITAR</button>
+            </span>
+        </div>
+        <div id="fe-preview-samples" style="margin-top:12px;"></div>
         <div id="fe-preview-errors" style="margin-top:12px;color:#b32d2e;"></div>
         <div id="fe-preview-warnings" style="margin-top:8px;color:#856404;"></div>
+        <p style="margin-top:14px;">
+            <button type="button" class="button button-primary" id="fe-download-btn-2" disabled>Descargar Excel</button>
+        </p>
     </div>
 
     <div class="card" style="max-width:920px;padding:16px 20px;margin-top:16px;">
@@ -130,6 +176,8 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
     let lastPreview = null;
     let lastBatchId = null;
     let lastPendingData = null;
+    let lastSkuChanges = null;
+    let previewAccion = '';
 
     const modoHelp = {
         update_only: 'EDITAR: actualiza productos que ya tienen mapa Riverso ↔ FACTO.',
@@ -154,6 +202,77 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
         return $('<div/>').text(s == null ? '' : s).html();
     }
 
+    function setDownloadEnabled(enabled) {
+        $('#fe-download-btn, #fe-download-btn-2').prop('disabled', !enabled);
+    }
+
+    function accionStyle(accion) {
+        if (accion === 'CREAR') return 'color:#2271b1;font-weight:600;';
+        if (accion === 'EDITAR') return 'color:#00a32a;font-weight:600;';
+        return '';
+    }
+
+    function renderDiffs(row) {
+        const diffs = row.diffs || [];
+        if (diffs.length) {
+            return '<table class="widefat" style="margin:0;background:transparent;border:0;box-shadow:none;"><tbody>' +
+                diffs.map(function(d) {
+                    const from = d.antes === '' || d.antes == null ? '—' : d.antes;
+                    const to = d.despues === '' || d.despues == null ? '—' : d.despues;
+                    return '<tr><td style="padding:2px 6px;min-width:110px;"><strong>' + esc(d.campo) + '</strong></td>' +
+                        '<td style="padding:2px 6px;"><code>' + esc(from) + '</code> → <code>' + esc(to) + '</code></td></tr>';
+                }).join('') +
+                '</tbody></table>';
+        }
+        if (row.accion === 'CREAR') return '<span class="description">Nuevo en FACTO</span>';
+        return '<span class="description">—</span>';
+    }
+
+    function renderChangeSamples(data) {
+        const q = ($('#fe-change-q').val() || '').toLowerCase().trim();
+        const rows = (data.preview_rows || []).filter(function(row) {
+            if (previewAccion && row.accion !== previewAccion) return false;
+            if (!q) return true;
+            const hay = ((row.sku || '') + ' ' + (row.sku_local || '') + ' ' + (row.nombre || '')).toLowerCase();
+            return hay.indexOf(q) !== -1;
+        });
+        const changed = parseInt(data.changed_count || 0, 10);
+        $('#fe-preview-toolbar').css('display', changed > 0 ? 'flex' : 'none');
+
+        if (!changed) {
+            let msg = 'No hay diferencias de columnas respecto al último lote aplicado.';
+            if (!data.has_baseline) {
+                msg = 'Sin lote aplicado como baseline: todas las filas del export se tratan como nuevas o sin historial local. Marca un lote como aplicado tras importar en FACTO.';
+            } else if ((data.total || 0) > 0) {
+                msg = 'Hay ' + data.total + ' fila(s) en el Excel, pero ninguna con cambio de columna vs el baseline (o están filtradas). Marca «Solo filas cambiadas» / «Solo pendientes» según corresponda.';
+            }
+            $('#fe-preview-samples').html('<p class="description">' + esc(msg) + '</p>');
+            return;
+        }
+
+        let html = '<div style="max-height:480px;overflow:auto;"><table class="widefat striped"><thead><tr>' +
+            '<th>Acción</th><th>SKU</th><th>Nombre</th><th>Precio total</th><th>Columnas que cambian</th>' +
+            '</tr></thead><tbody>';
+        if (!rows.length) {
+            html += '<tr><td colspan="5">Ninguna fila coincide con el filtro.</td></tr>';
+        } else {
+            rows.forEach(function(row) {
+                html += '<tr>' +
+                    '<td><span style="' + accionStyle(row.accion) + '">' + esc(row.accion) + '</span></td>' +
+                    '<td><code>' + esc(row.sku) + '</code></td>' +
+                    '<td>' + esc(row.nombre || '—') + '</td>' +
+                    '<td>' + esc(row.precio || '—') + '</td>' +
+                    '<td>' + renderDiffs(row) + '</td>' +
+                    '</tr>';
+            });
+        }
+        html += '</tbody></table></div>';
+        if (data.preview_truncated) {
+            html += '<p class="description">Mostrando ' + (data.preview_rows || []).length + ' de ' + changed + ' cambios. El Excel incluye el listado completo.</p>';
+        }
+        $('#fe-preview-samples').html(html);
+    }
+
     function renderPending(data) {
         const total = parseInt(data.pending_total || 0, 10);
         if (total <= 0) {
@@ -173,6 +292,60 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
             html += '<p class="description">… y ' + (total - data.samples.length) + ' más.</p>';
         }
         $('#fe-pending-samples').html(html);
+    }
+
+    function renderSkuChangesPanel(data) {
+        lastSkuChanges = data || {};
+        const total = parseInt(lastSkuChanges.total || 0, 10);
+        if (total <= 0) {
+            $('#fe-sku-changes-panel').hide();
+            return;
+        }
+        $('#fe-sku-changes-panel').show();
+        $('#fe-sku-changes-message').text(lastSkuChanges.message || '');
+        let html = '<table class="widefat striped"><thead><tr><th>SKU anterior</th><th>SKU nuevo</th><th>Nombre</th><th>ID FACTO</th></tr></thead><tbody>';
+        (lastSkuChanges.samples || []).slice(0, 8).forEach(function(row) {
+            html += '<tr><td><code>' + esc(row.sku_anterior) + '</code></td><td><code>' + esc(row.sku_nuevo) + '</code></td><td>' + esc(row.nombre || '—') + '</td><td>' + esc(row.facto_product_id || '—') + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        if (total > Math.min(8, (lastSkuChanges.samples || []).length)) {
+            html += '<p class="description">… y más. Usa «Ver cambios de SKU» para el listado completo.</p>';
+        }
+        $('#fe-sku-changes-samples').html(html);
+    }
+
+    function renderSkuChangesDetail(data) {
+        const rows = data.samples || [];
+        let html = '<table class="widefat striped"><thead><tr><th>SKU anterior</th><th>SKU nuevo</th><th>Nombre</th><th>ID FACTO</th><th>Instrucción</th></tr></thead><tbody>';
+        if (!rows.length) {
+            html += '<tr><td colspan="5">Sin cambios de SKU.</td></tr>';
+        } else {
+            rows.forEach(function(row) {
+                html += '<tr>' +
+                    '<td><code>' + esc(row.sku_anterior) + '</code></td>' +
+                    '<td><code>' + esc(row.sku_nuevo) + '</code></td>' +
+                    '<td>' + esc(row.nombre || '—') + '</td>' +
+                    '<td>' + esc(row.facto_product_id || '—') + '</td>' +
+                    '<td>' + esc(row.instruccion || '') + '</td>' +
+                    '</tr>';
+            });
+        }
+        html += '</tbody></table>';
+        if ((data.total || 0) > rows.length) {
+            html += '<p class="description">Mostrando ' + rows.length + ' de ' + data.total + '. Descarga el Excel para el listado completo.</p>';
+        }
+        $('#fe-sku-changes-detail-table').html(html);
+        $('#fe-sku-changes-detail').show();
+        $('html, body').animate({ scrollTop: $('#fe-sku-changes-detail').offset().top - 60 }, 200);
+    }
+
+    function loadSkuChanges() {
+        $.post(ajaxurl, { action: 'riverso_facto_export_sku_changes', nonce }, function(r) {
+            if (!r.success) {
+                return;
+            }
+            renderSkuChangesPanel(r.data || {});
+        });
     }
 
     function applyPendingExportFilters(pending) {
@@ -226,6 +399,8 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
         let html = '<button type="button" class="button button-small fe-view-diff" data-id="' + b.id + '">Ver cambios</button> ';
         if (b.can_mark_applied) {
             html += '<button type="button" class="button button-small fe-mark-applied" data-id="' + b.id + '">Marcar aplicado</button>';
+        } else if (b.blocked_by_newer) {
+            html += '<span class="description">Hay un lote posterior ya aplicado</span>';
         } else if (b.can_unmark_applied) {
             html += '<button type="button" class="button button-small fe-unmark-applied" data-id="' + b.id + '">Desmarcar</button>';
         }
@@ -301,73 +476,108 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
         });
     }
 
-    $('#fe-modo').on('change', refreshModoHelp);
-    refreshModoHelp();
-    loadPending();
-    loadBatches();
-
-    $('#fe-export-pending-btn').on('click', function() {
-        if (!lastPendingData || parseInt(lastPendingData.pending_total || 0, 10) <= 0) {
-            alert('No hay productos pendientes de export.');
-            return;
+    function applyPreview(d) {
+        lastPreview = d;
+        let html = '';
+        if (d.total <= 0) {
+            html += '<p style="color:#b32d2e;margin:0 0 10px;"><strong>Sin filas para exportar.</strong> ' + esc(d.empty_hint || '') + '</p>';
         }
-        applyPendingExportFilters(lastPendingData);
-        refreshModoHelp();
-        $('html, body').animate({ scrollTop: $('#fe-preview-btn').offset().top - 80 }, 200);
-        $('#fe-preview-btn').trigger('click');
-    });
+        html += '<ul style="margin:0;">' +
+            '<li><strong>Cambios de columnas:</strong> ' + (d.changed_count || 0) +
+                ' (CREAR ' + (d.create_count || 0) + ', EDITAR ' + (d.update_count || 0) + ')</li>' +
+            '<li><strong>Total filas Excel:</strong> ' + d.total + '</li>' +
+            '<li><strong>Tandas:</strong> ' + (d.tandas || 0) + ' (máx. ' + d.chunk_size + ' por archivo)</li>' +
+            '<li><strong>Con mapa FACTO:</strong> ' + d.mapped_count + '</li>' +
+            '</ul>';
+        if (d.replace_blocked) {
+            html += '<p style="color:#b32d2e;margin-top:10px;"><strong>Reemplazar bloqueado:</strong> ' + esc(d.replace_reason) + '</p>';
+        }
+        if (d.pending && d.pending.pending_total > 0) {
+            const pc = parseInt(d.pending.pending_create || 0, 10);
+            const pe = parseInt(d.pending.pending_mapped || 0, 10);
+            html += '<p style="margin-top:10px;"><strong>Pendientes de export:</strong> ' + d.pending.pending_total + ' (' + pc + ' CREAR, ' + pe + ' EDITAR)</p>';
+        }
+        if (d.sku_changes && d.sku_changes.total > 0) {
+            html += '<p style="margin-top:10px;color:#856404;"><strong>Cambios de SKU (manual):</strong> ' + d.sku_changes.total +
+                ' — no van en el Excel CRUD; usa «Ver cambios de SKU» / «Descargar instrucciones SKU».</p>';
+            renderSkuChangesPanel(d.sku_changes);
+        }
+        if ((d.hydrated_count || 0) > 0) {
+            html += '<p style="margin-top:10px;"><strong>Filas completadas desde FACTO:</strong> ' + d.hydrated_count + ' (precio/marca/categoría remota + tus cambios locales encima).</p>';
+        }
+        if (d.has_baseline) {
+            html += '<p class="description" style="margin-top:10px;">Baseline: lotes FACTO marcados como aplicados.</p>';
+        } else {
+            html += '<p class="description" style="margin-top:10px;">Sin baseline aplicado: no hay historial local de columnas para comparar.</p>';
+        }
+        $('#fe-preview-summary').html(html);
+        if (d.pending) {
+            renderPending(d.pending);
+        }
+        renderChangeSamples(d);
+        const errs = (d.sample_errors || []).map(function(e) {
+            return 'SKU ' + esc(e.sku || '?') + ': ' + esc(e.message);
+        }).join('<br>');
+        $('#fe-preview-errors').html(errs ? ('<strong>Errores:</strong><br>' + errs) : '');
+        const warns = (d.validation && d.validation.warnings && d.validation.warnings.length)
+            ? d.validation.warnings.map(function(w){ return esc(w); }).join('<br>')
+            : '';
+        $('#fe-preview-warnings').html(warns ? ('<strong>Advertencias:</strong><br>' + warns) : '');
+        $('#fe-tandas-label').text(d.tandas > 1 ? (' de ' + d.tandas) : '');
+        const canDl = !!(d.can_download && d.total > 0);
+        setDownloadEnabled(canDl);
+        $('#fe-status-line').html(canDl
+            ? ('Listo para descargar: <strong>' + d.total + '</strong> fila(s).')
+            : 'Nada descargable con estos filtros.');
+    }
 
-    $('#fe-preview-btn').on('click', function() {
-        const f = filters();
-        $.post(ajaxurl, Object.assign({ action: 'riverso_facto_export_preview', nonce }, f), function(r) {
-            $('#fe-preview-panel').show();
-            if (!r.success) {
-                $('#fe-preview-summary').html('<p style="color:#b32d2e;">' + esc(r.data && r.data.message ? r.data.message : 'Error') + '</p>');
-                $('#fe-download-btn').prop('disabled', true);
+    function runPreview(opts) {
+        opts = opts || {};
+        const $btns = $('#fe-preview-btn, #fe-view-changes-btn').prop('disabled', true);
+        $('#fe-preview-panel').show();
+        $('#fe-preview-summary').html('<p class="description">Calculando cambios…</p>');
+        $('#fe-preview-samples').empty();
+        $('#fe-preview-toolbar').hide();
+        $('#fe-preview-errors, #fe-preview-warnings').empty();
+        $('#fe-status-line').text('Calculando…');
+        setDownloadEnabled(false);
+
+        $.ajax({
+            url: ajaxurl,
+            method: 'POST',
+            dataType: 'json',
+            timeout: 180000,
+            data: Object.assign({ action: 'riverso_facto_export_preview', nonce: nonce }, filters())
+        }).done(function(r) {
+            if (!r || !r.success) {
+                const msg = (r && r.data && r.data.message) ? r.data.message : 'Error al calcular la vista previa';
+                $('#fe-preview-summary').html('<p style="color:#b32d2e;">' + esc(msg) + '</p>');
+                $('#fe-status-line').html('<span style="color:#b32d2e;">' + esc(msg) + '</span>');
+                setDownloadEnabled(false);
                 return;
             }
-            lastPreview = r.data;
-            const d = r.data;
-            let html = '';
-            if (d.total <= 0) {
-                html += '<p style="color:#b32d2e;margin:0 0 10px;"><strong>Sin filas para exportar.</strong> ' + esc(d.empty_hint || '') + '</p>';
+            applyPreview(r.data || {});
+            if (opts.scroll !== false) {
+                $('html, body').animate({ scrollTop: $('#fe-preview-panel').offset().top - 60 }, 200);
             }
-            html += '<ul style="margin:0;">' +
-                '<li><strong>Total filas:</strong> ' + d.total + '</li>' +
-                '<li><strong>Tandas:</strong> ' + (d.tandas || 0) + ' (máx. ' + d.chunk_size + ' por archivo)</li>' +
-                '<li><strong>Con mapa FACTO:</strong> ' + d.mapped_count + '</li>' +
-                '</ul>';
-            if (d.replace_blocked) {
-                html += '<p style="color:#b32d2e;margin-top:10px;"><strong>Reemplazar bloqueado:</strong> ' + esc(d.replace_reason) + '</p>';
+        }).fail(function(xhr) {
+            let msg = 'No se pudo calcular la vista previa';
+            if (xhr && xhr.statusText === 'timeout') {
+                msg = 'La vista previa tardó demasiado (timeout). Reintenta o filtra por SKU.';
+            } else if (xhr && xhr.status) {
+                msg += ' (HTTP ' + xhr.status + ')';
             }
-            if (d.pending && d.pending.pending_total > 0) {
-                const pc = parseInt(d.pending.pending_create || 0, 10);
-                const pe = parseInt(d.pending.pending_mapped || 0, 10);
-                html += '<p style="margin-top:10px;"><strong>Pendientes de export:</strong> ' + d.pending.pending_total + ' (' + pc + ' CREAR, ' + pe + ' EDITAR)</p>';
-            }
-            if ((d.hydrated_count || 0) > 0) {
-                html += '<p style="margin-top:10px;"><strong>Filas completadas desde FACTO:</strong> ' + d.hydrated_count + ' (precio/marca/categoría remota + tus cambios locales encima).</p>';
-            }
-            $('#fe-preview-summary').html(html);
-            if (d.pending) {
-                renderPending(d.pending);
-            }
-            const errs = (d.sample_errors || []).map(function(e) {
-                return 'SKU ' + esc(e.sku || '?') + ': ' + esc(e.message);
-            }).join('<br>');
-            $('#fe-preview-errors').html(errs ? ('<strong>Errores:</strong><br>' + errs) : '');
-            const warns = (d.validation && d.validation.warnings && d.validation.warnings.length)
-                ? d.validation.warnings.map(function(w){ return esc(w); }).join('<br>')
-                : '';
-            $('#fe-preview-warnings').html(warns ? ('<strong>Advertencias:</strong><br>' + warns) : '');
-            $('#fe-tandas-label').text(d.tandas > 1 ? (' de ' + d.tandas) : '');
-            $('#fe-download-btn').prop('disabled', !d.can_download || d.total <= 0);
+            $('#fe-preview-summary').html('<p style="color:#b32d2e;">' + esc(msg) + '</p>');
+            $('#fe-status-line').html('<span style="color:#b32d2e;">' + esc(msg) + '</span>');
+            setDownloadEnabled(false);
+        }).always(function() {
+            $btns.prop('disabled', false);
         });
-    });
+    }
 
-    $('#fe-download-btn').on('click', function() {
+    function doDownload() {
         if (!lastPreview || !lastPreview.can_download || lastPreview.total <= 0) {
-            alert('Primero ejecuta Vista previa con al menos una fila exportable.');
+            alert('Primero pulsa «Ver cambios» o «Vista previa» con al menos una fila exportable.');
             return;
         }
         const f = filters();
@@ -379,8 +589,68 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
         $('body').append($form);
         $form.submit();
         $form.remove();
+        $('#fe-status-line').text('Descarga iniciada. Si el navegador la bloqueó, permite ventanas emergentes.');
         setTimeout(loadBatches, 1500);
+    }
+
+    $('#fe-modo').on('change', refreshModoHelp);
+    refreshModoHelp();
+    loadPending();
+    loadSkuChanges();
+    loadBatches();
+
+    $('#fe-view-sku-changes-btn').on('click', function() {
+        $.post(ajaxurl, { action: 'riverso_facto_export_sku_changes', nonce }, function(r) {
+            if (!r.success) {
+                alert(r.data && r.data.message ? r.data.message : 'Error al cargar cambios de SKU');
+                return;
+            }
+            lastSkuChanges = r.data || {};
+            renderSkuChangesPanel(lastSkuChanges);
+            renderSkuChangesDetail(lastSkuChanges);
+        });
     });
+
+    $('#fe-download-sku-changes-btn').on('click', function() {
+        const $form = $('<form method="post" action="' + ajaxurl + '" target="_blank"></form>');
+        $form.append($('<input type="hidden">').attr('name', 'action').val('riverso_facto_export_sku_changes_download'));
+        $form.append($('<input type="hidden">').attr('name', 'nonce').val(nonce));
+        $('body').append($form);
+        $form.submit();
+        $form.remove();
+    });
+
+    $('#fe-sku-changes-detail-close').on('click', function() {
+        $('#fe-sku-changes-detail').hide();
+    });
+
+    $('#fe-export-pending-btn').on('click', function() {
+        if (!lastPendingData || parseInt(lastPendingData.pending_total || 0, 10) <= 0) {
+            alert('No hay productos pendientes de export.');
+            return;
+        }
+        applyPendingExportFilters(lastPendingData);
+        refreshModoHelp();
+        $('html, body').animate({ scrollTop: $('#fe-view-changes-btn').offset().top - 80 }, 200);
+        runPreview({ scroll: true });
+    });
+
+    $('#fe-view-changes-btn, #fe-preview-btn').on('click', function() {
+        runPreview({ scroll: true });
+    });
+
+    $('#fe-change-q').on('input', function() {
+        if (lastPreview) renderChangeSamples(lastPreview);
+    });
+
+    $(document).on('click', '.fe-accion-filter', function() {
+        previewAccion = $(this).data('accion') || '';
+        $('.fe-accion-filter').removeClass('button-primary');
+        $(this).addClass('button-primary');
+        if (lastPreview) renderChangeSamples(lastPreview);
+    });
+
+    $('#fe-download-btn, #fe-download-btn-2').on('click', doDownload);
 
     $(document).on('click', '.fe-mark-applied', function() {
         const id = $(this).data('id');
@@ -389,6 +659,7 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
             alert(r.success ? (r.data.message || 'OK') : (r.data.message || 'Error'));
             loadBatches();
             loadPending();
+            loadSkuChanges();
         });
     });
 
@@ -399,6 +670,7 @@ $chunk_size = Riverso_Facto_Export_Service::CHUNK_SIZE;
             alert(r.success ? (r.data.message || 'OK') : (r.data.message || 'Error'));
             loadBatches();
             loadPending();
+            loadSkuChanges();
         });
     });
 

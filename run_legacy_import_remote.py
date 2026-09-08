@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Importa legacy_precio_ref en producción: Excel local → SQL → mysql remoto."""
+import argparse
 import os
 import sys
 import tempfile
@@ -13,8 +14,9 @@ except ImportError:
     sys.exit(1)
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-FUENTE = 'productos_xlsx_2026-08'
-DEFAULT_XLSX = os.path.expanduser(r'~\Downloads\productos (3).xlsx')
+FUENTE = 'productos_xlsx_2026-09'
+DEFAULT_XLSX = os.path.expanduser(r'~\Downloads\productos (6).xlsx')
+IVA_FACTOR = 1.19
 
 
 def load_env_file(path):
@@ -43,12 +45,26 @@ def sql_val(value):
     return f"'{s}'"
 
 
-def build_sql(df, table):
+def normalize_iva(value):
+    s = (value or '').strip().lower()
+    return 'exento' if s == 'exento' else 'afecto'
+
+
+def net_from_gross(bruto, iva_tipo):
+    if bruto is None:
+        return None
+    if normalize_iva(iva_tipo) == 'exento':
+        return round(float(bruto), 4)
+    return round(float(bruto) / IVA_FACTOR, 4)
+
+
+def build_sql(df, table, costo_es_bruto=False):
     lines = [
         'SET NAMES utf8mb4;',
         'START TRANSACTION;',
     ]
     skipped = 0
+    convertidos = 0
     for _, row in df.iterrows():
         sku = str(row.get('SKU', '')).strip()
         if not sku or sku == 'nan':
@@ -71,10 +87,18 @@ def build_sql(df, table):
             s = str(v).strip()
             return s or None
 
+        costo = fnum('Costo neto')
+        if costo_es_bruto and costo is not None and costo > 0:
+            iva = normalize_iva(fstr('Venta: afecto/exento de IVA'))
+            neto = net_from_gross(costo, iva)
+            if iva == 'afecto' and neto is not None and abs(neto - costo) > 0.00005:
+                convertidos += 1
+            costo = neto
+
         vals = [
             sql_val(sku),
             sql_val(fstr('Nombre')),
-            sql_val(fnum('Costo neto')),
+            sql_val(costo),
             sql_val(fnum('Venta: Precio neto')),
             sql_val(fnum('Venta: Precio total')),
             sql_val(fstr('Código de barras')),
@@ -100,7 +124,7 @@ def build_sql(df, table):
             'unidad=VALUES(unidad), categoria=VALUES(categoria), importado_at=CURRENT_TIMESTAMP;'
         )
     lines.append('COMMIT;')
-    return '\n'.join(lines) + '\n', skipped
+    return '\n'.join(lines) + '\n', skipped, convertidos
 
 
 def run(ssh, cmd, timeout=900):
@@ -112,13 +136,22 @@ def run(ssh, cmd, timeout=900):
 
 
 def main():
+    parser = argparse.ArgumentParser(description='Import legacy_precio_ref remoto desde Excel FACTO')
+    parser.add_argument('--xlsx', default=DEFAULT_XLSX, help='Ruta al Excel de productos')
+    parser.add_argument(
+        '--costo-es-bruto',
+        action='store_true',
+        help='La columna Costo neto del Excel es en realidad bruto; convierte afecto ÷ 1.19',
+    )
+    args = parser.parse_args()
+
     load_env_file(os.path.join(ROOT, '.env.deploy'))
 
     host = os.environ.get('RIVERSO_DEPLOY_HOST', '72.61.37.37')
     user = os.environ.get('RIVERSO_DEPLOY_USER', 'root')
     password = os.environ.get('RIVERSO_DEPLOY_PASSWORD')
     wp_path = os.environ.get('RIVERSO_WP_PATH', '/var/www/vhosts/riverso.cl/httpdocs')
-    xlsx = DEFAULT_XLSX
+    xlsx = args.xlsx
 
     if not password:
         print('Falta RIVERSO_DEPLOY_PASSWORD en .env.deploy')
@@ -128,6 +161,8 @@ def main():
         sys.exit(1)
 
     print(f'Leyendo Excel: {xlsx}')
+    if args.costo_es_bruto:
+        print('Modo --costo-es-bruto: convertirá costos afecto a neto (÷ 1.19)')
     df = pd.read_excel(xlsx, sheet_name='Datos de producto')
     costo_cero = int(((df['Costo neto'].fillna(0)) == 0).sum())
     print(f'Filas leídas: {len(df)} (costo 0: {costo_cero})')
@@ -166,8 +201,10 @@ def main():
     dbhost_only = dbhost.split(':')[0]
     dbport = dbhost.split(':')[1] if ':' in dbhost else '3306'
 
-    sql_body, skipped = build_sql(df, table)
+    sql_body, skipped, convertidos = build_sql(df, table, costo_es_bruto=args.costo_es_bruto)
     print(f'SQL generado: {len(df) - skipped} inserts (omitidos sin SKU: {skipped})')
+    if args.costo_es_bruto:
+        print(f'Costos convertidos bruto→neto (afecto): {convertidos}')
 
     with tempfile.NamedTemporaryFile('w', suffix='.sql', delete=False, encoding='utf-8') as tmp:
         tmp.write(sql_body)

@@ -338,7 +338,14 @@ class Riverso_POS_Activator {
         self::create_phase38_family_decision($prefix);
         self::create_phase39_competencia($prefix, $charset_collate);
         self::create_phase40_competencia_precios_historial($prefix, $charset_collate);
+        self::create_phase41_competencia_grupos($prefix, $charset_collate);
         self::create_phase41_tpv_export($prefix, $charset_collate);
+        self::create_phase42_price_decimals($prefix);
+        self::create_phase43_competencia_tipo_match($prefix);
+        self::create_phase44_precio_folio_proceso($prefix, $charset_collate);
+        self::create_phase45_competencia_manual_fuente($prefix);
+        self::create_phase46_precio_folio_hibrido($prefix);
+        self::create_phase47_precio_folio_archivo($prefix);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -426,6 +433,7 @@ class Riverso_POS_Activator {
             ['path' => 'modules/quotes/class-received-quote-module.php', 'class' => 'Riverso_POS_Received_Quote_Module'],
             ['path' => 'modules/customer-quotes/class-customer-quote-module.php', 'class' => 'Riverso_Customer_Quote_Module'],
             ['path' => 'modules/pricing/class-pricing-module.php', 'class' => 'Riverso_Pricing_Module'],
+            ['path' => 'modules/pricing/class-price-history-module.php', 'class' => 'Riverso_Price_History_Module'],
             ['path' => 'modules/publish/class-woo-publisher-module.php', 'class' => 'Riverso_Woo_Publisher_Module'],
             ['path' => 'modules/packaging/class-packaging-module.php', 'class' => 'Riverso_Packaging_Module'],
             ['path' => 'modules/manufacturing/class-manufacturing-module.php', 'class' => 'Riverso_Manufacturing_Module'],
@@ -1295,14 +1303,51 @@ class Riverso_POS_Activator {
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             producto_base_id BIGINT UNSIGNED NOT NULL,
             canal VARCHAR(10) NOT NULL DEFAULT 'local',
+            woocommerce_variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
             precio_sugerido DECIMAL(12,4) DEFAULT NULL,
             precio_aprobado DECIMAL(12,4) DEFAULT NULL,
             precio_online DECIMAL(12,4) DEFAULT NULL,
             precio_local DECIMAL(12,4) DEFAULT NULL,
+            c_ref DECIMAL(12,4) DEFAULT NULL,
+            p_asignado_anterior DECIMAL(12,3) DEFAULT NULL,
+            p_asignado_nuevo DECIMAL(12,3) DEFAULT NULL,
+            margen_unitario DECIMAL(12,3) DEFAULT NULL,
+            source_type VARCHAR(20) NOT NULL DEFAULT 'manual',
+            source_document_id BIGINT UNSIGNED DEFAULT NULL,
+            notas TEXT DEFAULT NULL,
             usuario_id BIGINT UNSIGNED DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
-            KEY idx_producto_canal (producto_base_id, canal)
+            KEY idx_producto_canal (producto_base_id, canal),
+            KEY idx_created (created_at),
+            KEY idx_source (source_type, source_document_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        self::add_column_if_missing("{$prefix}precio_historial", 'woocommerce_variation_id', 'woocommerce_variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0');
+        self::add_column_if_missing("{$prefix}precio_historial", 'c_ref', 'c_ref DECIMAL(12,4) DEFAULT NULL');
+        self::add_column_if_missing("{$prefix}precio_historial", 'p_asignado_anterior', 'p_asignado_anterior DECIMAL(12,3) DEFAULT NULL');
+        self::add_column_if_missing("{$prefix}precio_historial", 'p_asignado_nuevo', 'p_asignado_nuevo DECIMAL(12,3) DEFAULT NULL');
+        self::add_column_if_missing("{$prefix}precio_historial", 'margen_unitario', 'margen_unitario DECIMAL(12,3) DEFAULT NULL');
+        self::add_column_if_missing("{$prefix}precio_historial", 'source_type', "source_type VARCHAR(20) NOT NULL DEFAULT 'manual'");
+        self::add_column_if_missing("{$prefix}precio_historial", 'source_document_id', 'source_document_id BIGINT UNSIGNED DEFAULT NULL');
+        self::add_column_if_missing("{$prefix}precio_historial", 'notas', 'notas TEXT DEFAULT NULL');
+
+        self::add_column_if_missing("{$prefix}precios", 'en_uso', 'en_uso TINYINT(1) NOT NULL DEFAULT 1');
+
+        $sql = "CREATE TABLE {$prefix}precio_folio_analisis (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            factura_id BIGINT UNSIGNED NOT NULL,
+            folio VARCHAR(50) DEFAULT NULL,
+            proveedor_id BIGINT UNSIGNED DEFAULT NULL,
+            fecha_emision DATE DEFAULT NULL,
+            resumen_json LONGTEXT DEFAULT NULL,
+            analyzed_by BIGINT UNSIGNED DEFAULT NULL,
+            analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_factura (factura_id),
+            KEY idx_folio (folio),
+            KEY idx_analyzed_at (analyzed_at)
         ) $charset_collate;";
         dbDelta($sql);
 
@@ -3656,8 +3701,8 @@ class Riverso_POS_Activator {
             sku VARCHAR(100) NOT NULL,
             nombre VARCHAR(255) DEFAULT NULL,
             costo_neto DECIMAL(12,4) DEFAULT NULL,
-            precio_neto DECIMAL(12,2) DEFAULT NULL,
-            precio_total DECIMAL(12,2) DEFAULT NULL,
+            precio_neto DECIMAL(12,3) DEFAULT NULL,
+            precio_total DECIMAL(12,3) DEFAULT NULL,
             codigo_barras VARCHAR(50) DEFAULT NULL,
             stock_bodega_general DECIMAL(12,4) DEFAULT NULL,
             stock_bodega_cajas DECIMAL(12,4) DEFAULT NULL,
@@ -4229,6 +4274,59 @@ class Riverso_POS_Activator {
     }
 
     /**
+     * Fase 41: competencia_grupos (DIMAFI) - agrega id_grupo_externo y descripcion.
+     */
+    private static function create_phase41_competencia_grupos($prefix, $charset_collate) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $prod_table = "{$prefix}competencia_productos";
+        self::add_column_if_missing(
+            $prod_table,
+            'id_grupo_externo',
+            'id_grupo_externo VARCHAR(32) DEFAULT NULL AFTER id_externo'
+        );
+        self::add_column_if_missing(
+            $prod_table,
+            'descripcion',
+            'descripcion MEDIUMTEXT DEFAULT NULL'
+        );
+        self::add_index_if_missing(
+            $prod_table,
+            'idx_grupo_externo',
+            'KEY idx_grupo_externo (id_grupo_externo)'
+        );
+
+        // Seed de fuente DIMAFI.
+        $fuente_table = "{$prefix}competencia_fuentes";
+        $exists = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$fuente_table} WHERE slug = %s",
+            'dimafi'
+        ));
+        if ($exists === 0) {
+            $wpdb->insert($fuente_table, [
+                'slug'     => 'dimafi',
+                'nombre'   => 'DIMAFI',
+                'base_url' => 'https://www.dimafi.cl',
+                'activo'   => 1,
+            ]);
+        }
+
+        if (get_option('riverso_pos_phase41_competencia_grupos_dimafi') !== '1') {
+            update_option('riverso_pos_phase41_competencia_grupos_dimafi', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase41_competencia_grupos_dimafi', 'competencia', 0, [
+                    'actor_type' => 'computer',
+                    'details'    => 'Fase 41: grupos competencia (id_grupo_externo + descripcion) para DIMAFI.',
+                ]);
+            }
+        }
+
+        // Evitar warnings por parámetro no usado.
+        unset($charset_collate);
+    }
+
+    /**
      * Fase 41: export TPV (catálogo XLSX) + facto_product_id nullable para altas pendientes.
      */
     private static function create_phase41_tpv_export($prefix, $charset_collate) {
@@ -4280,6 +4378,224 @@ class Riverso_POS_Activator {
                 Riverso_POS_Audit::log('schema.phase41_tpv_export', 'tpv', 0, [
                     'actor_type' => 'computer',
                     'details'    => 'Fase 41: export catálogo TPV + facto_product_id nullable',
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Fase 42: precios/costos locales con 3 decimales (fuente TPV, no FACTO redondeado).
+     */
+    private static function create_phase42_price_decimals($prefix) {
+        global $wpdb;
+
+        $precios = $prefix . 'precios';
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $precios)) === $precios) {
+            $wpdb->query("ALTER TABLE {$precios} MODIFY p_ref DECIMAL(12,3) DEFAULT NULL");
+            $wpdb->query("ALTER TABLE {$precios} MODIFY p_asignado DECIMAL(12,3) DEFAULT NULL");
+        }
+
+        $legacy = $prefix . 'legacy_precio_ref';
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $legacy)) === $legacy) {
+            $wpdb->query("ALTER TABLE {$legacy} MODIFY precio_neto DECIMAL(12,3) DEFAULT NULL");
+            $wpdb->query("ALTER TABLE {$legacy} MODIFY precio_total DECIMAL(12,3) DEFAULT NULL");
+        }
+
+        if (get_option('riverso_pos_phase42_price_decimals') !== '1') {
+            update_option('riverso_pos_phase42_price_decimals', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase42_price_decimals', 'pricing', 0, [
+                    'actor_type' => 'computer',
+                    'details'    => 'Fase 42: p_asignado/p_ref y legacy precio_total a 3 decimales',
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Fase 43: tipo_match (exacto|similar|otro) en competencia_match.
+     */
+    private static function create_phase43_competencia_tipo_match($prefix) {
+        global $wpdb;
+
+        $table = $prefix . 'competencia_match';
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) !== $table) {
+            return; // la tabla se crea en phase39; si no existe, nada que hacer.
+        }
+
+        $has = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM information_schema.columns
+             WHERE table_schema = DATABASE()
+               AND table_name   = %s
+               AND column_name  = 'tipo_match'",
+            $table
+        ));
+
+        if ($has === 0) {
+            $wpdb->query(
+                "ALTER TABLE `{$table}`
+                 ADD COLUMN `tipo_match` VARCHAR(20) DEFAULT NULL
+                 COMMENT 'exacto|similar|otro'
+                 AFTER `metodo`"
+            );
+        }
+
+        if (get_option('riverso_pos_phase43_competencia_tipo_match') !== '1') {
+            update_option('riverso_pos_phase43_competencia_tipo_match', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase43_competencia_tipo_match', 'competencia', 0, [
+                    'actor_type' => 'computer',
+                    'details'    => 'Fase 43: tipo_match en competencia_match (exacto|similar|otro)',
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Fase 44: workflow Procesar folios (precios desde factura).
+     */
+    private static function create_phase44_precio_folio_proceso($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE {$prefix}precio_folio_proceso (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            factura_id BIGINT UNSIGNED NOT NULL,
+            estado VARCHAR(40) NOT NULL DEFAULT 'pendiente',
+            estado_manual VARCHAR(40) NULL DEFAULT NULL,
+            blockers_json LONGTEXT DEFAULT NULL,
+            items_omitidos_json LONGTEXT DEFAULT NULL,
+            started_by BIGINT UNSIGNED DEFAULT NULL,
+            started_at DATETIME DEFAULT NULL,
+            completed_at DATETIME DEFAULT NULL,
+            notas TEXT DEFAULT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_factura (factura_id),
+            KEY idx_estado (estado),
+            KEY idx_estado_manual (estado_manual)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        if (get_option('riverso_pos_phase44_precio_folio_proceso') !== '1') {
+            update_option('riverso_pos_phase44_precio_folio_proceso', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase44_precio_folio_proceso', 'pricing', 0, [
+                    'actor_type' => 'computer',
+                    'details'    => 'Fase 44: tabla precio_folio_proceso para Procesar folios',
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Fase 46: columnas de ingreso híbrido en precio_folio_proceso.
+     */
+    private static function create_phase46_precio_folio_hibrido($prefix) {
+        global $wpdb;
+
+        $table = $prefix . 'precio_folio_proceso';
+        if (!self::table_exists($table)) {
+            return;
+        }
+
+        $col = $wpdb->get_results("SHOW COLUMNS FROM `{$table}` LIKE 'items_omitidos_json'");
+        if (empty($col)) {
+            $wpdb->query(
+                "ALTER TABLE `{$table}`
+                 ADD COLUMN `items_omitidos_json` LONGTEXT DEFAULT NULL
+                 COMMENT 'IDs factura_items ya ingresados (híbrido)' AFTER `blockers_json`"
+            );
+        }
+
+        if (get_option('riverso_pos_phase46_precio_folio_hibrido') !== '1') {
+            update_option('riverso_pos_phase46_precio_folio_hibrido', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase46_precio_folio_hibrido', 'pricing', 0, [
+                    'actor_type' => 'computer',
+                    'details'    => 'Fase 46: items_omitidos_json para ingreso híbrido de folios',
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Fase 47: archivado de folios en precio_folio_proceso.
+     */
+    private static function create_phase47_precio_folio_archivo($prefix) {
+        $table = $prefix . 'precio_folio_proceso';
+        if (!self::table_exists($table)) {
+            return;
+        }
+
+        self::add_column_if_missing($table, 'archived_at', 'archived_at DATETIME DEFAULT NULL');
+        self::add_column_if_missing($table, 'archived_by', 'archived_by BIGINT UNSIGNED DEFAULT NULL');
+        self::add_index_if_missing($table, 'idx_archived_at', 'KEY idx_archived_at (archived_at)');
+
+        if (get_option('riverso_pos_phase47_precio_folio_archivo') !== '1') {
+            update_option('riverso_pos_phase47_precio_folio_archivo', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase47_precio_folio_archivo', 'pricing', 0, [
+                    'actor_type' => 'computer',
+                    'details'    => 'Fase 47: archived_at/archived_by en precio_folio_proceso',
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Fase 45: fuente "manual" + índice url_producto para ingreso manual.
+     */
+    private static function create_phase45_competencia_manual_fuente($prefix) {
+        global $wpdb;
+
+        $fuente_table = $prefix . 'competencia_fuentes';
+        $prod_table = $prefix . 'competencia_productos';
+
+        if (self::table_exists($fuente_table)) {
+            $exists = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$fuente_table} WHERE slug = %s",
+                'manual'
+            ));
+            if ($exists === 0) {
+                $wpdb->insert($fuente_table, [
+                    'slug'     => 'manual',
+                    'nombre'   => 'Ingreso manual',
+                    'base_url' => null,
+                    'activo'   => 1,
+                ]);
+            } else {
+                $wpdb->update(
+                    $fuente_table,
+                    ['nombre' => 'Ingreso manual', 'activo' => 1],
+                    ['slug' => 'manual']
+                );
+            }
+        }
+
+        if (self::table_exists($prod_table)) {
+            $idx = $wpdb->get_results($wpdb->prepare(
+                "SHOW INDEX FROM `{$prod_table}` WHERE Key_name = %s",
+                'idx_url_producto'
+            ));
+            if (empty($idx)) {
+                $wpdb->query(
+                    "ALTER TABLE `{$prod_table}` ADD INDEX `idx_url_producto` (`url_producto`(191))"
+                );
+            }
+        }
+
+        // Invalidar cache de fuentes en el match service si está cargado.
+        if (class_exists('Riverso_Competencia_Match_Service') && method_exists('Riverso_Competencia_Match_Service', 'reset_fuentes_cache')) {
+            Riverso_Competencia_Match_Service::reset_fuentes_cache();
+        }
+
+        if (get_option('riverso_pos_phase45_competencia_manual_fuente') !== '1') {
+            update_option('riverso_pos_phase45_competencia_manual_fuente', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase45_competencia_manual_fuente', 'competencia', 0, [
+                    'actor_type' => 'computer',
+                    'details'    => 'Fase 45: fuente manual + índice url_producto',
                 ]);
             }
         }

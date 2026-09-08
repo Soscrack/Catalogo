@@ -1961,6 +1961,7 @@ class Riverso_Woo_Publisher_Module {
                     "SELECT p.* FROM {$prefix}precios p
                      INNER JOIN {$prefix}producto_base pb ON pb.id = p.producto_base_id
                      WHERE pb.woocommerce_product_id = %d AND p.canal = 'online'
+                       AND COALESCE(p.en_uso, 1) = 1
                      LIMIT 20",
                     $product_id
                 ), ARRAY_A);

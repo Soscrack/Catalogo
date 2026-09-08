@@ -16,12 +16,15 @@
         searchTimer: null,
         currentSelection: null,
         showDecimals: true,
+        /** Vista de montos: 'bruto' (default) | 'neto' */
+        costViewMode: 'bruto',
         limitPerPair: 3,
         docType: 'factura',
         lastExplorerData: null,
         lastDocument: null,
         lastDocHighlight: null,
         lastChartData: null,
+        lastEvoData: null,
         evoSelection: null,
         evoChart: null,
         evoDocType: 'factura',
@@ -58,6 +61,117 @@
         var parts = fixed.split('.');
         var intPart = Number(parts[0]).toLocaleString('es-CL');
         return parts.length > 1 ? ('$' + intPart + ',' + parts[1]) : ('$' + intPart);
+    }
+
+    /**
+     * Elige costo unitario según vista (bruto/neto).
+     * Acepta objeto con costo_unitario_neto/bruto o un número neto.
+     */
+    function pickCost(rowOrNeto, mode) {
+        mode = mode || state.costViewMode;
+        if (rowOrNeto === null || rowOrNeto === undefined || rowOrNeto === '') {
+            return null;
+        }
+        if (typeof rowOrNeto === 'object') {
+            var neto =
+                rowOrNeto.costo_unitario_neto != null
+                    ? rowOrNeto.costo_unitario_neto
+                    : rowOrNeto.costo_unitario != null
+                      ? rowOrNeto.costo_unitario
+                      : rowOrNeto.ultimo_costo_neto != null
+                        ? rowOrNeto.ultimo_costo_neto
+                        : rowOrNeto.ultimo_costo;
+            var bruto =
+                rowOrNeto.costo_unitario_bruto != null
+                    ? rowOrNeto.costo_unitario_bruto
+                    : rowOrNeto.ultimo_costo_bruto != null
+                      ? rowOrNeto.ultimo_costo_bruto
+                      : neto != null
+                        ? Math.round(Number(neto) * 1.19 * 10000) / 10000
+                        : null;
+            return mode === 'bruto' ? bruto : neto;
+        }
+        var n = Number(rowOrNeto);
+        if (!isFinite(n)) {
+            return null;
+        }
+        return mode === 'bruto' ? Math.round(n * 1.19 * 10000) / 10000 : n;
+    }
+
+    function pickSummaryField(sum, field) {
+        if (!sum) {
+            return null;
+        }
+        if (state.costViewMode === 'bruto') {
+            if (field === 'ultimo') {
+                return sum.ultimo_costo_bruto != null
+                    ? sum.ultimo_costo_bruto
+                    : pickCost({ costo_unitario_neto: sum.ultimo_costo }, 'bruto');
+            }
+            if (field === 'min') {
+                return sum.min_costo_bruto != null ? sum.min_costo_bruto : pickCost(sum.min_costo, 'bruto');
+            }
+            if (field === 'max') {
+                return sum.max_costo_bruto != null ? sum.max_costo_bruto : pickCost(sum.max_costo, 'bruto');
+            }
+        }
+        if (field === 'ultimo') {
+            return sum.ultimo_costo_neto != null ? sum.ultimo_costo_neto : sum.ultimo_costo;
+        }
+        if (field === 'min') {
+            return sum.min_costo_neto != null ? sum.min_costo_neto : sum.min_costo;
+        }
+        if (field === 'max') {
+            return sum.max_costo_neto != null ? sum.max_costo_neto : sum.max_costo;
+        }
+        return null;
+    }
+
+    function chartSeriesData(ds) {
+        if (state.costViewMode === 'bruto' && ds.data_bruto) {
+            return ds.data_bruto;
+        }
+        if (ds.data_neto) {
+            return ds.data_neto;
+        }
+        return ds.data || [];
+    }
+
+    function syncCostViewToggles() {
+        $('[data-rce-cost-view] .rce-view-btn').removeClass('is-active');
+        $('[data-rce-cost-view] .rce-view-btn[data-view="' + state.costViewMode + '"]').addClass('is-active');
+        $(document).trigger('riverso:cost-view-mode', [state.costViewMode]);
+    }
+
+    function setCostViewMode(mode) {
+        if (mode !== 'bruto' && mode !== 'neto') {
+            return;
+        }
+        if (state.costViewMode === mode) {
+            syncCostViewToggles();
+            return;
+        }
+        state.costViewMode = mode;
+        syncCostViewToggles();
+        applyCostViewMode();
+    }
+
+    function applyCostViewMode() {
+        if (state.lastExplorerData) {
+            renderExplorer(state.lastExplorerData);
+            // Preferir series de gráfico más recientes (p.ej. tras cambiar meses)
+            if (state.lastChartData) {
+                renderChart(state.lastChartData);
+            }
+        } else if (state.lastChartData) {
+            renderChart(state.lastChartData);
+        }
+        if (state.lastDocument) {
+            renderDocument(state.lastDocument, state.lastDocHighlight);
+        }
+        if (state.lastEvoData) {
+            renderEvoModal(state.lastEvoData);
+        }
     }
 
     function formatPct(n) {
@@ -135,6 +249,12 @@
         });
         // Default: decimales ON
         state.showDecimals = $('#rce-toggle-decimals').is(':checked');
+
+        $(document).on('click', '[data-rce-cost-view] .rce-view-btn', function (e) {
+            e.preventDefault();
+            setCostViewMode($(this).data('view'));
+        });
+        syncCostViewToggles();
 
         $('#rce-chart-months').on('change', function () {
             if (!state.currentSelection) {
@@ -264,6 +384,20 @@
                 meta.push(r.pares_count + ' par(es)');
             }
 
+            var linkBtn = '';
+            var canMap = !!(cfg.can_manage_codes && cfg.manual_mapping_url);
+            var isLoose = !r.producto_base_id && r.proveedor_id && r.codigo_proveedor;
+            if (canMap && isLoose) {
+                var mapUrl = cfg.manual_mapping_url;
+                var sep = mapUrl.indexOf('?') >= 0 ? '&' : '?';
+                mapUrl += sep + 'proveedor_id=' + encodeURIComponent(r.proveedor_id) +
+                    '&codigo=' + encodeURIComponent(r.codigo_proveedor);
+                linkBtn =
+                    '<a class="rce-map-link button button-small" href="' + escapeHtml(mapUrl) + '"' +
+                    ' onclick="event.stopPropagation();">' +
+                    'Vincular a SKU</a>';
+            }
+
             html +=
                 '<button type="button" class="rce-result-item"' +
                 ' data-pb="' + escapeHtml(r.producto_base_id || '') + '"' +
@@ -273,6 +407,7 @@
                 ' data-sku="' + escapeHtml(r.canonical_sku || '') + '">' +
                 '<span class="rce-result-name">' + escapeHtml(r.nombre || r.canonical_sku || r.codigo_proveedor || 'Sin nombre') + '</span>' +
                 '<span class="rce-result-meta">' + escapeHtml(meta.join(' · ')) + '</span>' +
+                linkBtn +
                 '</button>';
         });
         $box.html(html);
@@ -381,7 +516,8 @@
         $('#rce-empty-state').attr('hidden', true);
         $('#rce-product-panel').removeAttr('hidden');
         $('#rce-pairs-container').html('<p class="rce-muted">Cargando historial…</p>');
-        $('#rce-highlight').attr('hidden', true);
+        $('#rce-highlight').attr('hidden', true).removeClass('is-legacy');
+        $('#rce-highlight-label').text('Último costo');
 
         post('riverso_cost_get_timeline', buildTimelinePayload())
             .done(function (res) {
@@ -416,25 +552,75 @@
         $('#rce-product-sku').text(product.canonical_sku || '—');
         $('#rce-product-pairs-count').text((data.pares || []).length + ' pares');
 
+        // Atajo: vincular código suelto a SKU
+        var $map = $('#rce-map-sku-btn');
+        if (!$map.length) {
+            $map = $('<a id="rce-map-sku-btn" class="button button-small" style="margin-left:8px;"></a>');
+            $('#rce-product-pairs-count').after($map);
+        }
+        var sel = state.currentSelection || {};
+        var provId = product.producto_base_id ? 0 : (sel.proveedor_id || (data.pares && data.pares[0] && data.pares[0].proveedor_id));
+        var codigo = product.producto_base_id ? '' : (sel.codigo_proveedor || (data.pares && data.pares[0] && data.pares[0].codigo_proveedor));
+        if (cfg.can_manage_codes && cfg.manual_mapping_url && provId && codigo && !product.producto_base_id) {
+            var mapUrl = cfg.manual_mapping_url;
+            var sep = mapUrl.indexOf('?') >= 0 ? '&' : '?';
+            $map.attr('href', mapUrl + sep + 'proveedor_id=' + encodeURIComponent(provId) +
+                '&codigo=' + encodeURIComponent(codigo))
+                .text('Vincular a SKU')
+                .show();
+        } else {
+            $map.hide();
+        }
+
         renderHighlight(data.summary && data.summary.highlight);
-        renderPairs(data.timeline || [], data.summary && data.summary.by_pair ? data.summary.by_pair : []);
+        renderPairs(
+            data.timeline || [],
+            data.summary && data.summary.by_pair ? data.summary.by_pair : [],
+            data.summary && data.summary.highlight
+        );
         renderChart(data.chart || { labels: [], datasets: [] });
+    }
+
+    function isLegacyHighlight(h) {
+        return !!(h && (h.source === 'legacy' || h.ultimo_source_kind === 'legacy'));
     }
 
     function renderHighlight(h) {
         var $box = $('#rce-highlight');
-        if (!h || h.ultimo_costo === null || h.ultimo_costo === undefined) {
-            $box.attr('hidden', true);
+        if (!h || (h.ultimo_costo == null && h.ultimo_costo_neto == null && h.ultimo_costo_bruto == null)) {
+            $box.attr('hidden', true).removeClass('is-legacy');
             return;
         }
-        $box.removeAttr('hidden');
-        $('#rce-highlight-cost').text(formatMoney(h.ultimo_costo));
-        $('#rce-highlight-pair').text((h.proveedor_nombre || '') + ' / ' + (h.codigo_proveedor || ''));
-        $('#rce-highlight-date').text(h.ultimo_fecha || '—');
-        $('#rce-highlight-folio').text(h.ultimo_folio ? 'Folio ' + h.ultimo_folio : '');
+        var legacy = isLegacyHighlight(h);
+        var neto =
+            h.ultimo_costo_neto != null
+                ? h.ultimo_costo_neto
+                : h.ultimo_costo != null
+                  ? h.ultimo_costo
+                  : null;
+        var bruto =
+            h.ultimo_costo_bruto != null
+                ? h.ultimo_costo_bruto
+                : neto != null
+                  ? Math.round(Number(neto) * 1.19 * 10000) / 10000
+                  : null;
+        $box.toggleClass('is-legacy', legacy).removeAttr('hidden');
+        $('#rce-highlight-label').text(legacy ? 'Costo legacy' : 'Último costo');
+        // Siempre: bruto principal + neto secundario
+        $('#rce-highlight-cost').text(formatMoney(bruto) + ' bruto');
+        $('#rce-highlight-cost-alt').text(formatMoney(neto) + ' neto');
+        if (legacy) {
+            $('#rce-highlight-pair').text(h.proveedor_nombre || 'Catálogo TPV legacy');
+            $('#rce-highlight-date').text(h.ultimo_fecha || '—');
+            $('#rce-highlight-folio').text('');
+        } else {
+            $('#rce-highlight-pair').text((h.proveedor_nombre || '') + ' / ' + (h.codigo_proveedor || ''));
+            $('#rce-highlight-date').text(h.ultimo_fecha || '—');
+            $('#rce-highlight-folio').text(h.ultimo_folio ? 'Folio ' + h.ultimo_folio : '');
+        }
 
         var $var = $('#rce-highlight-variation').removeClass('up down').text('');
-        if (h.variacion_pct !== null && h.variacion_pct !== undefined) {
+        if (!legacy && h.variacion_pct !== null && h.variacion_pct !== undefined) {
             var txt = formatPct(h.variacion_pct) + ' vs anterior';
             $var.text(txt);
             if (h.variacion_pct > 0) {
@@ -457,10 +643,13 @@
         return null;
     }
 
-    function renderPairs(timeline, summaries) {
+    function renderPairs(timeline, summaries, highlight) {
         var $c = $('#rce-pairs-container');
         if (!timeline.length) {
-            $c.html('<p class="rce-muted">No hay pares proveedor/código ni facturas asociadas.</p>');
+            var emptyMsg = isLegacyHighlight(highlight)
+                ? 'Sin facturas ni cotizaciones. Se muestra el costo de referencia del catálogo legacy.'
+                : 'No hay pares proveedor/código ni facturas asociadas.';
+            $c.html('<p class="rce-muted">' + emptyMsg + '</p>');
             return;
         }
 
@@ -480,12 +669,12 @@
 
             if (sum) {
                 html += '<div class="rce-pair-stats">';
-                html += '<span>Último: <strong>' + formatMoney(sum.ultimo_costo) + '</strong></span>';
+                html += '<span>Último: <strong>' + formatMoney(pickSummaryField(sum, 'ultimo')) + '</strong></span>';
                 if (sum.variacion_pct !== null && sum.variacion_pct !== undefined) {
                     html += '<span>' + escapeHtml(formatPct(sum.variacion_pct)) + '</span>';
                 }
-                html += '<span>Min ' + formatMoney(sum.min_costo) + '</span>';
-                html += '<span>Max ' + formatMoney(sum.max_costo) + '</span>';
+                html += '<span>Min ' + formatMoney(pickSummaryField(sum, 'min')) + '</span>';
+                html += '<span>Max ' + formatMoney(pickSummaryField(sum, 'max')) + '</span>';
                 html += '<span>' + (sum.total_documentos || 0) + ' docs</span>';
                 html += '</div>';
             }
@@ -512,7 +701,7 @@
                         '</td>';
                     html += '<td>' + escapeHtml(d.nombre || '—') + '</td>';
                     html += '<td class="rce-num">' + escapeHtml(d.cantidad) + '</td>';
-                    html += '<td class="rce-num">' + formatMoney(d.costo_unitario) + '</td>';
+                    html += '<td class="rce-num">' + formatMoney(pickCost(d)) + '</td>';
                     if (d.source_kind === 'quote') {
                         html += '<td><span class="rce-muted">Cotiz.</span></td>';
                     } else if (d.factura_id) {
@@ -631,7 +820,7 @@
             var color = COLORS[idx % COLORS.length];
             return {
                 label: ds.label,
-                data: ds.data,
+                data: chartSeriesData(ds),
                 borderColor: color,
                 backgroundColor: color.replace(', 1)', ', 0.12)'),
                 spanGaps: true,
@@ -738,7 +927,7 @@
             html += '<td><code>' + escapeHtml(it.codigo_proveedor || '—') + '</code></td>';
             html += '<td>' + escapeHtml(it.nombre || '—') + '</td>';
             html += '<td class="rce-num">' + escapeHtml(it.cantidad) + '</td>';
-            html += '<td class="rce-num">' + formatMoney(it.costo_unitario) + '</td>';
+            html += '<td class="rce-num">' + formatMoney(pickCost(it)) + '</td>';
             html += '<td class="rce-num">' + formatMoney(it.monto_total) + '</td>';
             html += '</tr>';
         });
@@ -908,6 +1097,7 @@
     }
 
     function renderEvoModal(data) {
+        state.lastEvoData = data;
         var product = (data && data.product) || {};
         var subtitle = (product.nombre || state.evoSelection.nombre || '') +
             (product.canonical_sku ? ' · SKU ' + product.canonical_sku : '');
@@ -917,14 +1107,37 @@
 
         var h = data.summary && data.summary.highlight;
         var $hl = $('#rce-evo-highlight');
-        if (h && h.ultimo_costo != null) {
-            $('#rce-evo-highlight-cost').text(formatMoney(h.ultimo_costo));
-            $('#rce-evo-highlight-pair').text(
-                (h.proveedor_nombre || '') + ' / ' + (h.codigo_proveedor || '')
-            );
-            $('#rce-evo-highlight-date').text(h.ultimo_fecha || '');
+        if (h && (h.ultimo_costo != null || h.ultimo_costo_neto != null || h.ultimo_costo_bruto != null)) {
+            var legacy = isLegacyHighlight(h);
+            var neto =
+                h.ultimo_costo_neto != null
+                    ? h.ultimo_costo_neto
+                    : h.ultimo_costo != null
+                      ? h.ultimo_costo
+                      : null;
+            var bruto =
+                h.ultimo_costo_bruto != null
+                    ? h.ultimo_costo_bruto
+                    : neto != null
+                      ? Math.round(Number(neto) * 1.19 * 10000) / 10000
+                      : null;
+            $hl.toggleClass('is-legacy', legacy);
+            $('#rce-evo-highlight-label').text(legacy ? 'Costo legacy' : 'Último costo');
+            $('#rce-evo-highlight-cost').text(formatMoney(bruto) + ' bruto');
+            $('#rce-evo-highlight-cost-alt').text(formatMoney(neto) + ' neto');
+            if (legacy) {
+                $('#rce-evo-highlight-pair').text(h.proveedor_nombre || 'Catálogo TPV legacy');
+                $('#rce-evo-highlight-date').text(h.ultimo_fecha || '');
+                $('#rce-evo-highlight-folio').text('');
+            } else {
+                $('#rce-evo-highlight-pair').text(
+                    (h.proveedor_nombre || '') + ' / ' + (h.codigo_proveedor || '')
+                );
+                $('#rce-evo-highlight-date').text(h.ultimo_fecha || '');
+                $('#rce-evo-highlight-folio').text(h.ultimo_folio ? 'Folio ' + h.ultimo_folio : '');
+            }
             var $v = $('#rce-evo-highlight-variation');
-            if (h.variacion_pct != null) {
+            if (!legacy && h.variacion_pct != null) {
                 $v.text(formatPct(h.variacion_pct)).removeClass('up down');
                 if (h.variacion_pct > 0) {
                     $v.addClass('up');
@@ -932,11 +1145,11 @@
                     $v.addClass('down');
                 }
             } else {
-                $v.text('');
+                $v.text('').removeClass('up down');
             }
             $hl.removeAttr('hidden');
         } else {
-            $hl.attr('hidden', true);
+            $hl.attr('hidden', true).removeClass('is-legacy');
         }
 
         // Reuse pair cards HTML into modal container
@@ -944,7 +1157,10 @@
         var timeline = data.timeline || [];
         var summaries = (data.summary && data.summary.by_pair) || [];
         if (!timeline.length) {
-            $c.html('<p class="rce-muted">Sin documentos para este filtro.</p>');
+            var emptyEvo = isLegacyHighlight(h)
+                ? 'Sin facturas ni cotizaciones. Se muestra el costo de referencia del catálogo legacy.'
+                : 'Sin documentos para este filtro.';
+            $c.html('<p class="rce-muted">' + emptyEvo + '</p>');
         } else {
             // Temporarily swap container id usage by rendering into #rce-evo-pairs
             var prevId = 'rce-pairs-container';
@@ -963,7 +1179,7 @@
                 if (sum) {
                     htmlBuf +=
                         '<div class="rce-pair-stats"><span>Último: <strong>' +
-                        formatMoney(sum.ultimo_costo) +
+                        formatMoney(pickSummaryField(sum, 'ultimo')) +
                         '</strong></span>';
                     if (sum.variacion_pct != null) {
                         htmlBuf += '<span>' + escapeHtml(formatPct(sum.variacion_pct)) + '</span>';
@@ -986,7 +1202,7 @@
                         htmlBuf +=
                             '<td>' + escapeHtml(docLabel) + ' ' + escapeHtml(d.folio) + '</td>';
                         htmlBuf += '<td>' + escapeHtml(d.nombre || '—') + '</td>';
-                        htmlBuf += '<td class="rce-num">' + formatMoney(d.costo_unitario) + '</td>';
+                        htmlBuf += '<td class="rce-num">' + formatMoney(pickCost(d)) + '</td>';
                         if (d.source_kind === 'quote' || !d.factura_id) {
                             htmlBuf += '<td></td>';
                         } else {
@@ -1034,7 +1250,7 @@
             var color = COLORS[idx % COLORS.length];
             return {
                 label: ds.label,
-                data: ds.data,
+                data: chartSeriesData(ds),
                 borderColor: color,
                 backgroundColor: color.replace(', 1)', ', 0.12)'),
                 spanGaps: true,
@@ -1153,6 +1369,10 @@
         openEvolutionModal: openEvolutionModal,
         openEvolutionModalByTerm: openEvolutionModalByTerm,
         closeEvolutionModal: closeEvoModal,
+        getCostViewMode: function () {
+            return state.costViewMode;
+        },
+        setCostViewMode: setCostViewMode,
     };
 
     $(init);

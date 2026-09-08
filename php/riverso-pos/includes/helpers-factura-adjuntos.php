@@ -17,9 +17,16 @@ function riverso_is_sii_rescued_description($text) {
     if ($t === '') {
         return false;
     }
+    // Normalizar acentos para matching robusto
+    $t = strtr($t, [
+        'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U', 'Ñ' => 'N',
+        'Ü' => 'U',
+    ]);
     return (strpos($t, 'DOCUMENTO RESCATADO DEL SII') !== false)
+        || (strpos($t, 'RESCATADO DEL SII') !== false)
         || (strpos($t, 'SIN INFORMACION DE DETALLE') !== false)
-        || (strpos($t, 'SIN INFORMACIÓN DE DETALLE') !== false);
+        || (preg_match('/\bRESCATADO\b.*\bSII\b/', $t) === 1)
+        || (preg_match('/\bSIN INFORMACION\b.*\bDETALLE\b/', $t) === 1);
 }
 
 /**
@@ -99,7 +106,7 @@ function riverso_factura_origen_badge_class($origen) {
 }
 
 /**
- * Marca factura como ambos cuando se adjunta un escaneo a una ingresada por XML.
+ * Marca factura como ambos cuando se adjunta un escaneo a una ingresada por XML/FACTO.
  */
 function riverso_factura_mark_scan_attached($factura_id) {
     global $wpdb;
@@ -108,7 +115,7 @@ function riverso_factura_mark_scan_attached($factura_id) {
         "SELECT origen_ingreso FROM {$table} WHERE id = %d",
         (int) $factura_id
     ));
-    if ($current === 'xml') {
+    if ($current === 'xml' || $current === 'facto') {
         $wpdb->update($table, ['origen_ingreso' => 'ambos'], ['id' => (int) $factura_id]);
     } elseif (empty($current)) {
         $wpdb->update($table, ['origen_ingreso' => 'escaneo'], ['id' => (int) $factura_id]);
@@ -117,6 +124,7 @@ function riverso_factura_mark_scan_attached($factura_id) {
 
 /**
  * Marca factura como ambos cuando se adjunta un XML a una ingresada por escaneo.
+ * FACTO también pasa a ambos si ya había escaneo (origen escaneo).
  */
 function riverso_factura_mark_xml_attached($factura_id) {
     global $wpdb;
@@ -262,6 +270,9 @@ function riverso_link_scans_to_factura($factura_id, $tipo_dte, $folio, $rut) {
         return $result;
     }
 
+    $is_stub = function_exists('riverso_factura_db_is_sii_rescued_stub')
+        && riverso_factura_db_is_sii_rescued_stub($factura_id);
+
     foreach ($docs as $doc) {
         $doc_id = (int) $doc['id'];
         $estado = $doc['estado_revision'];
@@ -276,12 +287,21 @@ function riverso_link_scans_to_factura($factura_id, $tipo_dte, $folio, $rut) {
                     $doc['archivo_hash'] ?? ''
                 );
             }
+            // Incluir en doc_ids para try_apply_linked_scan_detail aunque ya estuviera vinculado
+            if ($is_stub && !in_array($doc_id, $result['doc_ids'], true)) {
+                $result['doc_ids'][] = $doc_id;
+            }
             continue;
         }
 
-        $new_estado = ($estado === 'confirmado' && $already === $factura_id)
-            ? 'confirmado'
-            : 'duplicado';
+        // Stub SII: no cerrar pendientes/revisados como "duplicado" — siguen faltando de ingreso
+        if ($is_stub && in_array($estado, ['pendiente', 'revisado'], true)) {
+            $new_estado = $estado;
+        } elseif ($estado === 'confirmado' && ($already === $factura_id || $already === 0)) {
+            $new_estado = 'confirmado';
+        } else {
+            $new_estado = 'duplicado';
+        }
 
         $wpdb->update("{$prefix}documentos_escaneados", [
             'factura_id'      => $factura_id,

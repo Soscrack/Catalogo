@@ -1,6 +1,9 @@
 <?php
 /**
- * Módulo FACTO: settings, cron outbox, backfill y suscripción a eventos de producto.
+ * Módulo FACTO: settings, cron outbox (legacy), export Excel, inbox y suscripción a eventos de producto.
+ *
+ * Nota: product.created/updated/archived ya no encolan ni procesan outbox hacia la API.
+ * El ingreso de altas/cambios a FACTO es por export Excel (pendiente_excel).
  *
  * @package Riverso_POS
  */
@@ -48,8 +51,11 @@ class Riverso_Facto_Module {
         add_action('wp_ajax_riverso_facto_inbox_estimate', [$this, 'ajax_inbox_estimate']);
         add_action('wp_ajax_riverso_facto_inbox_import', [$this, 'ajax_inbox_import']);
         add_action('wp_ajax_riverso_facto_inbox_runs', [$this, 'ajax_inbox_runs']);
+        add_action('wp_ajax_riverso_facto_inbox_search_folios', [$this, 'ajax_inbox_search_folios']);
         add_action('wp_ajax_riverso_facto_export_preview', [$this, 'ajax_export_preview']);
         add_action('wp_ajax_riverso_facto_export_pending', [$this, 'ajax_export_pending']);
+        add_action('wp_ajax_riverso_facto_export_sku_changes', [$this, 'ajax_export_sku_changes']);
+        add_action('wp_ajax_riverso_facto_export_sku_changes_download', [$this, 'ajax_export_sku_changes_download']);
         add_action('wp_ajax_riverso_facto_export_download', [$this, 'ajax_export_download']);
         add_action('wp_ajax_riverso_facto_export_mark_applied', [$this, 'ajax_export_mark_applied']);
         add_action('wp_ajax_riverso_facto_export_unmark_applied', [$this, 'ajax_export_unmark_applied']);
@@ -113,6 +119,7 @@ class Riverso_Facto_Module {
 
     /**
      * Empuja el outbox en ~15s (WP-Cron) sin esperar el intervalo de 5 min.
+     * Solo para drenaje manual/admin; el alta/edición de productos ya no encola.
      */
     private function kick_outbox_soon() {
         if (get_transient('riverso_facto_outbox_kick')) {
@@ -122,28 +129,28 @@ class Riverso_Facto_Module {
         wp_schedule_single_event(time() + 15, self::CRON_HOOK);
     }
 
+    /**
+     * Alta de producto: no llamar API Facto.
+     * El mapa queda en pendiente_excel vía mark_facto_pending_export; el ingreso es por export Excel.
+     */
     public function on_product_created($payload = [], $context = []) {
-        $id = $this->payload_id($payload);
-        if ($id) {
-            $this->sync->enqueue($id, 'create', is_array($payload) ? $payload : []);
-            $this->sync->process_outbox(5);
-        }
+        // Intencionalmente vacío: no enqueue / process_outbox.
     }
 
+    /**
+     * Edición de producto: no llamar API Facto.
+     * Cambios locales → pendiente_excel → export Excel.
+     */
     public function on_product_updated($payload = [], $context = []) {
-        $id = $this->payload_id($payload);
-        if ($id) {
-            $this->sync->enqueue($id, 'update', is_array($payload) ? $payload : []);
-            $this->sync->process_outbox(5);
-        }
+        // Intencionalmente vacío: no enqueue / process_outbox.
     }
 
+    /**
+     * Archivo/borrado: no llamar API Facto desde el evento.
+     * El drenaje de outbox legacy queda en cron / botón admin.
+     */
     public function on_product_archived($payload = [], $context = []) {
-        $id = $this->payload_id($payload);
-        if ($id) {
-            $this->sync->enqueue($id, 'archive', is_array($payload) ? $payload : []);
-            $this->sync->process_outbox(5);
-        }
+        // Intencionalmente vacío: no enqueue / process_outbox.
     }
 
     private function payload_id($payload) {
@@ -187,13 +194,49 @@ class Riverso_Facto_Module {
         wp_send_json_success($this->export_service->get_pending_crud_summary(30));
     }
 
+    public function ajax_export_sku_changes() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!$this->can_export_facto()) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        wp_send_json_success($this->export_service->get_sku_changes_summary(50));
+    }
+
+    public function ajax_export_sku_changes_download() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!$this->can_export_facto()) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        $result = $this->export_service->generate_sku_changes_file();
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+
+        $filename = $result['filename'];
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . strlen($result['binary']));
+        echo $result['binary'];
+        exit;
+    }
+
     public function ajax_export_preview() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         if (!$this->can_export_facto()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
-        $filters = $this->parse_export_filters();
-        wp_send_json_success($this->export_service->preview($filters));
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        @ini_set('memory_limit', '512M');
+        @set_time_limit(180);
+        try {
+            $filters = $this->parse_export_filters();
+            wp_send_json_success($this->export_service->preview($filters));
+        } catch (Throwable $e) {
+            wp_send_json_error(['message' => 'Error en vista previa: ' . $e->getMessage()]);
+        }
     }
 
     public function ajax_export_download() {
@@ -345,6 +388,19 @@ class Riverso_Facto_Module {
         }
         $runs = $this->inbox_import->list_runs(30);
         wp_send_json_success(['runs' => $runs]);
+    }
+
+    public function ajax_inbox_search_folios() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!$this->can_import_invoices() && !current_user_can('riverso_view_invoices')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $search = isset($_POST['search']) ? sanitize_text_field(wp_unslash($_POST['search'])) : '';
+        $result = $this->inbox_import->search_imported_folios($search, 40);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success($result);
     }
 
     public function ajax_save_settings() {

@@ -14,6 +14,44 @@
     --riverso-border: #e1e1e1;
 }
 
+/* Cabeceras de categoría en el menú lateral de WP Admin */
+#adminmenu .wp-submenu a .riverso-nav-label {
+    display: block;
+    margin: 6px 0 2px;
+    padding: 0;
+    color: rgba(240, 246, 252, 0.5);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    pointer-events: none;
+    cursor: default;
+}
+
+#adminmenu .wp-submenu li.riverso-nav-label-item > a,
+#adminmenu .wp-submenu li a:has(.riverso-nav-label) {
+    pointer-events: none;
+    cursor: default;
+    background: transparent !important;
+    color: inherit !important;
+    border-left-color: transparent !important;
+}
+
+#adminmenu .wp-submenu li.riverso-nav-label-item > a:hover,
+#adminmenu .wp-submenu li.riverso-nav-label-item > a:focus,
+#adminmenu .wp-submenu li a:has(.riverso-nav-label):hover,
+#adminmenu .wp-submenu li a:has(.riverso-nav-label):focus {
+    background: transparent !important;
+    box-shadow: none !important;
+    color: inherit !important;
+}
+
+#adminmenu .wp-submenu li.current.riverso-nav-label-item > a,
+#adminmenu .wp-submenu li.current a:has(.riverso-nav-label) {
+    background: transparent !important;
+    font-weight: 600;
+}
+
 /* Wrap principal */
 .riverso-pos-wrap {
     margin: 20px 20px 20px 0;
@@ -1056,4 +1094,29 @@
     .riverso-price-rules .rpr-layout {
         flex-direction: column;
     }
+}
+
+/* Badge neto/bruto en ficha de producto */
+.riverso-price-basis-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 1px 7px;
+    border-radius: 8px;
+    background: #e7f5ef;
+    color: #007017;
+    vertical-align: middle;
+    margin-left: 4px;
+}
+.riverso-price-basis-badge.is-bruto {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+/* Este CSS solo se carga en páginas Riverso POS.
+   Oculta el footer de WP que se sobrepone a tablas al hacer scroll. */
+#wpfooter {
+    display: none !important;
 }

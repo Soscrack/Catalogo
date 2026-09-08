@@ -18,6 +18,7 @@ except ImportError:
 
 DEFAULT_XLSX = os.path.expanduser(r'~\Downloads\productos (3).xlsx')
 FUENTE = 'productos_xlsx_2026-08'
+IVA_FACTOR = 1.19
 
 
 def get_connection():
@@ -45,10 +46,28 @@ def get_connection():
     return conn, prefix
 
 
+def normalize_iva(value):
+    s = (value or '').strip().lower()
+    return 'exento' if s == 'exento' else 'afecto'
+
+
+def net_from_gross(bruto, iva_tipo):
+    if bruto is None:
+        return None
+    if normalize_iva(iva_tipo) == 'exento':
+        return round(float(bruto), 4)
+    return round(float(bruto) / IVA_FACTOR, 4)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Import legacy price reference from Excel')
     parser.add_argument('--xlsx', default=DEFAULT_XLSX, help='Ruta al Excel de productos')
     parser.add_argument('--dry-run', action='store_true', help='No escribe en BD')
+    parser.add_argument(
+        '--costo-es-bruto',
+        action='store_true',
+        help='La columna Costo neto del Excel es en realidad bruto; convierte afecto ÷ 1.19',
+    )
     args = parser.parse_args()
 
     if not os.path.isfile(args.xlsx):
@@ -57,6 +76,8 @@ def main():
 
     df = pd.read_excel(args.xlsx, sheet_name='Datos de producto')
     print(f'Filas leídas: {len(df)}')
+    if args.costo_es_bruto:
+        print('Modo --costo-es-bruto: convertirá costos afecto a neto (÷ 1.19)')
 
     if args.dry_run:
         costo_cero = int(((df['Costo neto'].fillna(0)) == 0).sum())
@@ -70,6 +91,7 @@ def main():
 
     inserted = 0
     updated = 0
+    convertidos = 0
     for _, row in df.iterrows():
         sku = str(row.get('SKU', '')).strip()
         if not sku or sku == 'nan':
@@ -90,10 +112,18 @@ def main():
                 return None
             return str(v).strip() or None
 
+        costo = fnum('Costo neto')
+        if args.costo_es_bruto and costo is not None and costo > 0:
+            iva = normalize_iva(fstr('Venta: afecto/exento de IVA'))
+            neto = net_from_gross(costo, iva)
+            if iva == 'afecto' and neto is not None and abs(neto - costo) > 0.00005:
+                convertidos += 1
+            costo = neto
+
         data = (
             sku,
             fstr('Nombre'),
-            fnum('Costo neto'),
+            costo,
             fnum('Venta: Precio neto'),
             fnum('Venta: Precio total'),
             fstr('Código de barras'),
@@ -138,6 +168,8 @@ def main():
     costo_cero = int(((df['Costo neto'].fillna(0)) == 0).sum())
     print(f'Importados/actualizados: {inserted + updated} (insert ~{inserted}, update ~{updated})')
     print(f'Registros con costo 0 en Excel (referencia sin dato): {costo_cero}')
+    if args.costo_es_bruto:
+        print(f'Costos convertidos bruto→neto (afecto): {convertidos}')
     print('Listo.')
 
 

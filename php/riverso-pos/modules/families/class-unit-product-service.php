@@ -1227,6 +1227,200 @@ class Riverso_Unit_Product_Service {
     }
 
     /**
+     * Preview de remapeo código proveedor (unitario → hijo/envase).
+     *
+     * @param int $producto_base_id
+     * @param int $pp_id producto_proveedor.id
+     * @return array|WP_Error
+     */
+    public function build_code_remap_preview($producto_base_id, $pp_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $producto_base_id = intval($producto_base_id);
+        $pp_id = intval($pp_id);
+
+        $pb = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, canonical_sku, nombre_canonico, es_unidad_minima, unit_of_grupo_id,
+                    familia_decision, estado
+             FROM {$prefix}producto_base
+             WHERE id = %d AND deleted_at IS NULL",
+            $producto_base_id
+        ), ARRAY_A);
+        if (!$pb) {
+            return new WP_Error('not_found', 'Producto base no encontrado');
+        }
+
+        $pp = $wpdb->get_row($wpdb->prepare(
+            "SELECT pp.*, p.nombre AS proveedor_nombre
+             FROM {$prefix}producto_proveedor pp
+             LEFT JOIN {$prefix}proveedores p ON p.id = pp.proveedor_id
+             WHERE pp.id = %d",
+            $pp_id
+        ), ARRAY_A);
+        if (!$pp) {
+            return new WP_Error('not_found', 'Código de proveedor no encontrado');
+        }
+        if ((int) ($pp['producto_base_id'] ?? 0) !== $producto_base_id) {
+            return new WP_Error('mismatch', 'El código no pertenece a este producto');
+        }
+        if (isset($pp['activo']) && (int) $pp['activo'] !== 1) {
+            return new WP_Error('inactive', 'El código no está activo');
+        }
+
+        $family_ctx = $this->resolve_family_context_for_remap($producto_base_id);
+        $grupo_id = $family_ctx['grupo_id'] ? intval($family_ctx['grupo_id']) : 0;
+        $is_unitario = !empty($pb['es_unidad_minima'])
+            || (!empty($family_ctx['unit_producto_base_id'])
+                && intval($family_ctx['unit_producto_base_id']) === $producto_base_id);
+        $can_be_unitario = $is_unitario
+            || empty($pb['familia_decision'])
+            || ($pb['familia_decision'] === 'requiere')
+            || ($grupo_id > 0 && empty($family_ctx['unit_producto_base_id']));
+
+        $pack_map = $grupo_id
+            ? $this->get_pack_members_by_qty($grupo_id, $producto_base_id)
+            : [];
+        $members_caja = array_values($pack_map);
+
+        $can_create_child = false;
+        if ($grupo_id > 0) {
+            if ($is_unitario) {
+                $can_create_child = true;
+            } elseif (empty($family_ctx['unit_producto_base_id']) && $can_be_unitario) {
+                $can_create_child = true;
+            }
+        }
+
+        $needs_confirm = function_exists('riverso_pp_needs_human_confirm')
+            ? riverso_pp_needs_human_confirm($pp)
+            : false;
+
+        return [
+            'product' => [
+                'id' => intval($pb['id']),
+                'canonical_sku' => $pb['canonical_sku'],
+                'nombre_canonico' => $pb['nombre_canonico'],
+                'es_unidad_minima' => (int) ($pb['es_unidad_minima'] ?? 0),
+                'familia_decision' => $pb['familia_decision'] ?? null,
+            ],
+            'code' => [
+                'id' => intval($pp['id']),
+                'codigo_proveedor' => $pp['codigo_proveedor'] ?? '',
+                'proveedor_id' => (int) ($pp['proveedor_id'] ?? 0),
+                'proveedor_nombre' => $pp['proveedor_nombre'] ?? '',
+                'nombre_proveedor' => $pp['nombre_proveedor'] ?? '',
+                'origen_datos' => $pp['origen_datos'] ?? '',
+                'match_estado' => $pp['match_estado'] ?? '',
+                'needs_confirm' => (bool) $needs_confirm,
+                'catalogo_id' => isset($pp['catalogo_id']) ? (int) $pp['catalogo_id'] : null,
+            ],
+            'family' => $family_ctx,
+            'is_unitario' => (bool) $is_unitario,
+            'can_be_unitario' => (bool) $can_be_unitario,
+            'show_wizard' => (bool) ($is_unitario || $can_be_unitario),
+            'can_create_child' => (bool) $can_create_child,
+            'can_assign_child' => (bool) $can_create_child,
+            'can_move_child' => !empty($members_caja),
+            'members_caja' => $members_caja,
+            'suggested_destino' => !empty($members_caja) ? $members_caja[0] : null,
+            'actions' => ['keep_unit', 'move_child', 'assign_child', 'create_child'],
+        ];
+    }
+
+    /**
+     * Mueve un vínculo producto_proveedor al producto destino (hijo/envase).
+     *
+     * @param int   $pp_id
+     * @param int   $destino_producto_base_id
+     * @param array $opts verify, motivo
+     * @return array|WP_Error
+     */
+    public function move_supplier_code_to_product($pp_id, $destino_producto_base_id, array $opts = []) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $pp_id = intval($pp_id);
+        $destino_producto_base_id = intval($destino_producto_base_id);
+        if ($pp_id <= 0 || $destino_producto_base_id <= 0) {
+            return new WP_Error('invalid', 'Parámetros inválidos');
+        }
+
+        $pp = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}producto_proveedor WHERE id = %d",
+            $pp_id
+        ), ARRAY_A);
+        if (!$pp) {
+            return new WP_Error('not_found', 'Código de proveedor no encontrado');
+        }
+
+        $dest = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, canonical_sku, nombre_canonico FROM {$prefix}producto_base
+             WHERE id = %d AND deleted_at IS NULL",
+            $destino_producto_base_id
+        ), ARRAY_A);
+        if (!$dest) {
+            return new WP_Error('not_found', 'Producto destino no encontrado');
+        }
+
+        $from_id = (int) ($pp['producto_base_id'] ?? 0);
+        if ($from_id === $destino_producto_base_id) {
+            return [
+                'pp_id' => $pp_id,
+                'from_producto_base_id' => $from_id,
+                'destino_producto_base_id' => $destino_producto_base_id,
+                'moved' => false,
+            ];
+        }
+
+        // Unique (proveedor_id, codigo_proveedor): no puede haber otro activo en destino.
+        $clash = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, producto_base_id FROM {$prefix}producto_proveedor
+             WHERE proveedor_id = %d AND codigo_proveedor = %s AND id <> %d AND activo = 1
+             LIMIT 1",
+            (int) $pp['proveedor_id'],
+            $pp['codigo_proveedor'],
+            $pp_id
+        ), ARRAY_A);
+        if ($clash && (int) $clash['producto_base_id'] !== $destino_producto_base_id) {
+            return new WP_Error(
+                'conflict',
+                'El código ya está vinculado a otro producto (#' . (int) $clash['producto_base_id'] . ').'
+            );
+        }
+
+        $verify = !isset($opts['verify']) || !empty($opts['verify']);
+        $update = [
+            'producto_base_id' => $destino_producto_base_id,
+            'updated_at' => current_time('mysql'),
+        ];
+        if ($verify) {
+            $update['match_estado'] = 'VERIFIED';
+            $update['matched_at'] = current_time('mysql');
+            $update['match_origen'] = 'human';
+            $update['requires_human_review'] = 0;
+            $update['review_status'] = 'aprobado';
+        }
+
+        $ok = $wpdb->update(
+            "{$prefix}producto_proveedor",
+            $update,
+            ['id' => $pp_id]
+        );
+        if ($ok === false) {
+            return new WP_Error('db_error', $wpdb->last_error ?: 'No se pudo mover el código');
+        }
+
+        return [
+            'pp_id' => $pp_id,
+            'from_producto_base_id' => $from_id,
+            'destino_producto_base_id' => $destino_producto_base_id,
+            'codigo_proveedor' => $pp['codigo_proveedor'],
+            'proveedor_id' => (int) $pp['proveedor_id'],
+            'moved' => true,
+            'verified' => $verify,
+        ];
+    }
+
+    /**
      * Asigna un producto_base ya existente como miembro-caja de la familia
      * (ensure member + envase con cantidad) para luego mapear el barcode.
      *

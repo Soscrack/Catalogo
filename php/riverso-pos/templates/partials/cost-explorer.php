@@ -53,8 +53,9 @@ $received_quotes_url = admin_url('admin.php?page=riverso-pos-received-quotes');
         </div>
 
         <div id="rce-highlight" class="rce-highlight" hidden>
-            <div class="rce-highlight-label">Último costo</div>
+            <div class="rce-highlight-label" id="rce-highlight-label">Último costo</div>
             <div class="rce-highlight-value" id="rce-highlight-cost">—</div>
+            <div class="rce-highlight-alt" id="rce-highlight-cost-alt">—</div>
             <div class="rce-highlight-meta">
                 <span id="rce-highlight-pair">—</span>
                 <span id="rce-highlight-date">—</span>
@@ -67,6 +68,10 @@ $received_quotes_url = admin_url('admin.php?page=riverso-pos-received-quotes');
             <div class="rce-section-header">
                 <h4>Historial por par (proveedor + código)</h4>
                 <div class="rce-folio-controls">
+                    <div class="rce-view-toggle" role="group" aria-label="Vista de costos" data-rce-cost-view>
+                        <button type="button" class="button rce-view-btn is-active" data-view="bruto">Bruto</button>
+                        <button type="button" class="button rce-view-btn" data-view="neto">Neto</button>
+                    </div>
                     <label for="rce-doc-type">Tipo</label>
                     <select id="rce-doc-type" class="rce-doc-type" title="Tipo de documento">
                         <option value="factura" selected>Factura</option>
@@ -93,12 +98,18 @@ $received_quotes_url = admin_url('admin.php?page=riverso-pos-received-quotes');
         <div class="rce-section">
             <div class="rce-section-header">
                 <h4>Evolución del costo</h4>
-                <select id="rce-chart-months" class="rce-chart-months">
-                    <option value="6">Últimos 6 meses</option>
-                    <option value="12">Último año</option>
-                    <option value="24" selected>Últimos 2 años</option>
-                    <option value="60">Últimos 5 años</option>
-                </select>
+                <div class="rce-folio-controls">
+                    <div class="rce-view-toggle" role="group" aria-label="Vista de costos en gráfico" data-rce-cost-view>
+                        <button type="button" class="button rce-view-btn is-active" data-view="bruto">Bruto</button>
+                        <button type="button" class="button rce-view-btn" data-view="neto">Neto</button>
+                    </div>
+                    <select id="rce-chart-months" class="rce-chart-months">
+                        <option value="6">Últimos 6 meses</option>
+                        <option value="12">Último año</option>
+                        <option value="24" selected>Últimos 2 años</option>
+                        <option value="60">Últimos 5 años</option>
+                    </select>
+                </div>
             </div>
             <div class="rce-chart-wrap">
                 <canvas id="rce-cost-chart" height="280"></canvas>
@@ -138,6 +149,10 @@ $received_quotes_url = admin_url('admin.php?page=riverso-pos-received-quotes');
         </div>
         <div class="rce-modal-body" id="rce-evo-body">
             <div class="rce-folio-controls rce-evo-controls">
+                <div class="rce-view-toggle" role="group" aria-label="Vista de costos" data-rce-cost-view>
+                    <button type="button" class="button rce-view-btn is-active" data-view="bruto">Bruto</button>
+                    <button type="button" class="button rce-view-btn" data-view="neto">Neto</button>
+                </div>
                 <label for="rce-evo-doc-type">Tipo de documento</label>
                 <select id="rce-evo-doc-type" title="Tipo de documento">
                     <option value="factura" selected>Factura</option>
@@ -162,11 +177,13 @@ $received_quotes_url = admin_url('admin.php?page=riverso-pos-received-quotes');
                 </select>
             </div>
             <div id="rce-evo-highlight" class="rce-highlight" hidden style="margin-bottom:12px;">
-                <div class="rce-highlight-label">Último costo</div>
+                <div class="rce-highlight-label" id="rce-evo-highlight-label">Último costo</div>
                 <div class="rce-highlight-value" id="rce-evo-highlight-cost">—</div>
+                <div class="rce-highlight-alt" id="rce-evo-highlight-cost-alt">—</div>
                 <div class="rce-highlight-meta">
                     <span id="rce-evo-highlight-pair">—</span>
                     <span id="rce-evo-highlight-date">—</span>
+                    <span id="rce-evo-highlight-folio"></span>
                     <span id="rce-evo-highlight-variation" class="rce-variation"></span>
                 </div>
             </div>
@@ -301,6 +318,12 @@ $received_quotes_url = admin_url('admin.php?page=riverso-pos-received-quotes');
     margin-top: 2px;
 }
 
+.rce-result-item .rce-map-link {
+    display: inline-block;
+    margin-top: 6px;
+    text-decoration: none;
+}
+
 .rce-empty-state {
     background: var(--rce-bg);
     border: 1px dashed var(--rce-border);
@@ -392,6 +415,15 @@ $received_quotes_url = admin_url('admin.php?page=riverso-pos-received-quotes');
     padding: 18px 20px;
 }
 
+.rce-highlight.is-legacy {
+    background: linear-gradient(135deg, #fcf0e3 0%, #fef8f0 100%);
+    border-color: #dba617;
+}
+
+.rce-highlight.is-legacy .rce-highlight-label {
+    color: #996800;
+}
+
 .rce-highlight-label {
     font-size: 12px;
     text-transform: uppercase;
@@ -404,7 +436,37 @@ $received_quotes_url = admin_url('admin.php?page=riverso-pos-received-quotes');
     font-size: 32px;
     font-weight: 700;
     color: #1d2327;
-    margin: 4px 0 8px;
+    margin: 4px 0 2px;
+}
+
+.rce-highlight-alt {
+    font-size: 14px;
+    color: var(--rce-muted);
+    margin: 0 0 8px;
+}
+
+.rce-view-toggle {
+    display: inline-flex;
+    gap: 0;
+}
+
+.rce-view-toggle .rce-view-btn {
+    margin: 0;
+    border-radius: 0;
+}
+
+.rce-view-toggle .rce-view-btn:first-child {
+    border-radius: 4px 0 0 4px;
+}
+
+.rce-view-toggle .rce-view-btn:last-child {
+    border-radius: 0 4px 4px 0;
+}
+
+.rce-view-toggle .rce-view-btn.is-active {
+    background: var(--rce-accent);
+    border-color: var(--rce-accent);
+    color: #fff;
 }
 
 .rce-highlight-meta {

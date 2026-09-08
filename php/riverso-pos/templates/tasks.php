@@ -22,6 +22,16 @@ $task_type_categories = Riverso_Task_Module::TASK_TYPE_CATEGORY;
         </button>
     </h1>
 
+    <?php if (isset($_GET['from']) && sanitize_key(wp_unslash($_GET['from'])) === 'precio-folio'): ?>
+    <div class="notice notice-info">
+        <p>
+            <strong>Venís de Procesar folios (precios).</strong>
+            Completá las tareas de familia (<code>preguntar_familia</code> / <code>asignar_familia</code>)
+            del producto. Al terminar, volvé a Centro de Precios y pulsá «Ya resolví — actualizar».
+        </p>
+    </div>
+    <?php endif; ?>
+
     <!-- Tabs -->
     <div class="nav-tab-wrapper">
         <a href="#" class="nav-tab nav-tab-active" data-tab="todas">Todas</a>

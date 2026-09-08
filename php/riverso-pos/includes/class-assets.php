@@ -81,6 +81,14 @@ class Riverso_POS_Assets {
         if (strpos($hook, 'riverso-pos-costs') !== false) {
             $this->enqueue_cost_history_assets();
         }
+
+        if (strpos($hook, 'riverso-pos-manual-mapping') !== false) {
+            $this->enqueue_manual_mapping_assets();
+        }
+
+        if (strpos($hook, 'riverso-pos-pricing') !== false) {
+            $this->enqueue_price_history_assets();
+        }
     }
 
     /**
@@ -95,18 +103,100 @@ class Riverso_POS_Assets {
             true
         );
 
+        $js_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/cost-history.js';
+        $js_ver = file_exists($js_path) ? (string) filemtime($js_path) : RIVERSO_POS_VERSION;
         wp_enqueue_script(
             'riverso-cost-history',
             RIVERSO_POS_PLUGIN_URL . 'assets/js/cost-history.js',
             ['jquery', 'chartjs'],
-            RIVERSO_POS_VERSION,
+            $js_ver,
             true
         );
+
+        $manual_map_url = current_user_can('riverso_manage_codes')
+            ? (get_query_var('riverso_portal')
+                ? home_url('/interno/manual-mapping/')
+                : admin_url('admin.php?page=riverso-pos-manual-mapping'))
+            : '';
 
         wp_localize_script('riverso-cost-history', 'riversoCostHistory', [
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('riverso_pos_nonce'),
             'can_manage' => current_user_can('riverso_manage_costs'),
+            'can_manage_codes' => current_user_can('riverso_manage_codes'),
+            'manual_mapping_url' => $manual_map_url,
+        ]);
+    }
+
+    /**
+     * Encola JS de mapeo manual (admin y portal)
+     */
+    private function enqueue_manual_mapping_assets() {
+        $js_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/manual-mapping.js';
+        $js_ver = file_exists($js_path) ? (string) filemtime($js_path) : RIVERSO_POS_VERSION;
+        wp_enqueue_script(
+            'riverso-manual-mapping',
+            RIVERSO_POS_PLUGIN_URL . 'assets/js/manual-mapping.js',
+            ['jquery'],
+            $js_ver,
+            true
+        );
+
+        $is_portal = (bool) get_query_var('riverso_portal');
+        wp_localize_script('riverso-manual-mapping', 'riversoManualMapping', [
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('riverso_pos_nonce'),
+            'cost_history_url' => $is_portal
+                ? home_url('/interno/cost-history/')
+                : admin_url('admin.php?page=riverso-pos-costs'),
+            'can_manage' => current_user_can('riverso_manage_codes'),
+        ]);
+    }
+
+    /**
+     * Encola Chart.js + price-history.js (Centro de Precios)
+     */
+    private function enqueue_price_history_assets() {
+        $css_path = RIVERSO_POS_PLUGIN_DIR . 'assets/css/price-history.css';
+        $css_ver = file_exists($css_path) ? (string) filemtime($css_path) : RIVERSO_POS_VERSION;
+        wp_enqueue_style(
+            'riverso-price-history',
+            RIVERSO_POS_PLUGIN_URL . 'assets/css/price-history.css',
+            [],
+            $css_ver
+        );
+
+        wp_enqueue_script(
+            'chartjs',
+            'https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js',
+            [],
+            '3.9.1',
+            true
+        );
+
+        $js_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/price-history.js';
+        $js_ver = file_exists($js_path) ? (string) filemtime($js_path) : RIVERSO_POS_VERSION;
+        wp_enqueue_script(
+            'riverso-price-history',
+            RIVERSO_POS_PLUGIN_URL . 'assets/js/price-history.js',
+            ['jquery', 'chartjs'],
+            $js_ver,
+            true
+        );
+
+        wp_localize_script('riverso-price-history', 'riversoPriceHistory', [
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('riverso_pos_nonce'),
+            'can_manage' => current_user_can('riverso_manage_prices'),
+            'can_approve' => current_user_can('riverso_approve_prices'),
+            'can_create_local' => current_user_can('riverso_manage_products')
+                && (current_user_can('riverso_manage_codes') || current_user_can('riverso_process_invoices')),
+            'can_answer_family' => current_user_can('riverso_manage_products')
+                || current_user_can('riverso_manage_families'),
+            'can_manage_competencia' => current_user_can('riverso_manage_competencia'),
+            'can_view_barcodes' => current_user_can('riverso_view_products'),
+            'can_assign_barcodes' => current_user_can('riverso_manage_products'),
+            'products_admin_url' => admin_url('admin.php?page=riverso-pos-products'),
         ]);
     }
 
@@ -152,6 +242,10 @@ class Riverso_POS_Assets {
 
             if ($portal_page === 'cost-history') {
                 $this->enqueue_cost_history_assets();
+            }
+
+            if ($portal_page === 'manual-mapping') {
+                $this->enqueue_manual_mapping_assets();
             }
         }
 

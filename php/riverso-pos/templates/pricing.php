@@ -48,7 +48,11 @@ jQuery(function($){
     const canManage = <?php echo $can_manage ? 'true' : 'false'; ?>;
     const canApprove = <?php echo $can_approve ? 'true' : 'false'; ?>;
 
-    function fmt(v){ return (v === null || v === undefined || v === '') ? '-' : Number(v).toLocaleString('es-CL'); }
+    function fmt(v){
+        return (v === null || v === undefined || v === '')
+            ? '-'
+            : Number(v).toLocaleString('es-CL', {minimumFractionDigits: 3, maximumFractionDigits: 3});
+    }
 
     function render(items){
         if (!items || !items.length){
@@ -60,7 +64,7 @@ jQuery(function($){
             const alerta = parseInt(it.alerta_margen) === 1
                 ? '<span style="color:#b32d2e;font-weight:bold;">Margen bajo</span>' : '-';
             const assignInput = canManage
-                ? `<input type="number" step="0.01" min="0" class="small-text pricing-assigned" data-id="${it.id}" value="${it.p_asignado || ''}" style="width:90px;">`
+                ? `<input type="number" step="0.001" min="0" class="small-text pricing-assigned" data-id="${it.id}" value="${it.p_asignado || ''}" style="width:110px;">`
                 : fmt(it.p_asignado);
             let actions = '';
             if (canManage){

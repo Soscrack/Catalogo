@@ -1288,7 +1288,8 @@ class Riverso_Family_Module {
             ]);
         }
 
-        // Dispara sync Facto (y otros listeners): sin esto el SKU local no entra al outbox.
+        // Evento para otros listeners (catálogo, barcodes, etc.).
+        // Facto ya no encola API aquí: el mapa queda pendiente_excel en save_product / mark_facto_pending_export.
         $event_payload = [
             'id' => $producto_base_id,
             'canonical_sku' => $sku,

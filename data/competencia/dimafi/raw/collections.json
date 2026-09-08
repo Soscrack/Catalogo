@@ -1,0 +1,504 @@
+{
+  "collections": [
+    {
+      "id": 456210252062,
+      "title": "ACCESORIOS",
+      "handle": "accesorios",
+      "description": "<p>Encuentra la línea completa de accesorios y consumibles para herramientas en Chile. Contamos con brocas para concreto SDS, metal, madera y porcelanato, discos de corte y desbaste, cinceles, dados magnéticos, puntas de atornillado y discos diamantados. Todo en insumos de alta durabilidad para la construcción e industria con despacho a todo el país</p>",
+      "published_at": "2023-08-10T10:00:13-04:00",
+      "updated_at": "2026-09-02T07:14:00-04:00",
+      "image": {
+        "id": 1761702871326,
+        "created_at": "2026-08-27T16:24:08-04:00",
+        "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/collections/BROCACONCRETOSDSPLUS.jpg?v=1787862249",
+        "alt": "Accesorios para herramientas, brocas, discos de corte y cinceles - Dimafi"
+      },
+      "products_count": 38
+    },
+    {
+      "id": 456210120990,
+      "title": "ANCLAJE MECÁNICO",
+      "handle": "anclajes-mecanicos",
+      "description": "<p>Descubre nuestra línea de anclajes mecánicos y sistemas de fijación para hormigón y mampostería en Chile. Contamos con pernos de expansión, tacos atornillables, cáncamos y tarugos de alta resistencia para proyectos de edificación e industria. Calidad garantizada con despacho a todo el país</p>",
+      "published_at": "2023-08-10T09:59:31-04:00",
+      "updated_at": "2026-09-03T07:14:06-04:00",
+      "image": {
+        "id": 1761702805790,
+        "created_at": "2026-08-27T16:15:27-04:00",
+        "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/collections/DIMACONCRETE.jpg?v=1787861728",
+        "alt": "Anclajes mecánicos y pernos de expansión para hormigón"
+      },
+      "products_count": 18
+    },
+    {
+      "id": 472149262622,
+      "title": "ANCLAJE QUÍMICO",
+      "handle": "anclaje-quimico",
+      "description": "<p>\"Encuentra la línea completa de anclajes químicos en Chile para fijaciones de alta resistencia en hormigón y mampostería. Contamos con resinas epóxicas, viniléster y sistemas híbridos sísmicos, ideales para proyectos estructurales e industriales. Explora nuestros kits con dispensadores y accesorios con despacho a todo el país.\"</p>",
+      "published_at": "2024-05-02T14:17:58-04:00",
+      "updated_at": "2026-08-28T09:21:28-04:00",
+      "image": {
+        "id": 1760452116766,
+        "created_at": "2026-03-25T11:44:20-04:00",
+        "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/collections/anclaje_quimico_adhesivo_epoxico_585_ml.png?v=1787923279",
+        "alt": "Anclajes Químicos y Resinas Epóxicas | Dimafi "
+      },
+      "products_count": 10
+    },
+    {
+      "id": 478563205406,
+      "title": "ASPIRADORA",
+      "handle": "aspiradora",
+      "description": "",
+      "published_at": "2024-09-30T07:19:51-04:00",
+      "updated_at": "2026-05-13T23:34:51-04:00",
+      "image": null,
+      "products_count": 1
+    },
+    {
+      "id": 478427447582,
+      "title": "ATORNILLADORES",
+      "handle": "atornilladores",
+      "description": "",
+      "published_at": "2024-09-26T07:04:54-04:00",
+      "updated_at": "2026-08-27T07:14:15-04:00",
+      "image": null,
+      "products_count": 9
+    },
+    {
+      "id": 456339554590,
+      "title": "BROCAS",
+      "handle": "brocas",
+      "description": "",
+      "published_at": "2023-08-11T09:36:54-04:00",
+      "updated_at": "2026-09-02T07:14:00-04:00",
+      "image": null,
+      "products_count": 9
+    },
+    {
+      "id": 478427611422,
+      "title": "CINCELADORES",
+      "handle": "cinceladores",
+      "description": "",
+      "published_at": "2024-09-26T07:07:20-04:00",
+      "updated_at": "2026-06-04T08:01:41-04:00",
+      "image": null,
+      "products_count": 2
+    },
+    {
+      "id": 640384401694,
+      "title": "CINCELES Y PUNTOS",
+      "handle": "cinceles-y-puntos",
+      "description": "",
+      "published_at": "2025-06-06T12:42:56-04:00",
+      "updated_at": "2026-08-25T07:11:29-04:00",
+      "image": null,
+      "products_count": 5
+    },
+    {
+      "id": 456339849502,
+      "title": "CLAVADORAS INALÁMBIRCAS",
+      "handle": "clavadoras",
+      "description": "<p>Encuentra la línea completa de clavadoras inalámbricas a batería y a gas en Chile. Contamos con clavadoras para concreto, madera, estructuras y aislación, además de sus respectivos clavos e insumos. Soluciones portátiles de alta potencia para construcción e industria con despacho a todo el país</p>",
+      "published_at": "2023-08-11T09:39:08-04:00",
+      "updated_at": "2026-09-02T13:48:10-04:00",
+      "image": {
+        "id": 1761702936862,
+        "created_at": "2026-08-27T16:29:12-04:00",
+        "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/collections/CLAVADORAABATERIADCCN40A.png?v=1787862552",
+        "alt": null
+      },
+      "products_count": 11
+    },
+    {
+      "id": 638132027678,
+      "title": "CLAVOS PARA CLAVADORAS",
+      "handle": "clavos-para-clavadoras",
+      "description": "",
+      "published_at": "2025-03-24T12:10:22-04:00",
+      "updated_at": "2026-07-15T08:41:09-04:00",
+      "image": null,
+      "products_count": 4
+    },
+    {
+      "id": 640384303390,
+      "title": "COPA DIAMANTADA",
+      "handle": "copa-diamantada",
+      "description": "",
+      "published_at": "2025-06-06T12:41:10-04:00",
+      "updated_at": "2026-02-18T12:59:46-05:00",
+      "image": null,
+      "products_count": 1
+    },
+    {
+      "id": 640384368926,
+      "title": "DADOS HEXAGONALES",
+      "handle": "dados-hexagonales",
+      "description": "",
+      "published_at": "2025-06-06T12:41:51-04:00",
+      "updated_at": "2026-08-27T07:14:15-04:00",
+      "image": null,
+      "products_count": 2
+    },
+    {
+      "id": 478753489182,
+      "title": "DEMOLEDOR",
+      "handle": "demoledor",
+      "description": "",
+      "published_at": "2024-10-02T13:02:32-04:00",
+      "updated_at": "2026-07-03T12:54:18-04:00",
+      "image": null,
+      "products_count": 1
+    },
+    {
+      "id": 478748115230,
+      "title": "DIMAKIT",
+      "handle": "dimakit",
+      "description": "",
+      "published_at": "2024-10-02T09:43:55-04:00",
+      "updated_at": "2026-06-01T09:19:41-04:00",
+      "image": null,
+      "products_count": 1
+    },
+    {
+      "id": 456339652894,
+      "title": "DISCOS DE CORTE",
+      "handle": "discos",
+      "description": "",
+      "published_at": "2023-08-11T09:37:18-04:00",
+      "updated_at": "2026-05-30T07:13:43-04:00",
+      "image": null,
+      "products_count": 4
+    },
+    {
+      "id": 640384172318,
+      "title": "DISCOS DE DESBASTE",
+      "handle": "discos-de-desbaste",
+      "description": "",
+      "published_at": "2025-06-06T12:37:35-04:00",
+      "updated_at": "2026-05-21T07:18:50-04:00",
+      "image": null,
+      "products_count": 2
+    },
+    {
+      "id": 478402838814,
+      "title": "ESMERILES",
+      "handle": "esmeriles",
+      "description": "",
+      "published_at": "2024-09-25T15:49:28-04:00",
+      "updated_at": "2026-07-15T09:32:52-04:00",
+      "image": null,
+      "products_count": 4
+    },
+    {
+      "id": 643255861534,
+      "title": "FICHAS TECNICAS",
+      "handle": "fichas-tecnicas",
+      "description": "",
+      "published_at": "2025-08-25T13:54:07-04:00",
+      "updated_at": "2026-02-18T12:59:46-05:00",
+      "image": null,
+      "products_count": 0
+    },
+    {
+      "id": 649268560158,
+      "title": "FIJACION DIRECTA",
+      "handle": "fijaciones-directas",
+      "description": "<p>Explora nuestra gama de sistemas de fijación directa en Chile para concreto, acero y mampostería. Contamos con clavadoras a gas e inalámbricas, martillos de disparo a pólvora, fulminantes calibre 27, clavos dimanail y accesorios para montaje industrial. Soluciones de clavado continuo de alta eficiencia con despacho a todo el país</p>",
+      "published_at": "2026-01-12T09:05:09-05:00",
+      "updated_at": "2026-08-28T08:59:30-04:00",
+      "image": {
+        "id": 1761703067934,
+        "created_at": "2026-08-27T16:41:35-04:00",
+        "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/collections/CLAVOPARACONCRETODPBCORTO.jpg?v=1787863296",
+        "alt": "istemas de fijación directa, clavadoras a gas y martillos de disparo - Dimafi"
+      },
+      "products_count": 26
+    },
+    {
+      "id": 456207237406,
+      "title": "FIJACIONES",
+      "handle": "fijaciones",
+      "description": "",
+      "published_at": "2023-08-10T09:31:47-04:00",
+      "updated_at": "2026-08-28T08:59:30-04:00",
+      "image": null,
+      "products_count": 29
+    },
+    {
+      "id": 638131274014,
+      "title": "FULMINANTES + CLAVO SDM",
+      "handle": "fulminantes-clavo-sdm",
+      "description": "",
+      "published_at": "2025-03-24T11:43:33-04:00",
+      "updated_at": "2026-07-02T08:31:25-04:00",
+      "image": null,
+      "products_count": 4
+    },
+    {
+      "id": 640384237854,
+      "title": "GRATAS",
+      "handle": "gratas",
+      "description": "",
+      "published_at": "2025-06-06T12:40:47-04:00",
+      "updated_at": "2026-06-25T11:35:43-04:00",
+      "image": null,
+      "products_count": 2
+    },
+    {
+      "id": 638131929374,
+      "title": "GRATING FIJACION PARA REJAS",
+      "handle": "grating-fijacion-para-rejas",
+      "description": "",
+      "published_at": "2025-03-24T12:08:35-04:00",
+      "updated_at": "2026-08-28T09:30:40-04:00",
+      "image": {
+        "id": 1761707884830,
+        "created_at": "2026-08-28T09:29:17-04:00",
+        "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/collections/GRATING.jpg?v=1787923757",
+        "alt": "Disco espiga  para fijación de rejillas grating con perno roscado"
+      },
+      "products_count": 1
+    },
+    {
+      "id": 472149229854,
+      "title": "HERRAMIENTAS",
+      "handle": "herramientas-profesionales",
+      "description": "<p>Descubre nuestra línea completa de herramientas eléctricas e inalámbricas de uso profesional e industrial en Chile. Contamos con testigueras, taladros de base magnética, sierras circulares, esmeriles angulares, rotomartillos, demoledores y martillos de disparo. Equipos de alta resistencia y potencia para la construcción con despacho a todo el país</p>",
+      "published_at": "2024-05-02T14:17:02-04:00",
+      "updated_at": "2026-08-27T16:34:27-04:00",
+      "image": {
+        "id": 1761702969630,
+        "created_at": "2026-08-27T16:34:26-04:00",
+        "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/collections/ROTOMARTILLO_INALAMBRICO_DB_HAMMER.png?v=1787862867",
+        "alt": "Herramientas eléctricas e inalámbricas profesionales para construcción - Dimafi"
+      },
+      "products_count": 33
+    },
+    {
+      "id": 633544442142,
+      "title": "HERRAMIENTAS INALÁMBRICAS",
+      "handle": "herramientas-inalambricas",
+      "description": "",
+      "published_at": "2024-11-15T10:08:31-05:00",
+      "updated_at": "2026-09-02T13:45:12-04:00",
+      "image": null,
+      "products_count": 15
+    },
+    {
+      "id": 478427545886,
+      "title": "LLAVES DE IMPACTO",
+      "handle": "llave-de-impacto",
+      "description": "",
+      "published_at": "2024-09-26T07:05:56-04:00",
+      "updated_at": "2026-08-27T07:14:15-04:00",
+      "image": null,
+      "products_count": 4
+    },
+    {
+      "id": 478427316510,
+      "title": "MARTILLOS DE DISPARO",
+      "handle": "martillos-de-disparo",
+      "description": "",
+      "published_at": "2024-09-26T07:04:03-04:00",
+      "updated_at": "2026-06-23T07:15:02-04:00",
+      "image": null,
+      "products_count": 7
+    },
+    {
+      "id": 479059181854,
+      "title": "OFERTAS",
+      "handle": "ofertas",
+      "description": "<p>Aprovecha nuestras ofertas y descuentos exclusivos en herramientas eléctricas, generadores diésel, maquinaria y sistemas de fijación industrial en Chile. Encuentra precios especiales en equipos de marcas destacadas con garantía y despacho a todo el país. Renueva tu equipamiento con las mejores oportunidades de Dimafi</p>",
+      "published_at": "2024-10-10T12:12:09-04:00",
+      "updated_at": "2026-08-28T09:44:35-04:00",
+      "image": {
+        "id": 1761707950366,
+        "created_at": "2026-08-28T09:44:34-04:00",
+        "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/collections/OFERTAS-DIMAFI.png?v=1787924674",
+        "alt": "Ofertas y liquidación de herramientas eléctricas e insumos de construcción - Dimafi"
+      },
+      "products_count": 20
+    },
+    {
+      "id": 478755881246,
+      "title": "PLACA COLABORANTE",
+      "handle": "placa-colaborante",
+      "description": "",
+      "published_at": "2024-10-02T14:05:34-04:00",
+      "updated_at": "2026-08-22T07:10:53-04:00",
+      "image": null,
+      "products_count": 3
+    },
+    {
+      "id": 472635670814,
+      "title": "PRODUCTOS DESTACADOS",
+      "handle": "productos-destacados",
+      "description": "<p>Conoce los las nuevas soluciones que DIMAFI ofrece para ti, mantente al día con los productos innovadores.</p>\n<!---->",
+      "published_at": "2024-05-15T14:31:49-04:00",
+      "updated_at": "2026-08-28T08:59:30-04:00",
+      "image": null,
+      "products_count": 6
+    },
+    {
+      "id": 478427676958,
+      "title": "ROTOMARTILLOS",
+      "handle": "rotomartillos",
+      "description": "",
+      "published_at": "2024-09-26T07:07:58-04:00",
+      "updated_at": "2026-07-01T16:43:03-04:00",
+      "image": null,
+      "products_count": 5
+    },
+    {
+      "id": 636066824478,
+      "title": "SIERRAS",
+      "handle": "sierras",
+      "description": "",
+      "published_at": "2025-01-21T07:13:00-05:00",
+      "updated_at": "2026-07-15T09:25:34-04:00",
+      "image": null,
+      "products_count": 5
+    },
+    {
+      "id": 478603444510,
+      "title": "TALADRO BASE MAGNÉTICA",
+      "handle": "taladro-base-magnetica",
+      "description": "",
+      "published_at": "2024-10-01T09:35:41-04:00",
+      "updated_at": "2026-07-06T08:27:20-04:00",
+      "image": null,
+      "products_count": 3
+    },
+    {
+      "id": 478427709726,
+      "title": "TESTIGUERA",
+      "handle": "testiguera",
+      "description": "",
+      "published_at": "2024-09-26T07:08:22-04:00",
+      "updated_at": "2026-02-18T12:59:45-05:00",
+      "image": null,
+      "products_count": 2
+    },
+    {
+      "id": 712546320670,
+      "title": "TORNILLERIA",
+      "handle": "tornilleria",
+      "description": "<p>Explora nuestra gama completa de tornillería para madera, metal, volcanita, paneles SIP y fibrocemento en Chile. Contamos con tornillos autoperforantes, de cabeza lenteja, broca, rosca fina y acero inoxidable. Soluciones de alta calidad con despacho a todo el país</p>",
+      "published_at": "2026-06-26T10:44:49-04:00",
+      "updated_at": "2026-08-28T09:19:12-04:00",
+      "image": {
+        "id": 1761702838558,
+        "created_at": "2026-08-27T16:18:03-04:00",
+        "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/collections/TORNILLOCRS.png?v=1787923152",
+        "alt": "Tornillería industrial, autoperforantes y tornillos para madera - Dimafi"
+      },
+      "products_count": 17
+    },
+    {
+      "id": 638132125982,
+      "title": "TORNILLO PARA VENTANAS PVC",
+      "handle": "tornillo-para-ventanas-pvc",
+      "description": "",
+      "published_at": "2025-03-24T12:14:17-04:00",
+      "updated_at": "2026-05-26T13:14:07-04:00",
+      "image": null,
+      "products_count": 1
+    },
+    {
+      "id": 638659985694,
+      "title": "TORNILLO SIP PANEL",
+      "handle": "tornillo-sip-panel",
+      "description": "",
+      "published_at": "2025-04-09T13:26:38-04:00",
+      "updated_at": "2026-05-26T13:13:04-04:00",
+      "image": null,
+      "products_count": 1
+    },
+    {
+      "id": 638131503390,
+      "title": "TORNILLOS CABEZA DE LENTEJA",
+      "handle": "tornillos-cabeza-de-lenteja",
+      "description": "<p bis_size='{\"x\":11,\"y\":9,\"w\":574,\"h\":78,\"abs_x\":731,\"abs_y\":270}'>Estos tornillos se utilizan cuando no se desea que la cabeza interfiera<br bis_size='{\"x\":436,\"y\":9,\"w\":0,\"h\":18,\"abs_x\":1156,\"abs_y\":270}'>con el revestimiento como también en uniones en perfiles y estructuras tipo metalcon.<br bis_size='{\"x\":544,\"y\":29,\"w\":0,\"h\":18,\"abs_x\":1264,\"abs_y\":290}'>La golilla de diámetro ancho permite una amplia área de sujeción.<br bis_size='{\"x\":418,\"y\":48,\"w\":0,\"h\":18,\"abs_x\":1138,\"abs_y\":309}'>DIMAFI comercializa estos tornillos en 2 presentaciones.Punta fina y punta broca</p>\n<p bis_size='{\"x\":11,\"y\":103,\"w\":574,\"h\":19,\"abs_x\":731,\"abs_y\":364}'><a href=\"https://drive.google.com/file/d/1CnHdnU4hAuJhwujvMtJZSlQ913yDObol/view?usp=drive_link\" target=\"_blank\" bis_size='{\"x\":11,\"y\":103,\"w\":128,\"h\":18,\"abs_x\":731,\"abs_y\":364}' rel=\"noopener\">VER FICHA TÉCNICA </a></p>",
+      "published_at": "2025-03-24T11:59:05-04:00",
+      "updated_at": "2026-06-24T07:14:36-04:00",
+      "image": null,
+      "products_count": 2
+    },
+    {
+      "id": 638131208478,
+      "title": "TORNILLOS FIBROCEMENTO",
+      "handle": "tornillos-fibrocemento",
+      "description": "",
+      "published_at": "2025-03-24T11:39:59-04:00",
+      "updated_at": "2026-05-26T13:06:09-04:00",
+      "image": null,
+      "products_count": 2
+    },
+    {
+      "id": 654955872542,
+      "title": "TORNILLOS GALVANIZADOS",
+      "handle": "tornillos-galvanizados",
+      "description": "",
+      "published_at": "2026-05-06T16:09:07-04:00",
+      "updated_at": "2026-06-24T07:14:36-04:00",
+      "image": null,
+      "products_count": 2
+    },
+    {
+      "id": 654956232990,
+      "title": "TORNILLOS HEX RUSPERT",
+      "handle": "tornillos-ruspert",
+      "description": "",
+      "published_at": "2026-05-06T16:15:43-04:00",
+      "updated_at": "2026-08-27T07:14:15-04:00",
+      "image": null,
+      "products_count": 2
+    },
+    {
+      "id": 638129930526,
+      "title": "TORNILLOS HEXAGONALES",
+      "handle": "tornillos-hexagonales",
+      "description": "<p>Descubre nuestra variedad de tornillos hexagonales autoperforantes y para cubierta en Chile. Contamos con tornillos zincados, galvanizados DIMAHOT®, de acero inoxidable y recubrimiento Ruspert con golilla EPDM y punta broca o espada. Fijaciones de alta resistencia para cubiertas y estructuras metálicas con despacho a todo el país</p>",
+      "published_at": "2025-03-24T11:21:22-04:00",
+      "updated_at": "2026-08-28T09:26:49-04:00",
+      "image": {
+        "id": 1761707852062,
+        "created_at": "2026-08-28T09:26:23-04:00",
+        "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/collections/TORNILLOHEXAGONALRUSPERTPUNTABROCA.jpg?v=1787923609",
+        "alt": "ornillos hexagonales autoperforantes con golilla EPDM para cubiertas - Dimafi"
+      },
+      "products_count": 10
+    },
+    {
+      "id": 638130815262,
+      "title": "TORNILLOS PARA MADERA",
+      "handle": "tornillos-para-madera",
+      "description": "",
+      "published_at": "2025-03-24T11:31:24-04:00",
+      "updated_at": "2026-07-29T07:12:01-04:00",
+      "image": null,
+      "products_count": 4
+    },
+    {
+      "id": 638130848030,
+      "title": "TORNILLOS PARA VOLCANITA",
+      "handle": "tornillos-para-volcanita",
+      "description": "",
+      "published_at": "2025-03-24T11:35:44-04:00",
+      "updated_at": "2026-07-02T08:47:41-04:00",
+      "image": null,
+      "products_count": 3
+    },
+    {
+      "id": 654956658974,
+      "title": "TORNILLOS ZINCADOS",
+      "handle": "tornillos-zincados",
+      "description": "",
+      "published_at": "2026-05-06T16:31:51-04:00",
+      "updated_at": "2026-07-29T07:12:01-04:00",
+      "image": null,
+      "products_count": 2
+    }
+  ]
+}

@@ -42,6 +42,7 @@ class Riverso_Class_Loader {
 
             // Core - Permissions
             'Riverso_POS_Permissions' => 'core/permissions/class-permissions.php',
+            'Riverso_POS_Nav_Registry' => 'core/permissions/class-nav-registry.php',
 
             // Core - Tasks
             'Riverso_Task_Module' => 'core/tasks/class-task-module.php',

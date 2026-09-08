@@ -1,0 +1,2511 @@
+{
+  "products": [
+    {
+      "id": 8576837484830,
+      "title": "PERNO DIRECTO A CONCRETO DIMACONCRETE®",
+      "handle": "perno-directo-a-concreto-dimaconcrete",
+      "body_html": "<p bis_size='{\"x\":11,\"y\":9,\"w\":574,\"h\":195,\"abs_x\":11,\"abs_y\":9}'><span bis_size='{\"x\":11,\"y\":9,\"w\":414,\"h\":195,\"abs_x\":11,\"abs_y\":9}'> Pernos <strong bis_size='{\"x\":61,\"y\":9,\"w\":109,\"h\":18,\"abs_x\":61,\"abs_y\":9}'>DIMACONCRETE</strong> cumplen con la normativa internacional<br bis_size='{\"x\":417,\"y\":9,\"w\":0,\"h\":18,\"abs_x\":417,\"abs_y\":9}'> ETA/ICC para anclajes metálicos, calificando estos anclajes aptos<br bis_size='{\"x\":410,\"y\":29,\"w\":0,\"h\":18,\"abs_x\":410,\"abs_y\":29}'> para cargas dinámicas de carácter sísmico. Junto con la norma<br bis_size='{\"x\":399,\"y\":48,\"w\":0,\"h\":18,\"abs_x\":399,\"abs_y\":48}'> Europea, y Americana estos pernos cumplen con los estándares de<br bis_size='{\"x\":426,\"y\":68,\"w\":0,\"h\":18,\"abs_x\":426,\"abs_y\":68}'> las normas norteamericanas ASTM.<br bis_size='{\"x\":231,\"y\":87,\"w\":0,\"h\":18,\"abs_x\":231,\"abs_y\":87}'> Estos anclajes hexagonales  son construidos a partir de una<br bis_size='{\"x\":380,\"y\":107,\"w\":0,\"h\":18,\"abs_x\":380,\"abs_y\":107}'> aleación de acero al carbono con adición de boro, lo que aporta<br bis_size='{\"x\":410,\"y\":127,\"w\":0,\"h\":18,\"abs_x\":410,\"abs_y\":127}'> resistencia a los impactos y aumenta la dureza del acero corriente,<br bis_size='{\"x\":423,\"y\":146,\"w\":0,\"h\":18,\"abs_x\":423,\"abs_y\":146}'> permitiendo que el hilo no se dañe al momento de ser instalado<br bis_size='{\"x\":411,\"y\":166,\"w\":0,\"h\":18,\"abs_x\":411,\"abs_y\":166}'> en el hormigón.</span></p>\n<p bis_size='{\"x\":11,\"y\":221,\"w\":574,\"h\":19,\"abs_x\":11,\"abs_y\":221}'><a href=\"https://dimafi.odoo.com/odoo/documents/FYy9kg-NSPegl6oi-xom9Qo232\" target=\"_blank\" title=\"Perno directo a concreto Dimaconcrete\" rel=\"noopener\">VER FICHA TÉNICA</a><a href=\"https://dimafi.odoo.com/odoo/documents/kdi5MlJ7RoWMoy-wIFHWZwo150\" title=\"Perno directo a concreto Dimaconcrete\" rel=\"noopener\" bis_size='{\"x\":128,\"y\":221,\"w\":0,\"h\":18,\"abs_x\":128,\"abs_y\":221}' target=\"_blank\"></a></p>\n<p bis_size='{\"x\":11,\"y\":257,\"w\":574,\"h\":19,\"abs_x\":11,\"abs_y\":257}'><br bis_size='{\"x\":11,\"y\":257,\"w\":0,\"h\":18,\"abs_x\":11,\"abs_y\":257}'></p>",
+      "published_at": "2023-08-11T12:03:05-04:00",
+      "created_at": "2023-08-11T12:03:05-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "Mi tienda",
+      "product_type": "Anclaje Mecánico",
+      "tags": [
+        "dimaconcrete",
+        "perno",
+        "perno de anclaje para concreto",
+        "perno para concreto"
+      ],
+      "variants": [
+        {
+          "id": 46272639631646,
+          "title": "EUROPEA / 7.5 x 60",
+          "option1": "EUROPEA",
+          "option2": "7.5 x 60",
+          "option3": null,
+          "sku": "11B01000004903995",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": false,
+          "price": "575",
+          "grams": 1000,
+          "compare_at_price": null,
+          "position": 1,
+          "product_id": 8576837484830,
+          "created_at": "2023-08-11T12:03:05-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 46272640188702,
+          "title": "EUROPEA / 10 x 75",
+          "option1": "EUROPEA",
+          "option2": "10 x 75",
+          "option3": null,
+          "sku": "11B01000004904000",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "1550",
+          "grams": 1200,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 8576837484830,
+          "created_at": "2023-08-11T12:03:06-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 46272640221470,
+          "title": "EUROPEA / 12 x 85",
+          "option1": "EUROPEA",
+          "option2": "12 x 85",
+          "option3": null,
+          "sku": "11B01000004904005",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": false,
+          "price": "1150",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 3,
+          "product_id": 8576837484830,
+          "created_at": "2023-08-11T12:03:06-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 46272640254238,
+          "title": "EUROPEA / 12 x 100",
+          "option1": "EUROPEA",
+          "option2": "12 x 100",
+          "option3": null,
+          "sku": "11B01000004904010",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": false,
+          "price": "1150",
+          "grams": 3000,
+          "compare_at_price": null,
+          "position": 4,
+          "product_id": 8576837484830,
+          "created_at": "2023-08-11T12:03:06-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 46272640287006,
+          "title": "EUROPEA / 16 x 115",
+          "option1": "EUROPEA",
+          "option2": "16 x 115",
+          "option3": null,
+          "sku": "11B01000004904015",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": false,
+          "price": "1150",
+          "grams": 4000,
+          "compare_at_price": null,
+          "position": 5,
+          "product_id": 8576837484830,
+          "created_at": "2023-08-11T12:03:06-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 46272640319774,
+          "title": "EUROPEA / 16 x 160",
+          "option1": "EUROPEA",
+          "option2": "16 x 160",
+          "option3": null,
+          "sku": "11B01000004904020",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": false,
+          "price": "1150",
+          "grams": 5000,
+          "compare_at_price": null,
+          "position": 6,
+          "product_id": 8576837484830,
+          "created_at": "2023-08-11T12:03:06-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 46273030848798,
+          "title": "AMERICANA / 3/8 x 3\"",
+          "option1": "AMERICANA",
+          "option2": "3/8 x 3\"",
+          "option3": null,
+          "sku": "11B01000004904105",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "1150",
+          "grams": 3000,
+          "compare_at_price": null,
+          "position": 7,
+          "product_id": 8576837484830,
+          "created_at": "2023-08-11T12:31:12-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386075656478,
+          "title": "AMERICANA / 1/4\" x 2 1/4\"",
+          "option1": "AMERICANA",
+          "option2": "1/4\" x 2 1/4\"",
+          "option3": null,
+          "sku": "11B01000004904100",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "670",
+          "grams": 1000,
+          "compare_at_price": null,
+          "position": 8,
+          "product_id": 8576837484830,
+          "created_at": "2024-04-24T12:30:44-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 49489414291742,
+          "title": "AMERICANA / 1/4\" x 3\"",
+          "option1": "AMERICANA",
+          "option2": "1/4\" x 3\"",
+          "option3": null,
+          "sku": "11B01000004904103",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "890",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 9,
+          "product_id": 8576837484830,
+          "created_at": "2025-01-09T10:59:56-05:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 49725929390366,
+          "title": "AMERICANA / 1/2 x 4\"",
+          "option1": "AMERICANA",
+          "option2": "1/2 x 4\"",
+          "option3": null,
+          "sku": "11B01000004904010",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": false,
+          "price": "2110",
+          "grams": 3000,
+          "compare_at_price": null,
+          "position": 10,
+          "product_id": 8576837484830,
+          "created_at": "2025-04-09T15:54:18-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 49725931651358,
+          "title": "AMERICANA / 5/8 x 4 1/2\"",
+          "option1": "AMERICANA",
+          "option2": "5/8 x 4 1/2\"",
+          "option3": null,
+          "sku": "11B01000004904015",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "4820",
+          "grams": 4000,
+          "compare_at_price": null,
+          "position": 11,
+          "product_id": 8576837484830,
+          "created_at": "2025-04-09T15:55:23-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 49725933682974,
+          "title": "AMERICANA / 5/8 x 6\"",
+          "option1": "AMERICANA",
+          "option2": "5/8 x 6\"",
+          "option3": null,
+          "sku": "11B01000004904020",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "5270",
+          "grams": 5000,
+          "compare_at_price": null,
+          "position": 12,
+          "product_id": 8576837484830,
+          "created_at": "2025-04-09T15:55:50-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 42723525755166,
+          "created_at": "2023-08-11T12:03:05-04:00",
+          "position": 1,
+          "updated_at": "2023-08-11T12:03:08-04:00",
+          "product_id": 8576837484830,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/DIMACONCRETE.jpg?v=1691769788",
+          "width": 1000,
+          "height": 1000
+        }
+      ],
+      "options": [
+        {
+          "name": "Certifación",
+          "position": 1,
+          "values": [
+            "EUROPEA",
+            "AMERICANA"
+          ]
+        },
+        {
+          "name": "Medida",
+          "position": 2,
+          "values": [
+            "7.5 x 60",
+            "10 x 75",
+            "12 x 85",
+            "12 x 100",
+            "16 x 115",
+            "16 x 160",
+            "3/8 x 3\"",
+            "1/4\" x 2 1/4\"",
+            "1/4\" x 3\"",
+            "1/2 x 4\"",
+            "5/8 x 4 1/2\"",
+            "5/8 x 6\""
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9230322336030,
+      "title": "PERNO DE ANCLAJE EXPANSION ZINCADO (5 UDS)",
+      "handle": "perno-de-anclaje-expansion",
+      "body_html": "<p style=\"text-align: left;\"><span>Perno de anclaje de expansión Cuerpo confeccionado en una sola pieza, lo que otorga una mayor resistencia al corte como a la tracción.<br>Cuña de alta resistencia y de fácil desplazamiento dado a su diseño a tres secciones, lo que permite mayor superficie de contacto con el hormigón entregando al usuario una fácil instalación y mayor seguridad.<br>Su diseño es simple, lo que permite mayor rapidez en su instalación. </span></p>\n<p><a rel=\"noopener\" title=\"Perno de expansion zincado\" href=\"https://dimafi.odoo.com/odoo/documents/PmkeWKsLQgWY1D_Mn2fMWgo1f7\" target=\"_blank\">VER FICHA TÉNICA</a></p>\n<p> </p>",
+      "published_at": "2024-04-24T13:18:24-04:00",
+      "created_at": "2024-04-24T13:18:24-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "DIMAFI",
+      "product_type": "Anclaje Mecánico",
+      "tags": [
+        "ANCLAJE",
+        "perno",
+        "PERNO DE ANCLAJE",
+        "PERNO DE EXPANSION"
+      ],
+      "variants": [
+        {
+          "id": 48386218361118,
+          "title": "1/4\" / 2 1/2\"",
+          "option1": "1/4\"",
+          "option2": "2 1/2\"",
+          "option3": null,
+          "sku": "11B01000004904903",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "830",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 1,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218393886,
+          "title": "1/4\" / 3 3/4\"",
+          "option1": "1/4\"",
+          "option2": "3 3/4\"",
+          "option3": null,
+          "sku": "11B01000004904910",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "950",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218492190,
+          "title": "3/8\" / 3\"",
+          "option1": "3/8\"",
+          "option2": "3\"",
+          "option3": null,
+          "sku": "11B01000004904916",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "1510",
+          "grams": 3000,
+          "compare_at_price": null,
+          "position": 3,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218524958,
+          "title": "3/8\" / 3 3/4\"",
+          "option1": "3/8\"",
+          "option2": "3 3/4\"",
+          "option3": null,
+          "sku": "11B01000004904918",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "1700",
+          "grams": 3000,
+          "compare_at_price": null,
+          "position": 4,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218557726,
+          "title": "3/8\" / 5\"",
+          "option1": "3/8\"",
+          "option2": "5\"",
+          "option3": null,
+          "sku": "11B01000004904920",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "2360",
+          "grams": 3000,
+          "compare_at_price": null,
+          "position": 5,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218590494,
+          "title": "1/2\" / 3 3/4\"",
+          "option1": "1/2\"",
+          "option2": "3 3/4\"",
+          "option3": null,
+          "sku": "11B01000004904924",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "2710",
+          "grams": 4000,
+          "compare_at_price": null,
+          "position": 6,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218721566,
+          "title": "1/2\" / 10\"",
+          "option1": "1/2\"",
+          "option2": "10\"",
+          "option3": null,
+          "sku": "11B01000004904932",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "11290",
+          "grams": 7000,
+          "compare_at_price": null,
+          "position": 7,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218623262,
+          "title": "1/2\" / 4 1/2\"",
+          "option1": "1/2\"",
+          "option2": "4 1/2\"",
+          "option3": null,
+          "sku": "11B01000004904926",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "2940",
+          "grams": 6000,
+          "compare_at_price": null,
+          "position": 8,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218656030,
+          "title": "1/2\" / 5 1/2\"",
+          "option1": "1/2\"",
+          "option2": "5 1/2\"",
+          "option3": null,
+          "sku": "11B01000004904928",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "3320",
+          "grams": 6000,
+          "compare_at_price": null,
+          "position": 9,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218688798,
+          "title": "1/2\" / 7\"",
+          "option1": "1/2\"",
+          "option2": "7\"",
+          "option3": null,
+          "sku": "11B01000004904930",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "6780",
+          "grams": 5000,
+          "compare_at_price": null,
+          "position": 10,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218754334,
+          "title": "5/8\" / 4 1/2\"",
+          "option1": "5/8\"",
+          "option2": "4 1/2\"",
+          "option3": null,
+          "sku": "11B01000004904936",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "4890",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 11,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218787102,
+          "title": "5/8\" / 6\"",
+          "option1": "5/8\"",
+          "option2": "6\"",
+          "option3": null,
+          "sku": "11B01000004904938",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "5650",
+          "grams": 2200,
+          "compare_at_price": null,
+          "position": 12,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218819870,
+          "title": "5/8\" / 8 1/2\"",
+          "option1": "5/8\"",
+          "option2": "8 1/2\"",
+          "option3": null,
+          "sku": "11B01000004904942",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": false,
+          "price": "8280",
+          "grams": 4000,
+          "compare_at_price": null,
+          "position": 13,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218852638,
+          "title": "3/4\" / 5 1/2\"",
+          "option1": "3/4\"",
+          "option2": "5 1/2\"",
+          "option3": null,
+          "sku": "11B01000004904946",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "7910",
+          "grams": 6000,
+          "compare_at_price": null,
+          "position": 14,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218885406,
+          "title": "3/4\" / 7\"",
+          "option1": "3/4\"",
+          "option2": "7\"",
+          "option3": null,
+          "sku": "11B01000004904948",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "14300",
+          "grams": 8000,
+          "compare_at_price": null,
+          "position": 15,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218950942,
+          "title": "1\" / 12\"",
+          "option1": "1\"",
+          "option2": "12\"",
+          "option3": null,
+          "sku": "11B01000004904960",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "33870",
+          "grams": 9000,
+          "compare_at_price": null,
+          "position": 16,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48386218918174,
+          "title": "1\" / 9\"",
+          "option1": "1\"",
+          "option2": "9\"",
+          "option3": null,
+          "sku": "11B01000004904956",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "30110",
+          "grams": 7000,
+          "compare_at_price": null,
+          "position": 17,
+          "product_id": 9230322336030,
+          "created_at": "2024-04-24T13:18:26-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 45919530483998,
+          "created_at": "2024-04-24T13:18:24-04:00",
+          "position": 1,
+          "updated_at": "2024-04-24T13:18:27-04:00",
+          "product_id": 9230322336030,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/PERNODEANCLAJEEXPANSION.png?v=1713979107",
+          "width": 1080,
+          "height": 1080
+        }
+      ],
+      "options": [
+        {
+          "name": "Diámetro",
+          "position": 1,
+          "values": [
+            "1/4\"",
+            "3/8\"",
+            "1/2\"",
+            "5/8\"",
+            "3/4\"",
+            "1\""
+          ]
+        },
+        {
+          "name": "Largo",
+          "position": 2,
+          "values": [
+            "2 1/2\"",
+            "3 3/4\"",
+            "3\"",
+            "5\"",
+            "10\"",
+            "4 1/2\"",
+            "5 1/2\"",
+            "7\"",
+            "6\"",
+            "8 1/2\"",
+            "12\"",
+            "9\""
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9263140143390,
+      "title": "PERNO DE ANCLAJE DE EXPANSION CARGA PESADA DIMASTRONG HSLM",
+      "handle": "perno-de-anclaje-carga-pesada-hsld",
+      "body_html": "<p><strong><span class=\"OYPEnA font-feature-liga-off font-feature-clig-off font-feature-calt-off text-decoration-none text-strikethrough-none\">PERNO DIMASTRONG (HSLM)</span></strong></p>\n<p> Anclaje mecánico desmontable de alto rendimiento con cuña<br> expansiva, diseñado para soportar cargas estáticas y sísmicas en<br> hormigón fisurado y no fisurado. Aprobado para actividad sísmica<br> y resistente al fuego.<br> Puede ser desmontado dejando la superficie limpia</p>\n<p><a rel=\"noopener\" title=\"Perno de anclaje dimastrong\" href=\"https://dimafi.odoo.com/odoo/documents/GVMf-ejjQaW-zX0sZbpMKQo1f9\" target=\"_blank\">VER FICHA TÉCNICA</a></p>\n<p> </p>",
+      "published_at": "2024-04-30T09:48:08-04:00",
+      "created_at": "2024-04-30T09:48:08-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "DIMAFI",
+      "product_type": "Anclaje Mecánico",
+      "tags": [
+        "perno",
+        "PERNO DE EXPANSION",
+        "perno de expansion carga pesada"
+      ],
+      "variants": [
+        {
+          "id": 48456356692254,
+          "title": "M12 - 3/4 X 144 MM",
+          "option1": "M12 - 3/4 X 144 MM",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004954816",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "4516",
+          "grams": 1000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9263140143390,
+          "created_at": "2024-04-30T09:48:10-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48456356725022,
+          "title": "M16 - 1 X 175 MM",
+          "option1": "M16 - 1 X 175 MM",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004954826",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "6774",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 3,
+          "product_id": 9263140143390,
+          "created_at": "2024-04-30T09:48:10-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48456356790558,
+          "title": "M20 - 1 1/4 X 235 MM",
+          "option1": "M20 - 1 1/4 X 235 MM",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004954836",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "10538",
+          "grams": 3000,
+          "compare_at_price": null,
+          "position": 4,
+          "product_id": 9263140143390,
+          "created_at": "2024-04-30T09:48:10-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 46310238224670,
+          "created_at": "2024-05-27T10:11:34-04:00",
+          "position": 1,
+          "updated_at": "2024-05-27T10:11:38-04:00",
+          "product_id": 9263140143390,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/FOTOSMERCADOLIBRE_1.jpg?v=1716819098",
+          "width": 1000,
+          "height": 1000
+        },
+        {
+          "id": 61148634480926,
+          "created_at": "2025-05-28T10:38:36-04:00",
+          "position": 2,
+          "updated_at": "2025-05-28T10:38:44-04:00",
+          "product_id": 9263140143390,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/PERNO_HSLM.png?v=1748443124",
+          "width": 1080,
+          "height": 1080
+        },
+        {
+          "id": 45999203549470,
+          "created_at": "2024-04-30T09:48:08-04:00",
+          "position": 3,
+          "updated_at": "2025-05-28T10:38:44-04:00",
+          "product_id": 9263140143390,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/PERNOCARGAPESADA02.jpg?v=1748443124",
+          "width": 676,
+          "height": 900
+        },
+        {
+          "id": 61148673736990,
+          "created_at": "2025-05-28T10:48:03-04:00",
+          "position": 4,
+          "updated_at": "2025-05-28T10:48:05-04:00",
+          "product_id": 9263140143390,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/ChatGPT_Image_28_may_2025_10_39_27_a.m..png?v=1748443685",
+          "width": 1024,
+          "height": 1536
+        }
+      ],
+      "options": [
+        {
+          "name": "Medida",
+          "position": 1,
+          "values": [
+            "M12 - 3/4 X 144 MM",
+            "M16 - 1 X 175 MM",
+            "M20 - 1 1/4 X 235 MM"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9774748860702,
+      "title": "PERNO DE EXPANSION CON CAMISA DIMALIGHT (5 uds)",
+      "handle": "perno-de-expansion-con-camisa-dimalight-5-uds",
+      "body_html": "<p bis_size='{\"x\":11,\"y\":9,\"w\":574,\"h\":58,\"abs_x\":857,\"abs_y\":270}'><span class=\"OYPEnA font-feature-liga-off font-feature-clig-off font-feature-calt-off text-decoration-none text-strikethrough-none\" bis_size='{\"x\":11,\"y\":9,\"w\":76,\"h\":18,\"abs_x\":857,\"abs_y\":270}'>DIMALIGHT </span><span class=\"OYPEnA font-feature-liga-off font-feature-clig-off font-feature-calt-off text-decoration-none text-strikethrough-none\" bis_size='{\"x\":11,\"y\":9,\"w\":570,\"h\":57,\"abs_x\":857,\"abs_y\":270}'>(Perno con camisa hexagonal zincado) es un anclaje de expansión para cargas medianas, de instalación sencilla y rápida a través de la pieza a fijar. Recomendado para fijar sobre numerosos materiales (alta expansión), bloque de cemento, ladrillo y hormigón liviano</span></p>\n<p bis_size='{\"x\":11,\"y\":84,\"w\":574,\"h\":19,\"abs_x\":857,\"abs_y\":345}'><a href=\"https://dimafi.odoo.com/odoo/documents/wAI1KOhrTXqWTl19x8GMywo1fb\" target=\"_blank\" title=\"Perno de expansion Dimalight\" rel=\"noopener\"><span class=\"OYPEnA font-feature-liga-off font-feature-clig-off font-feature-calt-off text-decoration-none text-strikethrough-none\" bis_size='{\"x\":11,\"y\":84,\"w\":125,\"h\":18,\"abs_x\":857,\"abs_y\":345}'>VER FICHA TÉCNICA</span></a></p>\n<p bis_size='{\"x\":11,\"y\":119,\"w\":574,\"h\":19,\"abs_x\":857,\"abs_y\":380}'> </p>",
+      "published_at": "2025-05-28T09:11:32-04:00",
+      "created_at": "2025-05-28T09:11:32-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "DIMAFI",
+      "product_type": "perno de expansión",
+      "tags": [
+        "perno",
+        "PERNO DE ANCLAJE",
+        "perno de anclaje para concreto",
+        "PERNO DE EXPANSION",
+        "perno para concreto"
+      ],
+      "variants": [
+        {
+          "id": 49833712222494,
+          "title": "1/4\" X 2\"",
+          "option1": "1/4\" X 2\"",
+          "option2": null,
+          "option3": null,
+          "sku": "1B01000000404718",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "207",
+          "grams": 1000,
+          "compare_at_price": null,
+          "position": 1,
+          "product_id": 9774748860702,
+          "created_at": "2025-05-28T09:11:33-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 49833712255262,
+          "title": "5/16\" X 1 1/2\"",
+          "option1": "5/16\" X 1 1/2\"",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004904705",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": false,
+          "price": "242",
+          "grams": 1000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9774748860702,
+          "created_at": "2025-05-28T09:11:33-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 49833712288030,
+          "title": "5/16\" X 2\"",
+          "option1": "5/16\" X 2\"",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004904706",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "380",
+          "grams": 1200,
+          "compare_at_price": null,
+          "position": 3,
+          "product_id": 9774748860702,
+          "created_at": "2025-05-28T09:11:33-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 49833712320798,
+          "title": "3/8\" X 3\"",
+          "option1": "3/8\" X 3\"",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000000404715",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "866",
+          "grams": 1300,
+          "compare_at_price": null,
+          "position": 4,
+          "product_id": 9774748860702,
+          "created_at": "2025-05-28T09:11:33-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 49833712353566,
+          "title": "3/8\" X 3 1/4\"",
+          "option1": "3/8\" X 3 1/4\"",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000000404716",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "1093",
+          "grams": 1400,
+          "compare_at_price": null,
+          "position": 5,
+          "product_id": 9774748860702,
+          "created_at": "2025-05-28T09:11:33-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 49833712386334,
+          "title": "1/2\" X 4\"",
+          "option1": "1/2\" X 4\"",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004904718",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "1204",
+          "grams": 1500,
+          "compare_at_price": null,
+          "position": 6,
+          "product_id": 9774748860702,
+          "created_at": "2025-05-28T09:11:33-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 49833712419102,
+          "title": "5/8\" X 6\"",
+          "option1": "5/8\" X 6\"",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004904725",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": false,
+          "price": "5119",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 7,
+          "product_id": 9774748860702,
+          "created_at": "2025-05-28T09:11:33-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 61147748696350,
+          "created_at": "2025-05-28T08:35:44-04:00",
+          "position": 1,
+          "updated_at": "2025-07-15T15:28:42-04:00",
+          "product_id": 9774748860702,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/PERNODEEXPANSIONCONCAMISADIMALIGHT_1.png?v=1752607722",
+          "width": 1080,
+          "height": 1080
+        },
+        {
+          "id": 61148131229982,
+          "created_at": "2025-05-28T09:28:01-04:00",
+          "position": 2,
+          "updated_at": "2025-07-15T15:28:50-04:00",
+          "product_id": 9774748860702,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/PERNO_DE_EXPANSION_CON_CAMISA_DIMALIGHT_2.png?v=1752607730",
+          "width": 1992,
+          "height": 1320
+        },
+        {
+          "id": 61148131000606,
+          "created_at": "2025-05-28T09:27:54-04:00",
+          "position": 3,
+          "updated_at": "2025-07-15T15:28:58-04:00",
+          "product_id": 9774748860702,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/PERNO_DE_EXPANSION_CON_CAMISA_DIMALIGHT_1.png?v=1752607738",
+          "width": 1482,
+          "height": 990
+        }
+      ],
+      "options": [
+        {
+          "name": "Medida",
+          "position": 1,
+          "values": [
+            "1/4\" X 2\"",
+            "5/16\" X 1 1/2\"",
+            "5/16\" X 2\"",
+            "3/8\" X 3\"",
+            "3/8\" X 3 1/4\"",
+            "1/2\" X 4\"",
+            "5/8\" X 6\""
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9234393694494,
+      "title": "CANCAMO DE EXPANSIÓN (25 UDS)",
+      "handle": "cancamo-de-expansion",
+      "body_html": "<p bis_size='{\"x\":12,\"y\":9,\"w\":575,\"h\":137,\"abs_x\":619,\"abs_y\":271}'>Los cáncamos de expansión <strong bis_size='{\"x\":187,\"y\":9,\"w\":53,\"h\":19,\"abs_x\":794,\"abs_y\":271}'>DIMAFI </strong>por camisa son un anclaje mecánico<br bis_size='{\"x\":463,\"y\":9,\"w\":0,\"h\":19,\"abs_x\":1070,\"abs_y\":271}'> diseñado para fijacion en material sólido como puede ser hormigón, roca.<br bis_size='{\"x\":470,\"y\":29,\"w\":0,\"h\":19,\"abs_x\":1077,\"abs_y\":291}'> Ofrece un punto de anclaje permanente que evita que el elemento<br bis_size='{\"x\":426,\"y\":48,\"w\":0,\"h\":19,\"abs_x\":1033,\"abs_y\":310}'> sujetado se deslice o se salga accidentalmente.<br bis_size='{\"x\":304,\"y\":68,\"w\":0,\"h\":19,\"abs_x\":911,\"abs_y\":330}'> Al girar la tuerca exterior, el cono inferior del perno sube de forma<br bis_size='{\"x\":424,\"y\":87,\"w\":0,\"h\":19,\"abs_x\":1031,\"abs_y\":349}'> forzada, expandiendo la camisa metálica a presión contra las<br bis_size='{\"x\":389,\"y\":107,\"w\":0,\"h\":19,\"abs_x\":996,\"abs_y\":369}'> paredes de la perforación.</p>\n<p bis_size='{\"x\":12,\"y\":162,\"w\":575,\"h\":19,\"abs_x\":619,\"abs_y\":424}'><a href=\"https://dimafi.odoo.com/odoo/documents/jGkP6L3fQI-HrHpfnNh7ugo146\" target=\"_blank\" title=\"CANCAMO CERRADO\" rel=\"noopener\">VER FICHA TÉCNICA<strong bis_size='{\"x\":12,\"y\":162,\"w\":137,\"h\":19,\"abs_x\":619,\"abs_y\":424}'> </strong>(CANCAMO CERRADO)</a></p>\n<p bis_size='{\"x\":12,\"y\":162,\"w\":575,\"h\":19,\"abs_x\":619,\"abs_y\":424}'><a href=\"https://dimafi.odoo.com/odoo/documents/vnmNc92hRleqOzK7eWb-Hgo148\" target=\"_blank\" title=\"CANCAMO ABIERTO\" rel=\"noopener\">VER FICHA TÉCNICA (CANCAMO ABIERTO)</a></p>\n<p bis_size='{\"x\":12,\"y\":198,\"w\":575,\"h\":19,\"abs_x\":619,\"abs_y\":460}'> </p>",
+      "published_at": "2024-04-25T15:54:50-04:00",
+      "created_at": "2024-04-25T15:54:50-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "DIMAFI",
+      "product_type": "Anclaje Mecánico",
+      "tags": [
+        "CANCAMO",
+        "CONCRETO",
+        "EXPANSION"
+      ],
+      "variants": [
+        {
+          "id": 48393440985374,
+          "title": "HOOK ABIERTO 6 X 50 MM",
+          "option1": "HOOK ABIERTO 6 X 50 MM",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004905408",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": {
+            "id": 45933480116510,
+            "product_id": 9234393694494,
+            "position": 2,
+            "created_at": "2024-04-25T15:54:40-04:00",
+            "updated_at": "2024-04-25T15:54:41-04:00",
+            "alt": null,
+            "width": 1000,
+            "height": 1000,
+            "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/CANCAMO_HOOK_ABIERTO.jpg?v=1714074881",
+            "variant_ids": [
+              48393440985374,
+              49489517838622
+            ]
+          },
+          "available": true,
+          "price": "3760",
+          "grams": 5000,
+          "compare_at_price": null,
+          "position": 1,
+          "product_id": 9234393694494,
+          "created_at": "2024-04-25T15:54:52-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 49489517838622,
+          "title": "HOOK ABIERTO 8 X 50 MM",
+          "option1": "HOOK ABIERTO 8 X 50 MM",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004905417",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": {
+            "id": 45933480116510,
+            "product_id": 9234393694494,
+            "position": 2,
+            "created_at": "2024-04-25T15:54:40-04:00",
+            "updated_at": "2024-04-25T15:54:41-04:00",
+            "alt": null,
+            "width": 1000,
+            "height": 1000,
+            "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/CANCAMO_HOOK_ABIERTO.jpg?v=1714074881",
+            "variant_ids": [
+              48393440985374,
+              49489517838622
+            ]
+          },
+          "available": true,
+          "price": "3010",
+          "grams": 5000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9234393694494,
+          "created_at": "2025-01-09T11:22:10-05:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48393441018142,
+          "title": "CERRADO 8 X 50 MM",
+          "option1": "CERRADO 8 X 50 MM",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004905415",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": {
+            "id": 45933480083742,
+            "product_id": 9234393694494,
+            "position": 1,
+            "created_at": "2024-04-25T15:54:50-04:00",
+            "updated_at": "2024-04-25T15:54:52-04:00",
+            "alt": null,
+            "width": 3000,
+            "height": 3000,
+            "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/CANCAMODIMAHOLD8X40.jpg?v=1714074892",
+            "variant_ids": [
+              48393441018142,
+              48393441050910
+            ]
+          },
+          "available": false,
+          "price": "5270",
+          "grams": 6000,
+          "compare_at_price": null,
+          "position": 3,
+          "product_id": 9234393694494,
+          "created_at": "2024-04-25T15:54:52-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48393441050910,
+          "title": "CERRADO 8 X 10 X 60 MM",
+          "option1": "CERRADO 8 X 10 X 60 MM",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004905410",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": {
+            "id": 45933480083742,
+            "product_id": 9234393694494,
+            "position": 1,
+            "created_at": "2024-04-25T15:54:50-04:00",
+            "updated_at": "2024-04-25T15:54:52-04:00",
+            "alt": null,
+            "width": 3000,
+            "height": 3000,
+            "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/CANCAMODIMAHOLD8X40.jpg?v=1714074892",
+            "variant_ids": [
+              48393441018142,
+              48393441050910
+            ]
+          },
+          "available": true,
+          "price": "13170",
+          "grams": 8000,
+          "compare_at_price": null,
+          "position": 4,
+          "product_id": 9234393694494,
+          "created_at": "2024-04-25T15:54:52-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 45933480083742,
+          "created_at": "2024-04-25T15:54:50-04:00",
+          "position": 1,
+          "updated_at": "2024-04-25T15:54:52-04:00",
+          "product_id": 9234393694494,
+          "variant_ids": [
+            48393441018142,
+            48393441050910
+          ],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/CANCAMODIMAHOLD8X40.jpg?v=1714074892",
+          "width": 3000,
+          "height": 3000
+        },
+        {
+          "id": 45933480116510,
+          "created_at": "2024-04-25T15:54:40-04:00",
+          "position": 2,
+          "updated_at": "2024-04-25T15:54:41-04:00",
+          "product_id": 9234393694494,
+          "variant_ids": [
+            48393440985374,
+            49489517838622
+          ],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/CANCAMO_HOOK_ABIERTO.jpg?v=1714074881",
+          "width": 1000,
+          "height": 1000
+        }
+      ],
+      "options": [
+        {
+          "name": "Medida",
+          "position": 1,
+          "values": [
+            "HOOK ABIERTO 6 X 50 MM",
+            "HOOK ABIERTO 8 X 50 MM",
+            "CERRADO 8 X 50 MM",
+            "CERRADO 8 X 10 X 60 MM"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9259894538526,
+      "title": "CANCAMO CERRADO M12 + TARUGO NYLON M14 (5 UDS)",
+      "handle": "cancamo-cerrado-tarugo-nylon",
+      "body_html": "<p><span class=\"OYPEnA text-decoration-none text-strikethrough-none\">Los cáncamos de ojo soldado con tarugo de nylon forman un sistema de anclaje que trabaja por fricción. La expansión del tarugo dentro del hormigón se produce gracias a la entrada del cáncamo en el espacio confinado por el nylon y las paredes de la perforación, brindándole una gran resistencia.</span></p>\n<p><a rel=\"noopener\" title=\"Cancamo cerrado mas tarugo\" href=\"https://dimafi.odoo.com/odoo/documents/k0kI5fdVSJ2uASjZsNQFcgo147\" target=\"_blank\"><span class=\"OYPEnA text-decoration-none text-strikethrough-none\">VER FICHA TÉCNICA </span></a></p>\n<p>M12 x 100/150<br><br>M12 = Diámetro<br>100 = Largo útil<br>150 = Largo Total </p>",
+      "published_at": "2024-04-29T10:31:30-04:00",
+      "created_at": "2024-04-29T10:31:30-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "DIMAFI",
+      "product_type": "Anclaje Mecánico",
+      "tags": [
+        "12 x 100",
+        "andamios",
+        "CANCAMO",
+        "cancamo cerrado",
+        "cancamo con hilo",
+        "tarugo nylon"
+      ],
+      "variants": [
+        {
+          "id": 48443353235742,
+          "title": "M12 x 100/150",
+          "option1": "M12 x 100/150",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004905436",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "8670",
+          "grams": 4000,
+          "compare_at_price": null,
+          "position": 1,
+          "product_id": 9259894538526,
+          "created_at": "2024-04-29T10:31:31-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48443353268510,
+          "title": "M12 x 160/210",
+          "option1": "M12 x 160/210",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004905437",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "9800",
+          "grams": 7000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9259894538526,
+          "created_at": "2024-04-29T10:31:31-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 50526707286302,
+          "title": "M12 X 230/280",
+          "option1": "M12 X 230/280",
+          "option2": null,
+          "option3": null,
+          "sku": "B004905438",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "11900",
+          "grams": 4000,
+          "compare_at_price": null,
+          "position": 3,
+          "product_id": 9259894538526,
+          "created_at": "2026-01-19T09:43:10-05:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 45982580080926,
+          "created_at": "2024-04-29T10:31:30-04:00",
+          "position": 1,
+          "updated_at": "2024-04-29T10:31:32-04:00",
+          "product_id": 9259894538526,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/CANCAMOCONHILO.jpg?v=1714401092",
+          "width": 1000,
+          "height": 1000
+        },
+        {
+          "id": 45982580113694,
+          "created_at": "2024-04-29T10:31:30-04:00",
+          "position": 2,
+          "updated_at": "2024-04-29T10:31:32-04:00",
+          "product_id": 9259894538526,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/TARUGONYLON_0a28987a-b538-4496-b5cb-1a432c58560c.jpg?v=1714401092",
+          "width": 3000,
+          "height": 3000
+        }
+      ],
+      "options": [
+        {
+          "name": "Medida",
+          "position": 1,
+          "values": [
+            "M12 x 100/150",
+            "M12 x 160/210",
+            "M12 X 230/280"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9234426396958,
+      "title": "CANCAMO DE EXPANSION CERRADO DIMAWELD®",
+      "handle": "dimaweld®-cancamo-de-expansion",
+      "body_html": "<p bis_size='{\"x\":11,\"y\":9,\"w\":574,\"h\":19,\"abs_x\":857,\"abs_y\":270}'><strong bis_size='{\"x\":11,\"y\":9,\"w\":378,\"h\":18,\"abs_x\":857,\"abs_y\":270}'>DIMAWELD® CANCAMO DE EXPANSION M12 16X90 mm</strong></p>\n<p bis_size='{\"x\":11,\"y\":45,\"w\":574,\"h\":156,\"abs_x\":857,\"abs_y\":306}'> El cáncamo de expansión por camisa es un anclaje mecánico<br bis_size='{\"x\":388,\"y\":45,\"w\":0,\"h\":18,\"abs_x\":1234,\"abs_y\":306}'> diseñado para fijacion en material sólido como puede ser<br bis_size='{\"x\":369,\"y\":64,\"w\":0,\"h\":18,\"abs_x\":1215,\"abs_y\":325}'> hormigón, roca.<br bis_size='{\"x\":113,\"y\":84,\"w\":0,\"h\":18,\"abs_x\":959,\"abs_y\":345}'> Está compuesto por un perno de acero, una camisa metálica<br bis_size='{\"x\":387,\"y\":103,\"w\":0,\"h\":18,\"abs_x\":1233,\"abs_y\":364}'> ranurada (que actúa como expansor) mas una golilla y tuerca. <br bis_size='{\"x\":399,\"y\":123,\"w\":0,\"h\":18,\"abs_x\":1245,\"abs_y\":384}'>Al apretar la tuerca, el tornillo se introduce en la camisa,<br bis_size='{\"x\":357,\"y\":143,\"w\":0,\"h\":18,\"abs_x\":1203,\"abs_y\":404}'> provocando que esta se expanda contra las paredes del orificio<br bis_size='{\"x\":404,\"y\":162,\"w\":0,\"h\":18,\"abs_x\":1250,\"abs_y\":423}'> perforado, generando una fijación por fricción y presión</p>\n<p bis_size='{\"x\":11,\"y\":217,\"w\":574,\"h\":39,\"abs_x\":857,\"abs_y\":478}'><br bis_size='{\"x\":11,\"y\":217,\"w\":0,\"h\":18,\"abs_x\":857,\"abs_y\":478}'><a href=\"https://dimafi.odoo.com/odoo/documents/aS_18xZnRty8ZNFqIbl71Qo1fa\" target=\"_blank\" title=\"Cancamo de expansion cerrado dimaweld\" rel=\"noopener\">VER FICHA TÉCNICA</a></p>\n<p bis_size='{\"x\":11,\"y\":273,\"w\":574,\"h\":19,\"abs_x\":857,\"abs_y\":534}'><br bis_size='{\"x\":11,\"y\":273,\"w\":0,\"h\":18,\"abs_x\":857,\"abs_y\":534}'></p>\n<p bis_size='{\"x\":11,\"y\":308,\"w\":574,\"h\":19,\"abs_x\":857,\"abs_y\":569}'> </p>\n<p bis_size='{\"x\":11,\"y\":344,\"w\":574,\"h\":19,\"abs_x\":857,\"abs_y\":605}'> </p>",
+      "published_at": "2025-08-25T12:09:41-04:00",
+      "created_at": "2024-04-25T16:27:07-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "DIMAFI",
+      "product_type": "Anclaje Mecánico",
+      "tags": [
+        "cancamo cerrado",
+        "cancamo de expansion"
+      ],
+      "variants": [
+        {
+          "id": 51900108701982,
+          "title": "CÁNCAMO DIMAWELD M12 - 14 X 75 mm",
+          "option1": "CÁNCAMO DIMAWELD M12 - 14 X 75 mm",
+          "option2": null,
+          "option3": null,
+          "sku": "B004905422",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "2030",
+          "grams": 1000,
+          "compare_at_price": null,
+          "position": 1,
+          "product_id": 9234426396958,
+          "created_at": "2026-05-26T11:59:02-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 51900108734750,
+          "title": "CANCAMO DIMAWELD M12 16 X 90 mm",
+          "option1": "CANCAMO DIMAWELD M12 16 X 90 mm",
+          "option2": null,
+          "option3": null,
+          "sku": "B004905402",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": false,
+          "price": "2030",
+          "grams": 1000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9234426396958,
+          "created_at": "2026-05-26T11:59:02-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 45933721223454,
+          "created_at": "2024-04-25T16:27:07-04:00",
+          "position": 1,
+          "updated_at": "2024-04-25T16:27:09-04:00",
+          "product_id": 9234426396958,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/CANCAMODIMAWELD.jpg?v=1714076829",
+          "width": 3000,
+          "height": 3000
+        }
+      ],
+      "options": [
+        {
+          "name": "Medida ",
+          "position": 1,
+          "values": [
+            "CÁNCAMO DIMAWELD M12 - 14 X 75 mm",
+            "CANCAMO DIMAWELD M12 16 X 90 mm"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9234265080094,
+      "title": "DIMAHOLD® MOSQUETON DE ANCLAJE",
+      "handle": "dimahold®-mosqueton-de-anclaje",
+      "body_html": "<p><a href=\"https://drive.google.com/file/d/1sko_Pr0h9AiAH7sW_RxhbCIPBDy5DU5v/view?usp=sharing\">VER FICHA TÉCNICA</a> </p>",
+      "published_at": "2024-04-25T13:54:07-04:00",
+      "created_at": "2024-04-25T13:54:07-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "Mi tienda",
+      "product_type": "Anclaje Mecánico",
+      "tags": [
+        "ANCLAJE",
+        "CHAPA DE ANCLAJE",
+        "DIMAHOLD",
+        "MOSQUETON"
+      ],
+      "variants": [
+        {
+          "id": 48392995897630,
+          "title": "Default Title",
+          "option1": "Default Title",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000005080150",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "4520",
+          "grams": 1000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9234265080094,
+          "created_at": "2024-04-25T13:54:08-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 45932503007518,
+          "created_at": "2024-04-25T13:54:07-04:00",
+          "position": 1,
+          "updated_at": "2024-04-25T13:54:09-04:00",
+          "product_id": 9234265080094,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/MOSQUETONDEANCLAJE.png?v=1714067649",
+          "width": 1080,
+          "height": 1080
+        }
+      ],
+      "options": [
+        {
+          "name": "Title",
+          "position": 1,
+          "values": [
+            "Default Title"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9234214191390,
+      "title": "CHAPA DE ANCLAJE DIMAHOLD®",
+      "handle": "dimahold®-chapa-de-anclaje",
+      "body_html": "<p bis_size='{\"x\":11,\"y\":9,\"w\":574,\"h\":137,\"abs_x\":857,\"abs_y\":270}'><span class=\"OYPEnA text-decoration-none text-strikethrough-none\" bis_size='{\"x\":11,\"y\":9,\"w\":402,\"h\":136,\"abs_x\":857,\"abs_y\":270}'>La Chapa de Anclaje  es un componente de seguridad mecánica<br bis_size='{\"x\":405,\"y\":9,\"w\":0,\"h\":18,\"abs_x\":1251,\"abs_y\":270}'>de alta resistencia diseñado como punto de anclaje estructural<br bis_size='{\"x\":397,\"y\":29,\"w\":0,\"h\":18,\"abs_x\":1243,\"abs_y\":290}'>permanente o temporal sobre soportes compactos. Su geometría<br bis_size='{\"x\":414,\"y\":48,\"w\":0,\"h\":18,\"abs_x\":1260,\"abs_y\":309}'>asimétrica y optimizada asegura una distribución equilibrada de<br bis_size='{\"x\":405,\"y\":68,\"w\":0,\"h\":18,\"abs_x\":1251,\"abs_y\":329}'>fuerzas, minimizando el desgaste de los conectores acoplados y<br bis_size='{\"x\":405,\"y\":87,\"w\":0,\"h\":18,\"abs_x\":1251,\"abs_y\":348}'>garantizando la máxima fiabilidad en sistemas de retención y<br bis_size='{\"x\":387,\"y\":107,\"w\":0,\"h\":18,\"abs_x\":1233,\"abs_y\":368}'>detención de caídas.</span></p>\n<p bis_size='{\"x\":11,\"y\":162,\"w\":574,\"h\":19,\"abs_x\":857,\"abs_y\":423}'><a href=\"https://dimafi.odoo.com/odoo/documents/dSga4H03RkKOuu17eFgtZgo202\" target=\"_blank\" title=\"chapa de anclaje DIMAHOLD\" rel=\"noopener\"><span class=\"OYPEnA text-decoration-none text-strikethrough-none\" bis_size='{\"x\":11,\"y\":162,\"w\":128,\"h\":18,\"abs_x\":857,\"abs_y\":423}'>VER FICHA TÉCNICA </span></a></p>",
+      "published_at": "2024-04-25T13:06:53-04:00",
+      "created_at": "2024-04-25T13:06:53-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "DIMAFI",
+      "product_type": "Anclaje Mecánico",
+      "tags": [
+        "ANCLAJE",
+        "CHAPA DE ANCLAJE",
+        "dimaconcrete",
+        "LINEA DE VIDA",
+        "PLACA"
+      ],
+      "variants": [
+        {
+          "id": 48392823275806,
+          "title": "Default Title",
+          "option1": "Default Title",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000005050120",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": false,
+          "price": "2190",
+          "grams": 1000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9234214191390,
+          "created_at": "2024-04-25T13:06:54-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 45932219203870,
+          "created_at": "2024-04-25T13:06:53-04:00",
+          "position": 1,
+          "updated_at": "2024-04-25T13:06:55-04:00",
+          "product_id": 9234214191390,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/CHAPADEANCLAJE.jpg?v=1714064815",
+          "width": 3000,
+          "height": 3000
+        }
+      ],
+      "options": [
+        {
+          "name": "Title",
+          "position": 1,
+          "values": [
+            "Default Title"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9263207842078,
+      "title": "TACO DE ANCLAJE ATORNILLABLE DIMASCREW®  (5 UDS)",
+      "handle": "dimascrew-taco-de-anclaje",
+      "body_html": "<p>El Tornillo de Anclaje Directo a Hormigón con Cabeza de Manguito DIMASCREW®<br> Roscado Hembra es una solución de fijación mecánica<br> autorroscante de última generación, diseñada para<br> empotramientos estructurales y suspendidos de alta resistencia.<br> Este sistema destaca por su capacidad de instalarse directamente<br> sobre el material base sin requerir piezas de expansión plásticas ni<br> metálicas, optimizando los tiempos de montaje y eliminando las<br> fuerzas de expansión radial</p>\n<p><a rel=\"noopener\" title=\"Taco de anclaje DIMASCREW\" href=\"https://dimafi.odoo.com/odoo/documents/JRnrhXM6Sw-Pq_vIVYAWLAo1fd\" target=\"_blank\">VER FICHA TÉCNICA </a></p>\n<!---->",
+      "published_at": "2025-01-03T08:48:53-05:00",
+      "created_at": "2024-04-30T10:58:26-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "DIMAFI",
+      "product_type": "Anclaje Mecánico",
+      "tags": [
+        "anclaje mecanico",
+        "CONCRETO",
+        "perno",
+        "varilla roscada"
+      ],
+      "variants": [
+        {
+          "id": 48456616345886,
+          "title": "12.5 X 100 MM",
+          "option1": "12.5 X 100 MM",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004904990",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": false,
+          "price": "6021",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9263207842078,
+          "created_at": "2024-04-30T10:58:27-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48456616378654,
+          "title": "14.2 X 110 MM",
+          "option1": "14.2 X 110 MM",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004904991",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "9408",
+          "grams": 3000,
+          "compare_at_price": null,
+          "position": 3,
+          "product_id": 9263207842078,
+          "created_at": "2024-04-30T10:58:27-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48456616411422,
+          "title": "16.5 X 115 MM",
+          "option1": "16.5 X 115 MM",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004904992",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "13172",
+          "grams": 4000,
+          "compare_at_price": null,
+          "position": 4,
+          "product_id": 9263207842078,
+          "created_at": "2024-04-30T10:58:27-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48456616444190,
+          "title": "10.5 X 75 MM",
+          "option1": "10.5 X 75 MM",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004904993",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "3387",
+          "grams": 5000,
+          "compare_at_price": null,
+          "position": 5,
+          "product_id": 9263207842078,
+          "created_at": "2024-04-30T10:58:27-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48456616476958,
+          "title": "3/8\" X 5.5 MM",
+          "option1": "3/8\" X 5.5 MM",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004904994",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "1129",
+          "grams": 5000,
+          "compare_at_price": null,
+          "position": 6,
+          "product_id": 9263207842078,
+          "created_at": "2024-04-30T10:58:27-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48456616509726,
+          "title": "10 X 75 mm inox",
+          "option1": "10 X 75 mm inox",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004904995",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "6700",
+          "grams": 5000,
+          "compare_at_price": null,
+          "position": 7,
+          "product_id": 9263207842078,
+          "created_at": "2024-04-30T10:58:27-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 46321524277534,
+          "created_at": "2024-05-28T11:16:45-04:00",
+          "position": 1,
+          "updated_at": "2024-05-28T11:16:46-04:00",
+          "product_id": 9263207842078,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/FOTOSMERCADOLIBRE_3.jpg?v=1716909406",
+          "width": 1000,
+          "height": 1000
+        }
+      ],
+      "options": [
+        {
+          "name": "Medida",
+          "position": 1,
+          "values": [
+            "12.5 X 100 MM",
+            "14.2 X 110 MM",
+            "16.5 X 115 MM",
+            "10.5 X 75 MM",
+            "3/8\" X 5.5 MM",
+            "10 X 75 mm inox"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9234270847262,
+      "title": "TACO DE ANCLAJE EXPANSION DIMADROP (50 UDS)",
+      "handle": "taco-de-anclaje-expansion",
+      "body_html": "<p>El Anclaje de Expansión DIMADROP  es un elemento de fijación metálica de<br>alta resistencia diseñado para anclajes mecánicos permanentes en<br>materiales base compactos. El sistema destaca por su diseño<br>pasante empotrado al ras de la superficie, optimizado para la<br>recepción de varillas roscadas o pernos métricos estándar de<br>cualquier longitud</p>\n<p><a rel=\"noopener\" title=\"taco de anclaje dimadrop\" href=\"https://dimafi.odoo.com/odoo/documents/ShQY1aBJQmCQaYQR0peZjgo1fc\" target=\"_blank\">VER FICHA TÉCNICA</a></p>",
+      "published_at": "2024-04-25T13:58:42-04:00",
+      "created_at": "2024-04-25T13:58:42-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "DIMAFI",
+      "product_type": "Anclaje Mecánico",
+      "tags": [
+        "EXPANSION",
+        "HAAS",
+        "HILO",
+        "TACO",
+        "TACO DE ANCLAJE",
+        "VARILLA"
+      ],
+      "variants": [
+        {
+          "id": 48393013494046,
+          "title": "1/4\" HILO 20",
+          "option1": "1/4\" HILO 20",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004905105",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "5650",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9234270847262,
+          "created_at": "2024-04-25T13:58:43-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48393013526814,
+          "title": "3/8\" HILO 16",
+          "option1": "3/8\" HILO 16",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004905115",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "9410",
+          "grams": 3000,
+          "compare_at_price": null,
+          "position": 3,
+          "product_id": 9234270847262,
+          "created_at": "2024-04-25T13:58:43-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48393013559582,
+          "title": "1/2\" HIL 13",
+          "option1": "1/2\" HIL 13",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004905120",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "15060",
+          "grams": 3000,
+          "compare_at_price": null,
+          "position": 4,
+          "product_id": 9234270847262,
+          "created_at": "2024-04-25T13:58:43-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48393013592350,
+          "title": "5/8\" HILO 11",
+          "option1": "5/8\" HILO 11",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004905125",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "48170",
+          "grams": 4000,
+          "compare_at_price": null,
+          "position": 5,
+          "product_id": 9234270847262,
+          "created_at": "2024-04-25T13:58:43-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 45932541116702,
+          "created_at": "2024-04-25T13:58:42-04:00",
+          "position": 1,
+          "updated_at": "2024-04-25T13:58:44-04:00",
+          "product_id": 9234270847262,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/TACODEANCLAJE.jpg?v=1714067924",
+          "width": 3000,
+          "height": 3000
+        }
+      ],
+      "options": [
+        {
+          "name": "Medida",
+          "position": 1,
+          "values": [
+            "1/4\" HILO 20",
+            "3/8\" HILO 16",
+            "1/2\" HIL 13",
+            "5/8\" HILO 11"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9234285429022,
+      "title": "TARUGO CLAVO (50 UDS)",
+      "handle": "tarugo-clavo",
+      "body_html": "<p bis_size='{\"x\":11,\"y\":9,\"w\":574,\"h\":58,\"abs_x\":857,\"abs_y\":270}'><span data-mce-fragment=\"1\" bis_size='{\"x\":11,\"y\":9,\"w\":554,\"h\":57,\"abs_x\":857,\"abs_y\":270}'>El tarugo clavo tiene dos usos principales. El primero es la instalación de marcos, para puertas y ventanas. El segundo, la fijación de maderas y metales a superficies de concreto, ladrillo y bloques de cemento.</span></p>\n<p bis_size='{\"x\":11,\"y\":84,\"w\":574,\"h\":19,\"abs_x\":857,\"abs_y\":345}'><span data-mce-fragment=\"1\" bis_size='{\"x\":11,\"y\":84,\"w\":128,\"h\":18,\"abs_x\":857,\"abs_y\":345}'><a href=\"https://dimafi.odoo.com/odoo/documents/APgn9-8KSn6MzYq-_8xaeQo200\" target=\"_blank\" title=\"Tarugo Clavo\" rel=\"noopener\">VER FICHA TÉCNICA</a><a rel=\"noopener\" title=\"Tarugo Clavo\" href=\"https://dimafi.odoo.com/odoo/documents/XQ-APYzYRPKgaTmg7-0ZYgo157\" bis_size='{\"x\":11,\"y\":84,\"w\":128,\"h\":18,\"abs_x\":857,\"abs_y\":345}' target=\"_blank\"> </a></span></p>",
+      "published_at": "2024-04-25T14:15:31-04:00",
+      "created_at": "2024-04-25T14:15:31-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "DIMAFI",
+      "product_type": "Anclaje Mecánico",
+      "tags": [
+        "ANCLAJE",
+        "CONCRETO",
+        "TARUGO",
+        "TARUGO CLAVO"
+      ],
+      "variants": [
+        {
+          "id": 48393060286750,
+          "title": "6 MM / 38 MM",
+          "option1": "6 MM",
+          "option2": "38 MM",
+          "option3": null,
+          "sku": "11B01000004854315",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "1880",
+          "grams": 1000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9234285429022,
+          "created_at": "2024-04-25T14:15:33-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48393060319518,
+          "title": "6 MM / 55 MM",
+          "option1": "6 MM",
+          "option2": "55 MM",
+          "option3": null,
+          "sku": "11B01000004854320",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "2490",
+          "grams": 1000,
+          "compare_at_price": null,
+          "position": 3,
+          "product_id": 9234285429022,
+          "created_at": "2024-04-25T14:15:33-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48393060352286,
+          "title": "6 MM / 80 MM",
+          "option1": "6 MM",
+          "option2": "80 MM",
+          "option3": null,
+          "sku": "11B01000004854327",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "4140",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 4,
+          "product_id": 9234285429022,
+          "created_at": "2024-04-25T14:15:33-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48393060385054,
+          "title": "8 MM / 55 MM",
+          "option1": "8 MM",
+          "option2": "55 MM",
+          "option3": null,
+          "sku": "11B01000004854330",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "4890",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 5,
+          "product_id": 9234285429022,
+          "created_at": "2024-04-25T14:15:33-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48393060417822,
+          "title": "8 MM / 75 MM",
+          "option1": "8 MM",
+          "option2": "75 MM",
+          "option3": null,
+          "sku": "11B01000004854335",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "5270",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 6,
+          "product_id": 9234285429022,
+          "created_at": "2024-04-25T14:15:33-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48393060450590,
+          "title": "8 MM / 95 MM",
+          "option1": "8 MM",
+          "option2": "95 MM",
+          "option3": null,
+          "sku": "11B01000004854340",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "7460",
+          "grams": 3000,
+          "compare_at_price": null,
+          "position": 7,
+          "product_id": 9234285429022,
+          "created_at": "2024-04-25T14:15:33-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48393060483358,
+          "title": "8 MM / 120 MM",
+          "option1": "8 MM",
+          "option2": "120 MM",
+          "option3": null,
+          "sku": "11B01000004854355",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "9410",
+          "grams": 4000,
+          "compare_at_price": null,
+          "position": 8,
+          "product_id": 9234285429022,
+          "created_at": "2024-04-25T14:15:33-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 45932662358302,
+          "created_at": "2024-04-25T14:15:31-04:00",
+          "position": 1,
+          "updated_at": "2024-04-25T14:15:33-04:00",
+          "product_id": 9234285429022,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/TARUGOCLAVO.png?v=1714068933",
+          "width": 1200,
+          "height": 1200
+        }
+      ],
+      "options": [
+        {
+          "name": "Diametro",
+          "position": 1,
+          "values": [
+            "6 MM",
+            "8 MM"
+          ]
+        },
+        {
+          "name": "Largo",
+          "position": 2,
+          "values": [
+            "38 MM",
+            "55 MM",
+            "80 MM",
+            "75 MM",
+            "95 MM",
+            "120 MM"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9234305483038,
+      "title": "TARUGO ZAMAC (50 UDS)",
+      "handle": "tarugo-zamac",
+      "body_html": "<p>El Anclaje de Golpe tarugo zamac es un sistema de fijación<br>pasante 100% metálico de alta velocidad, diseñado para el montaje<br> permanente e inviolable de componentes ligeros y medianos<br> sobre materiales base compactos. Su diseño prescinde de<br> componentes plásticos, optimizando su desempeño en entornos<br> que exigen alta durabilidad estructural.<br> Cuenta con un clavo central de acero al carbono de alta tenacidad.<br> Al ser golpeado con un martillo, se introduce a presión en el canal<br> interno del cuerpo de Zamac</p>\n<p><a rel=\"noopener\" title=\"Tarugo Zamac\" href=\"https://dimafi.odoo.com/odoo/documents/zbxewmNJQH2czH9FjvSGCQo1ff\" target=\"_blank\">VER FICHA TÉCNICA </a><a href=\"https://dimafi.odoo.com/odoo/documents/FKMdDrXhQRi1YjktGFasHwo156\" title=\"Tarugo Zamac\" rel=\"noopener\" target=\"_blank\"></a></p>",
+      "published_at": "2024-04-25T14:37:16-04:00",
+      "created_at": "2024-04-25T14:37:16-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "DIMAFI",
+      "product_type": "Anclaje Mecánico",
+      "tags": [
+        "CONCRETO",
+        "TARUGO ZAMAC",
+        "ZAMAC"
+      ],
+      "variants": [
+        {
+          "id": 48393128378654,
+          "title": "5 X 22 MM",
+          "option1": "5 X 22 MM",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004854405",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "5270",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9234305483038,
+          "created_at": "2024-04-25T14:37:18-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48393128411422,
+          "title": "1/4\" X 1 1/2\"",
+          "option1": "1/4\" X 1 1/2\"",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004854410",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "9790",
+          "grams": 3000,
+          "compare_at_price": null,
+          "position": 3,
+          "product_id": 9234305483038,
+          "created_at": "2024-04-25T14:37:18-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 45932830425374,
+          "created_at": "2024-04-25T14:37:16-04:00",
+          "position": 1,
+          "updated_at": "2024-04-25T14:37:18-04:00",
+          "product_id": 9234305483038,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/TARUGOZAMAC.jpg?v=1714070238",
+          "width": 1000,
+          "height": 1000
+        }
+      ],
+      "options": [
+        {
+          "name": "Medida",
+          "position": 1,
+          "values": [
+            "5 X 22 MM",
+            "1/4\" X 1 1/2\""
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9240733974814,
+      "title": "TARUGO NYLON (100 UDS Y 50 UDS)",
+      "handle": "tarugo-nylon",
+      "body_html": "<p data-mce-fragment=\"1\">Al no tener arandela el tarugo puede introducirse en la perforación más allá del revoque o el revestimiento, generando la presión de expansión en el sustrato y alcanzando de esta forma altos valores de carga.</p>\n<p data-mce-fragment=\"1\">Como el tarugo expande solo en 2 direcciones, es posible direccionar el sentido de la fuerza de expansión con solo girar el taco, para que actúe paralelo al borde el elemento constructivo. Esto es ideal cuando existen pocas distancias a los bordes.</p>\n<p data-mce-fragment=\"1\"><a href=\"https://dimafi.odoo.com/odoo/documents/puWIR10cRdq2_A69un49kgo1bb\" target=\"_blank\" title=\"TARUGO NYLON\" rel=\"noopener\">VER FICHA TÉCNICA</a></p>",
+      "published_at": "2024-04-26T10:09:14-04:00",
+      "created_at": "2024-04-26T10:09:14-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "Mi tienda",
+      "product_type": "",
+      "tags": [
+        "nylon",
+        "TARUGO",
+        "tarugo nylon"
+      ],
+      "variants": [
+        {
+          "id": 48401751802142,
+          "title": "6 MM (100 UDS)",
+          "option1": "6 MM (100 UDS)",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004854227",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "1350",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 1,
+          "product_id": 9240733974814,
+          "created_at": "2024-04-26T10:09:15-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 50526664786206,
+          "title": "6 MM CON TOPE",
+          "option1": "6 MM CON TOPE",
+          "option2": null,
+          "option3": null,
+          "sku": null,
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "1850",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9240733974814,
+          "created_at": "2026-01-19T08:45:23-05:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48401751834910,
+          "title": "8 MM (100 UDS)",
+          "option1": "8 MM (100 UDS)",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004854228",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "2570",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 3,
+          "product_id": 9240733974814,
+          "created_at": "2024-04-26T10:09:15-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 50526657347870,
+          "title": "14 MM (50 UDS)",
+          "option1": "14 MM (50 UDS)",
+          "option2": null,
+          "option3": null,
+          "sku": null,
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "3750",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 4,
+          "product_id": 9240733974814,
+          "created_at": "2026-01-19T08:30:26-05:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 45944027087134,
+          "created_at": "2024-04-26T10:09:14-04:00",
+          "position": 1,
+          "updated_at": "2024-04-26T10:09:16-04:00",
+          "product_id": 9240733974814,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/TARUGONYLON.jpg?v=1714140556",
+          "width": 3000,
+          "height": 3000
+        }
+      ],
+      "options": [
+        {
+          "name": "MEDIDA",
+          "position": 1,
+          "values": [
+            "6 MM (100 UDS)",
+            "6 MM CON TOPE",
+            "8 MM (100 UDS)",
+            "14 MM (50 UDS)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9263161508126,
+      "title": "PERNO DE TORQUE CONTROLADO (10 UDS)",
+      "handle": "perno-de-torque-controlado",
+      "body_html": "<p><span class=\"oXzekf\">Los pernos de torque controlado son fabricados en acero medio carbono A.325 con tratamiento térmico, que se utiliza para uniones estructurales exigidas mecánicamente.<span> </span></span><span class=\"oXzekf\">Este tipo de perno facilita el montaje y evita la reutilización.</span></p>\n<p><a href=\"https://dimafi.odoo.com/odoo/documents/NpfNvdGqRbetfroarLPfego1b7\" target=\"_blank\" title=\"PERNO DE TORQUE CONTROLADO\" rel=\"noopener\"><span class=\"oXzekf\">VER FICHA TÉCNICA</span></a></p>",
+      "published_at": "2024-04-30T10:12:21-04:00",
+      "created_at": "2024-04-30T10:12:21-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "Mi tienda",
+      "product_type": "",
+      "tags": [],
+      "variants": [
+        {
+          "id": 48456436547870,
+          "title": "3/4\" X 2 1/2\"",
+          "option1": "3/4\" X 2 1/2\"",
+          "option2": null,
+          "option3": null,
+          "sku": "11B06000004904985",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "21075",
+          "grams": 5000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9263161508126,
+          "created_at": "2024-04-30T10:12:23-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48456436580638,
+          "title": "5/8\" X 1 3/4\"",
+          "option1": "5/8\" X 1 3/4\"",
+          "option2": null,
+          "option3": null,
+          "sku": "11B06000004904983",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "11290",
+          "grams": 7000,
+          "compare_at_price": null,
+          "position": 3,
+          "product_id": 9263161508126,
+          "created_at": "2024-04-30T10:12:23-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 45999490892062,
+          "created_at": "2024-04-30T10:12:21-04:00",
+          "position": 1,
+          "updated_at": "2024-04-30T10:12:23-04:00",
+          "product_id": 9263161508126,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/PERNODETORQUECONTROLADO.jpg?v=1714486343",
+          "width": 1000,
+          "height": 1000
+        }
+      ],
+      "options": [
+        {
+          "name": "Medida",
+          "position": 1,
+          "values": [
+            "3/4\" X 2 1/2\"",
+            "5/8\" X 1 3/4\""
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9240892506398,
+      "title": "TARUGO METALICO PARA PAREDES HUECAS (25 UDS)",
+      "handle": "tarugo-metalico-para-paredes-huecas",
+      "body_html": "<p><span class=\"a_GcMg font-feature-liga-off font-feature-clig-off font-feature-calt-off text-decoration-none text-strikethrough-none\">Tarugo metálico de expansión para muros huecos y tabiquería. Cuerpo de acero al carbono zincado con aletas deformables que generan un tope físico de alta resistencia en la cara oculta de la plancha. Incluye tornillo de rosca métrica y pestañas superiores anti-giro. Diseñado para montajes permanentes de carga media en cielos y tabiques de yeso-cartón</span></p>\n<p>MEDIDA: 4 X 47 MM</p>\n<p><a href=\"https://dimafi.odoo.com/odoo/documents/gEwkyVzyQ9y6qyv-6_B_yAo1b3\" target=\"_blank\" title=\"TARUGO METALICO PARA PAREDES HUECAS\" rel=\"noopener\">VER FICHA TÉCNICA</a></p>",
+      "published_at": "2024-04-26T11:52:55-04:00",
+      "created_at": "2024-04-26T11:52:55-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "Mi tienda",
+      "product_type": "",
+      "tags": [
+        "ARAÑA",
+        "PAREDES HUECAS",
+        "TABIQUE",
+        "TARUGO",
+        "TARUGO METALICO",
+        "volcanita"
+      ],
+      "variants": [
+        {
+          "id": 48402802442526,
+          "title": "Default Title",
+          "option1": "Default Title",
+          "option2": null,
+          "option3": null,
+          "sku": "11B06000004905131",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": false,
+          "price": "5270",
+          "grams": 0,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9240892506398,
+          "created_at": "2024-04-26T11:52:56-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 45944576213278,
+          "created_at": "2024-04-26T11:52:55-04:00",
+          "position": 1,
+          "updated_at": "2024-04-26T11:52:57-04:00",
+          "product_id": 9240892506398,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/TARUGOMETALICOARANA.jpg?v=1714146777",
+          "width": 1000,
+          "height": 1000
+        },
+        {
+          "id": 45944576377118,
+          "created_at": "2024-04-26T11:52:55-04:00",
+          "position": 2,
+          "updated_at": "2024-04-26T11:52:57-04:00",
+          "product_id": 9240892506398,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/TARUGOMETALICOARANA2.jpg?v=1714146777",
+          "width": 1000,
+          "height": 1000
+        }
+      ],
+      "options": [
+        {
+          "name": "Title",
+          "position": 1,
+          "values": [
+            "Default Title"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9259904663838,
+      "title": "TARUGO TOGGLER + PERNO (10 UDS)",
+      "handle": "tarugo-toggler",
+      "body_html": "<p bis_size='{\"x\":12,\"y\":9,\"w\":575,\"h\":97,\"abs_x\":619,\"abs_y\":271}'><span class=\"a_GcMg font-feature-liga-off font-feature-clig-off font-feature-calt-off text-decoration-none text-strikethrough-none\" bis_size='{\"x\":12,\"y\":9,\"w\":559,\"h\":97,\"abs_x\":619,\"abs_y\":271}'>El anclaje para paredes huecas tipo toggle está compuesto por un tornillo maquinado y un canal metálico roscado que se posiciona detrás de la superficie una vez insertadas en el orificio. El canal se encuentra conectado a guía plástica con una arandela tapón que proporciona un punto de fijación confiable para anclar en paneles de yeso y muros de bloque hueco.</span></p>\n<p bis_size='{\"x\":12,\"y\":123,\"w\":575,\"h\":19,\"abs_x\":619,\"abs_y\":385}'><a href=\"https://dimafi.odoo.com/odoo/documents/NnkpmSlBSq6_R5NwHkgyXAo1b5\" target=\"_blank\" title=\"TARUGO TOGGLER + PERNO \" bis_size='{\"x\":12,\"y\":123,\"w\":125,\"h\":19,\"abs_x\":619,\"abs_y\":385}' rel=\"noopener\"><span class=\"a_GcMg font-feature-liga-off font-feature-clig-off font-feature-calt-off text-decoration-none text-strikethrough-none\" bis_size='{\"x\":12,\"y\":123,\"w\":125,\"h\":19,\"abs_x\":619,\"abs_y\":385}'>VER FICHA TÉCNICA</span></a></p>",
+      "published_at": "2024-04-29T10:42:09-04:00",
+      "created_at": "2024-04-29T10:42:09-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "Mi tienda",
+      "product_type": "",
+      "tags": [
+        "PAREDES HUECAS",
+        "perno cocina",
+        "tabiqueria",
+        "TARUGO",
+        "toggler"
+      ],
+      "variants": [
+        {
+          "id": 48443460878622,
+          "title": "1 1/2\"",
+          "option1": "1 1/2\"",
+          "option2": null,
+          "option3": null,
+          "sku": "11B06000004905133",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "5870",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9259904663838,
+          "created_at": "2024-04-29T10:42:10-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48443460911390,
+          "title": "2\"",
+          "option1": "2\"",
+          "option2": null,
+          "option3": null,
+          "sku": "11B06000004905133",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "5950",
+          "grams": 2500,
+          "compare_at_price": null,
+          "position": 3,
+          "product_id": 9259904663838,
+          "created_at": "2024-04-29T10:42:11-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48443460944158,
+          "title": "2 1/2\"",
+          "option1": "2 1/2\"",
+          "option2": null,
+          "option3": null,
+          "sku": "11B06000004905133",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "6100",
+          "grams": 3000,
+          "compare_at_price": null,
+          "position": 4,
+          "product_id": 9259904663838,
+          "created_at": "2024-04-29T10:42:11-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        },
+        {
+          "id": 48443460976926,
+          "title": "3\"",
+          "option1": "3\"",
+          "option2": null,
+          "option3": null,
+          "sku": "11B06000004905133",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": true,
+          "price": "6250",
+          "grams": 3000,
+          "compare_at_price": null,
+          "position": 5,
+          "product_id": 9259904663838,
+          "created_at": "2024-04-29T10:42:11-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 45982684021022,
+          "created_at": "2024-04-29T10:42:09-04:00",
+          "position": 1,
+          "updated_at": "2024-04-29T10:42:11-04:00",
+          "product_id": 9259904663838,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/TARUGOTOGGLER.jpg?v=1714401731",
+          "width": 1000,
+          "height": 1000
+        }
+      ],
+      "options": [
+        {
+          "name": "Largo del perno",
+          "position": 1,
+          "values": [
+            "1 1/2\"",
+            "2\"",
+            "2 1/2\"",
+            "3\""
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9240743608606,
+      "title": "CLAVO TOPOGRÁFICO DIMAMINE® (25 UDS)",
+      "handle": "dimamine-clavo-topografico",
+      "body_html": "<p bis_size='{\"x\":11,\"y\":9,\"w\":574,\"h\":97,\"abs_x\":857,\"abs_y\":270}'>El Clavo Topográfico con Tarugo es una solución práctica y<br bis_size='{\"x\":371,\"y\":9,\"w\":0,\"h\":18,\"abs_x\":1217,\"abs_y\":270}'>confiable para establecer puntos de control precisos en superficies<br bis_size='{\"x\":422,\"y\":29,\"w\":0,\"h\":18,\"abs_x\":1268,\"abs_y\":290}'>duras como muros, pavimentos, estructuras de hormigón y losas,<br bis_size='{\"x\":413,\"y\":48,\"w\":0,\"h\":18,\"abs_x\":1259,\"abs_y\":309}'>ampliamente utilizado en topografía, obras civiles, replanteo y<br bis_size='{\"x\":394,\"y\":68,\"w\":0,\"h\":18,\"abs_x\":1240,\"abs_y\":329}'>monitoreo estructural.</p>\n<p bis_size='{\"x\":11,\"y\":123,\"w\":574,\"h\":19,\"abs_x\":857,\"abs_y\":384}'><a href=\"https://dimafi.odoo.com/odoo/documents/3XyJwRYkTmK795tpfUXbewo201\" target=\"_blank\" title=\"Clavo topográfico\" rel=\"noopener\">VER FICHA TÉCNICA </a></p>",
+      "published_at": "2024-04-26T10:17:23-04:00",
+      "created_at": "2024-04-26T10:17:24-04:00",
+      "updated_at": "2026-09-03T11:07:05-04:00",
+      "vendor": "DIMAFI",
+      "product_type": "Anclaje Mecánico",
+      "tags": [
+        "TOPOGRAFICO"
+      ],
+      "variants": [
+        {
+          "id": 48401790304542,
+          "title": "1/4 x 1 /12",
+          "option1": "1/4 x 1 /12",
+          "option2": null,
+          "option3": null,
+          "sku": "11B01000004854611",
+          "requires_shipping": true,
+          "taxable": false,
+          "featured_image": null,
+          "available": false,
+          "price": "7150",
+          "grams": 2000,
+          "compare_at_price": null,
+          "position": 2,
+          "product_id": 9240743608606,
+          "created_at": "2024-04-26T10:17:25-04:00",
+          "updated_at": "2026-09-03T11:07:05-04:00"
+        }
+      ],
+      "images": [
+        {
+          "id": 45944077713694,
+          "created_at": "2024-04-26T10:17:24-04:00",
+          "position": 1,
+          "updated_at": "2024-04-26T10:17:26-04:00",
+          "product_id": 9240743608606,
+          "variant_ids": [],
+          "src": "https://cdn.shopify.com/s/files/1/0809/1307/2414/files/CLAVOTOPOGRAFICOCONTARUGO.jpg?v=1714141046",
+          "width": 3000,
+          "height": 3000
+        }
+      ],
+      "options": [
+        {
+          "name": "Medida",
+          "position": 1,
+          "values": [
+            "1/4 x 1 /12"
+          ]
+        }
+      ]
+    }
+  ]
+}

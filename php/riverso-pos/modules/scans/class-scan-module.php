@@ -703,9 +703,15 @@ class Riverso_Scan_Module {
             if ($dup_band) {
                 $estado = 'duplicado';
             } elseif ($factura_existente) {
-                $estado = 'duplicado';
                 $factura_id = (int) $factura_existente;
                 $this->attach_scan_to_factura($factura_id, $r2_key_original, $doc, $archivo_hash);
+                // Stub SII/FACTO: dejar pendiente de ingreso (detalle del escaneo aún no aplicado)
+                $is_stub = function_exists('riverso_factura_db_is_sii_rescued_stub')
+                    && riverso_factura_db_is_sii_rescued_stub($factura_id);
+                $scan_has_detail = !empty($normalized['items'])
+                    && !(function_exists('riverso_factura_data_is_sii_rescued_stub')
+                        && riverso_factura_data_is_sii_rescued_stub($normalized));
+                $estado = ($is_stub && $scan_has_detail) ? 'pendiente' : 'duplicado';
             }
 
             $confianza = (float) ($doc['confianza_global'] ?? 0);
@@ -881,6 +887,17 @@ class Riverso_Scan_Module {
         if (!empty($row['factura_id']) && function_exists('riverso_factura_origen_label')) {
             $row['factura_origen_label'] = riverso_factura_origen_label($row['factura_origen'] ?? 'escaneo');
         }
+
+        $estado = $row['estado_revision'] ?? '';
+        $needs_ingreso = in_array($estado, ['pendiente', 'revisado'], true);
+        if (!$needs_ingreso && $estado === 'duplicado' && !empty($row['factura_id'])
+            && function_exists('riverso_factura_db_is_sii_rescued_stub')
+            && riverso_factura_db_is_sii_rescued_stub((int) $row['factura_id'])) {
+            $needs_ingreso = true;
+        }
+        $row['needs_ingreso'] = $needs_ingreso;
+        $row['needs_ingreso_label'] = $needs_ingreso ? 'Falta guardar ingreso' : '';
+
         return $row;
     }
 
@@ -903,11 +920,46 @@ class Riverso_Scan_Module {
             $params[] = sanitize_text_field($_POST['estado']);
         }
         if (!empty($_POST['search'])) {
-            $where[] = '(d.folio LIKE %s OR d.razon_social_emisor LIKE %s OR a.nombre_original LIKE %s)';
-            $like = '%' . $wpdb->esc_like(sanitize_text_field($_POST['search'])) . '%';
+            $term = sanitize_text_field(wp_unslash($_POST['search']));
+            $like = '%' . $wpdb->esc_like($term) . '%';
+            $search_parts = [
+                'd.folio LIKE %s',
+                'd.razon_social_emisor LIKE %s',
+                'a.nombre_original LIKE %s',
+                "EXISTS (
+                    SELECT 1 FROM {$this->table('documento_items')} di
+                    WHERE di.documento_id = d.id
+                      AND (
+                        di.codigo LIKE %s
+                        OR di.nombre LIKE %s
+                        OR di.descripcion LIKE %s
+                      )
+                )",
+            ];
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+
+            if (class_exists('Riverso_Invoice_Module')) {
+                $prefix = $wpdb->prefix . 'riverso_';
+                $product_match = Riverso_Invoice_Module::sql_factura_contains_product(
+                    'fx',
+                    $term,
+                    'd.factura_id',
+                    "(SELECT fx.proveedor_id FROM {$prefix}facturas fx WHERE fx.id = d.factura_id LIMIT 1)"
+                );
+                if ($product_match) {
+                    $search_parts[] = '(d.factura_id IS NOT NULL AND ' . $product_match['sql'] . ')';
+                    foreach ($product_match['params'] as $p) {
+                        $params[] = $p;
+                    }
+                }
+            }
+
+            $where[] = '(' . implode(' OR ', $search_parts) . ')';
         }
         if (!empty($_POST['fecha_desde'])) {
             $where[] = 'd.fecha_emision >= %s';
@@ -1095,7 +1147,25 @@ class Riverso_Scan_Module {
         unset($factura['_scan_meta']);
 
         require_once RIVERSO_POS_PLUGIN_DIR . 'modules/invoices/class-invoice-intake-service.php';
-        Riverso_Invoice_Intake_Service::get_instance()->classify_factura_items($factura);
+        $classify_opts = in_array($documento_tipo, ['productos', 'guia_despacho', 'nota_credito'], true)
+            ? ['documento_subtipo' => $documento_tipo, 'respect_existing' => true]
+            : ['force_keywords' => true];
+        if ($documento_tipo === 'gastos') {
+            foreach ($factura['items'] as &$it) {
+                $it['item_tipo'] = 'gasto';
+            }
+            unset($it);
+            $classify_opts = ['documento_subtipo' => 'gastos', 'respect_existing' => true];
+        } elseif ($documento_tipo === 'envio') {
+            foreach ($factura['items'] as &$it) {
+                if (empty($it['item_tipo']) || !in_array($it['item_tipo'], ['producto', 'gasto', 'envio'], true)) {
+                    $it['item_tipo'] = 'envio';
+                }
+            }
+            unset($it);
+            $classify_opts = ['documento_subtipo' => 'envio', 'respect_existing' => true];
+        }
+        Riverso_Invoice_Intake_Service::get_instance()->classify_factura_items($factura, $classify_opts);
         Riverso_Invoice_Intake_Service::get_instance()->enrich_factura_items_costs($factura);
 
         $save_options = [
@@ -1106,11 +1176,33 @@ class Riverso_Scan_Module {
             'origen_ingreso'    => 'escaneo',
         ];
 
-        $factura_id = $this->invoices()->save_invoice($factura, $save_options);
+        // Lookup normalizado antes de crear: evita segunda factura por RUT/folio con formato distinto
+        $existing_pre = null;
+        if (function_exists('riverso_find_factura_by_dte')) {
+            $found_pre = riverso_find_factura_by_dte(
+                (int) ($factura['tipo_dte'] ?? 0),
+                (string) ($factura['folio'] ?? ''),
+                $factura['emisor']['rut'] ?? ''
+            );
+            $existing_pre = $found_pre ? (int) ($found_pre['id'] ?? 0) : 0;
+        }
+
+        $factura_id = $existing_pre
+            ? new WP_Error('duplicate', 'Esta factura ya fue procesada', ['factura_id' => $existing_pre])
+            : $this->invoices()->save_invoice($factura, $save_options);
+
         if (is_wp_error($factura_id)) {
             if ($factura_id->get_error_code() === 'duplicate') {
                 $data = $factura_id->get_error_data();
                 $existing_id = (int) ($data['factura_id'] ?? 0);
+                if (!$existing_id && function_exists('riverso_find_factura_by_dte')) {
+                    $found = riverso_find_factura_by_dte(
+                        (int) ($factura['tipo_dte'] ?? 0),
+                        (string) ($factura['folio'] ?? ''),
+                        $factura['emisor']['rut'] ?? ''
+                    );
+                    $existing_id = $found ? (int) ($found['id'] ?? 0) : 0;
+                }
                 if ($existing_id) {
                     $archivo = $wpdb->get_row($wpdb->prepare(
                         "SELECT * FROM {$this->table('documentos_archivos')} WHERE id = %d",
@@ -1123,6 +1215,7 @@ class Riverso_Scan_Module {
 
                     $merged_detail = false;
                     $merge_msg = 'Factura ya existía — escaneo adjuntado como respaldo';
+                    $merge_error = null;
                     if (function_exists('riverso_factura_db_is_sii_rescued_stub')
                         && riverso_factura_db_is_sii_rescued_stub($existing_id)
                         && !empty($factura['items'])
@@ -1133,18 +1226,29 @@ class Riverso_Scan_Module {
                             $merged_detail = true;
                             $merge_msg = $merge['message']
                                 ?? 'Escaneo aplicado como detalle (XML SII sin líneas)';
+                        } elseif (is_wp_error($merge)) {
+                            $merge_error = $merge->get_error_message();
+                            $merge_msg = 'No se pudo aplicar el detalle del escaneo: ' . $merge_error;
                         }
                     }
 
+                    // Si el merge falló sobre stub, dejar pendiente de ingreso (no "duplicado")
+                    $still_stub = function_exists('riverso_factura_db_is_sii_rescued_stub')
+                        && riverso_factura_db_is_sii_rescued_stub($existing_id);
+                    $new_estado = $merged_detail
+                        ? 'confirmado'
+                        : ($still_stub ? 'revisado' : 'duplicado');
+
                     $wpdb->update($this->table('documentos_escaneados'), [
-                        'estado_revision' => $merged_detail ? 'confirmado' : 'duplicado',
+                        'estado_revision' => $new_estado,
                         'factura_id'      => $existing_id,
                     ], ['id' => $id]);
                     wp_send_json_success([
                         'message'    => $merge_msg,
                         'factura_id' => $existing_id,
-                        'duplicado'  => !$merged_detail,
+                        'duplicado'  => !$merged_detail && !$still_stub,
                         'scan_truth' => $merged_detail,
+                        'needs_ingreso' => !$merged_detail && $still_stub,
                     ]);
                 }
             }

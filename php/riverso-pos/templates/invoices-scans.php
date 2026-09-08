@@ -59,7 +59,7 @@ $scan_dte_options = [
         </select>
         <input type="date" id="scan-filter-desde">
         <input type="date" id="scan-filter-hasta">
-        <input type="search" id="scan-filter-search" placeholder="Buscar folio, proveedor o archivo…">
+        <input type="search" id="scan-filter-search" placeholder="Buscar folio, proveedor, archivo o producto…">
         <button type="button" class="button" id="scan-btn-filter">Filtrar</button>
     </div>
 
@@ -268,6 +268,19 @@ $scan_dte_options = [
 .scan-conf-green { color: #008a20; font-weight: 600; }
 .scan-conf-amber { color: #996800; font-weight: 600; }
 .scan-conf-red { color: #d63638; font-weight: 600; }
+.scan-badge-needs-ingreso {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: #d63638;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.55;
+    vertical-align: middle;
+    white-space: nowrap;
+}
 .scan-detail-modal {
     max-width: min(1480px, 96vw) !important;
     width: 100%;
@@ -395,6 +408,9 @@ table.scan-items-table .col-num {
 table.scan-items-table .col-codigo {
     width: 110px;
 }
+table.scan-items-table .col-tipo {
+    width: 100px;
+}
 table.scan-items-table .col-cant,
 table.scan-items-table .col-precio,
 table.scan-items-table .col-monto {
@@ -404,10 +420,14 @@ table.scan-items-table .col-desc {
     min-width: 220px;
 }
 .scan-items-table input,
-.scan-items-table textarea {
+.scan-items-table textarea,
+.scan-items-table select.si-tipo {
     width: 100%;
     box-sizing: border-box;
     font-size: 13px;
+}
+.scan-items-table select.si-tipo {
+    max-width: 110px;
 }
 .scan-items-table textarea.si-desc {
     min-height: 2.4em;
@@ -520,7 +540,11 @@ jQuery(function($) {
             } else {
                 let html = '';
                 items.forEach(function(row) {
-                    html += '<tr>' +
+                    const needsBadge = row.needs_ingreso
+                        ? ' <span class="scan-badge-needs-ingreso" title="Revise y pulse Confirmar e ingresar">'
+                          + escHtml(row.needs_ingreso_label || 'Falta guardar ingreso') + '</span>'
+                        : '';
+                    html += '<tr' + (row.needs_ingreso ? ' class="scan-row-needs-ingreso"' : '') + '>' +
                         '<td title="' + escAttr(row.nombre_original) + '">' + escHtml(trunc(row.nombre_original, 28)) + '</td>' +
                         '<td>' + escHtml(row.paginas_label) + '</td>' +
                         '<td>' + escHtml(row.tipo_label) + ' ' + escHtml(row.folio || '—') + '</td>' +
@@ -528,7 +552,7 @@ jQuery(function($) {
                         '<td>' + escHtml(row.fecha_emision || '—') + '</td>' +
                         '<td>' + fmtMoney(row.monto_total) + '</td>' +
                         '<td class="' + confClass(row.confianza_level) + '">' + Math.round((row.confianza || 0) * 100) + '%</td>' +
-                        '<td>' + escHtml(row.estado_revision) +
+                        '<td>' + escHtml(row.estado_revision) + needsBadge +
                         (row.factura_id ? ' · <a href="#" class="scan-link-factura" data-id="' + row.factura_id + '">#' + escHtml(row.factura_folio || row.factura_id) + '</a>' : '') + '</td>' +
                         '<td><button type="button" class="button button-small btn-scan-view" data-id="' + row.id + '">Ver</button></td>' +
                         '</tr>';
@@ -981,18 +1005,22 @@ jQuery(function($) {
         if (!items.length) {
             $('#se-items-wrap').html('<p class="description scan-items-empty">Sin ítems detectados</p>');
         } else {
+            const defaultTipo = defaultItemTipoForDoc($('#se-doc-tipo').val());
             let itemsHtml = '<table class="scan-items-table"><thead><tr>' +
                 '<th class="col-num">#</th>' +
                 '<th class="col-codigo">Código</th>' +
+                '<th class="col-tipo">Tipo</th>' +
                 '<th class="col-desc">Descripción</th>' +
                 '<th class="col-cant">Cantidad</th>' +
                 '<th class="col-precio">P. unitario</th>' +
                 '<th class="col-monto">Monto</th>' +
                 '</tr></thead><tbody>';
             items.forEach(function(it, idx) {
+                const tipo = normalizeItemTipo(it.item_tipo) || defaultTipo;
                 itemsHtml += '<tr class="scan-item-row" data-idx="' + idx + '">' +
                     '<td class="col-num"><span class="scan-item-num">' + (idx + 1) + '</span></td>' +
                     '<td class="col-codigo"><input type="text" class="si-codigo" value="' + escAttr(it.codigo || '') + '" placeholder="SKU / código"></td>' +
+                    '<td class="col-tipo">' + itemTipoSelectHtml(tipo) + '</td>' +
                     '<td class="col-desc"><textarea class="si-desc" rows="2" placeholder="Descripción del ítem">' + escHtml(it.descripcion || '') + '</textarea></td>' +
                     '<td class="col-cant"><input type="number" class="si-cant" value="' + escAttr(it.cantidad || 0) + '" step="any" min="0"></td>' +
                     '<td class="col-precio"><input type="number" class="si-precio" value="' + escAttr(it.precio_unitario || 0) + '" step="any" min="0"></td>' +
@@ -1023,6 +1051,37 @@ jQuery(function($) {
         autoResizeDesc($(this));
     });
 
+    function normalizeItemTipo(t) {
+        t = String(t || '').toLowerCase();
+        if (t === 'flete') t = 'envio';
+        return (t === 'producto' || t === 'gasto' || t === 'envio') ? t : '';
+    }
+
+    function defaultItemTipoForDoc(docTipo) {
+        if (docTipo === 'gastos') return 'gasto';
+        if (docTipo === 'envio') return 'envio';
+        return 'producto';
+    }
+
+    function itemTipoSelectHtml(selected) {
+        selected = normalizeItemTipo(selected) || 'producto';
+        const opts = [
+            { v: 'producto', l: 'Producto' },
+            { v: 'gasto', l: 'Gasto' },
+            { v: 'envio', l: 'Flete' }
+        ];
+        let html = '<select class="si-tipo">';
+        opts.forEach(function(o) {
+            html += '<option value="' + o.v + '"' + (selected === o.v ? ' selected' : '') + '>' + o.l + '</option>';
+        });
+        return html + '</select>';
+    }
+
+    $('#se-doc-tipo').on('change', function() {
+        const def = defaultItemTipoForDoc($(this).val());
+        $('#se-items-wrap .si-tipo').val(def);
+    });
+
     function collectScanFormData() {
         const raw = $.extend(true, {}, scanDetailRaw || {});
         raw.tipo_dte = parseInt($('#se-tipo-dte').val(), 10) || 33;
@@ -1045,6 +1104,7 @@ jQuery(function($) {
                 cantidad: parseFloat($(this).find('.si-cant').val()) || 0,
                 precio_unitario: parseFloat($(this).find('.si-precio').val()) || 0,
                 monto_total: parseFloat($(this).find('.si-monto').val()) || 0,
+                item_tipo: normalizeItemTipo($(this).find('.si-tipo').val()) || defaultItemTipoForDoc($('#se-doc-tipo').val()),
                 confianza: 0.9
             });
         });

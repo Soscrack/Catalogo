@@ -324,23 +324,52 @@ class Riverso_Invoice_Intake_Service {
 
     /**
      * Clasifica ítems del XML parseado como producto, envío o gasto.
+     *
+     * @param array $factura_data
+     * @param array $options {
+     *   @type string $documento_subtipo  productos|guia_despacho: respeta item_tipo; default producto.
+     *   @type bool   $respect_existing   No pisa item_tipo válido ya presente.
+     *   @type bool   $force_keywords     Siempre reclasifica por keywords (auto-detect).
+     * }
      */
-    public function classify_factura_items(array &$factura_data) {
+    public function classify_factura_items(array &$factura_data, array $options = []) {
         $shipping_total = 0.0;
         $product_count = 0;
         $expense_count = 0;
+        $subtipo = sanitize_text_field($options['documento_subtipo'] ?? '');
+        $force_keywords = !empty($options['force_keywords']);
+        $product_doc = in_array($subtipo, ['productos', 'guia_despacho', 'nota_credito'], true);
+        $respect = !empty($options['respect_existing']) || ($product_doc && !$force_keywords);
 
         foreach ($factura_data['items'] as &$item) {
-            $nombre = $item['nombre'] ?? '';
-            $descripcion = $item['descripcion'] ?? '';
-            if ($this->is_shipping_line($nombre, $descripcion)) {
-                $item['item_tipo'] = 'envio';
+            $existing = strtolower(trim((string) ($item['item_tipo'] ?? '')));
+            if ($existing === 'flete') {
+                $existing = 'envio';
+            }
+            $has_explicit = in_array($existing, ['producto', 'gasto', 'envio'], true);
+
+            if ($respect && $has_explicit) {
+                $item['item_tipo'] = $existing;
+            } elseif ($respect && !$has_explicit) {
+                // Docs de productos: default producto (sin keywords; evita falsos positivos p.ej. "LUZ")
+                $item['item_tipo'] = 'producto';
+            } else {
+                $nombre = $item['nombre'] ?? '';
+                $descripcion = $item['descripcion'] ?? '';
+                if ($this->is_shipping_line($nombre, $descripcion)) {
+                    $item['item_tipo'] = 'envio';
+                } elseif ($this->is_expense_line($nombre, $descripcion)) {
+                    $item['item_tipo'] = 'gasto';
+                } else {
+                    $item['item_tipo'] = 'producto';
+                }
+            }
+
+            if ($item['item_tipo'] === 'envio') {
                 $shipping_total += (float) ($item['monto'] ?? 0);
-            } elseif ($this->is_expense_line($nombre, $descripcion)) {
-                $item['item_tipo'] = 'gasto';
+            } elseif ($item['item_tipo'] === 'gasto') {
                 $expense_count++;
             } else {
-                $item['item_tipo'] = 'producto';
                 $product_count++;
             }
         }
@@ -349,6 +378,12 @@ class Riverso_Invoice_Intake_Service {
         $factura_data['costo_envio_inline'] = $shipping_total;
         $factura_data['items_producto'] = $product_count;
         $factura_data['items_gasto'] = $expense_count;
+        $factura_data['items_envio'] = count(array_filter(
+            $factura_data['items'] ?? [],
+            static function ($it) {
+                return ($it['item_tipo'] ?? '') === 'envio';
+            }
+        ));
 
         return $factura_data;
     }
@@ -1170,6 +1205,8 @@ class Riverso_Invoice_Intake_Service {
 
         $old_sku = $this->get_code_current_sku($proveedor_id, $codigo_proveedor);
         $document_date = $this->normalize_document_date($opts['document_date'] ?? null);
+        $apply_all = !empty($opts['apply_all']);
+        $from_for_apply = $apply_all ? 'all' : $document_date;
         $modified_at = current_time('mysql');
 
         if ($clear) {
@@ -1181,7 +1218,7 @@ class Riverso_Invoice_Intake_Service {
                 $proveedor_id,
                 $codigo_proveedor,
                 '',
-                $document_date
+                $from_for_apply
             );
             return [
                 'sku_local' => null,
@@ -1268,7 +1305,7 @@ class Riverso_Invoice_Intake_Service {
             $proveedor_id,
             $codigo_proveedor,
             $sku_local,
-            $document_date,
+            $from_for_apply,
             $product_id
         );
         $last_seen = $this->resolve_last_seen_document_date($proveedor_id, $codigo_proveedor, $document_date);
@@ -1400,16 +1437,19 @@ class Riverso_Invoice_Intake_Service {
     }
 
     /**
-     * Aplica el mapeo a ítems y costos de facturas con fecha >= el documento editado.
+     * Aplica el mapeo a ítems y costos de facturas.
+     * Con $from_date = 'all' actualiza todos los folios del par (folios antiguos).
+     * Con fecha normal: solo documentos con fecha_emision >= esa fecha.
      */
     public function apply_mapping_to_later_invoices($proveedor_id, $codigo_proveedor, $sku_local, $from_date, $product_id = null) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         $proveedor_id = (int) $proveedor_id;
         $codigo_proveedor = trim((string) $codigo_proveedor);
-        $from_date = $this->normalize_document_date($from_date);
-        $result = ['items' => 0, 'invoices' => 0, 'costs' => 0];
-        if (!$proveedor_id || $codigo_proveedor === '' || !$from_date) {
+        $apply_all = ($from_date === 'all');
+        $from_date = $apply_all ? null : $this->normalize_document_date($from_date);
+        $result = ['items' => 0, 'invoices' => 0, 'costs' => 0, 'apply_all' => $apply_all];
+        if (!$proveedor_id || $codigo_proveedor === '' || (!$apply_all && !$from_date)) {
             return $result;
         }
 
@@ -1418,6 +1458,14 @@ class Riverso_Invoice_Intake_Service {
         $estado = $new_sku !== '' ? 'vinculado' : 'pendiente';
         $product_id = $new_sku !== '' ? (int) $product_id : 0;
 
+        $date_sql = $apply_all ? '' : ' AND f.fecha_emision >= %s';
+        $date_cost_sql = $apply_all ? '' : ' AND ch.document_date >= %s';
+
+        $base_params = [$proveedor_id, $codigo_proveedor];
+        if (!$apply_all) {
+            $base_params[] = $from_date;
+        }
+
         $factura_ids = $wpdb->get_col($wpdb->prepare(
             "SELECT DISTINCT f.id
              FROM {$prefix}factura_items fi
@@ -1425,12 +1473,11 @@ class Riverso_Invoice_Intake_Service {
              WHERE f.proveedor_id = %d
                AND fi.codigo_proveedor = %s
                AND (fi.item_tipo = 'producto' OR fi.item_tipo IS NULL)
-               AND f.fecha_emision >= %s",
-            $proveedor_id,
-            $codigo_proveedor,
-            $from_date
+               {$date_sql}",
+            ...$base_params
         ));
 
+        $update_params = array_merge([$new_sku, $product_id, $estado], $base_params);
         $result['items'] = (int) $wpdb->query($wpdb->prepare(
             "UPDATE {$prefix}factura_items fi
              INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
@@ -1440,15 +1487,14 @@ class Riverso_Invoice_Intake_Service {
              WHERE f.proveedor_id = %d
                AND fi.codigo_proveedor = %s
                AND (fi.item_tipo = 'producto' OR fi.item_tipo IS NULL)
-               AND f.fecha_emision >= %s",
-            $new_sku,
-            $product_id,
-            $estado,
-            $proveedor_id,
-            $codigo_proveedor,
-            $from_date
+               {$date_sql}",
+            ...$update_params
         ));
 
+        $cost_params = array_merge(
+            [$product_id, $new_sku !== '' ? 0 : 1, $proveedor_id, $codigo_proveedor],
+            $apply_all ? [] : [$from_date]
+        );
         $result['costs'] = (int) $wpdb->query($wpdb->prepare(
             "UPDATE {$prefix}cost_history ch
              INNER JOIN {$prefix}factura_items fi ON fi.id = ch.source_item_id AND ch.source_type = 'invoice'
@@ -1457,13 +1503,25 @@ class Riverso_Invoice_Intake_Service {
                  ch.pendiente_vinculacion = %d
              WHERE f.proveedor_id = %d
                AND fi.codigo_proveedor = %s
-               AND ch.document_date >= %s",
-            $product_id,
-            $new_sku !== '' ? 0 : 1,
-            $proveedor_id,
-            $codigo_proveedor,
-            $from_date
+               {$date_cost_sql}",
+            ...$cost_params
         ));
+
+        // También reconciliar cost_history indexado solo por supplier_code (sin join a ítem).
+        if ($apply_all) {
+            $result['costs'] += (int) $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}cost_history
+                 SET product_id = %d,
+                     pendiente_vinculacion = %d
+                 WHERE supplier_id = %d
+                   AND supplier_code = %s
+                   AND (source_item_id IS NULL OR source_item_id = 0 OR product_id = 0 OR pendiente_vinculacion = 1)",
+                $product_id,
+                $new_sku !== '' ? 0 : 1,
+                $proveedor_id,
+                $codigo_proveedor
+            ));
+        }
 
         foreach ($factura_ids ?: [] as $factura_id) {
             $this->sync_factura_item_status((int) $factura_id);
@@ -2957,24 +3015,11 @@ class Riverso_Invoice_Intake_Service {
                 $item_tipo = 'envio';
                 $item_estado = 'envio';
             } else {
-                $tmp = [
-                    'items' => [[
-                        'nombre' => $item->nombre ?? '',
-                        'descripcion' => $item->descripcion ?? '',
-                        'monto' => 0,
-                    ]],
-                ];
-                $this->classify_factura_items($tmp);
-                $item_tipo = $tmp['items'][0]['item_tipo'] ?? 'producto';
-                if ($item_tipo === 'envio') {
-                    $item_estado = 'envio';
-                } elseif ($item_tipo === 'gasto') {
-                    $item_estado = 'gasto';
-                } else {
-                    $item_estado = riverso_usable_local_sku($item->sku_local ?? '', $item->codigo_proveedor ?? '')
-                        ? 'vinculado'
-                        : 'pendiente';
-                }
+                // Docs de productos / guía / NC: todas producto (sin keywords)
+                $item_tipo = 'producto';
+                $item_estado = riverso_usable_local_sku($item->sku_local ?? '', $item->codigo_proveedor ?? '')
+                    ? 'vinculado'
+                    : 'pendiente';
             }
 
             $wpdb->update(

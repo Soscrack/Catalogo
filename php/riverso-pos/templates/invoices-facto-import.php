@@ -53,6 +53,31 @@ $facto_ready = function_exists('riverso_facto_is_configured') && riverso_facto_i
         <div id="facto-import-estimate-box" class="facto-import-estimate" style="display:none;"></div>
         <div id="facto-import-status" class="facto-import-status"></div>
 
+        <div class="riverso-filters facto-import-search-wrap">
+            <input type="search" id="facto-import-search" class="regular-text" style="min-width:280px;max-width:420px;"
+                   placeholder="Buscar folio importado o producto (SKU, barras, nombre…)" autocomplete="off">
+            <button type="button" class="button" id="btn-facto-import-search">Buscar</button>
+        </div>
+        <div id="facto-import-search-box" class="facto-import-search-box" style="display:none;">
+            <table class="wp-list-table widefat striped" id="facto-import-search-table">
+                <thead>
+                    <tr>
+                        <th>Folio</th>
+                        <th>Proveedor</th>
+                        <th>Fecha</th>
+                        <th>Estado</th>
+                        <th>Inbox</th>
+                        <th>Total</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="facto-import-search-body">
+                    <tr><td colspan="7">Sin resultados.</td></tr>
+                </tbody>
+            </table>
+            <p class="description" id="facto-import-search-meta" style="margin-top:6px;"></p>
+        </div>
+
         <h3>Intervalos procesados</h3>
         <table class="wp-list-table widefat striped" id="facto-import-runs-table">
             <thead>
@@ -87,6 +112,8 @@ $facto_ready = function_exists('riverso_facto_is_configured') && riverso_facto_i
 }
 .facto-import-filters { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:12px 0; }
 .facto-import-filters label { display:inline-flex; align-items:center; gap:6px; }
+.facto-import-search-wrap { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0 12px; }
+.facto-import-search-box { margin:0 0 16px; max-width:960px; }
 .facto-import-shortcuts { display:inline-flex; gap:4px; flex-wrap:wrap; }
 .facto-import-estimate {
     background:#f0f6fc; border:1px solid #c3d9ed; border-radius:4px;
@@ -408,6 +435,72 @@ $facto_ready = function_exists('riverso_facto_is_configured') && riverso_facto_i
         });
     }
 
+    function fmtMoney(n) {
+        return '$' + Number(n || 0).toLocaleString('es-CL');
+    }
+
+    function inboxStateLabel(state) {
+        const map = {
+            imported: 'Importado',
+            merged: 'Fusionado',
+            duplicate: 'Duplicado'
+        };
+        return map[state] || (state || '—');
+    }
+
+    function searchImportedFolios() {
+        const q = $.trim($('#facto-import-search').val() || '');
+        const $box = $('#facto-import-search-box');
+        const $body = $('#facto-import-search-body');
+        const $meta = $('#facto-import-search-meta');
+        if (q.length < 1) {
+            $box.hide();
+            $body.html('<tr><td colspan="7">Escribí un folio o producto.</td></tr>');
+            $meta.text('');
+            return;
+        }
+        $box.show();
+        $body.html('<tr><td colspan="7">Buscando…</td></tr>');
+        $meta.text('');
+        $.post(ajaxUrl, {
+            action: 'riverso_facto_inbox_search_folios',
+            nonce: nonce,
+            search: q
+        }).done(function(resp) {
+            if (!resp.success) {
+                $body.html('<tr><td colspan="7">' + (resp.data && resp.data.message ? resp.data.message : 'Error') + '</td></tr>');
+                return;
+            }
+            const rows = (resp.data && resp.data.rows) || [];
+            const total = (resp.data && resp.data.total) || 0;
+            if (!rows.length) {
+                $body.html('<tr><td colspan="7">Sin facturas FACTO que coincidan.</td></tr>');
+                $meta.text('');
+                return;
+            }
+            const detailBase = '<?php echo esc_js(admin_url('admin.php?page=riverso-pos-invoices&factura=')); ?>';
+            let html = '';
+            rows.forEach(function(r) {
+                html += '<tr>' +
+                    '<td><strong>' + (r.folio || '—') + '</strong>' +
+                    (r.tipo_dte ? ' <span class="description">DTE ' + r.tipo_dte + '</span>' : '') + '</td>' +
+                    '<td>' + (r.proveedor_nombre || '—') + '</td>' +
+                    '<td>' + (r.fecha_emision || '—') + '</td>' +
+                    '<td>' + (r.estado || '—') + '</td>' +
+                    '<td>' + inboxStateLabel(r.inbox_state) + '</td>' +
+                    '<td>' + fmtMoney(r.monto_total) + '</td>' +
+                    '<td><a class="button button-small" href="' + detailBase + encodeURIComponent(r.id) + '">Ver</a></td>' +
+                    '</tr>';
+            });
+            $body.html(html);
+            $meta.text(total > rows.length
+                ? ('Mostrando ' + rows.length + ' de ' + total + ' coincidencias.')
+                : (total + ' coincidencia' + (total === 1 ? '' : 's') + '.'));
+        }).fail(function() {
+            $body.html('<tr><td colspan="7">Error de red.</td></tr>');
+        });
+    }
+
     window.riversoInitFactoImportPanel = function() {
         if (panelInitialized) {
             loadRuns();
@@ -439,6 +532,14 @@ $facto_ready = function_exists('riverso_facto_is_configured') && riverso_facto_i
                 skipConfirm: true,
                 forceReprocess: true
             });
+        });
+
+        $('#btn-facto-import-search').on('click', searchImportedFolios);
+        $('#facto-import-search').on('keydown', function(e) {
+            if (e.key === 'Enter' || e.keyCode === 13) {
+                e.preventDefault();
+                searchImportedFolios();
+            }
         });
 
         $(document).on('click', '.facto-resume-run', function() {

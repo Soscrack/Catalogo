@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aplica migraciones competencia (phase39 + phase40) vía mysql remoto (sin wp-load.php)."""
+"""Aplica migraciones competencia (phase39 + phase40 + competencia_grupos) vía mysql remoto (sin wp-load.php)."""
 import os
 import re
 import sys
@@ -11,6 +11,7 @@ import paramiko
 ROOT = Path(__file__).resolve().parents[1]
 SQL_PHASE39 = ROOT / "php" / "riverso-pos" / "migrations" / "phase39_competencia_catalog_v1.sql"
 SQL_PHASE40 = ROOT / "php" / "riverso-pos" / "migrations" / "phase40_competencia_precios_historial_v1.sql"
+SQL_PHASE41_COMPETENCIA_GRUPOS = ROOT / "php" / "riverso-pos" / "migrations" / "phase41_competencia_grupos_v1.sql"
 
 
 def load_env():
@@ -168,6 +169,9 @@ def main():
     if not SQL_PHASE39.is_file():
         print(f"No existe {SQL_PHASE39}")
         return 1
+    if not SQL_PHASE41_COMPETENCIA_GRUPOS.is_file():
+        print(f"No existe {SQL_PHASE41_COMPETENCIA_GRUPOS}")
+        return 1
 
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -211,13 +215,26 @@ def main():
         ssh.close()
         return code
 
+    # Phase 41 (competencia_grupos)
+    sql41 = SQL_PHASE41_COMPETENCIA_GRUPOS.read_text(encoding="utf-8").replace("{prefix}", rprefix)
+    with tempfile.NamedTemporaryFile("w", suffix=".sql", delete=False, encoding="utf-8") as tmp:
+        tmp.write(sql41)
+        local41 = tmp.name
+    print("=== phase41_competencia_grupos ===")
+    code = upload_and_run_sql(ssh, mysql_bin, local41, "phase41_competencia_grupos.sql")
+    os.unlink(local41)
+    if code != 0:
+        ssh.close()
+        return code
+
     verify = (
         f"{mysql_bin} -N -e "
         f"\"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{dbname}' "
         f"AND table_name LIKE '{rprefix}competencia_%'; "
         f"SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema='{dbname}' "
         f"AND table_name='{rprefix}competencia_precios' AND index_name='ux_producto_id'; "
-        f"SELECT COUNT(*) FROM `{rprefix}competencia_precios_historial`;\""
+        # Evitar backticks: en el shell se interpretan como command substitution.
+        f"SELECT COUNT(*) FROM {rprefix}competencia_precios_historial;\""
     )
     code, out, err = run(ssh, verify)
     print(f"Verify (tablas / ux_producto_id / hist_rows):\n{out.strip()}")

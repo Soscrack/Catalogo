@@ -14,330 +14,101 @@ class Riverso_POS_Admin_Menu {
      */
     public function __construct() {
         add_action('admin_menu', [$this, 'register_menus']);
+        add_action('admin_footer', [$this, 'nav_label_script']);
     }
     
     /**
-     * Registra los menús del plugin
+     * Registra los menús del plugin desde el registry unificado.
      */
     public function register_menus() {
-        // Menú principal
+        if (!class_exists('Riverso_POS_Nav_Registry')) {
+            require_once RIVERSO_POS_PLUGIN_DIR . 'core/permissions/class-nav-registry.php';
+        }
+
+        $top_cap = Riverso_POS_Nav_Registry::get_admin_top_capability();
+
         add_menu_page(
             __('Riverso POS', 'riverso-pos'),
             __('Riverso POS', 'riverso-pos'),
-            'riverso_view_products',
+            $top_cap,
             'riverso-pos',
             [$this, 'render_dashboard'],
             'dashicons-store',
             30
         );
-        
-        // Dashboard (mismo que principal)
-        add_submenu_page(
-            'riverso-pos',
-            __('Dashboard', 'riverso-pos'),
-            __('Dashboard', 'riverso-pos'),
-            'riverso_view_products',
-            'riverso-pos',
-            [$this, 'render_dashboard']
-        );
-        
-        // Facturas
-        add_submenu_page(
-            'riverso-pos',
-            __('Facturas', 'riverso-pos'),
-            __('Facturas', 'riverso-pos'),
-            'riverso_view_invoices',
-            'riverso-pos-invoices',
-            [$this, 'render_invoices']
-        );
-        
-        // Recepción de Mercadería
-        add_submenu_page(
-            'riverso-pos',
-            __('Recepción', 'riverso-pos'),
-            __('Recepción', 'riverso-pos'),
-            'riverso_receive_items',
-            'riverso-pos-reception',
-            [$this, 'render_reception']
-        );
-        
-        // Códigos
-        add_submenu_page(
-            'riverso-pos',
-            __('Códigos', 'riverso-pos'),
-            __('Códigos', 'riverso-pos'),
-            'riverso_manage_codes',
-            'riverso-pos-codes',
-            [$this, 'render_codes']
-        );
 
-        // Catálogo Canónico
-        add_submenu_page(
-            'riverso-pos',
-            __('Catálogo Canónico', 'riverso-pos'),
-            __('Catálogo Canónico', 'riverso-pos'),
-            'riverso_manage_codes',
-            'riverso-pos-domain',
-            [$this, 'render_domain']
-        );
+        // Quitar el duplicado automático para conservar el orden de categorías.
+        remove_submenu_page('riverso-pos', 'riverso-pos');
 
-        add_submenu_page(
-            'riverso-pos',
-            __('Salud del catálogo', 'riverso-pos'),
-            __('Salud del catálogo', 'riverso-pos'),
-            'riverso_manage_codes',
-            'riverso-pos-catalog-health',
-            [$this, 'render_catalog_health']
-        );
+        $grouped = Riverso_POS_Nav_Registry::get_grouped('admin');
 
-        // Productos
-        add_submenu_page(
-            'riverso-pos',
-            __('Productos', 'riverso-pos'),
-            __('Productos', 'riverso-pos'),
-            'riverso_view_products',
-            'riverso-pos-products',
-            [$this, 'render_products']
-        );
-        
-        // Categorías y Familias
-        add_submenu_page(
-            'riverso-pos',
-            __('Categorías y Familias', 'riverso-pos'),
-            __('Categorías y Familias', 'riverso-pos'),
-            'riverso_manage_products',
-            'riverso-pos-categories',
-            [$this, 'render_categories']
-        );
-        
-        // Tareas
-        add_submenu_page(
-            'riverso-pos',
-            __('Tareas', 'riverso-pos'),
-            __('Tareas', 'riverso-pos'),
-            'riverso_view_tasks',
-            'riverso-pos-tasks',
-            [$this, 'render_tasks']
-        );
-        
-        // Ubicaciones
-        add_submenu_page(
-            'riverso-pos',
-            __('Bodega', 'riverso-pos'),
-            __('Bodega', 'riverso-pos'),
-            'riverso_view_stock',
-            'riverso-pos-warehouse',
-            [$this, 'render_warehouse']
-        );
-        
-        // Proveedores
-        add_submenu_page(
-            'riverso-pos',
-            __('Proveedores', 'riverso-pos'),
-            __('Proveedores', 'riverso-pos'),
-            'riverso_view_suppliers',
-            'riverso-pos-suppliers',
-            [$this, 'render_suppliers']
-        );
-        
-        // Cotizaciones Recibidas
-        add_submenu_page(
-            'riverso-pos',
-            __('Cotizaciones Recibidas', 'riverso-pos'),
-            __('Cotizaciones Recibidas', 'riverso-pos'),
-            'riverso_view_invoices',
-            'riverso-pos-received-quotes',
-            [$this, 'render_received_quotes']
-        );
-        
-        // Auditoría
-        add_submenu_page(
-            'riverso-pos',
-            __('Auditoría', 'riverso-pos'),
-            __('Auditoría', 'riverso-pos'),
-            'riverso_view_audit',
-            'riverso-pos-audit',
-            [$this, 'render_audit']
-        );
-        
-        // Empleados
-        add_submenu_page(
-            'riverso-pos',
-            __('Empleados', 'riverso-pos'),
-            __('Empleados', 'riverso-pos'),
-            'riverso_manage_users',
-            'riverso-pos-employees',
-            [$this, 'render_employees']
-        );
-        
-        // Historial de Costos
-        add_submenu_page(
-            'riverso-pos',
-            __('Historial de Costos', 'riverso-pos'),
-            __('Historial de Costos', 'riverso-pos'),
-            'riverso_view_costs',
-            'riverso-pos-costs',
-            [$this, 'render_costs']
-        );
+        foreach ($grouped as $group_id => $group) {
+            $first = $group['items'][0] ?? null;
+            $header_cap = $top_cap;
+            if ($first) {
+                $header_cap = $first['admin_capability']
+                    ?? $first['capability']
+                    ?? $top_cap;
+            }
 
-        // Precios
-        add_submenu_page(
-            'riverso-pos',
-            __('Precios', 'riverso-pos'),
-            __('💲 Precios', 'riverso-pos'),
-            'riverso_view_prices',
-            'riverso-pos-pricing',
-            [$this, 'render_pricing']
-        );
+            // Cabecera de sección (no navegable)
+            add_submenu_page(
+                'riverso-pos',
+                '',
+                '<span class="riverso-nav-label">' . esc_html($group['label']) . '</span>',
+                $header_cap,
+                'riverso-pos-nav-' . $group_id,
+                '__return_null'
+            );
 
-        // Reglas de Precio
-        add_submenu_page(
-            'riverso-pos',
-            __('Reglas de Precio', 'riverso-pos'),
-            __('Reglas de Precio', 'riverso-pos'),
-            'riverso_manage_prices',
-            'riverso-pos-price-rules',
-            [$this, 'render_price_rules']
-        );
+            foreach ($group['items'] as $item) {
+                $page = $item['admin_page'] ?? null;
+                $callback_name = $item['admin_callback'] ?? null;
+                if (!$page || !$callback_name || !method_exists($this, $callback_name)) {
+                    continue;
+                }
 
-        // Publicación WooCommerce
-        add_submenu_page(
-            'riverso-pos',
-            __('Publicación', 'riverso-pos'),
-            __('Publicación', 'riverso-pos'),
-            'riverso_review_products',
-            'riverso-pos-publish',
-            [$this, 'render_publish']
-        );
+                $cap = $item['admin_capability']
+                    ?? $item['capability']
+                    ?? $top_cap;
 
-        // Manufactura [WIP]
-        add_submenu_page(
-            'riverso-pos',
-            __('Manufactura', 'riverso-pos'),
-            __('Manufactura [WIP]', 'riverso-pos'),
-            'riverso_manage_manufacturing',
-            'riverso-pos-manufacturing',
-            [$this, 'render_manufacturing']
-        );
+                $menu_label = $item['menu_label'] ?? $item['label'];
 
-        // Embolsado (redirección a Manufactura)
-        add_submenu_page(
-            'riverso-pos',
-            __('Embolsado', 'riverso-pos'),
-            __('Embolsado', 'riverso-pos'),
-            'riverso_manage_packaging',
-            'riverso-pos-packaging',
-            [$this, 'render_packaging']
-        );
-        
-        // Códigos de Barra
-        add_submenu_page(
-            'riverso-pos',
-            __('Códigos de Barra', 'riverso-pos'),
-            __('Códigos de Barra', 'riverso-pos'),
-            'riverso_manage_products',
-            'riverso-pos-barcodes',
-            [$this, 'render_barcodes']
-        );
+                add_submenu_page(
+                    'riverso-pos',
+                    $item['label'],
+                    $menu_label,
+                    $cap,
+                    $page,
+                    [$this, $callback_name]
+                );
+            }
+        }
+    }
 
-        // Impresiones
-        add_submenu_page(
-            'riverso-pos',
-            __('Impresiones', 'riverso-pos'),
-            __('Impresiones', 'riverso-pos'),
-            'riverso_view_print_orders',
-            'riverso-pos-print-orders',
-            [$this, 'render_print_orders']
-        );
-
-        // Tienda Local
-        add_submenu_page(
-            'riverso-pos',
-            __('Tienda Local', 'riverso-pos'),
-            __('Tienda Local', 'riverso-pos'),
-            'riverso_view_products',
-            'riverso-pos-tienda-local',
-            [$this, 'render_tienda_local']
-        );
-        
-        // Cotizaciones a Clientes
-        add_submenu_page(
-            'riverso-pos',
-            __('Cotizaciones a Clientes', 'riverso-pos'),
-            __('Cotizaciones a Clientes', 'riverso-pos'),
-            'riverso_view_quotes',
-            'riverso-pos-customer-quotes',
-            [$this, 'render_customer_quotes']
-        );
-        
-        // POS (Punto de Venta)
-        add_submenu_page(
-            'riverso-pos',
-            __('Punto de Venta', 'riverso-pos'),
-            __('🛒 Punto de Venta', 'riverso-pos'),
-            'riverso_use_pos',
-            'riverso-pos-pos',
-            [$this, 'render_pos']
-        );
-        
-        // Reportes
-        add_submenu_page(
-            'riverso-pos',
-            __('Reportes', 'riverso-pos'),
-            __('📊 Reportes', 'riverso-pos'),
-            'riverso_view_reports',
-            'riverso-pos-reports',
-            [$this, 'render_reports']
-        );
-        
-        // Export FACTO
-        add_submenu_page(
-            'riverso-pos',
-            __('Competencia', 'riverso-pos'),
-            __('Competencia', 'riverso-pos'),
-            'riverso_manage_competencia',
-            'riverso-pos-competencia',
-            [$this, 'render_competencia']
-        );
-
-        // Configuración
-        add_submenu_page(
-            'riverso-pos',
-            __('Export FACTO', 'riverso-pos'),
-            __('Export FACTO', 'riverso-pos'),
-            'riverso_export_facto',
-            'riverso-pos-facto-export',
-            [$this, 'render_facto_export']
-        );
-
-        add_submenu_page(
-            'riverso-pos',
-            __('Export TPV', 'riverso-pos'),
-            __('Export TPV', 'riverso-pos'),
-            'riverso_export_facto',
-            'riverso-pos-tpv-export',
-            [$this, 'render_tpv_export']
-        );
-
-        // Configuración
-        add_submenu_page(
-            'riverso-pos',
-            __('Configuración', 'riverso-pos'),
-            __('Configuración', 'riverso-pos'),
-            'riverso_manage_settings',
-            'riverso-pos-settings',
-            [$this, 'render_settings']
-        );
-        
-        // Permisos - visible para admin WP o empleados con riverso_manage_permissions
-        add_submenu_page(
-            'riverso-pos',
-            __('Permisos', 'riverso-pos'),
-            __('🔐 Permisos', 'riverso-pos'),
-            'riverso_manage_permissions',
-            'riverso-pos-permissions',
-            [$this, 'render_permissions']
-        );
+    /**
+     * Anula clicks en cabeceras de categoría del menú admin.
+     */
+    public function nav_label_script() {
+        ?>
+        <script>
+        (function () {
+            document.querySelectorAll('#adminmenu .riverso-nav-label').forEach(function (label) {
+                var link = label.closest('a');
+                if (!link) return;
+                link.setAttribute('href', '#');
+                link.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+                var li = link.closest('li');
+                if (li) {
+                    li.classList.add('riverso-nav-label-item');
+                }
+            });
+        })();
+        </script>
+        <?php
     }
     
     /**
@@ -366,6 +137,17 @@ class Riverso_POS_Admin_Menu {
      */
     public function render_codes() {
         $this->render_page('codes');
+    }
+
+    /**
+     * Renderiza la página de mapeo manual (Proveedor + Código → SKU).
+     */
+    public function render_manual_mapping() {
+        if (!class_exists('Riverso_Manual_Mapping_Module')) {
+            require_once RIVERSO_POS_PLUGIN_DIR . 'modules/codes/class-manual-mapping-module.php';
+        }
+        Riverso_Manual_Mapping_Module::get_instance();
+        $this->render_page('manual-mapping');
     }
 
     /**
@@ -497,7 +279,16 @@ class Riverso_POS_Admin_Menu {
      */
     public function render_pricing() {
         require_once RIVERSO_POS_PLUGIN_DIR . 'modules/pricing/class-pricing-module.php';
-        $this->render_page('pricing');
+        $lookup = RIVERSO_POS_PLUGIN_DIR . 'modules/pricing/class-price-lookup-service.php';
+        if (file_exists($lookup)) {
+            require_once $lookup;
+        }
+        $hist = RIVERSO_POS_PLUGIN_DIR . 'modules/pricing/class-price-history-module.php';
+        if (file_exists($hist)) {
+            require_once $hist;
+            Riverso_Price_History_Module::get_instance();
+        }
+        $this->render_page('price-history');
     }
 
     /**

@@ -370,6 +370,15 @@ PROMPT;
                 'codigos'             => [],
                 '_confianza'          => (float) ($item['confianza'] ?? 0),
             ];
+            $raw_tipo = strtolower(trim((string) ($item['item_tipo'] ?? '')));
+            if ($raw_tipo === 'flete') {
+                $raw_tipo = 'envio';
+            }
+            if (in_array($raw_tipo, ['producto', 'gasto', 'envio'], true)) {
+                $factura_item['item_tipo'] = $raw_tipo;
+            } else {
+                $factura_item['item_tipo'] = 'producto';
+            }
             if ($codigo !== '') {
                 $factura_item['codigos'][] = ['tipo' => 'INT1', 'valor' => $codigo];
             }

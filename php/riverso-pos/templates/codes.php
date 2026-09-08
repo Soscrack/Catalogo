@@ -14,6 +14,23 @@ if (!defined('ABSPATH')) {
         Códigos de Proveedor
     </h1>
 
+    <?php
+    if (isset($_GET['from']) && sanitize_key(wp_unslash($_GET['from'])) === 'precio-folio'):
+        $codigo_hint = isset($_GET['codigo']) ? sanitize_text_field(wp_unslash($_GET['codigo'])) : '';
+    ?>
+    <div class="notice notice-info">
+        <p>
+            <strong>Venís de Procesar folios (precios).</strong>
+            <?php if ($codigo_hint !== ''): ?>
+                Buscá o vinculá el código <code><?php echo esc_html($codigo_hint); ?></code> a un SKU local existente.
+            <?php else: ?>
+                Vinculá el código proveedor a un SKU local. Si el producto no existe, crealo primero en el Hub.
+            <?php endif; ?>
+            Al terminar, volvé a Centro de Precios → «Ya resolví — actualizar».
+        </p>
+    </div>
+    <?php endif; ?>
+
     <!-- Stats -->
     <div class="codes-stats">
         <div class="stat-card">

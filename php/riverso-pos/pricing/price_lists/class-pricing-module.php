@@ -5,11 +5,12 @@
  * Motor de precios LOCAL y ONLINE sobre el dominio canónico (producto_base /
  * producto_proveedor / lotes / equivalencias).
  *
- * PRECIO LOCAL:
- *   c_ref = MAX(costo_unitario) entre los lotes de todos los producto_proveedor
- *           del producto_base (agrupando equivalentes del mismo grupo activo).
- *   p_ref = factor_objetivo * c_ref      (1.8 por defecto)
- *   alarma si p_asignado < factor_minimo * c_ref   (1.3 por defecto)
+ * PRECIO LOCAL (explorador):
+ *   c_ref / p_ref / p_asignado se muestran como BRUTO comercial.
+ *   neto = bruto / 1.19 (afecto; 4 decimales). Margen = P bruto / C bruto.
+ *
+ * Persistencia histórica y alertas internas pueden seguir usando bases mixtas;
+ * el Centro de Precios → Buscar usa la convención bruto anterior.
  *
  * PRECIO ONLINE (WooCommerce):
  *   c_ref = costo_unitario del envase/lote específico (sin agrupación).
@@ -32,6 +33,7 @@ class Riverso_Pricing_Module {
     const FACTOR_MINIMO_DEFAULT  = 1.30;
     const FACTOR_OBJETIVO_DEFAULT = 1.80;
     const FACTOR_MAXIMO_DEFAULT  = 3.00;
+    const IVA_FACTOR = 1.19;
 
     public static function get_instance() {
         if (null === self::$instance) {
@@ -78,8 +80,8 @@ class Riverso_Pricing_Module {
             canal VARCHAR(10) NOT NULL DEFAULT 'local',
             woocommerce_variation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
             c_ref DECIMAL(12,4) DEFAULT NULL,
-            p_ref DECIMAL(12,2) DEFAULT NULL,
-            p_asignado DECIMAL(12,2) DEFAULT NULL,
+            p_ref DECIMAL(12,3) DEFAULT NULL,
+            p_asignado DECIMAL(12,3) DEFAULT NULL,
             factor_minimo DECIMAL(5,2) NOT NULL DEFAULT 1.30,
             factor_objetivo DECIMAL(5,2) NOT NULL DEFAULT 1.80,
             factor_maximo_referencia DECIMAL(5,2) NOT NULL DEFAULT 3.00,
@@ -90,6 +92,7 @@ class Riverso_Pricing_Module {
             aprobado_at DATETIME DEFAULT NULL,
             created_by_system TINYINT(1) NOT NULL DEFAULT 0,
             requires_human_review TINYINT(1) NOT NULL DEFAULT 0,
+            en_uso TINYINT(1) NOT NULL DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
@@ -100,9 +103,81 @@ class Riverso_Pricing_Module {
         ) $charset_collate;";
         dbDelta($sql);
 
+        self::ensure_en_uso_column();
+
         // Tablas del submódulo de reglas de precio.
         require_once __DIR__ . '/class-price-rules-module.php';
         Riverso_Price_Rules_Module::create_tables();
+    }
+
+    /**
+     * Asegura la columna en_uso en instalaciones ya existentes.
+     */
+    public static function ensure_en_uso_column() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'riverso_precios';
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = 'en_uso'",
+            DB_NAME,
+            $table
+        ));
+        if ((int) $exists === 0) {
+            $wpdb->query("ALTER TABLE `{$table}` ADD COLUMN en_uso TINYINT(1) NOT NULL DEFAULT 1");
+        }
+    }
+
+    /**
+     * Persiste un cambio de precio en precio_historial.
+     *
+     * @param array $data
+     * @return int|false
+     */
+    public function record_price_change($data) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $producto_base_id = intval($data['producto_base_id'] ?? 0);
+        if (!$producto_base_id) {
+            return false;
+        }
+
+        $canal = ($data['canal'] ?? self::CANAL_LOCAL) === self::CANAL_ONLINE
+            ? self::CANAL_ONLINE
+            : self::CANAL_LOCAL;
+        $c_ref = isset($data['c_ref']) && $data['c_ref'] !== null && $data['c_ref'] !== ''
+            ? (float) $data['c_ref']
+            : null;
+        $nuevo = isset($data['p_asignado_nuevo']) && $data['p_asignado_nuevo'] !== null && $data['p_asignado_nuevo'] !== ''
+            ? (float) $data['p_asignado_nuevo']
+            : null;
+        $margen = ($nuevo !== null && $c_ref !== null) ? round($nuevo - $c_ref, 3) : null;
+
+        $ok = $wpdb->insert(
+            "{$prefix}precio_historial",
+            [
+                'producto_base_id' => $producto_base_id,
+                'canal' => $canal,
+                'woocommerce_variation_id' => intval($data['woocommerce_variation_id'] ?? 0),
+                'precio_sugerido' => isset($data['precio_sugerido']) ? $data['precio_sugerido'] : null,
+                'precio_aprobado' => isset($data['precio_aprobado']) ? $data['precio_aprobado'] : null,
+                'precio_online' => $canal === self::CANAL_ONLINE ? $nuevo : null,
+                'precio_local' => $canal === self::CANAL_LOCAL ? $nuevo : null,
+                'c_ref' => $c_ref,
+                'p_asignado_anterior' => isset($data['p_asignado_anterior']) && $data['p_asignado_anterior'] !== ''
+                    ? (float) $data['p_asignado_anterior']
+                    : null,
+                'p_asignado_nuevo' => $nuevo,
+                'margen_unitario' => $margen,
+                'source_type' => sanitize_key($data['source_type'] ?? 'manual'),
+                'source_document_id' => !empty($data['source_document_id']) ? intval($data['source_document_id']) : null,
+                'notas' => isset($data['notas']) ? sanitize_textarea_field($data['notas']) : null,
+                'usuario_id' => intval($data['usuario_id'] ?? get_current_user_id()),
+            ],
+            ['%d', '%s', '%d', '%f', '%f', '%f', '%f', '%f', '%f', '%f', '%f', '%s', '%d', '%s', '%d']
+        );
+
+        return $ok ? (int) $wpdb->insert_id : false;
     }
 
     /* ===================== Cálculo de costo de referencia ===================== */
@@ -238,6 +313,109 @@ class Riverso_Pricing_Module {
         return $cost !== null ? (float) $cost : null;
     }
 
+    /**
+     * @param mixed $iva_tipo
+     * @return string afecto|exento
+     */
+    public static function normalize_iva_tipo($iva_tipo) {
+        $iva_tipo = strtolower(trim((string) $iva_tipo));
+        return $iva_tipo === 'exento' ? 'exento' : 'afecto';
+    }
+
+    /**
+     * Precio de venta neto a partir del bruto comercial (p_asignado / TPV precio).
+     *
+     * @param float|int|string|null $bruto
+     * @param string                $iva_tipo
+     * @return float|null
+     */
+    public static function net_from_gross($bruto, $iva_tipo = 'afecto') {
+        if ($bruto === null || $bruto === '') {
+            return null;
+        }
+        $bruto = (float) $bruto;
+        if (self::normalize_iva_tipo($iva_tipo) === 'exento') {
+            return round($bruto, 4);
+        }
+        return round($bruto / self::IVA_FACTOR, 4);
+    }
+
+    /**
+     * Bruto a partir de neto. En el explorador de precios los montos de
+     * referencia (c_ref, p_ref, p_asignado) se tratan como BRUTO comercial;
+     * esta helper queda para conversiones puntuales.
+     *
+     * @param float|int|string|null $neto
+     * @param string                $iva_tipo
+     * @return float|null
+     */
+    public static function gross_from_net($neto, $iva_tipo = 'afecto') {
+        if ($neto === null || $neto === '') {
+            return null;
+        }
+        $neto = (float) $neto;
+        if (self::normalize_iva_tipo($iva_tipo) === 'exento') {
+            return round($neto, 4);
+        }
+        return round($neto * self::IVA_FACTOR, 4);
+    }
+
+    /**
+     * Etiqueta humana para source_type de precio_historial / origen inferido.
+     *
+     * @param string $key
+     * @return string
+     */
+    public static function source_type_label($key) {
+        $key = sanitize_key((string) $key);
+        $map = [
+            'manual'     => 'Manual',
+            'folio'      => 'Revisión de folio',
+            'recalc'     => 'Costo',
+            'import'     => 'TPV',
+            'legacy'     => 'Legacy',
+            'costo'      => 'Costo',
+            'copy_local' => 'Copia local',
+            'system'     => 'Sistema',
+            'tpv'        => 'TPV',
+        ];
+        return $map[$key] ?? ($key !== '' ? $key : '—');
+    }
+
+    /**
+     * @param int $producto_base_id
+     * @return string afecto|exento
+     */
+    public function get_iva_tipo_for_product($producto_base_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $tipo = $wpdb->get_var($wpdb->prepare(
+            "SELECT facto_iva_tipo FROM {$prefix}producto_base WHERE id = %d",
+            intval($producto_base_id)
+        ));
+        return self::normalize_iva_tipo($tipo);
+    }
+
+    /**
+     * Alerta si el neto de venta queda bajo factor_minimo × c_ref (ambos netos).
+     *
+     * @param float|null $p_asignado_bruto
+     * @param float|null $c_ref_neto
+     * @param float      $factor_minimo
+     * @param string     $iva_tipo
+     * @return int 0|1
+     */
+    public static function is_margin_alert($p_asignado_bruto, $c_ref_neto, $factor_minimo, $iva_tipo = 'afecto') {
+        if ($p_asignado_bruto === null || $c_ref_neto === null) {
+            return 0;
+        }
+        $neto = self::net_from_gross($p_asignado_bruto, $iva_tipo);
+        if ($neto === null) {
+            return 0;
+        }
+        return ($neto < ((float) $factor_minimo * (float) $c_ref_neto)) ? 1 : 0;
+    }
+
     /* ===================== Recálculo y persistencia ===================== */
 
     /**
@@ -279,10 +457,8 @@ class Riverso_Pricing_Module {
         $p_ref = ($c_ref !== null) ? round($c_ref * $factor_objetivo, 2) : null;
 
         $p_asignado = $existing ? ($existing['p_asignado'] !== null ? (float) $existing['p_asignado'] : null) : null;
-        $alerta = 0;
-        if ($p_asignado !== null && $c_ref !== null && $p_asignado < ($factor_minimo * $c_ref)) {
-            $alerta = 1;
-        }
+        $iva_tipo = $this->get_iva_tipo_for_product($producto_base_id);
+        $alerta = self::is_margin_alert($p_asignado, $c_ref, $factor_minimo, $iva_tipo);
 
         if ($existing) {
             $wpdb->update(
@@ -297,7 +473,22 @@ class Riverso_Pricing_Module {
                 ['%d']
             );
             $id = (int) $existing['id'];
+
+            $old_c_ref = $existing['c_ref'] !== null ? (float) $existing['c_ref'] : null;
+            if ($old_c_ref !== $c_ref) {
+                $this->record_price_change([
+                    'producto_base_id' => $producto_base_id,
+                    'canal' => $canal,
+                    'woocommerce_variation_id' => $woocommerce_variation_id,
+                    'c_ref' => $c_ref,
+                    'precio_sugerido' => $p_ref,
+                    'p_asignado_anterior' => $p_asignado,
+                    'p_asignado_nuevo' => $p_asignado,
+                    'source_type' => 'recalc',
+                ]);
+            }
         } else {
+            $en_uso_default = $canal === self::CANAL_ONLINE ? 0 : 1;
             $wpdb->insert(
                 "{$prefix}precios",
                 [
@@ -314,8 +505,9 @@ class Riverso_Pricing_Module {
                     'alerta_margen' => $alerta,
                     'created_by_system' => 1,
                     'requires_human_review' => 1,
+                    'en_uso' => $en_uso_default,
                 ],
-                ['%d', '%s', '%d', '%f', '%f', '%s', '%f', '%f', '%f', '%s', '%d', '%d', '%d']
+                ['%d', '%s', '%d', '%f', '%f', '%s', '%f', '%f', '%f', '%s', '%d', '%d', '%d', '%d']
             );
             $id = (int) $wpdb->insert_id;
 
@@ -349,9 +541,10 @@ class Riverso_Pricing_Module {
      *
      * @param int   $precio_id
      * @param float $p_asignado
+     * @param array $meta source_type, notas, en_uso, source_document_id
      * @return array|WP_Error
      */
-    public function set_assigned_price($precio_id, $p_asignado) {
+    public function set_assigned_price($precio_id, $p_asignado, $meta = []) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
@@ -364,19 +557,40 @@ class Riverso_Pricing_Module {
         $p_asignado = (float) $p_asignado;
         $c_ref = $row['c_ref'] !== null ? (float) $row['c_ref'] : null;
         $factor_minimo = (float) $row['factor_minimo'];
-        $alerta = ($c_ref !== null && $p_asignado < ($factor_minimo * $c_ref)) ? 1 : 0;
+        $iva_tipo = $this->get_iva_tipo_for_product((int) $row['producto_base_id']);
+        $alerta = self::is_margin_alert($p_asignado, $c_ref, $factor_minimo, $iva_tipo);
+
+        $update = [
+            'p_asignado' => $p_asignado,
+            'alerta_margen' => $alerta,
+            'estado_aprobacion' => 'pendiente',
+        ];
+        $formats = ['%f', '%d', '%s'];
+        if (array_key_exists('en_uso', $meta)) {
+            $update['en_uso'] = intval($meta['en_uso']) ? 1 : 0;
+            $formats[] = '%d';
+        }
 
         $wpdb->update(
             "{$prefix}precios",
-            [
-                'p_asignado' => $p_asignado,
-                'alerta_margen' => $alerta,
-                'estado_aprobacion' => 'pendiente',
-            ],
+            $update,
             ['id' => $precio_id],
-            ['%f', '%d', '%s'],
+            $formats,
             ['%d']
         );
+
+        $this->record_price_change([
+            'producto_base_id' => $row['producto_base_id'],
+            'canal' => $row['canal'],
+            'woocommerce_variation_id' => $row['woocommerce_variation_id'] ?? 0,
+            'c_ref' => $c_ref,
+            'precio_sugerido' => $row['p_ref'],
+            'p_asignado_anterior' => $row['p_asignado'],
+            'p_asignado_nuevo' => $p_asignado,
+            'source_type' => $meta['source_type'] ?? 'manual',
+            'source_document_id' => $meta['source_document_id'] ?? null,
+            'notas' => $meta['notas'] ?? null,
+        ]);
 
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('price_changed', 'precio', $precio_id, [
@@ -432,6 +646,19 @@ class Riverso_Pricing_Module {
                 'new_value' => ['p_asignado' => $row['p_asignado']],
             ]);
         }
+
+        $this->record_price_change([
+            'producto_base_id' => $row['producto_base_id'],
+            'canal' => $row['canal'],
+            'woocommerce_variation_id' => $row['woocommerce_variation_id'] ?? 0,
+            'c_ref' => $row['c_ref'],
+            'precio_sugerido' => $row['p_ref'],
+            'precio_aprobado' => $row['p_asignado'],
+            'p_asignado_anterior' => $row['p_asignado'],
+            'p_asignado_nuevo' => $row['p_asignado'],
+            'source_type' => 'system',
+            'notas' => 'Aprobación de precio',
+        ]);
 
         return true;
     }
@@ -495,17 +722,129 @@ class Riverso_Pricing_Module {
      * @param int $woocommerce_variation_id ID de variación Woo (0 si es producto simple)
      * @return array|null
      */
-    public function get_online_price($producto_base_id, $woocommerce_variation_id = 0) {
+    public function get_online_price($producto_base_id, $woocommerce_variation_id = 0, $only_in_use = true) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
-        return $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$prefix}precios
-             WHERE producto_base_id = %d AND canal = %s AND woocommerce_variation_id = %d",
+        $sql = "SELECT * FROM {$prefix}precios
+             WHERE producto_base_id = %d AND canal = %s AND woocommerce_variation_id = %d";
+        $params = [
             intval($producto_base_id),
             self::CANAL_ONLINE,
-            intval($woocommerce_variation_id)
-        ), ARRAY_A);
+            intval($woocommerce_variation_id),
+        ];
+        if ($only_in_use) {
+            $sql .= ' AND COALESCE(en_uso, 1) = 1';
+        }
+
+        return $wpdb->get_row($wpdb->prepare($sql, $params), ARRAY_A);
+    }
+
+    /**
+     * Fila online incluyendo precios guardados pero inactivos.
+     */
+    public function get_online_price_row($producto_base_id, $woocommerce_variation_id = 0) {
+        return $this->get_online_price($producto_base_id, $woocommerce_variation_id, false);
+    }
+
+    /**
+     * Copia p_asignado local hacia online y deja el online inactivo (en_uso=0).
+     *
+     * @param int $producto_base_id
+     * @param int $woocommerce_variation_id
+     * @return array|WP_Error
+     */
+    public function copy_local_to_online($producto_base_id, $woocommerce_variation_id = 0) {
+        $local = $this->get_local_price($producto_base_id);
+        if (!$local || $local['p_asignado'] === null) {
+            return new WP_Error('no_local', 'No hay precio local asignado para copiar');
+        }
+
+        $this->recalc_price($producto_base_id, self::CANAL_ONLINE, $woocommerce_variation_id);
+        $online = $this->get_online_price_row($producto_base_id, $woocommerce_variation_id);
+        if (!$online) {
+            return new WP_Error('no_online', 'No se pudo crear el precio online');
+        }
+
+        return $this->set_assigned_price((int) $online['id'], (float) $local['p_asignado'], [
+            'en_uso' => 0,
+            'source_type' => 'copy_local',
+            'notas' => 'Copia de precio local a online (inactivo)',
+        ]);
+    }
+
+    /**
+     * Activa el precio online para uso (POS / Woo). No sincroniza Woo por sí solo.
+     *
+     * @param int  $producto_base_id
+     * @param int  $woocommerce_variation_id
+     * @param bool $sync_woo
+     * @return array|WP_Error
+     */
+    public function set_online_active($producto_base_id, $woocommerce_variation_id = 0, $sync_woo = false) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $row = $this->get_online_price_row($producto_base_id, $woocommerce_variation_id);
+        if (!$row) {
+            return new WP_Error('not_found', 'No hay precio online guardado');
+        }
+        if ($row['p_asignado'] === null) {
+            return new WP_Error('no_assigned', 'Debe asignar un precio online antes de activarlo');
+        }
+
+        $wpdb->update(
+            "{$prefix}precios",
+            ['en_uso' => 1],
+            ['id' => intval($row['id'])],
+            ['%d'],
+            ['%d']
+        );
+
+        $this->record_price_change([
+            'producto_base_id' => $producto_base_id,
+            'canal' => self::CANAL_ONLINE,
+            'woocommerce_variation_id' => $woocommerce_variation_id,
+            'c_ref' => $row['c_ref'],
+            'p_asignado_anterior' => $row['p_asignado'],
+            'p_asignado_nuevo' => $row['p_asignado'],
+            'source_type' => 'system',
+            'notas' => 'Activación de precio online',
+        ]);
+
+        if ($sync_woo) {
+            $sync = $this->sync_online_to_woocommerce($producto_base_id, $woocommerce_variation_id);
+            if (is_wp_error($sync)) {
+                return $sync;
+            }
+        }
+
+        return $this->get_online_price_row($producto_base_id, $woocommerce_variation_id);
+    }
+
+    /**
+     * Upsert de p_asignado por producto/canal (crea fila si no existe).
+     *
+     * @param int    $producto_base_id
+     * @param string $canal
+     * @param float  $p_asignado
+     * @param int    $woocommerce_variation_id
+     * @param array  $meta
+     * @return array|WP_Error
+     */
+    public function upsert_assigned_price($producto_base_id, $canal, $p_asignado, $woocommerce_variation_id = 0, $meta = []) {
+        $canal = $canal === self::CANAL_ONLINE ? self::CANAL_ONLINE : self::CANAL_LOCAL;
+        $this->recalc_price($producto_base_id, $canal, $woocommerce_variation_id);
+        $row = $canal === self::CANAL_ONLINE
+            ? $this->get_online_price_row($producto_base_id, $woocommerce_variation_id)
+            : $this->get_local_price($producto_base_id);
+        if (!$row) {
+            return new WP_Error('not_found', 'No se pudo crear el registro de precio');
+        }
+        if ($canal === self::CANAL_ONLINE && !array_key_exists('en_uso', $meta)) {
+            $meta['en_uso'] = 0;
+        }
+        return $this->set_assigned_price((int) $row['id'], (float) $p_asignado, $meta);
     }
 
     /**
@@ -533,6 +872,10 @@ class Riverso_Pricing_Module {
         $row = $this->recalc_price($producto_base_id, self::CANAL_ONLINE, $woocommerce_variation_id);
         if (is_wp_error($row)) {
             return $row;
+        }
+
+        if (empty($row['en_uso'])) {
+            return new WP_Error('online_inactive', 'El precio online está guardado pero no está en uso. Actívalo antes de sincronizar.');
         }
 
         $precio = null;

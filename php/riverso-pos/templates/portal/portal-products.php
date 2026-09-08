@@ -363,15 +363,16 @@ $can_manage_families = current_user_can('riverso_manage_families');
                 <tr>
                     <th>Precio Local</th>
                     <td>
+                        <p style="margin:0 0 8px;font-size:12px;color:#646970;">Precio asignado <strong>bruto (con IVA)</strong>, costo <strong>neto</strong>. El neto de venta se calcula según IVA (afecto ÷ 1,19).</p>
                         <div id="local-precio-view">-</div>
                         <div id="local-precio-edit" style="display: none; background: #f9f9f9; padding: 10px; border-radius: 4px;">
                             <table style="width: 100%; margin-bottom: 8px;">
                                 <tr>
-                                    <td style="width: 30%;"><strong>Costo Ref:</strong></td>
+                                    <td style="width: 30%;"><strong>Costo Ref (neto):</strong></td>
                                     <td><span id="precio-c-ref">-</span></td>
                                 </tr>
                                 <tr>
-                                    <td><strong>Precio Ref:</strong></td>
+                                    <td><strong>Precio Ref (neto):</strong></td>
                                     <td><span id="precio-p-ref">-</span></td>
                                 </tr>
                                 <tr>
@@ -379,14 +380,16 @@ $can_manage_families = current_user_can('riverso_manage_families');
                                     <td><span id="precio-factor-min">-</span></td>
                                 </tr>
                                 <tr>
-                                    <td><strong>Margen:</strong></td>
-                                    <td><span id="precio-margen" style="color: green;">✓ Correcto</span></td>
+                                    <td><strong>Margen (neto / costo):</strong></td>
+                                    <td><span id="precio-margen">—</span></td>
                                 </tr>
                                 <tr>
                                     <td colspan="2">
-                                        <label><strong>Precio Asignado:</strong></label><br>
+                                        <label><strong>Precio Asignado (bruto):</strong></label><br>
                                         <input type="number" id="precio-p-asignado" step="0.01" min="0" placeholder="0.00">
-                                        <button class="btn-small success" id="precio-save-btn" style="margin-top: 8px;">Guardar precio</button>
+                                        <p style="margin:6px 0 0;font-size:12px;color:#646970;">Neto de venta: <strong id="precio-neto-preview">—</strong></p>
+                                        <button type="button" class="btn-small success" id="precio-save-btn" style="margin-top: 8px;">Guardar precio</button>
+                                        <button type="button" class="btn-small" id="precio-cancel-btn" style="margin-top: 8px; margin-left: 6px;">Cancelar</button>
                                     </td>
                                 </tr>
                             </table>
@@ -752,6 +755,64 @@ $can_manage_families = current_user_can('riverso_manage_families');
         return $('<div>').text(v === null || v === undefined ? '' : v).html();
     }
 
+    const IVA_FACTOR = 1.19;
+    function isIvaAfecto(product) {
+        return ((product && product.facto_iva_tipo) || 'afecto').toLowerCase() !== 'exento';
+    }
+    function splitVenta(bruto, product) {
+        const b = parseFloat(bruto);
+        const afecto = isIvaAfecto(product);
+        if (!b || isNaN(b)) {
+            return { bruto: 0, neto: 0, iva: 0, afecto };
+        }
+        if (!afecto) {
+            return { bruto: b, neto: b, iva: 0, afecto };
+        }
+        const neto = Math.round((b / IVA_FACTOR) * 1000) / 1000;
+        return { bruto: b, neto, iva: Math.round((b - neto) * 1000) / 1000, afecto };
+    }
+    function margenNetoRatio(precioNeto, costeNeto, factorMin) {
+        const p = parseFloat(precioNeto);
+        const c = parseFloat(costeNeto);
+        const min = parseFloat(factorMin) || 1.30;
+        if (!p || !c || c <= 0 || isNaN(p) || isNaN(c)) {
+            return { factor: null, alerta: false, min, label: '—' };
+        }
+        const factor = Math.round((p / c) * 1000) / 1000;
+        return {
+            factor,
+            alerta: factor < min,
+            min,
+            label: formatMoney(p) + ' / ' + formatMoney(c) + ' = ' + factor.toFixed(2) + '×'
+        };
+    }
+    function updatePrecioNetoPreview() {
+        const split = splitVenta($('#precio-p-asignado').val(), currentProduct);
+        const precio = currentProduct && (currentProduct.precio_local || currentProduct.precio);
+        const cRef = precio ? parseFloat(precio.c_ref || precio.costo_ref || 0) : 0;
+        const factorMin = precio ? parseFloat(precio.factor_minimo || precio.factor_min || 1.30) : 1.30;
+        if (!split.bruto) {
+            $('#precio-neto-preview').text('—');
+            $('#precio-margen').html('—');
+            return;
+        }
+        const ratio = margenNetoRatio(split.neto, cRef, factorMin);
+        $('#precio-neto-preview').text(
+            split.afecto
+                ? (formatMoney(split.neto) + '  ·  IVA ' + formatMoney(split.iva))
+                : (formatMoney(split.neto) + ' (exento)')
+        );
+        if (ratio.factor === null) {
+            $('#precio-margen').html('—');
+            return;
+        }
+        $('#precio-margen').html(
+            ratio.alerta
+                ? '<span style="color:red;font-weight:bold;">⚠️ ' + ratio.label + ' (mín. ' + ratio.min.toFixed(2) + '×)</span>'
+                : '<span style="color:green;">✓ ' + ratio.label + ' (mín. ' + ratio.min.toFixed(2) + '×)</span>'
+        );
+    }
+
     /** Woo ID compacto: producto simple, o "padre / variación". */
     function formatWooIds(p) {
         const parent = parseInt(p.woocommerce_product_id || 0, 10);
@@ -781,7 +842,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
     }
 
     function formatMoney(val) {
-        return '$' + parseFloat(val || 0).toFixed(2);
+        return '$' + parseFloat(val || 0).toFixed(3);
     }
 
     function completenessLabel(cat) {
@@ -978,15 +1039,25 @@ $can_manage_families = current_user_can('riverso_manage_families');
             const p_ref = parseFloat(precio.p_ref || precio.precio_ref || 0);
             const p_asignado = parseFloat(precio.p_asignado || precio.precio_asignado || 0);
             const factor_min = parseFloat(precio.factor_minimo || precio.factor_min || 1.30);
-            const alerta = !!precio.alerta_margen;
+            const split = splitVenta(p_asignado, p);
+            const ratio = margenNetoRatio(split.neto, c_ref, factor_min);
+            const alerta = ratio.alerta;
+            const netoTxt = split.afecto
+                ? formatMoney(split.neto) + ' · IVA ' + formatMoney(split.iva)
+                : formatMoney(split.neto) + ' (exento)';
             $('#local-precio-view').html(`
-                <div>Costo Ref: ${formatMoney(c_ref)} | Precio Ref: ${formatMoney(p_ref)} | Asignado: <strong style="${alerta ? 'color:red;' : ''}">${formatMoney(p_asignado)}</strong></div>
+                <div>
+                    <span style="display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:8px;background:#fef3c7;color:#92400e;">bruto</span>
+                    <span style="display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:8px;background:#e7f5ef;color:#007017;margin-left:4px;">neto</span>
+                </div>
+                <div>Costo (neto): ${formatMoney(c_ref)} | Venta (neto): ${netoTxt} | Asignado (bruto): <strong style="${alerta ? 'color:red;' : ''}">${formatMoney(p_asignado)}</strong></div>
+                <div style="${alerta ? 'color:red;font-weight:bold;' : ''}">Margen (neto / costo): ${ratio.label} · mín. ${factor_min.toFixed(2)}×${alerta ? ' ⚠️ bajo mínimo' : ''}</div>
             `);
             $('#precio-c-ref').text(formatMoney(c_ref));
             $('#precio-p-ref').text(formatMoney(p_ref));
             $('#precio-factor-min').text(factor_min.toFixed(2));
-            $('#precio-margen').html(alerta ? '<span style="color:red;">⚠️ Alerta margen</span>' : '<span style="color:green;">✓ Correcto</span>');
             $('#precio-p-asignado').val(p_asignado || 0);
+            updatePrecioNetoPreview();
         } else {
             $('#local-precio-view').html('<span style="color:#999;">Sin precio asignado</span>');
         }
@@ -1223,15 +1294,37 @@ $can_manage_families = current_user_can('riverso_manage_families');
 
     $(document).on('click', '.familia-answer-yes, .task-family-yes', function(e) {
         e.preventDefault();
-        answerFamilyNeed(true).done(refreshProductAfterFamilyAnswer).fail(function() {
+        if (!window.confirm('¿Estás seguro? Vas a marcar que este producto SÍ necesita familia.')) {
+            return;
+        }
+        const $btn = $(this).prop('disabled', true);
+        answerFamilyNeed(true).done(function(r) {
+            refreshProductAfterFamilyAnswer(r);
+            if (!(r && r.success)) {
+                alert((r && r.data && r.data.message) || 'No se pudo guardar la respuesta');
+            }
+        }).fail(function() {
             alert('Error al guardar la respuesta');
+        }).always(function() {
+            $btn.prop('disabled', false);
         });
     });
 
     $(document).on('click', '.familia-answer-no, .task-family-no', function(e) {
         e.preventDefault();
-        answerFamilyNeed(false).done(refreshProductAfterFamilyAnswer).fail(function() {
+        if (!window.confirm('¿Estás seguro? Vas a marcar que este producto NO necesita familia (queda solo).')) {
+            return;
+        }
+        const $btn = $(this).prop('disabled', true);
+        answerFamilyNeed(false).done(function(r) {
+            refreshProductAfterFamilyAnswer(r);
+            if (!(r && r.success)) {
+                alert((r && r.data && r.data.message) || 'No se pudo guardar la respuesta');
+            }
+        }).fail(function() {
             alert('Error al guardar la respuesta');
+        }).always(function() {
+            $btn.prop('disabled', false);
         });
     });
 
@@ -1673,12 +1766,29 @@ $can_manage_families = current_user_can('riverso_manage_families');
             $('#suppliers-list').html('<p style="color: #999;">Sin códigos proveedor asignados</p>');
             return;
         }
-        let html = '<h4>Códigos Asignados</h4><table style="width: 100%; font-size: 13px; border-collapse: collapse;">';
+        const remapCtx = p.code_remap_context || p.barcode_remap_context || {};
+        const showCodeRemap = !!remapCtx.show_wizard;
+        let html = '<h4>Códigos Asignados</h4>';
+        if (showCodeRemap) {
+            html += '<p style="font-size:12px;color:#555;margin:0 0 10px;">Este producto es o puede ser unitario: puedes mapear códigos de catálogo a hijos/envases.</p>';
+        }
+        html += '<table style="width: 100%; font-size: 13px; border-collapse: collapse;">';
         codes.forEach(code => {
             const id = code.id || code.pp_id || 0;
             const nombre = code.proveedor_nombre || code.proveedor || code.nombre || '-';
             const codigo = code.codigo_proveedor || code.codigo || code.supplier_code || '-';
-            html += `<tr style="border-bottom: 1px solid #eee;"><td style="padding: 8px;">${esc(nombre)}</td><td style="padding: 8px;"><code>${esc(codigo)}</code></td></tr>`;
+            const pending = code.needs_confirm
+                ? ' <span style="background:#fff3cd;color:#856404;padding:1px 6px;border-radius:3px;font-size:11px;">Por confirmar</span>'
+                : '';
+            let actions = '';
+            if (showCodeRemap && id) {
+                actions = `<button class="btn-small success code-remap-btn" data-id="${id}">Mapear…</button>`;
+            }
+            html += `<tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 8px;">${esc(nombre)}</td>
+                <td style="padding: 8px;"><code>${esc(codigo)}</code>${pending}</td>
+                <td style="padding: 8px; text-align: right;">${actions}</td>
+            </tr>`;
         });
         html += '</table>';
         $('#suppliers-list').html(html);
@@ -2581,7 +2691,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
     let searchTimeout;
     $('#products-search').on('input', function() {
         clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => loadProducts(0), 300);
+        searchTimeout = setTimeout(() => loadProducts(0), 1300);
     });
     
     $('#products-reload').click(() => loadProducts(0));
@@ -2808,6 +2918,191 @@ $can_manage_families = current_user_can('riverso_manage_families');
         window.portalProducts.rejectLegacyBarcode($(this).data('id'));
     });
 
+
+    window.showCodeRemapModal = function(preview) {
+        $('#code-remap-overlay').remove();
+        const code = preview.code || {};
+        const members = preview.members_caja || [];
+        const suggested = preview.suggested_destino || null;
+        let optionsHtml = '';
+        members.forEach(function(m) {
+            const selected = suggested && Number(suggested.producto_base_id) === Number(m.producto_base_id) ? ' selected' : '';
+            optionsHtml += `<option value="${m.producto_base_id}" data-qty="${m.cantidad_unidades}"${selected}>`
+                + esc(m.canonical_sku || '') + ' · ' + esc(String(m.cantidad_unidades)) + ' u · '
+                + esc(m.nombre_canonico || '') + '</option>';
+        });
+        const canCreate = !!preview.can_create_child;
+        const canAssign = !!preview.can_assign_child;
+        const canMove = !!preview.can_move_child && members.length > 0;
+        const familyNote = preview.family && preview.family.grupo_id
+            ? ('Familia #' + preview.family.grupo_id + (preview.family.unitario && preview.family.unitario.canonical_sku
+                ? (' · unitario ' + preview.family.unitario.canonical_sku) : ''))
+            : 'Sin familia: puedes confirmar aquí (no crear/asignar hijo).';
+        const excludeIds = [Number(currentProduct.id)].concat(members.map(function(m){ return Number(m.producto_base_id); }));
+        const provLabel = code.proveedor_nombre || 'Proveedor';
+
+        const html = `
+<div id="code-remap-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;">
+  <div style="background:#fff;max-width:560px;width:94%;max-height:90vh;overflow:auto;border-radius:6px;padding:18px;box-shadow:0 8px 24px rgba(0,0,0,0.2);">
+    <h3 style="margin:0 0 8px;">Mapear código de catálogo</h3>
+    <p style="margin:0 0 12px;font-size:13px;color:#555;">Código <code>${esc(code.codigo_proveedor || '')}</code>
+      · ${esc(provLabel)}
+      ${code.needs_confirm ? ' <span style="background:#fff3cd;color:#856404;padding:2px 6px;border-radius:3px;font-size:11px;">Por confirmar</span>' : ''}
+      <br><small>${esc(familyNote)}</small></p>
+    <label style="display:block;font-size:13px;margin-bottom:8px;">Acción
+      <select id="code-remap-accion" style="width:100%;margin-top:4px;padding:8px;">
+        <option value="keep_unit">Confirmar aquí (unitario)</option>
+        ${canMove ? '<option value="move_child"' + (suggested ? ' selected' : '') + '>Mover a hijo de la familia</option>' : ''}
+        ${canAssign ? '<option value="assign_child">Asignar hijo (buscar SKU y vincular a familia)</option>' : ''}
+        ${canCreate ? '<option value="create_child">Crear hijo/envase y mapear</option>' : ''}
+      </select>
+    </label>
+    <div id="code-remap-move-wrap" style="display:none;margin-bottom:10px;">
+      <label style="display:block;font-size:13px;">Hijo destino (ya en familia)
+        <select id="code-remap-destino" style="width:100%;margin-top:4px;padding:8px;">${optionsHtml || '<option value="">— Sin hijos —</option>'}</select>
+      </label>
+    </div>
+    <div id="code-remap-assign-wrap" style="display:none;margin-bottom:10px;">
+      <label style="display:block;font-size:13px;">Buscar producto hijo
+        <input type="text" id="code-remap-assign-search" placeholder="SKU o nombre…" style="width:100%;margin-top:4px;padding:8px;">
+      </label>
+      <div id="code-remap-assign-results" style="display:none;border:1px solid #ddd;max-height:160px;overflow:auto;margin-top:4px;font-size:12px;"></div>
+      <div id="code-remap-assign-selected" style="display:none;margin-top:8px;padding:8px;background:#e8f5e9;border-radius:4px;font-size:12px;"></div>
+      <input type="hidden" id="code-remap-assign-id" value="">
+    </div>
+    <div id="code-remap-qty-wrap" style="display:none;margin-bottom:10px;">
+      <label style="display:block;font-size:13px;">Cantidad del envase (&gt; 1)
+        <input type="number" id="code-remap-qty" min="2" step="1" value="${suggested ? Number(suggested.cantidad_unidades) : ''}" style="width:100%;margin-top:4px;padding:8px;">
+      </label>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+      <button type="button" class="btn-small secondary" id="code-remap-cancel">Cancelar</button>
+      <button type="button" class="btn-small success" id="code-remap-confirm">Confirmar</button>
+    </div>
+  </div>
+</div>`;
+        $('body').append(html);
+
+        let assignSearchTimerCode = null;
+        function syncCodeRemapFields() {
+            const accion = $('#code-remap-accion').val();
+            $('#code-remap-move-wrap').toggle(accion === 'move_child');
+            $('#code-remap-assign-wrap').toggle(accion === 'assign_child');
+            $('#code-remap-qty-wrap').toggle(
+                accion === 'create_child' || accion === 'move_child' || accion === 'assign_child'
+            );
+            if (accion === 'move_child') {
+                const $opt = $('#code-remap-destino option:selected');
+                const q = $opt.data('qty');
+                if (q) $('#code-remap-qty').val(q);
+            }
+        }
+        $('#code-remap-accion').on('change', syncCodeRemapFields);
+        $('#code-remap-destino').on('change', syncCodeRemapFields);
+        syncCodeRemapFields();
+
+        $('#code-remap-assign-search').on('input', function() {
+            const q = $(this).val().trim();
+            clearTimeout(assignSearchTimerCode);
+            if (q.length < 2) {
+                $('#code-remap-assign-results').hide().empty();
+                return;
+            }
+            assignSearchTimerCode = setTimeout(function() {
+                post('riverso_products_list', {
+                    search: q,
+                    limit: 12,
+                    status: 'active'
+                }).done(function(r) {
+                    if (!r.success) {
+                        $('#code-remap-assign-results').html('<div style="padding:8px;color:#c62828;">Error de búsqueda</div>').show();
+                        return;
+                    }
+                    const items = (r.data.items || []).filter(function(p) {
+                        return excludeIds.indexOf(Number(p.id)) < 0;
+                    });
+                    if (!items.length) {
+                        $('#code-remap-assign-results').html('<div style="padding:8px;color:#999;">Sin resultados</div>').show();
+                        return;
+                    }
+                    let htmlRes = '';
+                    items.forEach(function(p) {
+                        htmlRes += '<div class="code-remap-assign-option" data-id="' + p.id + '" data-sku="' + esc(p.canonical_sku || '') + '" data-name="' + esc(p.nombre_canonico || '') + '" style="padding:8px;border-bottom:1px solid #eee;cursor:pointer;">'
+                            + '<code>' + esc(p.canonical_sku || '—') + '</code> · ' + esc(p.nombre_canonico || '')
+                            + '</div>';
+                    });
+                    $('#code-remap-assign-results').html(htmlRes).show();
+                });
+            }, 280);
+        });
+        $(document).off('click.codeRemapAssign').on('click.codeRemapAssign', '.code-remap-assign-option', function() {
+            const id = $(this).data('id');
+            const sku = $(this).data('sku');
+            const name = $(this).data('name');
+            $('#code-remap-assign-id').val(id);
+            $('#code-remap-assign-selected').html('Seleccionado: <code>' + esc(String(sku)) + '</code> · ' + esc(String(name))).show();
+            $('#code-remap-assign-results').hide();
+            $('#code-remap-assign-search').val(sku || name);
+        });
+
+        function closeCodeModal() {
+            $(document).off('click.codeRemapAssign');
+            $('#code-remap-overlay').remove();
+        }
+        $('#code-remap-cancel').on('click', closeCodeModal);
+        $('#code-remap-overlay').on('click', function(e) {
+            if (e.target === this) closeCodeModal();
+        });
+        $('#code-remap-confirm').on('click', function() {
+            const accion = $('#code-remap-accion').val();
+            let destino = $('#code-remap-destino').val() || 0;
+            if (accion === 'assign_child') {
+                destino = $('#code-remap-assign-id').val() || 0;
+                if (!destino) {
+                    alert('Busca y selecciona el producto hijo a asignar');
+                    return;
+                }
+            }
+            const $btn = $(this).prop('disabled', true).text('Guardando…');
+            post('riverso_products_code_remap', {
+                pp_id: code.id,
+                product_id: currentProduct.id,
+                accion: accion,
+                destino_producto_base_id: destino,
+                cantidad_pack: parseFloat($('#code-remap-qty').val() || '0') || 0,
+                verify: 1,
+                audit_reason: 'Remapeo código desde portal productos'
+            }).done(function(resp) {
+                if (!resp.success) {
+                    alert('Error: ' + ((resp.data && resp.data.message) ? resp.data.message : 'No se pudo guardar'));
+                    $btn.prop('disabled', false).text('Confirmar');
+                    return;
+                }
+                closeCodeModal();
+                alert(resp.data.message || 'Listo');
+                openDetail(currentProduct.id);
+            }).fail(function() {
+                alert('Error de red');
+                $btn.prop('disabled', false).text('Confirmar');
+            });
+        });
+    };
+
+    $(document).on('click', '.code-remap-btn', function() {
+        const ppId = $(this).data('id');
+        if (!currentProduct || !ppId) return;
+        post('riverso_products_code_remap_preview', {
+            pp_id: ppId,
+            product_id: currentProduct.id
+        }).done(function(r) {
+            if (!r.success) {
+                alert('Error: ' + ((r.data && r.data.message) ? r.data.message : 'No se pudo cargar preview'));
+                return;
+            }
+            window.showCodeRemapModal(r.data.preview || {});
+        });
+    });
+
     $(document).on('click', '.barcode-remap-btn', function() {
         window.portalProducts.openBarcodeRemapWizard($(this).data('id'));
     });
@@ -2959,6 +3254,12 @@ $can_manage_families = current_user_can('riverso_manage_families');
                 }
             });
         });
+        $(document).on('click', '#precio-cancel-btn', function(e) {
+            e.preventDefault();
+            $('#local-precio-edit').hide();
+            $('#local-precio-view').show();
+        });
+        $(document).on('input', '#precio-p-asignado', updatePrecioNetoPreview);
 
         $('#familia-edit-toggle').click(() => {
             $('#local-familia-view').hide();

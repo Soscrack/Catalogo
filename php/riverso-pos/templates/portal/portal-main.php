@@ -113,12 +113,56 @@
             letter-spacing: 1px;
             opacity: 0.5;
         }
-        
+
+        .nav-group {
+            margin-bottom: 4px;
+        }
+
+        .nav-group-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding: 10px 20px 6px;
+            border: 0;
+            background: transparent;
+            color: rgba(255,255,255,0.55);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        .nav-group-toggle:hover {
+            color: rgba(255,255,255,0.85);
+        }
+
+        .nav-group-toggle .dashicons {
+            font-size: 16px;
+            width: 16px;
+            height: 16px;
+            transition: transform 0.2s;
+        }
+
+        .nav-group.is-collapsed .nav-group-toggle .dashicons {
+            transform: rotate(-90deg);
+        }
+
+        .nav-group-items {
+            overflow: hidden;
+        }
+
+        .nav-group.is-collapsed .nav-group-items {
+            display: none;
+        }
+
         .nav-item {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 12px 20px;
+            padding: 10px 20px 10px 28px;
             color: rgba(255,255,255,0.8);
             text-decoration: none;
             transition: all 0.2s;
@@ -783,6 +827,7 @@ $user = wp_get_current_user();
 $user_role = Riverso_POS_Permissions::get_riverso_role();
 $role_name = Riverso_POS_Permissions::ROLES[$user_role]['name'] ?? ($user_role === 'administrator' ? 'Administrador' : 'Usuario');
 $modules = Riverso_POS_Permissions::get_accessible_modules();
+$module_groups = Riverso_POS_Permissions::get_accessible_modules_grouped();
 $current_page = get_query_var('riverso_portal', 'dashboard');
 $catalog_initial_product = 0;
 $catalog_initial_hash = '';
@@ -849,18 +894,42 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
         </div>
         
         <nav class="sidebar-nav">
-            <div class="nav-section">Menú</div>
-            
-            <?php foreach ($modules as $key => $module): ?>
-            <a href="<?php echo home_url('/interno/' . $key . '/'); ?>" 
-               class="nav-item <?php echo $current_page === $key ? 'active' : ''; ?>">
-                <span class="dashicons dashicons-<?php echo esc_attr($module['icon']); ?>"></span>
-                <?php echo esc_html($module['label']); ?>
-            </a>
+            <?php
+            $active_group = '';
+            foreach ($module_groups as $group_id => $group) {
+                foreach ($group['items'] as $item) {
+                    $slug = $item['portal_slug'] ?? $item['id'];
+                    if ($slug === $current_page) {
+                        $active_group = $group_id;
+                        break 2;
+                    }
+                }
+            }
+            foreach ($module_groups as $group_id => $group):
+                $is_open = ($group_id === $active_group) || $active_group === '';
+            ?>
+            <div class="nav-group<?php echo $is_open ? '' : ' is-collapsed'; ?>" data-nav-group="<?php echo esc_attr($group_id); ?>">
+                <button type="button" class="nav-group-toggle" aria-expanded="<?php echo $is_open ? 'true' : 'false'; ?>">
+                    <span><?php echo esc_html($group['label']); ?></span>
+                    <span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>
+                </button>
+                <div class="nav-group-items">
+                    <?php foreach ($group['items'] as $item):
+                        $slug = $item['portal_slug'] ?? $item['id'];
+                        $icon = $item['icon'] ?? 'admin-generic';
+                    ?>
+                    <a href="<?php echo esc_url(home_url('/interno/' . $slug . '/')); ?>"
+                       class="nav-item <?php echo $current_page === $slug ? 'active' : ''; ?>">
+                        <span class="dashicons dashicons-<?php echo esc_attr($icon); ?>"></span>
+                        <?php echo esc_html($item['label']); ?>
+                    </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
             <?php endforeach; ?>
             
             <div class="nav-section" style="margin-top: 20px;">WordPress</div>
-            <a href="<?php echo admin_url(); ?>" class="nav-item" target="_blank">
+            <a href="<?php echo admin_url(); ?>" class="nav-item" style="padding-left: 20px;" target="_blank">
                 <span class="dashicons dashicons-admin-generic"></span>
                 Ir a WP Admin
             </a>
@@ -2498,6 +2567,33 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
         })();
         </script>
         <?php endif; ?>
+
+        <?php elseif ($current_page === 'manual-mapping'): ?>
+        <div class="content-section">
+            <div class="section-header">
+                <h2 class="section-title">Mapeo manual</h2>
+                <a href="<?php echo esc_url(admin_url('admin.php?page=riverso-pos-manual-mapping')); ?>" class="btn btn-secondary" target="_blank" rel="noopener">
+                    WP Admin
+                </a>
+            </div>
+            <div class="section-body">
+                <?php if (!current_user_can('riverso_manage_codes')): ?>
+                    <div class="empty-state">
+                        <span class="dashicons dashicons-lock"></span>
+                        <p>No tienes permiso para gestionar mapeos de códigos.</p>
+                    </div>
+                <?php else: ?>
+                    <?php
+                    if (!class_exists('Riverso_Manual_Mapping_Module')) {
+                        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/codes/class-manual-mapping-module.php';
+                    }
+                    Riverso_Manual_Mapping_Module::get_instance();
+                    $riverso_manual_mapping_context = 'portal';
+                    include RIVERSO_POS_PLUGIN_DIR . 'templates/partials/manual-mapping-app.php';
+                    ?>
+                <?php endif; ?>
+            </div>
+        </div>
         
         <?php elseif ($current_page === 'customer-quotes'): ?>
         <!-- Cotizaciones a Clientes -->
@@ -3060,6 +3156,38 @@ const ajaxUrl = '<?php echo admin_url('admin-ajax.php'); ?>';
         backdrop?.classList.toggle('open', !!open);
     });
     backdrop?.addEventListener('click', closeMenu);
+
+    const storageKey = 'riverso_portal_nav_groups';
+    let saved = {};
+    try {
+        saved = JSON.parse(localStorage.getItem(storageKey) || '{}') || {};
+    } catch (e) {
+        saved = {};
+    }
+
+    document.querySelectorAll('.nav-group[data-nav-group]').forEach((groupEl) => {
+        const id = groupEl.getAttribute('data-nav-group');
+        const btn = groupEl.querySelector('.nav-group-toggle');
+        const hasActive = !!groupEl.querySelector('.nav-item.active');
+
+        if (hasActive) {
+            groupEl.classList.remove('is-collapsed');
+            btn?.setAttribute('aria-expanded', 'true');
+        } else if (Object.prototype.hasOwnProperty.call(saved, id)) {
+            const open = !!saved[id];
+            groupEl.classList.toggle('is-collapsed', !open);
+            btn?.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+
+        btn?.addEventListener('click', () => {
+            const collapsed = groupEl.classList.toggle('is-collapsed');
+            btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            try {
+                saved[id] = !collapsed;
+                localStorage.setItem(storageKey, JSON.stringify(saved));
+            } catch (e) {}
+        });
+    });
 })();
 const canManageBarcodes = <?php echo (current_user_can('riverso_manage_products') || current_user_can('riverso_assign_barcodes')) ? 'true' : 'false'; ?>;
 const canDeleteInvoices = <?php echo (current_user_can('riverso_process_invoices') || current_user_can('riverso_create_invoices')) ? 'true' : 'false'; ?>;
@@ -4055,7 +4183,7 @@ function portalEliminarFactura(id, folio) {
                 html = '<ul>' + (ctx.attributes||[]).map(a => `<li>${esc(a.name)}: ${a.count} opciones</li>`).join('') + '</ul>';
             } else if (ctx.gate === 'human_price_review') {
                 html = '<table style="width:100%;font-size:13px;border-collapse:collapse;"><tr><th>c_ref</th><th>p_asignado</th><th>Margen</th></tr>' +
-                    (ctx.prices||[]).map(p => `<tr><td>${esc(p.c_ref)}</td><td><input type="number" class="price-assign-input" data-id="${p.id}" value="${esc(p.p_asignado||'')}" style="width:90px;"></td><td>${p.margin_pct}%${p.alerta?' ⚠':''}</td></tr>`).join('') +
+                    (ctx.prices||[]).map(p => `<tr><td>${esc(p.c_ref)}</td><td><input type="number" step="0.001" min="0" class="price-assign-input" data-id="${p.id}" value="${esc(p.p_asignado||'')}" style="width:110px;"></td><td>${p.margin_pct}%${p.alerta?' ⚠':''}</td></tr>`).join('') +
                     '</table>';
                 if (ctx.recent_costs?.length) {
                     html += '<p style="margin-top:12px;"><strong>Últimos costos:</strong></p><ul>' +

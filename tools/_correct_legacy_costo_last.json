@@ -1,0 +1,16 @@
+{
+  "dry_run": true,
+  "skipped": true,
+  "reason": "already_fixed",
+  "option": {
+    "fixed_at": "2026-09-06 15:21:27",
+    "updated": 9909,
+    "iva_factor": 1.19,
+    "fuentes": [
+      "productos_xlsx_2026-08",
+      "productos_xlsx_2026-09"
+    ]
+  },
+  "updated": 0,
+  "would_update": 0
+}

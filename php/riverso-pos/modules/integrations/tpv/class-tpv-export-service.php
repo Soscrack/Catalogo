@@ -986,40 +986,93 @@ class Riverso_Tpv_Export_Service {
         $raw = $wpdb->get_results($sql, ARRAY_A) ?: [];
         $map = [];
         foreach ($raw as $item) {
-            $pid = (int) ($item['producto_base_id'] ?? 0);
-            $codigo = trim((string) ($item['codigo'] ?? ''));
-            if ($pid <= 0 || $codigo === '') {
-                continue;
-            }
+            $this->append_tpv_barcode_row(
+                $map,
+                (int) ($item['producto_base_id'] ?? 0),
+                trim((string) ($item['codigo'] ?? '')),
+                $eligible_ids,
+                $family_index,
+                $pending_ids
+            );
+        }
 
-            $fam = $family_index[$pid] ?? null;
-            $is_child = is_array($fam) && !empty($fam['is_child']);
-            if ($is_child) {
-                $unit_id = (int) ($fam['unit_id'] ?? 0);
-                $unit_sku = trim((string) ($fam['unit_sku'] ?? ''));
-                if ($unit_id <= 0 || $unit_sku === '' || !isset($eligible_ids[$unit_id])) {
-                    continue;
-                }
-                $sku = $unit_sku;
-                $dest_id = $unit_id;
-            } else {
-                if (isset($pending_ids[$pid]) || !isset($eligible_ids[$pid])) {
-                    continue;
-                }
-                $sku = $eligible_ids[$pid];
-                $dest_id = $pid;
-            }
-
-            $key = $sku . '|' . $codigo;
-            $map[$key] = [
-                '_producto_base_id' => $dest_id,
-                '_entity_key'       => $key,
-                'SKU'               => $sku,
-                'CodigoBarras'      => $codigo,
-            ];
+        // Códigos de proveedor vinculados → también como CodigoBarras en TPV (no en FACTO).
+        $pp_sql = $wpdb->prepare(
+            "SELECT pp.producto_base_id, pp.codigo_proveedor
+             FROM {$prefix}producto_proveedor pp
+             WHERE pp.activo = 1
+               AND pp.producto_base_id IN ($placeholders)
+               AND pp.codigo_proveedor IS NOT NULL
+               AND TRIM(pp.codigo_proveedor) <> ''
+             ORDER BY pp.codigo_proveedor ASC",
+            ...$owner_ids
+        );
+        $pp_raw = $wpdb->get_results($pp_sql, ARRAY_A) ?: [];
+        foreach ($pp_raw as $item) {
+            $this->append_tpv_barcode_row(
+                $map,
+                (int) ($item['producto_base_id'] ?? 0),
+                trim((string) ($item['codigo_proveedor'] ?? '')),
+                $eligible_ids,
+                $family_index,
+                $pending_ids
+            );
         }
 
         return $map;
+    }
+
+    /**
+     * Resuelve SKU TPV (remap hijo→unitario) y agrega fila barcode si aplica.
+     * Dedupe solo por {SKU}|{CodigoBarras}; colisiones entre SKUs las resuelve el programa TPV.
+     *
+     * @param array<string, array<string, mixed>> $map
+     * @param array<int, string> $eligible_ids
+     * @param array<int, array<string, mixed>> $family_index
+     * @param array<int, true> $pending_ids
+     */
+    private function append_tpv_barcode_row(
+        array &$map,
+        $pid,
+        $codigo,
+        array $eligible_ids,
+        array $family_index,
+        array $pending_ids
+    ) {
+        $pid = (int) $pid;
+        $codigo = trim((string) $codigo);
+        if ($pid <= 0 || $codigo === '') {
+            return;
+        }
+
+        $fam = $family_index[$pid] ?? null;
+        $is_child = is_array($fam) && !empty($fam['is_child']);
+        if ($is_child) {
+            $unit_id = (int) ($fam['unit_id'] ?? 0);
+            $unit_sku = trim((string) ($fam['unit_sku'] ?? ''));
+            if ($unit_id <= 0 || $unit_sku === '' || !isset($eligible_ids[$unit_id])) {
+                return;
+            }
+            $sku = $unit_sku;
+            $dest_id = $unit_id;
+        } else {
+            if (isset($pending_ids[$pid]) || !isset($eligible_ids[$pid])) {
+                return;
+            }
+            $sku = $eligible_ids[$pid];
+            $dest_id = $pid;
+        }
+
+        $key = $sku . '|' . $codigo;
+        if (isset($map[$key])) {
+            return;
+        }
+        $map[$key] = [
+            '_producto_base_id' => $dest_id,
+            '_entity_key'       => $key,
+            'SKU'               => $sku,
+            'CodigoBarras'      => $codigo,
+        ];
     }
 
     /**

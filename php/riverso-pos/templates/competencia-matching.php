@@ -896,6 +896,51 @@ $now_display = current_time('Y-m-d H:i:s');
         </p>
     </div>
 
+<div id="cf-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100000;">
+    <div style="background:#fff;max-width:560px;margin:8vh auto;padding:20px;border-radius:6px;">
+        <h2 style="margin-top:0;" id="cf-edit-title">Editar fuente</h2>
+        <div id="cf-edit-summary" style="margin-bottom:12px;"></div>
+        <div id="cf-edit-form">
+            <p id="cf-edit-refresh-warn" class="description" style="display:none;margin:0 0 12px;color:#8c5e00;">
+                Este precio puede ser sobrescrito por el próximo refresh automático de la fuente.
+            </p>
+            <label style="display:block;margin-bottom:10px;">
+                Precio bruto total
+                <input type="number" id="cf-edit-precio" class="regular-text" style="width:100%;" min="0" step="1">
+            </label>
+            <label style="display:block;margin-bottom:10px;">
+                Unidad (cantidad mínima)
+                <input type="number" id="cf-edit-unidad" class="regular-text" style="width:100%;" min="1" step="1">
+            </label>
+            <p class="description" id="cf-edit-unitario" style="margin:0 0 12px;"></p>
+            <label style="display:block;margin-bottom:10px;">
+                Tipo de match
+                <select id="cf-edit-tipo" class="regular-text" style="width:100%;">
+                    <option value="exacto">Exacto</option>
+                    <option value="exacto_envase">Exacto diferente U de envase</option>
+                    <option value="similar">Similar</option>
+                    <option value="otro">Otro</option>
+                </select>
+            </label>
+        </div>
+        <div id="cf-edit-confirm" style="display:none;margin-bottom:12px;">
+            <p style="margin:0 0 8px;"><strong>¿Estás seguro de guardar estos cambios?</strong></p>
+            <div id="cf-edit-diff" style="background:#f6f7f7;padding:10px 12px;border-left:4px solid #2271b1;"></div>
+        </div>
+        <div id="cf-edit-delete-confirm" style="display:none;margin-bottom:12px;">
+            <p style="margin:0;">¿Estás seguro de eliminar esta fuente? El vínculo dejará de aparecer aquí.</p>
+        </div>
+        <div id="cf-edit-msg" style="display:none;margin-bottom:12px;"></div>
+        <p style="margin:0;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <button type="button" class="button button-primary" id="cf-edit-save">Guardar</button>
+            <button type="button" class="button button-primary" id="cf-edit-confirm-save" style="display:none;">Confirmar cambios</button>
+            <button type="button" class="button" id="cf-edit-cancel">Cancelar</button>
+            <button type="button" class="button" id="cf-edit-delete" style="margin-left:auto;color:#b32d2e;border-color:#b32d2e;">Eliminar</button>
+            <button type="button" class="button button-primary" id="cf-edit-confirm-delete" style="display:none;margin-left:auto;background:#b32d2e;border-color:#b32d2e;">Confirmar eliminación</button>
+        </p>
+    </div>
+</div>
+
 <script>
 (function($) {
     const nonce = <?php echo wp_json_encode($nonce); ?>;
@@ -903,6 +948,8 @@ $now_display = current_time('Y-m-d H:i:s');
     let searchTimer = null;
     let listXhr = null;
     const SEARCH_DEBOUNCE_MS = 800;
+    let editCtx = null;
+    let editMode = 'edit'; // edit | confirm-save | confirm-delete
 
     function esc(s) {
         return $('<div/>').text(s || '').html();
@@ -970,6 +1017,20 @@ $now_display = current_time('Y-m-d H:i:s');
                     ? '<br><code>' + esc(r.codigo_externo.trim()) + '</code>'
                     : '';
                 const actions = [];
+                actions.push(
+                    '<button type="button" class="button cf-edit-btn"' +
+                    ' data-id="' + escAttr(r.producto_competencia_id) + '"' +
+                    ' data-sku="' + escAttr(r.canonical_sku || '') + '"' +
+                    ' data-nombre="' + escAttr(r.nombre_canonico || '') + '"' +
+                    ' data-fuente-slug="' + escAttr(r.fuente_slug || '') + '"' +
+                    ' data-fuente-nombre="' + escAttr(r.fuente_nombre || '') + '"' +
+                    ' data-producto="' + escAttr(r.nombre_competencia || '') + '"' +
+                    ' data-url="' + escAttr(r.url_producto || '') + '"' +
+                    ' data-precio="' + escAttr(r.precio_bruto_total != null ? r.precio_bruto_total : '') + '"' +
+                    ' data-unidad="' + escAttr(r.cantidad_min || 1) + '"' +
+                    ' data-tipo="' + escAttr(r.tipo_match || '') + '"' +
+                    '>Editar</button>'
+                );
                 if (r.url_producto) {
                     actions.push('<a class="button" href="' + escAttr(r.url_producto) + '" target="_blank" rel="noopener noreferrer">Abrir URL</a>');
                 }
@@ -996,6 +1057,119 @@ $now_display = current_time('Y-m-d H:i:s');
         });
     }
 
+    function setEditMsg(text, isError) {
+        if (!text) {
+            $('#cf-edit-msg').hide().empty();
+            return;
+        }
+        $('#cf-edit-msg')
+            .css('color', isError ? '#b32d2e' : '#007017')
+            .html(esc(text))
+            .show();
+    }
+
+    function updateUnitarioHint() {
+        const precio = Number($('#cf-edit-precio').val());
+        const unidad = Math.max(1, parseInt($('#cf-edit-unidad').val(), 10) || 1);
+        if (!precio || precio <= 0) {
+            $('#cf-edit-unitario').text('');
+            return;
+        }
+        $('#cf-edit-unitario').text(fmtMoney(precio / unidad) + ' / u (derivado)');
+    }
+
+    function setEditMode(mode) {
+        editMode = mode;
+        $('#cf-edit-form').toggle(mode === 'edit');
+        $('#cf-edit-confirm').toggle(mode === 'confirm-save');
+        $('#cf-edit-delete-confirm').toggle(mode === 'confirm-delete');
+        $('#cf-edit-save').toggle(mode === 'edit');
+        $('#cf-edit-confirm-save').toggle(mode === 'confirm-save');
+        $('#cf-edit-delete').toggle(mode === 'edit');
+        $('#cf-edit-confirm-delete').toggle(mode === 'confirm-delete');
+        if (mode === 'confirm-save') {
+            $('#cf-edit-title').text('Confirmar cambios');
+        } else if (mode === 'confirm-delete') {
+            $('#cf-edit-title').text('Eliminar fuente');
+        } else {
+            $('#cf-edit-title').text('Editar fuente');
+        }
+    }
+
+    function closeEditModal() {
+        $('#cf-edit-modal').hide();
+        editCtx = null;
+        editMode = 'edit';
+        setEditMsg('');
+        $('#cf-edit-save, #cf-edit-confirm-save, #cf-edit-delete, #cf-edit-confirm-delete').prop('disabled', false);
+    }
+
+    function tipoMatchLabel(tipo) {
+        return ({exacto:'Exacto',exacto_envase:'Exacto diferente U de envase',similar:'Similar',otro:'Otro'}[tipo] || tipo || '—');
+    }
+
+    function openEditModal($btn) {
+        editCtx = {
+            id: parseInt($btn.attr('data-id'), 10) || 0,
+            sku: $btn.attr('data-sku') || '',
+            nombre: $btn.attr('data-nombre') || '',
+            fuenteSlug: ($btn.attr('data-fuente-slug') || '').toLowerCase(),
+            fuenteNombre: $btn.attr('data-fuente-nombre') || '',
+            producto: $btn.attr('data-producto') || '',
+            url: $btn.attr('data-url') || '',
+            precio: Number($btn.attr('data-precio')) || 0,
+            unidad: Math.max(1, parseInt($btn.attr('data-unidad'), 10) || 1),
+            tipo: $btn.attr('data-tipo') || ''
+        };
+        const prodHtml = editCtx.url
+            ? '<a href="' + escAttr(editCtx.url) + '" target="_blank" rel="noopener noreferrer">' + esc(editCtx.producto || editCtx.url) + '</a>'
+            : esc(editCtx.producto || '—');
+        $('#cf-edit-summary').html(
+            '<div><strong>SKU:</strong> <code>' + esc(editCtx.sku || '—') + '</code></div>' +
+            '<div><strong>Local:</strong> ' + esc(editCtx.nombre || '—') + '</div>' +
+            '<div style="margin-top:4px;"><strong>Fuente:</strong> ' + fuenteLabel(editCtx.fuenteSlug, editCtx.fuenteNombre) + '</div>' +
+            '<div style="margin-top:4px;"><strong>Producto:</strong> ' + prodHtml + '</div>'
+        );
+        $('#cf-edit-precio').val(editCtx.precio > 0 ? editCtx.precio : '');
+        $('#cf-edit-unidad').val(editCtx.unidad);
+        const tipoVal = ['exacto','exacto_envase','similar','otro'].indexOf(editCtx.tipo) >= 0 ? editCtx.tipo : 'exacto';
+        $('#cf-edit-tipo').val(tipoVal);
+        $('#cf-edit-refresh-warn').toggle(editCtx.fuenteSlug === 'sande' || editCtx.fuenteSlug === 'dimafi');
+        updateUnitarioHint();
+        setEditMsg('');
+        setEditMode('edit');
+        $('#cf-edit-modal').show();
+    }
+
+    function buildDiffHtml(before, after) {
+        const lines = [];
+        if (before.precio !== after.precio) {
+            lines.push('<div><strong>Precio bruto:</strong> ' + fmtMoney(before.precio) + ' → <strong>' + fmtMoney(after.precio) + '</strong></div>');
+        }
+        if (before.unidad !== after.unidad) {
+            lines.push('<div><strong>Unidad:</strong> ' + esc(String(before.unidad)) + ' → <strong>' + esc(String(after.unidad)) + '</strong></div>');
+        }
+        if (before.tipo !== after.tipo) {
+            lines.push('<div><strong>Tipo:</strong> ' + esc(tipoMatchLabel(before.tipo)) + ' → <strong>' + esc(tipoMatchLabel(after.tipo)) + '</strong></div>');
+        }
+        if (before.precio !== after.precio || before.unidad !== after.unidad) {
+            lines.push('<div class="description" style="margin-top:6px;">Unitario: ' +
+                fmtMoney(before.unitario) + ' / u → <strong>' + fmtMoney(after.unitario) + ' / u</strong></div>');
+        }
+        return lines.join('');
+    }
+
+    function readEditValues() {
+        const precio = Number($('#cf-edit-precio').val());
+        const unidad = Math.max(1, parseInt($('#cf-edit-unidad').val(), 10) || 1);
+        return {
+            precio: precio,
+            unidad: unidad,
+            unitario: (precio > 0 && unidad > 0) ? (precio / unidad) : 0,
+            tipo: $('#cf-edit-tipo').val() || ''
+        };
+    }
+
     $('#cf-fuente').on('change', function() { page = 1; loadList(); });
     $('#cf-refresh-btn').on('click', function() { page = 1; loadList(); });
     $('#cf-prev-btn').on('click', function() { if (page > 1) { page--; loadList(); } });
@@ -1011,6 +1185,106 @@ $now_display = current_time('Y-m-d H:i:s');
             page = 1;
             loadList();
         }
+    });
+
+    $(document).on('click', '.cf-edit-btn', function() {
+        openEditModal($(this));
+    });
+
+    $('#cf-edit-precio, #cf-edit-unidad').on('input change', updateUnitarioHint);
+
+    $('#cf-edit-cancel, #cf-edit-modal').on('click', function(e) {
+        if (e.target !== this) return;
+        if (editMode === 'confirm-save' || editMode === 'confirm-delete') {
+            setEditMode('edit');
+            setEditMsg('');
+            return;
+        }
+        closeEditModal();
+    });
+
+    $('#cf-edit-save').on('click', function() {
+        if (!editCtx) return;
+        const after = readEditValues();
+        if (!(after.precio > 0)) {
+            setEditMsg('El precio total debe ser mayor a 0.', true);
+            return;
+        }
+        if (!after.tipo) {
+            setEditMsg('Debes seleccionar el tipo de match.', true);
+            return;
+        }
+        const before = {
+            precio: editCtx.precio,
+            unidad: editCtx.unidad,
+            unitario: editCtx.precio > 0 ? (editCtx.precio / editCtx.unidad) : 0,
+            tipo: editCtx.tipo || ''
+        };
+        if (after.precio === before.precio && after.unidad === before.unidad && after.tipo === before.tipo) {
+            setEditMsg('No hay cambios que guardar.', false);
+            return;
+        }
+        $('#cf-edit-diff').html(buildDiffHtml(before, after));
+        setEditMsg('');
+        setEditMode('confirm-save');
+    });
+
+    $('#cf-edit-confirm-save').on('click', function() {
+        if (!editCtx) return;
+        const after = readEditValues();
+        const $btn = $(this).prop('disabled', true);
+        setEditMsg('Guardando…', false);
+        $.post(ajaxurl, {
+            action: 'riverso_competencia_update_fuente_precio',
+            nonce,
+            producto_competencia_id: editCtx.id,
+            precio_total: after.precio,
+            unidad: after.unidad,
+            tipo_match: after.tipo
+        }).done(function(res) {
+            if (!res.success) {
+                setEditMsg((res.data && res.data.message) || 'Error al guardar', true);
+                $btn.prop('disabled', false);
+                setEditMode('edit');
+                return;
+            }
+            closeEditModal();
+            loadList();
+        }).fail(function() {
+            setEditMsg('Error de red al guardar', true);
+            $btn.prop('disabled', false);
+            setEditMode('edit');
+        });
+    });
+
+    $('#cf-edit-delete').on('click', function() {
+        if (!editCtx) return;
+        setEditMsg('');
+        setEditMode('confirm-delete');
+    });
+
+    $('#cf-edit-confirm-delete').on('click', function() {
+        if (!editCtx) return;
+        const $btn = $(this).prop('disabled', true);
+        setEditMsg('Eliminando…', false);
+        $.post(ajaxurl, {
+            action: 'riverso_competencia_eliminar_fuente',
+            nonce,
+            producto_competencia_id: editCtx.id
+        }).done(function(res) {
+            if (!res.success) {
+                setEditMsg((res.data && res.data.message) || 'Error al eliminar', true);
+                $btn.prop('disabled', false);
+                setEditMode('edit');
+                return;
+            }
+            closeEditModal();
+            loadList();
+        }).fail(function() {
+            setEditMsg('Error de red al eliminar', true);
+            $btn.prop('disabled', false);
+            setEditMode('edit');
+        });
     });
 
     loadList();

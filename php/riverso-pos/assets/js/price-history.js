@@ -2998,6 +2998,24 @@
         $('#rpf-hybrid-footer').hide().empty();
     }
 
+    function sanitizeSupplierCodeForName(codigoProveedor) {
+        var raw = String(codigoProveedor || '').trim();
+        if (!/^0{5,}/.test(raw)) {
+            return raw;
+        }
+        var stripped = raw.replace(/^0+/, '');
+        return stripped || raw;
+    }
+
+    function suggestedLocalProductName(descripcion, codigoProveedor) {
+        var desc = String(descripcion || '').trim();
+        var code = sanitizeSupplierCodeForName(codigoProveedor);
+        if (desc && code) {
+            return desc + ' (' + code + ')';
+        }
+        return desc || code;
+    }
+
     function closeCreateLocalModal() {
         rpfCreateLocal = null;
         $('#rpf-create-local-modal').hide().attr('aria-hidden', 'true');
@@ -3018,7 +3036,8 @@
             step: 'form',
             item_id: itemId,
             codigo_proveedor: opts.codigo_proveedor || '',
-            nombre: opts.nombre || '',
+            descripcion: opts.nombre || '',
+            nombre: suggestedLocalProductName(opts.nombre, opts.codigo_proveedor),
             folio: inv.folio || '',
             sku: '',
             loadingSku: true
@@ -3065,7 +3084,7 @@
             '<dl class="rpf-create-local-meta">' +
             '<dt>Folio</dt><dd><code>' + esc(rpfCreateLocal.folio || '—') + '</code></dd>' +
             '<dt>Código proveedor</dt><dd><code>' + esc(rpfCreateLocal.codigo_proveedor || '—') + '</code></dd>' +
-            '<dt>Descripción de la fila</dt><dd>' + esc(rpfCreateLocal.nombre || '—') + '</dd>' +
+            '<dt>Descripción de la fila</dt><dd>' + esc(rpfCreateLocal.descripcion || rpfCreateLocal.nombre || '—') + '</dd>' +
             '<dt>SKU local a crear</dt><dd><code id="rpf-create-local-sku-preview">' + esc(skuLabel) + '</code>' +
             ' <span class="description">(numérico, no uses el código proveedor)</span></dd>' +
             '</dl>' +
@@ -3073,7 +3092,7 @@
             '<label for="rpf-create-local-name">Nombre del producto</label>' +
             '<input type="text" id="rpf-create-local-name" class="large-text" ' +
             'value="' + esc(rpfCreateLocal.nombre || '') + '" autocomplete="off">' +
-            '<p class="description">Sugerido desde la descripción de la fila; podés editarlo.</p>' +
+            '<p class="description">Sugerido como descripción + (código proveedor); podés editarlo.</p>' +
             '</div>'
         );
         $('#rpf-create-local-footer').html(

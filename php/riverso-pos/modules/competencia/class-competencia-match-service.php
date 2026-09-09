@@ -1307,6 +1307,126 @@ class Riverso_Competencia_Match_Service {
     }
 
     /**
+     * Actualiza precio y/o tipo_match de un vínculo confirmado (vista Fuentes).
+     *
+     * @param int         $producto_competencia_id
+     * @param float       $precio_bruto_total
+     * @param int         $cantidad_min
+     * @param string|null $tipo_match  Si es null, no se modifica el tipo.
+     * @return array|WP_Error
+     */
+    public static function update_precio_fuente($producto_competencia_id, $precio_bruto_total, $cantidad_min = 1, $tipo_match = null) {
+        global $wpdb;
+        $prefix = self::prefix();
+        $producto_competencia_id = (int) $producto_competencia_id;
+        $cantidad_min = max(1, (int) $cantidad_min);
+        $precio_bruto_total = (float) $precio_bruto_total;
+
+        if ($producto_competencia_id <= 0) {
+            return new WP_Error('invalid_id', 'ID de producto competencia inválido.');
+        }
+        if ($precio_bruto_total <= 0) {
+            return new WP_Error('invalid_precio', 'El precio total debe ser mayor a 0.');
+        }
+        if ($tipo_match !== null && $tipo_match !== '' && !self::is_allowed_tipo_match($tipo_match)) {
+            return new WP_Error('invalid_tipo', 'Tipo de match no válido.');
+        }
+
+        $match = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, estado, tipo_match FROM {$prefix}competencia_match WHERE producto_competencia_id = %d",
+            $producto_competencia_id
+        ), ARRAY_A);
+        if (!$match || ($match['estado'] ?? '') !== 'confirmado') {
+            return new WP_Error('not_linked', 'No hay un vínculo confirmado para este producto.');
+        }
+
+        $prev = $wpdb->get_row($wpdb->prepare(
+            "SELECT precio_bruto_total, precio_bruto_unitario, cantidad_min
+             FROM {$prefix}competencia_precios WHERE producto_id = %d LIMIT 1",
+            $producto_competencia_id
+        ), ARRAY_A);
+
+        $ok = self::upsert_precio($producto_competencia_id, $precio_bruto_total, $cantidad_min);
+        if (!$ok) {
+            return new WP_Error('upsert_failed', 'No se pudo actualizar el precio.');
+        }
+
+        $tipo_before = (string) ($match['tipo_match'] ?? '');
+        $tipo_after = $tipo_before;
+        if ($tipo_match !== null && $tipo_match !== '') {
+            $tipo_after = sanitize_key($tipo_match);
+            if ($tipo_after !== $tipo_before) {
+                $wpdb->update(
+                    "{$prefix}competencia_match",
+                    [
+                        'tipo_match'  => $tipo_after,
+                        'revisado_por' => get_current_user_id(),
+                        'revisado_at'  => current_time('mysql'),
+                        'updated_at'   => current_time('mysql'),
+                    ],
+                    ['id' => (int) $match['id']]
+                );
+            }
+        }
+
+        $bruto_u = round($precio_bruto_total / $cantidad_min, 6);
+
+        return [
+            'producto_competencia_id' => $producto_competencia_id,
+            'match_id'                => (int) $match['id'],
+            'before'                  => [
+                'precio_bruto_total'    => isset($prev['precio_bruto_total']) ? (float) $prev['precio_bruto_total'] : null,
+                'precio_bruto_unitario' => isset($prev['precio_bruto_unitario']) ? (float) $prev['precio_bruto_unitario'] : null,
+                'cantidad_min'          => isset($prev['cantidad_min']) ? (int) $prev['cantidad_min'] : null,
+                'tipo_match'            => $tipo_before,
+            ],
+            'after'                   => [
+                'precio_bruto_total'    => round($precio_bruto_total, 6),
+                'precio_bruto_unitario' => $bruto_u,
+                'cantidad_min'          => $cantidad_min,
+                'tipo_match'            => $tipo_after,
+            ],
+        ];
+    }
+
+    /**
+     * Elimina (rechaza) un vínculo confirmado desde la vista Fuentes.
+     *
+     * @param int    $producto_competencia_id
+     * @param int    $user_id
+     * @param string $nota
+     * @return array|WP_Error
+     */
+    public static function eliminar_fuente($producto_competencia_id, $user_id = 0, $nota = '') {
+        global $wpdb;
+        $prefix = self::prefix();
+        $producto_competencia_id = (int) $producto_competencia_id;
+
+        if ($producto_competencia_id <= 0) {
+            return new WP_Error('invalid_id', 'ID de producto competencia inválido.');
+        }
+
+        $match = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, estado FROM {$prefix}competencia_match WHERE producto_competencia_id = %d",
+            $producto_competencia_id
+        ), ARRAY_A);
+        if (!$match || ($match['estado'] ?? '') !== 'confirmado') {
+            return new WP_Error('not_linked', 'No hay un vínculo confirmado para este producto.');
+        }
+
+        $match_id = self::reject_match(
+            $producto_competencia_id,
+            $user_id > 0 ? $user_id : get_current_user_id(),
+            $nota !== '' ? $nota : 'Eliminado desde Fuentes'
+        );
+
+        return [
+            'producto_competencia_id' => $producto_competencia_id,
+            'match_id'                => (int) $match_id,
+        ];
+    }
+
+    /**
      * Ingreso manual: SKU local + URL + precio → producto competencia + match confirmado.
      *
      * @return array|WP_Error

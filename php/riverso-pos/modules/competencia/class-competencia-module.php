@@ -36,6 +36,8 @@ class Riverso_Competencia_Module {
         add_action('wp_ajax_riverso_competencia_list_skus', [$this, 'ajax_list_skus']);
         add_action('wp_ajax_riverso_competencia_manual_ingreso', [$this, 'ajax_manual_ingreso']);
         add_action('wp_ajax_riverso_competencia_list_fuentes', [$this, 'ajax_list_fuentes']);
+        add_action('wp_ajax_riverso_competencia_update_fuente_precio', [$this, 'ajax_update_fuente_precio']);
+        add_action('wp_ajax_riverso_competencia_eliminar_fuente', [$this, 'ajax_eliminar_fuente']);
         add_action('wp_ajax_riverso_competencia_list_sugerencias', [$this, 'ajax_list_sugerencias']);
         add_action('wp_ajax_riverso_competencia_unit_context', [$this, 'ajax_unit_context']);
     }
@@ -281,6 +283,65 @@ class Riverso_Competencia_Module {
             'page'     => isset($_POST['page']) ? (int) $_POST['page'] : 1,
             'per_page' => isset($_POST['per_page']) ? (int) $_POST['per_page'] : 25,
         ]);
+        wp_send_json_success($result);
+    }
+
+    public function ajax_update_fuente_precio() {
+        $this->guard();
+        $producto_competencia_id = isset($_POST['producto_competencia_id']) ? (int) $_POST['producto_competencia_id'] : 0;
+        $precio_total = isset($_POST['precio_total']) ? (float) wp_unslash($_POST['precio_total']) : 0;
+        $unidad = isset($_POST['unidad']) ? (int) $_POST['unidad'] : 1;
+        $tipo_match = isset($_POST['tipo_match']) ? sanitize_key(wp_unslash($_POST['tipo_match'])) : null;
+
+        $result = Riverso_Competencia_Match_Service::update_precio_fuente(
+            $producto_competencia_id,
+            $precio_total,
+            $unidad,
+            $tipo_match
+        );
+
+        if (is_wp_error($result)) {
+            wp_send_json_error([
+                'message' => $result->get_error_message(),
+                'code'    => $result->get_error_code(),
+            ], 400);
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('competencia.update_fuente_precio', 'competencia', $producto_competencia_id, [
+                'actor_type' => 'user',
+                'details'    => $result,
+            ]);
+        }
+
+        wp_send_json_success($result);
+    }
+
+    public function ajax_eliminar_fuente() {
+        $this->guard();
+        $producto_competencia_id = isset($_POST['producto_competencia_id']) ? (int) $_POST['producto_competencia_id'] : 0;
+        $nota = isset($_POST['nota']) ? sanitize_textarea_field(wp_unslash($_POST['nota'])) : '';
+
+        $result = Riverso_Competencia_Match_Service::eliminar_fuente(
+            $producto_competencia_id,
+            get_current_user_id(),
+            $nota
+        );
+
+        if (is_wp_error($result)) {
+            wp_send_json_error([
+                'message' => $result->get_error_message(),
+                'code'    => $result->get_error_code(),
+            ], 400);
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('competencia.eliminar_fuente', 'competencia', $producto_competencia_id, [
+                'actor_type' => 'user',
+                'details'    => $result,
+            ]);
+        }
+
         wp_send_json_success($result);
     }
 

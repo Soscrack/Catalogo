@@ -16,6 +16,10 @@ if (!defined('ABSPATH')) {
                 <button type="button" class="button rpe-view-btn is-active" data-view="bruto">Bruto</button>
                 <button type="button" class="button rpe-view-btn" data-view="neto">Neto</button>
             </div>
+            <div class="rpe-view-toggle rpe-cost-toggle" role="group" aria-label="Base de costo" style="margin-left:8px;">
+                <button type="button" class="button rpe-cost-btn" data-cost="referencia" title="Precio lista / antes de D/R">Costo referencia</button>
+                <button type="button" class="button rpe-cost-btn is-active" data-cost="tras_dr" title="Tras descuento y recargo">Costo con Descuento/Recargo</button>
+            </div>
         </div>
         <div class="rce-search-row">
             <input type="text" id="rpe-search-input" class="rce-search-input"

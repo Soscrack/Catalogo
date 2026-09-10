@@ -123,6 +123,7 @@ function riverso_get_task_types() {
         'confirmar_barcode_legacy' => ['label' => 'Confirmar código legacy', 'icon' => 'warning', 'categoria' => 'productos'],
         'confirmar_codigo_proveedor' => ['label' => 'Confirmar código proveedor (legacy)', 'icon' => 'warning', 'categoria' => 'productos'],
         'confirmar_tipo_documento' => ['label' => 'Confirmar tipo de documento', 'icon' => 'media-text', 'categoria' => 'administracion'],
+        'ingresar_flete' => ['label' => 'Ingresar flete', 'icon' => 'car', 'categoria' => 'administracion'],
         'revisar_relacion' => ['label' => 'Revisar relación de producto', 'icon' => 'randomize', 'categoria' => 'productos'],
         'validar_categoria' => ['label' => 'Validar categoría', 'icon' => 'category', 'categoria' => 'productos'],
         'verificar_etiquetado' => ['label' => 'Verificar etiquetado', 'icon' => 'tag', 'categoria' => 'productos'],
@@ -555,6 +556,7 @@ function riverso_resolve_task_target_by_type($task_tipo, array $extra = [], $ref
         'asignar_regla_precio' => 'riverso-pos-price-rules',
         'revisar_calidad_catalogo' => 'riverso-pos-catalog-health',
         'confirmar_tipo_documento' => 'riverso-pos-invoices',
+        'ingresar_flete' => 'riverso-pos-invoices',
         'autorizar_publicacion' => 'riverso-pos-publish',
         'confirmar_estructura_atributos' => 'riverso-pos-publish',
         'codigo_faltante' => 'riverso-pos-codes',
@@ -574,6 +576,7 @@ function riverso_resolve_task_target_by_type($task_tipo, array $extra = [], $ref
         'cotizacion' => 'received-quotes',
         'devolucion' => 'invoices',
         'confirmar_tipo_documento' => 'invoices',
+        'ingresar_flete' => 'invoices',
         'codigo_faltante' => 'codes',
         'barcode_faltante' => 'barcodes',
         'confirmar_barcode_legacy' => 'barcodes',
@@ -592,7 +595,7 @@ function riverso_resolve_task_target_by_type($task_tipo, array $extra = [], $ref
 
     if ($context === 'portal' && isset($portal_modules[$task_tipo])) {
         $args = [];
-        if (in_array($task_tipo, ['devolucion', 'confirmar_tipo_documento'], true) && $referencia_id) {
+        if (in_array($task_tipo, ['devolucion', 'confirmar_tipo_documento', 'ingresar_flete'], true) && $referencia_id) {
             $args['factura'] = (int) $referencia_id;
         }
         return riverso_task_portal_module_url($portal_modules[$task_tipo], $args);
@@ -615,7 +618,7 @@ function riverso_resolve_task_target_by_type($task_tipo, array $extra = [], $ref
             $args['grupo_id'] = $gid;
         }
     }
-    if ($task_tipo === 'confirmar_tipo_documento' && $referencia_id) {
+    if (in_array($task_tipo, ['confirmar_tipo_documento', 'ingresar_flete'], true) && $referencia_id) {
         $args['factura'] = (int) $referencia_id;
     }
     if (in_array($task_tipo, ['etiquetado', 'bodegaje', 'recepcion', 'devolucion'], true) && $referencia_id) {

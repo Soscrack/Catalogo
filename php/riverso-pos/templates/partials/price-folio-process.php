@@ -85,7 +85,7 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
                     </select>
                 </div>
                 <div class="filter-group">
-                    <label>Completitud</label>
+                    <label>Confirmados en este folio</label>
                     <select id="rpf-filter-completitud">
                         <option value="">Todos</option>
                         <option value="completo">Completos</option>
@@ -142,7 +142,7 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
                     <th>Fecha ingreso</th>
                     <th>Proveedor</th>
                     <th>Estado</th>
-                    <th>Completitud</th>
+                    <th title="Precios confirmados desde este folio">Confirmados</th>
                     <th>Bloqueos</th>
                     <th>Total</th>
                     <th>Acciones</th>
@@ -171,6 +171,12 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
         <div id="rpf-session-header" class="rpf-session-header"></div>
         <div id="rpf-blockers" class="rpf-blockers" style="display:none;"></div>
         <div id="rpf-lines" style="overflow:auto;"></div>
+        <div id="rpf-pdf-footer" class="rpf-pdf-footer" style="display:none;">
+            <button type="button" class="button" id="rpf-btn-ver-pdf">Ver PDF</button>
+            <div id="rpf-pdf-viewer-wrap" style="display:none;margin-top:10px;">
+                <iframe id="rpf-pdf-viewer" title="Documento" style="width:100%;height:480px;border:1px solid #c3c4c7;border-radius:4px;background:#fff;"></iframe>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -409,5 +415,16 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
                 </p>
             </div>
         </div>
+    </div>
+</div>
+
+<div id="rpf-flete-modal" class="rpf-modal" style="display:none;" aria-hidden="true">
+    <div class="rpf-modal-backdrop rpf-flete-modal-backdrop"></div>
+    <div class="rpf-modal-card rpf-flete-card">
+        <div class="rpf-modal-head">
+            <h2 style="margin:0;">Flete del folio</h2>
+            <button type="button" class="button rpf-flete-modal-close">Cerrar</button>
+        </div>
+        <div id="rpf-flete-body" class="rpf-modal-body"></div>
     </div>
 </div>

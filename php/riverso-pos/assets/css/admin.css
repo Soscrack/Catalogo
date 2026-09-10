@@ -1115,6 +1115,22 @@
     color: #92400e;
 }
 
+.riverso-cost-mode-toggle .riverso-cost-mode-btn {
+    margin: 0;
+    border-radius: 0;
+}
+.riverso-cost-mode-toggle .riverso-cost-mode-btn:first-child {
+    border-radius: 4px 0 0 4px;
+}
+.riverso-cost-mode-toggle .riverso-cost-mode-btn:last-child {
+    border-radius: 0 4px 4px 0;
+}
+.riverso-cost-mode-toggle .riverso-cost-mode-btn.is-active {
+    background: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
+}
+
 /* Este CSS solo se carga en páginas Riverso POS.
    Oculta el footer de WP que se sobrepone a tablas al hacer scroll. */
 #wpfooter {

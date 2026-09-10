@@ -183,8 +183,110 @@
     color: #fff;
 }
 
+.rpe-cost-toggle .rpe-cost-btn {
+    margin: 0;
+    border-radius: 0;
+}
+
+.rpe-cost-toggle .rpe-cost-btn:first-child {
+    border-radius: 4px 0 0 4px;
+}
+
+.rpe-cost-toggle .rpe-cost-btn:last-child {
+    border-radius: 0 4px 4px 0;
+}
+
+.rpe-cost-toggle .rpe-cost-btn.is-active {
+    background: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
+}
+
 .rpf-view-toggle {
     vertical-align: middle;
+}
+
+.rpf-cost-toggle {
+    vertical-align: middle;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+
+.rpf-cost-toggle .rpf-cost-btn.is-active,
+.rpf-view-toggle .rpf-view-btn.is-active {
+    background: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
+}
+
+.rpf-cost-toggle .rpf-cost-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.rpf-chip-flete-warn {
+    display: block;
+    margin-top: 4px;
+    background: #fcf0f1;
+    border: 1px solid #d63638;
+    color: #8a2424;
+    font-size: 12px;
+    padding: 4px 6px;
+}
+
+.rpf-chip-flete-warn a,
+.rpf-chip-flete-warn .button-link {
+    margin-left: 4px;
+}
+
+.rpf-pdf-footer {
+    margin-top: 12px;
+}
+
+.rpf-flete-card {
+    width: min(720px, 94vw);
+}
+
+.rpf-folio-results,
+.folio-search-results {
+    position: absolute;
+    z-index: 30;
+    left: 0;
+    right: 0;
+    top: 100%;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    max-height: 220px;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.rpf-folio-results .folio-result-item,
+.folio-search-results .folio-result-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 10px;
+    border: 0;
+    background: #fff;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f1;
+    font-size: 13px;
+}
+
+.rpf-folio-results .folio-result-item:hover,
+.folio-search-results .folio-result-item:hover {
+    background: #f0f6fc;
+}
+
+.rpf-folio-results .folio-result-empty,
+.folio-search-results .folio-result-empty {
+    padding: 10px;
+    color: #646970;
+    font-size: 13px;
 }
 
 .rce-result {
@@ -482,6 +584,40 @@
 .rpf-progress-ninguno { background: #f0f0f1; color: #50575e; }
 .rpf-progress-parcial { background: #fcf9e8; color: #996800; }
 .rpf-progress-completo { background: #edfaef; color: #007017; }
+
+.rpf-line-chips {
+    margin-top: 4px;
+    max-width: 220px;
+}
+
+.rpf-chip {
+    display: block;
+    margin-top: 3px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    line-height: 1.35;
+}
+
+.rpf-chip-cost-same {
+    background: #f0f6fc;
+    color: #0a4b78;
+}
+
+.rpf-chip-other-origin {
+    background: #fcf9e8;
+    color: #996800;
+}
+
+.rpf-chip-historial-only {
+    background: #f6f7f7;
+    color: #3c434a;
+    border: 1px solid #dcdcde;
+}
+
+.rpf-chip-historial-only a {
+    white-space: nowrap;
+}
 
 .rpf-badge {
     display: inline-block;

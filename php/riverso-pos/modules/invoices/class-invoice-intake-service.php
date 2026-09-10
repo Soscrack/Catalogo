@@ -2223,23 +2223,7 @@ class Riverso_Invoice_Intake_Service {
         }
 
         foreach (array_keys($affected_product_ids) as $producto_id) {
-            $assigned = (float) $wpdb->get_var($wpdb->prepare(
-                "SELECT COALESCE(SUM(monto_asignado), 0) FROM {$vinculos_table} WHERE factura_productos_id = %d",
-                (int) $producto_id
-            ));
-            $inline = (float) $wpdb->get_var($wpdb->prepare(
-                "SELECT COALESCE(SUM(monto_total), 0) FROM {$prefix}factura_items
-                 WHERE factura_id = %d AND item_tipo = 'envio'",
-                (int) $producto_id
-            ));
-            $wpdb->update(
-                "{$prefix}facturas",
-                ['costo_envio_total' => round($assigned + $inline, 2)],
-                ['id' => (int) $producto_id],
-                ['%f'],
-                ['%d']
-            );
-            $this->prorate_shipping_costs((int) $producto_id);
+            $this->refresh_product_shipping_total((int) $producto_id);
         }
 
         return [
@@ -2248,6 +2232,45 @@ class Riverso_Invoice_Intake_Service {
             'linked_invoices' => count($links),
             'affected_products' => array_keys($affected_product_ids),
         ];
+    }
+
+    /**
+     * Recalcula costo_envio_total de una factura de productos:
+     * vínculos asignados + líneas inline de envío + monto manual.
+     */
+    public function refresh_product_shipping_total($factura_productos_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $vinculos_table = $this->flete_vinculos_table();
+        $factura_productos_id = (int) $factura_productos_id;
+
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-activator.php';
+        Riverso_POS_Activator::ensure_costo_envio_manual_column();
+
+        $assigned = (float) $wpdb->get_var($wpdb->prepare(
+            "SELECT COALESCE(SUM(monto_asignado), 0) FROM {$vinculos_table} WHERE factura_productos_id = %d",
+            $factura_productos_id
+        ));
+        $inline = (float) $wpdb->get_var($wpdb->prepare(
+            "SELECT COALESCE(SUM(monto_total), 0) FROM {$prefix}factura_items
+             WHERE factura_id = %d AND item_tipo = 'envio'",
+            $factura_productos_id
+        ));
+        $manual = (float) $wpdb->get_var($wpdb->prepare(
+            "SELECT COALESCE(costo_envio_manual, 0) FROM {$prefix}facturas WHERE id = %d",
+            $factura_productos_id
+        ));
+
+        $wpdb->update(
+            "{$prefix}facturas",
+            ['costo_envio_total' => round($assigned + $inline + $manual, 2)],
+            ['id' => $factura_productos_id],
+            ['%f'],
+            ['%d']
+        );
+        $this->prorate_shipping_costs($factura_productos_id);
+
+        return round($assigned + $inline + $manual, 2);
     }
 
     /**
@@ -2333,16 +2356,33 @@ class Riverso_Invoice_Intake_Service {
             ['%d', '%d', '%f', '%d']
         );
 
+        // Al vincular un flete real se limpian gratuito y monto manual.
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-activator.php';
+        Riverso_POS_Activator::ensure_flete_gratuito_column();
+        Riverso_POS_Activator::ensure_costo_envio_manual_column();
         $wpdb->update(
             "{$prefix}facturas",
-            ['documento_subtipo' => 'envio'],
+            [
+                'documento_subtipo' => 'envio',
+            ],
             ['id' => (int) $factura_envio_id],
             ['%s'],
+            ['%d']
+        );
+        $wpdb->update(
+            "{$prefix}facturas",
+            [
+                'flete_gratuito' => 0,
+                'costo_envio_manual' => 0,
+            ],
+            ['id' => (int) $factura_productos_id],
+            ['%d', '%f'],
             ['%d']
         );
 
         $result = $this->recalculate_flete_allocations((int) $factura_envio_id);
         $this->sync_envio_link_state((int) $factura_envio_id);
+        $this->complete_ingresar_flete_task((int) $factura_productos_id);
 
         if (class_exists('Riverso_Audit_Module')) {
             Riverso_Audit_Module::get_instance()->log(
@@ -2427,23 +2467,8 @@ class Riverso_Invoice_Intake_Service {
         $this->recalculate_flete_allocations((int) $factura_envio_id);
         foreach (array_keys($affected_products) as $producto_id) {
             if ((int) $producto_id !== (int) $factura_envio_id) {
-                $assigned = (float) $wpdb->get_var($wpdb->prepare(
-                    "SELECT COALESCE(SUM(monto_asignado), 0) FROM {$vinculos_table} WHERE factura_productos_id = %d",
-                    (int) $producto_id
-                ));
-                $inline = (float) $wpdb->get_var($wpdb->prepare(
-                    "SELECT COALESCE(SUM(monto_total), 0) FROM {$prefix}factura_items
-                     WHERE factura_id = %d AND item_tipo = 'envio'",
-                    (int) $producto_id
-                ));
-                $wpdb->update(
-                    "{$prefix}facturas",
-                    ['costo_envio_total' => round($assigned + $inline, 2)],
-                    ['id' => (int) $producto_id],
-                    ['%f'],
-                    ['%d']
-                );
-                $this->prorate_shipping_costs((int) $producto_id);
+                $this->refresh_product_shipping_total((int) $producto_id);
+                $this->sync_ingresar_flete_task_state((int) $producto_id);
             }
         }
 
@@ -2473,8 +2498,11 @@ class Riverso_Invoice_Intake_Service {
             (int) $factura_id
         ));
 
-        $linked_shipping = (float) ($factura->costo_envio_total ?? 0);
-        $total_shipping = $inline_shipping + $linked_shipping;
+        // costo_envio_total ya incluye vínculos + inline + manual; no sumar inline otra vez.
+        $total_shipping = (float) ($factura->costo_envio_total ?? 0);
+        if ($total_shipping <= 0 && $inline_shipping > 0) {
+            $total_shipping = $inline_shipping;
+        }
 
         $items = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$prefix}factura_items
@@ -2992,6 +3020,247 @@ class Riverso_Invoice_Intake_Service {
                 'prioridad' => 'alta',
             ]
         );
+    }
+
+    /**
+     * ¿La factura de productos ya tiene flete resuelto (gratuito, manual o vínculo)?
+     */
+    public function is_flete_resolved($factura_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $vinculos_table = $this->flete_vinculos_table();
+        $factura_id = (int) $factura_id;
+
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-activator.php';
+        Riverso_POS_Activator::ensure_flete_gratuito_column();
+        Riverso_POS_Activator::ensure_costo_envio_manual_column();
+
+        $factura = $wpdb->get_row($wpdb->prepare(
+            "SELECT flete_gratuito, costo_envio_manual FROM {$prefix}facturas WHERE id = %d",
+            $factura_id
+        ));
+        if (!$factura) {
+            return false;
+        }
+        if ((int) ($factura->flete_gratuito ?? 0) === 1) {
+            return true;
+        }
+        if ((float) ($factura->costo_envio_manual ?? 0) > 0) {
+            return true;
+        }
+        $linked = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$vinculos_table} WHERE factura_productos_id = %d",
+            $factura_id
+        ));
+        return $linked > 0;
+    }
+
+    /**
+     * Crea (o reutiliza) la tarea «Ingresar flete» para una factura de productos.
+     */
+    public function create_ingresar_flete_task($factura_id) {
+        if (!class_exists('Riverso_Task_Module')) {
+            return 0;
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $factura_id = (int) $factura_id;
+
+        $factura = $wpdb->get_row($wpdb->prepare(
+            "SELECT folio, documento_subtipo FROM {$prefix}facturas WHERE id = %d",
+            $factura_id
+        ));
+        if (!$factura) {
+            return 0;
+        }
+        if (($factura->documento_subtipo ?? 'productos') !== 'productos') {
+            return 0;
+        }
+        if ($this->is_flete_resolved($factura_id)) {
+            return 0;
+        }
+
+        return Riverso_Task_Module::get_instance()->create_review_task(
+            'ingresar_flete',
+            sprintf('Ingresar flete - Folio %s', $factura->folio),
+            'factura',
+            $factura_id,
+            [
+                'descripcion' => sprintf(
+                    'Indique el flete de la factura folio %s: gratuito, monto manual o vínculo a folio de transportista.',
+                    $factura->folio
+                ),
+                'prioridad' => 'normal',
+            ]
+        );
+    }
+
+    /**
+     * Completa la tarea abierta «Ingresar flete» de una factura.
+     */
+    public function complete_ingresar_flete_task($factura_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $factura_id = (int) $factura_id;
+
+        $task_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}tareas
+             WHERE tipo = 'ingresar_flete'
+               AND referencia_tipo = 'factura'
+               AND referencia_id = %d
+               AND estado NOT IN ('completada', 'cancelada')
+             LIMIT 1",
+            $factura_id
+        ));
+        if (!$task_id) {
+            return 0;
+        }
+
+        $wpdb->update(
+            "{$prefix}tareas",
+            ['estado' => 'completada', 'completado_en' => current_time('mysql')],
+            ['id' => (int) $task_id],
+            ['%s', '%s'],
+            ['%d']
+        );
+        return (int) $task_id;
+    }
+
+    /**
+     * Cancela la tarea abierta «Ingresar flete» (p. ej. si el tipo deja de ser productos).
+     */
+    public function cancel_ingresar_flete_task($factura_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $factura_id = (int) $factura_id;
+
+        $task_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}tareas
+             WHERE tipo = 'ingresar_flete'
+               AND referencia_tipo = 'factura'
+               AND referencia_id = %d
+               AND estado NOT IN ('completada', 'cancelada')
+             LIMIT 1",
+            $factura_id
+        ));
+        if (!$task_id) {
+            return 0;
+        }
+
+        $wpdb->update(
+            "{$prefix}tareas",
+            ['estado' => 'cancelada'],
+            ['id' => (int) $task_id],
+            ['%s'],
+            ['%d']
+        );
+        return (int) $task_id;
+    }
+
+    /**
+     * Completa o reabre la tarea según el estado actual de flete.
+     */
+    public function sync_ingresar_flete_task_state($factura_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $factura_id = (int) $factura_id;
+
+        $factura = $wpdb->get_row($wpdb->prepare(
+            "SELECT documento_subtipo FROM {$prefix}facturas WHERE id = %d",
+            $factura_id
+        ));
+        if (!$factura) {
+            return;
+        }
+        if (($factura->documento_subtipo ?? 'productos') !== 'productos') {
+            $this->cancel_ingresar_flete_task($factura_id);
+            return;
+        }
+
+        if ($this->is_flete_resolved($factura_id)) {
+            $this->complete_ingresar_flete_task($factura_id);
+        } else {
+            $this->create_ingresar_flete_task($factura_id);
+        }
+    }
+
+    /**
+     * Guarda monto de flete manual en factura de productos.
+     *
+     * @return true|WP_Error
+     */
+    public function set_manual_shipping($factura_id, $monto) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $vinculos_table = $this->flete_vinculos_table();
+        $factura_id = (int) $factura_id;
+        $monto = max(0, round((float) $monto, 2));
+
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-activator.php';
+        Riverso_POS_Activator::ensure_flete_gratuito_column();
+        Riverso_POS_Activator::ensure_costo_envio_manual_column();
+
+        $factura = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, folio, documento_subtipo FROM {$prefix}facturas WHERE id = %d",
+            $factura_id
+        ));
+        if (!$factura) {
+            return new WP_Error('not_found', 'Factura no encontrada');
+        }
+        $subtipo = $factura->documento_subtipo ?: 'productos';
+        if ($subtipo !== 'productos') {
+            return new WP_Error('invalid', 'Solo se puede ingresar flete manual en facturas de productos');
+        }
+
+        if ($monto > 0) {
+            $linked = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$vinculos_table} WHERE factura_productos_id = %d",
+                $factura_id
+            ));
+            if ($linked > 0) {
+                return new WP_Error(
+                    'has_links',
+                    'Desvincule primero los fletes vinculados antes de ingresar un monto manual'
+                );
+            }
+        }
+
+        $updated = $wpdb->update(
+            "{$prefix}facturas",
+            [
+                'costo_envio_manual' => $monto,
+                'flete_gratuito' => 0,
+            ],
+            ['id' => $factura_id],
+            ['%f', '%d'],
+            ['%d']
+        );
+        if ($updated === false) {
+            return new WP_Error('db_error', 'Error al actualizar: ' . $wpdb->last_error);
+        }
+
+        $this->refresh_product_shipping_total($factura_id);
+        $this->sync_ingresar_flete_task_state($factura_id);
+
+        if (class_exists('Riverso_Audit_Module')) {
+            Riverso_Audit_Module::get_instance()->log(
+                'invoice_processed',
+                'invoice',
+                $factura_id,
+                null,
+                [
+                    'action' => $monto > 0 ? 'flete_manual_guardado' : 'flete_manual_quitado',
+                    'monto' => $monto,
+                    'folio' => $factura->folio ?? null,
+                ],
+                $monto > 0
+                    ? sprintf('Flete manual $%s en folio %s', number_format($monto, 0, ',', '.'), $factura->folio ?? $factura_id)
+                    : sprintf('Flete manual quitado de folio %s', $factura->folio ?? $factura_id)
+            );
+        }
+
+        return true;
     }
 
     /**

@@ -197,6 +197,7 @@ class Riverso_POS_Assets {
             'can_view_barcodes' => current_user_can('riverso_view_products'),
             'can_assign_barcodes' => current_user_can('riverso_manage_products'),
             'products_admin_url' => admin_url('admin.php?page=riverso-pos-products'),
+            'admin_url' => admin_url(),
         ]);
     }
 

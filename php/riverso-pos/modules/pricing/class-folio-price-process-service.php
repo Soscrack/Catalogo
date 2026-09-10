@@ -22,6 +22,12 @@ class Riverso_Folio_Price_Process_Service {
 
     private static $instance = null;
 
+    /** @var array<string,array<int,true>> cache factura_id|canal → set de target_id confirmados */
+    private $confirmed_cache = [];
+
+    /** @var array<int,array{factura_id:int,folio:string,fecha:string,url:string}|null> */
+    private $newest_folio_cache = [];
+
     public static function get_instance() {
         if (null === self::$instance) {
             self::$instance = new self();
@@ -606,8 +612,179 @@ class Riverso_Folio_Price_Process_Service {
     }
 
     /**
-     * Progreso de precios locales por filas de producto del folio.
-     * N = ítems producto (filas); n = filas con precio local (o híbrido omitido).
+     * True si A es más reciente que B (fecha_emision, empate por factura_id).
+     *
+     * @param string $fecha_a
+     * @param int    $id_a
+     * @param string $fecha_b
+     * @param int    $id_b
+     * @return bool
+     */
+    private function folio_is_newer($fecha_a, $id_a, $fecha_b, $id_b) {
+        $fa = substr(trim((string) $fecha_a), 0, 10);
+        $fb = substr(trim((string) $fecha_b), 0, 10);
+        if ($fa !== '' && $fb !== '' && $fa !== $fb) {
+            return $fa > $fb;
+        }
+        if ($fa !== '' && $fb === '') {
+            return true;
+        }
+        if ($fa === '' && $fb !== '') {
+            return false;
+        }
+        return (int) $id_a > (int) $id_b;
+    }
+
+    /**
+     * Targets confirmados desde cada folio (historial source_type=folio).
+     *
+     * @param int[]  $factura_ids
+     * @param string $canal
+     * @return array<int,array<int,true>> factura_id => set target_id
+     */
+    private function confirmed_targets_by_folios(array $factura_ids, $canal = 'local') {
+        global $wpdb;
+        $canal = $canal === 'online' ? 'online' : 'local';
+        $ids = [];
+        $out = [];
+        foreach ($factura_ids as $fid) {
+            $fid = absint($fid);
+            if ($fid <= 0) {
+                continue;
+            }
+            $cache_key = $fid . '|' . $canal;
+            if (isset($this->confirmed_cache[$cache_key])) {
+                $out[$fid] = $this->confirmed_cache[$cache_key];
+                continue;
+            }
+            $ids[$fid] = $fid;
+            $out[$fid] = [];
+        }
+        if (!$ids) {
+            return $out;
+        }
+
+        $id_list = implode(',', array_map('intval', array_values($ids)));
+        $prefix = $this->prefix();
+        $rows = $wpdb->get_results(
+            "SELECT DISTINCT source_document_id AS factura_id, producto_base_id AS target_id
+             FROM {$prefix}precio_historial
+             WHERE source_type = 'folio'
+               AND canal = '{$canal}'
+               AND source_document_id IN ({$id_list})
+               AND p_asignado_nuevo IS NOT NULL",
+            ARRAY_A
+        ) ?: [];
+
+        foreach ($rows as $row) {
+            $fid = (int) ($row['factura_id'] ?? 0);
+            $tid = (int) ($row['target_id'] ?? 0);
+            if ($fid > 0 && $tid > 0) {
+                $out[$fid][$tid] = true;
+            }
+        }
+
+        foreach ($ids as $fid) {
+            $this->confirmed_cache[$fid . '|' . $canal] = $out[$fid] ?? [];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Folio confirmado más reciente por target (fecha_emision DESC, factura_id DESC).
+     *
+     * @param int[]  $target_ids
+     * @param string $canal
+     * @return array<int,array{factura_id:int,folio:string,fecha:string,url:string}>
+     */
+    private function newest_applied_folio_by_targets(array $target_ids, $canal = 'local') {
+        global $wpdb;
+        $canal = $canal === 'online' ? 'online' : 'local';
+        $ids = [];
+        $out = [];
+        foreach ($target_ids as $tid) {
+            $tid = absint($tid);
+            if ($tid <= 0) {
+                continue;
+            }
+            if (array_key_exists($tid, $this->newest_folio_cache)) {
+                if ($this->newest_folio_cache[$tid] !== null) {
+                    $out[$tid] = $this->newest_folio_cache[$tid];
+                }
+                continue;
+            }
+            $ids[$tid] = $tid;
+        }
+        if (!$ids) {
+            return $out;
+        }
+
+        $id_list = implode(',', array_map('intval', array_values($ids)));
+        $prefix = $this->prefix();
+        $rows = $wpdb->get_results(
+            "SELECT h.producto_base_id AS target_id, h.source_document_id AS factura_id,
+                    f.folio, f.fecha_emision
+             FROM {$prefix}precio_historial h
+             INNER JOIN {$prefix}facturas f ON f.id = h.source_document_id
+             WHERE h.source_type = 'folio'
+               AND h.canal = '{$canal}'
+               AND h.producto_base_id IN ({$id_list})
+               AND h.source_document_id IS NOT NULL
+               AND h.p_asignado_nuevo IS NOT NULL
+             ORDER BY h.producto_base_id ASC, f.fecha_emision DESC, f.id DESC, h.id DESC",
+            ARRAY_A
+        ) ?: [];
+
+        $seen = [];
+        foreach ($rows as $row) {
+            $tid = (int) ($row['target_id'] ?? 0);
+            if ($tid <= 0 || isset($seen[$tid])) {
+                continue;
+            }
+            $seen[$tid] = true;
+            $fid = (int) ($row['factura_id'] ?? 0);
+            $pack = [
+                'factura_id' => $fid,
+                'folio' => (string) ($row['folio'] ?? ''),
+                'fecha' => substr((string) ($row['fecha_emision'] ?? ''), 0, 10),
+                'url' => $fid > 0 ? $this->prior_folio_url($fid) : '',
+            ];
+            $out[$tid] = $pack;
+            $this->newest_folio_cache[$tid] = $pack;
+        }
+        foreach ($ids as $tid) {
+            if (!isset($seen[$tid])) {
+                $this->newest_folio_cache[$tid] = null;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Invalida caches de confirmación/recencia tras un save.
+     *
+     * @param int $factura_id
+     * @param int $target_id
+     */
+    private function invalidate_confirmation_caches($factura_id, $target_id = 0) {
+        $factura_id = absint($factura_id);
+        $target_id = absint($target_id);
+        unset(
+            $this->confirmed_cache[$factura_id . '|local'],
+            $this->confirmed_cache[$factura_id . '|online']
+        );
+        if ($target_id > 0) {
+            unset($this->newest_folio_cache[$target_id]);
+        } else {
+            $this->newest_folio_cache = [];
+        }
+    }
+
+    /**
+     * Progreso de confirmación de precios por filas de producto del folio.
+     * N = ítems producto; n = filas confirmadas desde este folio (o híbrido omitido).
      *
      * @param int        $factura_id
      * @param array|null $gates resultado opcional de evaluate_gates (evita trabajo extra)
@@ -621,19 +798,18 @@ class Riverso_Folio_Price_Process_Service {
         }
 
         $omitted = $this->omitted_item_ids($factura_id);
-        $pricing = $this->pricing();
         $proveedor_id = (int) ($loaded['factura']['proveedor_id'] ?? 0);
+        $confirmed_map = $this->confirmed_targets_by_folios([$factura_id], 'local');
+        $confirmed = $confirmed_map[$factura_id] ?? [];
 
-        // Mapa target_id → tiene precio, reutilizando products de gates si vienen.
-        $priced_targets = [];
-        if (is_array($gates) && !empty($gates['products']) && $pricing) {
+        // Targets de gates (ya resueltos) → confirmados en este folio.
+        $confirmed_targets = [];
+        if (is_array($gates) && !empty($gates['products'])) {
             foreach ($gates['products'] as $p) {
                 $tid = (int) ($p['target_id'] ?? 0);
-                if ($tid <= 0) {
-                    continue;
+                if ($tid > 0) {
+                    $confirmed_targets[$tid] = isset($confirmed[$tid]);
                 }
-                $local = $pricing->get_local_price($tid);
-                $priced_targets[$tid] = ($local && $local['p_asignado'] !== null && $local['p_asignado'] !== '');
             }
         }
 
@@ -643,7 +819,7 @@ class Riverso_Folio_Price_Process_Service {
             $item_id = (int) ($item['id'] ?? 0);
             $total++;
 
-            // Híbrido: fila marcada como ya ingresada cuenta como guardada.
+            // Híbrido: fila marcada como ya ingresada cuenta como confirmada.
             if ($item_id > 0 && isset($omitted[$item_id])) {
                 $saved++;
                 continue;
@@ -660,18 +836,14 @@ class Riverso_Folio_Price_Process_Service {
                 continue;
             }
 
-            if (array_key_exists($target_id, $priced_targets)) {
-                if ($priced_targets[$target_id]) {
+            if (array_key_exists($target_id, $confirmed_targets)) {
+                if ($confirmed_targets[$target_id]) {
                     $saved++;
                 }
                 continue;
             }
-            if (!$pricing) {
-                continue;
-            }
-            $local = $pricing->get_local_price($target_id);
-            $has = ($local && $local['p_asignado'] !== null && $local['p_asignado'] !== '');
-            $priced_targets[$target_id] = $has;
+            $has = isset($confirmed[$target_id]);
+            $confirmed_targets[$target_id] = $has;
             if ($has) {
                 $saved++;
             }
@@ -733,20 +905,31 @@ class Riverso_Folio_Price_Process_Service {
         ];
     }
 
-    private function prices_complete(array $products) {
-        $pricing = $this->pricing();
-        if (!$pricing) {
-            return false;
-        }
+    /**
+     * True si todos los targets pendientes tienen confirmación de precio desde este folio.
+     *
+     * @param array $products targets únicos de evaluate_gates
+     * @param int   $factura_id
+     * @return bool
+     */
+    private function prices_complete(array $products, $factura_id) {
+        $factura_id = absint($factura_id);
         // Sin targets pendientes (p. ej. todos omitidos en híbrido) → completo.
         if (empty($products)) {
             return true;
         }
+        $local_map = $this->confirmed_targets_by_folios([$factura_id], 'local');
+        $online_map = $this->confirmed_targets_by_folios([$factura_id], 'online');
+        $confirmed_local = $local_map[$factura_id] ?? [];
+        $confirmed_online = $online_map[$factura_id] ?? [];
+
         global $wpdb;
         foreach ($products as $p) {
-            $target_id = (int) $p['target_id'];
-            $local = $pricing->get_local_price($target_id);
-            if (!$local || $local['p_asignado'] === null || $local['p_asignado'] === '') {
+            $target_id = (int) ($p['target_id'] ?? 0);
+            if ($target_id <= 0) {
+                return false;
+            }
+            if (empty($confirmed_local[$target_id])) {
                 return false;
             }
             $woo = (int) ($p['woo_id'] ?? 0);
@@ -756,13 +939,8 @@ class Riverso_Folio_Price_Process_Service {
                     $target_id
                 ));
             }
-            if ($woo > 0) {
-                $online = method_exists($pricing, 'get_online_price_row')
-                    ? $pricing->get_online_price_row($target_id, 0)
-                    : null;
-                if (!$online || $online['p_asignado'] === null || $online['p_asignado'] === '') {
-                    return false;
-                }
+            if ($woo > 0 && empty($confirmed_online[$target_id])) {
+                return false;
             }
         }
         return true;
@@ -822,7 +1000,7 @@ class Riverso_Folio_Price_Process_Service {
         ), ARRAY_A);
 
         $hybrid = $this->is_hybrid_mode($factura_id);
-        $prices_ok = $this->prices_complete($gates['products']);
+        $prices_ok = $this->prices_complete($gates['products'], $factura_id);
 
         if (!$gates['ok']) {
             $auto = self::STATE_ERROR;
@@ -986,6 +1164,19 @@ class Riverso_Folio_Price_Process_Service {
             ? $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A)
             : $wpdb->get_results($sql, ARRAY_A);
         $candidates = $candidates ?: [];
+
+        // Precarga batch de confirmaciones (evita N+1 en resolve_estado / progress).
+        $candidate_ids = [];
+        foreach ($candidates as $c) {
+            $cid = (int) ($c['id'] ?? 0);
+            if ($cid > 0) {
+                $candidate_ids[] = $cid;
+            }
+        }
+        if ($candidate_ids) {
+            $this->confirmed_targets_by_folios($candidate_ids, 'local');
+            $this->confirmed_targets_by_folios($candidate_ids, 'online');
+        }
 
         $rows = [];
         $counts = array_fill_keys(array_keys(self::estado_labels()), 0);
@@ -1305,6 +1496,113 @@ class Riverso_Folio_Price_Process_Service {
         return null;
     }
 
+    /**
+     * Tres bases de costo unitario neto: referencia, tras D/R, tras D/R+flete.
+     *
+     * @return array{referencia:?float,tras_dr:?float,tras_dr_flete:?float,flete_ok:bool}
+     */
+    private function unit_cost_bases_from_item(array $item, $flete_ok = false) {
+        $qty = (float) ($item['cantidad'] ?? 0);
+        if ($qty <= 0) {
+            $qty = 1;
+        }
+        $precio = isset($item['precio_unitario']) && $item['precio_unitario'] !== null && $item['precio_unitario'] !== ''
+            ? (float) $item['precio_unitario']
+            : null;
+
+        $referencia = null;
+        if (isset($item['costo_neto_base']) && $item['costo_neto_base'] !== null && $item['costo_neto_base'] !== '') {
+            $referencia = round((float) $item['costo_neto_base'] / $qty, 4);
+        } elseif ($precio !== null) {
+            $referencia = round($precio, 4);
+        }
+
+        $tras_dr = null;
+        if (isset($item['costo_neto_final']) && $item['costo_neto_final'] !== null && $item['costo_neto_final'] !== '') {
+            $tras_dr = round((float) $item['costo_neto_final'] / $qty, 4);
+        } elseif ($precio !== null) {
+            $tras_dr = round($precio, 4);
+        } elseif ($referencia !== null) {
+            $tras_dr = $referencia;
+        }
+
+        $flete_ok = (bool) $flete_ok;
+        $tras_dr_flete = null;
+        if ($flete_ok) {
+            if (isset($item['costo_landed_unitario']) && $item['costo_landed_unitario'] !== null && $item['costo_landed_unitario'] !== ''
+                && (float) $item['costo_landed_unitario'] > 0) {
+                $tras_dr_flete = round((float) $item['costo_landed_unitario'], 4);
+            } else {
+                $tras_dr_flete = $tras_dr;
+            }
+        }
+
+        return [
+            'referencia' => $referencia,
+            'tras_dr' => $tras_dr,
+            'tras_dr_flete' => $tras_dr_flete,
+            'flete_ok' => $flete_ok,
+        ];
+    }
+
+    /**
+     * ¿La factura de productos tiene flete resuelto (gratis, manual o vínculo)?
+     */
+    private function factura_flete_ok($factura_id) {
+        $factura_id = absint($factura_id);
+        if ($factura_id <= 0) {
+            return false;
+        }
+        if (class_exists('Riverso_Invoice_Intake_Service')
+            && method_exists('Riverso_Invoice_Intake_Service', 'is_flete_resolved')) {
+            return (bool) Riverso_Invoice_Intake_Service::get_instance()->is_flete_resolved($factura_id);
+        }
+        global $wpdb;
+        $prefix = $this->prefix();
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT COALESCE(flete_gratuito, 0) AS flete_gratuito,
+                    COALESCE(costo_envio_manual, 0) AS costo_envio_manual
+             FROM {$prefix}facturas WHERE id = %d",
+            $factura_id
+        ));
+        if (!$row) {
+            return false;
+        }
+        if ((int) $row->flete_gratuito === 1 || (float) $row->costo_envio_manual > 0) {
+            return true;
+        }
+        $vinculos = $prefix . 'factura_flete_vinculos';
+        $linked = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$vinculos} WHERE factura_productos_id = %d",
+            $factura_id
+        ));
+        return $linked > 0;
+    }
+
+    /**
+     * Batch flete_ok por IDs de factura.
+     *
+     * @param int[] $factura_ids
+     * @return array<int,bool>
+     */
+    private function facturas_flete_ok_map(array $factura_ids) {
+        $map = [];
+        $ids = [];
+        foreach ($factura_ids as $id) {
+            $id = absint($id);
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+        if (!$ids) {
+            return $map;
+        }
+        foreach ($ids as $id) {
+            $map[$id] = $this->factura_flete_ok($id);
+        }
+        return $map;
+    }
+
     private function pct_delta($from, $to) {
         if ($from === null || $to === null || (float) $from == 0.0) {
             return null;
@@ -1561,9 +1859,44 @@ class Riverso_Folio_Price_Process_Service {
         }
 
         foreach ($by_pb as $pb => $events) {
+            // Orden cronológico por fecha de documento (no por id de inserción).
+            usort($events, static function ($a, $b) {
+                $da = (string) ($a['_effective_date'] ?? '');
+                $db = (string) ($b['_effective_date'] ?? '');
+                if ($da !== $db) {
+                    return $da <=> $db;
+                }
+                $fa = (int) ($a['source_document_id'] ?? 0);
+                $fb = (int) ($b['source_document_id'] ?? 0);
+                if ($fa !== $fb) {
+                    return $fa <=> $fb;
+                }
+                return ((int) ($a['id'] ?? 0)) <=> ((int) ($b['id'] ?? 0));
+            });
+
             $price_evt = null;
             foreach ($events as $row) {
-                if ($row['p_asignado_nuevo'] !== null && $row['p_asignado_nuevo'] !== '') {
+                if ($row['p_asignado_nuevo'] === null || $row['p_asignado_nuevo'] === '') {
+                    continue;
+                }
+                if ($price_evt === null) {
+                    $price_evt = $row;
+                    continue;
+                }
+                // Gana el de mayor fecha efectiva / factura_id / id.
+                $better = false;
+                $da = (string) ($row['_effective_date'] ?? '');
+                $db = (string) ($price_evt['_effective_date'] ?? '');
+                if ($da > $db) {
+                    $better = true;
+                } elseif ($da === $db) {
+                    $fa = (int) ($row['source_document_id'] ?? 0);
+                    $fb = (int) ($price_evt['source_document_id'] ?? 0);
+                    if ($fa > $fb || ($fa === $fb && (int) $row['id'] > (int) $price_evt['id'])) {
+                        $better = true;
+                    }
+                }
+                if ($better) {
                     $price_evt = $row;
                 }
             }
@@ -1680,7 +2013,7 @@ class Riverso_Folio_Price_Process_Service {
         );
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT f.id AS factura_id, f.folio, f.fecha_emision, fi.codigo_proveedor,
-                    fi.cantidad, fi.costo_neto_final, fi.costo_landed_unitario, fi.precio_unitario
+                    fi.cantidad, fi.precio_unitario, fi.costo_neto_base, fi.costo_neto_final, fi.costo_landed_unitario
              FROM {$prefix}factura_items fi
              INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
              WHERE (fi.item_tipo = 'producto' OR fi.item_tipo IS NULL OR fi.item_tipo = '')
@@ -1697,18 +2030,32 @@ class Riverso_Folio_Price_Process_Service {
             $params
         ), ARRAY_A) ?: [];
 
+        $flete_ids = [];
+        foreach ($rows as $row) {
+            $fid = (int) ($row['factura_id'] ?? 0);
+            if ($fid > 0) {
+                $flete_ids[$fid] = $fid;
+            }
+        }
+        $flete_map = $this->facturas_flete_ok_map(array_values($flete_ids));
+
         foreach ($rows as $row) {
             $code = trim((string) ($row['codigo_proveedor'] ?? ''));
             if ($code === '' || isset($out[$code])) {
                 continue;
             }
+            $fid = (int) ($row['factura_id'] ?? 0);
+            $flete_ok = !empty($flete_map[$fid]);
+            $bases = $this->unit_cost_bases_from_item($row, $flete_ok);
             $cost = $this->unit_cost_from_item($row);
-            if ($cost === null) {
+            if ($cost === null && $bases['tras_dr'] === null && $bases['referencia'] === null) {
                 continue;
             }
             $out[$code] = [
-                'costo' => $cost,
-                'factura_id' => (int) $row['factura_id'],
+                'costo' => $cost !== null ? $cost : ($bases['tras_dr'] ?? $bases['referencia']),
+                'costo_bases' => $bases,
+                'flete_ok' => $flete_ok,
+                'factura_id' => $fid,
                 'folio' => (string) ($row['folio'] ?? ''),
                 'fecha_emision' => (string) ($row['fecha_emision'] ?? ''),
             ];
@@ -1746,7 +2093,7 @@ class Riverso_Folio_Price_Process_Service {
         $id_list = implode(',', array_map('intval', array_values($ids)));
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT pp.producto_base_id, f.id AS factura_id, f.folio, f.fecha_emision,
-                    fi.cantidad, fi.costo_neto_final, fi.costo_landed_unitario, fi.precio_unitario
+                    fi.cantidad, fi.precio_unitario, fi.costo_neto_base, fi.costo_neto_final, fi.costo_landed_unitario
              FROM {$prefix}factura_items fi
              INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
              INNER JOIN {$prefix}producto_proveedor pp
@@ -1769,18 +2116,32 @@ class Riverso_Folio_Price_Process_Service {
             (int) $factura_id
         ), ARRAY_A) ?: [];
 
+        $flete_ids = [];
+        foreach ($rows as $row) {
+            $fid = (int) ($row['factura_id'] ?? 0);
+            if ($fid > 0) {
+                $flete_ids[$fid] = $fid;
+            }
+        }
+        $flete_map = $this->facturas_flete_ok_map(array_values($flete_ids));
+
         foreach ($rows as $row) {
             $pb = (int) ($row['producto_base_id'] ?? 0);
             if ($pb <= 0 || isset($out[$pb])) {
                 continue;
             }
+            $fid = (int) ($row['factura_id'] ?? 0);
+            $flete_ok = !empty($flete_map[$fid]);
+            $bases = $this->unit_cost_bases_from_item($row, $flete_ok);
             $cost = $this->unit_cost_from_item($row);
-            if ($cost === null) {
+            if ($cost === null && $bases['tras_dr'] === null && $bases['referencia'] === null) {
                 continue;
             }
             $out[$pb] = [
-                'costo' => $cost,
-                'factura_id' => (int) $row['factura_id'],
+                'costo' => $cost !== null ? $cost : ($bases['tras_dr'] ?? $bases['referencia']),
+                'costo_bases' => $bases,
+                'flete_ok' => $flete_ok,
+                'factura_id' => $fid,
                 'folio' => (string) ($row['folio'] ?? ''),
                 'fecha_emision' => (string) ($row['fecha_emision'] ?? ''),
             ];
@@ -1844,6 +2205,11 @@ class Riverso_Folio_Price_Process_Service {
             $target_ids[$target_id] = $target_id;
         }
         $prior_by_target = $this->lookup_prior_refs(array_values($target_ids), $factura_id, $fecha_emision);
+        $confirmed_local_map = $this->confirmed_targets_by_folios([$factura_id], 'local');
+        $confirmed_online_map = $this->confirmed_targets_by_folios([$factura_id], 'online');
+        $confirmed_local = $confirmed_local_map[$factura_id] ?? [];
+        $confirmed_online = $confirmed_online_map[$factura_id] ?? [];
+        $newest_by_target = $this->newest_applied_folio_by_targets(array_values($target_ids), 'local');
 
         // Fallback costo: facturas anteriores (mismo código / producto) antes de legacy.
         $codes_for_prior = [];
@@ -1873,6 +2239,8 @@ class Riverso_Folio_Price_Process_Service {
             $fecha_emision
         );
 
+        $current_flete_ok = $this->factura_flete_ok($factura_id);
+
         $lines = [];
         $by_target = [];
 
@@ -1884,6 +2252,7 @@ class Riverso_Folio_Price_Process_Service {
                 ? $item_ctx[$item_id]['product']
                 : ($is_omitted ? $this->resolve_item_product($item, $proveedor_id) : null);
             $costo_folio = $this->unit_cost_from_item($item);
+            $costo_folio_bases = $this->unit_cost_bases_from_item($item, $current_flete_ok);
 
             $line = [
                 'item_id' => $item_id,
@@ -1892,6 +2261,8 @@ class Riverso_Folio_Price_Process_Service {
                 'descripcion' => (string) ($item['nombre'] ?? $item['descripcion'] ?? ''),
                 'cantidad' => (float) ($item['cantidad'] ?? 0),
                 'costo_folio' => $costo_folio,
+                'costo_folio_bases' => $costo_folio_bases,
+                'flete_ok' => $current_flete_ok,
                 'blocked' => false,
                 'block_reason' => '',
                 'hybrid_omitted' => $is_omitted,
@@ -1936,6 +2307,9 @@ class Riverso_Folio_Price_Process_Service {
             $precio_origen = $prior['precio_origen'];
 
             // Historial → factura anterior → legacy (solo si no hay otra referencia de costo).
+            $costo_anterior_bases = null;
+            $prior_flete_ok = null;
+            $prior_factura_id = !empty($costo_origen['factura_id']) ? (int) $costo_origen['factura_id'] : 0;
             if ($costo_anterior === null) {
                 $inv_prior = null;
                 if ($code !== '' && isset($invoice_prior_by_code[$code])) {
@@ -1948,7 +2322,22 @@ class Riverso_Folio_Price_Process_Service {
                 if ($inv_prior) {
                     $costo_anterior = (float) $inv_prior['costo'];
                     $costo_origen = $this->invoice_prior_origin($inv_prior);
+                    $costo_anterior_bases = $inv_prior['costo_bases'] ?? null;
+                    $prior_flete_ok = isset($inv_prior['flete_ok']) ? (bool) $inv_prior['flete_ok'] : null;
+                    $prior_factura_id = (int) ($inv_prior['factura_id'] ?? 0);
                 }
+            } elseif ($prior_factura_id > 0) {
+                $prior_flete_ok = $this->factura_flete_ok($prior_factura_id);
+            }
+
+            if ($costo_anterior_bases === null && $costo_anterior !== null) {
+                // Historial / legacy: misma cifra en las tres bases (sin desglose D/R).
+                $costo_anterior_bases = [
+                    'referencia' => (float) $costo_anterior,
+                    'tras_dr' => (float) $costo_anterior,
+                    'tras_dr_flete' => ($prior_flete_ok === true) ? (float) $costo_anterior : null,
+                    'flete_ok' => $prior_flete_ok === true,
+                ];
             }
 
             $legacy = null;
@@ -1965,6 +2354,14 @@ class Riverso_Folio_Price_Process_Service {
                             : round($legacy_cost_raw / 1.19, 4);
                         $costo_origen = $this->legacy_prior_origin();
                         $legacy_used = true;
+                        $prior_flete_ok = null;
+                        $prior_factura_id = 0;
+                        $costo_anterior_bases = [
+                            'referencia' => (float) $costo_anterior,
+                            'tras_dr' => (float) $costo_anterior,
+                            'tras_dr_flete' => null,
+                            'flete_ok' => false,
+                        ];
                     }
                     if ($precio_anterior === null) {
                         if (!empty($legacy['precio_total'])) {
@@ -1981,9 +2378,27 @@ class Riverso_Folio_Price_Process_Service {
             }
 
             $proposed = $precio_anterior;
-            // Si ya hay P local vigente (p. ej. guardado en este folio), mostrarlo como propuesto.
+            // Si ya hay P local vigente, usarlo como propuesto SOLO si este folio aplica
+            // (no en historial-only: no copiar el precio del folio más reciente).
             $has_local = $local && $local['p_asignado'] !== null && $local['p_asignado'] !== '';
-            if ($has_local) {
+            $confirmed_from_folio = isset($confirmed_local[$target_id]);
+            $confirmed_online_from_folio = isset($confirmed_online[$target_id]);
+            $newest = $newest_by_target[$target_id] ?? null;
+            $apply_mode = 'apply';
+            $newer_folio = null;
+            if ($newest
+                && (int) ($newest['factura_id'] ?? 0) !== $factura_id
+                && $this->folio_is_newer(
+                    $newest['fecha'] ?? '',
+                    (int) ($newest['factura_id'] ?? 0),
+                    $fecha_emision,
+                    $factura_id
+                )
+            ) {
+                $apply_mode = 'historial_only';
+                $newer_folio = $newest;
+            }
+            if ($has_local && $apply_mode === 'apply') {
                 $proposed = (float) $local['p_asignado'];
             }
             $costo_cmp = $costo_folio !== null ? $costo_folio : $costo_anterior;
@@ -2022,12 +2437,16 @@ class Riverso_Folio_Price_Process_Service {
                 'woo_id' => $woo_id,
                 'costo_anterior' => $costo_anterior,
                 'costo_anterior_origen' => $costo_origen,
+                'costo_anterior_bases' => $costo_anterior_bases,
+                'prior_flete_ok' => $prior_flete_ok,
+                'prior_factura_id' => $prior_factura_id > 0 ? $prior_factura_id : null,
                 'costo_delta' => $this->abs_delta($costo_anterior, $costo_folio),
                 'costo_delta_pct' => $this->pct_delta($costo_anterior, $costo_folio),
                 'costo_unchanged' => $this->cost_unchanged($costo_anterior, $costo_folio),
                 'precio_anterior' => $precio_anterior,
                 'precio_anterior_origen' => $precio_origen,
                 'precio_propuesto' => $proposed,
+                'precio_vigente' => $has_local ? (float) $local['p_asignado'] : null,
                 'precio_delta' => $this->abs_delta($precio_anterior, $proposed),
                 'precio_delta_pct' => $this->pct_delta($precio_anterior, $proposed),
                 'margen_anterior' => $margen_antes['margen'],
@@ -2038,6 +2457,10 @@ class Riverso_Folio_Price_Process_Service {
                 'precio_online_propuesto' => ($woo_id > 0) ? $proposed : null,
                 'has_local_price' => (bool) $has_local,
                 'has_online_price' => $online && $online['p_asignado'] !== null && $online['p_asignado'] !== '',
+                'confirmed_from_folio' => (bool) $confirmed_from_folio,
+                'confirmed_online_from_folio' => (bool) $confirmed_online_from_folio,
+                'apply_mode' => $apply_mode,
+                'newer_folio' => $newer_folio,
                 'legacy_used' => $legacy_used,
                 'iva_tipo' => $iva,
                 'family_rule' => $rule ? [
@@ -2083,11 +2506,17 @@ class Riverso_Folio_Price_Process_Service {
                 continue;
             }
             $unique_targets[$tid] = true;
-            $need_local = empty($ln['has_local_price']);
-            $need_online = !empty($ln['requires_online']) && empty($ln['has_online_price']);
+            $need_local = empty($ln['confirmed_from_folio']);
+            $need_online = !empty($ln['requires_online']) && empty($ln['confirmed_online_from_folio']);
             if ($need_local || $need_online) {
                 $pending_count++;
             }
+        }
+
+        $adjuntos = [];
+        if (function_exists('riverso_factura_get_adjuntos')) {
+            $adj_info = riverso_factura_get_adjuntos($factura_id, $loaded['factura']);
+            $adjuntos = $adj_info['adjuntos'] ?? [];
         }
 
         return [
@@ -2099,6 +2528,14 @@ class Riverso_Folio_Price_Process_Service {
                 'proveedor_nombre' => $loaded['factura']['proveedor_nombre'] ?? '',
                 'monto_total' => isset($loaded['factura']['monto_total']) ? (float) $loaded['factura']['monto_total'] : null,
                 'estado_factura' => $loaded['factura']['estado'] ?? '',
+                'flete_ok' => $current_flete_ok,
+                'flete_gratuito' => (int) ($loaded['factura']['flete_gratuito'] ?? 0),
+                'costo_envio_manual' => (float) ($loaded['factura']['costo_envio_manual'] ?? 0),
+                'adjuntos' => $adjuntos,
+                'url_factura' => add_query_arg(
+                    ['page' => 'riverso-pos-invoices', 'factura' => $factura_id],
+                    admin_url('admin.php')
+                ),
             ],
             'proceso' => $resolved,
             'gates_ok' => $gates['ok'],
@@ -2229,35 +2666,89 @@ class Riverso_Folio_Price_Process_Service {
         }
 
         $costo = $this->unit_cost_from_item($item);
+        $folio_label = (string) ($loaded['factura']['folio'] ?? $factura_id);
+        $fecha_emision = (string) ($loaded['factura']['fecha_emision'] ?? '');
         $meta = [
             'source_type' => 'folio',
             'source_document_id' => $factura_id,
-            'notas' => 'Procesar folio #' . ($loaded['factura']['folio'] ?? $factura_id),
+            'notas' => 'Procesar folio #' . $folio_label,
         ];
 
-        if ($costo !== null && method_exists($pricing, 'recalc_price')) {
-            $pricing->recalc_price($target_id, 'local');
-            global $wpdb;
-            $wpdb->update(
-                $this->prefix() . 'precios',
-                ['c_ref' => $costo],
-                [
+        $newest_map = $this->newest_applied_folio_by_targets([$target_id], 'local');
+        $newest = $newest_map[$target_id] ?? null;
+        $historial_only = false;
+        if ($newest
+            && (int) ($newest['factura_id'] ?? 0) !== $factura_id
+            && $this->folio_is_newer(
+                $newest['fecha'] ?? '',
+                (int) ($newest['factura_id'] ?? 0),
+                $fecha_emision,
+                $factura_id
+            )
+        ) {
+            $historial_only = true;
+            $newer_label = trim((string) ($newest['folio'] ?? ''));
+            if ($newer_label === '') {
+                $newer_label = (string) ($newest['factura_id'] ?? '');
+            }
+            $newer_fecha = (string) ($newest['fecha'] ?? '');
+            $meta['notas'] = 'Procesar folio #' . $folio_label
+                . ' (no aplicado: vigente folio #' . $newer_label
+                . ($newer_fecha !== '' ? ' · ' . $newer_fecha : '')
+                . ')';
+        }
+
+        $result = null;
+        $online_result = null;
+        $applied = false;
+        global $wpdb;
+
+        $local_row = $pricing->get_local_price($target_id);
+        $prev_local = ($local_row && $local_row['p_asignado'] !== null && $local_row['p_asignado'] !== '')
+            ? (float) $local_row['p_asignado']
+            : null;
+
+        if ($historial_only) {
+            // Solo constancia en historial: no pisar precios.p_asignado ni c_ref.
+            if (method_exists($pricing, 'record_price_change')) {
+                $pricing->record_price_change([
                     'producto_base_id' => $target_id,
                     'canal' => 'local',
                     'woocommerce_variation_id' => 0,
-                ],
-                ['%f'],
-                ['%d', '%s', '%d']
-            );
+                    'c_ref' => $costo,
+                    'precio_sugerido' => $local_row['p_ref'] ?? null,
+                    'p_asignado_anterior' => $prev_local,
+                    'p_asignado_nuevo' => $p_asignado,
+                    'source_type' => 'folio',
+                    'source_document_id' => $factura_id,
+                    'notas' => $meta['notas'],
+                ]);
+            }
+            $result = $local_row ?: ['producto_base_id' => $target_id, 'p_asignado' => $prev_local];
+            $applied = false;
+        } else {
+            if ($costo !== null && method_exists($pricing, 'recalc_price')) {
+                $pricing->recalc_price($target_id, 'local');
+                $wpdb->update(
+                    $this->prefix() . 'precios',
+                    ['c_ref' => $costo],
+                    [
+                        'producto_base_id' => $target_id,
+                        'canal' => 'local',
+                        'woocommerce_variation_id' => 0,
+                    ],
+                    ['%f'],
+                    ['%d', '%s', '%d']
+                );
+            }
+
+            $result = $pricing->upsert_assigned_price($target_id, 'local', $p_asignado, 0, $meta);
+            if (is_wp_error($result)) {
+                return $result;
+            }
+            $applied = true;
         }
 
-        $result = $pricing->upsert_assigned_price($target_id, 'local', $p_asignado, 0, $meta);
-        if (is_wp_error($result)) {
-            return $result;
-        }
-
-        $online_result = null;
-        global $wpdb;
         $woo_id = (int) $product['woo_id'];
         if ($woo_id <= 0) {
             $woo_id = (int) $wpdb->get_var($wpdb->prepare(
@@ -2268,18 +2759,44 @@ class Riverso_Folio_Price_Process_Service {
         if ($woo_id > 0) {
             $online_price = $p_online !== null && $p_online !== '' ? (float) $p_online : $p_asignado;
             if ($online_price > 0) {
-                $online_meta = $meta;
-                $existing_en_uso = (int) $wpdb->get_var($wpdb->prepare(
-                    "SELECT en_uso FROM {$this->prefix()}precios
-                     WHERE producto_base_id = %d AND canal = 'online' AND woocommerce_variation_id = 0
-                     LIMIT 1",
-                    $target_id
-                ));
-                // Solo desactivar si aún no estaba activo online.
-                $online_meta['en_uso'] = $existing_en_uso === 1 ? 1 : 0;
-                $online_result = $pricing->upsert_assigned_price($target_id, 'online', $online_price, 0, $online_meta);
+                if ($historial_only) {
+                    $online_row = method_exists($pricing, 'get_online_price_row')
+                        ? $pricing->get_online_price_row($target_id, 0)
+                        : null;
+                    $prev_online = ($online_row && $online_row['p_asignado'] !== null && $online_row['p_asignado'] !== '')
+                        ? (float) $online_row['p_asignado']
+                        : null;
+                    if (method_exists($pricing, 'record_price_change')) {
+                        $pricing->record_price_change([
+                            'producto_base_id' => $target_id,
+                            'canal' => 'online',
+                            'woocommerce_variation_id' => 0,
+                            'c_ref' => $costo,
+                            'precio_sugerido' => $online_row['p_ref'] ?? null,
+                            'p_asignado_anterior' => $prev_online,
+                            'p_asignado_nuevo' => $online_price,
+                            'source_type' => 'folio',
+                            'source_document_id' => $factura_id,
+                            'notas' => $meta['notas'],
+                        ]);
+                    }
+                    $online_result = $online_row;
+                } else {
+                    $online_meta = $meta;
+                    $existing_en_uso = (int) $wpdb->get_var($wpdb->prepare(
+                        "SELECT en_uso FROM {$this->prefix()}precios
+                         WHERE producto_base_id = %d AND canal = 'online' AND woocommerce_variation_id = 0
+                         LIMIT 1",
+                        $target_id
+                    ));
+                    // Solo desactivar si aún no estaba activo online.
+                    $online_meta['en_uso'] = $existing_en_uso === 1 ? 1 : 0;
+                    $online_result = $pricing->upsert_assigned_price($target_id, 'online', $online_price, 0, $online_meta);
+                }
             }
         }
+
+        $this->invalidate_confirmation_caches($factura_id, $target_id);
 
         $complete = $this->try_complete($factura_id);
         $ready = is_array($complete) && !empty($complete['ready']);
@@ -2295,6 +2812,8 @@ class Riverso_Folio_Price_Process_Service {
             'local' => $result,
             'online' => $online_result,
             'target_id' => $target_id,
+            'applied' => $applied,
+            'historial_only' => $historial_only,
             'completed' => $auto_done,
             'ready_to_complete' => $ready,
             'session' => $this->get_session($factura_id),
@@ -2307,7 +2826,7 @@ class Riverso_Folio_Price_Process_Service {
         if (!$gates['ok']) {
             return false;
         }
-        if (!$this->prices_complete($gates['products'])) {
+        if (!$this->prices_complete($gates['products'], $factura_id)) {
             return false;
         }
         $is_hybrid = $this->is_hybrid_mode($factura_id);
@@ -2328,8 +2847,8 @@ class Riverso_Folio_Price_Process_Service {
         if (!$gates['ok']) {
             return new WP_Error('incomplete', 'Aún hay bloqueos por resolver');
         }
-        if (!$this->prices_complete($gates['products'])) {
-            return new WP_Error('incomplete', 'Aún faltan precios locales (u online si aplica)');
+        if (!$this->prices_complete($gates['products'], $factura_id)) {
+            return new WP_Error('incomplete', 'Aún faltan precios confirmados desde este folio (u online si aplica)');
         }
 
         $omitted = $this->omitted_item_ids($factura_id);

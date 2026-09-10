@@ -346,6 +346,8 @@ class Riverso_POS_Activator {
         self::create_phase45_competencia_manual_fuente($prefix);
         self::create_phase46_precio_folio_hibrido($prefix);
         self::create_phase47_precio_folio_archivo($prefix);
+        self::create_phase48_flete_gratuito($prefix);
+        self::create_phase49_costo_envio_manual($prefix);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -1064,6 +1066,24 @@ class Riverso_POS_Activator {
             return;
         }
         self::create_phase11_flete_vinculos($prefix);
+    }
+
+    /**
+     * Garantiza columna flete_gratuito en facturas (deploy sin bump de versión).
+     */
+    public static function ensure_flete_gratuito_column() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        self::create_phase48_flete_gratuito($prefix);
+    }
+
+    /**
+     * Garantiza columna costo_envio_manual en facturas.
+     */
+    public static function ensure_costo_envio_manual_column() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        self::create_phase49_costo_envio_manual($prefix);
     }
 
     /**
@@ -4541,6 +4561,39 @@ class Riverso_POS_Activator {
                 ]);
             }
         }
+    }
+
+    /**
+     * Fase 48: marcar factura de productos como flete gratuito (sin documento de envío).
+     */
+    private static function create_phase48_flete_gratuito($prefix) {
+        $table = $prefix . 'facturas';
+        if (!self::table_exists($table)) {
+            return;
+        }
+
+        self::add_column_if_missing(
+            $table,
+            'flete_gratuito',
+            "flete_gratuito TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1=factura de productos sin costo de flete'"
+        );
+        self::add_index_if_missing($table, 'idx_flete_gratuito', 'KEY idx_flete_gratuito (flete_gratuito)');
+    }
+
+    /**
+     * Fase 49: monto de flete ingresado manualmente (sin documento de transportista).
+     */
+    private static function create_phase49_costo_envio_manual($prefix) {
+        $table = $prefix . 'facturas';
+        if (!self::table_exists($table)) {
+            return;
+        }
+
+        self::add_column_if_missing(
+            $table,
+            'costo_envio_manual',
+            "costo_envio_manual DECIMAL(12,2) NOT NULL DEFAULT 0 COMMENT 'Flete ingresado a mano en factura de productos'"
+        );
     }
 
     /**

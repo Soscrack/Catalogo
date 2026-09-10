@@ -18,6 +18,8 @@
         showDecimals: true,
         /** Vista de montos: 'bruto' (default) | 'neto' */
         costViewMode: 'bruto',
+        /** Base de costo: 'referencia' | 'tras_dr' (default) */
+        costMode: 'tras_dr',
         limitPerPair: 3,
         docType: 'factura',
         lastExplorerData: null,
@@ -64,15 +66,20 @@
     }
 
     /**
-     * Elige costo unitario según vista (bruto/neto).
-     * Acepta objeto con costo_unitario_neto/bruto o un número neto.
+     * Elige costo unitario según vista (bruto/neto) y base (referencia / tras D/R).
+     * Acepta objeto con costo_bases, costo_unitario_neto/bruto o un número neto.
      */
-    function pickCost(rowOrNeto, mode) {
-        mode = mode || state.costViewMode;
+    function pickCost(rowOrNeto, viewMode, costMode) {
+        viewMode = viewMode || state.costViewMode;
+        costMode = costMode || state.costMode;
         if (rowOrNeto === null || rowOrNeto === undefined || rowOrNeto === '') {
             return null;
         }
         if (typeof rowOrNeto === 'object') {
+            var fromBases = pickFromBases(rowOrNeto.costo_bases || rowOrNeto.ultimo_costo_bases, viewMode, costMode);
+            if (fromBases != null) {
+                return fromBases;
+            }
             var neto =
                 rowOrNeto.costo_unitario_neto != null
                     ? rowOrNeto.costo_unitario_neto
@@ -89,46 +96,92 @@
                       : neto != null
                         ? Math.round(Number(neto) * 1.19 * 10000) / 10000
                         : null;
-            return mode === 'bruto' ? bruto : neto;
+            return viewMode === 'bruto' ? bruto : neto;
         }
         var n = Number(rowOrNeto);
         if (!isFinite(n)) {
             return null;
         }
-        return mode === 'bruto' ? Math.round(n * 1.19 * 10000) / 10000 : n;
+        return viewMode === 'bruto' ? Math.round(n * 1.19 * 10000) / 10000 : n;
+    }
+
+    function pickFromBases(bases, viewMode, costMode) {
+        if (!bases || typeof bases !== 'object') {
+            return null;
+        }
+        viewMode = viewMode || state.costViewMode;
+        costMode = costMode || state.costMode;
+        var key = costMode === 'referencia' ? 'referencia' : 'tras_dr';
+        var pair = bases[key];
+        if (!pair || typeof pair !== 'object') {
+            if (key === 'referencia' && bases.tras_dr) {
+                pair = bases.tras_dr;
+            } else {
+                return null;
+            }
+        }
+        var v = viewMode === 'bruto' ? pair.bruto : pair.neto;
+        if (v === null || v === undefined || v === '' || isNaN(v)) {
+            return null;
+        }
+        return Number(v);
     }
 
     function pickSummaryField(sum, field) {
         if (!sum) {
             return null;
         }
-        if (state.costViewMode === 'bruto') {
-            if (field === 'ultimo') {
-                return sum.ultimo_costo_bruto != null
-                    ? sum.ultimo_costo_bruto
-                    : pickCost({ costo_unitario_neto: sum.ultimo_costo }, 'bruto');
-            }
-            if (field === 'min') {
-                return sum.min_costo_bruto != null ? sum.min_costo_bruto : pickCost(sum.min_costo, 'bruto');
-            }
-            if (field === 'max') {
-                return sum.max_costo_bruto != null ? sum.max_costo_bruto : pickCost(sum.max_costo, 'bruto');
-            }
-        }
+        var viewMode = state.costViewMode;
+        var costMode = state.costMode;
         if (field === 'ultimo') {
-            return sum.ultimo_costo_neto != null ? sum.ultimo_costo_neto : sum.ultimo_costo;
+            var fromUltimo = pickFromBases(sum.ultimo_costo_bases, viewMode, costMode);
+            if (fromUltimo != null) {
+                return fromUltimo;
+            }
+            return pickCost(sum, viewMode, costMode);
         }
         if (field === 'min') {
-            return sum.min_costo_neto != null ? sum.min_costo_neto : sum.min_costo;
+            var minBases = sum.min_costo_bases;
+            var fromMin = pickFromBases(minBases, viewMode, costMode);
+            if (fromMin != null) {
+                return fromMin;
+            }
+            return viewMode === 'bruto'
+                ? (sum.min_costo_bruto != null ? sum.min_costo_bruto : pickCost(sum.min_costo, 'bruto'))
+                : (sum.min_costo_neto != null ? sum.min_costo_neto : sum.min_costo);
         }
         if (field === 'max') {
-            return sum.max_costo_neto != null ? sum.max_costo_neto : sum.max_costo;
+            var maxBases = sum.max_costo_bases;
+            var fromMax = pickFromBases(maxBases, viewMode, costMode);
+            if (fromMax != null) {
+                return fromMax;
+            }
+            return viewMode === 'bruto'
+                ? (sum.max_costo_bruto != null ? sum.max_costo_bruto : pickCost(sum.max_costo, 'bruto'))
+                : (sum.max_costo_neto != null ? sum.max_costo_neto : sum.max_costo);
         }
         return null;
     }
 
     function chartSeriesData(ds) {
-        if (state.costViewMode === 'bruto' && ds.data_bruto) {
+        var viewMode = state.costViewMode;
+        var costMode = state.costMode;
+        if (costMode === 'referencia') {
+            if (viewMode === 'bruto' && ds.data_referencia_bruto) {
+                return ds.data_referencia_bruto;
+            }
+            if (ds.data_referencia_neto) {
+                return ds.data_referencia_neto;
+            }
+        } else {
+            if (viewMode === 'bruto' && ds.data_tras_dr_bruto) {
+                return ds.data_tras_dr_bruto;
+            }
+            if (ds.data_tras_dr_neto) {
+                return ds.data_tras_dr_neto;
+            }
+        }
+        if (viewMode === 'bruto' && ds.data_bruto) {
             return ds.data_bruto;
         }
         if (ds.data_neto) {
@@ -140,7 +193,9 @@
     function syncCostViewToggles() {
         $('[data-rce-cost-view] .rce-view-btn').removeClass('is-active');
         $('[data-rce-cost-view] .rce-view-btn[data-view="' + state.costViewMode + '"]').addClass('is-active');
-        $(document).trigger('riverso:cost-view-mode', [state.costViewMode]);
+        $('[data-rce-cost-mode] .rce-cost-btn').removeClass('is-active');
+        $('[data-rce-cost-mode] .rce-cost-btn[data-cost="' + state.costMode + '"]').addClass('is-active');
+        $(document).trigger('riverso:cost-view-mode', [state.costViewMode, state.costMode]);
     }
 
     function setCostViewMode(mode) {
@@ -152,6 +207,19 @@
             return;
         }
         state.costViewMode = mode;
+        syncCostViewToggles();
+        applyCostViewMode();
+    }
+
+    function setCostMode(mode) {
+        if (mode !== 'referencia' && mode !== 'tras_dr') {
+            return;
+        }
+        if (state.costMode === mode) {
+            syncCostViewToggles();
+            return;
+        }
+        state.costMode = mode;
         syncCostViewToggles();
         applyCostViewMode();
     }
@@ -253,6 +321,10 @@
         $(document).on('click', '[data-rce-cost-view] .rce-view-btn', function (e) {
             e.preventDefault();
             setCostViewMode($(this).data('view'));
+        });
+        $(document).on('click', '[data-rce-cost-mode] .rce-cost-btn', function (e) {
+            e.preventDefault();
+            setCostMode($(this).data('cost'));
         });
         syncCostViewToggles();
 
@@ -587,26 +659,34 @@
 
     function renderHighlight(h) {
         var $box = $('#rce-highlight');
-        if (!h || (h.ultimo_costo == null && h.ultimo_costo_neto == null && h.ultimo_costo_bruto == null)) {
+        if (!h || (h.ultimo_costo == null && h.ultimo_costo_neto == null && h.ultimo_costo_bruto == null
+            && !h.ultimo_costo_bases)) {
             $box.attr('hidden', true).removeClass('is-legacy');
             return;
         }
         var legacy = isLegacyHighlight(h);
-        var neto =
-            h.ultimo_costo_neto != null
-                ? h.ultimo_costo_neto
-                : h.ultimo_costo != null
-                  ? h.ultimo_costo
-                  : null;
-        var bruto =
-            h.ultimo_costo_bruto != null
-                ? h.ultimo_costo_bruto
-                : neto != null
-                  ? Math.round(Number(neto) * 1.19 * 10000) / 10000
-                  : null;
+        var neto = pickFromBases(h.ultimo_costo_bases, 'neto', state.costMode);
+        if (neto == null) {
+            neto =
+                h.ultimo_costo_neto != null
+                    ? h.ultimo_costo_neto
+                    : h.ultimo_costo != null
+                      ? h.ultimo_costo
+                      : null;
+        }
+        var bruto = pickFromBases(h.ultimo_costo_bases, 'bruto', state.costMode);
+        if (bruto == null) {
+            bruto =
+                h.ultimo_costo_bruto != null
+                    ? h.ultimo_costo_bruto
+                    : neto != null
+                      ? Math.round(Number(neto) * 1.19 * 10000) / 10000
+                      : null;
+        }
         $box.toggleClass('is-legacy', legacy).removeAttr('hidden');
-        $('#rce-highlight-label').text(legacy ? 'Costo legacy' : 'Último costo');
-        // Siempre: bruto principal + neto secundario
+        var modeLabel = state.costMode === 'referencia' ? 'referencia' : 'tras D/R';
+        $('#rce-highlight-label').text(legacy ? 'Costo legacy' : 'Último costo (' + modeLabel + ')');
+        // Siempre: bruto principal + neto secundario (valores de la base activa)
         $('#rce-highlight-cost').text(formatMoney(bruto) + ' bruto');
         $('#rce-highlight-cost-alt').text(formatMoney(neto) + ' neto');
         if (legacy) {
@@ -620,12 +700,18 @@
         }
 
         var $var = $('#rce-highlight-variation').removeClass('up down').text('');
-        if (!legacy && h.variacion_pct !== null && h.variacion_pct !== undefined) {
-            var txt = formatPct(h.variacion_pct) + ' vs anterior';
+        var varPct = h.variacion_pct;
+        var curN = pickFromBases(h.ultimo_costo_bases, 'neto', state.costMode);
+        var prevN = pickFromBases(h.costo_previo_bases, 'neto', state.costMode);
+        if (curN != null && prevN != null && Number(prevN) !== 0) {
+            varPct = Math.round(((Number(curN) - Number(prevN)) / Math.abs(Number(prevN))) * 10000) / 100;
+        }
+        if (!legacy && varPct !== null && varPct !== undefined) {
+            var txt = formatPct(varPct) + ' vs anterior';
             $var.text(txt);
-            if (h.variacion_pct > 0) {
+            if (varPct > 0) {
                 $var.addClass('up');
-            } else if (h.variacion_pct < 0) {
+            } else if (varPct < 0) {
                 $var.addClass('down');
             }
         }
@@ -1107,22 +1193,30 @@
 
         var h = data.summary && data.summary.highlight;
         var $hl = $('#rce-evo-highlight');
-        if (h && (h.ultimo_costo != null || h.ultimo_costo_neto != null || h.ultimo_costo_bruto != null)) {
+        if (h && (h.ultimo_costo != null || h.ultimo_costo_neto != null || h.ultimo_costo_bruto != null
+            || h.ultimo_costo_bases)) {
             var legacy = isLegacyHighlight(h);
-            var neto =
-                h.ultimo_costo_neto != null
-                    ? h.ultimo_costo_neto
-                    : h.ultimo_costo != null
-                      ? h.ultimo_costo
-                      : null;
-            var bruto =
-                h.ultimo_costo_bruto != null
-                    ? h.ultimo_costo_bruto
-                    : neto != null
-                      ? Math.round(Number(neto) * 1.19 * 10000) / 10000
-                      : null;
+            var neto = pickFromBases(h.ultimo_costo_bases, 'neto', state.costMode);
+            if (neto == null) {
+                neto =
+                    h.ultimo_costo_neto != null
+                        ? h.ultimo_costo_neto
+                        : h.ultimo_costo != null
+                          ? h.ultimo_costo
+                          : null;
+            }
+            var bruto = pickFromBases(h.ultimo_costo_bases, 'bruto', state.costMode);
+            if (bruto == null) {
+                bruto =
+                    h.ultimo_costo_bruto != null
+                        ? h.ultimo_costo_bruto
+                        : neto != null
+                          ? Math.round(Number(neto) * 1.19 * 10000) / 10000
+                          : null;
+            }
             $hl.toggleClass('is-legacy', legacy);
-            $('#rce-evo-highlight-label').text(legacy ? 'Costo legacy' : 'Último costo');
+            var modeLabel = state.costMode === 'referencia' ? 'referencia' : 'tras D/R';
+            $('#rce-evo-highlight-label').text(legacy ? 'Costo legacy' : 'Último costo (' + modeLabel + ')');
             $('#rce-evo-highlight-cost').text(formatMoney(bruto) + ' bruto');
             $('#rce-evo-highlight-cost-alt').text(formatMoney(neto) + ' neto');
             if (legacy) {
@@ -1137,11 +1231,17 @@
                 $('#rce-evo-highlight-folio').text(h.ultimo_folio ? 'Folio ' + h.ultimo_folio : '');
             }
             var $v = $('#rce-evo-highlight-variation');
-            if (!legacy && h.variacion_pct != null) {
-                $v.text(formatPct(h.variacion_pct)).removeClass('up down');
-                if (h.variacion_pct > 0) {
+            var varPct = h.variacion_pct;
+            var curN = pickFromBases(h.ultimo_costo_bases, 'neto', state.costMode);
+            var prevN = pickFromBases(h.costo_previo_bases, 'neto', state.costMode);
+            if (curN != null && prevN != null && Number(prevN) !== 0) {
+                varPct = Math.round(((Number(curN) - Number(prevN)) / Math.abs(Number(prevN))) * 10000) / 100;
+            }
+            if (!legacy && varPct != null) {
+                $v.text(formatPct(varPct)).removeClass('up down');
+                if (varPct > 0) {
                     $v.addClass('up');
-                } else if (h.variacion_pct < 0) {
+                } else if (varPct < 0) {
                     $v.addClass('down');
                 }
             } else {
@@ -1373,6 +1473,10 @@
             return state.costViewMode;
         },
         setCostViewMode: setCostViewMode,
+        getCostMode: function () {
+            return state.costMode;
+        },
+        setCostMode: setCostMode,
     };
 
     $(init);

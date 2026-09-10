@@ -36,8 +36,12 @@
     var rpfBcCtx = null;
     /** Vista de montos en Buscar: 'bruto' (default) | 'neto' */
     var priceViewMode = 'bruto';
+    /** Base de costo en Buscar: 'referencia' | 'tras_dr' (default). */
+    var explorerCostMode = 'tras_dr';
     /** Vista de montos en Procesar folios: default neto (base del documento). */
     var rpfViewMode = 'neto';
+    /** Base de costo: referencia | tras_dr | tras_dr_flete. Default tras D/R. */
+    var rpfCostMode = 'tras_dr';
     /** Borradores de inputs al cambiar Neto/Bruto (item_id → {local, online, margin}). */
     var rpfDraftPrices = {};
     /** Evita ciclo precio ↔ margen. */
@@ -144,14 +148,104 @@
             '<span id="rpf-view-toggle" class="rpe-view-toggle rpf-view-toggle" role="group" aria-label="Vista de montos del folio" style="margin-left:10px;">' +
             '<button type="button" class="button rpe-view-btn rpf-view-btn" data-view="neto">Neto</button>' +
             '<button type="button" class="button rpe-view-btn rpf-view-btn" data-view="bruto">Bruto</button>' +
+            '</span>' +
+            '<span id="rpf-cost-toggle" class="rpe-view-toggle rpf-cost-toggle" role="group" aria-label="Base de costo" style="margin-left:10px;">' +
+            '<button type="button" class="button rpf-cost-btn" data-cost="referencia" title="Precio lista / costo antes de D/R">Costo referencia</button>' +
+            '<button type="button" class="button rpf-cost-btn" data-cost="tras_dr" title="Tras descuento y recargo">Costo tras Descuento/Recargo</button>' +
+            '<button type="button" class="button rpf-cost-btn" data-cost="tras_dr_flete" title="Tras D/R más flete">Costo tras D/R + flete</button>' +
+            '<button type="button" class="button" id="rpf-btn-flete" title="Ver y asignar flete del folio">Flete</button>' +
             '</span>'
         );
+    }
+
+    function rpfInvoiceFleteOk() {
+        return !!(rpfSession && rpfSession.invoice && rpfSession.invoice.flete_ok);
     }
 
     function updateRpfViewToggle() {
         ensureRpfViewToggle();
         $('#rpf-view-toggle .rpf-view-btn').removeClass('is-active');
         $('#rpf-view-toggle .rpf-view-btn[data-view="' + rpfViewMode + '"]').addClass('is-active');
+        var fleteOk = rpfInvoiceFleteOk();
+        var $drf = $('#rpf-cost-toggle .rpf-cost-btn[data-cost="tras_dr_flete"]');
+        $drf.prop('disabled', !fleteOk)
+            .attr('title', fleteOk
+                ? 'Tras D/R más flete'
+                : 'Resuelva el flete del folio (botón Flete) antes de usar esta vista');
+        if (!fleteOk && rpfCostMode === 'tras_dr_flete') {
+            rpfCostMode = 'tras_dr';
+        }
+        $('#rpf-cost-toggle .rpf-cost-btn').removeClass('is-active');
+        $('#rpf-cost-toggle .rpf-cost-btn[data-cost="' + rpfCostMode + '"]').addClass('is-active');
+    }
+
+    function rpfPickCostBase(bases, mode, fallback) {
+        if (!bases || typeof bases !== 'object') {
+            return fallback != null && fallback !== '' && !isNaN(fallback) ? Number(fallback) : null;
+        }
+        var key = mode === 'referencia' ? 'referencia'
+            : (mode === 'tras_dr_flete' ? 'tras_dr_flete' : 'tras_dr');
+        var v = bases[key];
+        if (v === null || v === undefined || v === '' || isNaN(v)) {
+            if (mode !== 'tras_dr_flete' && fallback != null && fallback !== '' && !isNaN(fallback)) {
+                return Number(fallback);
+            }
+            return null;
+        }
+        return Number(v);
+    }
+
+    function rpfLineCostFolio(ln) {
+        return rpfPickCostBase(ln.costo_folio_bases, rpfCostMode, ln.costo_folio);
+    }
+
+    function rpfLineCostAnterior(ln) {
+        return rpfPickCostBase(ln.costo_anterior_bases, rpfCostMode, ln.costo_anterior);
+    }
+
+    function rpfInvoiceAdminUrl(fid) {
+        fid = parseInt(fid, 10) || 0;
+        if (fid <= 0) {
+            return '';
+        }
+        if (rpfSession && rpfSession.invoice && Number(rpfSession.invoice.id) === fid && rpfSession.invoice.url_factura) {
+            return rpfSession.invoice.url_factura;
+        }
+        var base = cfg.admin_url || '';
+        if (!base && productsAdminUrl) {
+            base = productsAdminUrl.replace(/admin\.php.*$/, '');
+        }
+        if (!base) {
+            return '';
+        }
+        return base.replace(/\/?$/, '/') + 'admin.php?page=riverso-pos-invoices&factura=' + fid;
+    }
+
+    function rpfFleteWarningHtml(ln, which) {
+        if (rpfCostMode !== 'tras_dr_flete') {
+            return '';
+        }
+        var ok = which === 'folio' ? !!ln.flete_ok : ln.prior_flete_ok;
+        if (ok === true) {
+            return '';
+        }
+        if (which === 'anterior' && (ok === null || ok === undefined)) {
+            return '';
+        }
+        var fid = which === 'folio'
+            ? (rpfFacturaId || (rpfSession && rpfSession.invoice && rpfSession.invoice.id) || 0)
+            : (ln.prior_factura_id || (ln.costo_anterior_origen && ln.costo_anterior_origen.factura_id) || 0);
+        var url = rpfInvoiceAdminUrl(fid);
+        var label = which === 'folio' ? 'Sin flete en folio actual' : 'Sin flete en folio anterior';
+        var html = '<div class="rpf-chip rpf-chip-flete-warn" title="' + esc(label) + '">' + esc(label);
+        if (which === 'folio') {
+            html += ' <button type="button" class="button-link rpf-open-flete-modal">Asignar</button>';
+        }
+        if (url) {
+            html += ' <a href="' + esc(url) + '" target="_blank" rel="noopener">Abrir folio</a>';
+        }
+        html += '</div>';
+        return html;
     }
 
     function switchRpfViewMode(newMode) {
@@ -385,14 +479,60 @@
         $el.text(label).attr('data-key', key).show();
     }
 
+    function pickExplorerCostPair(basesOrRow, mode) {
+        mode = mode || explorerCostMode;
+        var bases = null;
+        if (basesOrRow && basesOrRow.c_ref_bases) {
+            bases = basesOrRow.c_ref_bases;
+        } else if (basesOrRow && (basesOrRow.referencia || basesOrRow.tras_dr)) {
+            bases = basesOrRow;
+        }
+        if (!bases) {
+            return null;
+        }
+        var key = mode === 'referencia' ? 'referencia' : 'tras_dr';
+        var pair = bases[key];
+        if (!pair && key === 'referencia') {
+            pair = bases.tras_dr;
+        }
+        if (!pair || typeof pair !== 'object') {
+            return null;
+        }
+        return pair;
+    }
+
+    function pickExplorerCostNetoBruto(row) {
+        var pair = pickExplorerCostPair(row);
+        if (pair) {
+            return {
+                neto: pair.neto != null ? Number(pair.neto) : null,
+                bruto: pair.bruto != null ? Number(pair.bruto) : null
+            };
+        }
+        var bruto = row && (row.c_ref_bruto != null ? row.c_ref_bruto : row.c_ref);
+        var neto = row && row.c_ref_neto;
+        if (neto == null && bruto != null) {
+            var iva = (row.iva_tipo || (explorerData && explorerData.product && explorerData.product.facto_iva_tipo) || 'afecto');
+            neto = String(iva).toLowerCase() === 'exento'
+                ? Number(bruto)
+                : Math.round((Number(bruto) / 1.19) * 10000) / 10000;
+        }
+        return {
+            neto: neto != null ? Number(neto) : null,
+            bruto: bruto != null ? Number(bruto) : null
+        };
+    }
+
     function updateViewHints() {
         var isBruto = priceViewMode === 'bruto';
         $('.rpe-view-hint[data-hint-for="costo"]').attr('data-label', isBruto ? '(bruto)' : '(neto)');
         $('.rpe-view-hint[data-hint-for="pref"]').attr('data-label', isBruto ? '(bruto)' : '(neto)');
         $('.rpe-view-hint[data-hint-for="precio"]').attr('data-label', isBruto ? '(bruto)' : '(neto)');
-        var $explorerBtns = $('.rpe-view-toggle').not('#rpf-view-toggle').find('.rpe-view-btn');
+        var $explorerBtns = $('.rpe-view-toggle').not('#rpf-view-toggle, #rpf-cost-toggle').find('.rpe-view-btn');
         $explorerBtns.removeClass('is-active');
         $explorerBtns.filter('[data-view="' + priceViewMode + '"]').addClass('is-active');
+        $('.rpe-cost-toggle .rpe-cost-btn').removeClass('is-active');
+        $('.rpe-cost-toggle .rpe-cost-btn[data-cost="' + explorerCostMode + '"]').addClass('is-active');
     }
 
     function fillDualField(prefix, field, neto, bruto) {
@@ -495,7 +635,7 @@
             st = 'parcial';
         }
         var labels = { ninguno: 'Ninguno', parcial: 'Parcial', completo: 'Completo' };
-        return '<span class="rpf-progress">' +
+        return '<span class="rpf-progress" title="Confirmados desde este folio">' +
             '<code>' + s + '/' + t + '</code> ' +
             '<span class="rpf-progress-badge rpf-progress-' + esc(st) + '">' + esc(labels[st] || st) + '</span>' +
             '</span>';
@@ -743,6 +883,7 @@
     function renderProcessLines(lines, isHybrid) {
         if (!lines.length) {
             $('#rpf-lines').html('<p>Sin ítems de producto.</p>');
+            renderRpfPdfFooter();
             return;
         }
         var suf = ' ' + rpfAmountSuffix();
@@ -762,8 +903,6 @@
             var blocked = !!ln.blocked && !hybridOmitted;
             var rowClass = (blocked || hybridOmitted) ? 'rpf-row-blocked' : '';
             if (hybridOmitted) rowClass += ' rpf-row-hybrid-omitted';
-            if (ln.costo_delta > 0) rowClass += ' rpf-cost-up';
-            if (ln.costo_delta < 0) rowClass += ' rpf-cost-down';
             var iva = ln.iva_tipo || 'afecto';
             var sku = ln.is_child ? (ln.unit_sku || ln.sku) + ' <span class="description">(unitario)</span>' : (ln.sku || '—');
             var draft = rpfDraftPrices[ln.item_id] || {};
@@ -773,15 +912,29 @@
             var displayOnline = draft.online != null && draft.online !== ''
                 ? draft.online
                 : rpfPriceDisplay(ln.precio_online_propuesto, iva);
-            var costoNetoBase = ln.costo_folio != null && ln.costo_folio !== ''
-                ? Number(ln.costo_folio)
-                : (ln.costo_anterior != null && ln.costo_anterior !== '' ? Number(ln.costo_anterior) : null);
+            var costoFolioNeto = rpfLineCostFolio(ln);
+            var costoAntNeto = rpfLineCostAnterior(ln);
+            var costoDeltaRaw = (costoFolioNeto != null && costoAntNeto != null)
+                ? (Number(costoFolioNeto) - Number(costoAntNeto))
+                : null;
+            if (costoDeltaRaw != null && costoDeltaRaw > 0) rowClass += ' rpf-cost-up';
+            if (costoDeltaRaw != null && costoDeltaRaw < 0) rowClass += ' rpf-cost-down';
+            var costoDeltaPct = (costoAntNeto != null && Number(costoAntNeto) !== 0 && costoFolioNeto != null)
+                ? Math.round(((Number(costoFolioNeto) - Number(costoAntNeto)) / Math.abs(Number(costoAntNeto))) * 10000) / 100
+                : null;
+            var costoNetoBase = costoFolioNeto != null
+                ? Number(costoFolioNeto)
+                : (costoAntNeto != null ? Number(costoAntNeto) : null);
             var canEditPrice = canManage && !blocked && !hybridOmitted;
             var canEditMargin = canEditPrice && costoNetoBase != null && !isNaN(costoNetoBase);
             var priceInput = !canEditPrice
                 ? money(displayLocal)
                 : '<input type="number" step="0.0001" min="0" class="small-text rpf-p-local" data-item="' + ln.item_id + '" value="' +
                     (displayLocal != null ? displayLocal : '') + '">';
+            if (canEditPrice && (ln.apply_mode || 'apply') === 'historial_only' && ln.precio_vigente != null) {
+                priceInput += '<div class="description rpf-vigente-hint">Vigente: ' +
+                    money(rpfPriceDisplay(ln.precio_vigente, iva)) + suf + '</div>';
+            }
             var onlineInput = '';
             if (ln.requires_online && canEditPrice) {
                 onlineInput = '<div class="description">Online <input type="number" step="0.0001" min="0" class="small-text rpf-p-online" data-item="' + ln.item_id + '" value="' +
@@ -806,10 +959,43 @@
                     ' data-nombre="' + esc(ln.nombre || ln.descripcion || '') + '">Barcode</button>';
             }
             var saveBtn = '';
+            var applyMode = ln.apply_mode || 'apply';
+            var confirmedHere = !!ln.confirmed_from_folio;
+            var chips = '';
+            if (!blocked && !hybridOmitted) {
+                if (ln.costo_unchanged) {
+                    chips += '<span class="rpf-chip rpf-chip-cost-same" title="El costo del folio no cambió respecto al anterior">Costo sin cambio — confirmar precio</span>';
+                }
+                if (ln.has_local_price && !confirmedHere && applyMode === 'apply') {
+                    chips += '<span class="rpf-chip rpf-chip-other-origin">Precio vigente (otro origen) — confirmar</span>';
+                }
+                if (applyMode === 'historial_only' && ln.newer_folio) {
+                    var nf = ln.newer_folio;
+                    var nfLabel = (nf.folio ? '#' + nf.folio : ('#' + (nf.factura_id || ''))) +
+                        (nf.fecha ? ' · ' + nf.fecha : '');
+                    chips += '<span class="rpf-chip rpf-chip-historial-only">' +
+                        'Hay un folio más reciente (' + esc(nfLabel) + ') que ya fijó el precio. ' +
+                        'Confirmar aquí solo deja constancia; no cambia el vigente.' +
+                        (nf.url ? ' <a href="' + esc(nf.url) + '" target="_blank" rel="noopener">Abrir</a>' : '') +
+                        '</span>';
+                }
+            }
             if (hybridOmitted) {
                 saveBtn = '<span class="description">Ya ingresada (híbrido)</span>';
             } else if (!blocked && canManage) {
-                saveBtn = '<button type="button" class="button button-small button-primary rpf-save-line" data-item="' + ln.item_id + '">Guardar</button>';
+                if (applyMode === 'historial_only') {
+                    saveBtn = '<button type="button" class="button button-small button-primary rpf-save-line" data-item="' + ln.item_id + '" data-mode="historial">Confirmar en historial</button>';
+                } else {
+                    var sameAsVigente = false;
+                    if (ln.has_local_price && displayLocal != null && displayLocal !== '') {
+                        var propDisp = rpfPriceDisplay(ln.precio_propuesto, iva);
+                        if (propDisp != null && Math.abs(Number(displayLocal) - Number(propDisp)) < 0.00015) {
+                            sameAsVigente = true;
+                        }
+                    }
+                    var btnLabel = (ln.has_local_price && sameAsVigente) ? 'Confirmar' : 'Guardar';
+                    saveBtn = '<button type="button" class="button button-small button-primary rpf-save-line" data-item="' + ln.item_id + '" data-mode="apply">' + btnLabel + '</button>';
+                }
             } else if (blocked) {
                 saveBtn = '<span class="description">' + esc(ln.block_reason || 'Bloqueado') + '</span>';
                 if (canCreateLocal && (ln.block_reason || '') === 'Sin SKU') {
@@ -825,13 +1011,24 @@
                         ' data-nombre="' + esc(ln.nombre || ln.descripcion || '') + '">Responder aquí</button>';
                 }
             }
-            if (ln.has_local_price && !blocked && !hybridOmitted) {
-                saveBtn += ' <span class="dashicons dashicons-yes" style="color:green;" title="Tiene precio local"></span>';
+            if (confirmedHere && !blocked && !hybridOmitted) {
+                saveBtn += ' <span class="dashicons dashicons-yes" style="color:green;" title="Confirmado desde este folio"></span>';
+            }
+            if (chips) {
+                saveBtn += '<div class="rpf-line-chips">' + chips + '</div>';
             }
 
-            var costoDeltaShow = rpfDeltaDisplay(ln.costo_delta, 'cost', iva);
+            var costoDeltaShow = rpfDeltaDisplay(costoDeltaRaw, 'cost', iva);
             var precioDeltaShow = rpfDeltaDisplay(ln.precio_delta, 'price', iva);
-            var margenAntShow = rpfMarginDisplay(ln.margen_anterior, iva);
+            var margenAntShow = null;
+            if (ln.precio_anterior != null && costoAntNeto != null) {
+                var pAntForM = rpfIsExento(iva)
+                    ? Number(ln.precio_anterior)
+                    : Number(ln.precio_anterior) / 1.19;
+                margenAntShow = rpfRound4(pAntForM - Number(costoAntNeto));
+            } else {
+                margenAntShow = rpfMarginDisplay(ln.margen_anterior, iva);
+            }
             var margenActNeto = draft.margin != null && draft.margin !== ''
                 ? draft.margin
                 : (ln.margen_actual != null ? rpfRound4(ln.margen_actual) : null);
@@ -850,14 +1047,11 @@
                 margenActCell = money(rpfMarginDisplay(ln.margen_actual, iva)) +
                     (ln.margen_actual_pct != null ? ' <span class="description">(' + ln.margen_actual_pct + '%)</span>' : '');
             }
-            var margenDeltaRaw = (ln.margen_actual != null && ln.margen_anterior != null)
-                ? (Number(ln.margen_actual) - Number(ln.margen_anterior))
+            var margenDeltaRaw = (margenActNeto != null && margenAntShow != null && !isNaN(margenActNeto) && !isNaN(margenAntShow))
+                ? (Number(margenActNeto) - Number(margenAntShow))
                 : null;
 
             // Factor = P neto / C neto (= P bruto / C bruto si afecto).
-            var costoAntNeto = ln.costo_anterior != null && ln.costo_anterior !== ''
-                ? Number(ln.costo_anterior)
-                : null;
             var pAntNeto = null;
             if (ln.precio_anterior != null && ln.precio_anterior !== '' && !isNaN(ln.precio_anterior)) {
                 pAntNeto = rpfIsExento(iva)
@@ -903,16 +1097,17 @@
                 '<td><code>' + sku + '</code></td>' +
                 '<td>' + esc(ln.nombre || ln.descripcion || '') +
                     (ln.legacy_used ? ' <span class="description">(legacy)</span>' : '') + '</td>' +
-                '<td>' + money(rpfCostDisplay(ln.costo_anterior, iva)) +
-                    rpfPriorOriginHint(ln.costo_anterior_origen, 'Costo anterior') + '</td>' +
-                '<td>' + money(rpfCostDisplay(ln.costo_folio, iva)) + '</td>' +
-                '<td class="' + deltaClass(ln.costo_delta) + '">' + fmtDelta(costoDeltaShow, ln.costo_delta_pct) + '</td>' +
+                '<td>' + money(rpfCostDisplay(costoAntNeto, iva)) +
+                    rpfPriorOriginHint(ln.costo_anterior_origen, 'Costo anterior') +
+                    rpfFleteWarningHtml(ln, 'anterior') + '</td>' +
+                '<td>' + money(rpfCostDisplay(costoFolioNeto, iva)) +
+                    rpfFleteWarningHtml(ln, 'folio') + '</td>' +
+                '<td class="' + deltaClass(costoDeltaRaw) + '">' + fmtDelta(costoDeltaShow, costoDeltaPct) + '</td>' +
                 '<td>' + money(rpfPriceDisplay(ln.precio_anterior, iva)) +
                     rpfPriorOriginHint(ln.precio_anterior_origen, 'Precio anterior') + '</td>' +
                 '<td>' + priceInput + onlineInput + '</td>' +
                 '<td class="' + deltaClass(ln.precio_delta) + '">' + fmtDelta(precioDeltaShow, ln.precio_delta_pct) + '</td>' +
-                '<td>' + money(margenAntShow) +
-                    (ln.margen_anterior_pct != null ? ' <span class="description">(' + ln.margen_anterior_pct + '%)</span>' : '') + '</td>' +
+                '<td>' + money(margenAntShow) + '</td>' +
                 '<td class="' + deltaClass(margenDeltaRaw) + '">' + margenActCell + '</td>' +
                 '<td>' + rpfFmtFactor(factorAnt) + '</td>' +
                 '<td class="' + deltaClass(factorDeltaRaw) + '">' + factorActCell + '</td>' +
@@ -925,6 +1120,181 @@
             html = '<p class="description rpf-hybrid-hint">Podés marcar o desmarcar filas ya ingresadas; el árbol de tareas se actualiza solo para las que faltan. Podés guardar filas válidas aunque otras tengan error.</p>' + html;
         }
         $('#rpf-lines').html(html);
+        renderRpfPdfFooter();
+    }
+
+    function renderRpfPdfFooter() {
+        var $wrap = $('#rpf-pdf-footer');
+        if (!$wrap.length) {
+            $('#rpf-lines').after(
+                '<div id="rpf-pdf-footer" class="rpf-pdf-footer" style="display:none;margin-top:12px;">' +
+                '<button type="button" class="button" id="rpf-btn-ver-pdf">Ver PDF</button>' +
+                '<div id="rpf-pdf-viewer-wrap" style="display:none;margin-top:10px;">' +
+                '<iframe id="rpf-pdf-viewer" title="Documento" style="width:100%;height:480px;border:1px solid #c3c4c7;border-radius:4px;background:#fff;"></iframe>' +
+                '</div></div>'
+            );
+            $wrap = $('#rpf-pdf-footer');
+        }
+        var adjuntos = (rpfSession && rpfSession.invoice && rpfSession.invoice.adjuntos) || [];
+        var withUrl = adjuntos.filter(function (a) { return a && a.url; });
+        if (!withUrl.length) {
+            $wrap.hide();
+            $('#rpf-pdf-viewer-wrap').hide();
+            $('#rpf-pdf-viewer').attr('src', 'about:blank');
+            return;
+        }
+        $wrap.show().data('adjuntos', withUrl);
+        $('#rpf-btn-ver-pdf').text(withUrl.length > 1 ? 'Ver PDF / escaneos (' + withUrl.length + ')' : 'Ver PDF');
+    }
+
+    function closeRpfFleteModal() {
+        $('#rpf-flete-modal').hide().attr('aria-hidden', 'true');
+    }
+
+    function openRpfFleteModal() {
+        if (!rpfFacturaId) {
+            return;
+        }
+        ensureRpfFleteModal();
+        $('#rpf-flete-modal').css('display', 'flex').attr('aria-hidden', 'false');
+        $('#rpf-flete-body').html('<p class="description">Cargando…</p>');
+        post('riverso_get_invoice', { factura_id: rpfFacturaId }).done(function (res) {
+            if (!res.success || !res.data) {
+                $('#rpf-flete-body').html('<p class="description">No se pudo cargar la factura.</p>');
+                return;
+            }
+            renderRpfFleteModalBody(res.data);
+        }).fail(function () {
+            $('#rpf-flete-body').html('<p class="description">Error de red.</p>');
+        });
+    }
+
+    function ensureRpfFleteModal() {
+        if ($('#rpf-flete-modal').length) {
+            return;
+        }
+        $('body').append(
+            '<div id="rpf-flete-modal" class="rpf-modal" style="display:none;" aria-hidden="true">' +
+            '<div class="rpf-modal-backdrop rpf-flete-modal-backdrop"></div>' +
+            '<div class="rpf-modal-card rpf-flete-card">' +
+            '<div class="rpf-modal-head">' +
+            '<h2 style="margin:0;">Flete del folio</h2>' +
+            '<button type="button" class="button rpf-flete-modal-close">Cerrar</button>' +
+            '</div>' +
+            '<div id="rpf-flete-body" class="rpf-modal-body"></div>' +
+            '</div></div>'
+        );
+    }
+
+    function renderRpfFleteModalBody(factura) {
+        var fletes = factura.fletes_vinculados || [];
+        var isGratuito = parseInt(factura.flete_gratuito, 10) === 1;
+        var montoManual = Number(factura.costo_envio_manual || 0);
+        var html = '';
+        if (isGratuito) {
+            html += '<p><span class="rpf-chip rpf-chip-cost-same">Flete gratuito</span> ' +
+                '<button type="button" class="button button-small" id="rpf-flete-btn-ungratis">Quitar</button></p>';
+        } else if (montoManual > 0) {
+            html += '<p><span class="rpf-chip">Flete manual $' + Number(montoManual).toLocaleString('es-CL') + '</span></p>';
+        }
+        if (fletes.length) {
+            html += '<ul style="margin:0 0 12px;padding-left:18px;">';
+            fletes.forEach(function (fl) {
+                html += '<li>Folio <strong>' + esc(fl.folio) + '</strong> — ' + esc(fl.proveedor_nombre || '') +
+                    ' — $' + Number(fl.monto_total || 0).toLocaleString('es-CL') +
+                    ' <button type="button" class="button button-small rpf-flete-unassign" data-envio-id="' + fl.id + '">Desvincular</button></li>';
+            });
+            html += '</ul>';
+        } else if (!isGratuito && montoManual <= 0) {
+            html += '<p class="description">Sin fletes vinculados.</p>';
+        }
+
+        html += '<div style="margin:12px 0;padding-top:10px;border-top:1px solid #dcdcde;">' +
+            '<label><strong>Buscar flete para vincular</strong></label>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:6px;">' +
+            '<div class="folio-search-wrap" style="position:relative;flex:1;min-width:200px;">' +
+            '<input type="text" id="rpf-flete-search" class="regular-text" style="width:100%;" placeholder="Folio, proveedor o RUT…" autocomplete="off">' +
+            '<input type="hidden" id="rpf-flete-assign-id" value="">' +
+            '<div id="rpf-flete-results" class="folio-search-results rpf-folio-results" style="display:none;"></div>' +
+            '</div>' +
+            '<label style="margin:0;">Desde<input type="date" id="rpf-flete-desde" style="display:block;margin-top:2px;"></label>' +
+            '<label style="margin:0;">Hasta<input type="date" id="rpf-flete-hasta" style="display:block;margin-top:2px;"></label>' +
+            '<button type="button" class="button" id="rpf-flete-btn-search">Buscar</button>' +
+            '<button type="button" class="button button-primary" id="rpf-flete-btn-assign">Vincular</button>' +
+            '</div>' +
+            '<p id="rpf-flete-selected" class="description" style="margin-top:6px;"></p>' +
+            '</div>';
+
+        html += '<div style="margin:12px 0;padding-top:10px;border-top:1px solid #dcdcde;">' +
+            '<label><strong>Flete manual</strong></label>' +
+            '<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center;">' +
+            '<input type="text" id="rpf-flete-manual-monto" class="regular-text" style="width:140px;" placeholder="Monto $" value="' +
+            (montoManual > 0 ? String(Math.round(montoManual)) : '') + '">' +
+            '<button type="button" class="button button-primary" id="rpf-flete-btn-manual">Guardar flete manual</button>' +
+            '</div></div>';
+
+        if (!isGratuito) {
+            html += '<div style="margin-top:10px;">' +
+                '<button type="button" class="button" id="rpf-flete-btn-gratis">Marcar flete gratuito</button>' +
+                ' <span class="description">Sin documento — costo $0.</span></div>';
+        }
+
+        $('#rpf-flete-body').html(html);
+        bindRpfFleteSearcher();
+    }
+
+    function bindRpfFleteSearcher() {
+        var timer = null;
+        function runSearch() {
+            var q = $('#rpf-flete-search').val().trim();
+            var desde = $('#rpf-flete-desde').val() || '';
+            var hasta = $('#rpf-flete-hasta').val() || '';
+            var $results = $('#rpf-flete-results');
+            if (!q && !desde && !hasta) {
+                $results.hide().empty();
+                return;
+            }
+            post('riverso_search_invoice_folios', {
+                q: q,
+                tipos: 'envio',
+                exclude_id: rpfFacturaId,
+                exclude_linked_to: rpfFacturaId,
+                fecha_desde: desde,
+                fecha_hasta: hasta
+            }).done(function (res) {
+                if (!res.success) {
+                    $results.html('<div class="folio-result-empty">Error al buscar</div>').show();
+                    return;
+                }
+                var rows = (res.data && res.data.results) || [];
+                if (!rows.length) {
+                    $results.html('<div class="folio-result-empty">Sin resultados</div>').show();
+                    return;
+                }
+                $results.empty();
+                rows.forEach(function (f) {
+                    var label = 'Folio ' + f.folio + ' · ' + (f.fecha_emision || '') +
+                        ' · $' + Number(f.monto_total || 0).toLocaleString('es-CL') +
+                        ' · ' + (f.proveedor_nombre || f.rut_emisor || '');
+                    $('<button type="button" class="folio-result-item"></button>')
+                        .text(label)
+                        .on('click', function () {
+                            $('#rpf-flete-assign-id').val(String(f.id));
+                            $('#rpf-flete-search').val('Folio ' + f.folio);
+                            $('#rpf-flete-selected').html('Seleccionado: <strong>' + esc(label) + '</strong>');
+                            $results.hide().empty();
+                        })
+                        .appendTo($results);
+                });
+                $results.show();
+            });
+        }
+        $('#rpf-flete-search').off('input.rpfFlete').on('input.rpfFlete', function () {
+            clearTimeout(timer);
+            timer = setTimeout(runSearch, 250);
+        });
+        $('#rpf-flete-btn-search, #rpf-flete-desde, #rpf-flete-hasta').off('click.rpfFlete change.rpfFlete')
+            .on('click.rpfFlete change.rpfFlete', runSearch);
     }
 
     function rpfGoogleUrl(nombre) {
@@ -1545,6 +1915,10 @@
     function backToList() {
         rpfSession = null;
         rpfFacturaId = 0;
+        closeRpfFleteModal();
+        $('#rpf-pdf-viewer-wrap').hide();
+        $('#rpf-pdf-viewer').attr('src', 'about:blank');
+        $('#rpf-pdf-footer').hide();
         $('#rpf-session-panel').hide();
         $('#rpf-list-panel').show();
         loadProcessList();
@@ -1571,15 +1945,16 @@
                 var local = r.local || {};
                 var pBruto = local.p_asignado != null ? local.p_asignado : r.p_asignado;
                 var pNeto = local.p_neto != null ? local.p_neto : r.p_neto;
-                var cBruto = local.c_ref_bruto != null ? local.c_ref_bruto
-                    : (local.c_ref != null ? local.c_ref : r.c_ref);
-                var cNeto = local.c_ref_neto != null ? local.c_ref_neto : r.c_ref_neto;
-                if (cNeto == null && cBruto != null) {
-                    var ivaHit = (r.facto_iva_tipo || 'afecto').toLowerCase();
-                    cNeto = ivaHit === 'exento'
-                        ? Number(cBruto)
-                        : Math.round((Number(cBruto) / 1.19) * 10000) / 10000;
-                }
+                var costSrc = local.c_ref_bases ? local : (r.c_ref_bases ? r : local);
+                var costs = pickExplorerCostNetoBruto($.extend({}, costSrc, {
+                    c_ref_bases: local.c_ref_bases || r.c_ref_bases,
+                    c_ref: local.c_ref != null ? local.c_ref : r.c_ref,
+                    c_ref_bruto: local.c_ref_bruto != null ? local.c_ref_bruto : r.c_ref_bruto,
+                    c_ref_neto: local.c_ref_neto != null ? local.c_ref_neto : r.c_ref_neto,
+                    iva_tipo: r.facto_iva_tipo
+                }));
+                var cBruto = costs.bruto;
+                var cNeto = costs.neto;
                 var pShow = priceViewMode === 'bruto' ? pBruto : pNeto;
                 var pAlt = priceViewMode === 'bruto' ? pNeto : pBruto;
                 var cShow = priceViewMode === 'bruto' ? cBruto : cNeto;
@@ -1677,8 +2052,9 @@
         var oldBruto = row.p_asignado != null ? Number(row.p_asignado) : null;
         var oldNeto = row.p_neto != null ? Number(row.p_neto) : netFromGross(oldBruto, ivaTipo);
         var newNeto = netFromGross(newBruto, ivaTipo);
-        var cBruto = row.c_ref_bruto != null ? row.c_ref_bruto : row.c_ref;
-        var cNeto = row.c_ref_neto != null ? row.c_ref_neto : netFromGross(cBruto, ivaTipo);
+        var cPair = pickExplorerCostNetoBruto(row);
+        var cBruto = cPair.bruto;
+        var cNeto = cPair.neto;
         var origenCosto = originLabel(row.origen_costo);
 
         var oldFactor = (oldBruto != null && cBruto != null && Number(cBruto) > 0)
@@ -1719,16 +2095,12 @@
 
     function fillChannel(canal, row) {
         var prefix = 'rpe-' + canal;
-        var cBruto = row.c_ref_bruto != null ? row.c_ref_bruto : row.c_ref;
-        var cNeto = row.c_ref_neto;
-        if (cNeto == null && cBruto != null) {
-            var ivaC = (row.iva_tipo || (explorerData && explorerData.product && explorerData.product.facto_iva_tipo) || 'afecto');
-            cNeto = String(ivaC).toLowerCase() === 'exento'
-                ? Number(cBruto)
-                : Math.round((Number(cBruto) / 1.19) * 10000) / 10000;
-        }
-        var pRefBruto = row.p_ref_bruto != null ? row.p_ref_bruto : row.p_ref;
-        var pRefNeto = row.p_ref_neto;
+        var costs = pickExplorerCostNetoBruto(row || {});
+        var cBruto = costs.bruto;
+        var cNeto = costs.neto;
+        // Por ahora: p_ref en pantalla = p_asignado (no usa p_ref persistido).
+        var pRefBruto = row.p_asignado != null ? Number(row.p_asignado) : null;
+        var pRefNeto = row.p_neto;
         if (pRefNeto == null && pRefBruto != null) {
             var ivaR = (row.iva_tipo || (explorerData && explorerData.product && explorerData.product.facto_iva_tipo) || 'afecto');
             pRefNeto = String(ivaR).toLowerCase() === 'exento'
@@ -1760,18 +2132,15 @@
         $('#' + prefix + '-neto').text(money(neto));
         var pBruto = row.p_asignado != null ? Number(row.p_asignado) : null;
         var factorMin = row.factor_minimo != null ? Number(row.factor_minimo) : 1.30;
-        var factor = row.margen_factor != null
-            ? Number(row.margen_factor)
-            : ((pBruto != null && cBruto && Number(cBruto) > 0)
-                ? Math.round((pBruto / Number(cBruto)) * 10000) / 10000
-                : null);
+        var factor = (pBruto != null && cBruto != null && Number(cBruto) > 0)
+            ? Math.round((pBruto / Number(cBruto)) * 10000) / 10000
+            : null;
         var alertaReal = factor != null && factor < factorMin;
         var margen = '—';
         if (factor != null && pBruto != null && cBruto != null) {
             margen = money(pBruto) + ' / ' + money(cBruto) + ' = ' + factor.toFixed(4) + '×';
-            if (row.margen_unitario != null) {
-                margen += ' · Δ ' + money(row.margen_unitario);
-            }
+            var delta = Math.round((pBruto - Number(cBruto)) * 10000) / 10000;
+            margen += ' · Δ ' + money(delta);
         }
         $('#' + prefix + '-margen').text(margen);
         var estado = (row.estado_aprobacion || '—');
@@ -2338,6 +2707,20 @@
             refreshExplorerAmounts();
         });
 
+        $(document).on('click', '.rpe-cost-toggle .rpe-cost-btn', function (e) {
+            e.preventDefault();
+            var mode = $(this).data('cost');
+            if (mode !== 'referencia' && mode !== 'tras_dr') {
+                return;
+            }
+            if (explorerCostMode === mode) {
+                updateViewHints();
+                return;
+            }
+            explorerCostMode = mode;
+            refreshExplorerAmounts();
+        });
+
         $(document).on('click', '#rpf-view-toggle .rpf-view-btn', function (e) {
             e.preventDefault();
             var view = $(this).data('view');
@@ -2349,6 +2732,150 @@
                     'Montos en <strong>' + (rpfViewMode === 'neto' ? 'neto' : 'bruto') + '</strong>'
                 ));
             }
+        });
+
+        $(document).on('click', '#rpf-cost-toggle .rpf-cost-btn', function (e) {
+            e.preventDefault();
+            if ($(this).prop('disabled')) {
+                return;
+            }
+            var mode = $(this).data('cost');
+            if (mode !== 'referencia' && mode !== 'tras_dr' && mode !== 'tras_dr_flete') {
+                return;
+            }
+            if (mode === 'tras_dr_flete' && !rpfInvoiceFleteOk()) {
+                return;
+            }
+            if (mode === rpfCostMode) {
+                updateRpfViewToggle();
+                return;
+            }
+            rpfCostMode = mode;
+            updateRpfViewToggle();
+            if (rpfSession) {
+                renderProcessLines(rpfSession.lines || [], !!rpfSession.is_hybrid);
+            }
+        });
+
+        $(document).on('click', '#rpf-btn-flete, .rpf-open-flete-modal', function (e) {
+            e.preventDefault();
+            openRpfFleteModal();
+        });
+
+        $(document).on('click', '#rpf-btn-ver-pdf', function (e) {
+            e.preventDefault();
+            var adjuntos = $('#rpf-pdf-footer').data('adjuntos') || [];
+            if (!adjuntos.length) {
+                return;
+            }
+            var $wrap = $('#rpf-pdf-viewer-wrap');
+            var $iframe = $('#rpf-pdf-viewer');
+            if ($wrap.is(':visible')) {
+                $wrap.hide();
+                $iframe.attr('src', 'about:blank');
+                return;
+            }
+            $iframe.attr('src', adjuntos[0].url);
+            $wrap.show();
+        });
+
+        $(document).on('click', '.rpf-flete-modal-close, .rpf-flete-modal-backdrop', function () {
+            closeRpfFleteModal();
+        });
+
+        $(document).on('click', '#rpf-flete-btn-assign', function () {
+            var envioId = $('#rpf-flete-assign-id').val();
+            if (!envioId || !rpfFacturaId) {
+                window.alert('Busque y seleccione un flete');
+                return;
+            }
+            post('riverso_assign_shipping_invoice', {
+                factura_productos_id: rpfFacturaId,
+                factura_envio_id: envioId
+            }).done(function (res) {
+                if (!res.success) {
+                    window.alert((res.data && res.data.message) || 'Error al vincular');
+                    return;
+                }
+                closeRpfFleteModal();
+                refreshSession();
+            });
+        });
+
+        $(document).on('click', '#rpf-flete-btn-manual', function () {
+            var monto = $('#rpf-flete-manual-monto').val();
+            if (!rpfFacturaId) {
+                return;
+            }
+            post('riverso_set_manual_shipping', {
+                factura_id: rpfFacturaId,
+                monto: monto
+            }).done(function (res) {
+                if (!res.success) {
+                    window.alert((res.data && res.data.message) || 'Error al guardar flete manual');
+                    return;
+                }
+                closeRpfFleteModal();
+                refreshSession();
+            });
+        });
+
+        $(document).on('click', '#rpf-flete-btn-gratis', function () {
+            if (!rpfFacturaId) {
+                return;
+            }
+            if (!window.confirm('¿Marcar esta factura como flete gratuito?')) {
+                return;
+            }
+            post('riverso_mark_free_shipping', {
+                factura_id: rpfFacturaId,
+                gratuito: 1
+            }).done(function (res) {
+                if (!res.success) {
+                    window.alert((res.data && res.data.message) || 'Error');
+                    return;
+                }
+                closeRpfFleteModal();
+                refreshSession();
+            });
+        });
+
+        $(document).on('click', '#rpf-flete-btn-ungratis', function () {
+            if (!rpfFacturaId) {
+                return;
+            }
+            post('riverso_mark_free_shipping', {
+                factura_id: rpfFacturaId,
+                gratuito: 0
+            }).done(function (res) {
+                if (!res.success) {
+                    window.alert((res.data && res.data.message) || 'Error');
+                    return;
+                }
+                closeRpfFleteModal();
+                refreshSession();
+            });
+        });
+
+        $(document).on('click', '.rpf-flete-unassign', function () {
+            var envioId = $(this).data('envio-id');
+            if (!envioId || !rpfFacturaId) {
+                return;
+            }
+            if (!window.confirm('¿Desvincular este flete?')) {
+                return;
+            }
+            post('riverso_unassign_shipping_invoice', {
+                factura_envio_id: envioId,
+                factura_productos_id: rpfFacturaId
+            }).done(function (res) {
+                if (!res.success) {
+                    window.alert((res.data && res.data.message) || 'Error');
+                    return;
+                }
+                openRpfFleteModal();
+                refreshSession();
+            });
         });
 
         $('#rpe-search-input').on('input', function () {
@@ -2704,6 +3231,7 @@
             var $row = $('#rpf-lines tr[data-item="' + itemId + '"]');
             var pLocal = $row.find('.rpf-p-local').val();
             var pOnline = $row.find('.rpf-p-online').val();
+            var $btn = $(this).prop('disabled', true);
             post('riverso_price_folio_process_save_line', {
                 factura_id: rpfFacturaId,
                 item_id: itemId,
@@ -2719,8 +3247,12 @@
                     showSession(res.data.session);
                 }
                 if (res.data.completed) {
-                    window.alert('Folio completado: todos los productos tienen precio asignado.');
+                    window.alert('Folio completado: todos los productos tienen precio confirmado desde este folio.');
+                } else if (res.data.historial_only || res.data.applied === false) {
+                    window.alert('Constancia en historial guardada. El precio vigente no cambió (hay un folio más reciente).');
                 }
+            }).always(function () {
+                $btn.prop('disabled', false);
             });
         });
         $(document).on('input', '.rpf-p-local', function () {

@@ -227,7 +227,8 @@ class Riverso_Price_Lookup_Service {
                 $iva,
                 $sku,
                 $legacy,
-                $hist
+                $hist,
+                $pb_id
             );
             $hit['facto_iva_tipo'] = class_exists('Riverso_Pricing_Module')
                 ? Riverso_Pricing_Module::normalize_iva_tipo($iva)
@@ -238,6 +239,8 @@ class Riverso_Price_Lookup_Service {
             $hit['c_ref'] = $pack['c_ref'];
             $hit['c_ref_bruto'] = $pack['c_ref_bruto'];
             $hit['c_ref_neto'] = $pack['c_ref_neto'];
+            $hit['c_ref_bases'] = $pack['c_ref_bases'] ?? null;
+            $hit['costo_bases_meta'] = $pack['costo_bases_meta'] ?? null;
             $hit['p_ref'] = $pack['p_ref'];
             $hit['p_ref_bruto'] = $pack['p_ref_bruto'];
             $hit['p_ref_neto'] = $pack['p_ref_neto'];
@@ -282,9 +285,9 @@ class Riverso_Price_Lookup_Service {
     /**
      * Último evento de precio y de costo real por producto (un canal).
      *
-     * Precio = último historial con p_asignado_nuevo.
-     * Costo = último historial donde c_ref cambió respecto al anterior
-     * (ignora saves de solo precio que copian c_ref).
+     * Precio = evento con mayor fecha efectiva (fecha_emision del folio si source=folio;
+     * si no, created_at). Empate: factura_id / id.
+     * Costo = último cambio real de c_ref en orden cronológico por fecha efectiva.
      *
      * @param int[]  $ids
      * @param string $canal
@@ -303,61 +306,78 @@ class Riverso_Price_Lookup_Service {
         $id_list = implode(',', array_map('intval', $ids));
         $canal = $canal === 'online' ? 'online' : 'local';
 
-        // Último cambio de p_asignado (precio).
-        $price_rows = $wpdb->get_results(
-            "SELECT h.*
+        $hist = $wpdb->get_results(
+            "SELECT h.*, f.fecha_emision AS factura_fecha, f.folio AS factura_folio
              FROM {$this->prefix}precio_historial h
-             INNER JOIN (
-                SELECT producto_base_id, MAX(id) AS max_id
-                FROM {$this->prefix}precio_historial
-                WHERE producto_base_id IN ({$id_list})
-                  AND canal = '{$canal}'
-                  AND p_asignado_nuevo IS NOT NULL
-                GROUP BY producto_base_id
-             ) t ON t.max_id = h.id",
-            ARRAY_A
-        ) ?: [];
-        foreach ($price_rows as $row) {
-            $out[(int) $row['producto_base_id']]['price'] = $row;
-        }
-
-        // Historial con c_ref (ASC) para detectar el último cambio real de costo.
-        $cost_hist = $wpdb->get_results(
-            "SELECT id, producto_base_id, canal, c_ref, p_asignado_nuevo, source_type,
-                    source_document_id, created_at, notas
-             FROM {$this->prefix}precio_historial
-             WHERE producto_base_id IN ({$id_list})
-               AND canal = '{$canal}'
-               AND c_ref IS NOT NULL
-             ORDER BY producto_base_id ASC, id ASC",
+             LEFT JOIN {$this->prefix}facturas f ON f.id = h.source_document_id
+             WHERE h.producto_base_id IN ({$id_list})
+               AND h.canal = '{$canal}'
+             ORDER BY h.producto_base_id ASC, h.id ASC",
             ARRAY_A
         ) ?: [];
 
-        $prev_c_by_pb = [];
-        $cost_change_by_pb = [];
-        foreach ($cost_hist as $row) {
+        $by_pb = [];
+        foreach ($hist as $row) {
             $pb = (int) $row['producto_base_id'];
-            $c = (float) $row['c_ref'];
             $st = sanitize_key((string) ($row['source_type'] ?? ''));
-            $has_prev = array_key_exists($pb, $prev_c_by_pb);
-            $prev = $has_prev ? $prev_c_by_pb[$pb] : null;
-
-            // Cambio real de valor (no basta la primera fila: puede ser save de solo precio).
-            $changed = $has_prev && !$this->values_close($c, $prev);
-            // Fuentes que actualizan costo aunque repitan el valor.
-            $force_cost_src = in_array($st, ['folio', 'recalc', 'import'], true);
-
-            if ($changed || $force_cost_src) {
-                $cost_change_by_pb[$pb] = $row;
+            $factura_fecha = !empty($row['factura_fecha']) ? substr((string) $row['factura_fecha'], 0, 10) : '';
+            $created = !empty($row['created_at']) ? substr((string) $row['created_at'], 0, 10) : '';
+            if ($st === 'folio' && $factura_fecha !== '') {
+                $row['_effective_date'] = $factura_fecha;
+            } else {
+                $row['_effective_date'] = $created;
             }
-            // manual/copy_local/system con mismo c_ref: no pisa origen de costo.
-
-            if (!$has_prev || $changed) {
-                $prev_c_by_pb[$pb] = $c;
-            }
+            $by_pb[$pb][] = $row;
         }
-        foreach ($cost_change_by_pb as $pb => $row) {
-            $out[$pb]['cost'] = $row;
+
+        foreach ($by_pb as $pb => $events) {
+            usort($events, static function ($a, $b) {
+                $da = (string) ($a['_effective_date'] ?? '');
+                $db = (string) ($b['_effective_date'] ?? '');
+                if ($da !== $db) {
+                    return $da <=> $db;
+                }
+                $fa = (int) ($a['source_document_id'] ?? 0);
+                $fb = (int) ($b['source_document_id'] ?? 0);
+                if ($fa !== $fb) {
+                    return $fa <=> $fb;
+                }
+                return ((int) ($a['id'] ?? 0)) <=> ((int) ($b['id'] ?? 0));
+            });
+
+            $price_evt = null;
+            foreach ($events as $row) {
+                if ($row['p_asignado_nuevo'] === null || $row['p_asignado_nuevo'] === '') {
+                    continue;
+                }
+                $price_evt = $row;
+            }
+            if ($price_evt) {
+                $out[$pb]['price'] = $price_evt;
+            }
+
+            $prev_c = null;
+            $has_prev = false;
+            $cost_evt = null;
+            foreach ($events as $row) {
+                if ($row['c_ref'] === null || $row['c_ref'] === '') {
+                    continue;
+                }
+                $c = (float) $row['c_ref'];
+                $st = sanitize_key((string) ($row['source_type'] ?? ''));
+                $changed = $has_prev && !$this->values_close($c, $prev_c);
+                $force_cost_src = in_array($st, ['folio', 'recalc', 'import'], true);
+                if ($changed || $force_cost_src) {
+                    $cost_evt = $row;
+                }
+                if (!$has_prev || $changed) {
+                    $prev_c = $c;
+                    $has_prev = true;
+                }
+            }
+            if ($cost_evt) {
+                $out[$pb]['cost'] = $cost_evt;
+            }
         }
 
         // Folios de facturas referenciadas.
@@ -379,7 +399,11 @@ class Riverso_Price_Lookup_Service {
                 $did = !empty($pack[$kind]['source_document_id'])
                     ? (int) $pack[$kind]['source_document_id']
                     : 0;
-                $pack[$kind]['folio'] = ($did && isset($folios[$did])) ? $folios[$did] : '';
+                if (!empty($pack[$kind]['factura_folio'])) {
+                    $pack[$kind]['folio'] = (string) $pack[$kind]['factura_folio'];
+                } else {
+                    $pack[$kind]['folio'] = ($did && isset($folios[$did])) ? $folios[$did] : '';
+                }
             }
         }
         unset($pack);
@@ -449,7 +473,8 @@ class Riverso_Price_Lookup_Service {
             $iva,
             $sku,
             $legacy,
-            $hist_local[$producto_base_id] ?? null
+            $hist_local[$producto_base_id] ?? null,
+            $producto_base_id
         );
         $online_pack = $this->decorate_price_row(
             $online,
@@ -457,7 +482,8 @@ class Riverso_Price_Lookup_Service {
             $iva,
             $sku,
             $legacy,
-            $hist_online[$producto_base_id] ?? null
+            $hist_online[$producto_base_id] ?? null,
+            $producto_base_id
         );
 
         $family = $this->get_family_block($producto_base_id, $local_pack['p_asignado'] ?? null, $iva);
@@ -497,9 +523,10 @@ class Riverso_Price_Lookup_Service {
      * @param string     $sku
      * @param array|null $legacy
      * @param array|null $hist  {price, cost}
+     * @param int        $producto_base_id
      * @return array
      */
-    private function decorate_price_row($row, $canal, $iva_tipo = 'afecto', $sku = '', $legacy = null, $hist = null) {
+    private function decorate_price_row($row, $canal, $iva_tipo = 'afecto', $sku = '', $legacy = null, $hist = null, $producto_base_id = 0) {
         $iva_tipo = class_exists('Riverso_Pricing_Module')
             ? Riverso_Pricing_Module::normalize_iva_tipo($iva_tipo)
             : (($iva_tipo === 'exento') ? 'exento' : 'afecto');
@@ -507,12 +534,14 @@ class Riverso_Price_Lookup_Service {
         $empty_origin = $this->origin_pack('');
 
         if (!$row) {
-            return [
+            $empty = [
                 'id' => null,
                 'canal' => $canal,
                 'c_ref' => null,
                 'c_ref_bruto' => null,
                 'c_ref_neto' => null,
+                'c_ref_bases' => null,
+                'costo_bases_meta' => null,
                 'p_ref' => null,
                 'p_ref_bruto' => null,
                 'p_ref_neto' => null,
@@ -530,6 +559,7 @@ class Riverso_Price_Lookup_Service {
                 'origen_precio' => $empty_origin,
                 'origen_costo' => $empty_origin,
             ];
+            return $this->merge_c_ref_bases($empty, (int) $producto_base_id);
         }
 
         // Convención explorador: c_ref, p_ref y p_asignado son BRUTO comercial.
@@ -571,7 +601,7 @@ class Riverso_Price_Lookup_Service {
         $factor_minimo = (float) $row['factor_minimo'];
         $alerta = ($margen_factor !== null && $margen_factor < $factor_minimo) ? 1 : (int) $row['alerta_margen'];
 
-        return [
+        $pack = [
             'id' => (int) $row['id'],
             'canal' => $row['canal'],
             'c_ref' => $c_ref_bruto,
@@ -595,6 +625,52 @@ class Riverso_Price_Lookup_Service {
             'origen_precio' => $origins['origen_precio'],
             'origen_costo' => $origins['origen_costo'],
         ];
+        return $this->merge_c_ref_bases($pack, (int) $producto_base_id);
+    }
+
+    /**
+     * Adjunta c_ref_bases desde la última factura; fallback a c_ref persistido.
+     *
+     * @param array $pack
+     * @param int   $producto_base_id
+     * @return array
+     */
+    private function merge_c_ref_bases(array $pack, $producto_base_id) {
+        $info = null;
+        $svc = $this->cost_lookup();
+        if ($svc && $producto_base_id > 0) {
+            $info = $svc->latest_cost_bases_for_product($producto_base_id);
+        }
+        $bases = is_array($info) ? ($info['costo_bases'] ?? null) : null;
+        // Explorador: c_ref es bruto comercial.
+        if (!$bases && class_exists('Riverso_Cost_Lookup_Service')) {
+            $bruto = $pack['c_ref_bruto'] ?? $pack['c_ref'] ?? null;
+            $neto = $pack['c_ref_neto'] ?? null;
+            if ($bruto !== null || $neto !== null) {
+                $bases = Riverso_Cost_Lookup_Service::bases_from_c_ref($neto, $bruto);
+            }
+        }
+        $pack['c_ref_bases'] = $bases;
+        $pack['costo_bases_meta'] = [
+            'folio' => is_array($info) ? ($info['folio'] ?? null) : null,
+            'fecha_emision' => is_array($info) ? ($info['fecha_emision'] ?? null) : null,
+            'factura_id' => is_array($info) ? ($info['factura_id'] ?? null) : null,
+            'proveedor_nombre' => is_array($info) ? ($info['proveedor_nombre'] ?? null) : null,
+            'codigo_proveedor' => is_array($info) ? ($info['codigo_proveedor'] ?? null) : null,
+        ];
+
+        // Fallback: sin historial de costo pero sí última factura → badge folio.
+        $origen = $pack['origen_costo'] ?? null;
+        $origen_key = is_array($origen) ? (string) ($origen['key'] ?? '') : '';
+        $meta_folio = trim((string) ($pack['costo_bases_meta']['folio'] ?? ''));
+        if ($origen_key === '' && $meta_folio !== '') {
+            $pack['origen_costo'] = $this->origin_pack('folio', [
+                'folio' => $meta_folio,
+                'fecha' => (string) ($pack['costo_bases_meta']['fecha_emision'] ?? ''),
+            ]);
+        }
+
+        return $pack;
     }
 
     /**
@@ -676,7 +752,10 @@ class Riverso_Price_Lookup_Service {
             } elseif ($cost_evt) {
                 $st = sanitize_key((string) ($cost_evt['source_type'] ?? ''));
                 $meta = $this->origin_meta_from_event($cost_evt);
-                if (in_array($st, ['folio', 'recalc'], true)) {
+                // Alinear con Procesar folios: folio → key folio; recalc → costo.
+                if ($st === 'folio') {
+                    $origen_costo = $this->origin_pack('folio', $meta);
+                } elseif ($st === 'recalc') {
                     $origen_costo = $this->origin_pack('costo', $meta);
                 } elseif ($st === 'import') {
                     $origen_costo = $this->origin_pack('import', $meta);

@@ -446,13 +446,43 @@ $default_intake_mode = 'solo_costos';
             </div>
 
             <div id="detail-shipping-section" style="display:none;margin-bottom:16px;padding:12px;background:#f0f6fc;border-radius:6px;">
-                <h3 style="margin:0 0 10px;">Fletes vinculados</h3>
+                <h3 style="margin:0 0 10px;">Fletes vinculados
+                    <span id="detail-flete-gratuito-badge" style="display:none;margin-left:8px;padding:2px 8px;border-radius:999px;background:#dcfce7;color:#166534;font-size:12px;font-weight:600;">Flete gratuito</span>
+                    <span id="detail-flete-manual-badge" style="display:none;margin-left:8px;padding:2px 8px;border-radius:999px;background:#e0e7ff;color:#3730a3;font-size:12px;font-weight:600;">Flete manual</span>
+                </h3>
                 <div id="detail-shipping-linked"></div>
-                <div id="detail-shipping-assign" style="margin-top:12px;display:none;">
-                    <label><strong>Asignar flete pendiente</strong></label>
-                    <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
-                        <select id="detail-assign-flete-id" style="flex:1;min-width:200px;"></select>
+                <div id="detail-shipping-assign" style="margin-top:12px;">
+                    <label><strong>Buscar flete para vincular</strong></label>
+                    <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;align-items:flex-end;">
+                        <div class="folio-search-wrap" style="position:relative;flex:1;min-width:220px;">
+                            <input type="text" id="detail-flete-folio-search" class="regular-text" style="width:100%;"
+                                   placeholder="Folio, proveedor o RUT…" autocomplete="off">
+                            <input type="hidden" id="detail-assign-flete-id" value="">
+                            <div id="detail-flete-folio-results" class="folio-search-results" style="display:none;"></div>
+                        </div>
+                        <label style="margin:0;">Desde
+                            <input type="date" id="detail-flete-fecha-desde" style="display:block;margin-top:2px;">
+                        </label>
+                        <label style="margin:0;">Hasta
+                            <input type="date" id="detail-flete-fecha-hasta" style="display:block;margin-top:2px;">
+                        </label>
+                        <button type="button" class="button" id="btn-search-flete">Buscar</button>
                         <button type="button" class="button button-primary" id="btn-assign-flete">Vincular flete</button>
+                    </div>
+                    <p id="detail-flete-selected-label" class="description" style="margin-top:6px;"></p>
+                    <div style="margin-top:12px;padding-top:10px;border-top:1px solid #c5d9ed;">
+                        <label><strong>Flete manual</strong> <em>(sin documento de transportista)</em></label>
+                        <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center;">
+                            <input type="text" id="detail-flete-manual-monto" class="regular-text" style="width:140px;"
+                                   placeholder="Monto $" inputmode="decimal" autocomplete="off">
+                            <button type="button" class="button button-primary" id="btn-save-flete-manual">Guardar flete manual</button>
+                            <button type="button" class="button" id="btn-clear-flete-manual" style="display:none;">Quitar monto</button>
+                        </div>
+                    </div>
+                    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                        <button type="button" class="button" id="btn-mark-flete-gratuito">Marcar flete gratuito</button>
+                        <button type="button" class="button" id="btn-unmark-flete-gratuito" style="display:none;">Quitar flete gratuito</button>
+                        <span class="description">Sin documento de transportista — costo de flete $0.</span>
                     </div>
                 </div>
             </div>
@@ -460,10 +490,23 @@ $default_intake_mode = 'solo_costos';
             <div id="detail-envio-assign-section" style="display:none;margin-bottom:16px;padding:12px;background:#fff8e5;border-radius:6px;">
                 <h3 style="margin:0 0 8px;">Vincular a facturas de productos</h3>
                 <p class="description" style="margin-bottom:8px;">Un mismo flete puede repartirse entre varias facturas de productos.</p>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <select id="detail-envio-target-id" style="flex:1;min-width:200px;"></select>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+                    <div class="folio-search-wrap" style="position:relative;flex:1;min-width:220px;">
+                        <input type="text" id="detail-envio-folio-search" class="regular-text" style="width:100%;"
+                               placeholder="Folio, proveedor o RUT…" autocomplete="off">
+                        <input type="hidden" id="detail-envio-target-id" value="">
+                        <div id="detail-envio-folio-results" class="folio-search-results" style="display:none;"></div>
+                    </div>
+                    <label style="margin:0;">Desde
+                        <input type="date" id="detail-envio-fecha-desde" style="display:block;margin-top:2px;">
+                    </label>
+                    <label style="margin:0;">Hasta
+                        <input type="date" id="detail-envio-fecha-hasta" style="display:block;margin-top:2px;">
+                    </label>
+                    <button type="button" class="button" id="btn-search-envio-target">Buscar</button>
                     <button type="button" class="button button-primary" id="btn-envio-assign">Vincular</button>
                 </div>
+                <p id="detail-envio-selected-label" class="description" style="margin-top:6px;"></p>
                 <div id="detail-envio-linked-info" style="margin-top:10px;display:none;"></div>
                 <button type="button" class="button" id="btn-envio-unassign" style="margin-top:8px;display:none;">Desvincular todas</button>
             </div>
@@ -1453,7 +1496,14 @@ jQuery(function($) {
 
     function formatFolioResultLabel(f) {
         const sub = f.documento_subtipo === 'envio' ? 'Flete' : 'Productos';
-        return `Folio ${f.folio} · ${sub} · T${f.tipo_dte} · $${Number(f.monto_total || 0).toLocaleString('es-CL')} · ${f.proveedor_nombre || f.rut_emisor || ''}`;
+        const fecha = f.fecha_emision ? String(f.fecha_emision) : '—';
+        const vinculos = parseInt(f.vinculos_count, 10) || 0;
+        const vinculosTxt = vinculos > 0
+            ? (f.documento_subtipo === 'envio'
+                ? ` · ${vinculos} factura(s)`
+                : ` · ${vinculos} flete(s)`)
+            : '';
+        return `Folio ${f.folio} · ${sub} · ${fecha} · T${f.tipo_dte} · $${Number(f.monto_total || 0).toLocaleString('es-CL')} · ${f.proveedor_nombre || f.rut_emisor || ''}${vinculosTxt}`;
     }
 
     function setCreditNoteOrigin(f) {
@@ -1474,13 +1524,17 @@ jQuery(function($) {
     function bindFolioSearcher($input, $results, $hidden, opts) {
         let timer = null;
         const options = opts || {};
-        $input.off('input.folioSearch focus.folioSearch').on('input.folioSearch focus.folioSearch', function() {
-            const q = $(this).val().trim();
+
+        function runSearch(force) {
+            const q = $input.val().trim();
+            const fechaDesde = options.$fechaDesde ? String(options.$fechaDesde.val() || '') : '';
+            const fechaHasta = options.$fechaHasta ? String(options.$fechaHasta.val() || '') : '';
             clearTimeout(timer);
-            if (q.length < 1) {
+            if (q.length < 1 && !fechaDesde && !fechaHasta) {
                 $results.hide().empty();
                 return;
             }
+            const delay = force ? 0 : 250;
             timer = setTimeout(function() {
                 $.post(ajaxurl, {
                     action: 'riverso_search_invoice_folios',
@@ -1488,7 +1542,10 @@ jQuery(function($) {
                     q: q,
                     rut_emisor: options.rutEmisor || '',
                     exclude_id: options.excludeId || 0,
-                    tipos: options.tipos || 'productos,envio'
+                    exclude_linked_to: options.excludeLinkedTo || 0,
+                    tipos: options.tipos || 'productos,envio',
+                    fecha_desde: fechaDesde,
+                    fecha_hasta: fechaHasta
                 }, function(res) {
                     if (!res.success) {
                         $results.html('<div class="folio-result-empty">Error al buscar</div>').show();
@@ -1496,7 +1553,8 @@ jQuery(function($) {
                     }
                     const rows = res.data.results || [];
                     if (!rows.length) {
-                        $results.html('<div class="folio-result-empty">Sin resultados para "' + q + '"</div>').show();
+                        const hint = q || (fechaDesde || fechaHasta ? 'el rango de fechas' : '');
+                        $results.html('<div class="folio-result-empty">Sin resultados' + (hint ? ' para "' + hint + '"' : '') + '</div>').show();
                         return;
                     }
                     $results.empty();
@@ -1516,13 +1574,28 @@ jQuery(function($) {
                     });
                     $results.show();
                 });
-            }, 250);
+            }, delay);
+        }
+
+        $input.off('input.folioSearch focus.folioSearch').on('input.folioSearch focus.folioSearch', function() {
+            runSearch(false);
         });
+        if (options.$fechaDesde) {
+            options.$fechaDesde.off('change.folioSearch').on('change.folioSearch', function() { runSearch(true); });
+        }
+        if (options.$fechaHasta) {
+            options.$fechaHasta.off('change.folioSearch').on('change.folioSearch', function() { runSearch(true); });
+        }
+        if (options.$searchBtn) {
+            options.$searchBtn.off('click.folioSearch').on('click.folioSearch', function() { runSearch(true); });
+        }
         $(document).off('click.folioSearchClose').on('click.folioSearchClose', function(e) {
             if (!$(e.target).closest('.folio-search-wrap').length) {
                 $('.folio-search-results').hide();
             }
         });
+
+        return { search: function() { runSearch(true); } };
     }
 
     function fillCreditNoteSection(d) {
@@ -2264,13 +2337,33 @@ jQuery(function($) {
         } else if (isEnvio) {
             $envioSection.show();
             const vinculadas = factura.facturas_productos_vinculadas || [];
-            const $target = $('#detail-envio-target-id').empty()
-                .append('<option value="">— Seleccionar factura de productos —</option>');
-            (factura.facturas_productos_disponibles || []).forEach(f => {
-                if (!vinculadas.some(v => String(v.id) === String(f.id))) {
-                    $target.append(`<option value="${f.id}">Folio ${f.folio} — ${f.proveedor_nombre || ''} — $${Number(f.monto_total || 0).toLocaleString('es-CL')}</option>`);
+
+            $('#detail-envio-target-id').val('');
+            $('#detail-envio-folio-search').val('');
+            $('#detail-envio-selected-label').text('');
+            $('#detail-envio-fecha-desde').val('');
+            $('#detail-envio-fecha-hasta').val('');
+            $('#detail-envio-folio-results').hide().empty();
+
+            bindFolioSearcher(
+                $('#detail-envio-folio-search'),
+                $('#detail-envio-folio-results'),
+                $('#detail-envio-target-id'),
+                {
+                    tipos: 'productos',
+                    excludeId: factura.id,
+                    excludeLinkedTo: factura.id,
+                    $fechaDesde: $('#detail-envio-fecha-desde'),
+                    $fechaHasta: $('#detail-envio-fecha-hasta'),
+                    $searchBtn: $('#btn-search-envio-target'),
+                    onSelect: function(f) {
+                        $('#detail-envio-target-id').val(String(f.id));
+                        $('#detail-envio-folio-search').val('Folio ' + f.folio);
+                        $('#detail-envio-selected-label').html('Seleccionada: <strong>' + formatFolioResultLabel(f) + '</strong>');
+                        $('#detail-envio-folio-results').hide().empty();
+                    }
                 }
-            });
+            );
 
             if (vinculadas.length) {
                 let html = '<ul style="margin:0;padding-left:18px;">';
@@ -2288,41 +2381,76 @@ jQuery(function($) {
                 $('#detail-envio-linked-info').hide().empty();
                 $('#btn-envio-unassign').hide();
             }
-            $('#detail-envio-target-id').closest('div').show();
             $('#btn-envio-assign').show();
-        } else {
+        } else if ((factura.documento_subtipo || 'productos') === 'productos') {
+            // Factura de productos: siempre mostrar panel de flete.
+            $shippingSection.show();
             const fletes = factura.fletes_vinculados || [];
-            if (fletes.length || (factura.fletes_sin_vincular || []).length) {
-                $shippingSection.show();
-                let html = '';
-                if (fletes.length) {
-                    html += '<ul style="margin:0;padding-left:18px;">';
-                    fletes.forEach(fl => {
-                        html += `<li>Folio <strong>${fl.folio}</strong> — ${fl.proveedor_nombre || ''} — $${Number(fl.monto_total || 0).toLocaleString('es-CL')}
-                            <button type="button" class="button button-small btn-unassign-flete" data-envio-id="${fl.id}" style="margin-left:8px;">Desvincular</button></li>`;
-                    });
-                    html += '</ul>';
-                    if (factura.costo_envio_vinculado) {
-                        html += `<p class="description" style="margin:8px 0 0;">Total fletes vinculados: <strong>$${Number(factura.costo_envio_vinculado).toLocaleString('es-CL')}</strong></p>`;
-                    }
-                } else {
-                    html = '<p class="description" style="margin:0;">Sin fletes vinculados.</p>';
-                }
-                $('#detail-shipping-linked').html(html);
+            const isGratuito = parseInt(factura.flete_gratuito, 10) === 1;
+            const montoManual = Number(factura.costo_envio_manual || 0);
+            const hasManual = montoManual > 0;
 
-                const pendientes = factura.fletes_sin_vincular || [];
-                const $assignWrap = $('#detail-shipping-assign');
-                const $sel = $('#detail-assign-flete-id').empty();
-                if (pendientes.length) {
-                    $assignWrap.show();
-                    $sel.append('<option value="">— Seleccionar flete pendiente —</option>');
-                    pendientes.forEach(fl => {
-                        $sel.append(`<option value="${fl.id}">Folio ${fl.folio} — ${fl.proveedor_nombre || ''} — $${Number(fl.monto_total || 0).toLocaleString('es-CL')}</option>`);
-                    });
-                } else {
-                    $assignWrap.hide();
-                }
+            $('#detail-flete-gratuito-badge').toggle(isGratuito);
+            if (hasManual) {
+                $('#detail-flete-manual-badge')
+                    .text('Flete manual $' + montoManual.toLocaleString('es-CL'))
+                    .show();
+            } else {
+                $('#detail-flete-manual-badge').hide();
             }
+            $('#btn-mark-flete-gratuito').toggle(!isGratuito);
+            $('#btn-unmark-flete-gratuito').toggle(isGratuito);
+            $('#detail-flete-manual-monto').val(hasManual ? String(Math.round(montoManual)) : '');
+            $('#btn-clear-flete-manual').toggle(hasManual);
+
+            let html = '';
+            if (fletes.length) {
+                html += '<ul style="margin:0;padding-left:18px;">';
+                fletes.forEach(fl => {
+                    html += `<li>Folio <strong>${fl.folio}</strong> — ${fl.proveedor_nombre || ''} — $${Number(fl.monto_total || 0).toLocaleString('es-CL')}
+                        <button type="button" class="button button-small btn-unassign-flete" data-envio-id="${fl.id}" style="margin-left:8px;">Desvincular</button></li>`;
+                });
+                html += '</ul>';
+                if (factura.costo_envio_vinculado) {
+                    html += `<p class="description" style="margin:8px 0 0;">Total fletes vinculados: <strong>$${Number(factura.costo_envio_vinculado).toLocaleString('es-CL')}</strong></p>`;
+                }
+            } else if (isGratuito) {
+                html = '<p class="description" style="margin:0;">Sin fletes vinculados — marcada como <strong>flete gratuito</strong>.</p>';
+            } else if (hasManual) {
+                html = '<p class="description" style="margin:0;">Sin fletes vinculados — flete manual <strong>$' +
+                    montoManual.toLocaleString('es-CL') + '</strong>.</p>';
+            } else {
+                html = '<p class="description" style="margin:0;">Sin fletes vinculados.</p>';
+            }
+            $('#detail-shipping-linked').html(html);
+
+            $('#detail-assign-flete-id').val('');
+            $('#detail-flete-folio-search').val('');
+            $('#detail-flete-selected-label').text('');
+            $('#detail-flete-fecha-desde').val('');
+            $('#detail-flete-fecha-hasta').val('');
+            $('#detail-flete-folio-results').hide().empty();
+            $('#detail-shipping-assign').show();
+
+            bindFolioSearcher(
+                $('#detail-flete-folio-search'),
+                $('#detail-flete-folio-results'),
+                $('#detail-assign-flete-id'),
+                {
+                    tipos: 'envio',
+                    excludeId: factura.id,
+                    excludeLinkedTo: factura.id,
+                    $fechaDesde: $('#detail-flete-fecha-desde'),
+                    $fechaHasta: $('#detail-flete-fecha-hasta'),
+                    $searchBtn: $('#btn-search-flete'),
+                    onSelect: function(f) {
+                        $('#detail-assign-flete-id').val(String(f.id));
+                        $('#detail-flete-folio-search').val('Folio ' + f.folio);
+                        $('#detail-flete-selected-label').html('Seleccionado: <strong>' + formatFolioResultLabel(f) + '</strong>');
+                        $('#detail-flete-folio-results').hide().empty();
+                    }
+                }
+            );
         }
 
         renderDetailItems(factura);
@@ -2393,7 +2521,7 @@ jQuery(function($) {
 
     $('#btn-assign-flete').on('click', function() {
         const envioId = $('#detail-assign-flete-id').val();
-        if (!envioId) { alert('Seleccione un flete'); return; }
+        if (!envioId) { alert('Busque y seleccione un flete'); return; }
         $.post(ajaxurl, {
             action: 'riverso_assign_shipping_invoice',
             nonce: nonce,
@@ -2411,7 +2539,7 @@ jQuery(function($) {
 
     $('#btn-envio-assign').on('click', function() {
         const targetId = $('#detail-envio-target-id').val();
-        if (!targetId) { alert('Seleccione la factura de productos'); return; }
+        if (!targetId) { alert('Busque y seleccione la factura de productos'); return; }
         $.post(ajaxurl, {
             action: 'riverso_assign_shipping_invoice',
             nonce: nonce,
@@ -2425,6 +2553,63 @@ jQuery(function($) {
                 alert(res.data?.message || 'Error al vincular');
             }
         });
+    });
+
+    function markFreeShipping(gratuito) {
+        if (!currentDetailFacturaId) return;
+        $.post(ajaxurl, {
+            action: 'riverso_mark_free_shipping',
+            nonce: nonce,
+            factura_id: currentDetailFacturaId,
+            gratuito: gratuito ? 1 : 0
+        }, function(res) {
+            if (res.success) {
+                reloadInvoiceDetail();
+                loadInvoices();
+            } else {
+                alert(res.data?.message || 'Error al actualizar flete gratuito');
+            }
+        });
+    }
+
+    $('#btn-mark-flete-gratuito').on('click', function() {
+        if (!confirm('¿Marcar esta factura como flete gratuito? No se creará documento de transportista.')) return;
+        markFreeShipping(true);
+    });
+
+    $('#btn-unmark-flete-gratuito').on('click', function() {
+        markFreeShipping(false);
+    });
+
+    function saveManualShipping(monto) {
+        if (!currentDetailFacturaId) return;
+        $.post(ajaxurl, {
+            action: 'riverso_set_manual_shipping',
+            nonce: nonce,
+            factura_id: currentDetailFacturaId,
+            monto: monto
+        }, function(res) {
+            if (res.success) {
+                reloadInvoiceDetail();
+                loadInvoices();
+            } else {
+                alert(res.data?.message || 'Error al guardar flete manual');
+            }
+        });
+    }
+
+    $('#btn-save-flete-manual').on('click', function() {
+        const raw = $('#detail-flete-manual-monto').val().trim();
+        if (!raw) {
+            alert('Ingrese un monto de flete');
+            return;
+        }
+        saveManualShipping(raw);
+    });
+
+    $('#btn-clear-flete-manual').on('click', function() {
+        if (!confirm('¿Quitar el flete manual de esta factura?')) return;
+        saveManualShipping(0);
     });
 
     $(document).on('click', '.btn-unassign-flete, #btn-envio-unassign, .btn-unassign-producto', function() {

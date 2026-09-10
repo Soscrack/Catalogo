@@ -82,6 +82,8 @@ class Riverso_Invoice_Module {
         add_action('wp_ajax_riverso_search_invoice_folios', [$this, 'ajax_search_invoice_folios']);
         add_action('wp_ajax_riverso_link_credit_note_origin', [$this, 'ajax_link_credit_note_origin']);
         add_action('wp_ajax_riverso_invoice_adjuntos', [$this, 'ajax_invoice_adjuntos']);
+        add_action('wp_ajax_riverso_mark_free_shipping', [$this, 'ajax_mark_free_shipping']);
+        add_action('wp_ajax_riverso_set_manual_shipping', [$this, 'ajax_set_manual_shipping']);
     }
 
     /**
@@ -112,6 +114,16 @@ class Riverso_Invoice_Module {
     private function ensure_flete_vinculos_table() {
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-activator.php';
         Riverso_POS_Activator::ensure_flete_vinculos_table();
+    }
+
+    private function ensure_flete_gratuito_column() {
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-activator.php';
+        Riverso_POS_Activator::ensure_flete_gratuito_column();
+    }
+
+    private function ensure_costo_envio_manual_column() {
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-activator.php';
+        Riverso_POS_Activator::ensure_costo_envio_manual_column();
     }
 
     /**
@@ -694,6 +706,11 @@ class Riverso_Invoice_Module {
         // Tarea de confirmar tipo: todos los XML no confirmados (incluye carga masiva y flete/NC/gastos).
         if (empty($options['tipo_confirmado'])) {
             $this->intake()->create_document_type_confirmation_task((int) $factura_id);
+        }
+
+        // Tarea ingresar flete: facturas de productos (sugeridas o confirmadas).
+        if ($documento_subtipo === 'productos') {
+            $this->intake()->create_ingresar_flete_task((int) $factura_id);
         }
 
         // Actualizar estado de factura según items (solo productos)
@@ -2091,6 +2108,8 @@ class Riverso_Invoice_Module {
         }
 
         $this->ensure_flete_vinculos_table();
+        $this->ensure_flete_gratuito_column();
+        $this->ensure_costo_envio_manual_column();
 
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
@@ -2108,6 +2127,8 @@ class Riverso_Invoice_Module {
         }
 
         $factura['tipo_confirmado'] = (int) ($factura['tipo_confirmado'] ?? 0);
+        $factura['flete_gratuito'] = (int) ($factura['flete_gratuito'] ?? 0);
+        $factura['costo_envio_manual'] = (float) ($factura['costo_envio_manual'] ?? 0);
 
         $items = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$prefix}factura_items WHERE factura_id = %d ORDER BY numero_linea",
@@ -2475,6 +2496,12 @@ class Riverso_Invoice_Module {
                 ['%s', '%s'],
                 ['%d']
             );
+        }
+
+        if ($documento_subtipo === 'productos') {
+            $this->intake()->sync_ingresar_flete_task_state($factura_id);
+        } else {
+            $this->intake()->cancel_ingresar_flete_task($factura_id);
         }
 
         $labels = [
@@ -3863,7 +3890,7 @@ class Riverso_Invoice_Module {
     }
 
     /**
-     * AJAX: Buscar folios de facturas de productos o flete para vincular NC.
+     * AJAX: Buscar folios de facturas de productos o flete (NC / vínculo flete).
      */
     public function ajax_search_invoice_folios() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
@@ -3872,25 +3899,62 @@ class Riverso_Invoice_Module {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
 
-        $q = sanitize_text_field($_POST['q'] ?? '');
-        $rut_emisor = sanitize_text_field($_POST['rut_emisor'] ?? '');
-        $exclude_id = intval($_POST['exclude_id'] ?? 0);
+        $this->ensure_flete_vinculos_table();
 
-        if (strlen($q) < 1) {
+        $q = sanitize_text_field(wp_unslash($_POST['q'] ?? ''));
+        $rut_emisor = sanitize_text_field(wp_unslash($_POST['rut_emisor'] ?? ''));
+        $exclude_id = intval($_POST['exclude_id'] ?? 0);
+        $exclude_linked_to = intval($_POST['exclude_linked_to'] ?? 0);
+        $fecha_desde = sanitize_text_field(wp_unslash($_POST['fecha_desde'] ?? ''));
+        $fecha_hasta = sanitize_text_field(wp_unslash($_POST['fecha_hasta'] ?? ''));
+        $tipos_raw = sanitize_text_field(wp_unslash($_POST['tipos'] ?? 'productos,envio'));
+
+        $allowed_tipos = ['productos', 'envio'];
+        $tipos = array_values(array_intersect(
+            array_filter(array_map('trim', explode(',', $tipos_raw))),
+            $allowed_tipos
+        ));
+        if (!$tipos) {
+            $tipos = $allowed_tipos;
+        }
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha_desde)) {
+            $fecha_desde = '';
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha_hasta)) {
+            $fecha_hasta = '';
+        }
+
+        if (strlen($q) < 1 && $fecha_desde === '' && $fecha_hasta === '') {
             wp_send_json_success(['results' => []]);
         }
 
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
-        $like = '%' . $wpdb->esc_like($q) . '%';
+        $vinculos_table = $prefix . 'factura_flete_vinculos';
 
+        $tipo_placeholders = implode(',', array_fill(0, count($tipos), '%s'));
         $where = [
-            "(f.documento_subtipo IN ('productos', 'envio') OR f.documento_subtipo IS NULL)",
+            "(COALESCE(f.documento_subtipo, 'productos') IN ($tipo_placeholders))",
             'f.tipo_dte <> 61',
             "f.estado NOT IN ('rejected', 'archived')",
-            '(f.folio LIKE %s OR CAST(f.folio AS CHAR) LIKE %s OR p.nombre LIKE %s OR p.rut LIKE %s OR f.rut_emisor LIKE %s)',
         ];
-        $params = [$like, $like, $like, $like, $like];
+        $params = $tipos;
+
+        if (strlen($q) >= 1) {
+            $like = '%' . $wpdb->esc_like($q) . '%';
+            $where[] = '(f.folio LIKE %s OR CAST(f.folio AS CHAR) LIKE %s OR p.nombre LIKE %s OR p.rut LIKE %s OR f.rut_emisor LIKE %s)';
+            $params = array_merge($params, [$like, $like, $like, $like, $like]);
+        }
+
+        if ($fecha_desde !== '') {
+            $where[] = 'f.fecha_emision >= %s';
+            $params[] = $fecha_desde;
+        }
+        if ($fecha_hasta !== '') {
+            $where[] = 'f.fecha_emision <= %s';
+            $params[] = $fecha_hasta;
+        }
 
         if ($rut_emisor !== '') {
             $where[] = 'f.rut_emisor = %s';
@@ -3901,22 +3965,189 @@ class Riverso_Invoice_Module {
             $params[] = $exclude_id;
         }
 
+        // Al vincular flete a una factura de productos: no listar fletes ya ligados a ella.
+        if ($exclude_linked_to > 0 && in_array('envio', $tipos, true)) {
+            $where[] = "NOT EXISTS (
+                SELECT 1 FROM {$vinculos_table} v
+                WHERE v.factura_envio_id = f.id AND v.factura_productos_id = %d
+            )";
+            $params[] = $exclude_linked_to;
+        }
+
+        // Al vincular productos desde un flete: no listar productos ya ligados a ese flete.
+        if ($exclude_linked_to > 0 && in_array('productos', $tipos, true) && !in_array('envio', $tipos, true)) {
+            $where[] = "NOT EXISTS (
+                SELECT 1 FROM {$vinculos_table} v
+                WHERE v.factura_productos_id = f.id AND v.factura_envio_id = %d
+            )";
+            $params[] = $exclude_linked_to;
+        }
+
         $where_sql = implode(' AND ', $where);
+
+        $order_params = [];
+        if (strlen($q) >= 1) {
+            $order_sql = "CASE WHEN CAST(f.folio AS CHAR) = %s THEN 0 WHEN CAST(f.folio AS CHAR) LIKE %s THEN 1 ELSE 2 END,
+                    f.fecha_emision DESC, f.id DESC";
+            $order_params[] = $q;
+            $order_params[] = $wpdb->esc_like($q) . '%';
+        } else {
+            $order_sql = 'f.fecha_emision DESC, f.id DESC';
+        }
+
         $sql = "SELECT f.id, f.folio, f.tipo_dte, f.fecha_emision, f.monto_total, f.estado,
                        COALESCE(f.documento_subtipo, 'productos') AS documento_subtipo,
-                       f.rut_emisor, p.nombre AS proveedor_nombre
+                       f.rut_emisor, p.nombre AS proveedor_nombre,
+                       CASE
+                           WHEN COALESCE(f.documento_subtipo, 'productos') = 'envio' THEN (
+                               SELECT COUNT(*) FROM {$vinculos_table} v WHERE v.factura_envio_id = f.id
+                           )
+                           ELSE (
+                               SELECT COUNT(*) FROM {$vinculos_table} v WHERE v.factura_productos_id = f.id
+                           )
+                       END AS vinculos_count
                 FROM {$prefix}facturas f
                 LEFT JOIN {$prefix}proveedores p ON p.id = f.proveedor_id
                 WHERE {$where_sql}
-                ORDER BY
-                    CASE WHEN CAST(f.folio AS CHAR) = %s THEN 0 WHEN CAST(f.folio AS CHAR) LIKE %s THEN 1 ELSE 2 END,
-                    f.fecha_emision DESC, f.id DESC
+                ORDER BY {$order_sql}
                 LIMIT 25";
-        $params[] = $q;
-        $params[] = $wpdb->esc_like($q) . '%';
 
-        $results = $wpdb->get_results($wpdb->prepare($sql, ...$params), ARRAY_A);
+        $all_params = array_merge($params, $order_params);
+        $results = $wpdb->get_results($wpdb->prepare($sql, ...$all_params), ARRAY_A);
         wp_send_json_success(['results' => $results ?: []]);
+    }
+
+    /**
+     * AJAX: Marcar / desmarcar factura de productos como flete gratuito.
+     */
+    public function ajax_mark_free_shipping() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!$this->user_can_intake_invoices()) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        $this->ensure_flete_vinculos_table();
+        $this->ensure_flete_gratuito_column();
+        $this->ensure_costo_envio_manual_column();
+
+        $factura_id = intval($_POST['factura_id'] ?? 0);
+        $gratuito = intval($_POST['gratuito'] ?? 0) ? 1 : 0;
+
+        if (!$factura_id) {
+            wp_send_json_error(['message' => 'ID de factura requerido']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $vinculos_table = $prefix . 'factura_flete_vinculos';
+
+        $factura = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, folio, documento_subtipo, flete_gratuito FROM {$prefix}facturas WHERE id = %d",
+            $factura_id
+        ));
+        if (!$factura) {
+            wp_send_json_error(['message' => 'Factura no encontrada']);
+        }
+
+        $subtipo = $factura->documento_subtipo ?: 'productos';
+        if ($subtipo !== 'productos') {
+            wp_send_json_error(['message' => 'Solo se puede marcar flete gratuito en facturas de productos']);
+        }
+
+        if ($gratuito === 1) {
+            $linked = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$vinculos_table} WHERE factura_productos_id = %d",
+                $factura_id
+            ));
+            if ($linked > 0) {
+                wp_send_json_error([
+                    'message' => 'Desvincule primero los fletes vinculados antes de marcar flete gratuito',
+                ]);
+            }
+        }
+
+        $update = ['flete_gratuito' => $gratuito];
+        $formats = ['%d'];
+        if ($gratuito === 1) {
+            $update['costo_envio_manual'] = 0;
+            $formats[] = '%f';
+        }
+
+        $updated = $wpdb->update(
+            "{$prefix}facturas",
+            $update,
+            ['id' => $factura_id],
+            $formats,
+            ['%d']
+        );
+
+        if ($updated === false) {
+            wp_send_json_error(['message' => 'Error al actualizar: ' . $wpdb->last_error]);
+        }
+
+        if ($gratuito === 1) {
+            $this->intake()->refresh_product_shipping_total($factura_id);
+        }
+        $this->intake()->sync_ingresar_flete_task_state($factura_id);
+
+        if (class_exists('Riverso_Audit_Module')) {
+            Riverso_Audit_Module::get_instance()->log(
+                'invoice_processed',
+                'invoice',
+                $factura_id,
+                null,
+                [
+                    'action' => $gratuito ? 'flete_gratuito_marcado' : 'flete_gratuito_quitado',
+                    'folio' => $factura->folio ?? null,
+                ],
+                $gratuito
+                    ? sprintf('Factura folio %s marcada como flete gratuito', $factura->folio ?? $factura_id)
+                    : sprintf('Quitada marca flete gratuito de folio %s', $factura->folio ?? $factura_id)
+            );
+        }
+
+        wp_send_json_success([
+            'message' => $gratuito ? 'Factura marcada como flete gratuito' : 'Marca de flete gratuito quitada',
+            'flete_gratuito' => $gratuito,
+        ]);
+    }
+
+    /**
+     * AJAX: Guardar / limpiar monto de flete manual.
+     */
+    public function ajax_set_manual_shipping() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!$this->user_can_intake_invoices()) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        $factura_id = intval($_POST['factura_id'] ?? 0);
+        $monto_raw = sanitize_text_field(wp_unslash($_POST['monto'] ?? '0'));
+        $monto_raw = str_replace(['$', ' '], '', $monto_raw);
+        if (preg_match('/^\d{1,3}(\.\d{3})+(,\d+)?$/', $monto_raw)) {
+            // Formato CL: 12.000,50
+            $monto_raw = str_replace('.', '', $monto_raw);
+            $monto_raw = str_replace(',', '.', $monto_raw);
+        } else {
+            $monto_raw = str_replace(',', '.', $monto_raw);
+        }
+        $monto = (float) $monto_raw;
+
+        if (!$factura_id) {
+            wp_send_json_error(['message' => 'ID de factura requerido']);
+        }
+
+        $result = $this->intake()->set_manual_shipping($factura_id, $monto);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+
+        wp_send_json_success([
+            'message' => $monto > 0 ? 'Flete manual guardado' : 'Flete manual quitado',
+            'costo_envio_manual' => round(max(0, $monto), 2),
+        ]);
     }
 
     /**

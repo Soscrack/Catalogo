@@ -45,6 +45,7 @@ class Riverso_Task_Module {
         'confirmar_codigo_proveedor' => 'Confirmar código proveedor (legacy)',
         // Tareas de revisión humana (procesos automáticos)
         'confirmar_tipo_documento' => 'Confirmar tipo de documento',
+        'ingresar_flete' => 'Ingresar flete',
         'revisar_relacion' => 'Revisar relación de producto',
         'validar_categoria' => 'Validar categoría',
         'verificar_etiquetado' => 'Verificar etiquetado',
@@ -77,6 +78,7 @@ class Riverso_Task_Module {
      */
     const TASK_TYPE_CATEGORY = [
         'confirmar_tipo_documento' => 'administracion',
+        'ingresar_flete' => 'administracion',
         'autorizar_publicacion' => 'administracion',
         'confirmar_estructura_atributos' => 'administracion',
         'revisar_calidad_catalogo' => 'administracion',

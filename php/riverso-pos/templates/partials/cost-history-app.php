@@ -193,6 +193,14 @@ $riverso_cost_history_context = isset($riverso_cost_history_context) ? $riverso_
                         <div class="analysis-sku" id="folio-analysis-meta">—</div>
                     </div>
                     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                        <div class="rce-view-toggle" role="group" aria-label="Vista neto/bruto" id="folio-view-toggle">
+                            <button type="button" class="button rce-view-btn is-active" data-folio-view="neto">Neto</button>
+                            <button type="button" class="button rce-view-btn" data-folio-view="bruto">Bruto</button>
+                        </div>
+                        <div class="rce-view-toggle" role="group" aria-label="Base de costo" id="folio-cost-toggle">
+                            <button type="button" class="button rce-cost-btn" data-folio-cost="referencia" title="Precio lista / antes de D/R">Costo referencia</button>
+                            <button type="button" class="button rce-cost-btn is-active" data-folio-cost="tras_dr" title="Tras descuento y recargo">Costo tras Descuento/Recargo</button>
+                        </div>
                         <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
                             <input type="checkbox" id="folio-toggle-decimals" checked>
                             Costos con decimales <em>(hasta 3)</em>
@@ -586,6 +594,14 @@ $riverso_cost_history_context = isset($riverso_cost_history_context) ? $riverso_
         </div>
         <div class="rce-modal-body">
             <div style="display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+                <div class="rce-view-toggle" role="group" aria-label="Vista neto/bruto" id="alerts-folio-view-toggle">
+                    <button type="button" class="button rce-view-btn is-active" data-folio-view="neto">Neto</button>
+                    <button type="button" class="button rce-view-btn" data-folio-view="bruto">Bruto</button>
+                </div>
+                <div class="rce-view-toggle" role="group" aria-label="Base de costo" id="alerts-folio-cost-toggle">
+                    <button type="button" class="button rce-cost-btn" data-folio-cost="referencia" title="Precio lista / antes de D/R">Costo referencia</button>
+                    <button type="button" class="button rce-cost-btn is-active" data-folio-cost="tras_dr" title="Tras descuento y recargo">Costo tras Descuento/Recargo</button>
+                </div>
                 <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
                     <input type="checkbox" id="alerts-folio-toggle-decimals" checked>
                     Costos con decimales <em>(hasta 3)</em>
@@ -770,6 +786,21 @@ $riverso_cost_history_context = isset($riverso_cost_history_context) ? $riverso_
     border-radius: 0 4px 4px 0;
 }
 .riverso-cost-history-app .rce-view-toggle .rce-view-btn.is-active {
+    background: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
+}
+.riverso-cost-history-app .rce-view-toggle .rce-cost-btn {
+    margin: 0;
+    border-radius: 0;
+}
+.riverso-cost-history-app .rce-view-toggle .rce-cost-btn:first-child {
+    border-radius: 4px 0 0 4px;
+}
+.riverso-cost-history-app .rce-view-toggle .rce-cost-btn:last-child {
+    border-radius: 0 4px 4px 0;
+}
+.riverso-cost-history-app .rce-view-toggle .rce-cost-btn.is-active {
     background: #2271b1;
     border-color: #2271b1;
     color: #fff;
@@ -1976,6 +2007,8 @@ jQuery(document).ready(function($) {
     // Análisis por folio de factura de productos
     let searchTimeout;
     let folioShowDecimals = true;
+    let folioViewMode = 'neto';
+    let folioCostMode = 'tras_dr';
     let lastFolioAnalysis = null;
     let selectedFolioId = null;
     let folioRecentPage = 1;
@@ -2020,6 +2053,138 @@ jQuery(document).ready(function($) {
         if (t === 'bajo') return 'trend-down';
         return '';
     }
+
+    function folioViewLabel() {
+        return folioViewMode === 'bruto' ? 'bruto' : 'neto';
+    }
+
+    function folioCostLabel() {
+        return folioCostMode === 'referencia' ? 'costo referencia' : 'tras Descuento/Recargo';
+    }
+
+    function folioCostLabelShort() {
+        return folioCostMode === 'referencia' ? 'Costo referencia' : 'Costo tras Descuento/Recargo';
+    }
+
+    function pickFolioBase(bases, viewMode, costMode) {
+        if (!bases || typeof bases !== 'object') return null;
+        viewMode = viewMode || folioViewMode;
+        costMode = costMode || folioCostMode;
+        const key = costMode === 'referencia' ? 'referencia' : 'tras_dr';
+        let pair = bases[key];
+        if (!pair && key === 'referencia') pair = bases.tras_dr;
+        if (!pair || typeof pair !== 'object') return null;
+        const v = viewMode === 'bruto' ? pair.bruto : pair.neto;
+        if (v === null || v === undefined || v === '' || isNaN(v)) return null;
+        return Number(v);
+    }
+
+    function folioUnitCost(rowOrPrev) {
+        if (!rowOrPrev) return null;
+        if (rowOrPrev.costo_actual_bases || rowOrPrev.costo_bases) {
+            const fromBases = pickFolioBase(rowOrPrev.costo_actual_bases || rowOrPrev.costo_bases);
+            if (fromBases != null) return fromBases;
+        }
+        let neto = rowOrPrev.costo_actual != null ? rowOrPrev.costo_actual : rowOrPrev.costo_unitario;
+        if (neto === null || neto === undefined || neto === '' || isNaN(neto)) return null;
+        neto = Number(neto);
+        if (folioViewMode === 'bruto') {
+            return Math.round(neto * 1.19 * 10000) / 10000;
+        }
+        return neto;
+    }
+
+    function folioRowMetrics(row) {
+        const current = folioUnitCost(row);
+        const prevInv = row.prev_invoice || null;
+        const prevQuote = row.prev_quote || null;
+        const prevInvCost = prevInv ? folioUnitCost(prevInv) : null;
+        const prevQuoteCost = prevQuote ? folioUnitCost(prevQuote) : null;
+
+        let previous = null;
+        let source = null;
+        if (prevInvCost != null && prevQuoteCost != null) {
+            const dInv = current != null ? current - prevInvCost : 0;
+            const dQuote = current != null ? current - prevQuoteCost : 0;
+            if (dInv >= dQuote) {
+                previous = prevInvCost;
+                source = 'invoice';
+            } else {
+                previous = prevQuoteCost;
+                source = 'quote';
+            }
+        } else if (prevInvCost != null) {
+            previous = prevInvCost;
+            source = 'invoice';
+        } else if (prevQuoteCost != null) {
+            previous = prevQuoteCost;
+            source = 'quote';
+        }
+
+        let delta = null;
+        let pct = null;
+        let trend = null;
+        if (current != null && previous != null) {
+            delta = Math.round((current - previous) * 10000) / 10000;
+            if (previous !== 0) {
+                pct = Math.round((delta / Math.abs(previous)) * 1000) / 10;
+            }
+            if (Math.abs(delta) < 0.00015) trend = 'se_mantuvo';
+            else if (delta > 0) trend = 'subio';
+            else trend = 'bajo';
+        }
+        return {
+            current: current,
+            prevInvCost: prevInvCost,
+            prevQuoteCost: prevQuoteCost,
+            previous: previous,
+            source: source,
+            delta: delta,
+            pct: pct,
+            trend: trend
+        };
+    }
+
+    function syncFolioViewToggles() {
+        $('#folio-view-toggle .rce-view-btn, #alerts-folio-view-toggle .rce-view-btn').removeClass('is-active');
+        $('#folio-view-toggle .rce-view-btn[data-folio-view="' + folioViewMode + '"], #alerts-folio-view-toggle .rce-view-btn[data-folio-view="' + folioViewMode + '"]').addClass('is-active');
+        $('#folio-cost-toggle .rce-cost-btn, #alerts-folio-cost-toggle .rce-cost-btn').removeClass('is-active');
+        $('#folio-cost-toggle .rce-cost-btn[data-folio-cost="' + folioCostMode + '"], #alerts-folio-cost-toggle .rce-cost-btn[data-folio-cost="' + folioCostMode + '"]').addClass('is-active');
+    }
+
+    function setFolioViewMode(mode) {
+        if (mode !== 'neto' && mode !== 'bruto') return;
+        folioViewMode = mode;
+        syncFolioViewToggles();
+        if (lastFolioAnalysis) {
+            renderFolioAnalysis(lastFolioAnalysis);
+            if (!$('#alerts-folio-modal').is('[hidden]')) {
+                renderFolioAnalysisModal(lastFolioAnalysis);
+            }
+        }
+    }
+
+    function setFolioCostMode(mode) {
+        if (mode !== 'referencia' && mode !== 'tras_dr') return;
+        folioCostMode = mode;
+        syncFolioViewToggles();
+        if (lastFolioAnalysis) {
+            renderFolioAnalysis(lastFolioAnalysis);
+            if (!$('#alerts-folio-modal').is('[hidden]')) {
+                renderFolioAnalysisModal(lastFolioAnalysis);
+            }
+        }
+    }
+
+    $(document).on('click', '#folio-view-toggle .rce-view-btn, #alerts-folio-view-toggle .rce-view-btn', function(e) {
+        e.preventDefault();
+        setFolioViewMode($(this).data('folio-view'));
+    });
+    $(document).on('click', '#folio-cost-toggle .rce-cost-btn, #alerts-folio-cost-toggle .rce-cost-btn', function(e) {
+        e.preventDefault();
+        setFolioCostMode($(this).data('folio-cost'));
+    });
+    syncFolioViewToggles();
 
     $('#analysis-folio-search').on('input', function() {
         clearTimeout(searchTimeout);
@@ -2121,7 +2286,12 @@ jQuery(document).ready(function($) {
 
     function renderFolioAnalysis(data) {
         const inv = data.invoice || {};
-        $('#folio-analysis-title').text(tipoDteLabel(inv.tipo_dte) + ' N° ' + (inv.folio || ''));
+        const viewTag = folioViewLabel();
+        const costTag = folioCostLabel();
+        $('#folio-analysis-title').text(
+            tipoDteLabel(inv.tipo_dte) + ' N° ' + (inv.folio || '') +
+            ' (' + viewTag + ' · ' + costTag + ')'
+        );
         $('#folio-analysis-meta').text(
             (inv.proveedor_nombre || '') + ' · RUT ' + (inv.rut_emisor || '—') +
             ' · Doc. ' + (inv.fecha_emision || '—') +
@@ -2133,9 +2303,15 @@ jQuery(document).ready(function($) {
         header += docField('Fecha documento', inv.fecha_emision);
         header += docField('Fecha ingreso', formatDateTime(inv.created_at));
         header += docField('Estado', inv.estado);
-        header += docField('Neto', formatCostMoney(inv.monto_neto));
-        header += docField('Total', formatCostMoney(inv.monto_total));
+        header += docField('Vista', (folioViewMode === 'bruto' ? 'Bruto' : 'Neto') + ' · ' + folioCostLabelShort());
+        header += docField('Neto doc.', formatCostMoney(inv.monto_neto));
+        header += docField('Total doc.', formatCostMoney(inv.monto_total));
         $('#folio-analysis-header').html(header);
+
+        const suffix = ' (' + viewTag + ')';
+        $('#folio-analysis-table thead th').eq(3).text('Costo factura' + suffix);
+        $('#folio-analysis-table thead th').eq(4).html('Última facturación' + suffix);
+        $('#folio-analysis-table thead th').eq(5).html('Última cotización <span class="wip-inline">WIP</span>' + suffix);
 
         const rows = data.rows || [];
         if (!rows.length) {
@@ -2146,27 +2322,26 @@ jQuery(document).ready(function($) {
 
         let html = '';
         rows.forEach(function(row) {
-            const tClass = trendClass(row.trend);
-            const changed = row.trend === 'subio' || row.trend === 'bajo';
+            const m = folioRowMetrics(row);
+            const tClass = trendClass(m.trend);
+            const changed = m.trend === 'subio' || m.trend === 'bajo';
             const prevInv = row.prev_invoice;
             let prevInvHtml = '—';
-            if (prevInv && prevInv.costo_unitario !== null && prevInv.costo_unitario !== undefined) {
-                prevInvHtml = `<div><strong>${formatCostMoney(prevInv.costo_unitario)}</strong></div>` +
+            if (prevInv && m.prevInvCost !== null && m.prevInvCost !== undefined) {
+                prevInvHtml = `<div><strong>${formatCostMoney(m.prevInvCost)}</strong></div>` +
                     `<div class="cost-doc-ref">${escapeHtml(tipoDteLabel(prevInv.tipo_dte))} ${escapeHtml(prevInv.folio)} · ${escapeHtml(prevInv.fecha_emision || '')}</div>`;
             }
 
-            // WIP cotización
             let prevQuoteHtml = '—';
-            if (row.prev_quote && row.prev_quote.costo_unitario != null) {
-                prevQuoteHtml = formatCostMoney(row.prev_quote.costo_unitario);
+            if (row.prev_quote && m.prevQuoteCost != null) {
+                prevQuoteHtml = formatCostMoney(m.prevQuoteCost);
             }
 
-            const deltaCls = row.trend === 'subio' ? 'trend-up' : (row.trend === 'bajo' ? 'trend-down' : '');
+            const deltaCls = m.trend === 'subio' ? 'trend-up' : (m.trend === 'bajo' ? 'trend-down' : '');
             let deltaText = '—';
-            if (row.delta !== null && row.delta !== undefined) {
-                // formatCostMoney always prefixes $; for signed delta keep sign outside
-                if (row.delta < 0) deltaText = '-' + formatCostMoney(Math.abs(row.delta));
-                else if (row.delta > 0) deltaText = '+' + formatCostMoney(Math.abs(row.delta));
+            if (m.delta !== null && m.delta !== undefined) {
+                if (m.delta < 0) deltaText = '-' + formatCostMoney(Math.abs(m.delta));
+                else if (m.delta > 0) deltaText = '+' + formatCostMoney(Math.abs(m.delta));
                 else deltaText = formatCostMoney(0);
             }
 
@@ -2174,12 +2349,12 @@ jQuery(document).ready(function($) {
                 <td>${escapeHtml(row.numero_linea)}</td>
                 <td><code>${escapeHtml(row.codigo_proveedor || '—')}</code></td>
                 <td>${escapeHtml(row.nombre || '—')}</td>
-                <td style="text-align:right">${formatCostMoney(row.costo_actual)}</td>
+                <td style="text-align:right">${formatCostMoney(m.current)}</td>
                 <td>${prevInvHtml}</td>
                 <td>${prevQuoteHtml}</td>
-                <td class="${tClass}"><strong>${escapeHtml(trendLabel(row.trend))}</strong></td>
+                <td class="${tClass}"><strong>${escapeHtml(trendLabel(m.trend))}</strong></td>
                 <td style="text-align:right" class="${deltaCls}">${deltaText}</td>
-                <td style="text-align:right" class="${deltaCls}">${formatDeltaPct(row.delta_pct)}</td>
+                <td style="text-align:right" class="${deltaCls}">${formatDeltaPct(m.pct)}</td>
             </tr>`;
         });
         $('#folio-analysis-body').html(html);
@@ -2189,28 +2364,33 @@ jQuery(document).ready(function($) {
     function buildFolioPrintHtml(data) {
         const inv = data.invoice || {};
         const rows = data.rows || [];
+        const viewTag = folioViewLabel();
+        const costTag = folioCostLabel();
         const title = tipoDteLabel(inv.tipo_dte) + ' N° ' + (inv.folio || '');
+        const titleWithView = title + ' (' + viewTag + ' · ' + costTag + ')';
         const printedAt = new Date().toLocaleString('es-CL');
+        const suffix = ' (' + viewTag + ')';
 
         let rowsHtml = '';
         rows.forEach(function(row) {
-            const changed = row.trend === 'subio' || row.trend === 'bajo';
+            const m = folioRowMetrics(row);
+            const changed = m.trend === 'subio' || m.trend === 'bajo';
             const rowClass = changed ? 'changed' : '';
             const prevInv = row.prev_invoice;
             let prevInvText = '—';
-            if (prevInv && prevInv.costo_unitario != null) {
-                prevInvText = formatCostMoney(prevInv.costo_unitario) +
+            if (prevInv && m.prevInvCost != null) {
+                prevInvText = formatCostMoney(m.prevInvCost) +
                     ' (' + tipoDteLabel(prevInv.tipo_dte) + ' ' + (prevInv.folio || '') +
                     ' · ' + (prevInv.fecha_emision || '') + ')';
             }
             let prevQuoteText = '—';
-            if (row.prev_quote && row.prev_quote.costo_unitario != null) {
-                prevQuoteText = formatCostMoney(row.prev_quote.costo_unitario);
+            if (row.prev_quote && m.prevQuoteCost != null) {
+                prevQuoteText = formatCostMoney(m.prevQuoteCost);
             }
             let deltaText = '—';
-            if (row.delta !== null && row.delta !== undefined) {
-                if (row.delta < 0) deltaText = '-' + formatCostMoney(Math.abs(row.delta));
-                else if (row.delta > 0) deltaText = '+' + formatCostMoney(Math.abs(row.delta));
+            if (m.delta !== null && m.delta !== undefined) {
+                if (m.delta < 0) deltaText = '-' + formatCostMoney(Math.abs(m.delta));
+                else if (m.delta > 0) deltaText = '+' + formatCostMoney(Math.abs(m.delta));
                 else deltaText = formatCostMoney(0);
             }
 
@@ -2218,17 +2398,22 @@ jQuery(document).ready(function($) {
                 '<td>' + escapeHtml(row.numero_linea) + '</td>' +
                 '<td>' + escapeHtml(row.codigo_proveedor || '—') + '</td>' +
                 '<td>' + escapeHtml(row.nombre || '—') + '</td>' +
-                '<td class="num">' + escapeHtml(formatCostMoney(row.costo_actual)) + '</td>' +
+                '<td class="num">' + escapeHtml(formatCostMoney(m.current)) + '</td>' +
                 '<td>' + escapeHtml(prevInvText) + '</td>' +
                 '<td>' + escapeHtml(prevQuoteText) + '</td>' +
-                '<td class="chg">' + escapeHtml(trendLabel(row.trend)) + '</td>' +
+                '<td class="chg">' + escapeHtml(trendLabel(m.trend)) + '</td>' +
                 '<td class="num chg">' + escapeHtml(deltaText) + '</td>' +
-                '<td class="num chg">' + escapeHtml(formatDeltaPct(row.delta_pct)) + '</td>' +
+                '<td class="num chg">' + escapeHtml(formatDeltaPct(m.pct)) + '</td>' +
                 '</tr>';
         });
 
+        const vistaMeta = (folioViewMode === 'bruto' ? 'Bruto' : 'Neto') + ' · ' + folioCostLabelShort();
+        const baseNote = folioCostMode === 'referencia'
+            ? 'Costo referencia = precio lista / costo antes de descuentos y recargos.'
+            : 'Costo tras Descuento/Recargo = costo unitario después de descuentos y recargos (sin flete).';
+
         return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-<title>Análisis ${escapeHtml(title)}</title>
+<title>Análisis ${escapeHtml(titleWithView)}</title>
 <style>
 body{font-family:Arial,sans-serif;margin:24px;color:#111;}
 h1{margin:0 0 8px;font-size:22px;}
@@ -2249,13 +2434,14 @@ tr.changed td.chg{text-decoration:underline;}
   tr.changed td{font-weight:700;}
 }
 </style></head><body>
-<h1>Análisis de costos — ${escapeHtml(title)}</h1>
+<h1>Análisis de costos — ${escapeHtml(titleWithView)}</h1>
 <div class="meta">
   <div><strong>Proveedor:</strong> ${escapeHtml(inv.proveedor_nombre || '—')}</div>
   <div><strong>RUT:</strong> ${escapeHtml(inv.rut_emisor || '—')}</div>
   <div><strong>Fecha documento:</strong> ${escapeHtml(inv.fecha_emision || '—')}</div>
   <div><strong>Fecha ingreso:</strong> ${escapeHtml(formatDateTime(inv.created_at))}</div>
-  <div><strong>Estado:</strong> ${escapeHtml(inv.estado || '—')} · <strong>Neto:</strong> ${escapeHtml(formatCostMoney(inv.monto_neto))} · <strong>Total:</strong> ${escapeHtml(formatCostMoney(inv.monto_total))}</div>
+  <div><strong>Estado:</strong> ${escapeHtml(inv.estado || '—')} · <strong>Neto doc.:</strong> ${escapeHtml(formatCostMoney(inv.monto_neto))} · <strong>Total doc.:</strong> ${escapeHtml(formatCostMoney(inv.monto_total))}</div>
+  <div><strong>Vista:</strong> ${escapeHtml(vistaMeta)}</div>
   <div><strong>Generado:</strong> ${escapeHtml(printedAt)}</div>
 </div>
 <table>
@@ -2264,9 +2450,9 @@ tr.changed td.chg{text-decoration:underline;}
       <th>#</th>
       <th>Código</th>
       <th>Descripción</th>
-      <th>Costo factura</th>
-      <th>Última facturación</th>
-      <th>Última cotización</th>
+      <th>Costo factura${escapeHtml(suffix)}</th>
+      <th>Última facturación${escapeHtml(suffix)}</th>
+      <th>Última cotización${escapeHtml(suffix)}</th>
       <th>Tendencia</th>
       <th>Diferencia</th>
       <th>Dif. %</th>
@@ -2274,7 +2460,7 @@ tr.changed td.chg{text-decoration:underline;}
   </thead>
   <tbody>${rowsHtml}</tbody>
 </table>
-<div class="legend"><strong>Nota:</strong> las filas en negrita (y diferencia subrayada) indican cambio de costo respecto a la última facturación.</div>
+<div class="legend"><strong>Nota:</strong> ${escapeHtml(baseNote)} Las filas en negrita (y diferencia subrayada) indican cambio de costo respecto a la referencia elegida.</div>
 <p class="no-print" style="margin-top:20px;">
   <button type="button" onclick="window.print()">Imprimir</button>
 </p>
@@ -2669,7 +2855,12 @@ tr.changed td.chg{text-decoration:underline;}
 
     function renderFolioAnalysisModal(data) {
         const inv = data.invoice || {};
-        $('#alerts-folio-title').text(tipoDteLabel(inv.tipo_dte) + ' N° ' + (inv.folio || ''));
+        const viewTag = folioViewLabel();
+        const costTag = folioCostLabel();
+        $('#alerts-folio-title').text(
+            tipoDteLabel(inv.tipo_dte) + ' N° ' + (inv.folio || '') +
+            ' (' + viewTag + ' · ' + costTag + ')'
+        );
         $('#alerts-folio-meta').text(
             (inv.proveedor_nombre || '') + ' · RUT ' + (inv.rut_emisor || '—') +
             ' · Doc. ' + (inv.fecha_emision || '—') +
@@ -2681,9 +2872,15 @@ tr.changed td.chg{text-decoration:underline;}
         header += docField('Fecha documento', inv.fecha_emision);
         header += docField('Fecha ingreso', formatDateTime(inv.created_at));
         header += docField('Estado', inv.estado);
-        header += docField('Neto', formatCostMoney(inv.monto_neto));
-        header += docField('Total', formatCostMoney(inv.monto_total));
+        header += docField('Vista', (folioViewMode === 'bruto' ? 'Bruto' : 'Neto') + ' · ' + folioCostLabelShort());
+        header += docField('Neto doc.', formatCostMoney(inv.monto_neto));
+        header += docField('Total doc.', formatCostMoney(inv.monto_total));
         $('#alerts-folio-header').html(header);
+
+        const suffix = ' (' + viewTag + ')';
+        $('#alerts-folio-table thead th').eq(3).text('Costo factura' + suffix);
+        $('#alerts-folio-table thead th').eq(4).html('Última facturación' + suffix);
+        $('#alerts-folio-table thead th').eq(5).html('Última cotización <span class="wip-inline">WIP</span>' + suffix);
 
         const rows = data.rows || [];
         if (!rows.length) {
@@ -2694,35 +2891,36 @@ tr.changed td.chg{text-decoration:underline;}
 
         let html = '';
         rows.forEach(function(row) {
-            const tClass = trendClass(row.trend);
-            const changed = row.trend === 'subio' || row.trend === 'bajo';
+            const m = folioRowMetrics(row);
+            const tClass = trendClass(m.trend);
+            const changed = m.trend === 'subio' || m.trend === 'bajo';
             const prevInv = row.prev_invoice;
             let prevInvHtml = '—';
-            if (prevInv && prevInv.costo_unitario !== null && prevInv.costo_unitario !== undefined) {
-                prevInvHtml = `<div><strong>${formatCostMoney(prevInv.costo_unitario)}</strong></div>` +
+            if (prevInv && m.prevInvCost !== null && m.prevInvCost !== undefined) {
+                prevInvHtml = `<div><strong>${formatCostMoney(m.prevInvCost)}</strong></div>` +
                     `<div class="cost-doc-ref">${escapeHtml(tipoDteLabel(prevInv.tipo_dte))} ${escapeHtml(prevInv.folio)} · ${escapeHtml(prevInv.fecha_emision || '')}</div>`;
             }
             let prevQuoteHtml = '—';
-            if (row.prev_quote && row.prev_quote.costo_unitario != null) {
-                prevQuoteHtml = formatCostMoney(row.prev_quote.costo_unitario);
+            if (row.prev_quote && m.prevQuoteCost != null) {
+                prevQuoteHtml = formatCostMoney(m.prevQuoteCost);
             }
-            const deltaCls = row.trend === 'subio' ? 'trend-up' : (row.trend === 'bajo' ? 'trend-down' : '');
+            const deltaCls = m.trend === 'subio' ? 'trend-up' : (m.trend === 'bajo' ? 'trend-down' : '');
             let deltaText = '—';
-            if (row.delta !== null && row.delta !== undefined) {
-                if (row.delta < 0) deltaText = '-' + formatCostMoney(Math.abs(row.delta));
-                else if (row.delta > 0) deltaText = '+' + formatCostMoney(Math.abs(row.delta));
+            if (m.delta !== null && m.delta !== undefined) {
+                if (m.delta < 0) deltaText = '-' + formatCostMoney(Math.abs(m.delta));
+                else if (m.delta > 0) deltaText = '+' + formatCostMoney(Math.abs(m.delta));
                 else deltaText = formatCostMoney(0);
             }
             html += `<tr class="${tClass}${changed ? ' has-change' : ''}">
                 <td>${escapeHtml(row.numero_linea)}</td>
                 <td><code>${escapeHtml(row.codigo_proveedor || '—')}</code></td>
                 <td>${escapeHtml(row.nombre || '—')}</td>
-                <td style="text-align:right">${formatCostMoney(row.costo_actual)}</td>
+                <td style="text-align:right">${formatCostMoney(m.current)}</td>
                 <td>${prevInvHtml}</td>
                 <td>${prevQuoteHtml}</td>
-                <td class="${tClass}"><strong>${escapeHtml(trendLabel(row.trend))}</strong></td>
+                <td class="${tClass}"><strong>${escapeHtml(trendLabel(m.trend))}</strong></td>
                 <td style="text-align:right" class="${deltaCls}">${deltaText}</td>
-                <td style="text-align:right" class="${deltaCls}">${formatDeltaPct(row.delta_pct)}</td>
+                <td style="text-align:right" class="${deltaCls}">${formatDeltaPct(m.pct)}</td>
             </tr>`;
         });
         $('#alerts-folio-body').html(html);

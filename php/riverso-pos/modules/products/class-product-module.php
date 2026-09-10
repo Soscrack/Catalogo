@@ -661,6 +661,7 @@ class Riverso_Product_Module {
         // Enriquecer con precio local
         if (class_exists('Riverso_Pricing_Module')) {
             $product['precio_local'] = Riverso_Pricing_Module::get_instance()->get_local_price($id);
+            $product['precio_local'] = $this->attach_costo_bases_to_precio($product['precio_local'], $id);
             
             // Enriquecer con precio online si tiene variación o producto Woo
             $var_id = (int) ($product['woocommerce_variation_id'] ?? 0);
@@ -911,6 +912,52 @@ class Riverso_Product_Module {
         }
         
         return $details;
+    }
+
+    /**
+     * Adjunta costo_bases (referencia / tras D/R) al array de precio local.
+     * Solo vista: no altera c_ref persistido.
+     *
+     * @param array|null $precio
+     * @param int        $producto_base_id
+     * @return array|null
+     */
+    private function attach_costo_bases_to_precio($precio, $producto_base_id) {
+        if (!is_array($precio)) {
+            $precio = [];
+        }
+        $producto_base_id = (int) $producto_base_id;
+        $info = null;
+        if (!class_exists('Riverso_Cost_Lookup_Service')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'modules/costs/class-cost-lookup-service.php';
+            if (file_exists($path)) {
+                require_once $path;
+            }
+        }
+        if (class_exists('Riverso_Cost_Lookup_Service') && $producto_base_id > 0) {
+            $info = Riverso_Cost_Lookup_Service::get_instance()->latest_cost_bases_for_product($producto_base_id);
+        }
+
+        $bases = is_array($info) ? ($info['costo_bases'] ?? null) : null;
+        // Hub Productos: c_ref se trata como neto.
+        if (!$bases) {
+            $c_ref = isset($precio['c_ref']) && $precio['c_ref'] !== null && $precio['c_ref'] !== ''
+                ? (float) $precio['c_ref']
+                : null;
+            if ($c_ref !== null && class_exists('Riverso_Cost_Lookup_Service')) {
+                $bases = Riverso_Cost_Lookup_Service::bases_from_c_ref($c_ref, null);
+            }
+        }
+
+        $precio['costo_bases'] = $bases;
+        $precio['costo_bases_meta'] = [
+            'folio' => is_array($info) ? ($info['folio'] ?? null) : null,
+            'fecha_emision' => is_array($info) ? ($info['fecha_emision'] ?? null) : null,
+            'factura_id' => is_array($info) ? ($info['factura_id'] ?? null) : null,
+            'proveedor_nombre' => is_array($info) ? ($info['proveedor_nombre'] ?? null) : null,
+            'codigo_proveedor' => is_array($info) ? ($info['codigo_proveedor'] ?? null) : null,
+        ];
+        return $precio;
     }
 
     private function get_product_barcodes($product_id) {
@@ -1848,8 +1895,37 @@ class Riverso_Product_Module {
             wp_send_json_error(['message' => $result->get_error_message()]);
         }
 
-        if (class_exists('Riverso_Matching_Module')) {
-            $pp_id = $pp_before ? intval($pp_before['id']) : 0;
+        $pp_id = $pp_before ? intval($pp_before['id']) : 0;
+        if (!$pp_id) {
+            $pp_id = intval($wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}producto_proveedor
+                 WHERE codigo_proveedor = %s AND proveedor_id = %d
+                 ORDER BY id DESC LIMIT 1",
+                $supplier_code,
+                $supplier_id
+            )));
+        }
+
+        // create_link() solo escribe supplier_product_links y exige un ID Woo para
+        // crear producto_proveedor. Un ingreso manual nuevo no tiene ese ID, así
+        // que hay que persistir el par canónico aquí.
+        if (!$pp_id) {
+            $inserted = $wpdb->insert(
+                "{$prefix}producto_proveedor",
+                [
+                    'producto_base_id' => $product_id,
+                    'proveedor_id' => $supplier_id,
+                    'codigo_proveedor' => $supplier_code,
+                    'activo' => 1,
+                    'match_estado' => 'VERIFIED',
+                    'match_origen' => 'product_assignment',
+                    'requires_human_review' => 0,
+                    'origen_datos' => 'manual',
+                    'created_at' => current_time('mysql'),
+                ],
+                ['%d', '%d', '%s', '%d', '%s', '%s', '%d', '%s', '%s']
+            );
+            $pp_id = (int) $wpdb->insert_id;
             if (!$pp_id) {
                 $pp_id = intval($wpdb->get_var($wpdb->prepare(
                     "SELECT id FROM {$prefix}producto_proveedor
@@ -1859,15 +1935,32 @@ class Riverso_Product_Module {
                     $supplier_id
                 )));
             }
-            if ($pp_id) {
-                if ($pending_grupo_id) {
-                    $wpdb->query($wpdb->prepare(
-                        "UPDATE {$prefix}producto_proveedor SET grupo_id = %d WHERE id = %d AND (grupo_id IS NULL OR grupo_id = 0)",
-                        $pending_grupo_id,
-                        $pp_id
-                    ));
-                }
-                Riverso_Matching_Module::get_instance()->assign_to_product($pp_id, $product_id);
+            if (!$inserted && !$pp_id) {
+                wp_send_json_error([
+                    'message' => 'No se pudo guardar el código de proveedor: '
+                        . ($wpdb->last_error ?: 'error de base de datos'),
+                ]);
+            }
+        }
+
+        if (class_exists('Riverso_Matching_Module') && $pp_id) {
+            $wpdb->update(
+                "{$prefix}producto_proveedor",
+                ['activo' => 1],
+                ['id' => $pp_id],
+                ['%d'],
+                ['%d']
+            );
+            if ($pending_grupo_id) {
+                $wpdb->query($wpdb->prepare(
+                    "UPDATE {$prefix}producto_proveedor SET grupo_id = %d WHERE id = %d AND (grupo_id IS NULL OR grupo_id = 0)",
+                    $pending_grupo_id,
+                    $pp_id
+                ));
+            }
+            $assigned = Riverso_Matching_Module::get_instance()->assign_to_product($pp_id, $product_id);
+            if (is_wp_error($assigned)) {
+                wp_send_json_error(['message' => $assigned->get_error_message()]);
             }
         } elseif ($pending_grupo_id && class_exists('Riverso_Family_Module') && $pp_before) {
             Riverso_Family_Module::get_instance()->promote_pending_supplier_to_member(
@@ -1877,9 +1970,14 @@ class Riverso_Product_Module {
             );
         }
 
-        $this->close_counterpart_task($product_id, 'relacionar_producto_proveedor');
         $product = $this->get_product($product_id);
+        if (!$product || (int) ($product['proveedores_count'] ?? 0) === 0) {
+            wp_send_json_error(['message' => 'No se pudo persistir el código de proveedor en el producto.']);
+        }
+
+        $this->close_counterpart_task($product_id, 'relacionar_producto_proveedor');
         $this->trigger_counterpart_tasks($product_id);
+        $product = $this->get_product($product_id);
 
         wp_send_json_success(['message' => 'Código proveedor vinculado', 'item' => $product]);
     }

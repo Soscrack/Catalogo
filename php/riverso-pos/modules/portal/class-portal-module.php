@@ -190,8 +190,29 @@ class Riverso_Portal_Module {
      * Obtiene notificaciones del usuario (placeholder)
      */
     private function get_notifications($user_id) {
-        // TODO: Implementar sistema de notificaciones
-        return [];
+        if (!class_exists('Riverso_Messaging_Store')) {
+            $f = RIVERSO_POS_PLUGIN_DIR . 'core/messaging/class-messaging-store.php';
+            if (file_exists($f)) {
+                require_once $f;
+            }
+        }
+        if (!class_exists('Riverso_Messaging_Store')) {
+            return [];
+        }
+        $rows = Riverso_Messaging_Store::list_notifications($user_id, 15);
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = [
+                'id' => (int) $row['id'],
+                'title' => $row['titulo'],
+                'body' => $row['cuerpo'],
+                'link' => $row['link'],
+                'read' => !empty($row['leido_at']),
+                'created_at' => $row['created_at'],
+                'tipo' => $row['tipo'],
+            ];
+        }
+        return $out;
     }
 
     /**

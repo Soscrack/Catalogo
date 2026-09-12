@@ -3,7 +3,7 @@
  * Plugin Name: Riverso POS
  * Plugin URI: https://riverso.cl
  * Description: Sistema POS/mini-ERP integrado con WooCommerce para gestión de productos, facturas, inventario y tareas operativas.
- * Version: 1.6.96
+ * Version: 1.7.4
  * Author: Riverso
  * Author URI: https://riverso.cl
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constantes del plugin
-define('RIVERSO_POS_VERSION', '1.6.96');
+define('RIVERSO_POS_VERSION', '1.7.4');
 define('RIVERSO_POS_PLUGIN_FILE', __FILE__);
 define('RIVERSO_POS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RIVERSO_POS_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -99,6 +99,7 @@ final class Riverso_POS {
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-scan.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-facto.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-factura-adjuntos.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-messaging.php';
         
         // Aliases de compatibilidad: cargar clases movidas a core/
         // (permiten que código antiguo siga usando el path antiguo)
@@ -254,6 +255,20 @@ final class Riverso_POS {
                 'paths' => [
                     RIVERSO_POS_PLUGIN_DIR . 'core/employees/class-employee-module.php',
                     RIVERSO_POS_PLUGIN_DIR . 'modules/employees/class-employee-module.php',
+                ],
+            ],
+            'messaging' => [
+                'file' => 'class-messaging-module.php',
+                'class' => 'Riverso_Messaging_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'core/messaging/class-messaging-module.php',
+                ],
+            ],
+            'rest' => [
+                'file' => 'class-rest-module.php',
+                'class' => 'Riverso_REST_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'core/rest/class-rest-module.php',
                 ],
             ],
             'quotes'    => ['file' => 'class-received-quote-module.php', 'class' => 'Riverso_POS_Received_Quote_Module'],

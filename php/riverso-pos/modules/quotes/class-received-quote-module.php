@@ -43,11 +43,12 @@ class Riverso_POS_Received_Quote_Module {
 
     // Tipos de fuente
     const SOURCE_TYPES = [
-        'pdf'     => 'PDF',
-        'excel'   => 'Excel',
-        'text'    => 'Texto',
-        'manual'  => 'Manual',
-        'email'   => 'Email'
+        'pdf'      => 'PDF',
+        'excel'    => 'Excel',
+        'text'     => 'Texto',
+        'manual'   => 'Manual',
+        'email'    => 'Email',
+        'whatsapp' => 'WhatsApp',
     ];
 
     private static $instance = null;
@@ -72,6 +73,11 @@ class Riverso_POS_Received_Quote_Module {
         add_action('wp_ajax_riverso_match_all_items', [$this, 'ajax_match_all_items']);
         add_action('wp_ajax_riverso_set_item_decision', [$this, 'ajax_set_item_decision']);
         add_action('wp_ajax_riverso_approve_received_quote', [$this, 'ajax_approve_quote']);
+        add_action('wp_ajax_riverso_reject_received_quote', [$this, 'ajax_reject_quote']);
+        add_action('wp_ajax_riverso_set_received_quote_status', [$this, 'ajax_set_status']);
+        add_action('wp_ajax_riverso_parse_quote_text', [$this, 'ajax_parse_text']);
+        add_action('wp_ajax_riverso_analyze_received_quote', [$this, 'ajax_analyze_quote']);
+        add_action('wp_ajax_riverso_quote_claim_draft', [$this, 'ajax_claim_draft']);
         add_action('wp_ajax_riverso_convert_quote_to_expected', [$this, 'ajax_convert_to_expected']);
         add_action('wp_ajax_riverso_get_quote_comparison', [$this, 'ajax_get_comparison']);
     }
@@ -91,13 +97,20 @@ class Riverso_POS_Received_Quote_Module {
             numero_documento VARCHAR(100) NULL,
             fecha_documento DATE NULL,
             fecha_recepcion DATETIME DEFAULT CURRENT_TIMESTAMP,
-            tipo_fuente ENUM('pdf','excel','text','manual','email') DEFAULT 'manual',
+            tipo_fuente ENUM('pdf','excel','text','manual','email','whatsapp') DEFAULT 'manual',
             archivo_path VARCHAR(500) NULL,
             archivo_original VARCHAR(255) NULL,
+            origen_mensaje_id BIGINT UNSIGNED NULL,
+            origen_canal VARCHAR(20) NULL,
             estado VARCHAR(50) DEFAULT 'draft',
             moneda VARCHAR(10) DEFAULT 'CLP',
             subtotal DECIMAL(15,2) DEFAULT 0,
             impuesto DECIMAL(15,2) DEFAULT 0,
+            tasa_iva DECIMAL(5,2) DEFAULT 19,
+            descuento_pct DECIMAL(8,4) NULL,
+            descuento_monto DECIMAL(15,4) NULL,
+            condiciones_pago VARCHAR(255) NULL,
+            fecha_validez DATE NULL,
             total DECIMAL(15,2) DEFAULT 0,
             notas TEXT NULL,
             datos_parseados LONGTEXT NULL,
@@ -123,6 +136,10 @@ class Riverso_POS_Received_Quote_Module {
             descripcion TEXT NULL,
             cantidad DECIMAL(15,4) DEFAULT 1,
             unidad VARCHAR(20) DEFAULT 'UN',
+            precio_lista DECIMAL(15,4) NULL,
+            descuento_pct DECIMAL(8,4) NULL,
+            descuento_monto DECIMAL(15,4) NULL,
+            tasa_iva DECIMAL(5,2) NULL,
             costo_neto DECIMAL(15,4) DEFAULT 0,
             costo_impuesto DECIMAL(15,4) DEFAULT 0,
             costo_total DECIMAL(15,4) DEFAULT 0,
@@ -167,6 +184,7 @@ class Riverso_POS_Received_Quote_Module {
         $buscar = isset($_POST['buscar']) ? sanitize_text_field($_POST['buscar']) : '';
         $fecha_desde = isset($_POST['fecha_desde']) ? sanitize_text_field($_POST['fecha_desde']) : '';
         $fecha_hasta = isset($_POST['fecha_hasta']) ? sanitize_text_field($_POST['fecha_hasta']) : '';
+        $tipo_fuente = isset($_POST['tipo_fuente']) ? sanitize_text_field($_POST['tipo_fuente']) : '';
 
         $where = ["1=1"];
         $params = [];
@@ -195,6 +213,11 @@ class Riverso_POS_Received_Quote_Module {
         if ($fecha_hasta) {
             $where[] = "c.fecha_documento <= %s";
             $params[] = $fecha_hasta;
+        }
+
+        if ($tipo_fuente && array_key_exists($tipo_fuente, self::SOURCE_TYPES)) {
+            $where[] = "c.tipo_fuente = %s";
+            $params[] = $tipo_fuente;
         }
 
         $where_sql = implode(' AND ', $where);
@@ -295,6 +318,40 @@ class Riverso_POS_Received_Quote_Module {
             }
         }
 
+        $origen = null;
+        $origen_mensaje_id = !empty($quote->origen_mensaje_id) ? (int) $quote->origen_mensaje_id : 0;
+        if ($origen_mensaje_id > 0) {
+            $msg = $wpdb->get_row($wpdb->prepare(
+                "SELECT m.id, m.thread_id, m.subject, m.from_address, m.sent_at, m.direction,
+                        t.canal, t.contacto_nombre, t.contacto_identificador
+                 FROM {$prefix}messaging_messages m
+                 LEFT JOIN {$prefix}messaging_threads t ON t.id = m.thread_id
+                 WHERE m.id = %d",
+                $origen_mensaje_id
+            ), ARRAY_A);
+            if ($msg) {
+                $atts = $wpdb->get_results($wpdb->prepare(
+                    "SELECT id, filename, mime, size_bytes
+                     FROM {$prefix}messaging_attachments WHERE message_id = %d ORDER BY id ASC",
+                    $origen_mensaje_id
+                ), ARRAY_A) ?: [];
+                $inbox_admin = admin_url('admin.php?page=riverso-pos-inbox&thread=' . (int) $msg['thread_id']);
+                $inbox_portal = home_url('/interno/inbox/?thread=' . (int) $msg['thread_id']);
+                $origen = [
+                    'mensaje_id' => (int) $msg['id'],
+                    'thread_id' => (int) $msg['thread_id'],
+                    'canal' => $msg['canal'] ?: ($quote->origen_canal ?: 'email'),
+                    'subject' => $msg['subject'],
+                    'from_address' => $msg['from_address'],
+                    'sent_at' => $msg['sent_at'],
+                    'contacto' => $msg['contacto_nombre'] ?: $msg['contacto_identificador'],
+                    'inbox_url' => $inbox_admin,
+                    'inbox_portal_url' => $inbox_portal,
+                    'attachments' => $atts,
+                ];
+            }
+        }
+
         // Proveedores para selector
         $proveedores = $wpdb->get_results("
             SELECT id, nombre, rut FROM {$prefix}proveedores WHERE estado = 'activo' ORDER BY nombre
@@ -303,6 +360,7 @@ class Riverso_POS_Received_Quote_Module {
         wp_send_json_success([
             'quote' => $quote,
             'items' => $items,
+            'origen' => $origen,
             'proveedores' => $proveedores,
             'estados' => self::ESTADOS,
             'match_status' => self::MATCH_STATUS,
@@ -328,7 +386,9 @@ class Riverso_POS_Received_Quote_Module {
             'proveedor_id'     => isset($_POST['proveedor_id']) && $_POST['proveedor_id'] ? intval($_POST['proveedor_id']) : null,
             'numero_documento' => isset($_POST['numero_documento']) ? sanitize_text_field($_POST['numero_documento']) : null,
             'fecha_documento'  => isset($_POST['fecha_documento']) && $_POST['fecha_documento'] ? sanitize_text_field($_POST['fecha_documento']) : null,
-            'tipo_fuente'      => isset($_POST['tipo_fuente']) ? sanitize_text_field($_POST['tipo_fuente']) : 'manual',
+            'tipo_fuente'      => isset($_POST['tipo_fuente']) && array_key_exists($_POST['tipo_fuente'], self::SOURCE_TYPES)
+                ? sanitize_text_field($_POST['tipo_fuente'])
+                : 'manual',
             'moneda'           => isset($_POST['moneda']) ? sanitize_text_field($_POST['moneda']) : 'CLP',
             'notas'            => isset($_POST['notas']) ? sanitize_textarea_field($_POST['notas']) : null,
             'updated_by'       => get_current_user_id()
@@ -474,12 +534,13 @@ class Riverso_POS_Received_Quote_Module {
             'id'          => $quote_id,
             'filepath'    => $filepath,
             'source_type' => $source_type,
+            'parsed'      => $this->parse_quote_internal($quote_id),
             'message'     => 'Archivo subido correctamente'
         ]);
     }
 
     /**
-     * AJAX: Parsear cotización (básico - extraer ítems)
+     * AJAX: Parsear cotización con Gemini.
      */
     public function ajax_parse_quote() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
@@ -489,34 +550,201 @@ class Riverso_POS_Received_Quote_Module {
             wp_send_json_error(['message' => 'ID requerido']);
         }
 
+        $result = $this->parse_quote_internal($id);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success($result);
+    }
+
+    public function ajax_parse_text() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $text = isset($_POST['texto']) ? wp_unslash($_POST['texto']) : '';
+        if (!$id || trim($text) === '') {
+            wp_send_json_error(['message' => 'ID y texto requeridos']);
+        }
+        $result = $this->parse_quote_internal($id, $text);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success($result);
+    }
+
+    /**
+     * Crea cotización desde un mensaje de inbox y dispara parseo.
+     *
+     * @param array $args
+     * @return int|WP_Error
+     */
+    public function create_from_message($args) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
+        $canal = $args['canal'] ?? 'email';
+        $tipo = $canal === 'whatsapp' ? 'whatsapp' : 'email';
+        $path = $args['archivo_path'] ?? '';
+        $original = $args['archivo_original'] ?? '';
+        $rel = $path;
+        $upload = wp_upload_dir();
+        if ($path && strpos($path, $upload['basedir']) === 0) {
+            $rel = str_replace($upload['basedir'], '', $path);
+        }
 
+        $wpdb->insert("{$prefix}cotizaciones_recibidas", [
+            'proveedor_id'     => !empty($args['proveedor_id']) ? (int) $args['proveedor_id'] : null,
+            'numero_documento' => $args['numero_documento'] ?? null,
+            'tipo_fuente'      => $tipo,
+            'archivo_path'     => $rel,
+            'archivo_original' => $original,
+            'origen_mensaje_id'=> !empty($args['mensaje_id']) ? (int) $args['mensaje_id'] : null,
+            'origen_canal'     => $canal,
+            'estado'           => 'uploaded',
+            'created_by'       => get_current_user_id() ?: null,
+            'updated_by'       => get_current_user_id() ?: null,
+        ]);
+        $id = (int) $wpdb->insert_id;
+        if (!$id) {
+            return new WP_Error('quote_insert', 'No se pudo crear la cotización');
+        }
+        $this->parse_quote_internal($id);
+        return $id;
+    }
+
+    /**
+     * @param int         $id
+     * @param string|null $text_override
+     * @return array|WP_Error
+     */
+    public function parse_quote_internal($id, $text_override = null) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
         $quote = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
             $id
         ));
-
         if (!$quote) {
-            wp_send_json_error(['message' => 'Cotización no encontrada']);
+            return new WP_Error('not_found', 'Cotización no encontrada');
         }
 
-        // Por ahora, solo marcar como parseada y crear estructura vacía
-        // La lógica de parsing real se puede agregar después
-        $wpdb->update("{$prefix}cotizaciones_recibidas", [
+        if (!class_exists('Riverso_Quote_Extractor')) {
+            require_once RIVERSO_POS_PLUGIN_DIR . 'modules/quotes/class-quote-extractor.php';
+        }
+        $extractor = new Riverso_Quote_Extractor();
+
+        $abs = '';
+        if (!empty($quote->archivo_path)) {
+            $upload = wp_upload_dir();
+            $abs = $quote->archivo_path;
+            if (!is_file($abs)) {
+                $candidate = $upload['basedir'] . '/' . ltrim($quote->archivo_path, '/');
+                if (is_file($candidate)) {
+                    $abs = $candidate;
+                }
+            }
+        }
+
+        $mime = 'application/pdf';
+        if ($abs && is_file($abs)) {
+            $mime = function_exists('mime_content_type') ? (mime_content_type($abs) ?: 'application/pdf') : 'application/pdf';
+        }
+
+        $parsed = $extractor->extract($abs && is_file($abs) ? $abs : '', $mime, $text_override);
+        if (is_wp_error($parsed)) {
+            $wpdb->update("{$prefix}cotizaciones_recibidas", [
+                'estado' => 'uploaded',
+                'datos_parseados' => wp_json_encode(['error' => $parsed->get_error_message(), 'parsed_at' => current_time('mysql')]),
+                'updated_by' => get_current_user_id() ?: null,
+            ], ['id' => $id]);
+            return $parsed;
+        }
+
+        $header = [
             'estado' => 'parsed',
-            'datos_parseados' => json_encode(['parsed_at' => current_time('mysql')]),
-            'updated_by' => get_current_user_id()
-        ], ['id' => $id]);
+            'datos_parseados' => wp_json_encode($parsed),
+            'updated_by' => get_current_user_id() ?: null,
+        ];
+        if (!empty($parsed['folio'])) {
+            $header['numero_documento'] = $parsed['folio'];
+        }
+        if (!empty($parsed['fecha_documento'])) {
+            $header['fecha_documento'] = $parsed['fecha_documento'];
+        }
+        if (!empty($parsed['fecha_validez'])) {
+            $header['fecha_validez'] = $parsed['fecha_validez'];
+        }
+        if (!empty($parsed['moneda'])) {
+            $header['moneda'] = $parsed['moneda'];
+        }
+        if (isset($parsed['tasa_iva'])) {
+            $header['tasa_iva'] = $parsed['tasa_iva'];
+        }
+        if (isset($parsed['descuento_pct'])) {
+            $header['descuento_pct'] = $parsed['descuento_pct'];
+        }
+        if (isset($parsed['descuento_monto'])) {
+            $header['descuento_monto'] = $parsed['descuento_monto'];
+        }
+        if (!empty($parsed['condiciones_pago'])) {
+            $header['condiciones_pago'] = $parsed['condiciones_pago'];
+        }
+        if (!$quote->proveedor_id && !empty($parsed['proveedor_nombre'])) {
+            $prov = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}proveedores WHERE nombre LIKE %s LIMIT 1",
+                '%' . $wpdb->esc_like($parsed['proveedor_nombre']) . '%'
+            ));
+            if ($prov) {
+                $header['proveedor_id'] = (int) $prov;
+            }
+        }
+
+        $wpdb->update("{$prefix}cotizaciones_recibidas", $header, ['id' => $id]);
+
+        $existing = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$prefix}cotizacion_items WHERE cotizacion_id = %d",
+            $id
+        ));
+        if ($existing === 0) {
+            foreach ($parsed['items'] as $item) {
+                $wpdb->insert("{$prefix}cotizacion_items", [
+                    'cotizacion_id'    => $id,
+                    'linea'            => $item['linea'],
+                    'codigo_proveedor' => $item['codigo_proveedor'] ?: null,
+                    'descripcion'      => $item['descripcion'],
+                    'cantidad'         => $item['cantidad'],
+                    'unidad'           => $item['unidad'],
+                    'precio_lista'     => $item['precio_lista'],
+                    'descuento_pct'    => $item['descuento_pct'],
+                    'descuento_monto'  => $item['descuento_monto'],
+                    'tasa_iva'         => $item['tasa_iva'],
+                    'costo_neto'       => $item['costo_neto'],
+                    'costo_impuesto'   => $item['costo_impuesto'],
+                    'costo_total'      => $item['costo_total'],
+                    'created_by'       => get_current_user_id() ?: null,
+                    'updated_by'       => get_current_user_id() ?: null,
+                ]);
+            }
+        }
+
+        $this->recalculate_quote_totals($id);
+        $this->match_all_internal($id);
+
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}cotizaciones_recibidas SET estado = 'under_review' WHERE id = %d AND estado = 'parsed'",
+            $id
+        ));
 
         if (class_exists('Riverso_POS_Audit')) {
-            Riverso_POS_Audit::log('received_quote.parsed', 'received_quote', $id);
+            Riverso_POS_Audit::log('received_quote.parsed', 'received_quote', $id, [
+                'items' => count($parsed['items']),
+            ]);
         }
 
-        wp_send_json_success([
-            'message' => 'Cotización lista para ingreso manual de ítems',
-            'estado' => 'parsed'
-        ]);
+        return [
+            'message' => 'Cotización parseada con Gemini',
+            'estado' => 'under_review',
+            'items' => count($parsed['items']),
+            'confianza' => $parsed['confianza_global'] ?? null,
+        ];
     }
 
     /**
@@ -661,11 +889,7 @@ class Riverso_POS_Received_Quote_Module {
             $update_data['producto_id'] = $best->product_id;
             $update_data['variacion_id'] = $best->variation_id ?: null;
             $update_data['sku_match'] = $best->sku;
-            $update_data['costo_anterior'] = $best->purchase_price ?: null;
-            
-            if ($best->purchase_price) {
-                $update_data['diferencia_costo'] = $item->costo_neto - floatval($best->purchase_price);
-            }
+            $this->apply_previous_cost($update_data, $item, $best);
         }
 
         $wpdb->update("{$prefix}cotizacion_items", $update_data, ['id' => $item_id]);
@@ -684,6 +908,10 @@ class Riverso_POS_Received_Quote_Module {
             wp_send_json_error(['message' => 'quote_id requerido']);
         }
 
+        wp_send_json_success($this->match_all_internal($quote_id));
+    }
+
+    private function match_all_internal($quote_id) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
@@ -696,7 +924,8 @@ class Riverso_POS_Received_Quote_Module {
             'processed' => 0,
             'matched' => 0,
             'not_found' => 0,
-            'ambiguous' => 0
+            'ambiguous' => 0,
+            'message' => '',
         ];
 
         foreach ($items as $item) {
@@ -706,7 +935,7 @@ class Riverso_POS_Received_Quote_Module {
             $update_data = [
                 'match_status'     => $result['status'],
                 'match_confidence' => $result['confidence'],
-                'updated_by'       => get_current_user_id()
+                'updated_by'       => get_current_user_id() ?: null,
             ];
 
             if ($result['status'] === 'matched' && !empty($result['matches'])) {
@@ -714,23 +943,54 @@ class Riverso_POS_Received_Quote_Module {
                 $update_data['producto_id'] = $best->product_id;
                 $update_data['variacion_id'] = $best->variation_id ?: null;
                 $update_data['sku_match'] = $best->sku;
-                $update_data['costo_anterior'] = $best->purchase_price ?: null;
-                
-                if ($best->purchase_price) {
-                    $update_data['diferencia_costo'] = $item->costo_neto - floatval($best->purchase_price);
-                }
+                $this->apply_previous_cost($update_data, $item, $best);
                 $results['matched']++;
             } else {
-                $results[$result['status']]++;
+                $key = $result['status'];
+                if (!isset($results[$key])) {
+                    $results[$key] = 0;
+                }
+                $results[$key]++;
             }
 
             $wpdb->update("{$prefix}cotizacion_items", $update_data, ['id' => $item->id]);
         }
 
-        wp_send_json_success([
-            'message' => "Procesados: {$results['processed']}, Vinculados: {$results['matched']}, No encontrados: {$results['not_found']}",
-            'results' => $results
-        ]);
+        $results['message'] = "Procesados: {$results['processed']}, Vinculados: {$results['matched']}";
+        return $results;
+    }
+
+    private function apply_previous_cost(&$update_data, $item, $best = null) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $quote = $wpdb->get_row($wpdb->prepare(
+            "SELECT proveedor_id, fecha_documento FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+            $item->cotizacion_id
+        ));
+        $cost = null;
+        if (class_exists('Riverso_Cost_Lookup_Service') === false) {
+            $p = RIVERSO_POS_PLUGIN_DIR . 'modules/costs/class-cost-lookup-service.php';
+            if (file_exists($p)) {
+                require_once $p;
+            }
+        }
+        if (class_exists('Riverso_Cost_Lookup_Service') && $quote) {
+            $svc = Riverso_Cost_Lookup_Service::get_instance();
+            $code = $item->codigo_proveedor ?: '';
+            $fecha = $quote->fecha_documento ?: current_time('Y-m-d');
+            $prev = $svc->get_last_invoice_before_public((int) $quote->proveedor_id, $code, $fecha, 0)
+                ?: $svc->get_last_approved_quote_before((int) $quote->proveedor_id, $code, $fecha);
+            if ($prev && isset($prev['costo_unitario'])) {
+                $cost = (float) $prev['costo_unitario'];
+            }
+        }
+        if ($cost === null && $best && !empty($best->purchase_price)) {
+            $cost = floatval($best->purchase_price);
+        }
+        if ($cost !== null) {
+            $update_data['costo_anterior'] = $cost;
+            $update_data['diferencia_costo'] = floatval($item->costo_neto) - $cost;
+        }
     }
 
     /**
@@ -966,7 +1226,7 @@ class Riverso_POS_Received_Quote_Module {
     public function ajax_approve_quote() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
 
-        if (!current_user_can('manage_woocommerce')) {
+        if (!current_user_can('riverso_approve_received_quotes') && !current_user_can('manage_woocommerce')) {
             wp_send_json_error(['message' => 'Sin permisos para aprobar']);
         }
 
@@ -1087,19 +1347,139 @@ class Riverso_POS_Received_Quote_Module {
             wp_send_json_error(['message' => 'La cotización debe estar aprobada']);
         }
 
-        // Marcar como convertida
+        $po = $this->create_purchase_order_from_quote($quote);
+        if (is_wp_error($po)) {
+            wp_send_json_error(['message' => $po->get_error_message()]);
+        }
+
         $wpdb->update("{$prefix}cotizaciones_recibidas", [
             'estado' => 'converted_to_expected',
             'updated_by' => get_current_user_id()
         ], ['id' => $id]);
 
-        // TODO: Crear registro de "llegada esperada" cuando exista ese módulo
-
         if (class_exists('Riverso_POS_Audit')) {
-            Riverso_POS_Audit::log('received_quote.converted', 'received_quote', $id);
+            Riverso_POS_Audit::log('received_quote.converted', 'received_quote', $id, [
+                'orden_compra_id' => $po['id'] ?? null,
+            ]);
         }
 
-        wp_send_json_success(['message' => 'Cotización convertida a llegada esperada']);
+        wp_send_json_success([
+            'message' => 'Cotización convertida a OC ' . ($po['numero'] ?? ''),
+            'orden_id' => $po['id'] ?? null,
+            'numero' => $po['numero'] ?? null,
+        ]);
+    }
+
+    private function create_purchase_order_from_quote($quote) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        if (!class_exists('Riverso_Purchase_Order_Module')) {
+            $f = RIVERSO_POS_PLUGIN_DIR . 'purchases/purchase_orders/class-purchase-order-module.php';
+            if (file_exists($f)) {
+                require_once $f;
+            }
+        }
+
+        $numero = 'OC-' . gmdate('Ymd') . '-' . wp_generate_password(4, false, false);
+        $inserted = $wpdb->insert("{$prefix}ordenes_compra", [
+            'numero' => $numero,
+            'proveedor_id' => $quote->proveedor_id ?: null,
+            'cotizacion_id' => (int) $quote->id,
+            'estado' => 'borrador',
+            'fecha_emision' => current_time('Y-m-d'),
+            'notas' => 'Desde cotización #' . $quote->id,
+            'creado_por' => get_current_user_id(),
+            'created_at' => current_time('mysql'),
+        ]);
+        if (!$inserted) {
+            return new WP_Error('po_insert', 'No se pudo crear la orden de compra');
+        }
+        $orden_id = (int) $wpdb->insert_id;
+        $items = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$prefix}cotizacion_items WHERE cotizacion_id = %d AND decision_status != 'rejected'",
+            $quote->id
+        ));
+        foreach ($items as $item) {
+            $wpdb->insert("{$prefix}ordenes_compra_items", [
+                'orden_id' => $orden_id,
+                'producto_base_id' => $item->producto_id ?: null,
+                'descripcion' => $item->descripcion,
+                'cantidad' => $item->cantidad,
+                'unidad' => $item->unidad ?: 'unidad',
+                'precio_unitario' => $item->costo_neto,
+            ]);
+        }
+        return ['id' => $orden_id, 'numero' => $numero];
+    }
+
+    public function ajax_reject_quote() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_approve_received_quotes') && !current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $this->set_quote_status($id, 'rejected');
+        wp_send_json_success(['message' => 'Cotización rechazada', 'estado' => 'rejected']);
+    }
+
+    public function ajax_set_status() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $estado = isset($_POST['estado']) ? sanitize_text_field($_POST['estado']) : '';
+        if (!array_key_exists($estado, self::ESTADOS)) {
+            wp_send_json_error(['message' => 'Estado inválido']);
+        }
+        $this->set_quote_status($id, $estado);
+        wp_send_json_success(['message' => 'Estado actualizado', 'estado' => $estado]);
+    }
+
+    private function set_quote_status($id, $estado) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $wpdb->update("{$prefix}cotizaciones_recibidas", [
+            'estado' => $estado,
+            'updated_by' => get_current_user_id(),
+        ], ['id' => $id]);
+    }
+
+    public function ajax_analyze_quote() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $base = isset($_POST['compare_base']) ? sanitize_text_field(wp_unslash($_POST['compare_base'])) : 'auto';
+        if (!class_exists('Riverso_Cost_Lookup_Service')) {
+            require_once RIVERSO_POS_PLUGIN_DIR . 'modules/costs/class-cost-lookup-service.php';
+        }
+        $result = Riverso_Cost_Lookup_Service::get_instance()->analyze_quote($id, $base);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success($result);
+    }
+
+    public function ajax_claim_draft() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $base = isset($_POST['compare_base']) ? sanitize_text_field(wp_unslash($_POST['compare_base'])) : 'auto';
+        if (!class_exists('Riverso_Cost_Lookup_Service')) {
+            require_once RIVERSO_POS_PLUGIN_DIR . 'modules/costs/class-cost-lookup-service.php';
+        }
+        $analysis = Riverso_Cost_Lookup_Service::get_instance()->analyze_quote($id, $base);
+        if (is_wp_error($analysis)) {
+            wp_send_json_error(['message' => $analysis->get_error_message()]);
+        }
+        if (!class_exists('Riverso_Quote_Extractor')) {
+            require_once RIVERSO_POS_PLUGIN_DIR . 'modules/quotes/class-quote-extractor.php';
+        }
+        $emails = (new Riverso_Quote_Extractor())->build_claim_emails($analysis);
+        wp_send_json_success([
+            'draft' => $emails['simple'],
+            'subject' => $emails['subject'],
+            'simple' => $emails['simple'],
+            'complex' => $emails['complex'],
+            'items' => $emails['items'],
+            'analysis' => $analysis,
+        ]);
     }
 
     /**

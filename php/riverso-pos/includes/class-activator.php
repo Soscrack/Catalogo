@@ -348,6 +348,7 @@ class Riverso_POS_Activator {
         self::create_phase47_precio_folio_archivo($prefix);
         self::create_phase48_flete_gratuito($prefix);
         self::create_phase49_costo_envio_manual($prefix);
+        self::create_phase50_messaging_quotes($prefix, $charset_collate);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -4649,6 +4650,77 @@ class Riverso_POS_Activator {
                 Riverso_POS_Audit::log('schema.phase45_competencia_manual_fuente', 'competencia', 0, [
                     'actor_type' => 'computer',
                     'details'    => 'Fase 45: fuente manual + índice url_producto',
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Fase 50: inbox unificado + campos extra de cotizaciones de compra.
+     */
+    private static function create_phase50_messaging_quotes($prefix, $charset_collate = '') {
+        if (!class_exists('Riverso_Messaging_Store')) {
+            $store = RIVERSO_POS_PLUGIN_DIR . 'core/messaging/class-messaging-store.php';
+            if (file_exists($store)) {
+                require_once $store;
+            }
+        }
+        if (class_exists('Riverso_Messaging_Store')) {
+            Riverso_Messaging_Store::create_tables();
+        }
+
+        $quotes = $prefix . 'cotizaciones_recibidas';
+        if (self::table_exists($quotes)) {
+            global $wpdb;
+            $wpdb->query(
+                "ALTER TABLE `{$quotes}`
+                 MODIFY COLUMN tipo_fuente ENUM('pdf','excel','text','manual','email','whatsapp') DEFAULT 'manual'"
+            );
+            self::add_column_if_missing($quotes, 'fecha_validez', 'fecha_validez DATE NULL');
+            self::add_column_if_missing($quotes, 'tasa_iva', 'tasa_iva DECIMAL(5,2) DEFAULT 19');
+            self::add_column_if_missing($quotes, 'descuento_pct', 'descuento_pct DECIMAL(8,4) NULL');
+            self::add_column_if_missing($quotes, 'descuento_monto', 'descuento_monto DECIMAL(15,4) NULL');
+            self::add_column_if_missing($quotes, 'condiciones_pago', 'condiciones_pago VARCHAR(255) NULL');
+            self::add_column_if_missing($quotes, 'origen_mensaje_id', 'origen_mensaje_id BIGINT UNSIGNED NULL');
+            self::add_column_if_missing($quotes, 'origen_canal', 'origen_canal VARCHAR(20) NULL');
+            self::add_index_if_missing($quotes, 'idx_origen_mensaje', 'KEY idx_origen_mensaje (origen_mensaje_id)');
+        }
+
+        $items = $prefix . 'cotizacion_items';
+        if (self::table_exists($items)) {
+            self::add_column_if_missing($items, 'precio_lista', 'precio_lista DECIMAL(15,4) NULL');
+            self::add_column_if_missing($items, 'descuento_pct', 'descuento_pct DECIMAL(8,4) NULL');
+            self::add_column_if_missing($items, 'descuento_monto', 'descuento_monto DECIMAL(15,4) NULL');
+            self::add_column_if_missing($items, 'tasa_iva', 'tasa_iva DECIMAL(5,2) NULL');
+        }
+
+        $oc = $prefix . 'ordenes_compra';
+        if (self::table_exists($oc)) {
+            self::add_column_if_missing($oc, 'cotizacion_id', 'cotizacion_id BIGINT UNSIGNED NULL');
+            self::add_index_if_missing($oc, 'idx_cotizacion', 'KEY idx_cotizacion (cotizacion_id)');
+        }
+
+        $threads = $prefix . 'messaging_threads';
+        if (self::table_exists($threads)) {
+            self::add_column_if_missing($threads, 'is_spam', 'is_spam TINYINT(1) NOT NULL DEFAULT 0');
+            self::add_column_if_missing($threads, 'is_important', 'is_important TINYINT(1) NOT NULL DEFAULT 0');
+            self::add_column_if_missing($threads, 'quote_hint', 'quote_hint TINYINT(1) NOT NULL DEFAULT 0');
+            self::add_index_if_missing($threads, 'idx_spam', 'KEY idx_spam (is_spam)');
+            self::add_index_if_missing($threads, 'idx_important', 'KEY idx_important (is_important)');
+            self::add_index_if_missing($threads, 'idx_quote_hint', 'KEY idx_quote_hint (quote_hint)');
+        }
+
+        $messages = $prefix . 'messaging_messages';
+        if (self::table_exists($messages)) {
+            self::add_column_if_missing($messages, 'gmail_labels', 'gmail_labels TEXT NULL');
+        }
+
+        if (get_option('riverso_pos_phase50_messaging_quotes') !== '1') {
+            update_option('riverso_pos_phase50_messaging_quotes', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase50_messaging_quotes', 'messaging', 0, [
+                    'actor_type' => 'computer',
+                    'details'    => 'Fase 50: inbox + descuentos/validez/whatsapp en cotizaciones',
                 ]);
             }
         }

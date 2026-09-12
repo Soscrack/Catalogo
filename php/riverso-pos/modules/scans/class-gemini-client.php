@@ -70,6 +70,41 @@ class Riverso_Gemini_Client {
         return $this->extract_document($file_path, $mime, $prompt, $response_schema);
     }
 
+    /**
+     * Genera JSON estructurado a partir de un prompt de texto (sin archivo).
+     *
+     * @param string $prompt
+     * @param array  $response_schema
+     * @return array|WP_Error
+     */
+    public function generate_json($prompt, $response_schema) {
+        if (!$this->is_configured()) {
+            return new WP_Error('gemini_not_configured', 'Gemini API no está configurada.');
+        }
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($this->model) . ':generateContent';
+        $body = [
+            'contents' => [[
+                'parts' => [
+                    ['text' => $prompt],
+                ],
+            ]],
+            'generationConfig' => [
+                'temperature'      => 0.2,
+                'responseMimeType' => 'application/json',
+                'responseSchema'   => $response_schema,
+            ],
+        ];
+        $response = wp_remote_post($url, [
+            'headers' => [
+                'Content-Type'   => 'application/json',
+                'x-goog-api-key' => $this->api_key,
+            ],
+            'body'    => wp_json_encode($body),
+            'timeout' => 120,
+        ]);
+        return $this->parse_response($response);
+    }
+
     private function generate_with_inline($mime, $base64_data, $prompt, $response_schema) {
         $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($this->model) . ':generateContent';
 

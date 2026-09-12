@@ -71,6 +71,12 @@ $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
                         <option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></option>
                     <?php endforeach; ?>
                 </select>
+                <select id="filtro-fuente">
+                    <option value="">Todas las fuentes</option>
+                    <?php foreach ($source_types as $key => $label): ?>
+                        <option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></option>
+                    <?php endforeach; ?>
+                </select>
                 <select id="filtro-proveedor">
                     <option value="">Todos los proveedores</option>
                 </select>
@@ -113,6 +119,12 @@ $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
             <h2 id="titulo-cotizacion">Nueva Cotización</h2>
             <div class="header-actions">
                 <span class="estado-badge" id="badge-estado"></span>
+                <a class="button" id="btn-ver-correo" href="#" target="_blank" rel="noopener" style="display:none;">
+                    <span class="dashicons dashicons-email-alt"></span> Ver correo
+                </a>
+                <button type="button" class="button" id="btn-ver-adjuntos" style="display:none;">
+                    <span class="dashicons dashicons-paperclip"></span> Ver adjuntos
+                </button>
             </div>
         </div>
 
@@ -158,6 +170,11 @@ $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
                         <input type="file" id="archivo-upload" accept=".pdf,.xlsx,.xls,.csv,.txt" style="margin-top:5px;">
                     </div>
                 </div>
+                <div class="form-group">
+                    <label for="texto-manual">Pegar texto (ingreso manual)</label>
+                    <textarea id="texto-manual" rows="4" class="large-text" placeholder="Pega el cuerpo de la cotización y pulsa Parsear texto"></textarea>
+                    <button type="button" class="button" id="btn-parsear-texto">Parsear texto</button>
+                </div>
                 <div class="form-actions">
                     <button type="submit" class="button button-primary">
                         <span class="dashicons dashicons-saved"></span> Guardar
@@ -187,11 +204,17 @@ $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
                 <span class="value" id="total-total">$0</span>
             </div>
             <div class="total-actions">
+                <button type="button" class="button" id="btn-parsear">
+                    <span class="dashicons dashicons-media-code"></span> Parsear con Gemini
+                </button>
+                <button type="button" class="button" id="btn-pendiente">Pendiente</button>
+                <button type="button" class="button button-link-delete" id="btn-rechazar">Rechazar</button>
                 <button type="button" class="button button-primary" id="btn-aprobar" style="display:none;">
                     <span class="dashicons dashicons-yes"></span> Aprobar Cotización
                 </button>
+                <button type="button" class="button" id="btn-convertir-oc" style="display:none;">Convertir a OC</button>
                 <button type="button" class="button" id="btn-ver-comparacion">
-                    <span class="dashicons dashicons-chart-line"></span> Ver Comparación
+                    <span class="dashicons dashicons-chart-line"></span> Evaluar costos
                 </button>
             </div>
         </div>
@@ -298,27 +321,99 @@ $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
 
     <!-- Modal Comparación de Costos -->
     <div id="modal-comparacion" class="riverso-modal" style="display:none;">
-        <div class="modal-content" style="max-width:900px;">
+        <div class="modal-content quote-eval-modal">
             <div class="modal-header">
-                <h3>Comparación de Costos</h3>
+                <div>
+                    <h3 id="quote-eval-title">Evaluación de costos</h3>
+                    <div class="analysis-sku" id="quote-eval-meta">—</div>
+                </div>
                 <button type="button" class="modal-close">&times;</button>
             </div>
             <div class="modal-body">
+                <div class="quote-eval-toolbar">
+                    <div class="rce-view-toggle" role="group" aria-label="Vista neto/bruto" id="quote-eval-view-toggle">
+                        <button type="button" class="button rce-view-btn is-active" data-quote-view="neto">Neto</button>
+                        <button type="button" class="button rce-view-btn" data-quote-view="bruto">Bruto</button>
+                    </div>
+                    <div class="rce-view-toggle" role="group" aria-label="Base de costo" id="quote-eval-cost-toggle">
+                        <button type="button" class="button rce-cost-btn" data-quote-cost="referencia" title="Precio lista / antes de D/R">Costo referencia</button>
+                        <button type="button" class="button rce-cost-btn is-active" data-quote-cost="tras_dr" title="Tras descuento y recargo">Costo tras Descuento/Recargo</button>
+                    </div>
+                    <label class="quote-eval-decimals">
+                        <input type="checkbox" id="quote-eval-toggle-decimals" checked>
+                        Costos con decimales <em>(hasta 3)</em>
+                    </label>
+                    <div class="rce-view-toggle" role="group" aria-label="Base de comparación" id="quote-eval-base-toggle">
+                        <button type="button" class="button rce-base-btn is-active" data-quote-base="auto">Auto (mayor alza)</button>
+                        <button type="button" class="button rce-base-btn" data-quote-base="invoice">Facturas</button>
+                        <button type="button" class="button rce-base-btn" data-quote-base="quote">Cotizaciones aprobadas</button>
+                    </div>
+                    <button type="button" class="button" id="btn-draft-reclamo">Preparar reclamo</button>
+                    <button type="button" class="button" id="btn-print-quote-eval" disabled>
+                        <span class="dashicons dashicons-printer" style="vertical-align:middle;margin-top:3px;"></span>
+                        Imprimir
+                    </button>
+                </div>
                 <div class="comparison-summary" id="comparison-summary"></div>
-                <table class="wp-list-table widefat striped" id="tabla-comparacion">
-                    <thead>
-                        <tr>
-                            <th>Producto</th>
-                            <th style="text-align:right">Costo Anterior</th>
-                            <th style="text-align:right">Costo Nuevo</th>
-                            <th style="text-align:right">Diferencia</th>
-                            <th style="text-align:right">%</th>
-                        </tr>
-                    </thead>
-                    <tbody id="lista-comparacion"></tbody>
-                </table>
+                <div class="quote-eval-table-wrap">
+                    <table class="wp-list-table widefat striped" id="tabla-comparacion">
+                        <thead>
+                            <tr>
+                                <th style="width:36px;">#</th>
+                                <th style="width:100px;">Código</th>
+                                <th>Descripción</th>
+                                <th style="width:110px;text-align:right;">Costo cotización</th>
+                                <th style="width:160px;">Última facturación</th>
+                                <th style="width:150px;">Última cotización</th>
+                                <th style="width:140px;">Legacy</th>
+                                <th style="width:90px;">Tendencia</th>
+                                <th style="width:90px;text-align:right;">Diferencia</th>
+                                <th style="width:70px;text-align:right;">Dif. %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lista-comparacion"></tbody>
+                    </table>
+                </div>
             </div>
             <div class="modal-footer">
+                <button type="button" class="button modal-close">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal borrador de reclamo -->
+    <div id="modal-reclamo" class="riverso-modal" style="display:none;">
+        <div class="modal-content" style="max-width:720px;">
+            <div class="modal-header">
+                <h3>Borrador de reclamo</h3>
+                <button type="button" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="quote-eval-toolbar" style="margin-bottom:12px;">
+                    <div class="rce-view-toggle" role="group" aria-label="Tipo de reclamo" id="reclamo-mode-toggle">
+                        <button type="button" class="button rce-view-btn is-active" data-reclamo-mode="simple">Opción simple</button>
+                        <button type="button" class="button rce-view-btn" data-reclamo-mode="complex">Opción compleja</button>
+                    </div>
+                    <button type="button" class="button button-primary" id="btn-copiar-reclamo">
+                        <span class="dashicons dashicons-clipboard" style="vertical-align:middle;margin-top:3px;"></span>
+                        Copiar texto
+                    </button>
+                    <span id="reclamo-copy-status" style="font-size:13px;color:#00a32a;display:none;">Copiado</span>
+                </div>
+                <p class="description" id="reclamo-mode-hint" style="margin-top:0;">
+                    Pide usar los precios anteriores: código, nombre y precio anterior.
+                </p>
+                <div class="form-group">
+                    <label for="reclamo-asunto">Asunto</label>
+                    <input type="text" id="reclamo-asunto" class="regular-text" style="width:100%;">
+                </div>
+                <div class="form-group">
+                    <label for="reclamo-cuerpo">Correo</label>
+                    <textarea id="reclamo-cuerpo" rows="16" style="width:100%;font-family:Consolas,Monaco,monospace;font-size:13px;line-height:1.45;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="button button-primary" id="btn-copiar-reclamo-footer">Copiar texto</button>
                 <button type="button" class="button modal-close">Cerrar</button>
             </div>
         </div>
@@ -386,6 +481,19 @@ $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
                     <div class="progress-bar"><div class="progress-fill"></div></div>
                     <p class="progress-text">Subiendo archivo...</p>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-adjuntos-origen" class="riverso-modal" style="display:none;">
+        <div class="modal-content" style="max-width:520px;">
+            <div class="modal-header">
+                <h3>Adjuntos del correo</h3>
+                <button type="button" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="adjuntos-origen-meta" class="description" style="margin-top:0;"></p>
+                <ul id="lista-adjuntos-origen" style="margin:0;padding-left:18px;"></ul>
             </div>
         </div>
     </div>
@@ -681,6 +789,80 @@ $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
     font-weight: 600;
 }
 
+.quote-eval-modal {
+    max-width: 1280px;
+    width: 96%;
+}
+.quote-eval-modal .analysis-sku {
+    font-size: 13px;
+    color: #646970;
+    margin-top: 4px;
+}
+.quote-eval-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+.rce-view-toggle {
+    display: inline-flex;
+    gap: 0;
+}
+.rce-view-toggle .button {
+    margin: 0;
+    border-radius: 0;
+}
+.rce-view-toggle .button:first-child {
+    border-radius: 4px 0 0 4px;
+}
+.rce-view-toggle .button:last-child {
+    border-radius: 0 4px 4px 0;
+}
+.rce-view-toggle .button.is-active {
+    background: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
+}
+.quote-eval-decimals {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    cursor: pointer;
+}
+.quote-eval-table-wrap {
+    overflow: auto;
+}
+#tabla-comparacion tr.trend-up td,
+#tabla-comparacion td.trend-up {
+    background: #fcf0f1;
+}
+#tabla-comparacion tr.trend-down td,
+#tabla-comparacion td.trend-down {
+    background: #edfaef;
+}
+#tabla-comparacion td.trend-up,
+#tabla-comparacion td.trend-up strong {
+    color: #d63638;
+}
+#tabla-comparacion td.trend-down,
+#tabla-comparacion td.trend-down strong {
+    color: #00a32a;
+}
+#tabla-comparacion tr.has-change td {
+    font-weight: 600;
+}
+.cost-doc-ref {
+    font-size: 11px;
+    color: #646970;
+    margin-top: 2px;
+    line-height: 1.35;
+}
+#modal-reclamo {
+    z-index: 100050;
+}
+
 .loading, .empty {
     text-align: center;
     padding: 40px;
@@ -695,14 +877,189 @@ $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
 
 <script>
 jQuery(document).ready(function($) {
+    const ajaxurl = window.ajaxurl || '<?php echo esc_js(admin_url('admin-ajax.php')); ?>';
     const nonce = '<?php echo wp_create_nonce('riverso_pos_nonce'); ?>';
     let cotizacionActual = null;
     let itemsActuales = [];
     let proveedoresCache = [];
+    let origenActual = null;
+    let lastQuoteEval = null;
+    let quoteEvalViewMode = 'neto';
+    let quoteEvalCostMode = 'tras_dr';
+    let quoteEvalBaseMode = 'auto';
+    let quoteEvalShowDecimals = true;
 
     // Formatear moneda
     function formatMoney(val) {
         return '$' + parseFloat(val || 0).toLocaleString('es-CL', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+    }
+
+    function escapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function formatCostMoney(n) {
+        if (n === null || n === undefined || n === '' || isNaN(n)) return '—';
+        const num = Number(n);
+        if (!isFinite(num)) return '—';
+        if (!quoteEvalShowDecimals) {
+            return '$' + Math.round(num).toLocaleString('es-CL');
+        }
+        const rounded = Math.round(num * 1000) / 1000;
+        const fixed = rounded.toFixed(3).replace(/\.?0+$/, '');
+        const parts = fixed.split('.');
+        const intPart = Number(parts[0]).toLocaleString('es-CL');
+        return parts.length > 1 ? ('$' + intPart + ',' + parts[1]) : ('$' + intPart);
+    }
+
+    function formatDeltaPct(n) {
+        if (n === null || n === undefined || isNaN(n)) return '—';
+        const sign = n > 0 ? '+' : '';
+        return sign + Number(n).toFixed(1) + '%';
+    }
+
+    function trendLabel(t) {
+        if (t === 'subio') return 'Subió';
+        if (t === 'bajo') return 'Bajó';
+        if (t === 'se_mantuvo') return 'Se mantuvo';
+        return '—';
+    }
+
+    function trendClass(t) {
+        if (t === 'subio') return 'trend-up';
+        if (t === 'bajo') return 'trend-down';
+        return '';
+    }
+
+    function pickEvalBase(bases, viewMode, costMode) {
+        if (!bases || typeof bases !== 'object') return null;
+        viewMode = viewMode || quoteEvalViewMode;
+        costMode = costMode || quoteEvalCostMode;
+        const key = costMode === 'referencia' ? 'referencia' : 'tras_dr';
+        let pair = bases[key];
+        if (!pair && key === 'referencia') pair = bases.tras_dr;
+        if (!pair || typeof pair !== 'object') return null;
+        const v = viewMode === 'bruto' ? pair.bruto : pair.neto;
+        if (v === null || v === undefined || v === '' || isNaN(v)) return null;
+        return Number(v);
+    }
+
+    function evalUnitCost(rowOrPrev) {
+        if (!rowOrPrev) return null;
+        if (rowOrPrev.costo_actual_bases || rowOrPrev.costo_bases) {
+            const fromBases = pickEvalBase(rowOrPrev.costo_actual_bases || rowOrPrev.costo_bases);
+            if (fromBases != null) return fromBases;
+        }
+        let neto = rowOrPrev.costo_actual != null ? rowOrPrev.costo_actual : rowOrPrev.costo_unitario;
+        if (neto === null || neto === undefined || neto === '' || isNaN(neto)) return null;
+        neto = Number(neto);
+        if (quoteEvalViewMode === 'bruto') {
+            return Math.round(neto * 1.19 * 10000) / 10000;
+        }
+        return neto;
+    }
+
+    function quoteEvalRowMetrics(row) {
+        const current = evalUnitCost(row);
+        const prevInv = row.prev_invoice || null;
+        const prevQuote = row.prev_quote || null;
+        const legacy = row.legacy || null;
+        const prevInvCost = prevInv ? evalUnitCost(prevInv) : null;
+        const prevQuoteCost = prevQuote ? evalUnitCost(prevQuote) : null;
+        const legacyCost = legacy ? evalUnitCost(legacy) : null;
+
+        let previous = null;
+        let source = null;
+        if (quoteEvalBaseMode === 'invoice') {
+            previous = prevInvCost != null ? prevInvCost : legacyCost;
+            source = prevInvCost != null ? 'invoice' : (legacyCost != null ? 'legacy' : null);
+        } else if (quoteEvalBaseMode === 'quote') {
+            previous = prevQuoteCost != null ? prevQuoteCost : legacyCost;
+            source = prevQuoteCost != null ? 'quote' : (legacyCost != null ? 'legacy' : null);
+        } else if (prevInvCost != null && prevQuoteCost != null) {
+            const dInv = current != null ? current - prevInvCost : 0;
+            const dQuote = current != null ? current - prevQuoteCost : 0;
+            if (dInv >= dQuote) {
+                previous = prevInvCost;
+                source = 'invoice';
+            } else {
+                previous = prevQuoteCost;
+                source = 'quote';
+            }
+        } else if (prevInvCost != null) {
+            previous = prevInvCost;
+            source = 'invoice';
+        } else if (prevQuoteCost != null) {
+            previous = prevQuoteCost;
+            source = 'quote';
+        } else if (legacyCost != null) {
+            previous = legacyCost;
+            source = 'legacy';
+        }
+
+        let delta = null;
+        let pct = null;
+        let trend = null;
+        if (current != null && previous != null) {
+            delta = Math.round((current - previous) * 10000) / 10000;
+            if (previous !== 0) {
+                pct = Math.round((delta / Math.abs(previous)) * 1000) / 10;
+            }
+            if (Math.abs(delta) < 0.00015) trend = 'se_mantuvo';
+            else if (delta > 0) trend = 'subio';
+            else trend = 'bajo';
+        }
+        return {
+            current: current,
+            prevInvCost: prevInvCost,
+            prevQuoteCost: prevQuoteCost,
+            legacyCost: legacyCost,
+            previous: previous,
+            source: source,
+            delta: delta,
+            pct: pct,
+            trend: trend
+        };
+    }
+
+    function syncQuoteEvalToggles() {
+        $('#quote-eval-view-toggle .rce-view-btn').removeClass('is-active');
+        $('#quote-eval-view-toggle .rce-view-btn[data-quote-view="' + quoteEvalViewMode + '"]').addClass('is-active');
+        $('#quote-eval-cost-toggle .rce-cost-btn').removeClass('is-active');
+        $('#quote-eval-cost-toggle .rce-cost-btn[data-quote-cost="' + quoteEvalCostMode + '"]').addClass('is-active');
+        $('#quote-eval-base-toggle .rce-base-btn').removeClass('is-active');
+        $('#quote-eval-base-toggle .rce-base-btn[data-quote-base="' + quoteEvalBaseMode + '"]').addClass('is-active');
+    }
+
+    function quoteEvalViewLabel() {
+        return quoteEvalViewMode === 'bruto' ? 'bruto' : 'neto';
+    }
+
+    function quoteEvalCostLabel() {
+        return quoteEvalCostMode === 'referencia' ? 'Costo referencia' : 'Costo tras Descuento/Recargo';
+    }
+
+    function originCell(cost, ref, fallbackLabel) {
+        if (cost == null || !ref) return '—';
+        const folio = ref.folio && ref.folio !== 'LEGACY' ? ref.folio : '';
+        const fecha = ref.fecha_emision || ref.importado_at || '';
+        const label = ref.match_label || fallbackLabel || '';
+        let html = '<div><strong>' + escapeHtml(formatCostMoney(cost)) + '</strong></div>';
+        const bits = [];
+        if (folio) bits.push(folio);
+        if (fecha) bits.push(fecha);
+        if (ref.proveedor_nombre) bits.push(ref.proveedor_nombre);
+        if (bits.length) {
+            html += '<div class="cost-doc-ref">' + escapeHtml(bits.join(' · ')) + '</div>';
+        }
+        if (label) {
+            html += '<div class="cost-doc-ref">' + escapeHtml(label) + '</div>';
+        }
+        return html;
     }
 
     // Cargar lista de cotizaciones
@@ -711,6 +1068,7 @@ jQuery(document).ready(function($) {
             action: 'riverso_get_received_quotes',
             nonce: nonce,
             estado: $('#filtro-estado').val(),
+            tipo_fuente: $('#filtro-fuente').val(),
             proveedor_id: $('#filtro-proveedor').val(),
             buscar: $('#filtro-buscar').val(),
             fecha_desde: $('#filtro-desde').val(),
@@ -795,6 +1153,7 @@ jQuery(document).ready(function($) {
             if (r.success) {
                 cotizacionActual = r.data.quote;
                 itemsActuales = r.data.items;
+                origenActual = r.data.origen || null;
                 if (r.data.proveedores) {
                     proveedoresCache = r.data.proveedores;
                     renderProveedoresSelect();
@@ -835,12 +1194,36 @@ jQuery(document).ready(function($) {
             } else {
                 $('#btn-aprobar').hide();
             }
+            if (q.estado === 'approved') {
+                $('#btn-convertir-oc').show();
+            } else {
+                $('#btn-convertir-oc').hide();
+            }
+
+            const origenEmail = origenActual && (origenActual.canal === 'email' || q.origen_canal === 'email');
+            if (origenActual && origenActual.inbox_url) {
+                const label = origenEmail
+                    ? '<span class="dashicons dashicons-email-alt"></span> Ver correo'
+                    : '<span class="dashicons dashicons-email-alt"></span> Ver mensaje';
+                $('#btn-ver-correo').attr('href', origenActual.inbox_url).html(label).show();
+            } else {
+                $('#btn-ver-correo').hide().attr('href', '#');
+            }
+            if (origenActual && origenActual.attachments && origenActual.attachments.length) {
+                $('#btn-ver-adjuntos').show();
+            } else {
+                $('#btn-ver-adjuntos').hide();
+            }
         } else {
             $('#form-cotizacion')[0].reset();
             $('#badge-estado').text('Nueva').attr('class', 'estado-badge');
             $('#archivo-info').html('<span class="no-archivo">Sin archivo adjunto</span>');
             $('#total-subtotal, #total-impuesto, #total-total').text('$0');
             $('#btn-aprobar').hide();
+            $('#btn-convertir-oc').hide();
+            $('#btn-ver-correo').hide().attr('href', '#');
+            $('#btn-ver-adjuntos').hide();
+            origenActual = null;
         }
         
         renderItems();
@@ -903,12 +1286,13 @@ jQuery(document).ready(function($) {
     $('#btn-nueva-cotizacion').on('click', function() {
         cotizacionActual = null;
         itemsActuales = [];
+        origenActual = null;
         mostrarDetalle();
     });
 
     $('#btn-filtrar').on('click', cargarCotizaciones);
     $('#btn-limpiar-filtros').on('click', function() {
-        $('#filtro-buscar, #filtro-estado, #filtro-proveedor, #filtro-desde, #filtro-hasta').val('');
+        $('#filtro-buscar, #filtro-estado, #filtro-fuente, #filtro-proveedor, #filtro-desde, #filtro-hasta').val('');
         cargarCotizaciones();
     });
 
@@ -1176,51 +1560,421 @@ jQuery(document).ready(function($) {
         });
     });
 
-    // Ver comparación de costos
-    $('#btn-ver-comparacion').on('click', function() {
+    function renderQuoteEval(data) {
+        const quote = (data && data.quote) || {};
+        const viewTag = quoteEvalViewLabel();
+        const costTag = quoteEvalCostLabel();
+        $('#quote-eval-title').text('Evaluación de costos · ' + viewTag + ' · ' + costTag);
+        $('#quote-eval-meta').text(
+            (quote.proveedor_nombre || 'Sin proveedor') +
+            (quote.numero_documento ? (' · Doc. ' + quote.numero_documento) : '') +
+            (quote.fecha_emision ? (' · ' + quote.fecha_emision) : '')
+        );
+
+        const suffix = ' (' + viewTag + ')';
+        $('#tabla-comparacion thead th').eq(3).text('Costo cotización' + suffix);
+        $('#tabla-comparacion thead th').eq(4).text('Última facturación' + suffix);
+        $('#tabla-comparacion thead th').eq(5).text('Última cotización' + suffix);
+        $('#tabla-comparacion thead th').eq(6).text('Legacy' + suffix);
+
+        const rowsData = data.rows || [];
+        let aumentos = 0, bajas = 0;
+        rowsData.forEach(function(row) {
+            const m = quoteEvalRowMetrics(row);
+            if (m.trend === 'subio') aumentos++;
+            if (m.trend === 'bajo') bajas++;
+        });
+        $('#comparison-summary').html(
+            '<div class="summary-item"><div class="summary-value">' + rowsData.length + '</div><div>Ítems</div></div>' +
+            '<div class="summary-item"><div class="summary-value cost-up">' + aumentos + '</div><div>Alzas</div></div>' +
+            '<div class="summary-item"><div class="summary-value cost-down">' + bajas + '</div><div>Bajas</div></div>' +
+            '<div class="summary-item"><div class="summary-value">' + escapeHtml(costTag) + '</div><div>' + escapeHtml(viewTag) + '</div></div>'
+        );
+
+        if (!rowsData.length) {
+            $('#lista-comparacion').html('<tr><td colspan="10" class="empty">Sin ítems</td></tr>');
+            $('#btn-print-quote-eval').prop('disabled', true);
+            return;
+        }
+
+        let rows = '';
+        rowsData.forEach(function(item) {
+            const m = quoteEvalRowMetrics(item);
+            const tClass = trendClass(m.trend);
+            const changed = m.trend === 'subio' || m.trend === 'bajo';
+            let deltaText = '—';
+            if (m.delta !== null && m.delta !== undefined) {
+                if (m.delta < 0) deltaText = '-' + formatCostMoney(Math.abs(m.delta));
+                else if (m.delta > 0) deltaText = '+' + formatCostMoney(Math.abs(m.delta));
+                else deltaText = formatCostMoney(0);
+            }
+            const productHint = item.resolved_product && item.resolved_product.canonical_sku
+                ? '<div class="cost-doc-ref">SKU ' + escapeHtml(item.resolved_product.canonical_sku) + '</div>'
+                : '';
+            rows += '<tr class="' + tClass + (changed ? ' has-change' : '') + '">' +
+                '<td>' + escapeHtml(item.numero_linea || '') + '</td>' +
+                '<td><code>' + escapeHtml(item.codigo_proveedor || '—') + '</code>' + productHint + '</td>' +
+                '<td>' + escapeHtml(item.nombre || '—') + '</td>' +
+                '<td style="text-align:right">' + escapeHtml(formatCostMoney(m.current)) + '</td>' +
+                '<td>' + originCell(m.prevInvCost, item.prev_invoice) + '</td>' +
+                '<td>' + originCell(m.prevQuoteCost, item.prev_quote) + '</td>' +
+                '<td>' + originCell(m.legacyCost, item.legacy) + '</td>' +
+                '<td class="' + tClass + '"><strong>' + escapeHtml(trendLabel(m.trend)) + '</strong></td>' +
+                '<td style="text-align:right" class="' + tClass + '">' + escapeHtml(deltaText) + '</td>' +
+                '<td style="text-align:right" class="' + tClass + '">' + escapeHtml(formatDeltaPct(m.pct)) + '</td>' +
+                '</tr>';
+        });
+        $('#lista-comparacion').html(rows);
+        $('#btn-print-quote-eval').prop('disabled', false);
+    }
+
+    function loadQuoteEval() {
         const cotizacionId = $('#cotizacion-id').val();
         if (!cotizacionId || cotizacionId === '0') return;
-
+        $('#lista-comparacion').html('<tr><td colspan="10" class="empty">Analizando…</td></tr>');
+        $('#btn-print-quote-eval').prop('disabled', true);
         $.post(ajaxurl, {
-            action: 'riverso_get_quote_comparison',
+            action: 'riverso_analyze_received_quote',
             nonce: nonce,
-            id: cotizacionId
+            id: cotizacionId,
+            compare_base: quoteEvalBaseMode
         }, function(r) {
-            if (r.success) {
-                const summary = r.data.summary;
-                $('#comparison-summary').html(`
-                    <div class="summary-item">
-                        <div class="summary-value">${summary.total_items}</div>
-                        <div>Con cambio de precio</div>
-                    </div>
-                    <div class="summary-item">
-                        <div class="summary-value cost-up">${summary.aumentos}</div>
-                        <div>Aumentos</div>
-                    </div>
-                    <div class="summary-item">
-                        <div class="summary-value cost-down">${summary.disminuciones}</div>
-                        <div>Disminuciones</div>
-                    </div>
-                    <div class="summary-item">
-                        <div class="summary-value ${summary.mayor_aumento > 0 ? 'cost-up' : ''}">${summary.mayor_aumento ? '+' + summary.mayor_aumento + '%' : '-'}</div>
-                        <div>Mayor aumento</div>
-                    </div>
-                `);
-
-                let rows = '';
-                r.data.items.forEach(item => {
-                    const diffClass = item.diferencia_costo > 0 ? 'cost-up' : 'cost-down';
-                    rows += `<tr>
-                        <td>${item.producto_nombre || item.descripcion}</td>
-                        <td style="text-align:right">${formatMoney(item.costo_anterior)}</td>
-                        <td style="text-align:right">${formatMoney(item.costo_neto)}</td>
-                        <td style="text-align:right" class="${diffClass}">${formatMoney(item.diferencia_costo)}</td>
-                        <td style="text-align:right" class="${diffClass}">${item.diferencia_porcentaje > 0 ? '+' : ''}${item.diferencia_porcentaje}%</td>
-                    </tr>`;
-                });
-                $('#lista-comparacion').html(rows || '<tr><td colspan="5" class="empty">No hay cambios de precio</td></tr>');
-                $('#modal-comparacion').show();
+            if (!r.success) {
+                alert((r.data && r.data.message) || 'Error al analizar');
+                return;
             }
+            lastQuoteEval = r.data;
+            quoteEvalShowDecimals = $('#quote-eval-toggle-decimals').is(':checked');
+            syncQuoteEvalToggles();
+            renderQuoteEval(r.data);
+            $('#modal-comparacion').show();
+        });
+    }
+
+    function buildQuoteEvalPrintHtml(data) {
+        const quote = (data && data.quote) || {};
+        const rows = (data && data.rows) || [];
+        const viewTag = quoteEvalViewLabel();
+        const costTag = quoteEvalCostLabel();
+        const title = 'Cotización ' + (quote.numero_documento || ('#' + (quote.id || '')));
+        const printedAt = new Date().toLocaleString('es-CL');
+        const suffix = ' (' + viewTag + ')';
+        let rowsHtml = '';
+        rows.forEach(function(row) {
+            const m = quoteEvalRowMetrics(row);
+            const changed = m.trend === 'subio' || m.trend === 'bajo';
+            const prevInv = row.prev_invoice;
+            let prevInvText = '—';
+            if (prevInv && m.prevInvCost != null) {
+                prevInvText = formatCostMoney(m.prevInvCost) +
+                    ' (' + (prevInv.folio || '') + ' · ' + (prevInv.fecha_emision || '') +
+                    (prevInv.match_label ? ' · ' + prevInv.match_label : '') + ')';
+            }
+            let prevQuoteText = '—';
+            if (row.prev_quote && m.prevQuoteCost != null) {
+                prevQuoteText = formatCostMoney(m.prevQuoteCost) +
+                    ' (' + (row.prev_quote.folio || '') + ' · ' + (row.prev_quote.fecha_emision || '') + ')';
+            }
+            let legacyText = '—';
+            if (row.legacy && m.legacyCost != null) {
+                legacyText = formatCostMoney(m.legacyCost) +
+                    ' (' + (row.legacy.sku || 'legacy') + ' · ' + (row.legacy.fecha_emision || '') + ')';
+            }
+            let deltaText = '—';
+            if (m.delta !== null && m.delta !== undefined) {
+                if (m.delta < 0) deltaText = '-' + formatCostMoney(Math.abs(m.delta));
+                else if (m.delta > 0) deltaText = '+' + formatCostMoney(Math.abs(m.delta));
+                else deltaText = formatCostMoney(0);
+            }
+            rowsHtml += '<tr class="' + (changed ? 'changed' : '') + '">' +
+                '<td>' + escapeHtml(row.numero_linea || '') + '</td>' +
+                '<td>' + escapeHtml(row.codigo_proveedor || '—') + '</td>' +
+                '<td>' + escapeHtml(row.nombre || '—') + '</td>' +
+                '<td class="num">' + escapeHtml(formatCostMoney(m.current)) + '</td>' +
+                '<td>' + escapeHtml(prevInvText) + '</td>' +
+                '<td>' + escapeHtml(prevQuoteText) + '</td>' +
+                '<td>' + escapeHtml(legacyText) + '</td>' +
+                '<td class="chg">' + escapeHtml(trendLabel(m.trend)) + '</td>' +
+                '<td class="num chg">' + escapeHtml(deltaText) + '</td>' +
+                '<td class="num chg">' + escapeHtml(formatDeltaPct(m.pct)) + '</td>' +
+                '</tr>';
+        });
+        const baseNote = quoteEvalCostMode === 'referencia'
+            ? 'Costo referencia = precio lista / costo antes de descuentos y recargos.'
+            : 'Costo tras Descuento/Recargo = costo unitario después de descuentos y recargos.';
+        return '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">' +
+            '<title>Evaluación ' + escapeHtml(title) + '</title>' +
+            '<style>body{font-family:Arial,sans-serif;margin:24px;color:#111;}h1{margin:0 0 8px;font-size:22px;}' +
+            '.meta{margin-bottom:16px;font-size:13px;color:#444;}.meta div{margin:2px 0;}' +
+            'table{width:100%;border-collapse:collapse;font-size:12px;}' +
+            'th,td{border:1px solid #ccc;padding:6px 8px;text-align:left;vertical-align:top;}' +
+            'th{background:#f5f5f5;}td.num{text-align:right;white-space:nowrap;}' +
+            'tr.changed td{font-weight:700;}tr.changed td.chg{text-decoration:underline;}' +
+            '.legend{margin-top:12px;font-size:12px;color:#444;}' +
+            '@media print{body{margin:12mm;} .no-print{display:none;}}</style></head><body>' +
+            '<h1>Evaluación de costos — ' + escapeHtml(title) + ' (' + escapeHtml(viewTag) + ' · ' + escapeHtml(costTag) + ')</h1>' +
+            '<div class="meta">' +
+            '<div><strong>Proveedor:</strong> ' + escapeHtml(quote.proveedor_nombre || '—') + '</div>' +
+            '<div><strong>Documento:</strong> ' + escapeHtml(quote.numero_documento || '—') + '</div>' +
+            '<div><strong>Fecha:</strong> ' + escapeHtml(quote.fecha_emision || '—') + '</div>' +
+            '<div><strong>Vista:</strong> ' + escapeHtml((quoteEvalViewMode === 'bruto' ? 'Bruto' : 'Neto') + ' · ' + costTag) + '</div>' +
+            '<div><strong>Generado:</strong> ' + escapeHtml(printedAt) + '</div>' +
+            '</div><table><thead><tr>' +
+            '<th>#</th><th>Código</th><th>Descripción</th>' +
+            '<th>Costo cotización' + escapeHtml(suffix) + '</th>' +
+            '<th>Última facturación' + escapeHtml(suffix) + '</th>' +
+            '<th>Última cotización' + escapeHtml(suffix) + '</th>' +
+            '<th>Legacy' + escapeHtml(suffix) + '</th>' +
+            '<th>Tendencia</th><th>Diferencia</th><th>Dif. %</th>' +
+            '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+            '<div class="legend"><strong>Nota:</strong> ' + escapeHtml(baseNote) +
+            ' Las filas en negrita (y diferencia subrayada) indican cambio de costo respecto a la referencia elegida.</div>' +
+            '<p class="no-print" style="margin-top:20px;"><button type="button" onclick="window.print()">Imprimir</button></p>' +
+            '</body></html>';
+    }
+
+    $('#btn-ver-comparacion').on('click', function() {
+        loadQuoteEval();
+    });
+
+    $('#quote-eval-view-toggle').on('click', '.rce-view-btn', function() {
+        quoteEvalViewMode = $(this).data('quote-view') || 'neto';
+        syncQuoteEvalToggles();
+        if (lastQuoteEval) renderQuoteEval(lastQuoteEval);
+    });
+    $('#quote-eval-cost-toggle').on('click', '.rce-cost-btn', function() {
+        quoteEvalCostMode = $(this).data('quote-cost') || 'tras_dr';
+        syncQuoteEvalToggles();
+        if (lastQuoteEval) renderQuoteEval(lastQuoteEval);
+    });
+    $('#quote-eval-base-toggle').on('click', '.rce-base-btn', function() {
+        quoteEvalBaseMode = $(this).data('quote-base') || 'auto';
+        syncQuoteEvalToggles();
+        loadQuoteEval();
+    });
+    $('#quote-eval-toggle-decimals').on('change', function() {
+        quoteEvalShowDecimals = $(this).is(':checked');
+        if (lastQuoteEval) renderQuoteEval(lastQuoteEval);
+    });
+    $('#btn-print-quote-eval').on('click', function() {
+        if (!lastQuoteEval) return;
+        quoteEvalShowDecimals = $('#quote-eval-toggle-decimals').is(':checked');
+        const html = buildQuoteEvalPrintHtml(lastQuoteEval);
+        const w = window.open('', '_blank');
+        if (!w) {
+            alert('Permite ventanas emergentes para imprimir');
+            return;
+        }
+        w.document.write(html);
+        w.document.close();
+    });
+
+    let reclamoMode = 'simple';
+    let reclamoDrafts = { subject: '', simple: '', complex: '' };
+
+    function isLegacyClaimRef(ref) {
+        if (!ref || typeof ref !== 'object') return true;
+        const kind = String(ref.source_kind || ref.match_path || '').toLowerCase();
+        const folio = String(ref.folio || '');
+        const label = String(ref.match_label || '');
+        if (kind === 'legacy' || folio.toUpperCase() === 'LEGACY') return true;
+        if (label.toLowerCase().indexOf('legacy') !== -1) return true;
+        return false;
+    }
+
+    function claimPublicReference(row) {
+        const inv = row && row.prev_invoice;
+        if (inv && !isLegacyClaimRef(inv)) {
+            const bits = [];
+            bits.push('Factura' + (inv.folio ? (' folio ' + inv.folio) : ''));
+            if (inv.fecha_emision) bits.push(inv.fecha_emision);
+            if (inv.proveedor_nombre) bits.push(inv.proveedor_nombre);
+            const label = bits.join(' · ');
+            if (label && label.toLowerCase().indexOf('legacy') === -1) return label;
+        }
+        const q = row && row.prev_quote;
+        if (q && !isLegacyClaimRef(q)) {
+            const bits = [];
+            bits.push('Cotización' + (q.folio ? (' ' + q.folio) : ''));
+            if (q.fecha_emision) bits.push(q.fecha_emision);
+            const label = bits.join(' · ');
+            if (label && label.toLowerCase().indexOf('legacy') === -1) return label;
+        }
+        return '';
+    }
+
+    function buildClaimEmailsFromEval(data) {
+        const quote = (data && data.quote) || {};
+        const proveedor = (quote.proveedor_nombre || '').trim() || 'estimados';
+        const folio = (quote.numero_documento || quote.folio || '').trim();
+        const docLabel = folio ? ('cotización ' + folio) : 'cotización';
+        const subject = folio ? ('Reclamo de precios — Cotización ' + folio) : 'Reclamo de precios';
+        const greeting = 'Estimados ' + proveedor + ',\n\n';
+        const intro = 'Junto con saludar, revisamos la ' + docLabel + ' y les pedimos por favor usar los precios anteriores en:\n\n';
+        const closing = '\nQuedamos atentos a su confirmación.\n\nSaludos cordiales,\nCompras Riverso\n';
+
+        const items = [];
+        (data.rows || []).forEach(function(row) {
+            const m = quoteEvalRowMetrics(row);
+            if (m.trend !== 'subio' || m.previous == null) return;
+            items.push({
+                codigo: (row.codigo_proveedor || '').trim(),
+                nombre: (row.nombre || '').trim(),
+                precio: formatCostMoney(m.previous),
+                referencia: claimPublicReference(row)
+            });
+        });
+
+        if (!items.length) {
+            const empty = greeting + 'Revisamos la ' + docLabel + ' y no encontramos alzas con precio anterior para reclamar.\n' + closing;
+            return { subject: subject, simple: empty, complex: empty, items: 0 };
+        }
+
+        let simple = greeting + intro;
+        let complex = greeting + intro;
+        items.forEach(function(it) {
+            const title = (it.codigo + ' ' + it.nombre).trim();
+            const block = title + '\nprecio anterior: ' + it.precio + '\n';
+            simple += block + '\n';
+            complex += block;
+            if (it.referencia) {
+                complex += 'referencia: ' + it.referencia + '\n';
+            }
+            complex += '\n';
+        });
+        return {
+            subject: subject,
+            simple: simple + closing,
+            complex: complex + closing,
+            items: items.length
+        };
+    }
+
+    function showReclamoDrafts(drafts) {
+        reclamoDrafts = drafts || { subject: '', simple: '', complex: '' };
+        $('#reclamo-asunto').val(reclamoDrafts.subject || '');
+        applyReclamoMode(reclamoMode);
+        $('#reclamo-copy-status').hide();
+        $('#modal-reclamo').show();
+    }
+
+    function applyReclamoMode(mode) {
+        reclamoMode = mode === 'complex' ? 'complex' : 'simple';
+        $('#reclamo-mode-toggle .rce-view-btn').removeClass('is-active');
+        $('#reclamo-mode-toggle .rce-view-btn[data-reclamo-mode="' + reclamoMode + '"]').addClass('is-active');
+        $('#reclamo-cuerpo').val(reclamoMode === 'complex' ? (reclamoDrafts.complex || '') : (reclamoDrafts.simple || ''));
+        $('#reclamo-mode-hint').text(
+            reclamoMode === 'complex'
+                ? 'Incluye referencias de factura o cotización. Si solo hay legacy, se omite la referencia.'
+                : 'Pide usar los precios anteriores: código, nombre y precio anterior.'
+        );
+    }
+
+    function copyReclamoText() {
+        const subject = $('#reclamo-asunto').val() || '';
+        const body = $('#reclamo-cuerpo').val() || '';
+        const text = 'Asunto: ' + subject + '\n\n' + body;
+        const done = function() {
+            $('#reclamo-copy-status').text('Copiado').show();
+            setTimeout(function() { $('#reclamo-copy-status').hide(); }, 1800);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done).catch(function() {
+                $('#reclamo-cuerpo').trigger('select');
+                document.execCommand('copy');
+                done();
+            });
+            return;
+        }
+        $('#reclamo-cuerpo').trigger('select');
+        document.execCommand('copy');
+        done();
+    }
+
+    $(document).on('click', '#btn-draft-reclamo', function() {
+        if (lastQuoteEval) {
+            showReclamoDrafts(buildClaimEmailsFromEval(lastQuoteEval));
+            return;
+        }
+        $.post(ajaxurl, {
+            action: 'riverso_quote_claim_draft',
+            nonce: nonce,
+            id: $('#cotizacion-id').val(),
+            compare_base: quoteEvalBaseMode
+        }, function(r) {
+            if (!r.success) { alert(r.data.message); return; }
+            showReclamoDrafts({
+                subject: r.data.subject || 'Reclamo de precios',
+                simple: r.data.simple || r.data.draft || '',
+                complex: r.data.complex || r.data.draft || ''
+            });
+        });
+    });
+    $('#reclamo-mode-toggle').on('click', '.rce-view-btn', function() {
+        applyReclamoMode($(this).data('reclamo-mode'));
+    });
+    $('#btn-copiar-reclamo, #btn-copiar-reclamo-footer').on('click', function() {
+        copyReclamoText();
+    });
+
+    $('#btn-ver-adjuntos').on('click', function() {
+        if (!origenActual || !origenActual.attachments || !origenActual.attachments.length) {
+            alert('Sin adjuntos en el mensaje de origen');
+            return;
+        }
+        const meta = [
+            origenActual.subject || '(sin asunto)',
+            origenActual.from_address || '',
+            origenActual.sent_at || ''
+        ].filter(Boolean).join(' · ');
+        $('#adjuntos-origen-meta').text(meta);
+        let html = '';
+        origenActual.attachments.forEach(function(a) {
+            const url = ajaxurl + '?action=riverso_inbox_download_attachment&nonce=' + encodeURIComponent(nonce) + '&id=' + a.id;
+            const size = a.size_bytes ? (' (' + Math.round(a.size_bytes / 1024) + ' KB)') : '';
+            html += '<li style="margin:8px 0;"><a href="' + url + '">' + (a.filename || ('Adjunto #' + a.id)) + '</a>' + size + '</li>';
+        });
+        $('#lista-adjuntos-origen').html(html);
+        $('#modal-adjuntos-origen').show();
+    });
+    $('#modal-adjuntos-origen .modal-close').on('click', function() {
+        $('#modal-adjuntos-origen').hide();
+    });
+
+    $('#btn-parsear').on('click', function() {
+        const id = $('#cotizacion-id').val();
+        if (!id || id === '0') { alert('Guarde la cotización primero'); return; }
+        $.post(ajaxurl, { action: 'riverso_parse_quote', nonce: nonce, id: id }, function(r) {
+            alert(r.success ? r.data.message : r.data.message);
+            if (r.success) verCotizacion(id);
+        });
+    });
+    $('#btn-parsear-texto').on('click', function() {
+        const id = $('#cotizacion-id').val();
+        const texto = $('#texto-manual').val();
+        if (!id || id === '0') { alert('Guarde la cotización primero (ingreso manual)'); return; }
+        $.post(ajaxurl, { action: 'riverso_parse_quote_text', nonce: nonce, id: id, texto: texto }, function(r) {
+            alert(r.success ? r.data.message : r.data.message);
+            if (r.success) verCotizacion(id);
+        });
+    });
+    $('#btn-rechazar').on('click', function() {
+        if (!confirm('¿Rechazar esta cotización?')) return;
+        $.post(ajaxurl, { action: 'riverso_reject_received_quote', nonce: nonce, id: $('#cotizacion-id').val() }, function(r) {
+            if (r.success) verCotizacion($('#cotizacion-id').val());
+            else alert(r.data.message);
+        });
+    });
+    $('#btn-pendiente').on('click', function() {
+        $.post(ajaxurl, { action: 'riverso_set_received_quote_status', nonce: nonce, id: $('#cotizacion-id').val(), estado: 'under_review' }, function(r) {
+            if (r.success) verCotizacion($('#cotizacion-id').val());
+        });
+    });
+    $('#btn-convertir-oc').on('click', function() {
+        if (!confirm('¿Crear orden de compra desde esta cotización aprobada?')) return;
+        $.post(ajaxurl, { action: 'riverso_convert_quote_to_expected', nonce: nonce, id: $('#cotizacion-id').val() }, function(r) {
+            alert(r.success ? r.data.message : r.data.message);
+            if (r.success) verCotizacion($('#cotizacion-id').val());
         });
     });
 

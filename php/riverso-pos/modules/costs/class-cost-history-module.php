@@ -61,6 +61,9 @@ class Riverso_Cost_History_Module {
         add_action('wp_ajax_riverso_cost_get_document', array($this, 'ajax_cost_get_document'));
         add_action('wp_ajax_riverso_cost_search_invoices', array($this, 'ajax_cost_search_invoices'));
         add_action('wp_ajax_riverso_cost_analyze_invoice', array($this, 'ajax_cost_analyze_invoice'));
+        add_action('wp_ajax_riverso_cost_analyze_quote', array($this, 'ajax_cost_analyze_quote'));
+        add_action('wp_ajax_riverso_cost_list_approved_quotes', array($this, 'ajax_cost_list_approved_quotes'));
+        add_action('wp_ajax_riverso_cost_claim_draft', array($this, 'ajax_cost_claim_draft'));
         add_action('wp_ajax_riverso_cost_list_recent_invoices', array($this, 'ajax_cost_list_recent_invoices'));
         add_action('wp_ajax_riverso_cost_list_increases', array($this, 'ajax_cost_list_increases'));
     }
@@ -979,13 +982,74 @@ class Riverso_Cost_History_Module {
         }
 
         $factura_id = isset($_POST['factura_id']) ? absint($_POST['factura_id']) : 0;
-        $result = $svc->analyze_invoice($factura_id);
+        $compare_base = isset($_POST['compare_base']) ? sanitize_text_field(wp_unslash($_POST['compare_base'])) : 'auto';
+        $result = $svc->analyze_invoice($factura_id, $compare_base);
 
         if (is_wp_error($result)) {
             wp_send_json_error($result->get_error_message());
         }
 
         wp_send_json_success($result);
+    }
+
+    public function ajax_cost_analyze_quote() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_costs') && !current_user_can('riverso_view_received_quotes')) {
+            wp_send_json_error('Sin permisos', 403);
+        }
+        $svc = $this->lookup();
+        if (!$svc) {
+            wp_send_json_error('Servicio de costos no disponible');
+        }
+        $id = isset($_POST['cotizacion_id']) ? absint($_POST['cotizacion_id']) : 0;
+        $compare_base = isset($_POST['compare_base']) ? sanitize_text_field(wp_unslash($_POST['compare_base'])) : 'auto';
+        $result = $svc->analyze_quote($id, $compare_base);
+        if (is_wp_error($result)) {
+            wp_send_json_error($result->get_error_message());
+        }
+        wp_send_json_success($result);
+    }
+
+    public function ajax_cost_list_approved_quotes() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_costs') && !current_user_can('riverso_view_received_quotes')) {
+            wp_send_json_error('Sin permisos', 403);
+        }
+        $svc = $this->lookup();
+        if (!$svc) {
+            wp_send_json_error('Servicio de costos no disponible');
+        }
+        $rows = $svc->list_approved_quotes([
+            'proveedor_id' => isset($_POST['proveedor_id']) ? absint($_POST['proveedor_id']) : 0,
+            'buscar' => isset($_POST['buscar']) ? sanitize_text_field(wp_unslash($_POST['buscar'])) : '',
+            'limit' => isset($_POST['limit']) ? absint($_POST['limit']) : 40,
+        ]);
+        wp_send_json_success($rows);
+    }
+
+    public function ajax_cost_claim_draft() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_costs') && !current_user_can('riverso_view_received_quotes')) {
+            wp_send_json_error('Sin permisos', 403);
+        }
+        $svc = $this->lookup();
+        $id = isset($_POST['cotizacion_id']) ? absint($_POST['cotizacion_id']) : 0;
+        $factura_id = isset($_POST['factura_id']) ? absint($_POST['factura_id']) : 0;
+        $compare_base = isset($_POST['compare_base']) ? sanitize_text_field(wp_unslash($_POST['compare_base'])) : 'auto';
+        $analysis = $id
+            ? $svc->analyze_quote($id, $compare_base)
+            : $svc->analyze_invoice($factura_id, $compare_base);
+        if (is_wp_error($analysis)) {
+            wp_send_json_error($analysis->get_error_message());
+        }
+        if (!class_exists('Riverso_Quote_Extractor')) {
+            require_once RIVERSO_POS_PLUGIN_DIR . 'modules/quotes/class-quote-extractor.php';
+        }
+        $draft = (new Riverso_Quote_Extractor())->draft_claim($analysis);
+        if (is_wp_error($draft)) {
+            wp_send_json_error($draft->get_error_message());
+        }
+        wp_send_json_success(['draft' => $draft, 'analysis' => $analysis]);
     }
 
     public function ajax_cost_list_recent_invoices() {

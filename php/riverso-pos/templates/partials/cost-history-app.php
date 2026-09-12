@@ -50,7 +50,6 @@ $riverso_cost_history_context = isset($riverso_cost_history_context) ? $riverso_
         </a>
         <a href="#" class="nav-tab" data-tab="quotes-wip">
             <span class="dashicons dashicons-media-text"></span> Cotizaciones aprobadas
-            <span class="alert-badge" style="background:#996800;">WIP</span>
         </a>
     </nav>
 
@@ -205,7 +204,12 @@ $riverso_cost_history_context = isset($riverso_cost_history_context) ? $riverso_
                             <input type="checkbox" id="folio-toggle-decimals" checked>
                             Costos con decimales <em>(hasta 3)</em>
                         </label>
-                        <button type="button" class="button" id="btn-print-folio-analysis" disabled>
+                        <div class="rce-view-toggle" role="group" aria-label="Base de comparación" id="folio-base-toggle">
+                            <button type="button" class="button rce-base-btn is-active" data-folio-base="auto">Auto (mayor alza)</button>
+                            <button type="button" class="button rce-base-btn" data-folio-base="invoice">Facturas</button>
+                            <button type="button" class="button rce-base-btn" data-folio-base="quote">Cotizaciones aprobadas</button>
+                        </div>
+                        <button type="button" class="button" id="btn-claim-folio" disabled>Preparar reclamo</button>
                             <span class="dashicons dashicons-printer" style="vertical-align:middle;margin-top:3px;"></span>
                             Imprimir
                         </button>
@@ -223,7 +227,7 @@ $riverso_cost_history_context = isset($riverso_cost_history_context) ? $riverso_
                                 <th>Descripción</th>
                                 <th style="width:100px;text-align:right;">Costo factura</th>
                                 <th style="width:140px;">Última facturación</th>
-                                <th style="width:140px;">Última cotización <span class="wip-inline">WIP</span></th>
+                                <th style="width:140px;">Última cotización</th>
                                 <th style="width:90px;">Tendencia</th>
                                 <th style="width:100px;text-align:right;">Diferencia</th>
                                 <th style="width:80px;text-align:right;">Dif. %</th>
@@ -2009,6 +2013,7 @@ jQuery(document).ready(function($) {
     let folioShowDecimals = true;
     let folioViewMode = 'neto';
     let folioCostMode = 'tras_dr';
+    let folioBaseMode = 'auto';
     let lastFolioAnalysis = null;
     let selectedFolioId = null;
     let folioRecentPage = 1;
@@ -2150,6 +2155,8 @@ jQuery(document).ready(function($) {
         $('#folio-view-toggle .rce-view-btn[data-folio-view="' + folioViewMode + '"], #alerts-folio-view-toggle .rce-view-btn[data-folio-view="' + folioViewMode + '"]').addClass('is-active');
         $('#folio-cost-toggle .rce-cost-btn, #alerts-folio-cost-toggle .rce-cost-btn').removeClass('is-active');
         $('#folio-cost-toggle .rce-cost-btn[data-folio-cost="' + folioCostMode + '"], #alerts-folio-cost-toggle .rce-cost-btn[data-folio-cost="' + folioCostMode + '"]').addClass('is-active');
+        $('#folio-base-toggle .rce-base-btn').removeClass('is-active');
+        $('#folio-base-toggle .rce-base-btn[data-folio-base="' + folioBaseMode + '"]').addClass('is-active');
     }
 
     function setFolioViewMode(mode) {
@@ -2183,6 +2190,30 @@ jQuery(document).ready(function($) {
     $(document).on('click', '#folio-cost-toggle .rce-cost-btn, #alerts-folio-cost-toggle .rce-cost-btn', function(e) {
         e.preventDefault();
         setFolioCostMode($(this).data('folio-cost'));
+    });
+    $(document).on('click', '#folio-base-toggle .rce-base-btn', function(e) {
+        e.preventDefault();
+        folioBaseMode = $(this).data('folio-base') || 'auto';
+        syncFolioViewToggles();
+        if (selectedFolioId) {
+            loadFolioAnalysis(selectedFolioId);
+        }
+    });
+    $(document).on('click', '#btn-claim-folio', function() {
+        if (!selectedFolioId) return;
+        $.post(ajaxurl, {
+            action: 'riverso_cost_claim_draft',
+            nonce: nonce,
+            factura_id: selectedFolioId,
+            compare_base: folioBaseMode
+        }, function(res) {
+            if (!res || !res.success) {
+                alert((res && res.data) || 'No se pudo generar el reclamo');
+                return;
+            }
+            const text = (res.data && res.data.draft) ? res.data.draft : '';
+            window.prompt('Borrador de reclamo (Ctrl+C para copiar):', text);
+        });
     });
     syncFolioViewToggles();
 
@@ -2268,7 +2299,8 @@ jQuery(document).ready(function($) {
         $.post(ajaxurl, {
             action: 'riverso_cost_analyze_invoice',
             nonce: nonce,
-            factura_id: facturaId
+            factura_id: facturaId,
+            compare_base: folioBaseMode
         }, function(res) {
             if (!res || !res.success) {
                 $('#folio-analysis-body').html('<tr><td colspan="9">Error: ' + escapeHtml((res && res.data) || 'análisis') + '</td></tr>');
@@ -2278,6 +2310,7 @@ jQuery(document).ready(function($) {
             folioShowDecimals = $('#folio-toggle-decimals').is(':checked');
             renderFolioAnalysis(res.data);
             $('#btn-print-folio-analysis').prop('disabled', false);
+            $('#btn-claim-folio').prop('disabled', false);
         }).fail(function() {
             $('#folio-analysis-body').html('<tr><td colspan="9">Error de red</td></tr>');
             $('#btn-print-folio-analysis').prop('disabled', true);
@@ -2311,7 +2344,7 @@ jQuery(document).ready(function($) {
         const suffix = ' (' + viewTag + ')';
         $('#folio-analysis-table thead th').eq(3).text('Costo factura' + suffix);
         $('#folio-analysis-table thead th').eq(4).html('Última facturación' + suffix);
-        $('#folio-analysis-table thead th').eq(5).html('Última cotización <span class="wip-inline">WIP</span>' + suffix);
+        $('#folio-analysis-table thead th').eq(5).html('Última cotización' + suffix);
 
         const rows = data.rows || [];
         if (!rows.length) {
@@ -2334,7 +2367,11 @@ jQuery(document).ready(function($) {
 
             let prevQuoteHtml = '—';
             if (row.prev_quote && m.prevQuoteCost != null) {
-                prevQuoteHtml = formatCostMoney(m.prevQuoteCost);
+                prevQuoteHtml = `<div><strong>${formatCostMoney(m.prevQuoteCost)}</strong></div>` +
+                    `<div class="cost-doc-ref">COT ${escapeHtml(row.prev_quote.folio || '')} · ${escapeHtml(row.prev_quote.fecha_emision || '')}</div>`;
+            } else if (row.legacy && row.legacy.costo_unitario) {
+                prevQuoteHtml = `<div><em>Legacy ${formatCostMoney(row.legacy.costo_unitario)}</em></div>` +
+                    `<div class="cost-doc-ref">${escapeHtml(row.legacy.fecha_emision || '')}</div>`;
             }
 
             const deltaCls = m.trend === 'subio' ? 'trend-up' : (m.trend === 'bajo' ? 'trend-down' : '');
@@ -2837,7 +2874,8 @@ tr.changed td.chg{text-decoration:underline;}
         $.post(ajaxurl, {
             action: 'riverso_cost_analyze_invoice',
             nonce: nonce,
-            factura_id: facturaId
+            factura_id: facturaId,
+            compare_base: folioBaseMode
         }, function(res) {
             if (!res || !res.success) {
                 $('#alerts-folio-body').html('<tr><td colspan="9">Error: ' + escapeHtml((res && res.data) || 'análisis') + '</td></tr>');
@@ -2880,7 +2918,7 @@ tr.changed td.chg{text-decoration:underline;}
         const suffix = ' (' + viewTag + ')';
         $('#alerts-folio-table thead th').eq(3).text('Costo factura' + suffix);
         $('#alerts-folio-table thead th').eq(4).html('Última facturación' + suffix);
-        $('#alerts-folio-table thead th').eq(5).html('Última cotización <span class="wip-inline">WIP</span>' + suffix);
+        $('#alerts-folio-table thead th').eq(5).html('Última cotización' + suffix);
 
         const rows = data.rows || [];
         if (!rows.length) {
@@ -2902,7 +2940,11 @@ tr.changed td.chg{text-decoration:underline;}
             }
             let prevQuoteHtml = '—';
             if (row.prev_quote && m.prevQuoteCost != null) {
-                prevQuoteHtml = formatCostMoney(m.prevQuoteCost);
+                prevQuoteHtml = `<div><strong>${formatCostMoney(m.prevQuoteCost)}</strong></div>` +
+                    `<div class="cost-doc-ref">COT ${escapeHtml(row.prev_quote.folio || '')} · ${escapeHtml(row.prev_quote.fecha_emision || '')}</div>`;
+            } else if (row.legacy && row.legacy.costo_unitario) {
+                prevQuoteHtml = `<div><em>Legacy ${formatCostMoney(row.legacy.costo_unitario)}</em></div>` +
+                    `<div class="cost-doc-ref">${escapeHtml(row.legacy.fecha_emision || '')}</div>`;
             }
             const deltaCls = m.trend === 'subio' ? 'trend-up' : (m.trend === 'bajo' ? 'trend-down' : '');
             let deltaText = '—';

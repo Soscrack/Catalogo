@@ -2614,25 +2614,29 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
             </div>
         </div>
         
-        <?php elseif ($current_page === 'received-quotes'): ?>
-        <!-- Cotizaciones Recibidas (Proveedores) -->
+        <?php elseif ($current_page === 'inbox'): ?>
         <div class="content-section">
-            <div class="section-header">
-                <h2 class="section-title">Cotizaciones de Proveedores</h2>
-                <?php if (current_user_can('riverso_create_received_quotes')): ?>
-                <button class="btn btn-primary" onclick="ingresarCotizacion()">
-                    <span class="dashicons dashicons-plus-alt"></span> Ingresar Cotización
-                </button>
-                <?php endif; ?>
-            </div>
             <div class="section-body">
-                <p style="color: var(--text-secondary);">Gestiona las cotizaciones recibidas de proveedores.</p>
-                <a href="<?php echo admin_url('admin.php?page=riverso-pos-received-quotes'); ?>" class="btn btn-secondary" style="margin-top: 15px;">
-                    Ver en WP Admin
-                </a>
-                <div style="margin-top: 24px;">
-                    <?php include RIVERSO_POS_PLUGIN_DIR . 'templates/partials/cost-quotes-wip.php'; ?>
-                </div>
+                <?php
+                if (!class_exists('Riverso_Messaging_Module')) {
+                    require_once RIVERSO_POS_PLUGIN_DIR . 'core/messaging/class-messaging-module.php';
+                }
+                Riverso_Messaging_Module::get_instance();
+                include RIVERSO_POS_PLUGIN_DIR . 'templates/inbox.php';
+                ?>
+            </div>
+        </div>
+
+        <?php elseif ($current_page === 'received-quotes'): ?>
+        <div class="content-section">
+            <div class="section-body">
+                <?php
+                if (!class_exists('Riverso_POS_Received_Quote_Module')) {
+                    require_once RIVERSO_POS_PLUGIN_DIR . 'modules/quotes/class-received-quote-module.php';
+                }
+                Riverso_POS_Received_Quote_Module::get_instance();
+                include RIVERSO_POS_PLUGIN_DIR . 'templates/received-quotes.php';
+                ?>
             </div>
         </div>
         

@@ -220,6 +220,14 @@ class Riverso_POS_Admin_Menu {
         require_once RIVERSO_POS_PLUGIN_DIR . 'modules/quotes/class-received-quote-module.php';
         $this->render_page('received-quotes');
     }
+
+    public function render_inbox() {
+        if (!class_exists('Riverso_Messaging_Module')) {
+            require_once RIVERSO_POS_PLUGIN_DIR . 'core/messaging/class-messaging-module.php';
+        }
+        Riverso_Messaging_Module::get_instance();
+        $this->render_page('inbox');
+    }
     
     /**
      * Renderiza la página de auditoría

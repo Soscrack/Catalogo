@@ -216,6 +216,52 @@ class Riverso_Cost_Lookup_Service {
     }
 
     /**
+     * Bases de costo de un ítem de cotización recibida.
+     * Referencia = precio lista; tras D/R = costo_neto.
+     *
+     * @param object|array $item
+     * @return array{referencia:?array{neto:?float,bruto:?float},tras_dr:?array{neto:?float,bruto:?float}}
+     */
+    public static function quote_item_cost_bases($item) {
+        $item = (array) $item;
+        $neto = isset($item['costo_neto']) && $item['costo_neto'] !== null && $item['costo_neto'] !== ''
+            ? (float) $item['costo_neto']
+            : null;
+        $lista = isset($item['precio_lista']) && $item['precio_lista'] !== null && $item['precio_lista'] !== ''
+            && (float) $item['precio_lista'] > 0
+            ? (float) $item['precio_lista']
+            : null;
+        $impuesto = isset($item['costo_impuesto']) ? (float) $item['costo_impuesto'] : 0.0;
+        $total = isset($item['costo_total']) && $item['costo_total'] !== null && $item['costo_total'] !== ''
+            && (float) $item['costo_total'] > 0
+            ? (float) $item['costo_total']
+            : null;
+
+        $ref_neto = $lista !== null ? $lista : $neto;
+        $dr_neto = $neto;
+        $ref_bruto = $ref_neto !== null ? self::neto_unit_to_bruto($ref_neto) : null;
+        $dr_bruto = null;
+        if ($dr_neto !== null) {
+            if ($total !== null) {
+                $dr_bruto = $total;
+            } elseif ($impuesto > 0) {
+                $dr_bruto = round($dr_neto + $impuesto, 4);
+            } else {
+                $dr_bruto = self::neto_unit_to_bruto($dr_neto);
+            }
+        }
+
+        return [
+            'referencia' => $ref_neto !== null
+                ? ['neto' => $ref_neto, 'bruto' => $ref_bruto]
+                : null,
+            'tras_dr' => $dr_neto !== null
+                ? ['neto' => $dr_neto, 'bruto' => $dr_bruto]
+                : null,
+        ];
+    }
+
+    /**
      * Búsqueda unificada: SKU local, barcode, código proveedor, nombre.
      *
      * @param string $term
@@ -1639,10 +1685,11 @@ class Riverso_Cost_Lookup_Service {
      * Analiza una factura de productos: costo actual vs última factura anterior
      * y cotización aprobada (WIP).
      *
-     * @param int $factura_id
+     * @param int    $factura_id
+     * @param string $compare_base auto|invoice|quote
      * @return array|WP_Error
      */
-    public function analyze_invoice($factura_id) {
+    public function analyze_invoice($factura_id, $compare_base = 'auto') {
         global $wpdb;
 
         $factura_id = (int) $factura_id;
@@ -1691,10 +1738,11 @@ class Riverso_Cost_Lookup_Service {
                 $prev_invoice = $this->get_last_invoice_before($proveedor_id, $code, $fecha, $factura_id);
             }
 
-            // WIP: cotizaciones aprobadas — stub hasta implementar la sección.
+            // Cotizaciones aprobadas + fallback legacy por línea.
             $prev_quote = $this->get_last_approved_quote_before($proveedor_id, $code, $fecha);
+            $legacy = $this->get_legacy_for_code($proveedor_id, $code);
 
-            $picked = $this->pick_reference($current, $prev_invoice, $prev_quote);
+            $picked = $this->pick_reference($current, $prev_invoice, $prev_quote, $legacy, $compare_base);
 
             $rows[] = [
                 'item_id' => (int) $item['id'],
@@ -1707,6 +1755,7 @@ class Riverso_Cost_Lookup_Service {
                 'costo_actual_bases' => $bases,
                 'prev_invoice' => $prev_invoice,
                 'prev_quote' => $prev_quote,
+                'legacy' => $legacy,
                 'reference_source' => $picked['source'],
                 'reference_cost' => $picked['previous'],
                 'delta' => $picked['delta'],
@@ -1732,23 +1781,766 @@ class Riverso_Cost_Lookup_Service {
                 'documento_subtipo' => $subtipo ?: 'productos',
             ],
             'rows' => $rows,
-            'quote_wip' => true,
+            'quote_wip' => false,
+            'compare_base' => $compare_base,
         ];
     }
 
     /**
-     * Stub WIP: última cotización aprobada antes de $date para el par.
-     * Cuando se implemente: cotizaciones_recibidas.estado='approved'
-     * + cotizacion_items.codigo_proveedor / costo_neto, fecha_documento < $date.
+     * Análisis de una cotización recibida vs facturas / cotizaciones aprobadas / legacy.
+     *
+     * @param int    $cotizacion_id
+     * @param string $compare_base auto|invoice|quote
+     * @return array|WP_Error
+     */
+    public function analyze_quote($cotizacion_id, $compare_base = 'auto') {
+        global $wpdb;
+        $cotizacion_id = (int) $cotizacion_id;
+        if ($cotizacion_id <= 0) {
+            return new WP_Error('invalid', 'Cotización no especificada');
+        }
+
+        $quote = $wpdb->get_row($wpdb->prepare(
+            "SELECT c.*, p.nombre AS proveedor_nombre, p.rut AS proveedor_rut
+             FROM {$this->prefix}cotizaciones_recibidas c
+             LEFT JOIN {$this->prefix}proveedores p ON p.id = c.proveedor_id
+             WHERE c.id = %d",
+            $cotizacion_id
+        ), ARRAY_A);
+        if (!$quote) {
+            return new WP_Error('not_found', 'Cotización no encontrada');
+        }
+
+        $items = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$this->prefix}cotizacion_items WHERE cotizacion_id = %d ORDER BY linea ASC",
+            $cotizacion_id
+        ), ARRAY_A);
+
+        $proveedor_id = (int) ($quote['proveedor_id'] ?? 0);
+        $fecha = $quote['fecha_documento'] ?: current_time('Y-m-d');
+        $rows = [];
+
+        foreach ($items ?: [] as $item) {
+            $code = trim((string) ($item['codigo_proveedor'] ?? ''));
+            $bases = self::quote_item_cost_bases($item);
+            $current = $bases['tras_dr']['neto'] ?? ($item['costo_neto'] !== null ? (float) $item['costo_neto'] : null);
+
+            $resolved = $this->resolve_quote_item_reference($item, $proveedor_id, $fecha, $cotizacion_id);
+            $prev_invoice = $resolved['prev_invoice'];
+            $prev_quote = $resolved['prev_quote'];
+            $legacy = $resolved['legacy'];
+            $picked = $this->pick_reference($current, $prev_invoice, $prev_quote, $legacy, $compare_base);
+
+            $match_path = null;
+            $match_label = null;
+            if ($picked['source'] === 'invoice' && is_array($prev_invoice)) {
+                $match_path = $prev_invoice['match_path'] ?? 'invoice';
+                $match_label = $prev_invoice['match_label'] ?? null;
+            } elseif ($picked['source'] === 'quote' && is_array($prev_quote)) {
+                $match_path = $prev_quote['match_path'] ?? 'quote';
+                $match_label = $prev_quote['match_label'] ?? null;
+            } elseif ($picked['source'] === 'legacy' && is_array($legacy)) {
+                $match_path = $legacy['match_path'] ?? 'legacy';
+                $match_label = $legacy['match_label'] ?? null;
+            }
+
+            $rows[] = [
+                'item_id' => (int) $item['id'],
+                'numero_linea' => (int) $item['linea'],
+                'codigo_proveedor' => $code !== '' ? $code : null,
+                'codigo_barras' => trim((string) ($item['codigo_barras'] ?? '')) ?: null,
+                'sku_match' => trim((string) ($item['sku_match'] ?? '')) ?: null,
+                'nombre' => $item['descripcion'],
+                'cantidad' => floatval($item['cantidad']),
+                'unidad' => $item['unidad'],
+                'costo_actual' => $current,
+                'costo_actual_bases' => $bases,
+                'prev_invoice' => $prev_invoice,
+                'prev_quote' => $prev_quote,
+                'legacy' => $legacy,
+                'resolved_product' => $resolved['product'],
+                'reference_source' => $picked['source'],
+                'reference_cost' => $picked['previous'],
+                'match_path' => $match_path,
+                'match_label' => $match_label,
+                'delta' => $picked['delta'],
+                'delta_pct' => $picked['pct'],
+                'trend' => $picked['trend'],
+            ];
+        }
+
+        return [
+            'quote' => [
+                'id' => (int) $quote['id'],
+                'folio' => $quote['numero_documento'],
+                'numero_documento' => $quote['numero_documento'],
+                'proveedor_id' => $proveedor_id,
+                'proveedor_nombre' => $quote['proveedor_nombre'],
+                'fecha_emision' => $quote['fecha_documento'],
+                'estado' => $quote['estado'],
+                'tipo_fuente' => $quote['tipo_fuente'],
+                'total' => floatval($quote['total']),
+            ],
+            'rows' => $rows,
+            'compare_base' => $compare_base,
+            'quote_wip' => false,
+        ];
+    }
+
+    public function list_approved_quotes($args = []) {
+        global $wpdb;
+        $limit = isset($args['limit']) ? max(1, min(100, (int) $args['limit'])) : 40;
+        $proveedor_id = isset($args['proveedor_id']) ? (int) $args['proveedor_id'] : 0;
+        $buscar = isset($args['buscar']) ? trim((string) $args['buscar']) : '';
+
+        $sql = "SELECT c.id, c.numero_documento, c.fecha_documento, c.estado, c.tipo_fuente,
+                       c.total, c.proveedor_id, c.approved_at, p.nombre AS proveedor_nombre,
+                       (SELECT COUNT(*) FROM {$this->prefix}cotizacion_items ci WHERE ci.cotizacion_id = c.id) AS items
+                FROM {$this->prefix}cotizaciones_recibidas c
+                LEFT JOIN {$this->prefix}proveedores p ON p.id = c.proveedor_id
+                WHERE c.estado = 'approved'";
+        $params = [];
+        if ($proveedor_id > 0) {
+            $sql .= ' AND c.proveedor_id = %d';
+            $params[] = $proveedor_id;
+        }
+        if ($buscar !== '') {
+            $sql .= ' AND (c.numero_documento LIKE %s OR p.nombre LIKE %s)';
+            $like = '%' . $wpdb->esc_like($buscar) . '%';
+            $params[] = $like;
+            $params[] = $like;
+        }
+        $sql .= ' ORDER BY c.fecha_documento DESC, c.id DESC LIMIT %d';
+        $params[] = $limit;
+        return $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A) ?: [];
+    }
+
+    /**
+     * Última cotización aprobada antes de $date para el par proveedor+código.
+     *
+     * @param int         $proveedor_id
+     * @param string      $codigo_proveedor
+     * @param string      $date
+     * @param int         $exclude_quote_id
+     * @return array|null
+     */
+    public function get_last_approved_quote_before($proveedor_id, $codigo_proveedor, $date, $exclude_quote_id = 0) {
+        global $wpdb;
+        $proveedor_id = (int) $proveedor_id;
+        $codigo_proveedor = trim((string) $codigo_proveedor);
+        if ($proveedor_id <= 0 || $codigo_proveedor === '' || !$date) {
+            return null;
+        }
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT c.id AS cotizacion_id, c.numero_documento AS folio, c.fecha_documento AS fecha_emision,
+                    ci.cantidad, ci.costo_neto, ci.costo_total
+             FROM {$this->prefix}cotizacion_items ci
+             INNER JOIN {$this->prefix}cotizaciones_recibidas c ON c.id = ci.cotizacion_id
+             WHERE c.proveedor_id = %d
+               AND ci.codigo_proveedor = %s
+               AND c.estado = 'approved'
+               AND c.id <> %d
+               AND c.fecha_documento IS NOT NULL
+               AND c.fecha_documento < %s
+             ORDER BY c.fecha_documento DESC, c.id DESC
+             LIMIT 1",
+            $proveedor_id,
+            $codigo_proveedor,
+            (int) $exclude_quote_id,
+            $date
+        ), ARRAY_A);
+
+        if (!$row) {
+            return null;
+        }
+        $neto = $row['costo_neto'] !== null ? (float) $row['costo_neto'] : null;
+        if ($neto === null) {
+            return null;
+        }
+        $packed = self::pack_unit_costs($neto);
+        return [
+            'cotizacion_id' => (int) $row['cotizacion_id'],
+            'folio' => $row['folio'] ?: ('COT-' . $row['cotizacion_id']),
+            'fecha_emision' => $row['fecha_emision'],
+            'tipo_dte' => null,
+            'costo_unitario' => $packed['costo_unitario'],
+            'costo_unitario_neto' => $packed['costo_unitario_neto'],
+            'costo_unitario_bruto' => $packed['costo_unitario_bruto'],
+            'costo_bases' => self::pack_same_bases($neto, $packed['costo_unitario_bruto']),
+        ];
+    }
+
+    /**
+     * Cascada de referencia para un ítem de cotización: factura exacta,
+     * código normalizado, producto relacionado (barcode/SKU) y legacy.
+     *
+     * @param array  $item
+     * @param int    $proveedor_id
+     * @param string $fecha
+     * @param int    $exclude_quote_id
+     * @return array{prev_invoice:?array,prev_quote:?array,legacy:?array,product:?array}
+     */
+    private function resolve_quote_item_reference(array $item, $proveedor_id, $fecha, $exclude_quote_id = 0) {
+        $code = trim((string) ($item['codigo_proveedor'] ?? ''));
+        $barcode = trim((string) ($item['codigo_barras'] ?? ''));
+        $product = $this->resolve_producto_base_for_quote_item($item, $proveedor_id);
+
+        $prev_invoice = null;
+        if ($proveedor_id > 0 && $code !== '' && $fecha) {
+            $prev_invoice = $this->get_last_invoice_before($proveedor_id, $code, $fecha, 0);
+            if ($prev_invoice) {
+                $prev_invoice = $this->annotate_ref(
+                    $prev_invoice,
+                    'invoice_exact',
+                    sprintf('Factura folio %s · mismo código', $prev_invoice['folio'] ?? '')
+                );
+            }
+        }
+
+        if (!$prev_invoice && $code !== '') {
+            $hit = $this->find_invoice_for_code($proveedor_id, $code, $fecha, true);
+            if ($hit) {
+                $same = strcasecmp(trim((string) ($hit['codigo_proveedor'] ?? '')), $code) === 0;
+                $prev_invoice = $this->annotate_ref(
+                    $hit,
+                    $same ? 'invoice_exact' : 'invoice_normalized',
+                    sprintf(
+                        'Factura folio %s · %s',
+                        $hit['folio'] ?? '',
+                        $same ? 'mismo código' : ('código normalizado ' . ($hit['codigo_proveedor'] ?? $code))
+                    )
+                );
+            }
+        }
+
+        if (!$prev_invoice && $code !== '') {
+            $hit = $this->find_invoice_for_code($proveedor_id, $code, $fecha, false);
+            if ($hit) {
+                $prev_invoice = $this->annotate_ref(
+                    $hit,
+                    'invoice_latest',
+                    sprintf('Factura folio %s · última (sin recorte de fecha)', $hit['folio'] ?? '')
+                );
+            }
+        }
+
+        if (!$prev_invoice && $code !== '') {
+            $hit = $this->find_invoice_for_code(0, $code, $fecha, false);
+            if ($hit) {
+                $prov_name = $hit['proveedor_nombre'] ?? ('Proveedor #' . (int) ($hit['proveedor_id'] ?? 0));
+                $prev_invoice = $this->annotate_ref(
+                    $hit,
+                    'invoice_any_supplier',
+                    sprintf('Factura folio %s · %s · mismo código', $hit['folio'] ?? '', $prov_name)
+                );
+            }
+        }
+
+        if (!$prev_invoice && $barcode !== '' && $barcode !== $code) {
+            $hit = $this->find_invoice_for_code($proveedor_id, $barcode, $fecha, false)
+                ?: $this->find_invoice_for_code(0, $barcode, $fecha, false);
+            if ($hit) {
+                $prev_invoice = $this->annotate_ref(
+                    $hit,
+                    'invoice_barcode',
+                    sprintf('Factura folio %s · vía barcode %s', $hit['folio'] ?? '', $barcode)
+                );
+            }
+        }
+
+        if (!$prev_invoice && !empty($product['producto_base_id'])) {
+            $related = $this->invoice_for_related_product((int) $product['producto_base_id'], $fecha);
+            if ($related) {
+                $sku = $product['canonical_sku'] ?? '';
+                $prov_name = $related['proveedor_nombre'] ?? '';
+                $path = !empty($related['_latest']) ? 'invoice_related_latest' : 'invoice_related';
+                $label = sprintf(
+                    'Factura folio %s · vía producto %s%s',
+                    $related['folio'] ?? '',
+                    $sku !== '' ? $sku : ('#' . $product['producto_base_id']),
+                    $prov_name !== '' ? (' · ' . $prov_name) : ''
+                );
+                unset($related['_latest']);
+                $prev_invoice = $this->annotate_ref($related, $path, $label);
+            }
+        }
+
+        $prev_quote = null;
+        if ($proveedor_id > 0 && $code !== '' && $fecha) {
+            $prev_quote = $this->get_last_approved_quote_before($proveedor_id, $code, $fecha, $exclude_quote_id);
+            if ($prev_quote) {
+                $prev_quote = $this->annotate_ref(
+                    $prev_quote,
+                    'quote_exact',
+                    sprintf('Cotización %s · mismo código', $prev_quote['folio'] ?? '')
+                );
+            }
+        }
+
+        $legacy = null;
+        $sku = !empty($product['canonical_sku']) ? (string) $product['canonical_sku'] : '';
+        if ($sku === '' && $code !== '') {
+            $legacy_direct = $this->get_legacy_for_code($proveedor_id, $code);
+            if ($legacy_direct) {
+                $legacy = $legacy_direct;
+            }
+        }
+        if (!$legacy && $sku !== '') {
+            $legacy = $this->legacy_ref_from_sku($sku, $product['match_source'] ?? 'sku');
+        }
+        if (!$legacy && $code !== '') {
+            $legacy = $this->get_legacy_for_code($proveedor_id, $code);
+        }
+
+        return [
+            'prev_invoice' => $prev_invoice,
+            'prev_quote' => $prev_quote,
+            'legacy' => $legacy,
+            'product' => $product,
+        ];
+    }
+
+    /**
+     * @param array  $item
+     * @param int    $proveedor_id
+     * @return array|null {producto_base_id,canonical_sku,nombre,match_source}
+     */
+    private function resolve_producto_base_for_quote_item(array $item, $proveedor_id) {
+        global $wpdb;
+
+        $woo_id = (int) ($item['producto_id'] ?? 0);
+        if ($woo_id > 0) {
+            $pb = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, canonical_sku, nombre_canonico
+                 FROM {$this->prefix}producto_base
+                 WHERE woocommerce_product_id = %d OR woocommerce_variation_id = %d
+                 LIMIT 1",
+                $woo_id,
+                $woo_id
+            ), ARRAY_A);
+            if ($pb) {
+                return [
+                    'producto_base_id' => (int) $pb['id'],
+                    'canonical_sku' => $pb['canonical_sku'],
+                    'nombre' => $pb['nombre_canonico'],
+                    'match_source' => 'woo_product',
+                ];
+            }
+        }
+
+        $terms = [];
+        foreach (['codigo_barras', 'codigo_proveedor', 'sku_match'] as $key) {
+            $val = trim((string) ($item[$key] ?? ''));
+            if ($val !== '' && !in_array($val, $terms, true)) {
+                $terms[] = $val;
+            }
+        }
+
+        return $this->resolve_producto_base_for_terms($terms, $proveedor_id);
+    }
+
+    /**
+     * @param string[] $terms
+     * @param int      $proveedor_id
+     * @return array|null
+     */
+    private function resolve_producto_base_for_terms(array $terms, $proveedor_id = 0) {
+        global $wpdb;
+
+        foreach ($terms as $term) {
+            $term = trim((string) $term);
+            if ($term === '') {
+                continue;
+            }
+
+            if (class_exists('Riverso_Barcode_Model')) {
+                $bundle = Riverso_Barcode_Model::lookup_for_search($term, ['limit' => 3]);
+                foreach ($bundle['hits'] as $hit) {
+                    $pb_id = (int) ($hit['producto_base_id'] ?? 0);
+                    if ($pb_id <= 0) {
+                        continue;
+                    }
+                    $pb = $this->get_producto_base($pb_id);
+                    if ($pb) {
+                        return [
+                            'producto_base_id' => $pb_id,
+                            'canonical_sku' => $pb['canonical_sku'],
+                            'nombre' => $pb['nombre_canonico'],
+                            'match_source' => $hit['match_source'] ?? 'barcode',
+                        ];
+                    }
+                }
+            }
+
+            $sql = "SELECT pb.id, pb.canonical_sku, pb.nombre_canonico, pp.proveedor_id
+                    FROM {$this->prefix}producto_proveedor pp
+                    INNER JOIN {$this->prefix}producto_base pb ON pb.id = pp.producto_base_id
+                    WHERE pp.activo = 1
+                      AND (pp.codigo_proveedor = %s OR pp.codigo_barras_proveedor = %s
+                           OR LOWER(TRIM(pp.codigo_proveedor)) = %s)
+                    ORDER BY CASE WHEN pp.proveedor_id = %d THEN 0 ELSE 1 END, pp.id DESC
+                    LIMIT 1";
+            $row = $wpdb->get_row($wpdb->prepare(
+                $sql,
+                $term,
+                $term,
+                strtolower($term),
+                (int) $proveedor_id
+            ), ARRAY_A);
+            if ($row) {
+                return [
+                    'producto_base_id' => (int) $row['id'],
+                    'canonical_sku' => $row['canonical_sku'],
+                    'nombre' => $row['nombre_canonico'],
+                    'match_source' => 'producto_proveedor',
+                ];
+            }
+
+            $spl = $this->prefix . 'supplier_product_links';
+            if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $spl)) === $spl) {
+                $row = $wpdb->get_row($wpdb->prepare(
+                    "SELECT COALESCE(spl.product_base_id, 0) AS producto_base_id, spl.internal_sku
+                     FROM {$spl} spl
+                     WHERE spl.is_active = 1
+                       AND (spl.supplier_code = %s OR spl.internal_sku = %s)
+                     ORDER BY CASE WHEN spl.supplier_id = %d THEN 0 ELSE 1 END
+                     LIMIT 1",
+                    $term,
+                    $term,
+                    (int) $proveedor_id
+                ), ARRAY_A);
+                if ($row) {
+                    $pb_id = (int) $row['producto_base_id'];
+                    $sku = trim((string) ($row['internal_sku'] ?? ''));
+                    $pb = $pb_id ? $this->get_producto_base($pb_id) : null;
+                    if (!$pb && $sku !== '') {
+                        $pb = $wpdb->get_row($wpdb->prepare(
+                            "SELECT id, canonical_sku, nombre_canonico
+                             FROM {$this->prefix}producto_base WHERE canonical_sku = %s LIMIT 1",
+                            $sku
+                        ), ARRAY_A);
+                    }
+                    if ($pb) {
+                        return [
+                            'producto_base_id' => (int) $pb['id'],
+                            'canonical_sku' => $pb['canonical_sku'],
+                            'nombre' => $pb['nombre_canonico'],
+                            'match_source' => 'supplier_link',
+                        ];
+                    }
+                }
+            }
+
+            $row = $wpdb->get_row($wpdb->prepare(
+                "SELECT COALESCE(c.product_base_id, 0) AS producto_base_id, c.sku_local
+                 FROM {$this->prefix}codigos c
+                 WHERE c.activo = 1
+                   AND (c.codigo_proveedor = %s OR c.sku_local = %s OR c.codigo_barras = %s)
+                 LIMIT 1",
+                $term,
+                $term,
+                $term
+            ), ARRAY_A);
+            if ($row) {
+                $pb_id = (int) $row['producto_base_id'];
+                $sku = trim((string) ($row['sku_local'] ?? ''));
+                $pb = $pb_id ? $this->get_producto_base($pb_id) : null;
+                if (!$pb && $sku !== '') {
+                    $pb = $wpdb->get_row($wpdb->prepare(
+                        "SELECT id, canonical_sku, nombre_canonico
+                         FROM {$this->prefix}producto_base WHERE canonical_sku = %s LIMIT 1",
+                        $sku
+                    ), ARRAY_A);
+                }
+                if ($pb) {
+                    return [
+                        'producto_base_id' => (int) $pb['id'],
+                        'canonical_sku' => $pb['canonical_sku'],
+                        'nombre' => $pb['nombre_canonico'],
+                        'match_source' => 'codigos',
+                    ];
+                }
+                if ($sku !== '') {
+                    return [
+                        'producto_base_id' => null,
+                        'canonical_sku' => $sku,
+                        'nombre' => $sku,
+                        'match_source' => 'codigos_sku',
+                    ];
+                }
+            }
+
+            $pb = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, canonical_sku, nombre_canonico
+                 FROM {$this->prefix}producto_base WHERE canonical_sku = %s LIMIT 1",
+                $term
+            ), ARRAY_A);
+            if ($pb) {
+                return [
+                    'producto_base_id' => (int) $pb['id'],
+                    'canonical_sku' => $pb['canonical_sku'],
+                    'nombre' => $pb['nombre_canonico'],
+                    'match_source' => 'sku_exact',
+                ];
+            }
+        }
+
+        foreach ($terms as $term) {
+            $hits = $this->search($term, 5);
+            foreach ($hits as $hit) {
+                if (!empty($hit['producto_base_id'])) {
+                    return [
+                        'producto_base_id' => (int) $hit['producto_base_id'],
+                        'canonical_sku' => $hit['canonical_sku'] ?? null,
+                        'nombre' => $hit['nombre'] ?? null,
+                        'match_source' => $hit['match_source'] ?? 'search',
+                    ];
+                }
+                if (!empty($hit['canonical_sku'])) {
+                    return [
+                        'producto_base_id' => null,
+                        'canonical_sku' => $hit['canonical_sku'],
+                        'nombre' => $hit['nombre'] ?? $hit['canonical_sku'],
+                        'match_source' => $hit['match_source'] ?? 'search_sku',
+                    ];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Factura más reciente del código (exacto o normalizado).
+     *
+     * @param int         $proveedor_id  0 = cualquier proveedor
+     * @param string      $codigo_proveedor
+     * @param string|null $fecha_emision
+     * @param bool        $before_only
+     * @return array|null
+     */
+    private function find_invoice_for_code($proveedor_id, $codigo_proveedor, $fecha_emision = null, $before_only = true) {
+        global $wpdb;
+
+        $code = trim((string) $codigo_proveedor);
+        if ($code === '') {
+            return null;
+        }
+        $norm = $this->normalize_supplier_code($code);
+        $code_lower = strtolower($code);
+
+        $sql = "SELECT f.id AS factura_id, f.tipo_dte, f.folio, f.fecha_emision,
+                       f.proveedor_id, p.nombre AS proveedor_nombre,
+                       fi.cantidad, fi.precio_unitario, fi.costo_neto_base, fi.costo_bruto_base,
+                       fi.costo_neto_final, fi.costo_bruto_final, fi.costo_landed_unitario,
+                       fi.codigo_proveedor
+                FROM {$this->prefix}factura_items fi
+                INNER JOIN {$this->prefix}facturas f ON f.id = fi.factura_id
+                LEFT JOIN {$this->prefix}proveedores p ON p.id = f.proveedor_id
+                WHERE fi.item_tipo = 'producto'
+                  AND f.tipo_dte IN (33, 34)
+                  AND (f.documento_subtipo = 'productos' OR f.documento_subtipo IS NULL OR f.documento_subtipo = '')
+                  AND fi.codigo_proveedor IS NOT NULL AND fi.codigo_proveedor != ''
+                  AND (
+                        fi.codigo_proveedor = %s
+                        OR LOWER(TRIM(fi.codigo_proveedor)) = %s
+                        OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(fi.codigo_proveedor)), '-', ''), '_', ''), ' ', '') = %s
+                  )";
+        $params = [$code, $code_lower, $norm];
+
+        if ((int) $proveedor_id > 0) {
+            $sql .= ' AND f.proveedor_id = %d';
+            $params[] = (int) $proveedor_id;
+        }
+        if ($before_only && $fecha_emision) {
+            $sql .= ' AND f.fecha_emision <= %s';
+            $params[] = $fecha_emision;
+        }
+
+        $sql .= ' ORDER BY f.fecha_emision DESC, f.id DESC LIMIT 1';
+        $row = $wpdb->get_row($wpdb->prepare($sql, $params), ARRAY_A);
+        return $this->invoice_row_to_ref($row);
+    }
+
+    /**
+     * @param int         $producto_base_id
+     * @param string|null $fecha
+     * @return array|null
+     */
+    private function invoice_for_related_product($producto_base_id, $fecha = null) {
+        $producto_base_id = (int) $producto_base_id;
+        if ($producto_base_id <= 0) {
+            return null;
+        }
+
+        $pares = $this->get_supplier_pairs($producto_base_id);
+        $best = null;
+        if ($fecha) {
+            foreach ($pares as $pair) {
+                $prov_id = (int) ($pair['proveedor_id'] ?? 0);
+                $pair_code = trim((string) ($pair['codigo_proveedor'] ?? ''));
+                if ($prov_id <= 0 || $pair_code === '') {
+                    continue;
+                }
+                $hit = $this->get_last_invoice_before($prov_id, $pair_code, $fecha, 0);
+                if (!$hit) {
+                    continue;
+                }
+                $hit['proveedor_id'] = $prov_id;
+                $hit['proveedor_nombre'] = $pair['proveedor_nombre'] ?? $this->get_proveedor_nombre($prov_id);
+                $hit['codigo_proveedor'] = $pair_code;
+                if ($best === null || (string) $hit['fecha_emision'] > (string) $best['fecha_emision']) {
+                    $best = $hit;
+                }
+            }
+            if ($best) {
+                $best['_latest'] = false;
+                return $best;
+            }
+        }
+
+        $latest = $this->latest_cost_bases_for_product($producto_base_id);
+        $ref = $this->ref_from_latest_product_cost($latest);
+        if ($ref) {
+            $ref['_latest'] = true;
+        }
+        return $ref;
+    }
+
+    /**
+     * @param array $latest
+     * @return array|null
+     */
+    private function ref_from_latest_product_cost(array $latest) {
+        if (empty($latest['factura_id']) || empty($latest['costo_bases'])) {
+            return null;
+        }
+        $bases = $latest['costo_bases'];
+        $neto = $bases['tras_dr']['neto'] ?? ($bases['referencia']['neto'] ?? null);
+        $bruto = $bases['tras_dr']['bruto'] ?? ($bases['referencia']['bruto'] ?? null);
+        if ($neto === null) {
+            return null;
+        }
+        $packed = self::pack_unit_costs((float) $neto, $bruto !== null ? (float) $bruto : null);
+        return [
+            'factura_id' => (int) $latest['factura_id'],
+            'tipo_dte' => null,
+            'folio' => $latest['folio'],
+            'fecha_emision' => $latest['fecha_emision'],
+            'proveedor_id' => $latest['proveedor_id'],
+            'proveedor_nombre' => $latest['proveedor_nombre'],
+            'codigo_proveedor' => $latest['codigo_proveedor'],
+            'costo_unitario' => $packed['costo_unitario'],
+            'costo_unitario_neto' => $packed['costo_unitario_neto'],
+            'costo_unitario_bruto' => $packed['costo_unitario_bruto'],
+            'costo_bases' => $bases,
+        ];
+    }
+
+    /**
+     * @param array|null $row
+     * @return array|null
+     */
+    private function invoice_row_to_ref($row) {
+        if (!$row) {
+            return null;
+        }
+        $bases = self::unit_cost_bases_packed($row);
+        $cost = $bases['tras_dr']['neto'] ?? self::unit_cost_from_item($row);
+        if ($cost === null) {
+            return null;
+        }
+        $bruto = $bases['tras_dr']['bruto'] ?? null;
+        $packed = self::pack_unit_costs((float) $cost, $bruto !== null ? (float) $bruto : null);
+        return [
+            'factura_id' => (int) $row['factura_id'],
+            'tipo_dte' => isset($row['tipo_dte']) ? (int) $row['tipo_dte'] : null,
+            'folio' => $row['folio'],
+            'fecha_emision' => $row['fecha_emision'],
+            'proveedor_id' => isset($row['proveedor_id']) ? (int) $row['proveedor_id'] : null,
+            'proveedor_nombre' => $row['proveedor_nombre'] ?? null,
+            'codigo_proveedor' => $row['codigo_proveedor'] ?? null,
+            'costo_unitario' => $packed['costo_unitario'],
+            'costo_unitario_neto' => $packed['costo_unitario_neto'],
+            'costo_unitario_bruto' => $packed['costo_unitario_bruto'],
+            'costo_bases' => $bases,
+        ];
+    }
+
+    /**
+     * @param array|null $ref
+     * @param string     $match_path
+     * @param string     $match_label
+     * @return array|null
+     */
+    private function annotate_ref($ref, $match_path, $match_label) {
+        if (!$ref) {
+            return null;
+        }
+        $ref['match_path'] = $match_path;
+        $ref['match_label'] = $match_label;
+        return $ref;
+    }
+
+    private function normalize_supplier_code($code) {
+        $code = strtolower(trim((string) $code));
+        return str_replace(['-', '_', ' '], '', $code);
+    }
+
+    private function get_legacy_for_code($proveedor_id, $codigo_proveedor) {
+        $code = trim((string) $codigo_proveedor);
+        if ($code === '') {
+            return null;
+        }
+        $resolved = $this->resolve_producto_base_for_terms([$code], (int) $proveedor_id);
+        $sku = $resolved && !empty($resolved['canonical_sku']) ? (string) $resolved['canonical_sku'] : '';
+        if ($sku === '') {
+            return null;
+        }
+        return $this->legacy_ref_from_sku($sku, $resolved['match_source'] ?? 'sku');
+    }
+
+    /**
+     * @param string $sku
+     * @param string $via
+     * @return array|null
+     */
+    private function legacy_ref_from_sku($sku, $via = 'sku') {
+        $legacy = $this->get_legacy_cost_for_sku($sku);
+        if (!$legacy) {
+            return null;
+        }
+        $neto = (float) $legacy['costo_neto'];
+        $packed = self::pack_unit_costs($neto);
+        return [
+            'folio' => 'LEGACY',
+            'fecha_emision' => $legacy['importado_at'],
+            'importado_at' => $legacy['importado_at'],
+            'tipo_dte' => null,
+            'source_kind' => 'legacy',
+            'match_path' => 'legacy',
+            'match_label' => sprintf('Legacy TPV · SKU %s', $sku),
+            'costo_unitario' => $packed['costo_unitario'],
+            'costo_unitario_neto' => $packed['costo_unitario_neto'],
+            'costo_unitario_bruto' => $packed['costo_unitario_bruto'],
+            'costo_bases' => self::pack_same_bases($neto, $packed['costo_unitario_bruto']),
+            'sku' => $sku,
+            'via' => $via,
+        ];
+    }
+
+    /**
+     * Última factura de productos anterior al documento, mismo par.
      *
      * @param int    $proveedor_id
      * @param string $codigo_proveedor
-     * @param string $date
-     * @return array|null
+     * @param string $fecha_emision
+     * @param int    $exclude_factura_id
+     * @return array|null {costo_unitario, folio, fecha_emision, factura_id, tipo_dte}
      */
-    public function get_last_approved_quote_before($proveedor_id, $codigo_proveedor, $date) {
-        unset($proveedor_id, $codigo_proveedor, $date);
-        return null;
+    public function get_last_invoice_before_public($proveedor_id, $codigo_proveedor, $fecha_emision, $exclude_factura_id = 0) {
+        return $this->get_last_invoice_before($proveedor_id, $codigo_proveedor, $fecha_emision, $exclude_factura_id);
     }
 
     /**
@@ -1817,7 +2609,7 @@ class Riverso_Cost_Lookup_Service {
      * @param array|null $prev_quote  {costo_unitario, ...} o null
      * @return array{source:?string,previous:?float,delta:?float,pct:?float,trend:?string}
      */
-    private function pick_reference($current, $prev_invoice, $prev_quote) {
+    private function pick_reference($current, $prev_invoice, $prev_quote, $legacy = null, $compare_base = 'auto') {
         $empty = [
             'source' => null,
             'previous' => null,
@@ -1830,45 +2622,58 @@ class Riverso_Cost_Lookup_Service {
             return $empty;
         }
 
-        $candidates = [];
-        if ($prev_invoice && isset($prev_invoice['costo_unitario']) && $prev_invoice['costo_unitario'] !== null) {
-            $candidates[] = [
-                'source' => 'invoice',
-                'previous' => (float) $prev_invoice['costo_unitario'],
-            ];
-        }
-        if ($prev_quote && isset($prev_quote['costo_unitario']) && $prev_quote['costo_unitario'] !== null) {
-            $candidates[] = [
-                'source' => 'quote',
-                'previous' => (float) $prev_quote['costo_unitario'],
-            ];
+        $invoice_c = ($prev_invoice && isset($prev_invoice['costo_unitario'])) ? (float) $prev_invoice['costo_unitario'] : null;
+        $quote_c = ($prev_quote && isset($prev_quote['costo_unitario'])) ? (float) $prev_quote['costo_unitario'] : null;
+        $legacy_c = ($legacy && isset($legacy['costo_unitario'])) ? (float) $legacy['costo_unitario'] : null;
+
+        $chosen = null;
+        $source = null;
+        if ($compare_base === 'invoice') {
+            $chosen = $invoice_c !== null ? $invoice_c : $legacy_c;
+            $source = $invoice_c !== null ? 'invoice' : ($legacy_c !== null ? 'legacy' : null);
+        } elseif ($compare_base === 'quote') {
+            $chosen = $quote_c !== null ? $quote_c : $legacy_c;
+            $source = $quote_c !== null ? 'quote' : ($legacy_c !== null ? 'legacy' : null);
+        } else {
+            $candidates = [];
+            if ($invoice_c !== null) {
+                $candidates[] = ['source' => 'invoice', 'previous' => $invoice_c];
+            }
+            if ($quote_c !== null) {
+                $candidates[] = ['source' => 'quote', 'previous' => $quote_c];
+            }
+            if (!$candidates && $legacy_c !== null) {
+                $candidates[] = ['source' => 'legacy', 'previous' => $legacy_c];
+            }
+            if (!$candidates) {
+                return $empty;
+            }
+            $best = null;
+            foreach ($candidates as $c) {
+                $delta = (float) $current - $c['previous'];
+                $c['delta'] = $delta;
+                if ($best === null || $delta > $best['delta']) {
+                    $best = $c;
+                }
+            }
+            $chosen = $best['previous'];
+            $source = $best['source'];
         }
 
-        if (!$candidates) {
+        if ($chosen === null) {
             return $empty;
         }
 
-        $best = null;
-        foreach ($candidates as $c) {
-            $delta = (float) $current - $c['previous'];
-            $c['delta'] = $delta;
-            if ($best === null || $delta > $best['delta']) {
-                $best = $c;
-            }
-        }
-
-        $delta = $best['delta'];
-        $prev = $best['previous'];
-        $pct = ($prev != 0.0) ? round(($delta / $prev) * 100, 2) : null;
-
+        $delta = (float) $current - $chosen;
+        $pct = ($chosen != 0.0) ? round(($delta / $chosen) * 100, 2) : null;
         $trend = 'se_mantuvo';
         if (abs($delta) >= 0.001) {
             $trend = $delta > 0 ? 'subio' : 'bajo';
         }
 
         return [
-            'source' => $best['source'],
-            'previous' => $prev,
+            'source' => $source,
+            'previous' => $chosen,
             'delta' => round($delta, 4),
             'pct' => $pct,
             'trend' => $trend,

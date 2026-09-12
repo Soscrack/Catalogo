@@ -66,6 +66,8 @@ class Riverso_POS_Permissions {
         'riverso_create_received_quotes'  => 'Ingresar cotizaciones recibidas',
         'riverso_edit_received_quotes'    => 'Editar cotizaciones recibidas',
         'riverso_approve_received_quotes' => 'Aprobar cotizaciones recibidas',
+        'riverso_view_inbox'              => 'Ver bandeja correo/WhatsApp',
+        'riverso_manage_inbox'            => 'Gestionar bandeja y responder',
         
         // === FACTURAS RECIBIDAS ===
         'riverso_view_invoices'      => 'Ver facturas recibidas',
@@ -186,6 +188,8 @@ class Riverso_POS_Permissions {
             'riverso_create_received_quotes',
             'riverso_edit_received_quotes',
             'riverso_approve_received_quotes',
+            'riverso_view_inbox',
+            'riverso_manage_inbox',
         ],
         'Facturas Recibidas' => [
             'riverso_view_invoices',
@@ -338,6 +342,8 @@ class Riverso_POS_Permissions {
                 'riverso_create_received_quotes',
                 'riverso_edit_received_quotes',
                 'riverso_approve_received_quotes',
+                'riverso_view_inbox',
+                'riverso_manage_inbox',
                 'riverso_view_invoices',
                 'riverso_create_invoices',
                 'riverso_process_invoices',

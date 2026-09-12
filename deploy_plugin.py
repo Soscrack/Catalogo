@@ -58,20 +58,29 @@ def build_zip(source=None):
     return str(out)
 
 
-def main(source=None, skip_migration=False):
-    if not PASSWORD:
-        raise RuntimeError(
-            'Falta la contraseña de deploy. Crea .env.deploy en la raíz del repo '
-            'con RIVERSO_DEPLOY_PASSWORD=... o exporta esa variable.'
-        )
+def _ssh_connect(ssh):
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    kwargs = {'hostname': HOST, 'username': USER, 'timeout': 30}
+    if PASSWORD:
+        kwargs['password'] = PASSWORD
+    else:
+        key_path = os.path.expanduser(os.path.join('~', '.ssh', 'id_ed25519'))
+        if not os.path.isfile(key_path):
+            raise RuntimeError(
+                'Falta RIVERSO_DEPLOY_PASSWORD (.env.deploy) y no hay llave '
+                '~/.ssh/id_ed25519 para conectar.'
+            )
+        kwargs['key_filename'] = key_path
+    ssh.connect(**kwargs)
 
+
+def main(source=None, skip_migration=False):
     zip_path = build_zip(source)
 
     # Connect
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     print('Connecting to server...')
-    ssh.connect(HOST, username=USER, password=PASSWORD, timeout=30)
+    _ssh_connect(ssh)
     print('Connected!')
 
     # Upload ZIP via SFTP
@@ -142,7 +151,7 @@ VERSION=$(sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   echo defined("RIVERSO_POS_VERSION") ? RIVERSO_POS_VERSION : "missing";
 ')
 fi
-test "$VERSION" = "1.6.96"
+test "$VERSION" = "1.7.4"
 
 if [ "$SKIP_MIGRATION" = "1" ]; then
   echo "schema-skip competencia tables should be applied via tools/migrate_competencia_remote.py"

@@ -239,6 +239,18 @@ class Riverso_POS_Nav_Registry {
 
             // === Compras ===
             [
+                'id' => 'inbox',
+                'group' => 'compras',
+                'label' => 'Bandeja',
+                'menu_label' => 'Bandeja correo/WhatsApp',
+                'icon' => 'email',
+                'surfaces' => ['portal', 'admin'],
+                'portal_slug' => 'inbox',
+                'admin_page' => 'riverso-pos-inbox',
+                'admin_callback' => 'render_inbox',
+                'capability' => 'riverso_view_inbox',
+            ],
+            [
                 'id' => 'invoices',
                 'group' => 'compras',
                 'label' => 'Facturas',

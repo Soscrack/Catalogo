@@ -29,10 +29,10 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
                     </li>
                     <li>
                         <strong>SKU — primero buscar, después crear:</strong>
-                        en el
+                        usá <strong>Buscar</strong> en el bloqueo del folio (código proveedor, barcode o nombre)
+                        y vinculá sin salir. También podés buscar en el
                         <a href="<?php echo esc_url($url_products); ?>" target="_blank" rel="noopener">Hub de Productos</a>
-                        buscá por código proveedor, nombre o SKU.
-                        Si existe, vinculalo en la
+                        o vincular en la
                         <a href="<?php echo esc_url($url_invoices); ?>" target="_blank" rel="noopener">factura</a>
                         (la factura <em>no crea</em> productos).
                         Si no existe:
@@ -212,6 +212,18 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
         </div>
         <div id="rpf-create-local-body" class="rpf-modal-body"></div>
         <div id="rpf-create-local-footer" class="rpf-create-local-footer"></div>
+    </div>
+</div>
+
+<div id="rpf-search-link-modal" class="rpf-modal" style="display:none;" aria-hidden="true">
+    <div class="rpf-modal-backdrop rpf-search-link-backdrop"></div>
+    <div class="rpf-modal-card rpf-search-link-card">
+        <div class="rpf-modal-head">
+            <h2 id="rpf-search-link-title" style="margin:0;">Buscar y vincular SKU</h2>
+            <button type="button" class="button rpf-search-link-close">Cerrar</button>
+        </div>
+        <div id="rpf-search-link-body" class="rpf-modal-body"></div>
+        <div id="rpf-search-link-footer" class="rpf-create-local-footer"></div>
     </div>
 </div>
 

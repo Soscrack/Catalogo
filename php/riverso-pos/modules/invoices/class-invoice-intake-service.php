@@ -1537,7 +1537,7 @@ class Riverso_Invoice_Intake_Service {
                  SET t.estado = 'completada', t.completado_en = %s
                  WHERE t.tipo = 'codigo_faltante'
                    AND t.referencia_tipo = 'factura_item'
-                   AND t.estado = 'pendiente'
+                   AND t.estado NOT IN ('completada', 'cancelada')
                    AND fi.factura_id IN ($placeholders)
                    AND fi.codigo_proveedor = %s",
                 ...array_merge([current_time('mysql')], $ids, [$codigo_proveedor])

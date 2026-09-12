@@ -805,6 +805,95 @@
     width: min(520px, 94vw);
 }
 
+.rpf-search-link-card {
+    width: min(920px, 96vw);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.rpf-search-link-card .rpf-modal-body {
+    overflow: auto;
+    flex: 1 1 auto;
+}
+
+.rpf-search-link-qrow {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.rpf-search-link-qrow input[type="text"] {
+    flex: 1 1 auto;
+    width: auto;
+}
+
+.rpf-search-link-table-wrap {
+    overflow: auto;
+    max-height: min(360px, 45vh);
+    border: 1px solid #dcdcde;
+    border-radius: 3px;
+}
+
+.rpf-search-link-table {
+    margin: 0;
+}
+
+.rpf-search-link-table th,
+.rpf-search-link-table td {
+    font-size: 12px;
+    vertical-align: middle;
+}
+
+.rpf-search-link-actions {
+    white-space: nowrap;
+}
+
+.rpf-completeness-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #dc3545;
+    color: #fff;
+}
+
+.rpf-completeness-badge.completo {
+    background: #28a745;
+    color: #fff;
+}
+
+.rpf-completeness-badge.publicado {
+    background: #007bff;
+    color: #fff;
+}
+
+.rpf-completeness-badge.falta_online {
+    background: #ffc107;
+    color: #333;
+}
+
+.rpf-completeness-badge.falta_codigo {
+    background: #fd7e14;
+    color: #fff;
+}
+
+.rpf-completeness-badge.solo_online {
+    background: #6f42c1;
+    color: #fff;
+}
+
+.rpf-completeness-badge.solo_online_publicado {
+    background: #17a2b8;
+    color: #fff;
+}
+
+.rpf-completeness-badge.incompleto {
+    background: #dc3545;
+    color: #fff;
+}
+
 .rpf-comp-card {
     width: min(980px, 96vw);
 }
@@ -1002,7 +1091,82 @@
 }
 
 .rpf-blockers-notice {
-    padding: 10px 12px !important;
+    padding: 0 !important;
+}
+
+.rpf-blockers-help {
+    margin: 0;
+}
+
+.rpf-blockers-help-summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 10px 12px;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+}
+
+.rpf-blockers-help-summary::-webkit-details-marker,
+.rpf-blockers-help-summary::marker {
+    display: none;
+    content: '';
+}
+
+.rpf-blockers-help-summary::before {
+    content: '';
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 5px 0 5px 7px;
+    border-color: transparent transparent transparent #b32d2e;
+    flex-shrink: 0;
+    transition: transform 0.15s ease;
+}
+
+.rpf-blockers-help[open] .rpf-blockers-help-summary::before {
+    transform: rotate(90deg);
+}
+
+.rpf-blockers-help-summary .dashicons {
+    color: #d63638;
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+}
+
+.rpf-blockers-help-title {
+    flex: 1 1 auto;
+}
+
+.rpf-blockers-help-hint {
+    font-weight: 400;
+    font-size: 12px;
+    color: #8a2424;
+    white-space: nowrap;
+}
+
+.rpf-blockers-help-hint::after {
+    content: 'Ver pasos';
+}
+
+.rpf-blockers-help[open] .rpf-blockers-help-hint::after {
+    content: 'Ocultar';
+}
+
+.rpf-blockers-help-body {
+    padding: 0 12px 12px;
+    border-top: 1px solid #f0b8b8;
+}
+
+.rpf-blockers-help-body > p {
+    margin: 10px 0 0;
+}
+
+.rpf-blockers-cards {
+    padding: 0;
 }
 
 .rpf-blocker-card {

@@ -276,14 +276,15 @@ class Riverso_Folio_Price_Process_Service {
 
         $pasos = [
             $this->playbook_step(
-                '1. Buscar si el producto ya existe',
+                '1. Buscar y vincular producto existente',
                 $search_url,
-                'En Hub de Productos buscá por código proveedor, nombre o SKU. No uses el código proveedor como SKU.'
+                'Buscá aquí por código proveedor, barcode o nombre y vinculá al folio. Atajo Hub disponible.',
+                'search_link'
             ),
             $this->playbook_step(
-                '2. Si existe: vincular en la factura',
+                '2. Alternativa: vincular en la factura',
                 $invoice_url,
-                'Abrí el folio y asigná el SKU local al ítem. La factura solo vincula; no crea productos.'
+                'Si preferís, abrí el folio en Facturas y asigná el SKU local al ítem.'
             ),
             $this->playbook_step(
                 '3a. Si no existe y es solo tienda física: Nuevo producto local',
@@ -3035,18 +3036,16 @@ class Riverso_Folio_Price_Process_Service {
             ['%s', '%d']
         );
 
-        $wpdb->update(
-            "{$prefix}tareas",
-            ['estado' => 'completada', 'completado_en' => current_time('mysql')],
-            [
-                'tipo' => 'codigo_faltante',
-                'referencia_tipo' => 'factura_item',
-                'referencia_id' => $item_id,
-                'estado' => 'pendiente',
-            ],
-            ['%s', '%s'],
-            ['%s', '%s', '%d', '%s']
-        );
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}tareas
+             SET estado = 'completada', completado_en = %s
+             WHERE tipo = 'codigo_faltante'
+               AND referencia_tipo = 'factura_item'
+               AND referencia_id = %d
+               AND estado NOT IN ('completada', 'cancelada')",
+            current_time('mysql'),
+            $item_id
+        ));
 
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log(

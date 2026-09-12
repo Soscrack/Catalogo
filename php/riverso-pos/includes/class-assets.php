@@ -191,6 +191,8 @@ class Riverso_POS_Assets {
             'can_approve' => current_user_can('riverso_approve_prices'),
             'can_create_local' => current_user_can('riverso_manage_products')
                 && (current_user_can('riverso_manage_codes') || current_user_can('riverso_process_invoices')),
+            'can_link_sku' => current_user_can('riverso_manage_codes')
+                || current_user_can('riverso_process_invoices'),
             'can_answer_family' => current_user_can('riverso_manage_products')
                 || current_user_can('riverso_manage_families'),
             'can_manage_competencia' => current_user_can('riverso_manage_competencia'),

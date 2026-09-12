@@ -740,6 +740,35 @@ class Riverso_Invoice_Module {
     }
 
     /**
+     * Lock de sesión MySQL para serializar writes de una factura (GET_LOCK no es reentrante).
+     */
+    private function factura_write_lock_name($factura_id) {
+        return 'riverso_factura_' . (int) $factura_id;
+    }
+
+    private function acquire_factura_write_lock($factura_id, $timeout = 20) {
+        global $wpdb;
+        $factura_id = (int) $factura_id;
+        if ($factura_id <= 0) {
+            return false;
+        }
+        $got = $wpdb->get_var($wpdb->prepare(
+            'SELECT GET_LOCK(%s, %d)',
+            $this->factura_write_lock_name($factura_id),
+            (int) $timeout
+        ));
+        return (int) $got === 1;
+    }
+
+    private function release_factura_write_lock($factura_id) {
+        global $wpdb;
+        $wpdb->get_var($wpdb->prepare(
+            'SELECT RELEASE_LOCK(%s)',
+            $this->factura_write_lock_name($factura_id)
+        ));
+    }
+
+    /**
      * Une un XML a una factura existente (p. ej. creada por escaneo).
      * El XML manda en cabecera; ítems solo si no hay recepción.
      * Excepción: XML rescatado del SII (sin detalle) — el escaneo manda en ítems.
@@ -747,6 +776,26 @@ class Riverso_Invoice_Module {
      * @return array|WP_Error {factura_id, merged, items_updated, warning?, scans_linked}
      */
     public function merge_xml_into_factura($factura_id, array $factura_data, array $options = []) {
+        $factura_id = (int) $factura_id;
+        if ($factura_id <= 0) {
+            return new WP_Error('not_found', 'Factura no encontrada');
+        }
+        if (!$this->acquire_factura_write_lock($factura_id)) {
+            return new WP_Error('locked', 'La factura se está actualizando. Reintentá en unos segundos.');
+        }
+        try {
+            return $this->merge_xml_into_factura_unlocked($factura_id, $factura_data, $options);
+        } finally {
+            $this->release_factura_write_lock($factura_id);
+        }
+    }
+
+    /**
+     * Cuerpo del merge XML. Llamar solo con lock de factura tomado.
+     *
+     * @return array|WP_Error
+     */
+    private function merge_xml_into_factura_unlocked($factura_id, array $factura_data, array $options = []) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         $factura_id = (int) $factura_id;
@@ -910,6 +959,26 @@ class Riverso_Invoice_Module {
      * @return array|WP_Error
      */
     public function merge_scan_into_factura($factura_id, array $factura_data, array $options = []) {
+        $factura_id = (int) $factura_id;
+        if ($factura_id <= 0) {
+            return new WP_Error('not_found', 'Factura no encontrada');
+        }
+        if (!$this->acquire_factura_write_lock($factura_id)) {
+            return new WP_Error('locked', 'La factura se está actualizando. Reintentá en unos segundos.');
+        }
+        try {
+            return $this->merge_scan_into_factura_unlocked($factura_id, $factura_data, $options);
+        } finally {
+            $this->release_factura_write_lock($factura_id);
+        }
+    }
+
+    /**
+     * Cuerpo del merge de escaneo. Llamar solo con lock de factura tomado.
+     *
+     * @return array|WP_Error
+     */
+    private function merge_scan_into_factura_unlocked($factura_id, array $factura_data, array $options = []) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         $factura_id = (int) $factura_id;
@@ -1068,6 +1137,16 @@ class Riverso_Invoice_Module {
         $prefix = $wpdb->prefix . 'riverso_';
         $factura_id = (int) $factura_id;
 
+        $wpdb->query('START TRANSACTION');
+        $locked_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}facturas WHERE id = %d FOR UPDATE",
+            $factura_id
+        ));
+        if ((int) $locked_id !== $factura_id) {
+            $wpdb->query('ROLLBACK');
+            return;
+        }
+
         $old_items = $wpdb->get_results($wpdb->prepare(
             "SELECT id, numero_linea, codigo_proveedor FROM {$prefix}factura_items WHERE factura_id = %d",
             $factura_id
@@ -1117,6 +1196,7 @@ class Riverso_Invoice_Module {
         }
         $this->update_invoice_status($factura_id);
         $this->sync_precio_folio_proceso_after_item_replace($factura_id, $old_items);
+        $wpdb->query('COMMIT');
     }
 
     /**
@@ -1333,6 +1413,234 @@ class Riverso_Invoice_Module {
                 ]
             );
         }
+    }
+
+    /**
+     * Clave de clon exacto: misma línea DTE + código + nombre + cantidad + precio.
+     */
+    private function factura_item_clone_key(array $item) {
+        return implode('|', [
+            (int) ($item['numero_linea'] ?? 0),
+            strtoupper(trim((string) ($item['codigo_proveedor'] ?? ''))),
+            mb_strtolower(trim((string) ($item['nombre'] ?? ''))),
+            number_format((float) ($item['cantidad'] ?? 0), 4, '.', ''),
+            number_format((float) ($item['precio_unitario'] ?? 0), 4, '.', ''),
+        ]);
+    }
+
+    /**
+     * Puntaje para elegir qué fila conservar cuando hay clones.
+     */
+    private function factura_item_keep_score(array $item) {
+        $score = 0;
+        if (trim((string) ($item['sku_local'] ?? '')) !== '') {
+            $score += 100;
+        }
+        if ((float) ($item['cantidad_recibida'] ?? 0) > 0) {
+            $score += 50;
+        }
+        if ((int) ($item['product_id'] ?? 0) > 0) {
+            $score += 10;
+        }
+        $score -= (int) ($item['id'] ?? 0) / 1000000;
+        return $score;
+    }
+
+    /**
+     * Elimina clones exactos de factura_items (carrera delete+insert del merge XML).
+     * Conserva la fila más completa y remapea cost_history, tareas e ítems omitidos.
+     *
+     * @param int  $factura_id 0 = todas las facturas con clones
+     * @param bool $apply      false = solo informar
+     * @return array{facturas:int,deleted:int,details:array,apply:bool}
+     */
+    public function dedupe_cloned_factura_items($factura_id = 0, $apply = true) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $factura_id = (int) $factura_id;
+        $apply = (bool) $apply;
+
+        if ($factura_id > 0) {
+            $factura_ids = [$factura_id];
+        } else {
+            $factura_ids = array_map('intval', $wpdb->get_col(
+                "SELECT factura_id
+                 FROM {$prefix}factura_items
+                 GROUP BY factura_id, numero_linea, codigo_proveedor, nombre, cantidad, precio_unitario
+                 HAVING COUNT(*) > 1"
+            ) ?: []);
+            $factura_ids = array_values(array_unique(array_filter($factura_ids)));
+        }
+
+        $summary = ['facturas' => 0, 'deleted' => 0, 'details' => [], 'apply' => $apply];
+        foreach ($factura_ids as $fid) {
+            $result = $this->dedupe_cloned_factura_items_one($fid, $apply);
+            if (($result['deleted'] ?? 0) > 0) {
+                $summary['facturas']++;
+                $summary['deleted'] += (int) $result['deleted'];
+                $summary['details'][] = $result;
+            }
+        }
+        return $summary;
+    }
+
+    /**
+     * @return array{factura_id:int,folio:string,deleted:int,kept:int,removed_ids:int[]}
+     */
+    private function dedupe_cloned_factura_items_one($factura_id, $apply = true) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $factura_id = (int) $factura_id;
+
+        $folio = (string) $wpdb->get_var($wpdb->prepare(
+            "SELECT folio FROM {$prefix}facturas WHERE id = %d",
+            $factura_id
+        ));
+
+        $items = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, numero_linea, codigo_proveedor, nombre, cantidad, precio_unitario,
+                    sku_local, product_id, cantidad_recibida
+             FROM {$prefix}factura_items
+             WHERE factura_id = %d
+             ORDER BY id ASC",
+            $factura_id
+        ), ARRAY_A) ?: [];
+
+        $groups = [];
+        foreach ($items as $item) {
+            $groups[$this->factura_item_clone_key($item)][] = $item;
+        }
+
+        $keep_ids = [];
+        $remove_ids = [];
+        foreach ($groups as $group) {
+            if (count($group) < 2) {
+                $keep_ids[] = (int) $group[0]['id'];
+                continue;
+            }
+            usort($group, function ($a, $b) {
+                return $this->factura_item_keep_score($b) <=> $this->factura_item_keep_score($a);
+            });
+            $keep_ids[] = (int) $group[0]['id'];
+            foreach (array_slice($group, 1) as $clone) {
+                $remove_ids[] = (int) $clone['id'];
+            }
+        }
+
+        $remove_ids = array_values(array_unique(array_filter($remove_ids)));
+        if (!$remove_ids) {
+            return [
+                'factura_id' => $factura_id,
+                'folio' => $folio,
+                'deleted' => 0,
+                'kept' => count($keep_ids),
+                'removed_ids' => [],
+            ];
+        }
+
+        $keep_by_remove = [];
+        foreach ($groups as $group) {
+            if (count($group) < 2) {
+                continue;
+            }
+            usort($group, function ($a, $b) {
+                return $this->factura_item_keep_score($b) <=> $this->factura_item_keep_score($a);
+            });
+            $keep = (int) $group[0]['id'];
+            foreach (array_slice($group, 1) as $clone) {
+                $keep_by_remove[(int) $clone['id']] = $keep;
+            }
+        }
+
+        $remaining = count($items) - count($remove_ids);
+        if (!$apply) {
+            return [
+                'factura_id' => $factura_id,
+                'folio' => $folio,
+                'deleted' => count($remove_ids),
+                'kept' => $remaining,
+                'removed_ids' => $remove_ids,
+            ];
+        }
+
+        $in = implode(',', $remove_ids);
+        $wpdb->query(
+            "DELETE FROM {$prefix}tareas
+             WHERE referencia_tipo = 'factura_item' AND referencia_id IN ({$in})"
+        );
+        $wpdb->query(
+            "DELETE FROM {$prefix}cost_history
+             WHERE source_type = 'invoice' AND source_item_id IN ({$in})"
+        );
+        $wpdb->query(
+            "DELETE FROM {$prefix}factura_items WHERE id IN ({$in}) AND factura_id = {$factura_id}"
+        );
+
+        $proceso = $wpdb->get_row($wpdb->prepare(
+            "SELECT items_omitidos_json FROM {$prefix}precio_folio_proceso WHERE factura_id = %d",
+            $factura_id
+        ), ARRAY_A);
+        if ($proceso && $proceso['items_omitidos_json']) {
+            $decoded = json_decode((string) $proceso['items_omitidos_json'], true);
+            if (is_array($decoded)) {
+                $remapped = [];
+                foreach ($decoded as $old_id) {
+                    $old_id = (int) $old_id;
+                    if (isset($keep_by_remove[$old_id])) {
+                        $remapped[] = $keep_by_remove[$old_id];
+                    } elseif (in_array($old_id, $keep_ids, true)) {
+                        $remapped[] = $old_id;
+                    }
+                }
+                $wpdb->update(
+                    "{$prefix}precio_folio_proceso",
+                    ['items_omitidos_json' => wp_json_encode(array_values(array_unique($remapped)))],
+                    ['factura_id' => $factura_id]
+                );
+            }
+        }
+
+        $remaining = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$prefix}factura_items WHERE factura_id = %d",
+            $factura_id
+        ));
+        $wpdb->update("{$prefix}facturas", ['items_total' => $remaining], ['id' => $factura_id]);
+
+        if (method_exists($this->intake(), 'prorate_shipping_costs')) {
+            $this->intake()->prorate_shipping_costs($factura_id);
+        }
+        $this->update_invoice_status($factura_id);
+
+        if (class_exists('Riverso_Folio_Price_Process_Service')) {
+            $svc = Riverso_Folio_Price_Process_Service::get_instance();
+            if (method_exists($svc, 'resolve_estado')) {
+                $svc->resolve_estado($factura_id);
+            }
+        }
+
+        if (class_exists('Riverso_Audit_Module')) {
+            Riverso_Audit_Module::get_instance()->log(
+                'invoice_items_deduped',
+                'invoice',
+                $factura_id,
+                null,
+                [
+                    'folio' => $folio,
+                    'deleted' => count($remove_ids),
+                    'kept' => $remaining,
+                    'removed_ids' => $remove_ids,
+                ],
+                sprintf('Ítems clonados eliminados en folio %s (%d filas)', $folio, count($remove_ids))
+            );
+        }
+
+        return [
+            'factura_id' => $factura_id,
+            'folio' => $folio,
+            'deleted' => count($remove_ids),
+            'kept' => $remaining,
+            'removed_ids' => $remove_ids,
+        ];
     }
 
     /**
@@ -2662,18 +2970,16 @@ class Riverso_Invoice_Module {
         );
 
         if ($new_sku && class_exists('Riverso_Task_Module')) {
-            $wpdb->update(
-                "{$prefix}tareas",
-                ['estado' => 'completada', 'completado_en' => current_time('mysql')],
-                [
-                    'tipo' => 'codigo_faltante',
-                    'referencia_tipo' => 'factura_item',
-                    'referencia_id' => $item_id,
-                    'estado' => 'pendiente',
-                ],
-                ['%s', '%s'],
-                ['%s', '%s', '%d', '%s']
-            );
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}tareas
+                 SET estado = 'completada', completado_en = %s
+                 WHERE tipo = 'codigo_faltante'
+                   AND referencia_tipo = 'factura_item'
+                   AND referencia_id = %d
+                   AND estado NOT IN ('completada', 'cancelada')",
+                current_time('mysql'),
+                $item_id
+            ));
         }
 
         if (class_exists('Riverso_POS_Audit')) {

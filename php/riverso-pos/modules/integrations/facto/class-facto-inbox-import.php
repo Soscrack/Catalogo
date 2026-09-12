@@ -444,6 +444,27 @@ class Riverso_Facto_Inbox_Import {
             return new WP_Error('no_inbox_id', 'Documento sin inbox_document_id');
         }
 
+        $lock_name = 'riverso_facto_inbox_' . $inbox_id;
+        $got = $wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s, %d)', $lock_name, 20));
+        if ((int) $got !== 1) {
+            return new WP_Error('locked', 'Inbox #' . $inbox_id . ' se está importando');
+        }
+
+        try {
+            return $this->import_single_document_locked($item, $force_reprocess, $inbox_id);
+        } finally {
+            $wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)', $lock_name));
+        }
+    }
+
+    /**
+     * Importa un DTE del inbox. Llamar solo con GET_LOCK del inbox tomado.
+     *
+     * @return array|WP_Error
+     */
+    private function import_single_document_locked(array $item, $force_reprocess, $inbox_id) {
+        global $wpdb;
+
         $existing_map = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$this->table('facto_inbox_map')} WHERE inbox_document_id = %d",
             $inbox_id

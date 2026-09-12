@@ -11,6 +11,7 @@
     var canManage = !!cfg.can_manage;
     var canApprove = !!cfg.can_approve;
     var canCreateLocal = !!cfg.can_create_local;
+    var canLinkSku = !!cfg.can_link_sku;
     var canAnswerFamily = !!cfg.can_answer_family;
     var canManageCompetencia = !!cfg.can_manage_competencia;
     var canViewBarcodes = !!cfg.can_view_barcodes;
@@ -50,6 +51,9 @@
     var pendingSaveCanal = null;
     /** Estado del modal 3a crear local + vincular. */
     var rpfCreateLocal = null;
+    /** Estado del modal buscar producto existente y vincular. */
+    var rpfSearchLink = null;
+    var rpfSearchLinkTimer = null;
     /** Estado del modal responder familia. */
     var rpfAnswerFamily = null;
 
@@ -657,9 +661,19 @@
             $('#rpf-blockers').hide().empty();
             return;
         }
+        var wasOpen = $('#rpf-blockers-help').prop('open') === true;
+        var n = blockers.length;
         var html = '<div class="notice notice-error inline rpf-blockers-notice">' +
-            '<p><strong>Hay que resolver esto antes de procesar precios</strong> — seguí los pasos en orden. ' +
-            'Cuando termines, pulsá <em>Ya resolví — actualizar</em>.</p>';
+            '<details class="rpf-blockers-help" id="rpf-blockers-help">' +
+            '<summary class="rpf-blockers-help-summary">' +
+            '<span class="dashicons dashicons-warning" aria-hidden="true"></span>' +
+            '<span class="rpf-blockers-help-title">Hay que resolver esto antes de procesar precios</span>' +
+            '<span class="rpf-blockers-count">' + n + '</span>' +
+            '<span class="rpf-blockers-help-hint"></span>' +
+            '</summary>' +
+            '<div class="rpf-blockers-help-body">' +
+            '<p>Seguí los pasos en orden. Cuando termines, pulsá <em>Ya resolví — actualizar</em>.</p>' +
+            '<div class="rpf-blockers-cards">';
         blockers.forEach(function (b, idx) {
             html += '<div class="rpf-blocker-card" data-tipo="' + esc(b.tipo || '') + '"' +
                 ' data-item="' + esc(b.item_id || '') + '"' +
@@ -680,7 +694,16 @@
                 html += '<ol class="rpf-blocker-pasos">';
                 b.pasos.forEach(function (p) {
                     html += '<li>';
-                    if (p.action === 'create_local' && canCreateLocal) {
+                    if (p.action === 'search_link' && canLinkSku) {
+                        html += '<button type="button" class="button button-small button-primary rpf-search-link-open"' +
+                            ' data-item="' + esc(b.item_id || '') + '"' +
+                            ' data-codigo="' + esc(b.codigo_proveedor || '') + '"' +
+                            ' data-nombre="' + esc(b.nombre || '') + '">' +
+                            esc(p.label || 'Buscar') + '</button>';
+                        if (p.url) {
+                            html += ' <a class="button button-small" href="' + esc(p.url) + '" target="_blank" rel="noopener">Hub</a>';
+                        }
+                    } else if (p.action === 'create_local' && canCreateLocal) {
                         html += '<button type="button" class="button button-small button-primary rpf-create-local-open"' +
                             ' data-item="' + esc(b.item_id || '') + '"' +
                             ' data-codigo="' + esc(b.codigo_proveedor || '') + '"' +
@@ -709,8 +732,11 @@
             }
             html += '</div>';
         });
-        html += '</div>';
+        html += '</div></div></details></div>';
         $('#rpf-blockers').html(html).show();
+        if (wasOpen) {
+            $('#rpf-blockers-help').attr('open', 'open');
+        }
     }
 
     function openFolioSession(id) {
@@ -998,6 +1024,12 @@
                 }
             } else if (blocked) {
                 saveBtn = '<span class="description">' + esc(ln.block_reason || 'Bloqueado') + '</span>';
+                if (canLinkSku && (ln.block_reason || '') === 'Sin SKU') {
+                    saveBtn += ' <button type="button" class="button button-small button-primary rpf-search-link-open"' +
+                        ' data-item="' + ln.item_id + '"' +
+                        ' data-codigo="' + esc(ln.codigo_proveedor || '') + '"' +
+                        ' data-nombre="' + esc(ln.nombre || ln.descripcion || '') + '">Buscar</button>';
+                }
                 if (canCreateLocal && (ln.block_reason || '') === 'Sin SKU') {
                     saveBtn += ' <button type="button" class="button button-small button-primary rpf-create-local-open"' +
                         ' data-item="' + ln.item_id + '"' +
@@ -3390,6 +3422,76 @@
         $(document).on('click', '#rpf-create-local-confirm', function () {
             submitCreateLocalAndLink();
         });
+        $(document).on('click', '.rpf-search-link-open', function () {
+            if (!canLinkSku || !rpfFacturaId) {
+                return;
+            }
+            openSearchLinkModal({
+                item_id: parseInt($(this).data('item'), 10) || 0,
+                codigo_proveedor: String($(this).data('codigo') || ''),
+                nombre: String($(this).data('nombre') || '')
+            });
+        });
+        $(document).on('click', '.rpf-search-link-close, .rpf-search-link-backdrop', function () {
+            closeSearchLinkModal();
+        });
+        $(document).on('click', '#rpf-search-link-cancel', function () {
+            if (!rpfSearchLink) {
+                return;
+            }
+            if (rpfSearchLink.step === 'confirm' || rpfSearchLink.step === 'detail') {
+                rpfSearchLink.selected = null;
+                rpfSearchLink.detail = null;
+                renderSearchLinkSearch();
+                return;
+            }
+            closeSearchLinkModal();
+        });
+        $(document).on('input', '#rpf-search-link-q', function () {
+            if (!rpfSearchLink || rpfSearchLink.step !== 'search') {
+                return;
+            }
+            rpfSearchLink.query = String($(this).val() || '');
+            scheduleSearchLinkFetch(true);
+        });
+        $(document).on('click', '#rpf-search-link-go', function () {
+            if (!rpfSearchLink) {
+                return;
+            }
+            rpfSearchLink.query = String($('#rpf-search-link-q').val() || '');
+            fetchSearchLinkResults(true);
+        });
+        $(document).on('click', '#rpf-search-link-more', function () {
+            fetchSearchLinkResults(false);
+        });
+        $(document).on('click', '.rpf-search-link-view', function () {
+            var id = parseInt($(this).data('id'), 10) || 0;
+            if (!id) {
+                return;
+            }
+            openSearchLinkDetail(id);
+        });
+        $(document).on('click', '.rpf-search-link-pick', function () {
+            var id = parseInt($(this).data('id'), 10) || 0;
+            var sku = String($(this).data('sku') || '');
+            var nombre = String($(this).data('nombre') || '');
+            if (!id || !sku) {
+                window.alert('Este producto no tiene SKU local para vincular. Usá Crear local o Vincular online.');
+                return;
+            }
+            rpfSearchLink.selected = {
+                id: id,
+                sku: sku,
+                nombre: nombre
+            };
+            renderSearchLinkConfirm();
+        });
+        $(document).on('click', '#rpf-search-link-confirm', function () {
+            submitSearchLink(false);
+        });
+        $(document).on('click', '#rpf-search-link-force', function () {
+            submitSearchLink(true);
+        });
         $(document).on('click', '.rpf-answer-family-open', function () {
             if (!canAnswerFamily) {
                 return;
@@ -3689,6 +3791,416 @@
             window.alert('Error de red');
             $btn.prop('disabled', false).text('Crear y vincular');
             $('#rpf-create-local-cancel').prop('disabled', false);
+        });
+    }
+
+    function completenessLabelRpf(cat) {
+        var labels = {
+            completo: 'Producto Completo',
+            publicado: 'Producto Publicado',
+            falta_online: 'Falta Online',
+            falta_codigo: 'Falta Código',
+            solo_online: 'Solo Online',
+            solo_online_publicado: 'Solo Online Publicado',
+            incompleto: 'Incompleto'
+        };
+        return labels[cat] || cat || '—';
+    }
+
+    function closeSearchLinkModal() {
+        if (rpfSearchLinkTimer) {
+            clearTimeout(rpfSearchLinkTimer);
+            rpfSearchLinkTimer = null;
+        }
+        rpfSearchLink = null;
+        $('#rpf-search-link-modal').hide().attr('aria-hidden', 'true');
+        $('#rpf-search-link-body').empty();
+        $('#rpf-search-link-footer').empty();
+        $('#rpf-search-link-title').text('Buscar y vincular SKU');
+    }
+
+    function openSearchLinkModal(opts) {
+        opts = opts || {};
+        var inv = (rpfSession && rpfSession.invoice) || {};
+        var itemId = opts.item_id || 0;
+        if (!itemId) {
+            window.alert('Ítem no válido');
+            return;
+        }
+        rpfSearchLink = {
+            step: 'search',
+            item_id: itemId,
+            codigo_proveedor: opts.codigo_proveedor || '',
+            descripcion: opts.nombre || '',
+            folio: inv.folio || '',
+            proveedor_nombre: inv.proveedor_nombre || '',
+            query: opts.codigo_proveedor || opts.nombre || '',
+            items: [],
+            total: 0,
+            offset: 0,
+            limit: 20,
+            loading: !!(opts.codigo_proveedor || opts.nombre),
+            selected: null,
+            detail: null,
+            conflictMessage: ''
+        };
+        $('#rpf-search-link-modal').css('display', 'flex').attr('aria-hidden', 'false');
+        renderSearchLinkSearch();
+        fetchSearchLinkResults(true);
+    }
+
+    function scheduleSearchLinkFetch(reset) {
+        if (rpfSearchLinkTimer) {
+            clearTimeout(rpfSearchLinkTimer);
+        }
+        rpfSearchLinkTimer = setTimeout(function () {
+            fetchSearchLinkResults(!!reset);
+        }, 300);
+    }
+
+    function fetchSearchLinkResults(reset) {
+        if (!rpfSearchLink) {
+            return;
+        }
+        var q = String(rpfSearchLink.query || '').trim();
+        if (reset) {
+            rpfSearchLink.offset = 0;
+            rpfSearchLink.items = [];
+            rpfSearchLink.total = 0;
+        }
+        if (q === '') {
+            rpfSearchLink.loading = false;
+            if (rpfSearchLink.step === 'search') {
+                renderSearchLinkSearch();
+            }
+            return;
+        }
+        rpfSearchLink.loading = true;
+        if (rpfSearchLink.step === 'search') {
+            renderSearchLinkSearch();
+        }
+        var reqOffset = rpfSearchLink.offset;
+        var reqQuery = q;
+        post('riverso_products_list', {
+            search: q,
+            status: 'active',
+            completeness: 'todos',
+            offset: reqOffset,
+            limit: rpfSearchLink.limit
+        }).done(function (res) {
+            if (!rpfSearchLink || String(rpfSearchLink.query || '').trim() !== reqQuery) {
+                return;
+            }
+            rpfSearchLink.loading = false;
+            if (!res || !res.success) {
+                window.alert((res && res.data && res.data.message) || 'No se pudo buscar');
+                if (rpfSearchLink.step === 'search') {
+                    renderSearchLinkSearch();
+                }
+                return;
+            }
+            var data = res.data || {};
+            var batch = data.items || [];
+            if (reqOffset === 0) {
+                rpfSearchLink.items = batch;
+            } else {
+                rpfSearchLink.items = rpfSearchLink.items.concat(batch);
+            }
+            rpfSearchLink.total = parseInt(data.total, 10) || rpfSearchLink.items.length;
+            rpfSearchLink.offset = rpfSearchLink.items.length;
+            if (rpfSearchLink.step === 'search') {
+                renderSearchLinkSearch();
+            }
+        }).fail(function () {
+            if (!rpfSearchLink) {
+                return;
+            }
+            rpfSearchLink.loading = false;
+            window.alert('Error de red al buscar');
+            if (rpfSearchLink.step === 'search') {
+                renderSearchLinkSearch();
+            }
+        });
+    }
+
+    function renderSearchLinkSearch() {
+        if (!rpfSearchLink) {
+            return;
+        }
+        rpfSearchLink.step = 'search';
+        rpfSearchLink.conflictMessage = '';
+        $('#rpf-search-link-title').text('Buscar y vincular SKU');
+
+        if (!$('#rpf-search-link-q').length) {
+            var hubLinkInit = '';
+            if (productsAdminUrl) {
+                hubLinkInit = '<a class="button" href="#" id="rpf-search-link-hub" target="_blank" rel="noopener">Abrir en Hub</a>';
+            }
+            $('#rpf-search-link-body').html(
+                '<dl class="rpf-create-local-meta">' +
+                '<dt>Proveedor</dt><dd>' + esc(rpfSearchLink.proveedor_nombre || '—') + '</dd>' +
+                '<dt>Folio</dt><dd><code>' + esc(rpfSearchLink.folio || '—') + '</code></dd>' +
+                '<dt>Código a vincular</dt><dd><code>' + esc(rpfSearchLink.codigo_proveedor || '—') + '</code></dd>' +
+                '<dt>Detalle ítem</dt><dd>' + esc(rpfSearchLink.descripcion || '—') + '</dd>' +
+                '</dl>' +
+                '<div class="rpf-create-local-field rpf-search-link-field">' +
+                '<label for="rpf-search-link-q">Buscar (código proveedor, barcode, nombre o SKU)</label>' +
+                '<div class="rpf-search-link-qrow">' +
+                '<input type="text" id="rpf-search-link-q" class="large-text" autocomplete="off" ' +
+                'value="' + esc(rpfSearchLink.query || '') + '">' +
+                '<button type="button" class="button" id="rpf-search-link-go">Buscar</button>' +
+                '</div>' +
+                '<p class="description">Se prellena con el código proveedor del ítem; podés editarlo.</p>' +
+                '</div>' +
+                '<div class="rpf-search-link-table-wrap">' +
+                '<table class="widefat striped rpf-search-link-table">' +
+                '<thead><tr>' +
+                '<th>ID</th><th>SKU</th><th>Nombre</th><th>Completitud</th><th>Código proveedor</th><th>Acciones</th>' +
+                '</tr></thead>' +
+                '<tbody id="rpf-search-link-tbody"></tbody>' +
+                '</table></div>' +
+                '<p class="description" id="rpf-search-link-count"></p>'
+            );
+            $('#rpf-search-link-footer').html(
+                '<button type="button" class="button" id="rpf-search-link-cancel">Cerrar</button>' +
+                '<span id="rpf-search-link-more-wrap"></span>' +
+                hubLinkInit
+            );
+            setTimeout(function () {
+                var $q = $('#rpf-search-link-q');
+                if ($q.length) {
+                    $q.trigger('focus');
+                }
+            }, 50);
+        } else {
+            if (String($('#rpf-search-link-q').val() || '') !== String(rpfSearchLink.query || '')) {
+                $('#rpf-search-link-q').val(rpfSearchLink.query || '');
+            }
+        }
+
+        updateSearchLinkHubHref();
+        renderSearchLinkTable();
+    }
+
+    function updateSearchLinkHubHref() {
+        var $hub = $('#rpf-search-link-hub');
+        if (!$hub.length || !productsAdminUrl || !rpfSearchLink) {
+            return;
+        }
+        var hubUrl = productsAdminUrl +
+            (productsAdminUrl.indexOf('?') >= 0 ? '&' : '?') +
+            'from=precio-folio&need=sku&search=' + encodeURIComponent(rpfSearchLink.query || '');
+        $hub.attr('href', hubUrl);
+    }
+
+    function renderSearchLinkTable() {
+        if (!rpfSearchLink) {
+            return;
+        }
+        var rows = '';
+        if (rpfSearchLink.loading && !rpfSearchLink.items.length) {
+            rows = '<tr><td colspan="6">Buscando…</td></tr>';
+        } else if (!String(rpfSearchLink.query || '').trim()) {
+            rows = '<tr><td colspan="6">Escribí código proveedor, barcode o nombre.</td></tr>';
+        } else if (!rpfSearchLink.items.length) {
+            rows = '<tr><td colspan="6">Sin resultados.</td></tr>';
+        } else {
+            rows = rpfSearchLink.items.map(function (it) {
+                var sku = String(it.sku_local || it.canonical_sku || '').trim();
+                var cat = it.completeness_category || 'incompleto';
+                var canPick = !!sku;
+                var actions = '<button type="button" class="button button-small rpf-search-link-view" data-id="' +
+                    esc(String(it.id || '')) + '">Ver</button>';
+                if (canLinkSku && canPick) {
+                    actions += ' <button type="button" class="button button-small button-primary rpf-search-link-pick"' +
+                        ' data-id="' + esc(String(it.id || '')) + '"' +
+                        ' data-sku="' + esc(sku) + '"' +
+                        ' data-nombre="' + esc(it.nombre_canonico || '') + '">Vincular</button>';
+                } else if (!canPick) {
+                    actions += ' <span class="description">Sin SKU local</span>';
+                }
+                return '<tr>' +
+                    '<td>' + esc(String(it.id || '')) + '</td>' +
+                    '<td>' + (sku ? '<code>' + esc(sku) + '</code>' : '—') + '</td>' +
+                    '<td>' + esc(it.nombre_canonico || '—') + '</td>' +
+                    '<td><span class="rpf-completeness-badge ' + esc(cat) + '">' +
+                    esc(completenessLabelRpf(cat)) + '</span></td>' +
+                    '<td><code>' + esc(it.codigos_proveedor || '—') + '</code></td>' +
+                    '<td class="rpf-search-link-actions">' + actions + '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+        $('#rpf-search-link-tbody').html(rows);
+        if (rpfSearchLink.total) {
+            $('#rpf-search-link-count').text(
+                'Mostrando ' + rpfSearchLink.items.length + ' de ' + rpfSearchLink.total
+            );
+        } else {
+            $('#rpf-search-link-count').text('');
+        }
+        var moreHtml = '';
+        if (rpfSearchLink.items.length < rpfSearchLink.total) {
+            moreHtml = '<button type="button" class="button" id="rpf-search-link-more"' +
+                (rpfSearchLink.loading ? ' disabled' : '') + '>Cargar más</button>';
+        }
+        $('#rpf-search-link-more-wrap').html(moreHtml);
+    }
+
+    function openSearchLinkDetail(productId) {
+        if (!rpfSearchLink || !productId) {
+            return;
+        }
+        rpfSearchLink.step = 'detail';
+        rpfSearchLink.detail = null;
+        $('#rpf-search-link-title').text('Detalle del producto');
+        $('#rpf-search-link-body').html('<p>Cargando detalle…</p>');
+        $('#rpf-search-link-footer').html(
+            '<button type="button" class="button" id="rpf-search-link-cancel">Volver</button>'
+        );
+        post('riverso_products_get', { id: productId }).done(function (res) {
+            if (!rpfSearchLink || rpfSearchLink.step !== 'detail') {
+                return;
+            }
+            if (!res || !res.success || !res.data || !res.data.item) {
+                window.alert((res && res.data && res.data.message) || 'No se pudo cargar el producto');
+                renderSearchLinkSearch();
+                return;
+            }
+            rpfSearchLink.detail = res.data.item;
+            renderSearchLinkDetail();
+        }).fail(function () {
+            window.alert('Error de red');
+            if (rpfSearchLink) {
+                renderSearchLinkSearch();
+            }
+        });
+    }
+
+    function renderSearchLinkDetail() {
+        if (!rpfSearchLink || !rpfSearchLink.detail) {
+            return;
+        }
+        var it = rpfSearchLink.detail;
+        var sku = String(it.canonical_sku || it.sku_local || '').trim();
+        var skuOnline = String(
+            it.sku_online ||
+            (it.online_details && it.online_details.sku) ||
+            ''
+        ).trim();
+        var cat = it.completeness_category || 'incompleto';
+        var codes = (it.proveedores || []).map(function (p) {
+            return (p.codigo_proveedor || '') +
+                (p.proveedor_nombre ? ' (' + p.proveedor_nombre + ')' : '');
+        }).filter(Boolean).join(', ') || (it.codigos_proveedor || '—');
+        var barcodes = (it.barcodes || []).map(function (b) {
+            return b.codigo || b.code || '';
+        }).filter(Boolean).join(', ') || '—';
+        var hubUrl = productsAdminUrl
+            ? (productsAdminUrl + (productsAdminUrl.indexOf('?') >= 0 ? '&' : '?') +
+                'action=detail&id=' + encodeURIComponent(String(it.id || '')))
+            : '';
+        var footer = '<button type="button" class="button" id="rpf-search-link-cancel">Volver</button>';
+        if (hubUrl) {
+            footer += '<a class="button" href="' + esc(hubUrl) + '" target="_blank" rel="noopener">Abrir en Hub</a>';
+        }
+        if (canLinkSku && sku) {
+            footer += '<button type="button" class="button button-primary rpf-search-link-pick"' +
+                ' data-id="' + esc(String(it.id || '')) + '"' +
+                ' data-sku="' + esc(sku) + '"' +
+                ' data-nombre="' + esc(it.nombre_canonico || '') + '">Vincular</button>';
+        } else if (!sku) {
+            footer += '<span class="description">Sin SKU local — usá Crear local o Vincular online</span>';
+        }
+        $('#rpf-search-link-body').html(
+            '<dl class="rpf-create-local-meta">' +
+            '<dt>ID</dt><dd>' + esc(String(it.id || '—')) + '</dd>' +
+            '<dt>Nombre</dt><dd>' + esc(it.nombre_canonico || '—') + '</dd>' +
+            '<dt>SKU local</dt><dd><code>' + esc(sku || '—') + '</code></dd>' +
+            '<dt>SKU online</dt><dd><code>' + esc(skuOnline || '—') + '</code></dd>' +
+            '<dt>Completitud</dt><dd><span class="rpf-completeness-badge ' + esc(cat) + '">' +
+            esc(completenessLabelRpf(cat)) + '</span></dd>' +
+            '<dt>Códigos proveedor</dt><dd><code>' + esc(codes) + '</code></dd>' +
+            '<dt>Barcodes</dt><dd><code>' + esc(barcodes) + '</code></dd>' +
+            '</dl>'
+        );
+        $('#rpf-search-link-footer').html(footer);
+    }
+
+    function renderSearchLinkConfirm() {
+        if (!rpfSearchLink || !rpfSearchLink.selected) {
+            return;
+        }
+        rpfSearchLink.step = 'confirm';
+        var sel = rpfSearchLink.selected;
+        var conflictBlock = rpfSearchLink.conflictMessage
+            ? '<div class="notice notice-warning inline"><p>' + esc(rpfSearchLink.conflictMessage) + '</p></div>'
+            : '';
+        $('#rpf-search-link-title').text('Confirmar vínculo');
+        $('#rpf-search-link-body').html(
+            conflictBlock +
+            '<p>Se va a vincular el código del proveedor de este folio con el SKU seleccionado:</p>' +
+            '<ul class="rpf-create-local-confirm">' +
+            '<li><strong>Proveedor:</strong> ' + esc(rpfSearchLink.proveedor_nombre || '—') + '</li>' +
+            '<li><strong>Folio:</strong> <code>' + esc(rpfSearchLink.folio || '—') + '</code></li>' +
+            '<li><strong>Código proveedor:</strong> <code>' + esc(rpfSearchLink.codigo_proveedor || '—') + '</code></li>' +
+            '<li><strong>SKU:</strong> <code>' + esc(sel.sku || '—') + '</code></li>' +
+            '<li><strong>Producto:</strong> ' + esc(sel.nombre || '—') + '</li>' +
+            '<li><strong>Detalle ítem:</strong> ' + esc(rpfSearchLink.descripcion || '—') + '</li>' +
+            '</ul>' +
+            '<p class="description">Se guardará el mapeo y se aplicará a ítems posteriores del mismo código.</p>' +
+            '<p class="rpf-create-local-sure">¿Estás seguro?</p>'
+        );
+        var footer = '<button type="button" class="button" id="rpf-search-link-cancel">Cancelar</button>';
+        if (rpfSearchLink.conflictMessage) {
+            footer += '<button type="button" class="button button-primary" id="rpf-search-link-force">' +
+                'Reasignar de todas formas</button>';
+        } else {
+            footer += '<button type="button" class="button button-primary" id="rpf-search-link-confirm">' +
+                'Vincular</button>';
+        }
+        $('#rpf-search-link-footer').html(footer);
+    }
+
+    function submitSearchLink(force) {
+        if (!rpfSearchLink || !rpfSearchLink.selected || !rpfFacturaId) {
+            return;
+        }
+        var sel = rpfSearchLink.selected;
+        var $btn = force ? $('#rpf-search-link-force') : $('#rpf-search-link-confirm');
+        $btn.prop('disabled', true).text(force ? 'Reasignando…' : 'Vinculando…');
+        $('#rpf-search-link-cancel').prop('disabled', true);
+        var payload = {
+            item_id: rpfSearchLink.item_id,
+            sku_local: sel.sku,
+            crear_mapeo: 1
+        };
+        if (force) {
+            payload.force = 1;
+        }
+        post('riverso_link_code', payload).done(function (res) {
+            if (res && res.success) {
+                var msg = res.data && res.data.message;
+                closeSearchLinkModal();
+                if (msg && /ítems posteriores/.test(msg)) {
+                    window.alert(msg);
+                }
+                refreshSession();
+                return;
+            }
+            var data = (res && res.data) || {};
+            if (data.conflict && !force) {
+                rpfSearchLink.conflictMessage = data.message ||
+                    'Conflicto de SKU. ¿Reasignar de todas formas? El dueño anterior perderá este SKU.';
+                renderSearchLinkConfirm();
+                return;
+            }
+            window.alert(data.message || 'No se pudo vincular');
+            $btn.prop('disabled', false).text(force ? 'Reasignar de todas formas' : 'Vincular');
+            $('#rpf-search-link-cancel').prop('disabled', false);
+        }).fail(function () {
+            window.alert('Error de red');
+            $btn.prop('disabled', false).text(force ? 'Reasignar de todas formas' : 'Vincular');
+            $('#rpf-search-link-cancel').prop('disabled', false);
         });
     }
 

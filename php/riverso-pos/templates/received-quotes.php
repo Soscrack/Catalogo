@@ -12,6 +12,7 @@ $estados = Riverso_POS_Received_Quote_Module::ESTADOS;
 $match_status = Riverso_POS_Received_Quote_Module::MATCH_STATUS;
 $decision_status = Riverso_POS_Received_Quote_Module::DECISION_STATUS;
 $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
+$doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
 ?>
 
 <div class="wrap riverso-pos-wrap">
@@ -59,6 +60,16 @@ $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
                     <span class="stat-label">Aprobadas</span>
                 </div>
             </div>
+            <div class="stat-card stat-card-clickable" id="stat-card-confirmar" title="Ver posibles cotizaciones por confirmar">
+                <div class="stat-icon bg-yellow"><span class="dashicons dashicons-warning"></span></div>
+                <div class="stat-info">
+                    <span class="stat-value" id="stat-por-confirmar">0</span>
+                    <span class="stat-label">Por confirmar</span>
+                </div>
+            </div>
+        </div>
+        <div id="aviso-posibles-pendientes" class="notice notice-warning" style="display:none;margin:0 0 16px;">
+            <p></p>
         </div>
 
         <!-- Filtros -->
@@ -70,6 +81,11 @@ $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
                     <?php foreach ($estados as $key => $label): ?>
                         <option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></option>
                     <?php endforeach; ?>
+                </select>
+                <select id="filtro-tipo-doc">
+                    <option value="todo">Todo</option>
+                    <option value="cotizacion" selected>Cotizaciones</option>
+                    <option value="posible_cotizacion">Posibles cotizaciones</option>
                 </select>
                 <select id="filtro-fuente">
                     <option value="">Todas las fuentes</option>
@@ -98,14 +114,15 @@ $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
                     <th>Nº Documento</th>
                     <th>Fecha</th>
                     <th>Tipo</th>
+                    <th>Fuente</th>
                     <th style="width:100px">Ítems</th>
                     <th style="text-align:right">Total</th>
                     <th style="width:120px">Estado</th>
-                    <th style="width:150px">Acciones</th>
+                    <th style="width:220px">Acciones</th>
                 </tr>
             </thead>
             <tbody id="lista-cotizaciones">
-                <tr><td colspan="9" class="loading">Cargando cotizaciones...</td></tr>
+                <tr><td colspan="10" class="loading">Cargando cotizaciones...</td></tr>
             </tbody>
         </table>
     </div>
@@ -119,6 +136,16 @@ $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
             <h2 id="titulo-cotizacion">Nueva Cotización</h2>
             <div class="header-actions">
                 <span class="estado-badge" id="badge-estado"></span>
+                <span class="tipo-doc-badge" id="badge-tipo-doc"></span>
+                <span class="tipo-confirm-aviso" id="aviso-confirmar-tipo" style="display:none;">Por confirmar</span>
+                <select id="select-tipo-doc" style="display:none;">
+                    <?php foreach ($doc_types as $key => $label): ?>
+                        <option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="button" class="button" id="btn-confirmar-tipo" style="display:none;">
+                    <span class="dashicons dashicons-yes"></span> Confirmar tipo
+                </button>
                 <a class="button" id="btn-ver-correo" href="#" target="_blank" rel="noopener" style="display:none;">
                     <span class="dashicons dashicons-email-alt"></span> Ver correo
                 </a>
@@ -126,6 +153,11 @@ $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
                     <span class="dashicons dashicons-paperclip"></span> Ver adjuntos
                 </button>
             </div>
+        </div>
+        <div id="banner-por-confirmar" class="quote-tipo-banner" style="display:none;">
+            <strong>Por confirmar.</strong>
+            Una persona debe revisar este documento (posible cotización, total 0 o origen automático).
+            Elija el tipo y pulse <em>Confirmar tipo</em> en esta misma barra.
         </div>
 
         <!-- Datos generales -->
@@ -502,9 +534,15 @@ $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
 <style>
 .riverso-stats-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 15px;
     margin-bottom: 20px;
+}
+.stat-card-clickable {
+    cursor: pointer;
+}
+.stat-card-clickable:hover {
+    border-color: #dba617;
 }
 .stat-card {
     background: #fff;
@@ -662,6 +700,37 @@ $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
 .estado-rejected { background: #fee2e2; color: #991b1b; }
 .estado-converted_to_expected { background: #ddd6fe; color: #5b21b6; }
 .estado-archived { background: #e5e7eb; color: #374151; }
+
+.tipo-doc-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    background: #dbeafe;
+    color: #1e40af;
+}
+.tipo-doc-badge.tipo-posible_cotizacion {
+    background: #fef3c7;
+    color: #92400e;
+}
+.tipo-confirm-aviso {
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #fef3c7;
+    color: #92400e;
+}
+tr.quote-por-confirmar {
+    background: #fffbeb;
+}
+.quote-tipo-banner {
+    margin: 12px 0 16px;
+    padding: 12px 14px;
+    border-left: 4px solid #dba617;
+    background: #fff8e5;
+    color: #614200;
+}
 
 .match-badge {
     padding: 2px 8px;
@@ -1069,6 +1138,7 @@ jQuery(document).ready(function($) {
             nonce: nonce,
             estado: $('#filtro-estado').val(),
             tipo_fuente: $('#filtro-fuente').val(),
+            tipo_doc: $('#filtro-tipo-doc').val() || 'cotizacion',
             proveedor_id: $('#filtro-proveedor').val(),
             buscar: $('#filtro-buscar').val(),
             fecha_desde: $('#filtro-desde').val(),
@@ -1090,33 +1160,56 @@ jQuery(document).ready(function($) {
         $('#stat-activas').text(stats.activas || 0);
         $('#stat-revision').text(stats.en_revision || 0);
         $('#stat-aprobadas').text(stats.aprobadas || 0);
+        const pendientes = parseInt(stats.por_confirmar || 0, 10) || 0;
+        $('#stat-por-confirmar').text(pendientes);
+        if (pendientes > 0) {
+            $('#aviso-posibles-pendientes').show().find('p').html(
+                'Hay <strong>' + pendientes + '</strong> documento(s) <strong>por confirmar</strong> (correo o WhatsApp sin adjunto, o tipo pendiente). ' +
+                'El filtro por defecto muestra solo cotizaciones confirmadas. ' +
+                '<a href="#" id="link-ver-posibles">Ver posibles cotizaciones</a> y resuélvalas con <em>Confirmar tipo</em> en el detalle o en la lista.'
+            );
+        } else {
+            $('#aviso-posibles-pendientes').hide();
+        }
     }
 
     function renderCotizaciones(quotes) {
         const tbody = $('#lista-cotizaciones');
         if (!quotes.length) {
-            tbody.html('<tr><td colspan="9" class="empty">No hay cotizaciones</td></tr>');
+            tbody.html('<tr><td colspan="10" class="empty">No hay cotizaciones</td></tr>');
             return;
         }
 
         const estados = <?php echo json_encode($estados); ?>;
         const sourceTypes = <?php echo json_encode($source_types); ?>;
+        const docTypes = <?php echo json_encode($doc_types); ?>;
 
         let html = '';
         quotes.forEach(q => {
             const matchInfo = `${q.items_matched}/${q.total_items}`;
             const pendingBadge = q.items_pending > 0 ? `<span class="match-badge match-pending">${q.items_pending} pend.</span>` : '';
+            const tipoKey = q.tipo_doc || 'cotizacion';
+            const tipoLabel = docTypes[tipoKey] || tipoKey;
+            const porConfirmar = String(q.tipo_confirmado) === '0';
+            const confirmAviso = porConfirmar
+                ? ' <span class="tipo-confirm-aviso">Por confirmar</span>'
+                : '';
+            const confirmBtn = porConfirmar
+                ? '<button class="button button-small button-primary btn-confirmar-tipo-lista" title="Confirmar como cotización">Confirmar tipo</button> '
+                : '';
             
-            html += `<tr data-id="${q.id}">
+            html += `<tr data-id="${q.id}" class="${porConfirmar ? 'quote-por-confirmar' : ''}">
                 <td>${q.id}</td>
                 <td>${q.proveedor_nombre || '<em>Sin proveedor</em>'}</td>
                 <td>${q.numero_documento || '-'}</td>
                 <td>${q.fecha_documento || '-'}</td>
-                <td>${sourceTypes[q.tipo_fuente] || q.tipo_fuente}</td>
+                <td><span class="tipo-doc-badge tipo-${tipoKey}">${tipoLabel}</span>${confirmAviso}</td>
+                <td>${sourceTypes[q.tipo_fuente] || q.tipo_fuente || '—'}</td>
                 <td>${matchInfo} ${pendingBadge}</td>
                 <td style="text-align:right">${formatMoney(q.total)}</td>
                 <td><span class="estado-badge estado-${q.estado}">${estados[q.estado] || q.estado}</span></td>
                 <td>
+                    ${confirmBtn}
                     <button class="button button-small btn-ver" title="Ver/Editar">
                         <span class="dashicons dashicons-edit"></span>
                     </button>
@@ -1177,6 +1270,7 @@ jQuery(document).ready(function($) {
             
             const estados = <?php echo json_encode($estados); ?>;
             $('#badge-estado').text(estados[q.estado] || q.estado).attr('class', 'estado-badge estado-' + q.estado);
+            syncTipoDocUi(q);
             
             if (q.archivo_original) {
                 $('#archivo-info').html(`<span class="dashicons dashicons-media-document"></span> ${q.archivo_original}`);
@@ -1188,8 +1282,8 @@ jQuery(document).ready(function($) {
             $('#total-impuesto').text(formatMoney(q.impuesto));
             $('#total-total').text(formatMoney(q.total));
             
-            // Mostrar botón aprobar si está en revisión
-            if (q.estado === 'under_review' || q.estado === 'parsed') {
+            const esCotizacion = (q.tipo_doc || 'cotizacion') === 'cotizacion' && !necesitaConfirmacionHumana(q);
+            if (esCotizacion && (q.estado === 'under_review' || q.estado === 'parsed')) {
                 $('#btn-aprobar').show();
             } else {
                 $('#btn-aprobar').hide();
@@ -1223,6 +1317,7 @@ jQuery(document).ready(function($) {
             $('#btn-convertir-oc').hide();
             $('#btn-ver-correo').hide().attr('href', '#');
             $('#btn-ver-adjuntos').hide();
+            syncTipoDocUi(null);
             origenActual = null;
         }
         
@@ -1230,6 +1325,22 @@ jQuery(document).ready(function($) {
         
         $('#vista-lista').hide();
         $('#vista-detalle').show();
+    }
+
+    function necesitaConfirmacionHumana(q) {
+        return !!q && (q.tipo_doc === 'posible_cotizacion' || String(q.tipo_confirmado) === '0');
+    }
+
+    function syncTipoDocUi(q) {
+        const docTypes = <?php echo json_encode($doc_types); ?>;
+        const tipo = q ? (q.tipo_doc || 'cotizacion') : 'cotizacion';
+        const pending = necesitaConfirmacionHumana(q);
+        $('#badge-tipo-doc').text(docTypes[tipo] || tipo).attr('class', 'tipo-doc-badge tipo-' + tipo).toggle(!!q);
+        $('#aviso-confirmar-tipo').toggle(pending);
+        $('#banner-por-confirmar').toggle(pending);
+        $('#select-tipo-doc').val(tipo).toggle(!!q);
+        $('#btn-confirmar-tipo').toggle(pending);
+        $('#btn-ver-comparacion').prop('disabled', pending);
     }
 
     function renderItems() {
@@ -1293,13 +1404,46 @@ jQuery(document).ready(function($) {
     $('#btn-filtrar').on('click', cargarCotizaciones);
     $('#btn-limpiar-filtros').on('click', function() {
         $('#filtro-buscar, #filtro-estado, #filtro-fuente, #filtro-proveedor, #filtro-desde, #filtro-hasta').val('');
+        $('#filtro-tipo-doc').val('cotizacion');
         cargarCotizaciones();
     });
 
     // Click en tabla
+    function confirmarTipoCotizacion(id, recargarLista) {
+        if (!id) return;
+        if (!confirm('¿Confirmar que este documento es una cotización?')) return;
+        $.post(ajaxurl, {
+            action: 'riverso_confirm_received_quote_tipo',
+            nonce: nonce,
+            id: id
+        }, function(r) {
+            if (!r.success) { alert(r.data.message); return; }
+            if (recargarLista) {
+                cargarCotizaciones();
+            } else {
+                verCotizacion(id);
+            }
+        });
+    }
+
+    $('#stat-card-confirmar').on('click', function() {
+        $('#filtro-tipo-doc').val('posible_cotizacion');
+        cargarCotizaciones();
+    });
+    $(document).on('click', '#link-ver-posibles', function(e) {
+        e.preventDefault();
+        $('#filtro-tipo-doc').val('posible_cotizacion');
+        cargarCotizaciones();
+    });
+
     $('#lista-cotizaciones').on('click', '.btn-ver', function() {
         const id = $(this).closest('tr').data('id');
         verCotizacion(id);
+    });
+
+    $('#lista-cotizaciones').on('click', '.btn-confirmar-tipo-lista', function() {
+        const id = $(this).closest('tr').data('id');
+        confirmarTipoCotizacion(id, true);
     });
 
     $('#lista-cotizaciones').on('click', '.btn-eliminar', function() {
@@ -1544,6 +1688,10 @@ jQuery(document).ready(function($) {
 
     // Aprobar cotización
     $('#btn-aprobar').on('click', function() {
+        if (necesitaConfirmacionHumana(cotizacionActual)) {
+            alert('Confirme el tipo como cotización antes de aprobar.');
+            return;
+        }
         if (!confirm('¿Aprobar esta cotización? Todos los ítems deben tener una decisión.')) return;
 
         $.post(ajaxurl, {
@@ -1734,7 +1882,43 @@ jQuery(document).ready(function($) {
     }
 
     $('#btn-ver-comparacion').on('click', function() {
+        if (necesitaConfirmacionHumana(cotizacionActual)) {
+            alert('Confirme el tipo como cotización antes de evaluar costos.');
+            return;
+        }
         loadQuoteEval();
+    });
+
+    $('#btn-confirmar-tipo').on('click', function() {
+        const id = $('#cotizacion-id').val();
+        if (!id || id === '0') return;
+        confirmarTipoCotizacion(id, false);
+    });
+
+    $('#select-tipo-doc').on('change', function() {
+        const id = $('#cotizacion-id').val();
+        const tipo = $(this).val();
+        if (!id || id === '0' || !tipo) return;
+        const labels = <?php echo json_encode($doc_types); ?>;
+        const actual = cotizacionActual ? (cotizacionActual.tipo_doc || 'cotizacion') : 'cotizacion';
+        if (tipo === actual) return;
+        if (!confirm('¿Cambiar el tipo a "' + (labels[tipo] || tipo) + '"?')) {
+            $(this).val(actual);
+            return;
+        }
+        $.post(ajaxurl, {
+            action: 'riverso_set_received_quote_tipo_doc',
+            nonce: nonce,
+            id: id,
+            tipo_doc: tipo
+        }, function(r) {
+            if (!r.success) {
+                alert(r.data.message);
+                $('#select-tipo-doc').val(actual);
+                return;
+            }
+            verCotizacion(id);
+        });
     });
 
     $('#quote-eval-view-toggle').on('click', '.rce-view-btn', function() {
@@ -1959,7 +2143,7 @@ jQuery(document).ready(function($) {
         });
     });
     $('#btn-rechazar').on('click', function() {
-        if (!confirm('¿Rechazar esta cotización?')) return;
+        if (!confirm('¿Rechazar este documento? No se usará como cotización.')) return;
         $.post(ajaxurl, { action: 'riverso_reject_received_quote', nonce: nonce, id: $('#cotizacion-id').val() }, function(r) {
             if (r.success) verCotizacion($('#cotizacion-id').val());
             else alert(r.data.message);
@@ -2047,6 +2231,11 @@ jQuery(document).ready(function($) {
     $('<style>.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }</style>').appendTo('head');
 
     // Init
-    cargarCotizaciones();
+    const quoteFromUrl = parseInt(new URLSearchParams(window.location.search).get('quote') || '0', 10);
+    if (quoteFromUrl > 0) {
+        verCotizacion(quoteFromUrl);
+    } else {
+        cargarCotizaciones();
+    }
 });
 </script>

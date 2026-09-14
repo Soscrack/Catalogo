@@ -189,7 +189,15 @@ class Riverso_Messaging_Module {
         $sql = "SELECT t.*, p.nombre AS proveedor_nombre,
                     (SELECT COUNT(*) FROM {$p}cotizaciones_recibidas c
                      INNER JOIN {$p}messaging_messages mq ON mq.id = c.origen_mensaje_id
-                     WHERE mq.thread_id = t.id) AS quote_count
+                     WHERE mq.thread_id = t.id) AS quote_count,
+                    (SELECT c2.tipo_doc FROM {$p}cotizaciones_recibidas c2
+                     INNER JOIN {$p}messaging_messages mq2 ON mq2.id = c2.origen_mensaje_id
+                     WHERE mq2.thread_id = t.id
+                     ORDER BY c2.id DESC LIMIT 1) AS quote_tipo_doc,
+                    (SELECT c3.tipo_confirmado FROM {$p}cotizaciones_recibidas c3
+                     INNER JOIN {$p}messaging_messages mq3 ON mq3.id = c3.origen_mensaje_id
+                     WHERE mq3.thread_id = t.id
+                     ORDER BY c3.id DESC LIMIT 1) AS quote_tipo_confirmado
                 FROM {$p}messaging_threads t
                 LEFT JOIN {$p}proveedores p ON p.id = t.proveedor_id
                 WHERE " . implode(' AND ', $where) . '
@@ -236,7 +244,7 @@ class Riverso_Messaging_Module {
         unset($m);
 
         $quotes = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, numero_documento, estado, tipo_fuente, fecha_documento, total, origen_mensaje_id
+            "SELECT id, numero_documento, estado, tipo_fuente, tipo_doc, tipo_confirmado, fecha_documento, total, origen_mensaje_id
              FROM {$p}cotizaciones_recibidas WHERE origen_mensaje_id IN (
                 SELECT id FROM {$p}messaging_messages WHERE thread_id = %d
              ) ORDER BY id DESC",
@@ -246,7 +254,7 @@ class Riverso_Messaging_Module {
         foreach ($quotes as $q) {
             $oid = (int) ($q['origen_mensaje_id'] ?? 0);
             if ($oid) {
-                $quote_by_msg[$oid] = true;
+                $quote_by_msg[$oid] = $q;
             }
         }
         foreach ($messages as &$m) {
@@ -257,7 +265,10 @@ class Riverso_Messaging_Module {
                     break;
                 }
             }
-            $m['has_quote'] = !empty($quote_by_msg[(int) $m['id']]);
+            $linked = $quote_by_msg[(int) $m['id']] ?? null;
+            $m['has_quote'] = !empty($linked);
+            $m['quote_tipo_doc'] = $linked['tipo_doc'] ?? null;
+            $m['quote_tipo_confirmado'] = isset($linked['tipo_confirmado']) ? (int) $linked['tipo_confirmado'] : null;
             $m['looks_like_quote'] = $m['has_quote'] || riverso_messaging_looks_like_quote(
                 $m['subject'] ?? '',
                 $m['body_text'] ?? '',
@@ -393,18 +404,27 @@ class Riverso_Messaging_Module {
         $att = $attachment_id
             ? $wpdb->get_row($wpdb->prepare("SELECT * FROM {$p}messaging_attachments WHERE id = %d", $attachment_id), ARRAY_A)
             : $wpdb->get_row($wpdb->prepare("SELECT * FROM {$p}messaging_attachments WHERE message_id = %d ORDER BY id DESC LIMIT 1", $message_id), ARRAY_A);
-        if (!$att) {
-            wp_send_json_error(['message' => 'Sin adjunto']);
-        }
         $thread = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$p}messaging_threads WHERE id = %d", $msg['thread_id']), ARRAY_A);
+        $has_purchase = $att && riverso_messaging_is_quote_filename($att['filename'] ?? '');
+        $suggested = riverso_messaging_suggest_quote_type(
+            $msg['subject'] ?? '',
+            $msg['body_text'] ?? '',
+            $has_purchase,
+            !empty($thread['proveedor_id'])
+        );
+        if (!$suggested) {
+            $suggested = $att ? 'cotizacion' : 'posible_cotizacion';
+        }
         $mod = Riverso_POS_Received_Quote_Module::get_instance();
         $id = $mod->create_from_message([
             'mensaje_id' => $message_id,
             'canal' => $thread['canal'] ?? 'email',
             'proveedor_id' => $thread['proveedor_id'] ?? null,
-            'archivo_path' => $att['local_path'],
-            'archivo_original' => $att['filename'],
-            'numero_documento' => $msg['subject'] ?: $att['filename'],
+            'archivo_path' => $att['local_path'] ?? '',
+            'archivo_original' => $att['filename'] ?? '',
+            'numero_documento' => $msg['subject'] ?: ($att['filename'] ?? ''),
+            'tipo_doc' => $suggested,
+            'tipo_confirmado' => 0,
         ]);
         if (is_wp_error($id)) {
             wp_send_json_error(['message' => $id->get_error_message()]);

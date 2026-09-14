@@ -137,6 +137,30 @@ jQuery(function($) {
         return $('<div>').text(s == null ? '' : String(s)).html();
     }
 
+    function inboxNeedsHumanConfirm(tipoConfirmado) {
+        return String(tipoConfirmado) === '0';
+    }
+
+    function inboxQuoteBadge(t) {
+        if (inboxNeedsHumanConfirm(t.quote_tipo_confirmado)) {
+            return 'Por confirmar';
+        }
+        if (t.quote_tipo_doc === 'posible_cotizacion' || !parseInt(t.quote_count || 0, 10)) {
+            return 'Posible';
+        }
+        return 'Cotización';
+    }
+
+    function inboxMessageQuoteBadge(m) {
+        if (m.has_quote && inboxNeedsHumanConfirm(m.quote_tipo_confirmado)) {
+            return 'Por confirmar';
+        }
+        if (m.has_quote && m.quote_tipo_doc !== 'posible_cotizacion') {
+            return 'Cotización detectada';
+        }
+        return 'Posible cotización';
+    }
+
     function prepareEmailHtml(html, showImages) {
         let out = String(html || '');
         out = out.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
@@ -227,7 +251,7 @@ jQuery(function($) {
                 html += '<li data-id="' + t.id + '"' + (quote ? ' class="has-quote"' : '') + '>'
                     + '<div><strong>' + esc(t.contacto_nombre || t.contacto_identificador || '—') + '</strong> '
                     + '<span class="tipo-badge">' + esc(t.tipo_chat) + '</span> '
-                    + (quote ? '<span class="quote-badge">Cotización</span> ' : '')
+                    + (quote ? '<span class="quote-badge">' + inboxQuoteBadge(t) + '</span> ' : '')
                     + '<small>' + esc(t.canal) + '</small></div>'
                     + '<div class="inbox-preview">' + esc(t.last_preview || '') + '</div></li>';
             });
@@ -250,7 +274,9 @@ jQuery(function($) {
             $('#inbox-thread-meta').text(meta);
             let qh = '';
             (r.data.quotes || []).forEach(function(q) {
-                qh += '<a class="button" href="' + quotesUrl + '&quote=' + q.id + '">Cotización #' + q.id + ' (' + esc(q.estado) + ')</a> ';
+                const tipo = q.tipo_doc === 'posible_cotizacion' ? 'Posible cotización' : 'Cotización';
+                const pending = String(q.tipo_confirmado) === '0' ? ' · por confirmar' : '';
+                qh += '<a class="button" href="' + quotesUrl + '&quote=' + q.id + '">' + tipo + ' #' + q.id + ' (' + esc(q.estado) + pending + ')</a> ';
             });
             $('#inbox-quotes').html(qh);
 
@@ -278,7 +304,7 @@ jQuery(function($) {
                 if (m.has_quote || m.looks_like_quote) {
                     const badge = document.createElement('span');
                     badge.className = 'quote-badge';
-                    badge.textContent = m.has_quote ? 'Cotización detectada' : 'Posible cotización';
+                    badge.textContent = inboxMessageQuoteBadge(m);
                     wrap.appendChild(badge);
                 }
                 if (htmlById[m.id]) {

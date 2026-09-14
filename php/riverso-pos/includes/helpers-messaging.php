@@ -82,7 +82,17 @@ function riverso_messaging_protect_uploads_dir() {
 
 function riverso_messaging_is_quote_filename($filename) {
     $ext = strtolower(pathinfo((string) $filename, PATHINFO_EXTENSION));
-    return in_array($ext, ['pdf', 'xlsx', 'xls', 'csv', 'txt'], true);
+    return in_array($ext, ['pdf', 'xlsx', 'xls', 'csv', 'txt', 'jpg', 'jpeg', 'png', 'webp', 'gif'], true);
+}
+
+function riverso_messaging_normalize_quote_haystack($subject, $body) {
+    $hay = strtolower(remove_accents((string) $subject . ' ' . (string) $body));
+    return str_replace(['á', 'é', 'í', 'ó', 'ú'], ['a', 'e', 'i', 'o', 'u'], $hay);
+}
+
+function riverso_messaging_quote_text_is_strong($subject, $body) {
+    $hay = riverso_messaging_normalize_quote_haystack($subject, $body);
+    return strpos($hay, 'cotizaci') !== false || strpos($hay, 'proforma') !== false;
 }
 
 /**
@@ -92,8 +102,7 @@ function riverso_messaging_is_quote_filename($filename) {
  * @param bool $known_proveedor El remitente ya está en proveedores.
  */
 function riverso_messaging_looks_like_quote($subject, $body, $has_attachment = false, $known_proveedor = false) {
-    $hay = strtolower(remove_accents((string) $subject . ' ' . (string) $body));
-    $hay = str_replace(['á', 'é', 'í', 'ó', 'ú'], ['a', 'e', 'i', 'o', 'u'], $hay);
+    $hay = riverso_messaging_normalize_quote_haystack($subject, $body);
     if (strpos($hay, 'cotizaci') !== false || strpos($hay, 'proforma') !== false) {
         return true;
     }
@@ -101,6 +110,21 @@ function riverso_messaging_looks_like_quote($subject, $body, $has_attachment = f
         return true;
     }
     return $has_attachment && (strpos($hay, 'precio') !== false || strpos($hay, 'lista') !== false);
+}
+
+/**
+ * Sugiere tipo_doc: cotizacion | posible_cotizacion | null.
+ *
+ * @return string|null
+ */
+function riverso_messaging_suggest_quote_type($subject, $body, $has_attachment = false, $known_proveedor = false) {
+    if (!riverso_messaging_looks_like_quote($subject, $body, $has_attachment, $known_proveedor)) {
+        return null;
+    }
+    if (riverso_messaging_quote_text_is_strong($subject, $body) && $has_attachment) {
+        return 'cotizacion';
+    }
+    return 'posible_cotizacion';
 }
 
 function riverso_messaging_parse_gmail_labels($raw) {

@@ -323,8 +323,9 @@ class Riverso_Gmail_Adapter {
                 break;
             }
         }
-        if (riverso_messaging_looks_like_quote($subject, $body['text'], $has_saved_purchase, (bool) $prov)) {
-            $quote = $this->maybe_create_quote($thread_id, $message_id, $prov, $saved_files, $subject);
+        $suggested = riverso_messaging_suggest_quote_type($subject, $body['text'], $has_saved_purchase, (bool) $prov);
+        if ($suggested) {
+            $quote = $this->maybe_create_quote($thread_id, $message_id, $prov, $saved_files, $subject, $suggested);
             Riverso_Messaging_Store::upsert_thread([
                 'canal' => 'email',
                 'remote_id' => $thread_gmail,
@@ -347,20 +348,16 @@ class Riverso_Gmail_Adapter {
         return ['message_id' => $message_id, 'quote' => $quote];
     }
 
-    private function maybe_create_quote($thread_id, $message_id, $prov, $files, $subject) {
+    private function maybe_create_quote($thread_id, $message_id, $prov, $files, $subject, $tipo_doc = 'posible_cotizacion') {
         if (!class_exists('Riverso_POS_Received_Quote_Module')) {
             return null;
         }
-        $pdf = null;
+        $file = null;
         foreach ($files as $f) {
-            $ext = strtolower(pathinfo($f['filename'], PATHINFO_EXTENSION));
-            if (in_array($ext, ['pdf', 'xlsx', 'xls', 'csv', 'txt'], true)) {
-                $pdf = $f;
+            if (riverso_messaging_is_quote_filename($f['filename'] ?? '')) {
+                $file = $f;
                 break;
             }
-        }
-        if (!$pdf) {
-            return null;
         }
         $mod = Riverso_POS_Received_Quote_Module::get_instance();
         if (!method_exists($mod, 'create_from_message')) {
@@ -370,9 +367,11 @@ class Riverso_Gmail_Adapter {
             'mensaje_id' => $message_id,
             'canal' => 'email',
             'proveedor_id' => $prov['id'] ?? null,
-            'archivo_path' => $pdf['local_path'],
-            'archivo_original' => $pdf['filename'],
+            'archivo_path' => $file['local_path'] ?? '',
+            'archivo_original' => $file['filename'] ?? '',
             'numero_documento' => $subject,
+            'tipo_doc' => $tipo_doc,
+            'tipo_confirmado' => 0,
         ]);
     }
 

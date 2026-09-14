@@ -4683,7 +4683,12 @@ class Riverso_POS_Activator {
             self::add_column_if_missing($quotes, 'condiciones_pago', 'condiciones_pago VARCHAR(255) NULL');
             self::add_column_if_missing($quotes, 'origen_mensaje_id', 'origen_mensaje_id BIGINT UNSIGNED NULL');
             self::add_column_if_missing($quotes, 'origen_canal', 'origen_canal VARCHAR(20) NULL');
+            self::add_column_if_missing($quotes, 'tipo_doc', "tipo_doc VARCHAR(32) NOT NULL DEFAULT 'cotizacion'");
+            self::add_column_if_missing($quotes, 'tipo_confirmado', 'tipo_confirmado TINYINT(1) NOT NULL DEFAULT 1');
             self::add_index_if_missing($quotes, 'idx_origen_mensaje', 'KEY idx_origen_mensaje (origen_mensaje_id)');
+            self::add_index_if_missing($quotes, 'idx_tipo_doc', 'KEY idx_tipo_doc (tipo_doc, tipo_confirmado)');
+            self::backfill_quotes_sin_adjunto($quotes);
+            self::backfill_quotes_total_cero($quotes);
         }
 
         $items = $prefix . 'cotizacion_items';
@@ -4724,5 +4729,60 @@ class Riverso_POS_Activator {
                 ]);
             }
         }
+    }
+
+    /**
+     * Correo/WhatsApp sin archivo → posible cotización por confirmar.
+     */
+    private static function backfill_quotes_sin_adjunto($quotes_table) {
+        if (get_option('riverso_pos_backfill_quote_sin_adjunto') === '1') {
+            return;
+        }
+        global $wpdb;
+        $atts = $wpdb->prefix . 'riverso_messaging_attachments';
+        $wpdb->query(
+            "UPDATE `{$quotes_table}`
+             SET tipo_doc = 'posible_cotizacion', tipo_confirmado = 0
+             WHERE (tipo_fuente IN ('email','whatsapp') OR origen_canal IN ('email','whatsapp') OR origen_mensaje_id IS NOT NULL)
+               AND estado NOT IN ('approved','converted_to_expected')
+               AND (archivo_path IS NULL OR TRIM(archivo_path) = '')
+               AND (archivo_original IS NULL OR TRIM(archivo_original) = '')"
+        );
+        if (self::table_exists($atts)) {
+            $wpdb->query(
+                "UPDATE `{$quotes_table}` c
+                 SET c.tipo_doc = 'posible_cotizacion', c.tipo_confirmado = 0
+                 WHERE c.origen_mensaje_id IS NOT NULL
+                   AND c.estado NOT IN ('approved','converted_to_expected')
+                   AND (c.archivo_path IS NULL OR TRIM(c.archivo_path) = '')
+                   AND NOT EXISTS (
+                        SELECT 1 FROM `{$atts}` a WHERE a.message_id = c.origen_mensaje_id
+                   )"
+            );
+        }
+        update_option('riverso_pos_backfill_quote_sin_adjunto', '1');
+    }
+
+    /**
+     * Ya procesadas con total 0 → posible cotización por confirmar.
+     */
+    private static function backfill_quotes_total_cero($quotes_table) {
+        if (get_option('riverso_pos_backfill_quote_total_cero') === '1') {
+            return;
+        }
+        global $wpdb;
+        $wpdb->query(
+            "UPDATE `{$quotes_table}`
+             SET tipo_doc = 'posible_cotizacion', tipo_confirmado = 0
+             WHERE estado NOT IN ('approved','converted_to_expected')
+               AND IFNULL(total, 0) <= 0
+               AND (
+                    origen_mensaje_id IS NOT NULL
+                    OR tipo_fuente IN ('email','whatsapp','pdf','excel','text')
+                    OR origen_canal IN ('email','whatsapp')
+                    OR datos_parseados IS NOT NULL
+               )"
+        );
+        update_option('riverso_pos_backfill_quote_total_cero', '1');
     }
 }

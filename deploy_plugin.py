@@ -151,7 +151,7 @@ VERSION=$(sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   echo defined("RIVERSO_POS_VERSION") ? RIVERSO_POS_VERSION : "missing";
 ')
 fi
-test "$VERSION" = "1.7.4"
+test "$VERSION" = "1.7.7"
 
 if [ "$SKIP_MIGRATION" = "1" ]; then
   echo "schema-skip competencia tables should be applied via tools/migrate_competencia_remote.py"

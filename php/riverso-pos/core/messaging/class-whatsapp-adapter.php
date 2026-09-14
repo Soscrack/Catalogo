@@ -144,8 +144,8 @@ class Riverso_Whatsapp_Adapter {
                 break;
             }
         }
-        $looks_quote = riverso_messaging_looks_like_quote($text, $text, $has_file, (bool) $prov);
-        if ($looks_quote) {
+        $suggested = riverso_messaging_suggest_quote_type($text, $text, $has_file, (bool) $prov);
+        if ($suggested) {
             Riverso_Messaging_Store::upsert_thread([
                 'canal' => 'whatsapp',
                 'remote_id' => $from,
@@ -153,16 +153,19 @@ class Riverso_Whatsapp_Adapter {
                 'cuenta_id' => $cuenta_id,
             ]);
         }
-        if ($looks_quote && class_exists('Riverso_POS_Received_Quote_Module')) {
+        if ($suggested && class_exists('Riverso_POS_Received_Quote_Module')) {
             $mod = Riverso_POS_Received_Quote_Module::get_instance();
-            if (method_exists($mod, 'create_from_message') && $files) {
+            if (method_exists($mod, 'create_from_message')) {
+                $file = $files[0] ?? null;
                 $mod->create_from_message([
                     'mensaje_id' => $message_id,
                     'canal' => 'whatsapp',
                     'proveedor_id' => $prov['id'] ?? null,
-                    'archivo_path' => $files[0]['local_path'],
-                    'archivo_original' => $files[0]['filename'],
+                    'archivo_path' => $file['local_path'] ?? '',
+                    'archivo_original' => $file['filename'] ?? '',
                     'numero_documento' => $text,
+                    'tipo_doc' => $suggested,
+                    'tipo_confirmado' => 0,
                 ]);
             }
         }

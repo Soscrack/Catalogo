@@ -51,6 +51,11 @@ class Riverso_POS_Received_Quote_Module {
         'whatsapp' => 'WhatsApp',
     ];
 
+    const DOC_TYPES = [
+        'cotizacion'          => 'Cotización',
+        'posible_cotizacion'  => 'Posible cotización',
+    ];
+
     private static $instance = null;
 
     public static function get_instance() {
@@ -75,6 +80,8 @@ class Riverso_POS_Received_Quote_Module {
         add_action('wp_ajax_riverso_approve_received_quote', [$this, 'ajax_approve_quote']);
         add_action('wp_ajax_riverso_reject_received_quote', [$this, 'ajax_reject_quote']);
         add_action('wp_ajax_riverso_set_received_quote_status', [$this, 'ajax_set_status']);
+        add_action('wp_ajax_riverso_set_received_quote_tipo_doc', [$this, 'ajax_set_tipo_doc']);
+        add_action('wp_ajax_riverso_confirm_received_quote_tipo', [$this, 'ajax_confirm_tipo_doc']);
         add_action('wp_ajax_riverso_parse_quote_text', [$this, 'ajax_parse_text']);
         add_action('wp_ajax_riverso_analyze_received_quote', [$this, 'ajax_analyze_quote']);
         add_action('wp_ajax_riverso_quote_claim_draft', [$this, 'ajax_claim_draft']);
@@ -102,6 +109,8 @@ class Riverso_POS_Received_Quote_Module {
             archivo_original VARCHAR(255) NULL,
             origen_mensaje_id BIGINT UNSIGNED NULL,
             origen_canal VARCHAR(20) NULL,
+            tipo_doc VARCHAR(32) NOT NULL DEFAULT 'cotizacion',
+            tipo_confirmado TINYINT(1) NOT NULL DEFAULT 1,
             estado VARCHAR(50) DEFAULT 'draft',
             moneda VARCHAR(10) DEFAULT 'CLP',
             subtotal DECIMAL(15,2) DEFAULT 0,
@@ -123,7 +132,8 @@ class Riverso_POS_Received_Quote_Module {
             INDEX idx_proveedor (proveedor_id),
             INDEX idx_estado (estado),
             INDEX idx_fecha (fecha_documento),
-            INDEX idx_numero (numero_documento)
+            INDEX idx_numero (numero_documento),
+            INDEX idx_tipo_doc (tipo_doc, tipo_confirmado)
         ) $charset_collate;";
 
         // Tabla de ítems de cotización
@@ -185,6 +195,7 @@ class Riverso_POS_Received_Quote_Module {
         $fecha_desde = isset($_POST['fecha_desde']) ? sanitize_text_field($_POST['fecha_desde']) : '';
         $fecha_hasta = isset($_POST['fecha_hasta']) ? sanitize_text_field($_POST['fecha_hasta']) : '';
         $tipo_fuente = isset($_POST['tipo_fuente']) ? sanitize_text_field($_POST['tipo_fuente']) : '';
+        $tipo_doc = isset($_POST['tipo_doc']) ? sanitize_text_field(wp_unslash($_POST['tipo_doc'])) : 'cotizacion';
 
         $where = ["1=1"];
         $params = [];
@@ -220,6 +231,14 @@ class Riverso_POS_Received_Quote_Module {
             $params[] = $tipo_fuente;
         }
 
+        if ($tipo_doc === 'posible_cotizacion') {
+            $where[] = "c.tipo_doc = %s";
+            $params[] = 'posible_cotizacion';
+        } elseif ($tipo_doc !== 'todo' && $tipo_doc !== '') {
+            $where[] = "c.tipo_doc = %s";
+            $params[] = 'cotizacion';
+        }
+
         $where_sql = implode(' AND ', $where);
 
         $sql = "SELECT c.*, 
@@ -249,7 +268,9 @@ class Riverso_POS_Received_Quote_Module {
                 SUM(CASE WHEN estado = 'draft' THEN 1 ELSE 0 END) as borradores,
                 SUM(CASE WHEN estado = 'under_review' THEN 1 ELSE 0 END) as en_revision,
                 SUM(CASE WHEN estado = 'approved' THEN 1 ELSE 0 END) as aprobadas,
-                SUM(CASE WHEN estado IN ('draft','uploaded','parsed','under_review') THEN 1 ELSE 0 END) as activas
+                SUM(CASE WHEN estado IN ('draft','uploaded','parsed','under_review') THEN 1 ELSE 0 END) as activas,
+                SUM(CASE WHEN tipo_doc = 'posible_cotizacion' THEN 1 ELSE 0 END) as posibles,
+                SUM(CASE WHEN tipo_confirmado = 0 THEN 1 ELSE 0 END) as por_confirmar
             FROM {$prefix}cotizaciones_recibidas
         ");
 
@@ -262,6 +283,7 @@ class Riverso_POS_Received_Quote_Module {
             'quotes' => $quotes,
             'stats'  => $stats,
             'estados' => self::ESTADOS,
+            'doc_types' => self::DOC_TYPES,
             'proveedores' => $proveedores
         ]);
     }
@@ -363,6 +385,7 @@ class Riverso_POS_Received_Quote_Module {
             'origen' => $origen,
             'proveedores' => $proveedores,
             'estados' => self::ESTADOS,
+            'doc_types' => self::DOC_TYPES,
             'match_status' => self::MATCH_STATUS,
             'decision_status' => self::DECISION_STATUS
         ]);
@@ -405,6 +428,8 @@ class Riverso_POS_Received_Quote_Module {
         } else {
             $data['created_by'] = get_current_user_id();
             $data['estado'] = 'draft';
+            $data['tipo_doc'] = 'cotizacion';
+            $data['tipo_confirmado'] = 1;
             $wpdb->insert("{$prefix}cotizaciones_recibidas", $data);
             $id = $wpdb->insert_id;
             $action = 'received_quote.created';
@@ -515,6 +540,8 @@ class Riverso_POS_Received_Quote_Module {
                 'archivo_path'     => str_replace($upload_dir['basedir'], '', $filepath),
                 'archivo_original' => $file['name'],
                 'tipo_fuente'      => $source_type,
+                'tipo_doc'         => 'cotizacion',
+                'tipo_confirmado'  => 1,
                 'estado'           => 'uploaded',
                 'created_by'       => get_current_user_id(),
                 'updated_by'       => get_current_user_id()
@@ -590,15 +617,33 @@ class Riverso_POS_Received_Quote_Module {
             $rel = str_replace($upload['basedir'], '', $path);
         }
 
+        $mensaje_id = !empty($args['mensaje_id']) ? (int) $args['mensaje_id'] : 0;
+        if ($mensaje_id > 0) {
+            $existing = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}cotizaciones_recibidas WHERE origen_mensaje_id = %d LIMIT 1",
+                $mensaje_id
+            ));
+            if ($existing > 0) {
+                return $existing;
+            }
+        }
+
+        $tipo_doc = isset($args['tipo_doc']) && array_key_exists($args['tipo_doc'], self::DOC_TYPES)
+            ? $args['tipo_doc']
+            : 'posible_cotizacion';
+        $tipo_confirmado = !empty($args['tipo_confirmado']) ? 1 : 0;
+
         $wpdb->insert("{$prefix}cotizaciones_recibidas", [
             'proveedor_id'     => !empty($args['proveedor_id']) ? (int) $args['proveedor_id'] : null,
             'numero_documento' => $args['numero_documento'] ?? null,
             'tipo_fuente'      => $tipo,
-            'archivo_path'     => $rel,
-            'archivo_original' => $original,
-            'origen_mensaje_id'=> !empty($args['mensaje_id']) ? (int) $args['mensaje_id'] : null,
+            'tipo_doc'         => $tipo_doc,
+            'tipo_confirmado'  => $tipo_confirmado,
+            'archivo_path'     => $rel ?: null,
+            'archivo_original' => $original ?: null,
+            'origen_mensaje_id'=> $mensaje_id ?: null,
             'origen_canal'     => $canal,
-            'estado'           => 'uploaded',
+            'estado'           => $path ? 'uploaded' : 'draft',
             'created_by'       => get_current_user_id() ?: null,
             'updated_by'       => get_current_user_id() ?: null,
         ]);
@@ -606,7 +651,9 @@ class Riverso_POS_Received_Quote_Module {
         if (!$id) {
             return new WP_Error('quote_insert', 'No se pudo crear la cotización');
         }
-        $this->parse_quote_internal($id);
+        if ($path) {
+            $this->parse_quote_internal($id);
+        }
         return $id;
     }
 
@@ -655,6 +702,7 @@ class Riverso_POS_Received_Quote_Module {
                 'datos_parseados' => wp_json_encode(['error' => $parsed->get_error_message(), 'parsed_at' => current_time('mysql')]),
                 'updated_by' => get_current_user_id() ?: null,
             ], ['id' => $id]);
+            $this->apply_tipo_after_process($id);
             return $parsed;
         }
 
@@ -726,6 +774,7 @@ class Riverso_POS_Received_Quote_Module {
         }
 
         $this->recalculate_quote_totals($id);
+        $this->apply_tipo_after_process($id);
         $this->match_all_internal($id);
 
         $wpdb->query($wpdb->prepare(
@@ -1234,6 +1283,10 @@ class Riverso_POS_Received_Quote_Module {
         if (!$id) {
             wp_send_json_error(['message' => 'ID requerido']);
         }
+        $blocked = $this->block_if_not_confirmed_cotizacion($id);
+        if ($blocked) {
+            wp_send_json_error(['message' => $blocked]);
+        }
 
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
@@ -1333,6 +1386,10 @@ class Riverso_POS_Received_Quote_Module {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) {
             wp_send_json_error(['message' => 'ID requerido']);
+        }
+        $blocked = $this->block_if_not_confirmed_cotizacion($id);
+        if ($blocked) {
+            wp_send_json_error(['message' => $blocked]);
         }
 
         global $wpdb;
@@ -1446,6 +1503,10 @@ class Riverso_POS_Received_Quote_Module {
     public function ajax_analyze_quote() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $blocked = $this->block_if_not_confirmed_cotizacion($id);
+        if ($blocked) {
+            wp_send_json_error(['message' => $blocked]);
+        }
         $base = isset($_POST['compare_base']) ? sanitize_text_field(wp_unslash($_POST['compare_base'])) : 'auto';
         if (!class_exists('Riverso_Cost_Lookup_Service')) {
             require_once RIVERSO_POS_PLUGIN_DIR . 'modules/costs/class-cost-lookup-service.php';
@@ -1460,6 +1521,10 @@ class Riverso_POS_Received_Quote_Module {
     public function ajax_claim_draft() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $blocked = $this->block_if_not_confirmed_cotizacion($id);
+        if ($blocked) {
+            wp_send_json_error(['message' => $blocked]);
+        }
         $base = isset($_POST['compare_base']) ? sanitize_text_field(wp_unslash($_POST['compare_base'])) : 'auto';
         if (!class_exists('Riverso_Cost_Lookup_Service')) {
             require_once RIVERSO_POS_PLUGIN_DIR . 'modules/costs/class-cost-lookup-service.php';
@@ -1480,6 +1545,99 @@ class Riverso_POS_Received_Quote_Module {
             'items' => $emails['items'],
             'analysis' => $analysis,
         ]);
+    }
+
+    public function ajax_set_tipo_doc() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $tipo = isset($_POST['tipo_doc']) ? sanitize_text_field(wp_unslash($_POST['tipo_doc'])) : '';
+        if (!$id || !array_key_exists($tipo, self::DOC_TYPES)) {
+            wp_send_json_error(['message' => 'Datos inválidos']);
+        }
+        $this->update_tipo_doc($id, $tipo, 1);
+        wp_send_json_success([
+            'message' => 'Tipo actualizado',
+            'tipo_doc' => $tipo,
+            'tipo_confirmado' => 1,
+            'tipo_doc_label' => self::DOC_TYPES[$tipo],
+        ]);
+    }
+
+    public function ajax_confirm_tipo_doc() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if (!$id) {
+            wp_send_json_error(['message' => 'ID requerido']);
+        }
+        $this->update_tipo_doc($id, 'cotizacion', 1);
+        wp_send_json_success([
+            'message' => 'Tipo confirmado como cotización',
+            'tipo_doc' => 'cotizacion',
+            'tipo_confirmado' => 1,
+            'tipo_doc_label' => self::DOC_TYPES['cotizacion'],
+        ]);
+    }
+
+    /**
+     * @param int $id
+     * @return string|null Mensaje de bloqueo o null si puede seguir.
+     */
+    private function block_if_not_confirmed_cotizacion($id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT tipo_doc, tipo_confirmado FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+            (int) $id
+        ), ARRAY_A);
+        if (!$row) {
+            return 'Documento no encontrado';
+        }
+        if (($row['tipo_doc'] ?? '') === 'posible_cotizacion' || (int) ($row['tipo_confirmado'] ?? 1) === 0) {
+            return 'Confirme el tipo como cotización antes de continuar.';
+        }
+        return null;
+    }
+
+    /**
+     * Tras parsear: total 0 → posible cotización por confirmar.
+     */
+    private function apply_tipo_after_process($id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $quote = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, estado, total, tipo_doc, tipo_confirmado
+             FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+            (int) $id
+        ));
+        if (!$quote || in_array($quote->estado, ['approved', 'converted_to_expected'], true)) {
+            return;
+        }
+        $total = (float) ($quote->total ?? 0);
+        if ($total <= 0) {
+            $this->update_tipo_doc((int) $id, 'posible_cotizacion', 0);
+        }
+    }
+
+    private function update_tipo_doc($id, $tipo, $confirmado) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $wpdb->update("{$prefix}cotizaciones_recibidas", [
+            'tipo_doc' => $tipo,
+            'tipo_confirmado' => $confirmado ? 1 : 0,
+            'updated_by' => get_current_user_id(),
+        ], ['id' => (int) $id]);
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('received_quote.tipo_doc', 'received_quote', (int) $id, [
+                'tipo_doc' => $tipo,
+                'tipo_confirmado' => $confirmado ? 1 : 0,
+            ]);
+        }
     }
 
     /**

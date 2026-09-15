@@ -306,7 +306,7 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
                 <tr>
                     <th>Precio Local</th>
                     <td>
-                        <p class="description" style="margin:0 0 8px;">El precio asignado es de venta <strong>bruto (con IVA)</strong>, igual que TPV. El costo es <strong>neto</strong>. El neto de venta se calcula según IVA venta (afecto ÷ 1,19).</p>
+                        <p class="description" style="margin:0 0 8px;">Usa <strong>Neto / Bruto</strong> para ver montos con o sin IVA. El precio asignado se guarda siempre <strong>bruto (TPV)</strong>. El costo legacy FACTO se convierte a neto (÷ 1,19) cuando aplica.</p>
                         <div id="local-precio-view">-</div>
                         <div id="local-precio-edit" style="display:none; background:#f9f9f9; padding:10px; border-radius:4px;">
                             <table style="width:100%; margin-bottom:8px;">
@@ -315,7 +315,7 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
                                     <td><span id="precio-c-ref">-</span></td>
                                 </tr>
                                 <tr>
-                                    <td><strong>Precio Ref (bruto):</strong></td>
+                                    <td><strong id="precio-p-ref-label">Precio Ref (bruto):</strong></td>
                                     <td><span id="precio-p-ref">-</span></td>
                                 </tr>
                                 <tr>
@@ -323,7 +323,7 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
                                     <td><span id="precio-factor-min">-</span></td>
                                 </tr>
                                 <tr>
-                                    <td><strong>Margen (neto / costo):</strong></td>
+                                    <td><strong id="precio-margen-label">Margen (neto / costo):</strong></td>
                                     <td><span id="precio-margen">—</span></td>
                                 </tr>
                                 <tr>
@@ -1076,23 +1076,54 @@ jQuery(function($){
     let currentProduct = null;
     /** Base de costo en vista hub: 'referencia' | 'tras_dr' (default) */
     let productCostMode = 'tras_dr';
+    /** Vista de montos: 'neto' (default hub) | 'bruto' */
+    let productViewMode = 'neto';
 
-    function pickProductCostNeto(precio, mode) {
+    function viewModeLabel() {
+        return productViewMode === 'bruto' ? 'bruto' : 'neto';
+    }
+
+    function pickProductCostPair(precio, mode) {
         mode = mode || productCostMode;
-        if (!precio) return null;
+        if (!precio) return { neto: null, bruto: null };
         const bases = precio.costo_bases;
         if (bases && typeof bases === 'object') {
             const key = mode === 'referencia' ? 'referencia' : 'tras_dr';
             let pair = bases[key];
             if (!pair && key === 'referencia') pair = bases.tras_dr;
-            if (pair && pair.neto != null && !isNaN(pair.neto)) {
-                return Number(pair.neto);
+            if (pair) {
+                const neto = (pair.neto != null && !isNaN(pair.neto)) ? Number(pair.neto) : null;
+                let bruto = (pair.bruto != null && !isNaN(pair.bruto)) ? Number(pair.bruto) : null;
+                if (bruto === null && neto !== null) {
+                    bruto = isIvaAfecto(currentProduct)
+                        ? Math.round(neto * IVA_FACTOR * 10000) / 10000
+                        : neto;
+                }
+                return { neto, bruto };
             }
         }
         if (precio.c_ref != null && precio.c_ref !== '' && !isNaN(precio.c_ref)) {
-            return Number(precio.c_ref);
+            const neto = Number(precio.c_ref);
+            const bruto = isIvaAfecto(currentProduct)
+                ? Math.round(neto * IVA_FACTOR * 10000) / 10000
+                : neto;
+            return { neto, bruto };
         }
-        return null;
+        return { neto: null, bruto: null };
+    }
+
+    /** Costo según vista Neto/Bruto (para display). */
+    function pickProductCost(precio, mode) {
+        const pair = pickProductCostPair(precio, mode);
+        if (productViewMode === 'bruto') {
+            return pair.bruto != null ? pair.bruto : pair.neto;
+        }
+        return pair.neto;
+    }
+
+    /** Siempre neto — alerta de margen y factor_minimo. */
+    function pickProductCostNeto(precio, mode) {
+        return pickProductCostPair(precio, mode).neto;
     }
 
     function productCostModeLabel(mode) {
@@ -1100,17 +1131,40 @@ jQuery(function($){
         return mode === 'referencia' ? 'Costo referencia' : 'Costo con Descuento/Recargo';
     }
 
+    function productViewToggleHtml() {
+        return '<div class="riverso-view-mode-toggle" role="group" aria-label="Vista de montos" style="display:inline-flex;gap:0;margin:0 8px 8px 0;">' +
+            '<button type="button" class="button riverso-view-mode-btn' + (productViewMode === 'bruto' ? ' button-primary is-active' : '') + '" data-view-mode="bruto">Bruto</button>' +
+            '<button type="button" class="button riverso-view-mode-btn' + (productViewMode === 'neto' ? ' button-primary is-active' : '') + '" data-view-mode="neto">Neto</button>' +
+            '</div>';
+    }
+
     function productCostToggleHtml(extraClass) {
         const cls = extraClass ? ' ' + extraClass : '';
         return '<div class="riverso-cost-mode-toggle' + cls + '" role="group" aria-label="Base de costo" style="display:inline-flex;gap:0;margin:0 0 8px;">' +
-            '<button type="button" class="button riverso-cost-mode-btn' + (productCostMode === 'referencia' ? ' is-active' : '') + '" data-cost-mode="referencia" title="Precio lista / antes de D/R">Costo referencia</button>' +
-            '<button type="button" class="button riverso-cost-mode-btn' + (productCostMode === 'tras_dr' ? ' is-active' : '') + '" data-cost-mode="tras_dr" title="Tras descuento y recargo">Costo con Descuento/Recargo</button>' +
+            '<button type="button" class="button riverso-cost-mode-btn' + (productCostMode === 'referencia' ? ' button-primary is-active' : '') + '" data-cost-mode="referencia" title="Precio lista / antes de D/R">Costo referencia</button>' +
+            '<button type="button" class="button riverso-cost-mode-btn' + (productCostMode === 'tras_dr' ? ' button-primary is-active' : '') + '" data-cost-mode="tras_dr" title="Tras descuento y recargo">Costo con Descuento/Recargo</button>' +
             '</div>';
     }
 
     function syncProductCostModeButtons() {
-        $('.riverso-cost-mode-btn').removeClass('is-active');
-        $('.riverso-cost-mode-btn[data-cost-mode="' + productCostMode + '"]').addClass('is-active');
+        $('.riverso-cost-mode-btn').removeClass('is-active button-primary');
+        $('.riverso-cost-mode-btn[data-cost-mode="' + productCostMode + '"]').addClass('is-active button-primary');
+        $('.riverso-view-mode-btn').removeClass('is-active button-primary');
+        $('.riverso-view-mode-btn[data-view-mode="' + productViewMode + '"]').addClass('is-active button-primary');
+    }
+
+    function costoOriginHint(meta) {
+        meta = meta || {};
+        if (meta.source === 'legacy') {
+            return '<span class="riverso-origin-hint" style="font-size:12px;color:#646970;margin-left:8px;">Catálogo TPV legacy</span>';
+        }
+        if (meta.folio) {
+            return '<span class="riverso-origin-hint" style="font-size:12px;color:#646970;margin-left:8px;">Folio ' +
+                esc(String(meta.folio)) +
+                (meta.fecha_emision ? ' · ' + esc(String(meta.fecha_emision)) : '') +
+                '</span>';
+        }
+        return '';
     }
     let searchTimeout = null;
     let currentOffset = 0;
@@ -1483,42 +1537,45 @@ jQuery(function($){
         $('#local-desc-facto-view').text(product.descripcion_facto || '—');
         $('#local-desc-facto-edit').val(product.descripcion_facto || '');
         
-        // Precio local: p_asignado es BRUTO (TPV); costo mostrado es NETO (base D/R o referencia).
+        // Precio local: p_asignado es BRUTO (TPV); costo desde costo_bases (neto/bruto según vista).
         if (product.precio_local) {
             const precio = product.precio_local;
-            const c_ref = pickProductCostNeto(precio);
-            const c_ref_num = c_ref != null ? c_ref : 0;
+            const costPair = pickProductCostPair(precio);
+            const c_show = pickProductCost(precio);
+            const c_neto = costPair.neto != null ? costPair.neto : 0;
             const p_asignado = precio.p_asignado ? parseFloat(precio.p_asignado) : 0;
-            // Por ahora: Precio Ref en pantalla = asignado (bruto).
-            const p_ref = p_asignado;
-            const factorMin = precio.factor_minimo ? parseFloat(precio.factor_minimo) : 1.30;
             const split = splitVenta(p_asignado, product);
-            const ratio = margenNetoRatio(split.neto, c_ref_num, factorMin);
+            const p_show = productViewMode === 'bruto' ? split.bruto : split.neto;
+            const p_ref_show = p_show;
+            const factorMin = precio.factor_minimo ? parseFloat(precio.factor_minimo) : 1.30;
+            // Alerta siempre en neto (factor_minimo del motor).
+            const ratio = margenNetoRatio(split.neto, c_neto, factorMin);
             const alerta = ratio.alerta;
-            const ventaNetoRow = split.afecto
-                ? `<tr><td><strong>Precio venta (neto):</strong></td><td>${fmtMoney2(split.neto)}</td></tr>
-                   <tr><td><strong>IVA 19%:</strong></td><td>${fmtMoney2(split.iva)}</td></tr>`
-                : `<tr><td><strong>Precio venta (neto):</strong></td><td>${fmtMoney2(split.neto)} <em style="color:#646970;font-weight:normal;">exento — igual al bruto</em></td></tr>`;
+            const vm = viewModeLabel();
+            const ventaExtraRows = productViewMode === 'neto'
+                ? (split.afecto
+                    ? `<tr><td><strong>IVA 19%:</strong></td><td>${fmtMoney2(split.iva)}</td></tr>`
+                    : `<tr><td><strong>IVA:</strong></td><td><em style="color:#646970;">exento — neto = bruto</em></td></tr>`)
+                : (split.afecto
+                    ? `<tr><td><strong>Precio venta (neto):</strong></td><td>${fmtMoney2(split.neto)}</td></tr>`
+                    : '');
             const margenRow = ratio.factor === null
-                ? `<tr><td><strong>Margen (neto / costo):</strong></td><td>—</td></tr>`
-                : `<tr><td><strong>Margen (neto / costo):</strong></td><td style="${alerta ? 'color:red;font-weight:bold;' : ''}">${ratio.label} <em style="color:#646970;font-weight:normal;">mín. ${factorMin.toFixed(2)}×</em></td></tr>`;
+                ? `<tr><td><strong>Margen (${vm} / costo):</strong></td><td>—</td></tr>`
+                : `<tr><td><strong>Margen (${vm} / costo):</strong></td><td style="${alerta ? 'color:red;font-weight:bold;' : ''}">${ratio.label} <em style="color:#646970;font-weight:normal;">mín. ${factorMin.toFixed(2)}×</em></td></tr>`;
             const meta = precio.costo_bases_meta || {};
-            const metaHint = meta.folio
-                ? `<span style="font-size:12px;color:#646970;margin-left:8px;">Folio ${esc(String(meta.folio))}${meta.fecha_emision ? ' · ' + esc(String(meta.fecha_emision)) : ''}</span>`
-                : '';
+            const metaHint = costoOriginHint(meta);
             
             let priceHtml = `<div style="background:#f9f9f9; padding:10px; border-radius:4px; margin-bottom:8px;">
-                <div style="margin-bottom:6px;">
-                    <span class="riverso-price-basis-badge is-bruto">bruto</span>
-                    <span class="riverso-price-basis-badge">neto</span>
-                    <span style="font-size:12px;color:#646970;">venta con IVA · costo sin IVA</span>
+                <div style="margin-bottom:6px; display:flex; flex-wrap:wrap; align-items:center; gap:4px;">
+                    ${productViewToggleHtml()}
+                    ${productCostToggleHtml()}
+                    ${metaHint}
                 </div>
-                ${productCostToggleHtml()}
-                ${metaHint}
                 <table style="width:100%; margin-bottom:8px;">
-                    <tr><td><strong>${esc(productCostModeLabel())} (neto):</strong></td><td>${c_ref != null ? fmtMoney2(c_ref) : '—'}</td></tr>
-                    <tr><td><strong>Precio Ref (bruto):</strong></td><td>${fmtMoney2(p_ref)}</td></tr>
-                    ${ventaNetoRow}
+                    <tr><td><strong>${esc(productCostModeLabel())} (${vm}):</strong></td><td>${c_show != null ? fmtMoney2(c_show) : '—'}</td></tr>
+                    <tr><td><strong>Precio Ref (${vm}):</strong></td><td>${fmtMoney2(p_ref_show)}</td></tr>
+                    <tr><td><strong>Precio venta (${vm}):</strong></td><td>${fmtMoney2(p_show)}</td></tr>
+                    ${ventaExtraRows}
                     <tr><td><strong>Precio Asignado (bruto):</strong></td><td style="${alerta ? 'color:red;font-weight:bold;' : ''}">${fmtMoney2(p_asignado)}</td></tr>
                     ${margenRow}
                     ${alerta ? '<tr><td colspan="2" style="color:red;font-weight:bold;">⚠️ Alerta: margen bajo el mínimo</td></tr>' : ''}
@@ -2134,10 +2191,15 @@ jQuery(function($){
         if (!currentProduct || !currentProduct.precio_local) return;
         
         const precio = currentProduct.precio_local;
-        const cShow = pickProductCostNeto(precio);
-        $('#precio-c-ref-label').text(productCostModeLabel() + ' (neto):');
+        const vm = viewModeLabel();
+        const cShow = pickProductCost(precio);
+        const split = splitVenta(precio.p_asignado, currentProduct);
+        const pRefShow = productViewMode === 'bruto' ? split.bruto : split.neto;
+        $('#precio-c-ref-label').text(productCostModeLabel() + ' (' + vm + '):');
         $('#precio-c-ref').text(cShow != null ? ('$' + Number(cShow).toFixed(2)) : '—');
-        $('#precio-p-ref').text('$' + (precio.p_asignado ? parseFloat(precio.p_asignado).toFixed(2) : '0.00'));
+        $('#precio-p-ref-label').text('Precio Ref (' + vm + '):');
+        $('#precio-p-ref').text('$' + (pRefShow ? Number(pRefShow).toFixed(2) : '0.00'));
+        $('#precio-margen-label').text('Margen (' + vm + ' / costo):');
         $('#precio-factor-min').text(precio.factor_minimo ? parseFloat(precio.factor_minimo).toFixed(2) : '1.30');
         $('#precio-p-asignado').val(precio.p_asignado ? parseFloat(precio.p_asignado).toFixed(2) : '');
         updatePrecioNetoPreview();
@@ -2157,6 +2219,25 @@ jQuery(function($){
             return;
         }
         productCostMode = mode;
+        syncProductCostModeButtons();
+        if (currentProduct) {
+            const wasEditing = $('#local-precio-edit').is(':visible');
+            showDetail(currentProduct);
+            if (wasEditing) {
+                $('#precio-edit-toggle').trigger('click');
+            }
+        }
+    });
+
+    $(document).on('click', '.riverso-view-mode-btn', function(e){
+        e.preventDefault();
+        const mode = $(this).data('view-mode');
+        if (mode !== 'neto' && mode !== 'bruto') return;
+        if (productViewMode === mode) {
+            syncProductCostModeButtons();
+            return;
+        }
+        productViewMode = mode;
         syncProductCostModeButtons();
         if (currentProduct) {
             const wasEditing = $('#local-precio-edit').is(':visible');

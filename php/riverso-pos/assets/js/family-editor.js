@@ -1557,20 +1557,90 @@
         });
     }
 
-    function openCreate(onCreated) {
+    /**
+     * @param {Function} [onCreated]
+     * @param {{
+     *   nombre?: string,
+     *   codigo_grupo?: string,
+     *   tipo_sustitucion?: string,
+     *   pendingMembers?: Array,
+     *   convertProductoBaseId?: number,
+     *   confirmR1?: boolean
+     * }} [seed]
+     */
+    function openCreate(onCreated, seed) {
         if (!canManage()) {
             alert('Sin permisos para crear familias');
             return;
         }
+        seed = seed || {};
+        // Compat: openCreate({ nombre, ... }) sin callback.
+        if (onCreated && typeof onCreated === 'object' && typeof seed.onCreated !== 'function') {
+            seed = onCreated;
+            onCreated = typeof seed.onCreated === 'function' ? seed.onCreated : null;
+        }
         openEditor({
             id: 0,
-            nombre: '',
-            codigo_grupo: '',
-            tipo_sustitucion: 'exacta',
+            nombre: seed.nombre || '',
+            codigo_grupo: seed.codigo_grupo || '',
+            tipo_sustitucion: seed.tipo_sustitucion || 'exacta',
             members: [],
             pending: [],
             stock: { stock_unidades: null, warnings: [] }
-        }, { isCreate: true, onCreated: onCreated });
+        }, {
+            isCreate: true,
+            onCreated: onCreated,
+            pendingMembers: seed.pendingMembers || [],
+            convertProductoBaseId: seed.convertProductoBaseId || 0,
+            confirmR1: !!seed.confirmR1
+        });
+    }
+
+    function applyCreateSeed($modal, opts) {
+        opts = opts || {};
+        var pending = opts.pendingMembers || [];
+        pending.forEach(function (item) {
+            addPendingMember($modal, item);
+        });
+
+        var convertId = parseInt(opts.convertProductoBaseId || 0, 10) || 0;
+        if (!convertId) {
+            return;
+        }
+
+        var match = pending.filter(function (m) {
+            return parseInt(m.producto_base_id || m.id || 0, 10) === convertId;
+        })[0] || null;
+
+        var $panel = $modal.find('.riverso-unit-panel');
+        if (!$panel.length) {
+            return;
+        }
+        $panel.find('.unit-toggle-enabled').prop('checked', true);
+        applyUnitPanelState($panel, true);
+        $panel.find('.unit-convert-id').val(String(convertId));
+        var sku = match
+            ? (match.sku_local || match.canonical_sku || '')
+            : '';
+        var nombre = match
+            ? (match.nombre_canonico || match.nombre || '')
+            : '';
+        $panel.find('.unit-sku').val(sku);
+        $panel.find('.unit-nombre').val(nombre);
+        $panel.find('.unit-sku-label').text(sku || '—');
+        $panel.find('.unit-nombre-label').text(nombre || '');
+        $panel.find('.unit-sku-selected').show();
+        $panel.find('.unit-link-preview-wrap').html(
+            '<p style="margin:8px 0;font-size:12px;color:#666;">El preview de herencia se calculará al guardar la familia.</p>'
+        );
+        if (opts.confirmR1) {
+            $panel.find('.unit-confirm-r1').prop('checked', true);
+            // Sin rule_id: backend resuelve R-1 aprobada.
+            if (!$panel.find('.unit-rule-id').val()) {
+                $panel.find('.unit-rule-selected').html('Seleccionada: <strong>R-1</strong> (default)');
+            }
+        }
+        refreshNameSuggestions($modal);
     }
 
     function openEditor(fam, opts) {
@@ -1654,6 +1724,12 @@
         bindOverlay($modal);
         loadUnitPanelIntoModal($modal, familyId, fam.members || []);
         refreshNameSuggestions($modal);
+        if (isCreate) {
+            applyCreateSeed($modal, opts);
+            if ((fam.nombre || '').trim() && !$modal.data('codigoTouched')) {
+                $modal.find('.family-edit-nombre').trigger('input');
+            }
+        }
 
         $modal.on('click', '.family-name-pick', function (ev) {
             ev.preventDefault();

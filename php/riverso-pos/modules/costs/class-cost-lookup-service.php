@@ -800,6 +800,123 @@ class Riverso_Cost_Lookup_Service {
         return self::pack_same_bases($neto, $bruto);
     }
 
+    /** Tolerancia al comparar c_ref vs costo legacy (mismo orden que el explorador). */
+    const LEGACY_COST_EPS = 0.02;
+
+    /**
+     * Resuelve costo_bases para el hub de productos (solo vista).
+     * Prioridad: factura → legacy (bruto FACTO → neto) → c_ref como neto.
+     *
+     * @param int         $producto_base_id
+     * @param string      $sku
+     * @param float|null  $c_ref
+     * @param string      $iva_tipo  afecto|exento
+     * @return array{
+     *   costo_bases:?array,
+     *   folio:?string,
+     *   fecha_emision:?string,
+     *   factura_id:?int,
+     *   proveedor_id:?int,
+     *   codigo_proveedor:?string,
+     *   proveedor_nombre:?string,
+     *   source:?string
+     * }
+     */
+    public function resolve_product_cost_bases($producto_base_id, $sku = '', $c_ref = null, $iva_tipo = 'afecto') {
+        $empty = [
+            'costo_bases' => null,
+            'folio' => null,
+            'fecha_emision' => null,
+            'factura_id' => null,
+            'proveedor_id' => null,
+            'codigo_proveedor' => null,
+            'proveedor_nombre' => null,
+            'source' => null,
+        ];
+
+        $producto_base_id = (int) $producto_base_id;
+        $sku = trim((string) $sku);
+        $c_ref = ($c_ref !== null && $c_ref !== '') ? (float) $c_ref : null;
+        if (class_exists('Riverso_Pricing_Module')) {
+            $iva_tipo = Riverso_Pricing_Module::normalize_iva_tipo($iva_tipo);
+        } else {
+            $iva_tipo = (strtolower(trim((string) $iva_tipo)) === 'exento') ? 'exento' : 'afecto';
+        }
+
+        // 1) Última factura con desglose D/R.
+        if ($producto_base_id > 0) {
+            $info = $this->latest_cost_bases_for_product($producto_base_id);
+            if (!empty($info['costo_bases'])) {
+                $info['source'] = 'folio';
+                return $info;
+            }
+        }
+
+        // 2) Legacy: legacy_precio_ref.costo_neto suele ser bruto FACTO pese al nombre.
+        $legacy_ref = $sku !== '' ? $this->legacy_ref_from_sku($sku) : null;
+        if ($legacy_ref && !empty($legacy_ref['costo_bases'])) {
+            $legacy_bruto = isset($legacy_ref['costo_unitario_bruto'])
+                ? (float) $legacy_ref['costo_unitario_bruto']
+                : null;
+            $legacy_neto = isset($legacy_ref['costo_unitario_neto'])
+                ? (float) $legacy_ref['costo_unitario_neto']
+                : null;
+
+            $use_legacy = ($c_ref === null);
+            if (!$use_legacy && $legacy_bruto !== null && $this->values_close($c_ref, $legacy_bruto)) {
+                // c_ref es copia del bruto legacy → convertir.
+                $use_legacy = true;
+            }
+            if (!$use_legacy && $legacy_neto !== null && $this->values_close($c_ref, $legacy_neto)) {
+                // c_ref ya es el neto convertido → no volver a dividir.
+                $use_legacy = true;
+            }
+
+            if ($use_legacy) {
+                return [
+                    'costo_bases' => $legacy_ref['costo_bases'],
+                    'folio' => null,
+                    'fecha_emision' => isset($legacy_ref['fecha_emision'])
+                        ? (string) $legacy_ref['fecha_emision']
+                        : (isset($legacy_ref['importado_at']) ? (string) $legacy_ref['importado_at'] : null),
+                    'factura_id' => null,
+                    'proveedor_id' => null,
+                    'codigo_proveedor' => $sku !== '' ? $sku : null,
+                    'proveedor_nombre' => 'Catálogo TPV legacy',
+                    'source' => 'legacy',
+                ];
+            }
+        }
+
+        // 3) c_ref de lote real (neto) — distinto de legacy.
+        if ($c_ref !== null) {
+            return [
+                'costo_bases' => self::bases_from_c_ref($c_ref, null),
+                'folio' => null,
+                'fecha_emision' => null,
+                'factura_id' => null,
+                'proveedor_id' => null,
+                'codigo_proveedor' => null,
+                'proveedor_nombre' => null,
+                'source' => 'c_ref',
+            ];
+        }
+
+        return $empty;
+    }
+
+    /**
+     * @param float|null $a
+     * @param float|null $b
+     * @return bool
+     */
+    private function values_close($a, $b) {
+        if ($a === null || $b === null) {
+            return false;
+        }
+        return abs((float) $a - (float) $b) <= self::LEGACY_COST_EPS;
+    }
+
     /**
      * Timeline: últimas N facturas por cada par.
      *
@@ -1195,8 +1312,9 @@ class Riverso_Cost_Lookup_Service {
             return ['highlight' => null, 'legacy_ref' => null];
         }
 
-        $neto = (float) $legacy['costo_neto'];
-        $bruto = self::neto_unit_to_bruto($neto);
+        $packed = $this->legacy_unit_costs_from_ref($legacy, $sku);
+        $neto = $packed['costo_unitario_neto'];
+        $bruto = $packed['costo_unitario_bruto'];
         return [
             'legacy_ref' => $legacy,
             'highlight' => [
@@ -1212,6 +1330,47 @@ class Riverso_Cost_Lookup_Service {
                 'variacion_pct' => null,
             ],
         ];
+    }
+
+    /**
+     * legacy_precio_ref.costo_neto suele venir del Excel FACTO en bruto pese al nombre.
+     * Devuelve neto + bruto unitarios comparables con facturas/cotizaciones.
+     *
+     * @param array  $legacy
+     * @param string $sku
+     * @return array{costo_unitario:?float,costo_unitario_neto:?float,costo_unitario_bruto:?float}
+     */
+    private function legacy_unit_costs_from_ref(array $legacy, $sku = '') {
+        $bruto = (float) ($legacy['costo_neto'] ?? 0);
+        if ($bruto <= 0) {
+            return self::pack_unit_costs(null, null);
+        }
+        $iva_tipo = $this->iva_tipo_for_sku($sku);
+        $neto = class_exists('Riverso_Pricing_Module')
+            ? Riverso_Pricing_Module::net_from_gross($bruto, $iva_tipo)
+            : round($bruto / 1.19, 4);
+        return self::pack_unit_costs($neto, $bruto);
+    }
+
+    /**
+     * @param string $sku
+     * @return string afecto|exento
+     */
+    private function iva_tipo_for_sku($sku) {
+        $sku = trim((string) $sku);
+        if ($sku === '') {
+            return 'afecto';
+        }
+        global $wpdb;
+        $tipo = $wpdb->get_var($wpdb->prepare(
+            "SELECT facto_iva_tipo FROM {$this->prefix}producto_base WHERE canonical_sku = %s LIMIT 1",
+            $sku
+        ));
+        if (class_exists('Riverso_Pricing_Module')) {
+            return Riverso_Pricing_Module::normalize_iva_tipo($tipo);
+        }
+        $tipo = strtolower(trim((string) $tipo));
+        return $tipo === 'exento' ? 'exento' : 'afecto';
     }
 
     /**
@@ -2511,8 +2670,7 @@ class Riverso_Cost_Lookup_Service {
         if (!$legacy) {
             return null;
         }
-        $neto = (float) $legacy['costo_neto'];
-        $packed = self::pack_unit_costs($neto);
+        $packed = $this->legacy_unit_costs_from_ref($legacy, $sku);
         return [
             'folio' => 'LEGACY',
             'fecha_emision' => $legacy['importado_at'],
@@ -2524,7 +2682,10 @@ class Riverso_Cost_Lookup_Service {
             'costo_unitario' => $packed['costo_unitario'],
             'costo_unitario_neto' => $packed['costo_unitario_neto'],
             'costo_unitario_bruto' => $packed['costo_unitario_bruto'],
-            'costo_bases' => self::pack_same_bases($neto, $packed['costo_unitario_bruto']),
+            'costo_bases' => self::pack_same_bases(
+                $packed['costo_unitario_neto'],
+                $packed['costo_unitario_bruto']
+            ),
             'sku' => $sku,
             'via' => $via,
         ];

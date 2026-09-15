@@ -351,47 +351,44 @@ class Riverso_Folio_Price_Process_Service {
                 : 'Falta decidir/asignar familia (no_requiere o familia)');
 
         $pasos = [];
+        $step_n = 1;
         if ($can_answer) {
             $pasos[] = $this->playbook_step(
-                '1. Responder aquí',
+                $step_n++ . '. Responder aquí',
                 '',
                 'Respondé «¿Necesita familia?» sin salir de Procesar folios.',
                 'answer_family'
             );
-            $pasos[] = $this->playbook_step(
-                '2. Abrir ficha del producto (tab Local)',
-                $hub_url,
-                'Atajo al Hub si preferís responder allá o asignar familia después.'
-            );
-            $pasos[] = $this->playbook_step(
-                '3. Ver tarea en la bandeja',
-                $tasks_url,
-                'Las tareas preguntar_familia / asignar_familia deben quedar completadas.'
-            );
-            $pasos[] = $this->playbook_step(
-                '4. Volver a Procesar folios y actualizar',
-                $this->folio_guide_url('riverso-pos-pricing', []),
-                'Pulsá «Ya resolví — actualizar» para que salga el ticket de error.'
-            );
-        } else {
-            $pasos = [
-                $this->playbook_step(
-                    '1. Abrir ficha del producto (tab Local)',
-                    $hub_url,
-                    'Asigná la familia al producto. Si no aplica packs, marcá no_requiere.'
-                ),
-                $this->playbook_step(
-                    '2. Ver tarea en la bandeja',
-                    $tasks_url,
-                    'La tarea asignar_familia debe quedar completada.'
-                ),
-                $this->playbook_step(
-                    '3. Volver a Procesar folios y actualizar',
-                    $this->folio_guide_url('riverso-pos-pricing', []),
-                    'Pulsá «Ya resolví — actualizar» para que salga el ticket de error.'
-                ),
-            ];
         }
+        $pasos[] = $this->playbook_step(
+            $step_n++ . '. Buscar familia existente',
+            '',
+            'Asigná el producto a una familia ya creada sin salir de Procesar folios.',
+            'search_family'
+        );
+        $pasos[] = $this->playbook_step(
+            $step_n++ . '. Crear familia nueva',
+            '',
+            'Creá la familia, asigná este producto y aplicá la regla R-1 por defecto.',
+            'create_family'
+        );
+        $pasos[] = $this->playbook_step(
+            $step_n++ . '. Abrir ficha del producto (tab Local)',
+            $hub_url,
+            $can_answer
+                ? 'Atajo al Hub si preferís responder allá o gestionar packs/unitario.'
+                : 'Atajo al Hub si preferís asignar familia allá o gestionar packs/unitario.'
+        );
+        $pasos[] = $this->playbook_step(
+            $step_n++ . '. Ver tarea en la bandeja',
+            $tasks_url,
+            'Las tareas preguntar_familia / asignar_familia deben quedar completadas.'
+        );
+        $pasos[] = $this->playbook_step(
+            $step_n++ . '. Volver a Procesar folios y actualizar',
+            $this->folio_guide_url('riverso-pos-pricing', []),
+            'Pulsá «Ya resolví — actualizar» para que salga el ticket de error.'
+        );
 
         $blocker = [
             'tipo' => $tipo,
@@ -400,6 +397,7 @@ class Riverso_Folio_Price_Process_Service {
             'sku' => $sku,
             'nombre' => $nombre,
             'can_answer_family' => $can_answer,
+            'can_assign_family' => true,
             'message' => $message,
             'url' => $hub_url,
             'pasos' => $pasos,
@@ -2487,6 +2485,9 @@ class Riverso_Folio_Price_Process_Service {
                     }
                     if (!empty($b['can_answer_family'])) {
                         $line['can_answer_family'] = true;
+                    }
+                    if (!empty($b['can_assign_family'])) {
+                        $line['can_assign_family'] = true;
                     }
                 }
             }

@@ -243,13 +243,31 @@ class Riverso_Messaging_Module {
         }
         unset($m);
 
-        $quotes = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, numero_documento, estado, tipo_fuente, tipo_doc, tipo_confirmado, fecha_documento, total, origen_mensaje_id
-             FROM {$p}cotizaciones_recibidas WHERE origen_mensaje_id IN (
-                SELECT id FROM {$p}messaging_messages WHERE thread_id = %d
-             ) ORDER BY id DESC",
-            $id
-        ), ARRAY_A) ?: [];
+        $quotes = [];
+        if (class_exists('Riverso_POS_Received_Quote_Module')) {
+            // Asegura columnas version_* antes del SELECT explícito.
+            $quote_mod = Riverso_POS_Received_Quote_Module::get_instance();
+            $quote_mod->decorate_version_meta([]);
+            $quotes = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, numero_documento, estado, tipo_fuente, tipo_doc, tipo_confirmado, fecha_documento, total,
+                        origen_mensaje_id, version_group_id, version_n
+                 FROM {$p}cotizaciones_recibidas WHERE origen_mensaje_id IN (
+                    SELECT id FROM {$p}messaging_messages WHERE thread_id = %d
+                 ) ORDER BY COALESCE(version_n, 9999) ASC, id ASC",
+                $id
+            ), ARRAY_A) ?: [];
+            $quotes = $quote_mod->decorate_version_meta($quotes);
+        } else {
+            $quotes = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, numero_documento, estado, tipo_fuente, tipo_doc, tipo_confirmado, fecha_documento, total,
+                        origen_mensaje_id
+                 FROM {$p}cotizaciones_recibidas WHERE origen_mensaje_id IN (
+                    SELECT id FROM {$p}messaging_messages WHERE thread_id = %d
+                 ) ORDER BY id ASC",
+                $id
+            ), ARRAY_A) ?: [];
+        }
+
         $quote_by_msg = [];
         foreach ($quotes as $q) {
             $oid = (int) ($q['origen_mensaje_id'] ?? 0);

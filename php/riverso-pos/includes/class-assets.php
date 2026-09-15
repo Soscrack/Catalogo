@@ -57,24 +57,11 @@ class Riverso_POS_Assets {
             ]
         ]);
 
-        // Editor de familias (Categorías/Familias y páginas de productos)
-        if (strpos($hook, 'riverso-pos-categories') !== false || strpos($hook, 'riverso-pos-products') !== false) {
-            $family_editor_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/family-editor.js';
-            $family_editor_ver = file_exists($family_editor_path)
-                ? (string) filemtime($family_editor_path)
-                : RIVERSO_POS_VERSION;
-            wp_enqueue_script(
-                'riverso-family-editor',
-                RIVERSO_POS_PLUGIN_URL . 'assets/js/family-editor.js',
-                ['jquery'],
-                $family_editor_ver,
-                true
-            );
-            wp_localize_script('riverso-family-editor', 'riversoFamilyEditor', [
-                'ajaxUrl' => admin_url('admin-ajax.php'),
-                'nonce' => wp_create_nonce('riverso_pos_nonce'),
-                'canManage' => current_user_can('riverso_manage_families'),
-            ]);
+        // Editor de familias (Categorías/Familias y productos; Precios lo encola en enqueue_price_history_assets)
+        if (strpos($hook, 'riverso-pos-categories') !== false
+            || strpos($hook, 'riverso-pos-products') !== false
+        ) {
+            $this->enqueue_family_editor_assets();
         }
 
         // Historial de costos: Chart.js + explorador
@@ -154,6 +141,28 @@ class Riverso_POS_Assets {
     }
 
     /**
+     * Encola family-editor.js (Categorías, productos, Precios).
+     */
+    private function enqueue_family_editor_assets() {
+        $family_editor_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/family-editor.js';
+        $family_editor_ver = file_exists($family_editor_path)
+            ? (string) filemtime($family_editor_path)
+            : RIVERSO_POS_VERSION;
+        wp_enqueue_script(
+            'riverso-family-editor',
+            RIVERSO_POS_PLUGIN_URL . 'assets/js/family-editor.js',
+            ['jquery'],
+            $family_editor_ver,
+            true
+        );
+        wp_localize_script('riverso-family-editor', 'riversoFamilyEditor', [
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('riverso_pos_nonce'),
+            'canManage' => current_user_can('riverso_manage_families'),
+        ]);
+    }
+
+    /**
      * Encola Chart.js + price-history.js (Centro de Precios)
      */
     private function enqueue_price_history_assets() {
@@ -174,12 +183,14 @@ class Riverso_POS_Assets {
             true
         );
 
+        $this->enqueue_family_editor_assets();
+
         $js_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/price-history.js';
         $js_ver = file_exists($js_path) ? (string) filemtime($js_path) : RIVERSO_POS_VERSION;
         wp_enqueue_script(
             'riverso-price-history',
             RIVERSO_POS_PLUGIN_URL . 'assets/js/price-history.js',
-            ['jquery', 'chartjs'],
+            ['jquery', 'chartjs', 'riverso-family-editor'],
             $js_ver,
             true
         );
@@ -195,6 +206,7 @@ class Riverso_POS_Assets {
                 || current_user_can('riverso_process_invoices'),
             'can_answer_family' => current_user_can('riverso_manage_products')
                 || current_user_can('riverso_manage_families'),
+            'can_manage_families' => current_user_can('riverso_manage_families'),
             'can_manage_competencia' => current_user_can('riverso_manage_competencia'),
             'can_view_barcodes' => current_user_can('riverso_view_products'),
             'can_assign_barcodes' => current_user_can('riverso_manage_products'),

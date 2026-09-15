@@ -13,6 +13,7 @@
     var canCreateLocal = !!cfg.can_create_local;
     var canLinkSku = !!cfg.can_link_sku;
     var canAnswerFamily = !!cfg.can_answer_family;
+    var canManageFamilies = !!cfg.can_manage_families;
     var canManageCompetencia = !!cfg.can_manage_competencia;
     var canViewBarcodes = !!cfg.can_view_barcodes;
     var canAssignBarcodes = !!cfg.can_assign_barcodes;
@@ -56,6 +57,11 @@
     var rpfSearchLinkTimer = null;
     /** Estado del modal responder familia. */
     var rpfAnswerFamily = null;
+    /** Estado del modal buscar familia existente. */
+    var rpfSearchFamily = null;
+    var rpfSearchFamilyTimer = null;
+    /** Estado del modal crear familia + R-1. */
+    var rpfCreateFamily = null;
 
     function money(n) {
         if (n === null || n === undefined || n === '' || isNaN(n)) {
@@ -715,6 +721,18 @@
                             ' data-sku="' + esc(b.sku || '') + '"' +
                             ' data-nombre="' + esc(b.nombre || '') + '">' +
                             esc(p.label || 'Responder aquí') + '</button>';
+                    } else if (p.action === 'search_family' && canManageFamilies && b.producto_base_id) {
+                        html += '<button type="button" class="button button-small button-primary rpf-search-family-open"' +
+                            ' data-producto="' + esc(b.producto_base_id || '') + '"' +
+                            ' data-sku="' + esc(b.sku || '') + '"' +
+                            ' data-nombre="' + esc(b.nombre || '') + '">' +
+                            esc(p.label || 'Buscar') + '</button>';
+                    } else if (p.action === 'create_family' && canManageFamilies && b.producto_base_id) {
+                        html += '<button type="button" class="button button-small button-primary rpf-create-family-open"' +
+                            ' data-producto="' + esc(b.producto_base_id || '') + '"' +
+                            ' data-sku="' + esc(b.sku || '') + '"' +
+                            ' data-nombre="' + esc(b.nombre || '') + '">' +
+                            esc(p.label || 'Crear') + '</button>';
                     } else if (p.url) {
                         html += '<a class="button button-small" href="' + esc(p.url) + '" target="_blank" rel="noopener">' +
                             esc(p.label || 'Abrir') + '</a>';
@@ -1041,6 +1059,16 @@
                         ' data-producto="' + ln.producto_base_id + '"' +
                         ' data-sku="' + esc(ln.sku || '') + '"' +
                         ' data-nombre="' + esc(ln.nombre || ln.descripcion || '') + '">Responder aquí</button>';
+                }
+                if (canManageFamilies && ln.can_assign_family && ln.producto_base_id) {
+                    saveBtn += ' <button type="button" class="button button-small button-primary rpf-search-family-open"' +
+                        ' data-producto="' + ln.producto_base_id + '"' +
+                        ' data-sku="' + esc(ln.sku || '') + '"' +
+                        ' data-nombre="' + esc(ln.nombre || ln.descripcion || '') + '">Buscar</button>';
+                    saveBtn += ' <button type="button" class="button button-small button-primary rpf-create-family-open"' +
+                        ' data-producto="' + ln.producto_base_id + '"' +
+                        ' data-sku="' + esc(ln.sku || '') + '"' +
+                        ' data-nombre="' + esc(ln.nombre || ln.descripcion || '') + '">Crear</button>';
                 }
             }
             if (confirmedHere && !blocked && !hybridOmitted) {
@@ -3529,6 +3557,140 @@
         $(document).on('click', '#rpf-answer-family-confirm', function () {
             submitAnswerFamily();
         });
+        $(document).on('click', '.rpf-search-family-open', function () {
+            if (!canManageFamilies) {
+                return;
+            }
+            openSearchFamilyModal({
+                producto_base_id: parseInt($(this).data('producto'), 10) || 0,
+                sku: String($(this).data('sku') || ''),
+                nombre: String($(this).data('nombre') || '')
+            });
+        });
+        $(document).on('click', '.rpf-search-family-close, .rpf-search-family-backdrop', function () {
+            closeSearchFamilyModal();
+        });
+        $(document).on('click', '#rpf-search-family-cancel', function () {
+            if (!rpfSearchFamily) {
+                return;
+            }
+            if (rpfSearchFamily.step === 'confirm') {
+                rpfSearchFamily.selected = null;
+                renderSearchFamilySearch();
+                return;
+            }
+            closeSearchFamilyModal();
+        });
+        $(document).on('input', '#rpf-search-family-q', function () {
+            if (!rpfSearchFamily || rpfSearchFamily.step !== 'search') {
+                return;
+            }
+            rpfSearchFamily.query = String($(this).val() || '');
+            scheduleSearchFamilyFetch();
+        });
+        $(document).on('click', '#rpf-search-family-go', function () {
+            if (!rpfSearchFamily) {
+                return;
+            }
+            rpfSearchFamily.query = String($('#rpf-search-family-q').val() || '');
+            fetchSearchFamilyResults();
+        });
+        $(document).on('click', '.rpf-search-family-pick', function () {
+            if (!rpfSearchFamily) {
+                return;
+            }
+            var grupoId = parseInt($(this).data('grupo'), 10) || 0;
+            var fam = null;
+            (rpfSearchFamily.items || []).forEach(function (f) {
+                if (parseInt(f.id, 10) === grupoId) {
+                    fam = f;
+                }
+            });
+            if (!fam) {
+                return;
+            }
+            rpfSearchFamily.selected = fam;
+            rpfSearchFamily.assignR1 = !fam.tiene_regla_precio;
+            rpfSearchFamily.role = 'member';
+            rpfSearchFamily.cantidad_unidades = null;
+            renderSearchFamilyConfirm();
+        });
+        $(document).on('change', '#rpf-search-family-assign-r1', function () {
+            if (!rpfSearchFamily) {
+                return;
+            }
+            rpfSearchFamily.assignR1 = !!$(this).prop('checked');
+        });
+        $(document).on('click', '#rpf-search-family-confirm', function () {
+            submitSearchFamily();
+        });
+        $(document).on('change', 'input[name="rpf-search-family-role"]', function () {
+            if (!rpfSearchFamily) {
+                return;
+            }
+            rpfSearchFamily.role = String($(this).val() || 'member');
+            var isMember = rpfSearchFamily.role === 'member';
+            $('#rpf-search-family-qty-wrap').toggle(isMember);
+        });
+        $(document).on('click', '.rpf-search-family-view', function () {
+            var grupoId = parseInt($(this).data('grupo'), 10) || 0;
+            if (!grupoId || !window.RiversoFamilyEditor) {
+                return;
+            }
+            RiversoFamilyEditor.openView(grupoId);
+        });
+        $(document).on('click', '#rpf-search-family-list .riverso-fp-toggle', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var $wrap = $(this).closest('.riverso-family-list-preview');
+            var $ul = $wrap.find('.riverso-fp-members');
+            var open = !$ul.is(':visible');
+            $ul.toggle(open);
+            var count = $wrap.find('.riverso-fp-member').length;
+            $(this).text((open ? '▼' : '▶') + ' ' + count + ' miembro(s)');
+            $wrap.attr('data-expanded', open ? '1' : '0');
+        });
+        $(document).on('click', '.rpf-create-family-open', function () {
+            if (!canManageFamilies) {
+                return;
+            }
+            openCreateFamilyModal({
+                producto_base_id: parseInt($(this).data('producto'), 10) || 0,
+                sku: String($(this).data('sku') || ''),
+                nombre: String($(this).data('nombre') || '')
+            });
+        });
+        $(document).on('click', '.rpf-create-family-close, .rpf-create-family-backdrop', function () {
+            closeCreateFamilyModal();
+        });
+        $(document).on('click', '#rpf-create-family-cancel', function () {
+            if (rpfCreateFamily && rpfCreateFamily.step === 'qty') {
+                renderCreateFamilyRoleStep();
+                return;
+            }
+            closeCreateFamilyModal();
+        });
+        $(document).on('click', '#rpf-create-family-role-unit', function () {
+            launchFamilyEditorFromCreate('unit');
+        });
+        $(document).on('click', '#rpf-create-family-role-member', function () {
+            renderCreateFamilyQtyStep();
+        });
+        $(document).on('click', '#rpf-create-family-role-manual', function () {
+            launchFamilyEditorFromCreate('manual');
+        });
+        $(document).on('click', '#rpf-create-family-qty-continue', function () {
+            var qty = parseFloat($('#rpf-create-family-qty').val());
+            if (!(qty > 0)) {
+                window.alert('Indicá una cantidad de envase mayor a 0 (ej. 100)');
+                $('#rpf-create-family-qty').trigger('focus');
+                return;
+            }
+            if (rpfCreateFamily) {
+                rpfCreateFamily.cantidad_unidades = qty;
+            }
+            launchFamilyEditorFromCreate('member');
+        });
         $(document).on('click', '.rpf-comp-open', function () {
             openRpfCompModal({
                 producto_base_id: parseInt($(this).data('producto'), 10) || 0,
@@ -4305,6 +4467,597 @@
             $btn.prop('disabled', false).text('Confirmar');
             $('#rpf-answer-family-cancel').prop('disabled', false);
         });
+    }
+
+    function closeSearchFamilyModal() {
+        if (rpfSearchFamilyTimer) {
+            clearTimeout(rpfSearchFamilyTimer);
+            rpfSearchFamilyTimer = null;
+        }
+        rpfSearchFamily = null;
+        $('#rpf-search-family-modal').hide().attr('aria-hidden', 'true');
+        $('#rpf-search-family-body').empty();
+        $('#rpf-search-family-footer').empty();
+        $('#rpf-search-family-title').text('Buscar familia');
+    }
+
+    function openSearchFamilyModal(opts) {
+        opts = opts || {};
+        var productId = opts.producto_base_id || 0;
+        if (!productId) {
+            window.alert('Producto no válido');
+            return;
+        }
+        var inv = (rpfSession && rpfSession.invoice) || {};
+        rpfSearchFamily = {
+            step: 'search',
+            producto_base_id: productId,
+            sku: opts.sku || '',
+            nombre: opts.nombre || '',
+            folio: inv.folio || '',
+            query: opts.nombre || opts.sku || '',
+            items: [],
+            loading: !!(opts.nombre || opts.sku),
+            selected: null,
+            assignR1: false,
+            role: 'member',
+            cantidad_unidades: null
+        };
+        $('#rpf-search-family-modal').css('display', 'flex').attr('aria-hidden', 'false');
+        renderSearchFamilySearch();
+        if (rpfSearchFamily.query) {
+            fetchSearchFamilyResults();
+        }
+    }
+
+    function scheduleSearchFamilyFetch() {
+        if (rpfSearchFamilyTimer) {
+            clearTimeout(rpfSearchFamilyTimer);
+        }
+        rpfSearchFamilyTimer = setTimeout(function () {
+            fetchSearchFamilyResults();
+        }, 300);
+    }
+
+    function fetchSearchFamilyResults() {
+        if (!rpfSearchFamily) {
+            return;
+        }
+        var q = String(rpfSearchFamily.query || '').trim();
+        rpfSearchFamily.items = [];
+        if (q !== '' && q.length < 2 && !/^\d+$/.test(q)) {
+            rpfSearchFamily.loading = false;
+            if (rpfSearchFamily.step === 'search') {
+                renderSearchFamilySearch();
+            }
+            return;
+        }
+        if (q === '') {
+            rpfSearchFamily.loading = false;
+            if (rpfSearchFamily.step === 'search') {
+                renderSearchFamilySearch();
+            }
+            return;
+        }
+        rpfSearchFamily.loading = true;
+        if (rpfSearchFamily.step === 'search') {
+            renderSearchFamilySearch();
+        }
+        var reqQuery = q;
+        post('riverso_families_list', {
+            search: q
+        }).done(function (res) {
+            if (!rpfSearchFamily || String(rpfSearchFamily.query || '').trim() !== reqQuery) {
+                return;
+            }
+            rpfSearchFamily.loading = false;
+            if (!res || !res.success) {
+                window.alert((res && res.data && res.data.message) || 'No se pudo buscar familias');
+                if (rpfSearchFamily.step === 'search') {
+                    renderSearchFamilySearch();
+                }
+                return;
+            }
+            rpfSearchFamily.items = (res.data && res.data.families) || [];
+            if (rpfSearchFamily.step === 'search') {
+                renderSearchFamilySearch();
+            }
+        }).fail(function () {
+            if (!rpfSearchFamily) {
+                return;
+            }
+            rpfSearchFamily.loading = false;
+            window.alert('Error de red al buscar familias');
+            if (rpfSearchFamily.step === 'search') {
+                renderSearchFamilySearch();
+            }
+        });
+    }
+
+    function renderSearchFamilySearch() {
+        if (!rpfSearchFamily) {
+            return;
+        }
+        rpfSearchFamily.step = 'search';
+        $('#rpf-search-family-title').text('Buscar familia');
+
+        if (!$('#rpf-search-family-q').length) {
+            $('#rpf-search-family-body').html(
+                '<dl class="rpf-create-local-meta">' +
+                '<dt>Folio</dt><dd><code>' + esc(rpfSearchFamily.folio || '—') + '</code></dd>' +
+                '<dt>SKU</dt><dd><code>' + esc(rpfSearchFamily.sku || '—') + '</code></dd>' +
+                '<dt>Producto</dt><dd>' + esc(rpfSearchFamily.nombre || '—') + '</dd>' +
+                '</dl>' +
+                '<div class="rpf-create-local-field rpf-search-link-field">' +
+                '<label for="rpf-search-family-q">Buscar familia (nombre, código, miembro, SKU o barcode)</label>' +
+                '<div class="rpf-search-link-qrow">' +
+                '<input type="search" id="rpf-search-family-q" class="large-text" autocomplete="off" ' +
+                'value="' + esc(rpfSearchFamily.query || '') + '" ' +
+                'placeholder="Nombre, miembro, SKU, código proveedor o barcode">' +
+                '<button type="button" class="button" id="rpf-search-family-go">Buscar</button>' +
+                '</div>' +
+                '<p class="description">Mínimo 2 caracteres. Misma búsqueda que Categorías y Familias.</p>' +
+                '</div>' +
+                '<div class="rpf-search-family-count-row">' +
+                '<span id="rpf-search-family-count" class="description"></span>' +
+                '</div>' +
+                '<div id="rpf-search-family-list" class="rpf-search-family-list">' +
+                '<p class="description" style="text-align:center;color:#999;">Escribí para buscar familias.</p>' +
+                '</div>'
+            );
+            $('#rpf-search-family-footer').html(
+                '<button type="button" class="button" id="rpf-search-family-cancel">Cerrar</button>'
+            );
+            setTimeout(function () {
+                var $q = $('#rpf-search-family-q');
+                if ($q.length) {
+                    $q.trigger('focus');
+                }
+            }, 50);
+        } else if (String($('#rpf-search-family-q').val() || '') !== String(rpfSearchFamily.query || '')) {
+            $('#rpf-search-family-q').val(rpfSearchFamily.query || '');
+        }
+
+        renderSearchFamilyList();
+    }
+
+    function rpfHighlightSearchTerm(text, query) {
+        var raw = text === null || text === undefined ? '' : String(text);
+        var escaped = esc(raw || '—');
+        var q = (query || '').trim();
+        if (!q) {
+            return escaped;
+        }
+        try {
+            var re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+            return escaped.replace(re, '<mark style="background:#fff59d;padding:0 2px;">$1</mark>');
+        } catch (e) {
+            return escaped;
+        }
+    }
+
+    function rpfRenderFamilySkusInline(members, search) {
+        var list = members || [];
+        if (!list.length) {
+            return '';
+        }
+        var locals = list.map(function (m) {
+            return rpfHighlightSearchTerm(m.sku_local || m.canonical_sku || '—', search);
+        }).join(', ');
+        var onlines = list.map(function (m) {
+            return rpfHighlightSearchTerm(m.sku_online || '—', search);
+        }).join(', ');
+        return ' | <span class="riverso-fp-inline-skus">' +
+            '<span class="sku-local" style="color:#1565c0;">Local: <code style="color:#1565c0;">' + locals + '</code></span> | ' +
+            '<span class="sku-online" style="color:#2e7d32;">Online: <code style="color:#2e7d32;">' + onlines + '</code></span>' +
+            '</span>';
+    }
+
+    function rpfRenderFamilyPreview(members, search) {
+        if (window.RiversoFamilyEditor && typeof RiversoFamilyEditor.renderListPreview === 'function') {
+            return RiversoFamilyEditor.renderListPreview(members || [], {
+                expanded: !!search,
+                search: search || ''
+            });
+        }
+        return '';
+    }
+
+    function renderSearchFamilyList() {
+        if (!rpfSearchFamily) {
+            return;
+        }
+        var $list = $('#rpf-search-family-list');
+        var $count = $('#rpf-search-family-count');
+        if (!$list.length) {
+            return;
+        }
+        if (rpfSearchFamily.loading) {
+            $list.html('<p style="color:#999;text-align:center;">Buscando…</p>');
+            $count.text('');
+            return;
+        }
+        var q = String(rpfSearchFamily.query || '').trim();
+        if (q === '') {
+            $list.html('<p style="color:#999;text-align:center;">Escribí para buscar familias.</p>');
+            $count.text('');
+            return;
+        }
+        if (q.length < 2 && !/^\d+$/.test(q)) {
+            $list.html('<p style="color:#999;text-align:center;">Mínimo 2 caracteres.</p>');
+            $count.text('');
+            return;
+        }
+        var items = rpfSearchFamily.items || [];
+        if (!items.length) {
+            $list.html('<p style="color:#999;text-align:center;">Sin coincidencias para «' + esc(q) + '»</p>');
+            $count.text('0 coincidencias');
+            return;
+        }
+
+        var html = items.map(function (fam) {
+            var stock = (fam.stock_unidades !== undefined && fam.stock_unidades !== null)
+                ? Number(fam.stock_unidades).toLocaleString('es-CL')
+                : '—';
+            var warn = (fam.stock_warnings && fam.stock_warnings.length)
+                ? ' <span title="' + esc((fam.stock_warnings || []).join(' | ')) + '" style="color:#e65100;">⚠</span>'
+                : '';
+            var unitSku = fam.unit_sku
+                ? ' | Unitario: <code>' + esc(fam.unit_sku) + '</code>'
+                : '';
+            var ruleWarn = fam.falta_regla_precio
+                ? ' <span title="Falta asignar regla de precio" style="color:#c62828;font-weight:700;">⚠ Sin regla de precio</span>'
+                : (!fam.tiene_regla_precio
+                    ? ' <span style="color:#7a5b00;">Sin regla</span>'
+                    : ' <span style="color:#2e7d32;">Con regla</span>');
+            var memberSkus = rpfRenderFamilySkusInline(fam.members, q);
+            var preview = rpfRenderFamilyPreview(fam.members, q);
+            return '<div class="family-item" data-family-id="' + esc(String(fam.id || '')) + '">' +
+                '<div class="family-item-main">' +
+                '<div>' +
+                '<strong>' + rpfHighlightSearchTerm(fam.nombre || '', q) + '</strong><br>' +
+                '<small style="color:#666;">Tipo: ' + esc(fam.tipo_sustitucion || '-') +
+                ' | Miembros: ' + esc(String(fam.miembros_count || 0)) +
+                ' | Stock familia: ' + stock + ' u' + warn + unitSku + ruleWarn + memberSkus +
+                '</small></div>' +
+                '<div style="display:flex;gap:4px;flex-shrink:0;">' +
+                '<button type="button" class="button button-small rpf-search-family-view" data-grupo="' +
+                esc(String(fam.id || '')) + '">Ver</button>' +
+                '<button type="button" class="button button-small button-primary rpf-search-family-pick" data-grupo="' +
+                esc(String(fam.id || '')) + '">Elegir</button>' +
+                '</div></div>' +
+                preview +
+                '</div>';
+        }).join('');
+
+        $list.html(html);
+        $count.text(items.length + (items.length === 1 ? ' coincidencia' : ' coincidencias'));
+    }
+
+    function renderSearchFamilyConfirm() {
+        if (!rpfSearchFamily || !rpfSearchFamily.selected) {
+            return;
+        }
+        rpfSearchFamily.step = 'confirm';
+        if (!rpfSearchFamily.role) {
+            rpfSearchFamily.role = 'member';
+        }
+        var fam = rpfSearchFamily.selected;
+        var hasRule = !!fam.tiene_regla_precio;
+        var role = rpfSearchFamily.role || 'member';
+        var ruleWarn = '';
+        if (!hasRule) {
+            ruleWarn = '<p class="description" style="color:#7a5b00;">Esta familia no tiene regla de precio. ' +
+                'Podés asignar R-1 al confirmar (recomendado para Procesar folios).</p>' +
+                '<label style="display:block;margin:8px 0;">' +
+                '<input type="checkbox" id="rpf-search-family-assign-r1"' +
+                (rpfSearchFamily.assignR1 ? ' checked' : '') + '>' +
+                ' Asignar regla R-1 a esta familia</label>';
+        } else {
+            ruleWarn = '<p class="description">La familia ya tiene regla; no se modifica.</p>';
+        }
+        $('#rpf-search-family-title').text('Confirmar asignación');
+        $('#rpf-search-family-body').html(
+            '<p>Se asignará el producto a esta familia:</p>' +
+            '<dl class="rpf-create-local-meta">' +
+            '<dt>Producto</dt><dd>' + esc(rpfSearchFamily.nombre || '—') +
+            ' <code>' + esc(rpfSearchFamily.sku || '') + '</code></dd>' +
+            '<dt>Familia</dt><dd><strong>' + esc(fam.nombre || '') + '</strong> ' +
+            '<code>' + esc(fam.codigo_grupo || '') + '</code></dd>' +
+            '<dt>Miembros</dt><dd>' + esc(String(fam.miembros_count != null ? fam.miembros_count : 0)) + '</dd>' +
+            '</dl>' +
+            '<fieldset class="rpf-create-family-roles" style="border:1px solid #ddd;padding:10px;margin:10px 0;border-radius:4px;">' +
+            '<legend style="padding:0 6px;"><strong>Rol de este SKU en la familia</strong></legend>' +
+            '<label style="display:block;margin:6px 0;">' +
+            '<input type="radio" name="rpf-search-family-role" value="unit"' +
+            (role === 'unit' ? ' checked' : '') + '> Unitario / granel</label>' +
+            '<label style="display:block;margin:6px 0;">' +
+            '<input type="radio" name="rpf-search-family-role" value="member"' +
+            (role === 'member' ? ' checked' : '') + '> Miembro en envase</label>' +
+            '<div id="rpf-search-family-qty-wrap" style="' + (role === 'member' ? '' : 'display:none;') + 'margin:8px 0 0 22px;">' +
+            '<label for="rpf-search-family-qty">Cantidad de envase<br>' +
+            '<input type="number" id="rpf-search-family-qty" class="small-text" min="0.0001" step="1" ' +
+            'value="' + esc(String(rpfSearchFamily.cantidad_unidades || '')) + '" placeholder="ej. 100"></label>' +
+            '</div></fieldset>' +
+            ruleWarn +
+            '<p class="rpf-create-local-sure">¿Estás seguro?</p>'
+        );
+        $('#rpf-search-family-footer').html(
+            '<button type="button" class="button" id="rpf-search-family-cancel">Volver</button>' +
+            '<button type="button" class="button button-primary" id="rpf-search-family-confirm">Asignar</button>'
+        );
+    }
+
+    function submitSearchFamily() {
+        if (!rpfSearchFamily || !rpfSearchFamily.selected) {
+            return;
+        }
+        var fam = rpfSearchFamily.selected;
+        var grupoId = parseInt(fam.id, 10) || 0;
+        var role = String(
+            $('input[name="rpf-search-family-role"]:checked').val()
+            || rpfSearchFamily.role
+            || 'member'
+        );
+        rpfSearchFamily.role = role;
+        var qty = null;
+        if (role === 'member') {
+            qty = parseFloat($('#rpf-search-family-qty').val());
+            if (!(qty > 0)) {
+                window.alert('Indicá una cantidad de envase mayor a 0 (ej. 100)');
+                $('#rpf-search-family-qty').trigger('focus');
+                return;
+            }
+            rpfSearchFamily.cantidad_unidades = qty;
+        } else if (role === 'unit') {
+            qty = 1;
+        }
+        var assignR1 = !fam.tiene_regla_precio && !!$('#rpf-search-family-assign-r1').prop('checked');
+        rpfSearchFamily.assignR1 = assignR1;
+        var productId = rpfSearchFamily.producto_base_id;
+        var $btn = $('#rpf-search-family-confirm').prop('disabled', true).text('Asignando…');
+        $('#rpf-search-family-cancel').prop('disabled', true);
+
+        function finishOk() {
+            closeSearchFamilyModal();
+            if (rpfFacturaId) {
+                refreshSession();
+            }
+        }
+
+        function finishFail(msg, stillRefresh) {
+            window.alert(msg || 'No se pudo asignar a la familia');
+            $btn.prop('disabled', false).text('Asignar');
+            $('#rpf-search-family-cancel').prop('disabled', false);
+            if (stillRefresh && rpfFacturaId) {
+                refreshSession();
+            }
+        }
+
+        function afterEnvase() {
+            if (role === 'unit') {
+                post('riverso_families_unit_configure', {
+                    grupo_id: grupoId,
+                    convert_producto_base_id: productId,
+                    es_producto_unitario: 1,
+                    confirm_r1: assignR1 ? 1 : 0,
+                    confirm_link_preview: 1
+                }).done(function (rUnit) {
+                    if (!rUnit || !rUnit.success) {
+                        finishFail(
+                            (rUnit && rUnit.data && rUnit.data.message) ||
+                            'Miembro asignado, pero no se pudo configurar como unitario',
+                            true
+                        );
+                        return;
+                    }
+                    finishOk();
+                }).fail(function () {
+                    finishFail('Miembro asignado, pero falló la red al configurar unitario', true);
+                });
+                return;
+            }
+            if (assignR1) {
+                post('riverso_families_assign_default_rule', {
+                    grupo_id: grupoId
+                }).done(function (r2) {
+                    if (!r2 || !r2.success) {
+                        finishFail(
+                            (r2 && r2.data && r2.data.message) ||
+                            'Producto asignado, pero no se pudo aplicar R-1',
+                            true
+                        );
+                        return;
+                    }
+                    finishOk();
+                }).fail(function () {
+                    finishFail('Producto asignado, pero falló la red al aplicar R-1', true);
+                });
+                return;
+            }
+            finishOk();
+        }
+
+        function afterMember() {
+            if (qty != null && qty > 0) {
+                post('riverso_families_set_member_envase', {
+                    grupo_id: grupoId,
+                    producto_base_id: productId,
+                    cantidad_unidades: qty
+                }).done(function (rEnv) {
+                    if (!rEnv || !rEnv.success) {
+                        finishFail(
+                            (rEnv && rEnv.data && rEnv.data.message) ||
+                            'Miembro asignado, pero no se pudo guardar el envase',
+                            true
+                        );
+                        return;
+                    }
+                    afterEnvase();
+                }).fail(function () {
+                    finishFail('Miembro asignado, pero falló la red al guardar envase', true);
+                });
+                return;
+            }
+            afterEnvase();
+        }
+
+        post('riverso_families_add_member', {
+            grupo_id: grupoId,
+            producto_base_id: productId
+        }).done(function (res) {
+            if (!res || !res.success) {
+                finishFail((res && res.data && res.data.message) || 'No se pudo asignar a la familia');
+                return;
+            }
+            afterMember();
+        }).fail(function () {
+            finishFail('Error de red');
+        });
+    }
+
+    function closeCreateFamilyModal() {
+        rpfCreateFamily = null;
+        $('#rpf-create-family-modal').hide().attr('aria-hidden', 'true');
+        $('#rpf-create-family-body').empty();
+        $('#rpf-create-family-footer').empty();
+        $('#rpf-create-family-title').text('Crear familia');
+    }
+
+    function openCreateFamilyModal(opts) {
+        opts = opts || {};
+        var productId = opts.producto_base_id || 0;
+        if (!productId) {
+            window.alert('Producto no válido');
+            return;
+        }
+        var inv = (rpfSession && rpfSession.invoice) || {};
+        rpfCreateFamily = {
+            step: 'role',
+            producto_base_id: productId,
+            sku: opts.sku || '',
+            producto_nombre: opts.nombre || '',
+            nombre: opts.nombre || '',
+            folio: inv.folio || '',
+            role: null,
+            cantidad_unidades: null
+        };
+        $('#rpf-create-family-modal').css('display', 'flex').attr('aria-hidden', 'false');
+        renderCreateFamilyRoleStep();
+    }
+
+    function renderCreateFamilyRoleStep() {
+        if (!rpfCreateFamily) {
+            return;
+        }
+        rpfCreateFamily.step = 'role';
+        rpfCreateFamily.role = null;
+        $('#rpf-create-family-title').text('Crear familia');
+        $('#rpf-create-family-body').html(
+            '<dl class="rpf-create-local-meta">' +
+            '<dt>Folio</dt><dd><code>' + esc(rpfCreateFamily.folio || '—') + '</code></dd>' +
+            '<dt>SKU</dt><dd><code>' + esc(rpfCreateFamily.sku || '—') + '</code></dd>' +
+            '<dt>Producto</dt><dd>' + esc(rpfCreateFamily.producto_nombre || '—') + '</dd>' +
+            '</dl>' +
+            '<p class="rpf-answer-family-question">¿Qué es este producto en la familia nueva?</p>' +
+            '<div class="rpf-create-family-role-actions" style="display:flex;flex-direction:column;gap:8px;margin:12px 0;">' +
+            '<button type="button" class="button button-primary" id="rpf-create-family-role-unit">' +
+            'Unitario / granel</button>' +
+            '<button type="button" class="button button-primary" id="rpf-create-family-role-member">' +
+            'Miembro en envase</button>' +
+            '<button type="button" class="button" id="rpf-create-family-role-manual">' +
+            'Manual (editor completo)</button>' +
+            '</div>' +
+            '<p class="description">Unitario = este SKU es la unidad mínima (R-1 al guardar). ' +
+            'Miembro = pack/caja (se pide cantidad de envase). ' +
+            'Manual = mismo editor de Categorías; el producto queda como miembro pendiente.</p>'
+        );
+        $('#rpf-create-family-footer').html(
+            '<button type="button" class="button" id="rpf-create-family-cancel">Cancelar</button>'
+        );
+    }
+
+    function renderCreateFamilyQtyStep() {
+        if (!rpfCreateFamily) {
+            return;
+        }
+        rpfCreateFamily.step = 'qty';
+        rpfCreateFamily.role = 'member';
+        $('#rpf-create-family-title').text('Cantidad de envase');
+        $('#rpf-create-family-body').html(
+            '<dl class="rpf-create-local-meta">' +
+            '<dt>SKU</dt><dd><code>' + esc(rpfCreateFamily.sku || '—') + '</code></dd>' +
+            '<dt>Producto</dt><dd>' + esc(rpfCreateFamily.producto_nombre || '—') + '</dd>' +
+            '</dl>' +
+            '<div class="rpf-create-local-field">' +
+            '<label for="rpf-create-family-qty">¿Cuántas unidades mínimas trae este envase?</label>' +
+            '<input type="number" id="rpf-create-family-qty" class="regular-text" min="0.0001" step="1" ' +
+            'value="' + esc(String(rpfCreateFamily.cantidad_unidades || '')) + '" placeholder="ej. 100" autocomplete="off">' +
+            '<p class="description">Ej.: caja de 100 → 100. Luego se abre el editor de familia (podés elegir el unitario).</p>' +
+            '</div>'
+        );
+        $('#rpf-create-family-footer').html(
+            '<button type="button" class="button" id="rpf-create-family-cancel">Volver</button>' +
+            '<button type="button" class="button button-primary" id="rpf-create-family-qty-continue">Continuar</button>'
+        );
+        setTimeout(function () {
+            var $q = $('#rpf-create-family-qty');
+            if ($q.length) {
+                $q.trigger('focus').select();
+            }
+        }, 50);
+    }
+
+    function launchFamilyEditorFromCreate(role) {
+        if (!rpfCreateFamily) {
+            return;
+        }
+        if (!window.RiversoFamilyEditor || typeof RiversoFamilyEditor.openCreate !== 'function') {
+            window.alert('Editor de familias no cargado. Recargá la página.');
+            return;
+        }
+        rpfCreateFamily.role = role;
+        var productId = rpfCreateFamily.producto_base_id;
+        var pending = {
+            producto_base_id: productId,
+            nombre_canonico: rpfCreateFamily.producto_nombre || '',
+            sku_local: rpfCreateFamily.sku || '',
+            canonical_sku: rpfCreateFamily.sku || '',
+            es_local: true,
+            es_online: false,
+            cantidad_unidades: null
+        };
+        var seed = {
+            nombre: rpfCreateFamily.nombre || rpfCreateFamily.producto_nombre || '',
+            pendingMembers: [pending],
+            confirmR1: false
+        };
+        if (role === 'unit') {
+            pending.cantidad_unidades = 1;
+            seed.convertProductoBaseId = productId;
+            seed.confirmR1 = true;
+        } else if (role === 'member') {
+            pending.cantidad_unidades = rpfCreateFamily.cantidad_unidades;
+        }
+        // manual: miembro pendiente sin envase ni unitario
+
+        closeCreateFamilyModal();
+
+        window.riversoFamilyEditor = window.riversoFamilyEditor || {};
+        window.riversoFamilyEditor.ajaxUrl = ajaxUrl;
+        window.riversoFamilyEditor.nonce = nonce;
+        window.riversoFamilyEditor.canManage = canManageFamilies;
+        window.riversoFamilyEditor.onChanged = function () {
+            if (rpfFacturaId) {
+                refreshSession();
+            }
+        };
+
+        RiversoFamilyEditor.openCreate(function () {
+            if (rpfFacturaId) {
+                refreshSession();
+            }
+        }, seed);
     }
 
     function openHybridWizard(facturaId) {

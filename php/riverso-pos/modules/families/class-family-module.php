@@ -44,6 +44,8 @@ class Riverso_Family_Module {
         add_action('wp_ajax_riverso_families_list', [$this, 'ajax_list_families']);
         add_action('wp_ajax_riverso_families_get', [$this, 'ajax_get_family']);
         add_action('wp_ajax_riverso_families_create', [$this, 'ajax_create_family']);
+        add_action('wp_ajax_riverso_families_create_and_assign', [$this, 'ajax_create_and_assign']);
+        add_action('wp_ajax_riverso_families_assign_default_rule', [$this, 'ajax_assign_default_rule']);
         add_action('wp_ajax_riverso_families_update', [$this, 'ajax_update_family']);
         add_action('wp_ajax_riverso_families_delete', [$this, 'ajax_delete_family']);
         add_action('wp_ajax_riverso_families_add_member', [$this, 'ajax_add_member']);
@@ -219,6 +221,7 @@ class Riverso_Family_Module {
             $unit_id = !empty($family['unit_producto_base_id'])
                 ? intval($family['unit_producto_base_id']) : 0;
             $family['unit_producto_base_id'] = $unit_id ?: null;
+            $family['tiene_regla_precio'] = !empty($families_with_rule[intval($family['id'])]);
             $family['falta_regla_precio'] = !empty($family['es_producto_unitario'])
                 && empty($families_with_rule[intval($family['id'])]);
 
@@ -469,6 +472,194 @@ class Riverso_Family_Module {
         ), ARRAY_A);
 
         wp_send_json_success(['family' => $family]);
+    }
+
+    /**
+     * AJAX: Crear familia, asignar producto y aplicar regla R-1 (atómico).
+     * Usado desde Centro de Precios → Procesar folios.
+     */
+    public function ajax_create_and_assign() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $producto_base_id = absint($_POST['producto_base_id'] ?? 0);
+        $nombre = sanitize_text_field($_POST['nombre'] ?? '');
+        $tipo_sustitucion = self::normalize_tipo($_POST['tipo_sustitucion'] ?? 'exacta');
+        $notas = sanitize_textarea_field($_POST['notas'] ?? '');
+        $codigo_grupo = sanitize_text_field($_POST['codigo_grupo'] ?? '');
+
+        if (!$producto_base_id) {
+            wp_send_json_error(['message' => 'producto_base_id es requerido']);
+        }
+        if (!$nombre) {
+            wp_send_json_error(['message' => 'El nombre es requerido']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $product = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, nombre_canonico, canonical_sku, deleted_at
+             FROM {$prefix}producto_base WHERE id = %d",
+            $producto_base_id
+        ), ARRAY_A);
+        if (!$product || !empty($product['deleted_at'])) {
+            wp_send_json_error(['message' => 'Producto no encontrado']);
+        }
+
+        if ($tipo_sustitucion === 'exacta') {
+            $other = $this->get_exacta_family_of_product($producto_base_id);
+            if ($other) {
+                wp_send_json_error([
+                    'message' => 'El producto ya pertenece a la familia exacta "'
+                        . ($other['nombre'] ?: $other['codigo_grupo'])
+                        . '". Un SKU solo puede estar en una familia exacta.',
+                ]);
+            }
+        }
+
+        // Verificar R-1 antes de crear (evitar familia huérfana sin regla).
+        if (!class_exists('Riverso_Unit_Product_Service') || !class_exists('Riverso_Price_Rules_Module')) {
+            wp_send_json_error(['message' => 'Módulo de reglas de precio no disponible']);
+        }
+        $r1_id = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}price_rules
+             WHERE codigo = %s AND estado = 'aprobada'
+             ORDER BY version DESC LIMIT 1",
+            'R-1'
+        ));
+        if (!$r1_id) {
+            wp_send_json_error(['message' => 'Regla R-1 no encontrada (debe existir una versión aprobada)']);
+        }
+
+        $codigo_grupo = $this->make_unique_codigo_grupo($nombre, $codigo_grupo);
+        if (is_wp_error($codigo_grupo)) {
+            wp_send_json_error(['message' => $codigo_grupo->get_error_message()]);
+        }
+
+        $wpdb->insert(
+            "{$prefix}equivalence_groups",
+            [
+                'codigo_grupo' => $codigo_grupo,
+                'nombre' => $nombre,
+                'tipo_sustitucion' => $tipo_sustitucion,
+                'notas' => $notas,
+                'activo' => 1,
+            ],
+            ['%s', '%s', '%s', '%s', '%d']
+        );
+
+        $grupo_id = (int) $wpdb->insert_id;
+        if (!$grupo_id) {
+            wp_send_json_error(['message' => 'No se pudo crear la familia']);
+        }
+
+        // Asignar R-1 antes del miembro: si falla, no se cierran tareas de familia.
+        $assign = Riverso_Unit_Product_Service::get_instance()->assign_default_rule($grupo_id, $r1_id);
+        if (is_wp_error($assign)) {
+            $this->soft_delete_family_for_rollback($grupo_id);
+            wp_send_json_error(['message' => $assign->get_error_message()]);
+        }
+
+        $member_id = $this->ensure_member($grupo_id, $producto_base_id);
+        if (!$member_id) {
+            $this->soft_delete_family_for_rollback($grupo_id);
+            wp_send_json_error(['message' => 'No se pudo asignar el producto a la familia']);
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('family_created_and_assigned', 'equivalence_groups', $grupo_id, [
+                'codigo_grupo' => $codigo_grupo,
+                'nombre' => $nombre,
+                'producto_base_id' => $producto_base_id,
+                'rule_id' => $r1_id,
+                'rule_codigo' => 'R-1',
+            ]);
+        }
+
+        $family = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}equivalence_groups WHERE id = %d",
+            $grupo_id
+        ), ARRAY_A);
+
+        wp_send_json_success([
+            'family' => $family,
+            'grupo_id' => $grupo_id,
+            'producto_base_id' => $producto_base_id,
+            'rule_id' => $r1_id,
+            'rule_codigo' => 'R-1',
+            'message' => 'Familia creada, producto asignado y regla R-1 aplicada',
+        ]);
+    }
+
+    /**
+     * AJAX: Asignar regla R-1 (u otra) a una familia existente.
+     */
+    public function ajax_assign_default_rule() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $rule_id = absint($_POST['rule_id'] ?? 0);
+        if (!$grupo_id) {
+            wp_send_json_error(['message' => 'grupo_id requerido']);
+        }
+
+        if (!class_exists('Riverso_Unit_Product_Service')) {
+            wp_send_json_error(['message' => 'Servicio de producto unitario no disponible']);
+        }
+
+        $assign = Riverso_Unit_Product_Service::get_instance()->assign_default_rule($grupo_id, $rule_id);
+        if (is_wp_error($assign)) {
+            wp_send_json_error(['message' => $assign->get_error_message()]);
+        }
+
+        wp_send_json_success([
+            'grupo_id' => $grupo_id,
+            'message' => 'Regla de precio asignada a la familia',
+        ]);
+    }
+
+    /**
+     * Soft-delete de familia recién creada (rollback atómico de create_and_assign).
+     *
+     * @param int $grupo_id
+     */
+    private function soft_delete_family_for_rollback($grupo_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $grupo_id = intval($grupo_id);
+        if (!$grupo_id) {
+            return;
+        }
+
+        $wpdb->update(
+            "{$prefix}equivalence_members",
+            ['activo' => 0],
+            ['grupo_id' => $grupo_id, 'activo' => 1],
+            ['%d'],
+            ['%d', '%d']
+        );
+        $wpdb->update(
+            "{$prefix}equivalence_groups",
+            ['activo' => 0],
+            ['id' => $grupo_id],
+            ['%d'],
+            ['%d']
+        );
+        if (class_exists('Riverso_Price_Rules_Module')) {
+            $wpdb->delete(
+                "{$prefix}price_rule_assignments",
+                ['target_tipo' => 'familia', 'target_id' => $grupo_id],
+                ['%s', '%d']
+            );
+        }
     }
 
     /**

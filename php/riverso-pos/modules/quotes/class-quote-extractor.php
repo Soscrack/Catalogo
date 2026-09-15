@@ -37,6 +37,22 @@ class Riverso_Quote_Extractor {
         $schema = self::response_schema();
 
         $image_mimes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/tiff'];
+        $ext = $file_path ? strtolower(pathinfo($file_path, PATHINFO_EXTENSION)) : '';
+        $doc_exts = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'gif', 'tif', 'tiff'];
+        // Si mime_content_type devolvió octet-stream, confiar en la extensión
+        if ($file_path && is_readable($file_path) && !in_array($mime, $image_mimes, true) && in_array($ext, $doc_exts, true)) {
+            $ext_map = [
+                'pdf' => 'application/pdf',
+                'jpg' => 'image/jpeg',
+                'jpeg' => 'image/jpeg',
+                'png' => 'image/png',
+                'webp' => 'image/webp',
+                'gif' => 'image/gif',
+                'tif' => 'image/tiff',
+                'tiff' => 'image/tiff',
+            ];
+            $mime = $ext_map[$ext] ?? $mime;
+        }
         if ($file_path && is_readable($file_path) && in_array($mime, $image_mimes, true)) {
             $result = $client->extract_document($file_path, $mime, $prompt, $schema);
         } else {
@@ -285,6 +301,15 @@ PROMPT;
             }
             $prev = $row['reference_cost'] ?? null;
             if ($prev === null || !is_numeric($prev)) {
+                continue;
+            }
+            // No reclamar alzas menores a +$0,01
+            $delta = isset($row['delta']) && is_numeric($row['delta'])
+                ? (float) $row['delta']
+                : ((isset($row['costo_actual']) && is_numeric($row['costo_actual']))
+                    ? ((float) $row['costo_actual'] - (float) $prev)
+                    : null);
+            if ($delta === null || $delta < 0.01) {
                 continue;
             }
             $items[] = [

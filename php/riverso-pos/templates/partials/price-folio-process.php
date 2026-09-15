@@ -45,8 +45,11 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
                         <a href="<?php echo esc_url($url_codes); ?>" target="_blank" rel="noopener">Códigos</a>.
                     </li>
                     <li>
-                        <strong>Familia:</strong> en la ficha del producto (tab Local) respondé
-                        «¿Necesita familia?» o asigná una. Si no aplica packs, marcá
+                        <strong>Familia:</strong> en la fila bloqueada usá <strong>Buscar</strong>
+                        (mismo listado que Categorías) o <strong>Crear</strong>
+                        (unitario / miembro con envase / manual con el editor completo).
+                        También <strong>Responder aquí</strong> si solo hay que decidir
+                        «¿Necesita familia?». Si no aplica packs, marcá
                         <code>no_requiere</code>. Seguimiento en
                         <a href="<?php echo esc_url($url_tasks); ?>" target="_blank" rel="noopener">Tareas</a>.
                     </li>
@@ -236,6 +239,30 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
         </div>
         <div id="rpf-answer-family-body" class="rpf-modal-body"></div>
         <div id="rpf-answer-family-footer" class="rpf-create-local-footer"></div>
+    </div>
+</div>
+
+<div id="rpf-search-family-modal" class="rpf-modal" style="display:none;" aria-hidden="true">
+    <div class="rpf-modal-backdrop rpf-search-family-backdrop"></div>
+    <div class="rpf-modal-card rpf-search-family-card">
+        <div class="rpf-modal-head">
+            <h2 id="rpf-search-family-title" style="margin:0;">Buscar familia</h2>
+            <button type="button" class="button rpf-search-family-close">Cerrar</button>
+        </div>
+        <div id="rpf-search-family-body" class="rpf-modal-body"></div>
+        <div id="rpf-search-family-footer" class="rpf-create-local-footer"></div>
+    </div>
+</div>
+
+<div id="rpf-create-family-modal" class="rpf-modal" style="display:none;" aria-hidden="true">
+    <div class="rpf-modal-backdrop rpf-create-family-backdrop"></div>
+    <div class="rpf-modal-card rpf-create-family-card">
+        <div class="rpf-modal-head">
+            <h2 id="rpf-create-family-title" style="margin:0;">Crear familia</h2>
+            <button type="button" class="button rpf-create-family-close">Cerrar</button>
+        </div>
+        <div id="rpf-create-family-body" class="rpf-modal-body"></div>
+        <div id="rpf-create-family-footer" class="rpf-create-local-footer"></div>
     </div>
 </div>
 

@@ -661,7 +661,12 @@ class Riverso_Product_Module {
         // Enriquecer con precio local
         if (class_exists('Riverso_Pricing_Module')) {
             $product['precio_local'] = Riverso_Pricing_Module::get_instance()->get_local_price($id);
-            $product['precio_local'] = $this->attach_costo_bases_to_precio($product['precio_local'], $id);
+            $product['precio_local'] = $this->attach_costo_bases_to_precio(
+                $product['precio_local'],
+                $id,
+                $product['canonical_sku'] ?? '',
+                $product['facto_iva_tipo'] ?? 'afecto'
+            );
             
             // Enriquecer con precio online si tiene variación o producto Woo
             $var_id = (int) ($product['woocommerce_variation_id'] ?? 0);
@@ -917,12 +922,15 @@ class Riverso_Product_Module {
     /**
      * Adjunta costo_bases (referencia / tras D/R) al array de precio local.
      * Solo vista: no altera c_ref persistido.
+     * Prioridad: factura → legacy (bruto FACTO→neto) → c_ref como neto.
      *
      * @param array|null $precio
      * @param int        $producto_base_id
+     * @param string     $sku
+     * @param string     $iva_tipo
      * @return array|null
      */
-    private function attach_costo_bases_to_precio($precio, $producto_base_id) {
+    private function attach_costo_bases_to_precio($precio, $producto_base_id, $sku = '', $iva_tipo = 'afecto') {
         if (!is_array($precio)) {
             $precio = [];
         }
@@ -935,19 +943,18 @@ class Riverso_Product_Module {
             }
         }
         if (class_exists('Riverso_Cost_Lookup_Service') && $producto_base_id > 0) {
-            $info = Riverso_Cost_Lookup_Service::get_instance()->latest_cost_bases_for_product($producto_base_id);
-        }
-
-        $bases = is_array($info) ? ($info['costo_bases'] ?? null) : null;
-        // Hub Productos: c_ref se trata como neto.
-        if (!$bases) {
             $c_ref = isset($precio['c_ref']) && $precio['c_ref'] !== null && $precio['c_ref'] !== ''
                 ? (float) $precio['c_ref']
                 : null;
-            if ($c_ref !== null && class_exists('Riverso_Cost_Lookup_Service')) {
-                $bases = Riverso_Cost_Lookup_Service::bases_from_c_ref($c_ref, null);
-            }
+            $info = Riverso_Cost_Lookup_Service::get_instance()->resolve_product_cost_bases(
+                $producto_base_id,
+                $sku,
+                $c_ref,
+                $iva_tipo
+            );
         }
+
+        $bases = is_array($info) ? ($info['costo_bases'] ?? null) : null;
 
         $precio['costo_bases'] = $bases;
         $precio['costo_bases_meta'] = [
@@ -956,6 +963,7 @@ class Riverso_Product_Module {
             'factura_id' => is_array($info) ? ($info['factura_id'] ?? null) : null,
             'proveedor_nombre' => is_array($info) ? ($info['proveedor_nombre'] ?? null) : null,
             'codigo_proveedor' => is_array($info) ? ($info['codigo_proveedor'] ?? null) : null,
+            'source' => is_array($info) ? ($info['source'] ?? null) : null,
         ];
         return $precio;
     }
@@ -5000,6 +5008,20 @@ class Riverso_Product_Module {
         $producto_base_id = (int) ($precio_actualizado['producto_base_id'] ?? 0);
         if ($producto_base_id > 0) {
             $this->mark_facto_pending_export($producto_base_id);
+            $sku = (string) $wpdb->get_var($wpdb->prepare(
+                "SELECT canonical_sku FROM {$prefix}producto_base WHERE id = %d",
+                $producto_base_id
+            ));
+            $iva = (string) $wpdb->get_var($wpdb->prepare(
+                "SELECT facto_iva_tipo FROM {$prefix}producto_base WHERE id = %d",
+                $producto_base_id
+            ));
+            $precio_actualizado = $this->attach_costo_bases_to_precio(
+                $precio_actualizado,
+                $producto_base_id,
+                $sku,
+                $iva ?: 'afecto'
+            );
         }
         wp_send_json_success(['item' => $precio_actualizado]);
     }

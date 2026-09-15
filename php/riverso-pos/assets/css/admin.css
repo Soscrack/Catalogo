@@ -1115,20 +1115,40 @@
     color: #92400e;
 }
 
+.riverso-view-mode-toggle .riverso-view-mode-btn,
 .riverso-cost-mode-toggle .riverso-cost-mode-btn {
     margin: 0;
     border-radius: 0;
 }
+.riverso-view-mode-toggle .riverso-view-mode-btn:first-child,
 .riverso-cost-mode-toggle .riverso-cost-mode-btn:first-child {
     border-radius: 4px 0 0 4px;
 }
+.riverso-view-mode-toggle .riverso-view-mode-btn:last-child,
 .riverso-cost-mode-toggle .riverso-cost-mode-btn:last-child {
     border-radius: 0 4px 4px 0;
 }
-.riverso-cost-mode-toggle .riverso-cost-mode-btn.is-active {
-    background: #2271b1;
-    border-color: #2271b1;
-    color: #fff;
+
+/* Highlight azul del modo activo (gana a .wp-core-ui .button) */
+.wp-core-ui .riverso-view-mode-toggle .button.riverso-view-mode-btn.is-active,
+.wp-core-ui .riverso-cost-mode-toggle .button.riverso-cost-mode-btn.is-active,
+.riverso-view-mode-toggle .button.riverso-view-mode-btn.is-active,
+.riverso-cost-mode-toggle .button.riverso-cost-mode-btn.is-active {
+    background: #2271b1 !important;
+    border-color: #135e96 !important;
+    color: #fff !important;
+    box-shadow: none;
+    text-shadow: none;
+}
+.wp-core-ui .riverso-view-mode-toggle .button.riverso-view-mode-btn.is-active:hover,
+.wp-core-ui .riverso-view-mode-toggle .button.riverso-view-mode-btn.is-active:focus,
+.wp-core-ui .riverso-cost-mode-toggle .button.riverso-cost-mode-btn.is-active:hover,
+.wp-core-ui .riverso-cost-mode-toggle .button.riverso-cost-mode-btn.is-active:focus,
+.riverso-view-mode-toggle .button.riverso-view-mode-btn.is-active:hover,
+.riverso-cost-mode-toggle .button.riverso-cost-mode-btn.is-active:hover {
+    background: #135e96 !important;
+    border-color: #0a4b78 !important;
+    color: #fff !important;
 }
 
 /* Este CSS solo se carga en páginas Riverso POS.

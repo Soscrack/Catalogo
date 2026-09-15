@@ -4681,14 +4681,22 @@ class Riverso_POS_Activator {
             self::add_column_if_missing($quotes, 'descuento_pct', 'descuento_pct DECIMAL(8,4) NULL');
             self::add_column_if_missing($quotes, 'descuento_monto', 'descuento_monto DECIMAL(15,4) NULL');
             self::add_column_if_missing($quotes, 'condiciones_pago', 'condiciones_pago VARCHAR(255) NULL');
+            self::add_column_if_missing($quotes, 'archivo_hash', 'archivo_hash CHAR(64) NULL');
             self::add_column_if_missing($quotes, 'origen_mensaje_id', 'origen_mensaje_id BIGINT UNSIGNED NULL');
             self::add_column_if_missing($quotes, 'origen_canal', 'origen_canal VARCHAR(20) NULL');
             self::add_column_if_missing($quotes, 'tipo_doc', "tipo_doc VARCHAR(32) NOT NULL DEFAULT 'cotizacion'");
             self::add_column_if_missing($quotes, 'tipo_confirmado', 'tipo_confirmado TINYINT(1) NOT NULL DEFAULT 1');
+            self::add_column_if_missing($quotes, 'version_group_id', 'version_group_id BIGINT UNSIGNED NULL');
+            self::add_column_if_missing($quotes, 'version_n', 'version_n SMALLINT UNSIGNED NULL');
+            self::add_column_if_missing($quotes, 'version_orden', "version_orden VARCHAR(20) NOT NULL DEFAULT 'mensaje'");
             self::add_index_if_missing($quotes, 'idx_origen_mensaje', 'KEY idx_origen_mensaje (origen_mensaje_id)');
             self::add_index_if_missing($quotes, 'idx_tipo_doc', 'KEY idx_tipo_doc (tipo_doc, tipo_confirmado)');
+            self::add_index_if_missing($quotes, 'idx_archivo_hash', 'KEY idx_archivo_hash (archivo_hash)');
+            self::add_index_if_missing($quotes, 'idx_version_group', 'KEY idx_version_group (version_group_id, version_n)');
             self::backfill_quotes_sin_adjunto($quotes);
             self::backfill_quotes_total_cero($quotes);
+            self::backfill_quote_versions_from_threads($quotes);
+            self::renumber_quote_versions_by_mensaje($quotes);
         }
 
         $items = $prefix . 'cotizacion_items';
@@ -4784,5 +4792,72 @@ class Riverso_POS_Activator {
                )"
         );
         update_option('riverso_pos_backfill_quote_total_cero', '1');
+    }
+
+    /**
+     * Agrupa cotizaciones del mismo hilo de correo/WhatsApp en familias de versión.
+     */
+    private static function backfill_quote_versions_from_threads($quotes_table) {
+        if (get_option('riverso_pos_backfill_quote_versions_v1') === '1') {
+            return;
+        }
+        if (!class_exists('Riverso_POS_Received_Quote_Module')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'modules/quotes/class-received-quote-module.php';
+            if (file_exists($path)) {
+                require_once $path;
+            }
+        }
+        if (class_exists('Riverso_POS_Received_Quote_Module')) {
+            Riverso_POS_Received_Quote_Module::get_instance()->backfill_versions_from_threads();
+        }
+        update_option('riverso_pos_backfill_quote_versions_v1', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.backfill_quote_versions', 'received_quote', 0, [
+                'actor_type' => 'computer',
+                'details' => 'Backfill version_group_id por hilo de messaging',
+            ]);
+        }
+    }
+
+    /**
+     * Reenumera grupos existentes por sent_at del mensaje (corrige v1/v2 invertidas por fecha_documento).
+     */
+    private static function renumber_quote_versions_by_mensaje($quotes_table) {
+        if (get_option('riverso_pos_renumber_quote_versions_mensaje_v1') === '1') {
+            return;
+        }
+        if (!class_exists('Riverso_POS_Received_Quote_Module')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'modules/quotes/class-received-quote-module.php';
+            if (file_exists($path)) {
+                require_once $path;
+            }
+        }
+        if (!class_exists('Riverso_POS_Received_Quote_Module')) {
+            return;
+        }
+        global $wpdb;
+        $groups = $wpdb->get_col(
+            "SELECT DISTINCT version_group_id FROM `{$quotes_table}`
+             WHERE version_group_id IS NOT NULL AND version_group_id > 0"
+        ) ?: [];
+        $mod = Riverso_POS_Received_Quote_Module::get_instance();
+        foreach ($groups as $gid) {
+            $orden = (string) $wpdb->get_var($wpdb->prepare(
+                "SELECT version_orden FROM `{$quotes_table}` WHERE version_group_id = %d LIMIT 1",
+                (int) $gid
+            ));
+            if ($orden === 'manual') {
+                continue;
+            }
+            $mod->renumber_version_group((int) $gid, 'mensaje');
+        }
+        update_option('riverso_pos_renumber_quote_versions_mensaje_v1', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.renumber_quote_versions_mensaje', 'received_quote', 0, [
+                'actor_type' => 'computer',
+                'details' => 'Reenumeración por messaging_messages.sent_at',
+                'groups' => count($groups),
+            ]);
+        }
     }
 }

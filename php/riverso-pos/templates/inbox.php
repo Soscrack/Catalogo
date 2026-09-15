@@ -276,7 +276,11 @@ jQuery(function($) {
             (r.data.quotes || []).forEach(function(q) {
                 const tipo = q.tipo_doc === 'posible_cotizacion' ? 'Posible cotización' : 'Cotización';
                 const pending = String(q.tipo_confirmado) === '0' ? ' · por confirmar' : '';
-                qh += '<a class="button" href="' + quotesUrl + '&quote=' + q.id + '">' + tipo + ' #' + q.id + ' (' + esc(q.estado) + pending + ')</a> ';
+                let ver = '';
+                if (q.version_n && q.version_count && Number(q.version_count) > 1) {
+                    ver = ' · v' + q.version_n + (q.is_version_final ? ' (Versión final)' : '');
+                }
+                qh += '<a class="button" href="' + quotesUrl + '&quote=' + q.id + '">' + tipo + ' #' + q.id + ver + ' (' + esc(q.estado) + pending + ')</a> ';
             });
             $('#inbox-quotes').html(qh);
 

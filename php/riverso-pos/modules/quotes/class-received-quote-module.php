@@ -71,6 +71,7 @@ class Riverso_POS_Received_Quote_Module {
         add_action('wp_ajax_riverso_save_received_quote', [$this, 'ajax_save_quote']);
         add_action('wp_ajax_riverso_delete_received_quote', [$this, 'ajax_delete_quote']);
         add_action('wp_ajax_riverso_upload_quote_file', [$this, 'ajax_upload_file']);
+        add_action('wp_ajax_riverso_view_quote_document', [$this, 'ajax_view_quote_document']);
         add_action('wp_ajax_riverso_parse_quote', [$this, 'ajax_parse_quote']);
         add_action('wp_ajax_riverso_save_quote_item', [$this, 'ajax_save_item']);
         add_action('wp_ajax_riverso_delete_quote_item', [$this, 'ajax_delete_item']);
@@ -87,6 +88,11 @@ class Riverso_POS_Received_Quote_Module {
         add_action('wp_ajax_riverso_quote_claim_draft', [$this, 'ajax_claim_draft']);
         add_action('wp_ajax_riverso_convert_quote_to_expected', [$this, 'ajax_convert_to_expected']);
         add_action('wp_ajax_riverso_get_quote_comparison', [$this, 'ajax_get_comparison']);
+        add_action('wp_ajax_riverso_search_quotes_for_version', [$this, 'ajax_search_quotes_for_version']);
+        add_action('wp_ajax_riverso_link_quote_version', [$this, 'ajax_link_quote_version']);
+        add_action('wp_ajax_riverso_unlink_quote_version', [$this, 'ajax_unlink_quote_version']);
+        add_action('wp_ajax_riverso_compare_quote_versions', [$this, 'ajax_compare_quote_versions']);
+        add_action('wp_ajax_riverso_reorder_quote_version', [$this, 'ajax_reorder_quote_version']);
     }
 
     /**
@@ -107,6 +113,7 @@ class Riverso_POS_Received_Quote_Module {
             tipo_fuente ENUM('pdf','excel','text','manual','email','whatsapp') DEFAULT 'manual',
             archivo_path VARCHAR(500) NULL,
             archivo_original VARCHAR(255) NULL,
+            archivo_hash CHAR(64) NULL,
             origen_mensaje_id BIGINT UNSIGNED NULL,
             origen_canal VARCHAR(20) NULL,
             tipo_doc VARCHAR(32) NOT NULL DEFAULT 'cotizacion',
@@ -123,6 +130,9 @@ class Riverso_POS_Received_Quote_Module {
             total DECIMAL(15,2) DEFAULT 0,
             notas TEXT NULL,
             datos_parseados LONGTEXT NULL,
+            version_group_id BIGINT UNSIGNED NULL,
+            version_n SMALLINT UNSIGNED NULL,
+            version_orden VARCHAR(20) NOT NULL DEFAULT 'mensaje',
             created_by BIGINT UNSIGNED NULL,
             updated_by BIGINT UNSIGNED NULL,
             approved_by BIGINT UNSIGNED NULL,
@@ -133,7 +143,9 @@ class Riverso_POS_Received_Quote_Module {
             INDEX idx_estado (estado),
             INDEX idx_fecha (fecha_documento),
             INDEX idx_numero (numero_documento),
-            INDEX idx_tipo_doc (tipo_doc, tipo_confirmado)
+            INDEX idx_tipo_doc (tipo_doc, tipo_confirmado),
+            INDEX idx_archivo_hash (archivo_hash),
+            INDEX idx_version_group (version_group_id, version_n)
         ) $charset_collate;";
 
         // Tabla de ítems de cotización
@@ -188,6 +200,7 @@ class Riverso_POS_Received_Quote_Module {
 
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
+        $this->ensure_version_columns();
 
         $estado = isset($_POST['estado']) ? sanitize_text_field($_POST['estado']) : '';
         $proveedor_id = isset($_POST['proveedor_id']) ? intval($_POST['proveedor_id']) : 0;
@@ -260,6 +273,19 @@ class Riverso_POS_Received_Quote_Module {
         }
 
         $quotes = $wpdb->get_results($sql);
+
+        $solo_final = !empty($_POST['solo_version_final']);
+        $quotes = $this->decorate_version_meta($quotes ?: []);
+        if ($solo_final) {
+            $quotes = array_values(array_filter($quotes, static function ($q) {
+                $q = (array) $q;
+                $cnt = (int) ($q['version_count'] ?? 1);
+                if ($cnt <= 1) {
+                    return true;
+                }
+                return !empty($q['is_version_final']);
+            }));
+        }
 
         // Estadísticas
         $stats = $wpdb->get_row("
@@ -379,10 +405,21 @@ class Riverso_POS_Received_Quote_Module {
             SELECT id, nombre, rut FROM {$prefix}proveedores WHERE estado = 'activo' ORDER BY nombre
         ");
 
+        $siblings = $this->get_version_siblings($id);
+        $quote_arr = (array) $quote;
+        $decorated = $this->decorate_version_meta([$quote_arr]);
+        $quote_meta = $decorated[0] ?? $quote_arr;
+        foreach (['version_label', 'is_version_final', 'version_count'] as $k) {
+            if (isset($quote_meta[$k])) {
+                $quote->{$k} = $quote_meta[$k];
+            }
+        }
+
         wp_send_json_success([
             'quote' => $quote,
             'items' => $items,
             'origen' => $origen,
+            'version_siblings' => $siblings,
             'proveedores' => $proveedores,
             'estados' => self::ESTADOS,
             'doc_types' => self::DOC_TYPES,
@@ -425,6 +462,18 @@ class Riverso_POS_Received_Quote_Module {
         if ($id) {
             $wpdb->update("{$prefix}cotizaciones_recibidas", $data, ['id' => $id]);
             $action = 'received_quote.updated';
+            // Reenumerar si cambió la fecha y el grupo no es manual
+            $gid = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT version_group_id FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+                $id
+            ));
+            $orden = (string) $wpdb->get_var($wpdb->prepare(
+                "SELECT version_orden FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+                $id
+            ));
+            if ($gid > 0 && $orden !== 'manual') {
+                $this->renumber_version_group($gid, $orden ?: 'mensaje');
+            }
         } else {
             $data['created_by'] = get_current_user_id();
             $data['estado'] = 'draft';
@@ -433,6 +482,14 @@ class Riverso_POS_Received_Quote_Module {
             $wpdb->insert("{$prefix}cotizaciones_recibidas", $data);
             $id = $wpdb->insert_id;
             $action = 'received_quote.created';
+            if ($id) {
+                $this->ensure_version_columns();
+                $wpdb->update(
+                    "{$prefix}cotizaciones_recibidas",
+                    ['version_group_id' => (int) $id, 'version_n' => 1],
+                    ['id' => (int) $id]
+                );
+            }
         }
 
         // Auditoría
@@ -464,8 +521,35 @@ class Riverso_POS_Received_Quote_Module {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
+        $gid = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT version_group_id FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+            $id
+        ));
+
         // Los ítems se eliminan por CASCADE
         $wpdb->delete("{$prefix}cotizaciones_recibidas", ['id' => $id]);
+
+        if ($gid > 0 && $gid !== $id) {
+            $left = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$prefix}cotizaciones_recibidas WHERE version_group_id = %d",
+                $gid
+            ));
+            if ($left === 1) {
+                $only = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM {$prefix}cotizaciones_recibidas WHERE version_group_id = %d LIMIT 1",
+                    $gid
+                ));
+                if ($only) {
+                    $wpdb->update(
+                        "{$prefix}cotizaciones_recibidas",
+                        ['version_group_id' => $only, 'version_n' => 1],
+                        ['id' => $only]
+                    );
+                }
+            } elseif ($left > 1) {
+                $this->renumber_version_group($gid);
+            }
+        }
 
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('received_quote.deleted', 'received_quote', $id);
@@ -475,7 +559,7 @@ class Riverso_POS_Received_Quote_Module {
     }
 
     /**
-     * AJAX: Subir archivo de cotización
+     * AJAX: Subir archivo de cotización (sin Gemini; el parseo es una petición aparte).
      */
     public function ajax_upload_file() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
@@ -490,19 +574,63 @@ class Riverso_POS_Received_Quote_Module {
 
         $file = $_FILES['file'];
         $quote_id = isset($_POST['quote_id']) ? intval($_POST['quote_id']) : 0;
+        $replace = !empty($_POST['replace']);
+        $tmp = isset($file['tmp_name']) ? (string) $file['tmp_name'] : '';
 
-        // Validar tipo de archivo
-        $allowed = ['pdf', 'xlsx', 'xls', 'csv', 'txt'];
+        if ($tmp === '' || !is_uploaded_file($tmp)) {
+            wp_send_json_error(['message' => 'Archivo temporal inválido']);
+        }
+
+        // Validar tipo de archivo (PDF/imagen como escaneos + Excel/CSV/TXT)
+        $allowed = ['pdf', 'xlsx', 'xls', 'csv', 'txt', 'jpg', 'jpeg', 'png', 'webp', 'tif', 'tiff'];
         $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-        
-        if (!in_array($ext, $allowed)) {
+
+        if (!in_array($ext, $allowed, true)) {
             wp_send_json_error(['message' => 'Tipo de archivo no permitido. Use: ' . implode(', ', $allowed)]);
+        }
+
+        $hash = hash_file('sha256', $tmp);
+        if (!$hash) {
+            wp_send_json_error(['message' => 'No se pudo calcular el hash del archivo']);
+        }
+
+        $this->ensure_archivo_hash_column();
+
+        // Documento ya registrado o adjunto a cotización existente → no Gemini
+        $existing = $this->find_quote_by_file_hash($hash, $quote_id);
+        if ($existing) {
+            wp_send_json_success([
+                'id'            => (int) $existing['id'],
+                'quote_id'      => (int) $existing['id'],
+                'duplicate'     => true,
+                'reutilizado'   => true,
+                'numero_documento' => $existing['numero_documento'] ?? null,
+                'proveedor_nombre' => $existing['proveedor_nombre'] ?? null,
+                'message'       => 'Este documento ya fue ingresado anteriormente (sin costo Gemini)',
+            ]);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        // Reemplazo solo con flag explícito; sin replace siempre INSERT (evita pisar cotización abierta).
+        if ($quote_id > 0 && !$replace) {
+            $quote_id = 0;
+        }
+        if ($quote_id > 0 && $replace) {
+            $prev = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, archivo_hash FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+                $quote_id
+            ), ARRAY_A);
+            if (!$prev) {
+                wp_send_json_error(['message' => 'Cotización no encontrada para reemplazar']);
+            }
         }
 
         // Crear directorio de uploads
         $upload_dir = wp_upload_dir();
         $quotes_dir = $upload_dir['basedir'] . '/riverso-quotes/' . date('Y/m');
-        
+
         if (!file_exists($quotes_dir)) {
             wp_mkdir_p($quotes_dir);
         }
@@ -512,58 +640,289 @@ class Riverso_POS_Received_Quote_Module {
         $filename = wp_unique_filename($quotes_dir, $filename);
         $filepath = $quotes_dir . '/' . $filename;
 
-        if (!move_uploaded_file($file['tmp_name'], $filepath)) {
+        if (!move_uploaded_file($tmp, $filepath)) {
             wp_send_json_error(['message' => 'Error al guardar archivo']);
         }
 
         // Determinar tipo de fuente
         $source_type = 'manual';
-        if ($ext === 'pdf') $source_type = 'pdf';
-        elseif (in_array($ext, ['xlsx', 'xls', 'csv'])) $source_type = 'excel';
-        elseif ($ext === 'txt') $source_type = 'text';
+        if ($ext === 'pdf' || in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'tif', 'tiff'], true)) {
+            $source_type = 'pdf';
+        } elseif (in_array($ext, ['xlsx', 'xls', 'csv'], true)) {
+            $source_type = 'excel';
+        } elseif ($ext === 'txt') {
+            $source_type = 'text';
+        }
 
-        global $wpdb;
-        $prefix = $wpdb->prefix . 'riverso_';
+        $rel_path = str_replace($upload_dir['basedir'], '', $filepath);
 
-        // Si hay quote_id, actualizar
-        if ($quote_id) {
-            $wpdb->update("{$prefix}cotizaciones_recibidas", [
-                'archivo_path'     => str_replace($upload_dir['basedir'], '', $filepath),
-                'archivo_original' => $file['name'],
-                'tipo_fuente'      => $source_type,
-                'estado'           => 'uploaded',
-                'updated_by'       => get_current_user_id()
-            ], ['id' => $quote_id]);
+        $row = [
+            'archivo_path'     => $rel_path,
+            'archivo_original' => $file['name'],
+            'archivo_hash'     => $hash,
+            'tipo_fuente'      => $source_type,
+            'estado'           => 'uploaded',
+            'updated_by'       => get_current_user_id(),
+        ];
+
+        $did_replace = false;
+        if ($quote_id > 0 && $replace) {
+            // Limpiar ítems previos para que el parseo posterior pueda reinsertar
+            $wpdb->delete("{$prefix}cotizacion_items", ['cotizacion_id' => $quote_id]);
+            $row['datos_parseados'] = null;
+            $row['subtotal'] = 0;
+            $row['impuesto'] = 0;
+            $row['total'] = 0;
+            $wpdb->update("{$prefix}cotizaciones_recibidas", $row, ['id' => $quote_id]);
+            $did_replace = true;
         } else {
             // Crear nueva cotización
-            $wpdb->insert("{$prefix}cotizaciones_recibidas", [
-                'archivo_path'     => str_replace($upload_dir['basedir'], '', $filepath),
-                'archivo_original' => $file['name'],
-                'tipo_fuente'      => $source_type,
-                'tipo_doc'         => 'cotizacion',
-                'tipo_confirmado'  => 1,
-                'estado'           => 'uploaded',
-                'created_by'       => get_current_user_id(),
-                'updated_by'       => get_current_user_id()
-            ]);
-            $quote_id = $wpdb->insert_id;
+            $row['tipo_doc'] = 'cotizacion';
+            $row['tipo_confirmado'] = 1;
+            $row['created_by'] = get_current_user_id();
+            $wpdb->insert("{$prefix}cotizaciones_recibidas", $row);
+            $quote_id = (int) $wpdb->insert_id;
+            if ($quote_id) {
+                $this->auto_group_from_thread($quote_id);
+            }
+        }
+
+        if (!$quote_id) {
+            wp_send_json_error(['message' => 'No se pudo guardar la cotización']);
         }
 
         // Auditoría
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('received_quote.file_uploaded', 'received_quote', $quote_id, [
                 'filename' => $file['name'],
-                'type' => $source_type
+                'type' => $source_type,
+                'archivo_hash' => $hash,
+                'replaced' => $did_replace,
             ]);
         }
 
         wp_send_json_success([
             'id'          => $quote_id,
+            'quote_id'    => $quote_id,
             'filepath'    => $filepath,
             'source_type' => $source_type,
-            'parsed'      => $this->parse_quote_internal($quote_id),
-            'message'     => 'Archivo subido correctamente'
+            'duplicate'   => false,
+            'replaced'    => $did_replace,
+            'needs_parse' => true,
+            'message'     => $did_replace
+                ? 'Archivo reemplazado. Procesando con Gemini…'
+                : 'Archivo subido correctamente. Procesando con Gemini…',
         ]);
+    }
+
+    /**
+     * AJAX: Abrir/descargar el archivo de una cotización (ingreso manual u otros).
+     */
+    public function ajax_view_quote_document() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('edit_posts')) {
+            wp_die('Sin permisos', 403);
+        }
+
+        $id = isset($_REQUEST['id']) ? intval($_REQUEST['id']) : 0;
+        if (!$id) {
+            wp_die('ID requerido', 400);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $quote = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, archivo_path, archivo_original FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+            $id
+        ), ARRAY_A);
+
+        if (!$quote || empty($quote['archivo_path'])) {
+            wp_die('Documento no encontrado', 404);
+        }
+
+        $abs = $this->absolute_quote_path($quote['archivo_path']);
+        if (!$abs || !is_file($abs) || !is_readable($abs)) {
+            wp_die('Archivo no disponible en el servidor', 404);
+        }
+
+        $name = $quote['archivo_original'] ?: basename($abs);
+        $mime = $this->mime_for_quote_file($abs, $name);
+
+        $inline = in_array($mime, [
+            'application/pdf',
+            'image/jpeg',
+            'image/png',
+            'image/webp',
+            'image/gif',
+            'image/tiff',
+            'text/plain',
+        ], true);
+
+        nocache_headers();
+        header('Content-Type: ' . $mime);
+        header('Content-Length: ' . (string) filesize($abs));
+        header(
+            ($inline ? 'Content-Disposition: inline' : 'Content-Disposition: attachment')
+            . '; filename="' . sanitize_file_name($name) . '"'
+        );
+        readfile($abs);
+        exit;
+    }
+
+    /**
+     * Asegura columna archivo_hash (idempotente, por si el activator aún no corrió).
+     */
+    private function ensure_archivo_hash_column() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'riverso_cotizaciones_recibidas';
+        $col = $wpdb->get_results("SHOW COLUMNS FROM `{$table}` LIKE 'archivo_hash'");
+        if (empty($col)) {
+            $wpdb->query("ALTER TABLE `{$table}` ADD COLUMN archivo_hash CHAR(64) NULL");
+            $idx = $wpdb->get_results("SHOW INDEX FROM `{$table}` WHERE Key_name = 'idx_archivo_hash'");
+            if (empty($idx)) {
+                $wpdb->query("ALTER TABLE `{$table}` ADD KEY idx_archivo_hash (archivo_hash)");
+            }
+        }
+    }
+
+    /**
+     * Busca cotización ya registrada con el mismo archivo (hash o bytes de path/adjunto).
+     *
+     * @param string $hash
+     * @param int    $exclude_quote_id
+     * @return array|null
+     */
+    private function find_quote_by_file_hash($hash, $exclude_quote_id = 0) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $hash = strtolower(trim((string) $hash));
+        if ($hash === '' || strlen($hash) !== 64) {
+            return null;
+        }
+
+        $exclude_sql = $exclude_quote_id > 0 ? ' AND c.id <> %d' : '';
+        $sql = "SELECT c.id, c.numero_documento, c.archivo_path, c.archivo_hash, c.estado,
+                    p.nombre AS proveedor_nombre
+             FROM {$prefix}cotizaciones_recibidas c
+             LEFT JOIN {$prefix}proveedores p ON p.id = c.proveedor_id
+             WHERE c.archivo_hash = %s
+             {$exclude_sql}
+             ORDER BY c.id ASC
+             LIMIT 1";
+        if ($exclude_quote_id > 0) {
+            $row = $wpdb->get_row($wpdb->prepare($sql, $hash, $exclude_quote_id), ARRAY_A);
+        } else {
+            $row = $wpdb->get_row($wpdb->prepare($sql, $hash), ARRAY_A);
+        }
+
+        if ($row) {
+            return $row;
+        }
+
+        // Backfill: cotizaciones con archivo pero sin hash (manual / email / whatsapp)
+        $candidates = $wpdb->get_results(
+            "SELECT c.id, c.numero_documento, c.archivo_path, c.archivo_hash, c.estado,
+                    c.origen_mensaje_id, p.nombre AS proveedor_nombre
+             FROM {$prefix}cotizaciones_recibidas c
+             LEFT JOIN {$prefix}proveedores p ON p.id = c.proveedor_id
+             WHERE c.archivo_path IS NOT NULL AND c.archivo_path <> ''
+               AND (c.archivo_hash IS NULL OR c.archivo_hash = '')
+             ORDER BY c.id ASC
+             LIMIT 200",
+            ARRAY_A
+        );
+
+        if (is_array($candidates)) {
+            foreach ($candidates as $cand) {
+                if ($exclude_quote_id > 0 && (int) $cand['id'] === (int) $exclude_quote_id) {
+                    continue;
+                }
+                $abs = $this->absolute_quote_path($cand['archivo_path'] ?? '');
+                if (!$abs || !is_file($abs)) {
+                    continue;
+                }
+                $cand_hash = hash_file('sha256', $abs);
+                if (!$cand_hash) {
+                    continue;
+                }
+                $wpdb->update(
+                    "{$prefix}cotizaciones_recibidas",
+                    ['archivo_hash' => $cand_hash],
+                    ['id' => (int) $cand['id']]
+                );
+                if (strtolower($cand_hash) === $hash) {
+                    $cand['archivo_hash'] = $cand_hash;
+                    return $cand;
+                }
+            }
+        }
+
+        // Adjuntos de inbox ya ligados a una cotización
+        $atts_table = $prefix . 'messaging_attachments';
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $atts_table)) === $atts_table) {
+            $atts = $wpdb->get_results(
+                "SELECT a.id, a.message_id, a.local_path, c.id AS quote_id, c.numero_documento,
+                        p.nombre AS proveedor_nombre, c.estado
+                 FROM {$atts_table} a
+                 INNER JOIN {$prefix}cotizaciones_recibidas c ON c.origen_mensaje_id = a.message_id
+                 LEFT JOIN {$prefix}proveedores p ON p.id = c.proveedor_id
+                 WHERE a.local_path IS NOT NULL AND a.local_path <> ''
+                 ORDER BY c.id ASC
+                 LIMIT 300",
+                ARRAY_A
+            );
+            if (is_array($atts)) {
+                foreach ($atts as $att) {
+                    if ($exclude_quote_id > 0 && (int) $att['quote_id'] === (int) $exclude_quote_id) {
+                        continue;
+                    }
+                    $abs = $this->absolute_quote_path($att['local_path'] ?? '');
+                    if (!$abs || !is_file($abs)) {
+                        continue;
+                    }
+                    $att_hash = hash_file('sha256', $abs);
+                    if ($att_hash && strtolower($att_hash) === $hash) {
+                        $wpdb->update(
+                            "{$prefix}cotizaciones_recibidas",
+                            ['archivo_hash' => $att_hash],
+                            ['id' => (int) $att['quote_id']]
+                        );
+                        return [
+                            'id' => (int) $att['quote_id'],
+                            'numero_documento' => $att['numero_documento'] ?? null,
+                            'proveedor_nombre' => $att['proveedor_nombre'] ?? null,
+                            'estado' => $att['estado'] ?? null,
+                            'archivo_hash' => $att_hash,
+                        ];
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param string $path Relativo o absoluto bajo uploads
+     * @return string
+     */
+    private function absolute_quote_path($path) {
+        $path = (string) $path;
+        if ($path === '') {
+            return '';
+        }
+        if (is_file($path)) {
+            return $path;
+        }
+        $upload = wp_upload_dir();
+        $candidate = $upload['basedir'] . '/' . ltrim($path, '/');
+        if (is_file($candidate)) {
+            return $candidate;
+        }
+        // Windows / rutas con backslash
+        $candidate2 = $upload['basedir'] . DIRECTORY_SEPARATOR . ltrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);
+        return is_file($candidate2) ? $candidate2 : '';
     }
 
     /**
@@ -628,12 +987,39 @@ class Riverso_POS_Received_Quote_Module {
             }
         }
 
+        $this->ensure_archivo_hash_column();
+        $archivo_hash = null;
+        if ($path) {
+            $abs = $this->absolute_quote_path($path);
+            if ($abs && is_file($abs)) {
+                $archivo_hash = hash_file('sha256', $abs) ?: null;
+            }
+        }
+        if ($archivo_hash) {
+            $by_hash = $this->find_quote_by_file_hash($archivo_hash);
+            if ($by_hash) {
+                // Reutilizar cotización existente; no llamar Gemini de nuevo
+                if ($mensaje_id > 0) {
+                    $wpdb->update(
+                        "{$prefix}cotizaciones_recibidas",
+                        [
+                            'origen_mensaje_id' => $mensaje_id,
+                            'origen_canal' => $canal,
+                            'updated_by' => get_current_user_id() ?: null,
+                        ],
+                        ['id' => (int) $by_hash['id']]
+                    );
+                }
+                return (int) $by_hash['id'];
+            }
+        }
+
         $tipo_doc = isset($args['tipo_doc']) && array_key_exists($args['tipo_doc'], self::DOC_TYPES)
             ? $args['tipo_doc']
             : 'posible_cotizacion';
         $tipo_confirmado = !empty($args['tipo_confirmado']) ? 1 : 0;
 
-        $wpdb->insert("{$prefix}cotizaciones_recibidas", [
+        $insert = [
             'proveedor_id'     => !empty($args['proveedor_id']) ? (int) $args['proveedor_id'] : null,
             'numero_documento' => $args['numero_documento'] ?? null,
             'tipo_fuente'      => $tipo,
@@ -646,7 +1032,12 @@ class Riverso_POS_Received_Quote_Module {
             'estado'           => $path ? 'uploaded' : 'draft',
             'created_by'       => get_current_user_id() ?: null,
             'updated_by'       => get_current_user_id() ?: null,
-        ]);
+        ];
+        if ($archivo_hash) {
+            $insert['archivo_hash'] = $archivo_hash;
+        }
+
+        $wpdb->insert("{$prefix}cotizaciones_recibidas", $insert);
         $id = (int) $wpdb->insert_id;
         if (!$id) {
             return new WP_Error('quote_insert', 'No se pudo crear la cotización');
@@ -654,6 +1045,7 @@ class Riverso_POS_Received_Quote_Module {
         if ($path) {
             $this->parse_quote_internal($id);
         }
+        $this->auto_group_from_thread($id);
         return $id;
     }
 
@@ -673,6 +1065,10 @@ class Riverso_POS_Received_Quote_Module {
             return new WP_Error('not_found', 'Cotización no encontrada');
         }
 
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(200);
+        }
+
         if (!class_exists('Riverso_Quote_Extractor')) {
             require_once RIVERSO_POS_PLUGIN_DIR . 'modules/quotes/class-quote-extractor.php';
         }
@@ -680,28 +1076,31 @@ class Riverso_POS_Received_Quote_Module {
 
         $abs = '';
         if (!empty($quote->archivo_path)) {
-            $upload = wp_upload_dir();
-            $abs = $quote->archivo_path;
-            if (!is_file($abs)) {
-                $candidate = $upload['basedir'] . '/' . ltrim($quote->archivo_path, '/');
-                if (is_file($candidate)) {
-                    $abs = $candidate;
-                }
-            }
+            $abs = $this->absolute_quote_path($quote->archivo_path);
         }
 
-        $mime = 'application/pdf';
-        if ($abs && is_file($abs)) {
-            $mime = function_exists('mime_content_type') ? (mime_content_type($abs) ?: 'application/pdf') : 'application/pdf';
-        }
+        $mime = $this->mime_for_quote_file(
+            $abs,
+            $quote->archivo_original ?: ($abs ? basename($abs) : '')
+        );
 
         $parsed = $extractor->extract($abs && is_file($abs) ? $abs : '', $mime, $text_override);
         if (is_wp_error($parsed)) {
             $wpdb->update("{$prefix}cotizaciones_recibidas", [
                 'estado' => 'uploaded',
-                'datos_parseados' => wp_json_encode(['error' => $parsed->get_error_message(), 'parsed_at' => current_time('mysql')]),
+                'datos_parseados' => wp_json_encode([
+                    'error' => $parsed->get_error_message(),
+                    'error_code' => $parsed->get_error_code(),
+                    'parsed_at' => current_time('mysql'),
+                ]),
                 'updated_by' => get_current_user_id() ?: null,
             ], ['id' => $id]);
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('received_quote.parse_failed', 'received_quote', $id, [
+                    'error' => $parsed->get_error_message(),
+                    'error_code' => $parsed->get_error_code(),
+                ]);
+            }
             $this->apply_tipo_after_process($id);
             return $parsed;
         }
@@ -782,6 +1181,20 @@ class Riverso_POS_Received_Quote_Module {
             $id
         ));
 
+        $gid = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT version_group_id FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+            $id
+        ));
+        $orden = (string) $wpdb->get_var($wpdb->prepare(
+            "SELECT version_orden FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+            $id
+        ));
+        if ($gid > 0 && $orden !== 'manual') {
+            $this->renumber_version_group($gid, $orden ?: 'mensaje');
+        } elseif ($gid <= 0) {
+            $this->auto_group_from_thread($id);
+        }
+
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('received_quote.parsed', 'received_quote', $id, [
                 'items' => count($parsed['items']),
@@ -794,6 +1207,42 @@ class Riverso_POS_Received_Quote_Module {
             'items' => count($parsed['items']),
             'confianza' => $parsed['confianza_global'] ?? null,
         ];
+    }
+
+    /**
+     * MIME confiable para parseo/visualización (extensión gana sobre octet-stream).
+     *
+     * @param string $abs_path
+     * @param string $original_name
+     * @return string
+     */
+    private function mime_for_quote_file($abs_path, $original_name = '') {
+        $name = $original_name !== '' ? $original_name : ($abs_path ? basename($abs_path) : '');
+        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        $map = [
+            'pdf'  => 'application/pdf',
+            'jpg'  => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png'  => 'image/png',
+            'webp' => 'image/webp',
+            'gif'  => 'image/gif',
+            'tif'  => 'image/tiff',
+            'tiff' => 'image/tiff',
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'xls'  => 'application/vnd.ms-excel',
+            'csv'  => 'text/csv',
+            'txt'  => 'text/plain',
+        ];
+        if (isset($map[$ext])) {
+            return $map[$ext];
+        }
+        if ($abs_path && is_file($abs_path) && function_exists('mime_content_type')) {
+            $detected = mime_content_type($abs_path);
+            if ($detected && $detected !== 'application/octet-stream') {
+                return $detected;
+            }
+        }
+        return 'application/pdf';
     }
 
     /**
@@ -1687,5 +2136,728 @@ class Riverso_POS_Received_Quote_Module {
             "SELECT * FROM {$prefix}cotizacion_items WHERE cotizacion_id = %d ORDER BY linea",
             $quote_id
         ));
+    }
+
+    // ------------------------------------------------------------------
+    // Versionamiento de cotizaciones
+    // ------------------------------------------------------------------
+
+    private function ensure_version_columns() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'riverso_cotizaciones_recibidas';
+        $cols = [
+            'version_group_id' => 'BIGINT UNSIGNED NULL',
+            'version_n' => 'SMALLINT UNSIGNED NULL',
+            'version_orden' => "VARCHAR(20) NOT NULL DEFAULT 'mensaje'",
+        ];
+        foreach ($cols as $name => $def) {
+            $exists = $wpdb->get_results("SHOW COLUMNS FROM `{$table}` LIKE '{$name}'");
+            if (empty($exists)) {
+                $wpdb->query("ALTER TABLE `{$table}` ADD COLUMN {$name} {$def}");
+            }
+        }
+        $idx = $wpdb->get_results("SHOW INDEX FROM `{$table}` WHERE Key_name = 'idx_version_group'");
+        if (empty($idx)) {
+            $wpdb->query("ALTER TABLE `{$table}` ADD KEY idx_version_group (version_group_id, version_n)");
+        }
+    }
+
+    /**
+     * Decora filas con is_version_final y version_label.
+     *
+     * @param array|object $quotes
+     * @return array
+     */
+    public function decorate_version_meta($quotes) {
+        $this->ensure_version_columns();
+        $rows = [];
+        foreach ((array) $quotes as $q) {
+            $rows[] = is_object($q) ? (array) $q : $q;
+        }
+        if (!$rows) {
+            return $quotes;
+        }
+        $group_ids = [];
+        foreach ($rows as $r) {
+            $gid = (int) ($r['version_group_id'] ?? 0);
+            if ($gid > 0) {
+                $group_ids[$gid] = true;
+            }
+        }
+        $max_by_group = [];
+        if ($group_ids) {
+            global $wpdb;
+            $prefix = $wpdb->prefix . 'riverso_';
+            $ids = array_map('intval', array_keys($group_ids));
+            $in = implode(',', $ids);
+            $max_rows = $wpdb->get_results(
+                "SELECT version_group_id, MAX(version_n) AS max_n, COUNT(*) AS cnt
+                 FROM {$prefix}cotizaciones_recibidas
+                 WHERE version_group_id IN ({$in})
+                 GROUP BY version_group_id",
+                ARRAY_A
+            ) ?: [];
+            foreach ($max_rows as $mr) {
+                $max_by_group[(int) $mr['version_group_id']] = [
+                    'max_n' => (int) $mr['max_n'],
+                    'cnt' => (int) $mr['cnt'],
+                ];
+            }
+        }
+
+        $out = [];
+        foreach ($rows as $r) {
+            $gid = (int) ($r['version_group_id'] ?? 0);
+            $vn = isset($r['version_n']) ? (int) $r['version_n'] : 0;
+            $meta = $gid > 0 ? ($max_by_group[$gid] ?? null) : null;
+            $cnt = $meta ? (int) $meta['cnt'] : 1;
+            $max_n = $meta ? (int) $meta['max_n'] : $vn;
+            $is_final = $gid > 0 && $vn > 0 && $vn === $max_n;
+            $r['version_count'] = $cnt;
+            $r['is_version_final'] = $is_final && $cnt > 1;
+            $r['version_label'] = '';
+            if ($vn > 0 && $cnt > 1) {
+                $r['version_label'] = 'v' . $vn . ($is_final ? ' (Versión final)' : '');
+            } elseif ($vn > 0) {
+                $r['version_label'] = 'v' . $vn;
+            }
+            $out[] = $r;
+        }
+        // Preserve object vs array based on first input
+        $first = reset($quotes);
+        if (is_object($first)) {
+            return array_map(static function ($r) {
+                return (object) $r;
+            }, $out);
+        }
+        return $out;
+    }
+
+    /**
+     * Hermanas de versión (mismo grupo), ordenadas por version_n.
+     *
+     * @param int $quote_id
+     * @return array
+     */
+    public function get_version_siblings($quote_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $this->ensure_version_columns();
+        $quote_id = (int) $quote_id;
+        $gid = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT version_group_id FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+            $quote_id
+        ));
+        if ($gid <= 0) {
+            $row = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, numero_documento, fecha_documento, estado, version_group_id, version_n, total
+                 FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+                $quote_id
+            ), ARRAY_A);
+            return $row ? [$row] : [];
+        }
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, numero_documento, fecha_documento, fecha_recepcion, estado, version_group_id, version_n, total, proveedor_id
+             FROM {$prefix}cotizaciones_recibidas
+             WHERE version_group_id = %d
+             ORDER BY version_n ASC, id ASC",
+            $gid
+        ), ARRAY_A) ?: [];
+        return $this->decorate_version_meta($rows);
+    }
+
+    /**
+     * Reenumera un grupo según version_orden.
+     * Default: cronología del mensaje del hilo (sent_at), no fecha_documento —
+     * las fechas del PDF/correo suelen invertir v1/v2/v3 en negociaciones.
+     *
+     * @param int         $group_id
+     * @param string|null $orden mensaje|fecha_recepcion|fecha_documento|manual
+     * @return void
+     */
+    public function renumber_version_group($group_id, $orden = null) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $this->ensure_version_columns();
+        $group_id = (int) $group_id;
+        if ($group_id <= 0) {
+            return;
+        }
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT c.id, c.fecha_documento, c.fecha_recepcion, c.created_at, c.version_n, c.version_orden,
+                    c.origen_mensaje_id, m.sent_at AS mensaje_sent_at, m.id AS mensaje_id
+             FROM {$prefix}cotizaciones_recibidas c
+             LEFT JOIN {$prefix}messaging_messages m ON m.id = c.origen_mensaje_id
+             WHERE c.version_group_id = %d",
+            $group_id
+        ), ARRAY_A) ?: [];
+        if (!$rows) {
+            return;
+        }
+
+        if ($orden === null) {
+            $orden = (string) ($rows[0]['version_orden'] ?? 'mensaje');
+            // Migrar criterio antiguo que invertía versiones por fechas de documento.
+            if ($orden === 'fecha_documento') {
+                $orden = 'mensaje';
+            }
+        }
+        if (!in_array($orden, ['mensaje', 'fecha_recepcion', 'fecha_documento', 'manual'], true)) {
+            $orden = 'mensaje';
+        }
+
+        if ($orden === 'manual') {
+            usort($rows, static function ($a, $b) {
+                $va = (int) ($a['version_n'] ?? 0);
+                $vb = (int) ($b['version_n'] ?? 0);
+                if ($va === $vb) {
+                    return (int) $a['id'] <=> (int) $b['id'];
+                }
+                if ($va <= 0) {
+                    return 1;
+                }
+                if ($vb <= 0) {
+                    return -1;
+                }
+                return $va <=> $vb;
+            });
+        } else {
+            usort($rows, static function ($a, $b) use ($orden) {
+                $cmp_empty = static function ($da, $db) {
+                    $a_empty = ($da === '' || $da === null);
+                    $b_empty = ($db === '' || $db === null);
+                    if ($a_empty && !$b_empty) {
+                        return 1;
+                    }
+                    if (!$a_empty && $b_empty) {
+                        return -1;
+                    }
+                    if ($da !== $db) {
+                        return strcmp((string) $da, (string) $db);
+                    }
+                    return 0;
+                };
+
+                if ($orden === 'mensaje') {
+                    $c = $cmp_empty($a['mensaje_sent_at'] ?? '', $b['mensaje_sent_at'] ?? '');
+                    if ($c !== 0) {
+                        return $c;
+                    }
+                    $ma = (int) ($a['mensaje_id'] ?? 0);
+                    $mb = (int) ($b['mensaje_id'] ?? 0);
+                    if ($ma !== $mb) {
+                        // Sin mensaje: al final respecto a quien sí tiene origen.
+                        if ($ma <= 0) {
+                            return 1;
+                        }
+                        if ($mb <= 0) {
+                            return -1;
+                        }
+                        return $ma <=> $mb;
+                    }
+                    return (int) $a['id'] <=> (int) $b['id'];
+                }
+
+                if ($orden === 'fecha_recepcion') {
+                    $da = $a['fecha_recepcion'] ?: ($a['created_at'] ?? '');
+                    $db = $b['fecha_recepcion'] ?: ($b['created_at'] ?? '');
+                } else {
+                    $da = $a['fecha_documento'] ?: '';
+                    $db = $b['fecha_documento'] ?: '';
+                }
+                $c = $cmp_empty($da, $db);
+                if ($c !== 0) {
+                    return $c;
+                }
+                // Desempate: mensaje del hilo, luego id (no fecha_documento suelta).
+                $c = $cmp_empty($a['mensaje_sent_at'] ?? '', $b['mensaje_sent_at'] ?? '');
+                if ($c !== 0) {
+                    return $c;
+                }
+                return (int) $a['id'] <=> (int) $b['id'];
+            });
+        }
+
+        $n = 1;
+        foreach ($rows as $row) {
+            $wpdb->update(
+                "{$prefix}cotizaciones_recibidas",
+                [
+                    'version_n' => $n,
+                    'version_orden' => $orden,
+                    'version_group_id' => $group_id,
+                ],
+                ['id' => (int) $row['id']]
+            );
+            $n++;
+        }
+    }
+
+    /**
+     * Une cotizaciones en un mismo grupo y reenumera.
+     *
+     * @param int[]  $quote_ids
+     * @param string $orden
+     * @return int|WP_Error group_id
+     */
+    public function link_quotes_as_versions(array $quote_ids, $orden = 'mensaje') {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $this->ensure_version_columns();
+
+        $ids = array_values(array_unique(array_filter(array_map('intval', $quote_ids))));
+        if (count($ids) < 2) {
+            return new WP_Error('need_two', 'Se requieren al menos dos cotizaciones para vincular');
+        }
+
+        $in = implode(',', $ids);
+        $rows = $wpdb->get_results(
+            "SELECT id, version_group_id FROM {$prefix}cotizaciones_recibidas WHERE id IN ({$in})",
+            ARRAY_A
+        ) ?: [];
+        if (count($rows) < 2) {
+            return new WP_Error('not_found', 'Cotizaciones no encontradas');
+        }
+
+        $group_id = 0;
+        foreach ($rows as $r) {
+            $gid = (int) ($r['version_group_id'] ?? 0);
+            if ($gid > 0) {
+                $group_id = $gid;
+                break;
+            }
+        }
+        if ($group_id <= 0) {
+            $group_id = min($ids);
+        }
+
+        // Traer también miembros ya existentes del grupo destino
+        $all_ids = $ids;
+        $existing = $wpdb->get_col($wpdb->prepare(
+            "SELECT id FROM {$prefix}cotizaciones_recibidas WHERE version_group_id = %d",
+            $group_id
+        )) ?: [];
+        foreach ($existing as $eid) {
+            $all_ids[] = (int) $eid;
+        }
+        // Si alguna tenía otro grupo, fusionar
+        foreach ($rows as $r) {
+            $gid = (int) ($r['version_group_id'] ?? 0);
+            if ($gid > 0 && $gid !== $group_id) {
+                $sibs = $wpdb->get_col($wpdb->prepare(
+                    "SELECT id FROM {$prefix}cotizaciones_recibidas WHERE version_group_id = %d",
+                    $gid
+                )) ?: [];
+                foreach ($sibs as $sid) {
+                    $all_ids[] = (int) $sid;
+                }
+            }
+        }
+        $all_ids = array_values(array_unique($all_ids));
+
+        foreach ($all_ids as $qid) {
+            $wpdb->update(
+                "{$prefix}cotizaciones_recibidas",
+                [
+                    'version_group_id' => $group_id,
+                    'version_orden' => in_array($orden, ['mensaje', 'fecha_documento', 'fecha_recepcion', 'manual'], true)
+                        ? $orden
+                        : 'mensaje',
+                ],
+                ['id' => $qid]
+            );
+        }
+        $this->renumber_version_group($group_id, $orden);
+        return $group_id;
+    }
+
+    /**
+     * Saca una cotización del grupo y reenumera el resto.
+     *
+     * @param int $quote_id
+     * @return true|WP_Error
+     */
+    public function unlink_quote_version($quote_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $this->ensure_version_columns();
+        $quote_id = (int) $quote_id;
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, version_group_id FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+            $quote_id
+        ), ARRAY_A);
+        if (!$row) {
+            return new WP_Error('not_found', 'Cotización no encontrada');
+        }
+        $gid = (int) ($row['version_group_id'] ?? 0);
+        $wpdb->update(
+            "{$prefix}cotizaciones_recibidas",
+            [
+                'version_group_id' => $quote_id,
+                'version_n' => 1,
+                'version_orden' => 'mensaje',
+            ],
+            ['id' => $quote_id]
+        );
+        if ($gid > 0 && $gid !== $quote_id) {
+            $left = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$prefix}cotizaciones_recibidas WHERE version_group_id = %d",
+                $gid
+            ));
+            if ($left === 1) {
+                $only = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM {$prefix}cotizaciones_recibidas WHERE version_group_id = %d LIMIT 1",
+                    $gid
+                ));
+                if ($only > 0) {
+                    $wpdb->update(
+                        "{$prefix}cotizaciones_recibidas",
+                        ['version_group_id' => $only, 'version_n' => 1],
+                        ['id' => $only]
+                    );
+                }
+            } elseif ($left > 1) {
+                $this->renumber_version_group($gid);
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Auto-agrupa con hermanas del mismo hilo de messaging.
+     *
+     * @param int $quote_id
+     * @return void
+     */
+    public function auto_group_from_thread($quote_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $this->ensure_version_columns();
+        $quote_id = (int) $quote_id;
+        $msg_id = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT origen_mensaje_id FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+            $quote_id
+        ));
+        if ($msg_id <= 0) {
+            // Cotización aislada: materializar v1
+            $wpdb->update(
+                "{$prefix}cotizaciones_recibidas",
+                ['version_group_id' => $quote_id, 'version_n' => 1],
+                ['id' => $quote_id]
+            );
+            return;
+        }
+        $thread_id = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT thread_id FROM {$prefix}messaging_messages WHERE id = %d",
+            $msg_id
+        ));
+        if ($thread_id <= 0) {
+            $wpdb->update(
+                "{$prefix}cotizaciones_recibidas",
+                ['version_group_id' => $quote_id, 'version_n' => 1],
+                ['id' => $quote_id]
+            );
+            return;
+        }
+        $sibling_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT c.id FROM {$prefix}cotizaciones_recibidas c
+             INNER JOIN {$prefix}messaging_messages m ON m.id = c.origen_mensaje_id
+             WHERE m.thread_id = %d
+             ORDER BY c.id ASC",
+            $thread_id
+        )) ?: [];
+        $sibling_ids = array_map('intval', $sibling_ids);
+        if (count($sibling_ids) < 2) {
+            $wpdb->update(
+                "{$prefix}cotizaciones_recibidas",
+                ['version_group_id' => $quote_id, 'version_n' => 1],
+                ['id' => $quote_id]
+            );
+            return;
+        }
+        $this->link_quotes_as_versions($sibling_ids, 'mensaje');
+    }
+
+    /**
+     * Backfill one-shot: hilos con N>1 cotizaciones.
+     */
+    public function backfill_versions_from_threads() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $this->ensure_version_columns();
+
+        $threads = $wpdb->get_col(
+            "SELECT m.thread_id
+             FROM {$prefix}cotizaciones_recibidas c
+             INNER JOIN {$prefix}messaging_messages m ON m.id = c.origen_mensaje_id
+             WHERE c.origen_mensaje_id IS NOT NULL
+             GROUP BY m.thread_id
+             HAVING COUNT(*) > 1"
+        ) ?: [];
+
+        foreach ($threads as $tid) {
+            $ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT c.id FROM {$prefix}cotizaciones_recibidas c
+                 INNER JOIN {$prefix}messaging_messages m ON m.id = c.origen_mensaje_id
+                 WHERE m.thread_id = %d
+                 ORDER BY c.id ASC",
+                (int) $tid
+            )) ?: [];
+            if (count($ids) > 1) {
+                $this->link_quotes_as_versions($ids, 'mensaje');
+            }
+        }
+
+        // Materializar v1 en cotizaciones sueltas sin grupo
+        $wpdb->query(
+            "UPDATE {$prefix}cotizaciones_recibidas
+             SET version_group_id = id, version_n = 1
+             WHERE version_group_id IS NULL OR version_group_id = 0"
+        );
+    }
+
+    /**
+     * Diff de ítems entre dos cotizaciones.
+     *
+     * @param int $id_a Versión anterior (base)
+     * @param int $id_b Versión nueva
+     * @return array|WP_Error
+     */
+    public function compare_quote_versions($id_a, $id_b) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $id_a = (int) $id_a;
+        $id_b = (int) $id_b;
+        if ($id_a <= 0 || $id_b <= 0 || $id_a === $id_b) {
+            return new WP_Error('invalid', 'Seleccione dos cotizaciones distintas');
+        }
+
+        $qa = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, numero_documento, fecha_documento, version_n, version_group_id, total
+             FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+            $id_a
+        ), ARRAY_A);
+        $qb = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, numero_documento, fecha_documento, version_n, version_group_id, total
+             FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+            $id_b
+        ), ARRAY_A);
+        if (!$qa || !$qb) {
+            return new WP_Error('not_found', 'Cotización no encontrada');
+        }
+
+        $items_a = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, linea, codigo_proveedor, descripcion, cantidad, precio_lista, costo_neto, costo_total
+             FROM {$prefix}cotizacion_items WHERE cotizacion_id = %d ORDER BY linea ASC",
+            $id_a
+        ), ARRAY_A) ?: [];
+        $items_b = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, linea, codigo_proveedor, descripcion, cantidad, precio_lista, costo_neto, costo_total
+             FROM {$prefix}cotizacion_items WHERE cotizacion_id = %d ORDER BY linea ASC",
+            $id_b
+        ), ARRAY_A) ?: [];
+
+        $map_a = [];
+        foreach ($items_a as $it) {
+            $map_a[$this->version_item_key($it)] = $it;
+        }
+        $map_b = [];
+        foreach ($items_b as $it) {
+            $map_b[$this->version_item_key($it)] = $it;
+        }
+
+        $keys = array_unique(array_merge(array_keys($map_a), array_keys($map_b)));
+        sort($keys);
+        $rows = [];
+        $stats = ['agregado' => 0, 'quitado' => 0, 'precio_cambio' => 0, 'igual' => 0];
+
+        foreach ($keys as $key) {
+            $a = $map_a[$key] ?? null;
+            $b = $map_b[$key] ?? null;
+            $cost_a = $a ? (float) ($a['costo_neto'] ?? 0) : null;
+            $cost_b = $b ? (float) ($b['costo_neto'] ?? 0) : null;
+            $lista_a = $a && $a['precio_lista'] !== null ? (float) $a['precio_lista'] : null;
+            $lista_b = $b && $b['precio_lista'] !== null ? (float) $b['precio_lista'] : null;
+
+            if ($a && !$b) {
+                $status = 'quitado';
+            } elseif (!$a && $b) {
+                $status = 'agregado';
+            } else {
+                $delta = ($cost_b !== null && $cost_a !== null) ? ($cost_b - $cost_a) : 0;
+                $delta_lista = ($lista_a !== null && $lista_b !== null) ? ($lista_b - $lista_a) : 0;
+                if (abs($delta) >= 0.01 || abs($delta_lista) >= 0.01) {
+                    $status = 'precio_cambio';
+                } else {
+                    $status = 'igual';
+                }
+            }
+            $stats[$status]++;
+
+            $rows[] = [
+                'key' => $key,
+                'status' => $status,
+                'codigo' => $a['codigo_proveedor'] ?? ($b['codigo_proveedor'] ?? ''),
+                'descripcion' => $a['descripcion'] ?? ($b['descripcion'] ?? ''),
+                'cantidad_a' => $a ? (float) $a['cantidad'] : null,
+                'cantidad_b' => $b ? (float) $b['cantidad'] : null,
+                'costo_a' => $cost_a,
+                'costo_b' => $cost_b,
+                'precio_lista_a' => $lista_a,
+                'precio_lista_b' => $lista_b,
+                'delta_costo' => ($cost_a !== null && $cost_b !== null) ? round($cost_b - $cost_a, 4) : null,
+            ];
+        }
+
+        return [
+            'quote_a' => $qa,
+            'quote_b' => $qb,
+            'rows' => $rows,
+            'stats' => $stats,
+        ];
+    }
+
+    private function version_item_key(array $item) {
+        $code = strtolower(trim((string) ($item['codigo_proveedor'] ?? '')));
+        $code = str_replace(['-', '_', ' '], '', $code);
+        if ($code !== '') {
+            return 'c:' . $code;
+        }
+        $desc = strtolower(trim((string) ($item['descripcion'] ?? '')));
+        $desc = preg_replace('/\s+/', ' ', $desc);
+        return 'd:' . md5($desc);
+    }
+
+    public function ajax_search_quotes_for_version() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $this->ensure_version_columns();
+        $exclude = isset($_POST['exclude_id']) ? intval($_POST['exclude_id']) : 0;
+        $q = isset($_POST['q']) ? sanitize_text_field(wp_unslash($_POST['q'])) : '';
+        $where = ['1=1'];
+        $params = [];
+        if ($exclude > 0) {
+            $where[] = 'c.id <> %d';
+            $params[] = $exclude;
+        }
+        if ($q !== '') {
+            if (ctype_digit($q)) {
+                $where[] = '(c.id = %d OR c.numero_documento LIKE %s OR p.nombre LIKE %s)';
+                $params[] = (int) $q;
+                $params[] = '%' . $wpdb->esc_like($q) . '%';
+                $params[] = '%' . $wpdb->esc_like($q) . '%';
+            } else {
+                $where[] = '(c.numero_documento LIKE %s OR p.nombre LIKE %s)';
+                $params[] = '%' . $wpdb->esc_like($q) . '%';
+                $params[] = '%' . $wpdb->esc_like($q) . '%';
+            }
+        }
+        $sql = "SELECT c.id, c.numero_documento, c.fecha_documento, c.estado, c.version_group_id, c.version_n,
+                       c.total, p.nombre AS proveedor_nombre
+                FROM {$prefix}cotizaciones_recibidas c
+                LEFT JOIN {$prefix}proveedores p ON p.id = c.proveedor_id
+                WHERE " . implode(' AND ', $where) . '
+                ORDER BY c.id DESC LIMIT 30';
+        $rows = $params
+            ? $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A)
+            : $wpdb->get_results($sql, ARRAY_A);
+        wp_send_json_success(['quotes' => $this->decorate_version_meta($rows ?: [])]);
+    }
+
+    public function ajax_link_quote_version() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $other = isset($_POST['other_id']) ? intval($_POST['other_id']) : 0;
+        $orden = isset($_POST['orden']) ? sanitize_key(wp_unslash($_POST['orden'])) : 'mensaje';
+        $result = $this->link_quotes_as_versions([$id, $other], $orden);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success([
+            'message' => 'Versiones vinculadas',
+            'version_group_id' => (int) $result,
+            'siblings' => $this->get_version_siblings($id),
+        ]);
+    }
+
+    public function ajax_unlink_quote_version() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $result = $this->unlink_quote_version($id);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success([
+            'message' => 'Cotización desvinculada del grupo de versiones',
+            'siblings' => $this->get_version_siblings($id),
+        ]);
+    }
+
+    public function ajax_compare_quote_versions() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        $id_a = isset($_POST['id_a']) ? intval($_POST['id_a']) : 0;
+        $id_b = isset($_POST['id_b']) ? intval($_POST['id_b']) : 0;
+        $result = $this->compare_quote_versions($id_a, $id_b);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success($result);
+    }
+
+    public function ajax_reorder_quote_version() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $this->ensure_version_columns();
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $direction = isset($_POST['direction']) ? sanitize_key(wp_unslash($_POST['direction'])) : '';
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, version_group_id, version_n FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+            $id
+        ), ARRAY_A);
+        if (!$row || empty($row['version_group_id'])) {
+            wp_send_json_error(['message' => 'Sin grupo de versiones']);
+        }
+        $gid = (int) $row['version_group_id'];
+        $vn = (int) $row['version_n'];
+        $swap_n = $direction === 'up' ? $vn - 1 : $vn + 1;
+        if ($swap_n < 1) {
+            wp_send_json_error(['message' => 'Ya es la primera versión']);
+        }
+        $other = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, version_n FROM {$prefix}cotizaciones_recibidas
+             WHERE version_group_id = %d AND version_n = %d",
+            $gid,
+            $swap_n
+        ), ARRAY_A);
+        if (!$other) {
+            wp_send_json_error(['message' => 'No hay versión adyacente']);
+        }
+        $wpdb->update("{$prefix}cotizaciones_recibidas", ['version_orden' => 'manual', 'version_n' => $swap_n], ['id' => $id]);
+        $wpdb->update("{$prefix}cotizaciones_recibidas", ['version_orden' => 'manual', 'version_n' => $vn], ['id' => (int) $other['id']]);
+        // Asegurar modo manual en todo el grupo
+        $wpdb->update(
+            "{$prefix}cotizaciones_recibidas",
+            ['version_orden' => 'manual'],
+            ['version_group_id' => $gid]
+        );
+        wp_send_json_success([
+            'message' => 'Orden actualizado',
+            'siblings' => $this->get_version_siblings($id),
+        ]);
     }
 }

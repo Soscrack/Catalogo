@@ -812,6 +812,56 @@
     flex-direction: column;
 }
 
+.rpf-search-family-card {
+    width: min(920px, 96vw);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.rpf-search-family-card .rpf-modal-body {
+    overflow: auto;
+    flex: 1 1 auto;
+}
+
+.rpf-search-family-list {
+    border: 1px solid #ddd;
+    padding: 12px;
+    border-radius: 4px;
+    background: #fafafa;
+    max-height: min(420px, 50vh);
+    overflow-y: auto;
+    margin-top: 8px;
+}
+
+.rpf-search-family-count-row {
+    margin-top: 6px;
+}
+
+.rpf-search-family-list .family-item {
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+}
+
+.rpf-search-family-list .family-item-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    width: 100%;
+    gap: 8px;
+}
+
+.rpf-create-family-card {
+    width: min(560px, 94vw);
+}
+
 .rpf-search-link-card .rpf-modal-body {
     overflow: auto;
     flex: 1 1 auto;
@@ -823,7 +873,8 @@
     align-items: center;
 }
 
-.rpf-search-link-qrow input[type="text"] {
+.rpf-search-link-qrow input[type="text"],
+.rpf-search-link-qrow input[type="search"] {
     flex: 1 1 auto;
     width: auto;
 }

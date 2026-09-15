@@ -102,6 +102,9 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
                     <span class="dashicons dashicons-filter"></span> Filtrar
                 </button>
                 <button type="button" class="button" id="btn-limpiar-filtros">Limpiar</button>
+                <label style="margin-left:8px;display:inline-flex;align-items:center;gap:4px;">
+                    <input type="checkbox" id="filtro-solo-final" value="1"> Solo versión final
+                </label>
             </div>
         </div>
 
@@ -112,6 +115,7 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
                     <th style="width:60px">ID</th>
                     <th>Proveedor</th>
                     <th>Nº Documento</th>
+                    <th style="width:100px">Versión</th>
                     <th>Fecha</th>
                     <th>Tipo</th>
                     <th>Fuente</th>
@@ -122,7 +126,7 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
                 </tr>
             </thead>
             <tbody id="lista-cotizaciones">
-                <tr><td colspan="10" class="loading">Cargando cotizaciones...</td></tr>
+                <tr><td colspan="11" class="loading">Cargando cotizaciones...</td></tr>
             </tbody>
         </table>
     </div>
@@ -158,6 +162,30 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
             <strong>Por confirmar.</strong>
             Una persona debe revisar este documento (posible cotización, total 0 o origen automático).
             Elija el tipo y pulse <em>Confirmar tipo</em> en esta misma barra.
+        </div>
+        <div id="banner-parse-error" class="quote-tipo-banner quote-parse-error-banner" style="display:none;">
+            <strong>Error al procesar con Gemini.</strong>
+            <span id="banner-parse-error-msg"></span>
+            <button type="button" class="button button-small" id="btn-reintentar-parse" style="margin-left:8px;">
+                Reintentar parseo
+            </button>
+        </div>
+
+        <div id="quote-versions-bar" class="riverso-card" style="display:none;padding:12px 16px;">
+            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+                <strong style="margin-right:4px;">Versiones:</strong>
+                <div id="quote-versions-chips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+                <span style="flex:1;"></span>
+                <button type="button" class="button button-small" id="btn-vincular-version">
+                    <span class="dashicons dashicons-admin-links"></span> Vincular versión
+                </button>
+                <button type="button" class="button button-small" id="btn-desvincular-version" style="display:none;">
+                    Desvincular
+                </button>
+                <button type="button" class="button button-small" id="btn-comparar-versiones" style="display:none;">
+                    <span class="dashicons dashicons-randomize"></span> Comparar
+                </button>
+            </div>
         </div>
 
         <!-- Datos generales -->
@@ -199,7 +227,13 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
                         <div id="archivo-info">
                             <span class="no-archivo">Sin archivo adjunto</span>
                         </div>
-                        <input type="file" id="archivo-upload" accept=".pdf,.xlsx,.xls,.csv,.txt" style="margin-top:5px;">
+                        <div id="archivo-actions" style="margin-top:6px;display:none;">
+                            <button type="button" class="button" id="btn-ver-documento">
+                                <span class="dashicons dashicons-media-document"></span> Ver Documento
+                            </button>
+                        </div>
+                        <input type="file" id="archivo-upload" accept=".pdf,.xlsx,.xls,.csv,.txt,.jpg,.jpeg,.png,.webp,.tif,.tiff" style="margin-top:5px;">
+                        <p class="description" style="margin:4px 0 0;">Reemplazar archivo de esta cotización (borra ítems y re-procesa).</p>
                     </div>
                 </div>
                 <div class="form-group">
@@ -497,18 +531,31 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
 
     <!-- Upload modal -->
     <div id="modal-upload" class="riverso-modal" style="display:none;">
-        <div class="modal-content" style="max-width:500px;">
+        <div class="modal-content" style="max-width:520px;">
             <div class="modal-header">
                 <h3>Subir Archivo de Cotización</h3>
                 <button type="button" class="modal-close">&times;</button>
             </div>
             <div class="modal-body">
+                <p class="description" style="margin-bottom:12px;">
+                    Suba <strong>un PDF, imagen o Excel</strong>. Arrástrelo a la zona o use el botón para buscar.
+                </p>
+                <input type="file" id="file-upload-input" accept=".pdf,.xlsx,.xls,.csv,.txt,.jpg,.jpeg,.png,.webp,.tif,.tiff" style="display:none;">
                 <div class="upload-zone" id="upload-zone">
                     <span class="dashicons dashicons-upload"></span>
-                    <p>Arrastra un archivo aquí o haz clic para seleccionar</p>
-                    <p class="upload-formats">Formatos: PDF, Excel (.xlsx, .xls), CSV, TXT</p>
-                    <input type="file" id="file-upload-input" accept=".pdf,.xlsx,.xls,.csv,.txt" style="display:none;">
+                    <p>Arrastra el archivo aquí</p>
+                    <p class="upload-formats">PDF, JPG, PNG, WEBP, TIFF, Excel (.xlsx, .xls), CSV, TXT</p>
                 </div>
+                <div class="quote-upload-toolbar">
+                    <button type="button" class="button button-primary" id="btn-browse-quote-file">
+                        <span class="dashicons dashicons-open-folder"></span> Buscar archivos
+                    </button>
+                    <button type="button" class="button button-primary" id="btn-upload-quote-file" disabled>
+                        Subir y procesar
+                    </button>
+                </div>
+                <p id="quote-upload-file-name" class="description" style="margin-top:10px;text-align:center;"></p>
+                <div id="quote-upload-status" class="quote-upload-status" aria-live="polite"></div>
                 <div id="upload-progress" style="display:none;">
                     <div class="progress-bar"><div class="progress-fill"></div></div>
                     <p class="progress-text">Subiendo archivo...</p>
@@ -526,6 +573,59 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
             <div class="modal-body">
                 <p id="adjuntos-origen-meta" class="description" style="margin-top:0;"></p>
                 <ul id="lista-adjuntos-origen" style="margin:0;padding-left:18px;"></ul>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-vincular-version" class="riverso-modal" style="display:none;">
+        <div class="modal-content" style="max-width:560px;">
+            <div class="modal-header">
+                <h3>Vincular versión</h3>
+                <button type="button" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="description">Busque otra cotización (ID, nº documento o proveedor) para unirlas como versiones de la misma negociación.</p>
+                <div style="display:flex;gap:8px;margin-bottom:12px;">
+                    <input type="text" id="version-search-q" class="regular-text" placeholder="Buscar…" style="flex:1;">
+                    <button type="button" class="button" id="btn-version-search">Buscar</button>
+                </div>
+                <div id="version-search-results"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-comparar-versiones" class="riverso-modal" style="display:none;">
+        <div class="modal-content" style="max-width:900px;">
+            <div class="modal-header">
+                <h3>Comparar versiones</h3>
+                <button type="button" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+                    <label>Base (A)
+                        <select id="compare-version-a"></select>
+                    </label>
+                    <label>Nueva (B)
+                        <select id="compare-version-b"></select>
+                    </label>
+                    <button type="button" class="button button-primary" id="btn-run-compare">Comparar</button>
+                </div>
+                <div id="compare-version-stats" class="description" style="margin-bottom:8px;"></div>
+                <div style="overflow:auto;max-height:480px;">
+                    <table class="wp-list-table widefat striped" id="tabla-compare-versions">
+                        <thead>
+                            <tr>
+                                <th>Estado</th>
+                                <th>Código</th>
+                                <th>Descripción</th>
+                                <th style="text-align:right">Costo A</th>
+                                <th style="text-align:right">Costo B</th>
+                                <th style="text-align:right">Δ</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -731,6 +831,11 @@ tr.quote-por-confirmar {
     background: #fff8e5;
     color: #614200;
 }
+.quote-parse-error-banner {
+    border-left-color: #b32d2e;
+    background: #fcf0f1;
+    color: #3c434a;
+}
 
 .match-badge {
     padding: 2px 8px;
@@ -827,6 +932,69 @@ tr.quote-por-confirmar {
 .upload-formats {
     font-size: 12px;
     color: #666;
+}
+.version-badge {
+    display: inline-block;
+    background: #eef2ff;
+    color: #3730a3;
+    border: 1px solid #c7d2fe;
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.version-badge.is-final {
+    background: #ecfdf5;
+    color: #065f46;
+    border-color: #a7f3d0;
+}
+.quote-version-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 12px;
+}
+.quote-version-chip.is-current {
+    border-color: #2271b1;
+    background: #f0f6fc;
+    font-weight: 600;
+}
+.quote-version-chip.is-final {
+    border-color: #00a32a;
+}
+.compare-status-agregado { color: #00a32a; font-weight: 600; }
+.compare-status-quitado { color: #d63638; font-weight: 600; }
+.compare-status-precio_cambio { color: #dba617; font-weight: 600; }
+.compare-status-igual { color: #646970; }
+.quote-upload-toolbar {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 14px;
+    flex-wrap: wrap;
+}
+.quote-upload-toolbar .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    vertical-align: text-bottom;
+    margin-right: 4px;
+}
+.quote-upload-status {
+    margin-top: 12px;
+}
+.quote-upload-status .notice {
+    margin: 0;
+    padding: 8px 12px;
+}
+.quote-upload-status .quote-dup-actions {
+    margin-top: 8px;
 }
 
 .match-info-box {
@@ -952,6 +1120,7 @@ jQuery(document).ready(function($) {
     let itemsActuales = [];
     let proveedoresCache = [];
     let origenActual = null;
+    let versionSiblingsActual = [];
     let lastQuoteEval = null;
     let quoteEvalViewMode = 'neto';
     let quoteEvalCostMode = 'tras_dr';
@@ -1142,7 +1311,8 @@ jQuery(document).ready(function($) {
             proveedor_id: $('#filtro-proveedor').val(),
             buscar: $('#filtro-buscar').val(),
             fecha_desde: $('#filtro-desde').val(),
-            fecha_hasta: $('#filtro-hasta').val()
+            fecha_hasta: $('#filtro-hasta').val(),
+            solo_version_final: $('#filtro-solo-final').is(':checked') ? 1 : 0
         }, function(r) {
             if (r.success) {
                 renderCotizaciones(r.data.quotes);
@@ -1176,7 +1346,7 @@ jQuery(document).ready(function($) {
     function renderCotizaciones(quotes) {
         const tbody = $('#lista-cotizaciones');
         if (!quotes.length) {
-            tbody.html('<tr><td colspan="10" class="empty">No hay cotizaciones</td></tr>');
+            tbody.html('<tr><td colspan="11" class="empty">No hay cotizaciones</td></tr>');
             return;
         }
 
@@ -1198,10 +1368,23 @@ jQuery(document).ready(function($) {
                 ? '<button class="button button-small button-primary btn-confirmar-tipo-lista" title="Confirmar como cotización">Confirmar tipo</button> '
                 : '';
             
+            const hasDoc = !!(q.archivo_path || q.archivo_original);
+            const docBtn = hasDoc
+                ? '<button class="button button-small btn-ver-documento-lista" title="Ver Documento"><span class="dashicons dashicons-media-document"></span></button> '
+                : '';
+            let versionHtml = '—';
+            if (q.version_label) {
+                versionHtml = '<span class="version-badge' + (q.is_version_final ? ' is-final' : '') + '">' +
+                    escapeHtml(q.version_label) + '</span>';
+            } else if (q.version_n) {
+                versionHtml = '<span class="version-badge">v' + q.version_n + '</span>';
+            }
+            
             html += `<tr data-id="${q.id}" class="${porConfirmar ? 'quote-por-confirmar' : ''}">
                 <td>${q.id}</td>
                 <td>${q.proveedor_nombre || '<em>Sin proveedor</em>'}</td>
                 <td>${q.numero_documento || '-'}</td>
+                <td>${versionHtml}</td>
                 <td>${q.fecha_documento || '-'}</td>
                 <td><span class="tipo-doc-badge tipo-${tipoKey}">${tipoLabel}</span>${confirmAviso}</td>
                 <td>${sourceTypes[q.tipo_fuente] || q.tipo_fuente || '—'}</td>
@@ -1210,6 +1393,7 @@ jQuery(document).ready(function($) {
                 <td><span class="estado-badge estado-${q.estado}">${estados[q.estado] || q.estado}</span></td>
                 <td>
                     ${confirmBtn}
+                    ${docBtn}
                     <button class="button button-small btn-ver" title="Ver/Editar">
                         <span class="dashicons dashicons-edit"></span>
                     </button>
@@ -1247,6 +1431,7 @@ jQuery(document).ready(function($) {
                 cotizacionActual = r.data.quote;
                 itemsActuales = r.data.items;
                 origenActual = r.data.origen || null;
+                versionSiblingsActual = r.data.version_siblings || [];
                 if (r.data.proveedores) {
                     proveedoresCache = r.data.proveedores;
                     renderProveedoresSelect();
@@ -1272,10 +1457,12 @@ jQuery(document).ready(function($) {
             $('#badge-estado').text(estados[q.estado] || q.estado).attr('class', 'estado-badge estado-' + q.estado);
             syncTipoDocUi(q);
             
-            if (q.archivo_original) {
-                $('#archivo-info').html(`<span class="dashicons dashicons-media-document"></span> ${q.archivo_original}`);
+            if (q.archivo_original || q.archivo_path) {
+                $('#archivo-info').html(`<span class="dashicons dashicons-media-document"></span> ${escapeHtml(q.archivo_original || q.archivo_path)}`);
+                $('#archivo-actions').show();
             } else {
                 $('#archivo-info').html('<span class="no-archivo">Sin archivo adjunto</span>');
+                $('#archivo-actions').hide();
             }
             
             $('#total-subtotal').text(formatMoney(q.subtotal));
@@ -1308,10 +1495,12 @@ jQuery(document).ready(function($) {
             } else {
                 $('#btn-ver-adjuntos').hide();
             }
+            renderVersionBar(versionSiblingsActual, q.id);
         } else {
             $('#form-cotizacion')[0].reset();
             $('#badge-estado').text('Nueva').attr('class', 'estado-badge');
             $('#archivo-info').html('<span class="no-archivo">Sin archivo adjunto</span>');
+            $('#archivo-actions').hide();
             $('#total-subtotal, #total-impuesto, #total-total').text('$0');
             $('#btn-aprobar').hide();
             $('#btn-convertir-oc').hide();
@@ -1319,6 +1508,8 @@ jQuery(document).ready(function($) {
             $('#btn-ver-adjuntos').hide();
             syncTipoDocUi(null);
             origenActual = null;
+            versionSiblingsActual = [];
+            $('#quote-versions-bar').hide();
         }
         
         renderItems();
@@ -1331,6 +1522,200 @@ jQuery(document).ready(function($) {
         return !!q && (q.tipo_doc === 'posible_cotizacion' || String(q.tipo_confirmado) === '0');
     }
 
+    function renderVersionBar(siblings, currentId) {
+        versionSiblingsActual = siblings || [];
+        const $bar = $('#quote-versions-bar');
+        const $chips = $('#quote-versions-chips').empty();
+        if (!currentId) {
+            $bar.hide();
+            return;
+        }
+        $bar.show();
+        const multi = versionSiblingsActual.length > 1;
+        $('#btn-desvincular-version').toggle(multi);
+        $('#btn-comparar-versiones').toggle(multi);
+        if (!versionSiblingsActual.length) {
+            $chips.append('<span class="description">v1 (sin hermanas vinculadas)</span>');
+            return;
+        }
+        versionSiblingsActual.forEach(function(s) {
+            const label = s.version_label || ('v' + (s.version_n || '?'));
+            const $chip = $('<button type="button" class="quote-version-chip"></button>');
+            $chip.text(label + ' · #' + s.id);
+            if (parseInt(s.id, 10) === parseInt(currentId, 10)) $chip.addClass('is-current');
+            if (s.is_version_final) $chip.addClass('is-final');
+            $chip.attr('data-id', s.id);
+            $chips.append($chip);
+        });
+    }
+
+    $(document).on('click', '.quote-version-chip', function() {
+        const id = $(this).data('id');
+        if (id && parseInt(id, 10) !== parseInt($('#cotizacion-id').val(), 10)) {
+            verCotizacion(id);
+        }
+    });
+
+    $('#btn-vincular-version').on('click', function() {
+        const id = $('#cotizacion-id').val();
+        if (!id || id === '0') { alert('Guarde la cotización primero'); return; }
+        $('#version-search-q').val('');
+        $('#version-search-results').html('<p class="description">Escriba y pulse Buscar.</p>');
+        $('#modal-vincular-version').show();
+    });
+
+    $('#btn-version-search').on('click', function() {
+        const id = $('#cotizacion-id').val();
+        $.post(ajaxurl, {
+            action: 'riverso_search_quotes_for_version',
+            nonce: nonce,
+            exclude_id: id,
+            q: $('#version-search-q').val()
+        }, function(r) {
+            if (!r.success) {
+                $('#version-search-results').html('<p class="description">' + escapeHtml((r.data && r.data.message) || 'Error') + '</p>');
+                return;
+            }
+            const rows = r.data.quotes || [];
+            if (!rows.length) {
+                $('#version-search-results').html('<p class="description">Sin resultados</p>');
+                return;
+            }
+            let html = '<table class="widefat striped"><thead><tr><th>ID</th><th>Proveedor</th><th>Doc</th><th>Versión</th><th></th></tr></thead><tbody>';
+            rows.forEach(function(q) {
+                html += '<tr><td>' + q.id + '</td><td>' + escapeHtml(q.proveedor_nombre || '—') + '</td><td>' +
+                    escapeHtml(q.numero_documento || '—') + '</td><td>' + escapeHtml(q.version_label || '—') +
+                    '</td><td><button type="button" class="button button-small btn-link-this-version" data-id="' + q.id + '">Vincular</button></td></tr>';
+            });
+            html += '</tbody></table>';
+            $('#version-search-results').html(html);
+        });
+    });
+
+    $(document).on('click', '.btn-link-this-version', function() {
+        const other = $(this).data('id');
+        const id = $('#cotizacion-id').val();
+        $.post(ajaxurl, {
+            action: 'riverso_link_quote_version',
+            nonce: nonce,
+            id: id,
+            other_id: other,
+            orden: 'mensaje'
+        }, function(r) {
+            if (!r.success) { alert(r.data.message); return; }
+            $('#modal-vincular-version').hide();
+            verCotizacion(id);
+        });
+    });
+
+    $('#btn-desvincular-version').on('click', function() {
+        const id = $('#cotizacion-id').val();
+        if (!id || !confirm('¿Desvincular esta cotización del grupo de versiones?')) return;
+        $.post(ajaxurl, {
+            action: 'riverso_unlink_quote_version',
+            nonce: nonce,
+            id: id
+        }, function(r) {
+            if (!r.success) { alert(r.data.message); return; }
+            verCotizacion(id);
+        });
+    });
+
+    $('#btn-comparar-versiones').on('click', function() {
+        const id = parseInt($('#cotizacion-id').val(), 10);
+        const sibs = versionSiblingsActual || [];
+        if (sibs.length < 2) return;
+        const $a = $('#compare-version-a').empty();
+        const $b = $('#compare-version-b').empty();
+        sibs.forEach(function(s) {
+            const label = (s.version_label || ('v' + s.version_n)) + ' · #' + s.id;
+            $a.append($('<option></option>').val(s.id).text(label));
+            $b.append($('<option></option>').val(s.id).text(label));
+        });
+        // Default: penúltima vs última
+        const sorted = sibs.slice().sort(function(x, y) {
+            return (parseInt(x.version_n, 10) || 0) - (parseInt(y.version_n, 10) || 0);
+        });
+        if (sorted.length >= 2) {
+            $a.val(sorted[sorted.length - 2].id);
+            $b.val(sorted[sorted.length - 1].id);
+        } else {
+            $b.val(id);
+        }
+        $('#tabla-compare-versions tbody').empty();
+        $('#compare-version-stats').text('');
+        $('#modal-comparar-versiones').show();
+        $('#btn-run-compare').trigger('click');
+    });
+
+    $('#btn-run-compare').on('click', function() {
+        const idA = $('#compare-version-a').val();
+        const idB = $('#compare-version-b').val();
+        $.post(ajaxurl, {
+            action: 'riverso_compare_quote_versions',
+            nonce: nonce,
+            id_a: idA,
+            id_b: idB
+        }, function(r) {
+            if (!r.success) {
+                alert(r.data.message);
+                return;
+            }
+            const st = r.data.stats || {};
+            $('#compare-version-stats').text(
+                'Agregados: ' + (st.agregado || 0) +
+                ' · Quitados: ' + (st.quitado || 0) +
+                ' · Precio cambió: ' + (st.precio_cambio || 0) +
+                ' · Iguales: ' + (st.igual || 0)
+            );
+            const statusLabel = {
+                agregado: 'Agregado',
+                quitado: 'Quitado',
+                precio_cambio: 'Precio Δ',
+                igual: 'Igual'
+            };
+            let html = '';
+            (r.data.rows || []).forEach(function(row) {
+                if (row.status === 'igual') return; // mostrar solo cambios por defecto
+                html += '<tr>' +
+                    '<td class="compare-status-' + row.status + '">' + (statusLabel[row.status] || row.status) + '</td>' +
+                    '<td>' + escapeHtml(row.codigo || '—') + '</td>' +
+                    '<td>' + escapeHtml(row.descripcion || '—') + '</td>' +
+                    '<td style="text-align:right">' + (row.costo_a != null ? formatCostMoney(row.costo_a) : '—') + '</td>' +
+                    '<td style="text-align:right">' + (row.costo_b != null ? formatCostMoney(row.costo_b) : '—') + '</td>' +
+                    '<td style="text-align:right">' + (row.delta_costo != null ? formatCostMoney(row.delta_costo) : '—') + '</td>' +
+                    '</tr>';
+            });
+            if (!html) {
+                html = '<tr><td colspan="6" class="empty">Sin diferencias materiales (≥ $0,01)</td></tr>';
+            }
+            $('#tabla-compare-versions tbody').html(html);
+        });
+    });
+
+    function parseDatosParseados(q) {
+        if (!q || !q.datos_parseados) return null;
+        if (typeof q.datos_parseados === 'object') return q.datos_parseados;
+        try {
+            return JSON.parse(q.datos_parseados);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function syncParseErrorUi(q) {
+        const parsed = parseDatosParseados(q);
+        const err = parsed && parsed.error ? String(parsed.error) : '';
+        const $banner = $('#banner-parse-error');
+        if (err) {
+            $('#banner-parse-error-msg').text(err);
+            $banner.show();
+        } else {
+            $('#banner-parse-error-msg').text('');
+            $banner.hide();
+        }
+    }
+
     function syncTipoDocUi(q) {
         const docTypes = <?php echo json_encode($doc_types); ?>;
         const tipo = q ? (q.tipo_doc || 'cotizacion') : 'cotizacion';
@@ -1341,6 +1726,7 @@ jQuery(document).ready(function($) {
         $('#select-tipo-doc').val(tipo).toggle(!!q);
         $('#btn-confirmar-tipo').toggle(pending);
         $('#btn-ver-comparacion').prop('disabled', pending);
+        syncParseErrorUi(q);
     }
 
     function renderItems() {
@@ -1391,6 +1777,12 @@ jQuery(document).ready(function($) {
     $('#btn-volver-lista').on('click', function() {
         $('#vista-detalle').hide();
         $('#vista-lista').show();
+        // Evitar que "Subir Archivo" reemplace la cotización abierta
+        $('#cotizacion-id').val(0);
+        cotizacionActual = null;
+        itemsActuales = [];
+        origenActual = null;
+        versionSiblingsActual = [];
         cargarCotizaciones();
     });
 
@@ -1398,13 +1790,16 @@ jQuery(document).ready(function($) {
         cotizacionActual = null;
         itemsActuales = [];
         origenActual = null;
+        versionSiblingsActual = [];
         mostrarDetalle();
     });
 
     $('#btn-filtrar').on('click', cargarCotizaciones);
+    $('#filtro-solo-final').on('change', cargarCotizaciones);
     $('#btn-limpiar-filtros').on('click', function() {
         $('#filtro-buscar, #filtro-estado, #filtro-fuente, #filtro-proveedor, #filtro-desde, #filtro-hasta').val('');
         $('#filtro-tipo-doc').val('cotizacion');
+        $('#filtro-solo-final').prop('checked', false);
         cargarCotizaciones();
     });
 
@@ -2000,7 +2395,9 @@ jQuery(document).ready(function($) {
         const items = [];
         (data.rows || []).forEach(function(row) {
             const m = quoteEvalRowMetrics(row);
+            // No reclamar alzas menores a +$0,01
             if (m.trend !== 'subio' || m.previous == null) return;
+            if (m.delta == null || Number(m.delta) < 0.01) return;
             items.push({
                 codigo: (row.codigo_proveedor || '').trim(),
                 nombre: (row.nombre || '').trim(),
@@ -2125,21 +2522,72 @@ jQuery(document).ready(function($) {
         $('#modal-adjuntos-origen').hide();
     });
 
+    function quoteDocumentUrl(id) {
+        return ajaxurl +
+            '?action=riverso_view_quote_document' +
+            '&nonce=' + encodeURIComponent(nonce) +
+            '&id=' + encodeURIComponent(id);
+    }
+
+    $('#btn-ver-documento').on('click', function() {
+        const id = $('#cotizacion-id').val() || (cotizacionActual && cotizacionActual.id);
+        if (!id || id === '0') {
+            alert('No hay documento asociado');
+            return;
+        }
+        window.open(quoteDocumentUrl(id), '_blank', 'noopener,noreferrer');
+    });
+
+    $('#lista-cotizaciones').on('click', '.btn-ver-documento-lista', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = $(this).closest('tr').data('id');
+        if (!id) return;
+        window.open(quoteDocumentUrl(id), '_blank', 'noopener,noreferrer');
+    });
+
     $('#btn-parsear').on('click', function() {
         const id = $('#cotizacion-id').val();
         if (!id || id === '0') { alert('Guarde la cotización primero'); return; }
-        $.post(ajaxurl, { action: 'riverso_parse_quote', nonce: nonce, id: id }, function(r) {
-            alert(r.success ? r.data.message : r.data.message);
-            if (r.success) verCotizacion(id);
+        const $btn = $(this).prop('disabled', true);
+        parseQuoteAfterUpload(id, {
+            onDone: function(r) {
+                $btn.prop('disabled', false);
+                alert((r && r.data && r.data.message) ? r.data.message : 'Cotización parseada');
+                verCotizacion(id);
+            },
+            onFail: function(msg) {
+                $btn.prop('disabled', false);
+                alert(msg);
+                verCotizacion(id);
+            }
         });
     });
     $('#btn-parsear-texto').on('click', function() {
         const id = $('#cotizacion-id').val();
         const texto = $('#texto-manual').val();
         if (!id || id === '0') { alert('Guarde la cotización primero (ingreso manual)'); return; }
-        $.post(ajaxurl, { action: 'riverso_parse_quote_text', nonce: nonce, id: id, texto: texto }, function(r) {
-            alert(r.success ? r.data.message : r.data.message);
-            if (r.success) verCotizacion(id);
+        const $btn = $(this).prop('disabled', true);
+        $.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: { action: 'riverso_parse_quote_text', nonce: nonce, id: id, texto: texto },
+            timeout: 190000,
+            success: function(r) {
+                $btn.prop('disabled', false);
+                alert(r.success ? r.data.message : r.data.message);
+                verCotizacion(id);
+            },
+            error: function(xhr, status) {
+                $btn.prop('disabled', false);
+                let msg = 'Error al parsear texto';
+                if (status === 'timeout') msg = 'El parseo tardó demasiado (timeout).';
+                else if (xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
+                    msg = xhr.responseJSON.data.message;
+                }
+                alert(msg);
+                verCotizacion(id);
+            }
         });
     });
     $('#btn-rechazar').on('click', function() {
@@ -2162,13 +2610,80 @@ jQuery(document).ready(function($) {
         });
     });
 
-    // Upload
+    // Upload (patrón invoices: dropzone + Buscar archivos + confirmar)
+    const quoteFileInput = $('#file-upload-input');
+    const quoteAllowedExt = ['pdf', 'xlsx', 'xls', 'csv', 'txt', 'jpg', 'jpeg', 'png', 'webp', 'tif', 'tiff'];
+    let quoteSelectedFile = null;
+
+    function resetQuoteUploadModal() {
+        quoteSelectedFile = null;
+        quoteFileInput.val('');
+        $('#upload-zone').removeClass('dragover').show();
+        $('#quote-upload-file-name').text('');
+        $('#quote-upload-status').empty();
+        $('#upload-progress').hide();
+        $('#btn-upload-quote-file').prop('disabled', true);
+    }
+
+    function setQuoteUploadStatus(type, message, extraHtml) {
+        const $box = $('#quote-upload-status').empty();
+        if (!message && !extraHtml) return;
+        const cls = type === 'error' ? 'notice-error'
+            : (type === 'warning' ? 'notice-warning'
+            : (type === 'success' ? 'notice-success' : 'notice-info'));
+        const $notice = $('<div class="notice ' + cls + '"><p></p></div>');
+        $notice.find('p').text(message || '');
+        if (extraHtml) {
+            $notice.append(extraHtml);
+        }
+        $box.append($notice);
+    }
+
+    function isQuoteUploadFile(file) {
+        if (!file || !file.name) return false;
+        const ext = String(file.name).split('.').pop().toLowerCase();
+        return quoteAllowedExt.indexOf(ext) !== -1;
+    }
+
+    function setQuoteUploadFile(file) {
+        if (!isQuoteUploadFile(file)) {
+            quoteSelectedFile = null;
+            setQuoteUploadStatus('error', 'Archivo no válido. Use PDF, imagen, Excel, CSV o TXT.');
+            $('#btn-upload-quote-file').prop('disabled', true);
+            $('#quote-upload-file-name').text('');
+            return false;
+        }
+        quoteSelectedFile = file;
+        try {
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            quoteFileInput[0].files = dt.files;
+        } catch (e) {
+            // Drag-and-drop sigue funcionando vía quoteSelectedFile
+        }
+        $('#quote-upload-file-name').text(file.name);
+        $('#btn-upload-quote-file').prop('disabled', false);
+        setQuoteUploadStatus('', '');
+        return true;
+    }
+
     $('#btn-subir-archivo').on('click', function() {
+        resetQuoteUploadModal();
         $('#modal-upload').show();
     });
 
-    $('#upload-zone').on('click', function() {
-        $('#file-upload-input').click();
+    $('#btn-browse-quote-file').on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        quoteFileInput.val('');
+        quoteFileInput[0].click();
+    });
+
+    $('#upload-zone').on('click', function(e) {
+        if ($(e.target).closest('#btn-browse-quote-file, #btn-upload-quote-file').length) return;
+        e.preventDefault();
+        quoteFileInput.val('');
+        quoteFileInput[0].click();
     });
 
     $('#upload-zone').on('dragover', function(e) {
@@ -2180,22 +2695,51 @@ jQuery(document).ready(function($) {
         e.preventDefault();
         $(this).removeClass('dragover');
         const files = e.originalEvent.dataTransfer.files;
-        if (files.length) uploadFile(files[0]);
+        if (files.length) setQuoteUploadFile(files[0]);
     });
 
-    $('#file-upload-input').on('change', function() {
-        if (this.files.length) uploadFile(this.files[0]);
+    quoteFileInput.on('change', function() {
+        const f = this.files && this.files[0];
+        if (f) setQuoteUploadFile(f);
+        else {
+            quoteSelectedFile = null;
+            $('#quote-upload-file-name').text('');
+            $('#btn-upload-quote-file').prop('disabled', true);
+        }
     });
 
-    function uploadFile(file) {
+    $('#btn-upload-quote-file').on('click', function() {
+        const f = quoteSelectedFile || (quoteFileInput[0].files && quoteFileInput[0].files[0]);
+        if (!f) {
+            setQuoteUploadStatus('error', 'Seleccione un archivo primero');
+            return;
+        }
+        // Modal global: siempre crear cotización nueva (nunca reemplazar)
+        uploadFile(f, { quoteId: 0, replace: false });
+    });
+
+    /**
+     * @param {File} file
+     * @param {{quoteId?:number, replace?:boolean}} opts
+     */
+    function uploadFile(file, opts) {
+        opts = opts || {};
+        const quoteId = opts.replace ? (parseInt(opts.quoteId, 10) || 0) : 0;
+        const replace = !!opts.replace && quoteId > 0;
+
         const formData = new FormData();
         formData.append('action', 'riverso_upload_quote_file');
         formData.append('nonce', nonce);
         formData.append('file', file);
-        formData.append('quote_id', $('#cotizacion-id').val() || 0);
+        formData.append('quote_id', quoteId);
+        if (replace) {
+            formData.append('replace', '1');
+        }
 
         $('#upload-zone').hide();
         $('#upload-progress').show();
+        $('#btn-upload-quote-file, #btn-browse-quote-file').prop('disabled', true);
+        setQuoteUploadStatus('info', 'Subiendo archivo…');
 
         $.ajax({
             url: ajaxurl,
@@ -2203,24 +2747,166 @@ jQuery(document).ready(function($) {
             data: formData,
             processData: false,
             contentType: false,
+            timeout: 120000,
             success: function(r) {
-                $('#modal-upload').hide();
-                $('#upload-zone').show();
                 $('#upload-progress').hide();
-                
-                if (r.success) {
-                    verCotizacion(r.data.id);
-                } else {
-                    alert(r.data.message);
+                $('#btn-browse-quote-file').prop('disabled', false);
+
+                if (!r || !r.success) {
+                    $('#upload-zone').show();
+                    $('#btn-upload-quote-file').prop('disabled', !quoteSelectedFile);
+                    setQuoteUploadStatus('error', (r && r.data && r.data.message) ? r.data.message : 'Error al subir archivo');
+                    return;
                 }
+
+                if (r.data && r.data.duplicate) {
+                    $('#upload-zone').show();
+                    $('#btn-upload-quote-file').prop('disabled', !!quoteSelectedFile);
+                    const qid = r.data.quote_id || r.data.id;
+                    let msg = r.data.message || 'Este documento ya fue ingresado anteriormente.';
+                    if (r.data.numero_documento) {
+                        msg += ' Nº ' + r.data.numero_documento;
+                    }
+                    if (r.data.proveedor_nombre) {
+                        msg += ' · ' + r.data.proveedor_nombre;
+                    }
+                    const $actions = $('<div class="quote-dup-actions"></div>');
+                    const $ver = $('<button type="button" class="button button-primary">Ver</button>');
+                    $ver.on('click', function() {
+                        $('#modal-upload').hide();
+                        resetQuoteUploadModal();
+                        verCotizacion(qid);
+                    });
+                    $actions.append($ver);
+                    setQuoteUploadStatus('warning', msg, $actions);
+                    return;
+                }
+
+                const newId = r.data.id || r.data.quote_id;
+                setQuoteUploadStatus('info', (r.data && r.data.message) ? r.data.message : 'Procesando con Gemini…');
+                parseQuoteAfterUpload(newId, {
+                    fromModal: true,
+                    onDone: function() {
+                        $('#modal-upload').hide();
+                        resetQuoteUploadModal();
+                        verCotizacion(newId);
+                    },
+                    onFail: function(msg) {
+                        $('#upload-zone').show();
+                        $('#upload-progress').hide();
+                        $('#btn-browse-quote-file').prop('disabled', false);
+                        $('#btn-upload-quote-file').prop('disabled', !quoteSelectedFile);
+                        const $actions = $('<div class="quote-dup-actions"></div>');
+                        const $ver = $('<button type="button" class="button button-primary">Ver cotización</button>');
+                        $ver.on('click', function() {
+                            $('#modal-upload').hide();
+                            resetQuoteUploadModal();
+                            verCotizacion(newId);
+                        });
+                        $actions.append($ver);
+                        setQuoteUploadStatus('error', msg || 'Error al procesar con Gemini', $actions);
+                    }
+                });
             },
-            error: function() {
+            error: function(xhr, status) {
                 $('#upload-zone').show();
                 $('#upload-progress').hide();
-                alert('Error al subir archivo');
+                $('#btn-browse-quote-file').prop('disabled', false);
+                $('#btn-upload-quote-file').prop('disabled', !quoteSelectedFile);
+                let msg = 'Error al subir archivo';
+                if (status === 'timeout') {
+                    msg = 'La subida tardó demasiado (timeout). Reintente.';
+                } else if (xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
+                    msg = xhr.responseJSON.data.message;
+                }
+                setQuoteUploadStatus('error', msg);
             }
         });
     }
+
+    /**
+     * Parseo Gemini separado de la subida (evita timeout del proxy y muestra el error real).
+     */
+    function parseQuoteAfterUpload(id, opts) {
+        opts = opts || {};
+        $.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'riverso_parse_quote',
+                nonce: nonce,
+                id: id
+            },
+            timeout: 190000,
+            success: function(r) {
+                if (r && r.success) {
+                    if (typeof opts.onDone === 'function') opts.onDone(r);
+                    else verCotizacion(id);
+                } else {
+                    const msg = (r && r.data && r.data.message) ? r.data.message : 'Error al procesar con Gemini';
+                    if (typeof opts.onFail === 'function') opts.onFail(msg);
+                    else {
+                        alert(msg);
+                        verCotizacion(id);
+                    }
+                }
+            },
+            error: function(xhr, status) {
+                let msg = 'Error al procesar con Gemini';
+                if (status === 'timeout') {
+                    msg = 'El parseo con Gemini tardó demasiado (timeout). Abra la cotización y pulse «Parsear con Gemini».';
+                } else if (xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
+                    msg = xhr.responseJSON.data.message;
+                } else if (xhr && xhr.status) {
+                    msg = 'Error al procesar con Gemini (HTTP ' + xhr.status + ')';
+                }
+                if (typeof opts.onFail === 'function') opts.onFail(msg);
+                else {
+                    alert(msg);
+                    verCotizacion(id);
+                }
+            }
+        });
+    }
+
+    // Reemplazo de archivo solo desde el detalle (confirmación + replace=1)
+    $('#archivo-upload').on('change', function() {
+        const f = this.files && this.files[0];
+        if (!f) return;
+        const qid = parseInt($('#cotizacion-id').val(), 10) || 0;
+        if (!qid) {
+            alert('Guarde o abra una cotización antes de reemplazar el archivo.');
+            $(this).val('');
+            return;
+        }
+        if (!confirm('¿Reemplazar el archivo de esta cotización? Se borrarán los ítems actuales y se volverá a procesar con Gemini.')) {
+            $(this).val('');
+            return;
+        }
+        const input = this;
+        resetQuoteUploadModal();
+        $('#modal-upload').show();
+        setQuoteUploadFile(f);
+        uploadFile(f, { quoteId: qid, replace: true });
+        $(input).val('');
+    });
+
+    $('#btn-reintentar-parse').on('click', function() {
+        const id = $('#cotizacion-id').val();
+        if (!id || id === '0') return;
+        $(this).prop('disabled', true);
+        parseQuoteAfterUpload(id, {
+            onDone: function() {
+                $('#btn-reintentar-parse').prop('disabled', false);
+                verCotizacion(id);
+            },
+            onFail: function(msg) {
+                $('#btn-reintentar-parse').prop('disabled', false);
+                alert(msg);
+                verCotizacion(id);
+            }
+        });
+    });
 
     // Cerrar modales
     $('.modal-close').on('click', function() {

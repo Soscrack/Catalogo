@@ -5,6 +5,8 @@
  */
 declare(strict_types=1);
 
+const DSC_RCG_INFERRED_GLOSA = 'Inferido por diferencia de totales';
+
 function normalize_dsc_rcg_global_entries(array $entries): array {
     $out = [];
     $n = 1;
@@ -32,16 +34,44 @@ function normalize_dsc_rcg_global_entries(array $entries): array {
     return $out;
 }
 
+function drop_inferred_dsc_rcg_entries(array $entries): array {
+    $out = [];
+    foreach ($entries as $entry) {
+        $glosa = trim((string) ($entry['glosa'] ?? ''));
+        if (strcasecmp($glosa, DSC_RCG_INFERRED_GLOSA) === 0) {
+            continue;
+        }
+        $out[] = $entry;
+    }
+    return $out;
+}
+
 function allocate(array &$factura_data): void {
     $tasa_iva = (float) ($factura_data['totales']['tasa_iva'] ?? 19);
     $monto_neto = (float) ($factura_data['totales']['neto'] ?? 0);
-    $entries = normalize_dsc_rcg_global_entries((array) ($factura_data['dsc_rcg_global'] ?? []));
+
+    // Como production: descartar inferidos previos y re-inferir con el pool actual.
+    $entries = drop_inferred_dsc_rcg_entries(
+        normalize_dsc_rcg_global_entries((array) ($factura_data['dsc_rcg_global'] ?? []))
+    );
+
     $product_idxs = [];
     $sum_lineas = 0.0;
     foreach ($factura_data['items'] as $idx => $item) {
+        $tipo = strtolower(trim((string) ($item['item_tipo'] ?? 'producto')));
+        if ($tipo === 'flete') {
+            $tipo = 'envio';
+        }
+        if (in_array($tipo, ['envio', 'gasto'], true)) {
+            $neto_final = (float) ($item['costo_neto_final'] ?? $item['monto'] ?? 0);
+            $factura_data['items'][$idx]['dsc_rcg_global_cuota'] = 0.0;
+            $factura_data['items'][$idx]['costo_neto_folio'] = $neto_final;
+            continue;
+        }
         $product_idxs[] = $idx;
         $sum_lineas += (float) ($item['costo_neto_final'] ?? $item['monto'] ?? 0);
     }
+
     if (!$entries && $monto_neto > 0 && $sum_lineas > 0) {
         $gap = round($sum_lineas - $monto_neto, 2);
         if (abs($gap) >= 0.5) {
@@ -50,18 +80,24 @@ function allocate(array &$factura_data): void {
                 'tpo_mov' => $gap > 0 ? 'D' : 'R',
                 'tpo_valor' => '$',
                 'valor' => abs($gap),
-                'glosa' => 'inferido',
+                'glosa' => DSC_RCG_INFERRED_GLOSA,
                 'ind_exe' => null,
                 'monto_calculado' => abs($gap),
             ]];
         }
     }
+    $factura_data['dsc_rcg_global'] = $entries;
+
     $cuotas = array_fill_keys($product_idxs, 0.0);
     foreach ($entries as &$entry) {
         $sign = ($entry['tpo_mov'] === 'D') ? -1.0 : 1.0;
         $pool = 0.0;
         foreach ($product_idxs as $idx) {
             $pool += (float) ($factura_data['items'][$idx]['costo_neto_final'] ?? 0);
+        }
+        if ($pool <= 0) {
+            $entry['monto_calculado'] = 0.0;
+            continue;
         }
         $amount = $entry['tpo_valor'] === '%'
             ? round($pool * ((float) $entry['valor']) / 100, 0)
@@ -180,6 +216,65 @@ $f4 = [
 ];
 allocate($f4);
 assert_true(abs(array_sum(array_column($f4['items'], 'costo_neto_folio')) - 100) < 0.01, 'gap inferido cuadra a 100');
+assert_true(count($f4['dsc_rcg_global']) === 1, 'gap inventa 1 entrada');
+assert_true($f4['dsc_rcg_global'][0]['tpo_mov'] === 'D', 'gap 110→100 es descuento');
+
+// Caso 49136: línea TR10 mal marcada como flete → se infiere recargo $20800
+$f5 = [
+    'totales' => ['neto' => 459514, 'tasa_iva' => 19],
+    'dsc_rcg_global' => [],
+    'items' => [
+        ['item_tipo' => 'producto', 'costo_neto_final' => 22950],
+        ['item_tipo' => 'producto', 'costo_neto_final' => 415764], // resto productos sin la TR10
+        ['item_tipo' => 'envio', 'costo_neto_final' => 20800], // TR10 mal clasificada
+    ],
+];
+allocate($f5);
+assert_true(count($f5['dsc_rcg_global']) === 1, '49136 con flete infiere 1 D/R');
+assert_true($f5['dsc_rcg_global'][0]['tpo_mov'] === 'R', '49136 gap es recargo');
+assert_true(abs((float) $f5['dsc_rcg_global'][0]['valor'] - 20800) < 0.01, '49136 recargo = 20800');
+assert_true(abs((float) $f5['items'][2]['costo_neto_folio'] - 20800) < 0.01, '49136 flete folio = fila');
+$sum_prod = (float) $f5['items'][0]['costo_neto_folio'] + (float) $f5['items'][1]['costo_neto_folio'];
+assert_true(abs($sum_prod - 459514) < 1.0, '49136 suma productos folio = neto');
+
+// Misma factura: al pasar la línea a producto + D/R inferido guardado → se descarta y folio = fila
+$f6 = [
+    'totales' => ['neto' => 459514, 'tasa_iva' => 19],
+    'dsc_rcg_global' => [[
+        'tpo_mov' => 'R',
+        'tpo_valor' => '$',
+        'valor' => 20800,
+        'glosa' => DSC_RCG_INFERRED_GLOSA,
+    ]],
+    'items' => [
+        ['item_tipo' => 'producto', 'costo_neto_final' => 22950],
+        ['item_tipo' => 'producto', 'costo_neto_final' => 415764],
+        ['item_tipo' => 'producto', 'costo_neto_final' => 20800], // TR10 corregida
+    ],
+];
+allocate($f6);
+assert_true($f6['dsc_rcg_global'] === [], '49136 tras producto: sin D/R inferido');
+assert_true(abs((float) $f6['items'][0]['costo_neto_folio'] - 22950) < 0.01, '49136 L1 folio = fila');
+assert_true(abs((float) $f6['items'][2]['costo_neto_folio'] - 20800) < 0.01, '49136 TR10 folio = fila');
+$sum6 = array_sum(array_column($f6['items'], 'costo_neto_folio'));
+assert_true(abs($sum6 - 459514) < 0.01, "49136 sum folio=$sum6 == neto");
+assert_true($f6['ok'], '49136 ok tras reclasificar');
+
+// D/R real del XML se conserva aunque también hubiera un inferido viejo
+$f7 = [
+    'totales' => ['neto' => 90, 'tasa_iva' => 19],
+    'dsc_rcg_global' => [
+        ['tpo_mov' => 'D', 'tpo_valor' => '$', 'valor' => 10, 'glosa' => 'Descuento comercial'],
+        ['tpo_mov' => 'R', 'tpo_valor' => '$', 'valor' => 999, 'glosa' => DSC_RCG_INFERRED_GLOSA],
+    ],
+    'items' => [
+        ['item_tipo' => 'producto', 'costo_neto_final' => 100],
+    ],
+];
+allocate($f7);
+assert_true(count($f7['dsc_rcg_global']) === 1, 'XML real se conserva; inferido se descarta');
+assert_true($f7['dsc_rcg_global'][0]['glosa'] === 'Descuento comercial', 'queda el D/R del XML');
+assert_true(abs((float) $f7['items'][0]['costo_neto_folio'] - 90) < 0.01, 'folio aplica solo D/R real');
 
 echo "\n$pass passed, $fail failed\n";
 exit($fail > 0 ? 1 : 0);

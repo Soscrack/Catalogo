@@ -15,6 +15,7 @@ if (!defined('ABSPATH')) {
 
 require_once __DIR__ . '/class-family-suggestion-service.php';
 require_once __DIR__ . '/class-unit-product-service.php';
+require_once __DIR__ . '/class-family-commercial-service.php';
 
 class Riverso_Family_Module {
 
@@ -66,6 +67,16 @@ class Riverso_Family_Module {
         add_action('wp_ajax_riverso_families_suggest_names', [$this, 'ajax_suggest_names']);
         add_action('wp_ajax_riverso_families_pack_merge_preview', [$this, 'ajax_pack_merge_preview']);
         add_action('wp_ajax_riverso_families_pack_merge_confirm', [$this, 'ajax_pack_merge_confirm']);
+        add_action('wp_ajax_riverso_families_commercial_get', [$this, 'ajax_commercial_get']);
+        add_action('wp_ajax_riverso_families_commercial_set_tipo', [$this, 'ajax_commercial_set_tipo']);
+        add_action('wp_ajax_riverso_families_commercial_save_pack', [$this, 'ajax_commercial_save_pack']);
+        add_action('wp_ajax_riverso_families_commercial_save_kit', [$this, 'ajax_commercial_save_kit']);
+        add_action('wp_ajax_riverso_families_commercial_optimize', [$this, 'ajax_commercial_optimize']);
+        add_action('wp_ajax_riverso_families_commercial_create_product', [$this, 'ajax_commercial_create_product']);
+
+        if (class_exists('Riverso_POS_Activator')) {
+            Riverso_POS_Activator::ensure_family_commercial_schema();
+        }
     }
 
     /**
@@ -377,6 +388,12 @@ class Riverso_Family_Module {
         }
 
         $family['tipo_sustitucion'] = self::normalize_tipo($family['tipo_sustitucion'] ?? 'exacta');
+        $tipo_com = Riverso_Family_Commercial_Service::normalize_tipo_comercial($family['tipo_comercial'] ?? '');
+        if ($tipo_com === '' && !empty($family['es_producto_unitario'])) {
+            $tipo_com = 'unitario';
+        }
+        $family['tipo_comercial'] = $tipo_com;
+        $family['pack_modo'] = Riverso_Family_Commercial_Service::normalize_pack_modo($family['pack_modo'] ?? 'ilimitado');
 
         $members = $wpdb->get_results($wpdb->prepare(
             "SELECT em.id, em.producto_base_id, em.prioridad, em.es_reemplazo_preferido,
@@ -411,6 +428,12 @@ class Riverso_Family_Module {
         $family['pending'] = $this->get_pending_suppliers($grupo_id);
         $family['stock'] = $stock;
         $family['pack_conflicts'] = $this->detect_pack_qty_conflicts($grupo_id, $members);
+        if (in_array($tipo_com, ['pack', 'kit'], true)) {
+            $commercial = Riverso_Family_Commercial_Service::get_instance()->get_snapshot($grupo_id);
+            if (!is_wp_error($commercial)) {
+                $family['commercial'] = $commercial;
+            }
+        }
         wp_send_json_success(['family' => $family]);
     }
 
@@ -427,6 +450,8 @@ class Riverso_Family_Module {
         $codigo_grupo = sanitize_text_field($_POST['codigo_grupo'] ?? '');
         $nombre = sanitize_text_field($_POST['nombre'] ?? '');
         $tipo_sustitucion = self::normalize_tipo($_POST['tipo_sustitucion'] ?? 'exacta');
+        $tipo_comercial = Riverso_Family_Commercial_Service::normalize_tipo_comercial($_POST['tipo_comercial'] ?? '');
+        $pack_modo = Riverso_Family_Commercial_Service::normalize_pack_modo($_POST['pack_modo'] ?? 'ilimitado');
         $notas = sanitize_textarea_field($_POST['notas'] ?? '');
 
         if (!$nombre) {
@@ -441,17 +466,28 @@ class Riverso_Family_Module {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
-        $wpdb->insert(
-            "{$prefix}equivalence_groups",
-            [
-                'codigo_grupo' => $codigo_grupo,
-                'nombre' => $nombre,
-                'tipo_sustitucion' => $tipo_sustitucion,
-                'notas' => $notas,
-                'activo' => 1,
-            ],
-            ['%s', '%s', '%s', '%s', '%d']
-        );
+        $insert = [
+            'codigo_grupo' => $codigo_grupo,
+            'nombre' => $nombre,
+            'tipo_sustitucion' => $tipo_sustitucion,
+            'notas' => $notas,
+            'activo' => 1,
+        ];
+        $formats = ['%s', '%s', '%s', '%s', '%d'];
+        if ($tipo_comercial !== '') {
+            $insert['tipo_comercial'] = $tipo_comercial;
+            $formats[] = '%s';
+            if ($tipo_comercial === 'unitario') {
+                $insert['es_producto_unitario'] = 1;
+                $formats[] = '%d';
+            }
+            if (in_array($tipo_comercial, ['pack', 'kit'], true)) {
+                $insert['pack_modo'] = $pack_modo;
+                $formats[] = '%s';
+            }
+        }
+
+        $wpdb->insert("{$prefix}equivalence_groups", $insert, $formats);
 
         $grupo_id = $wpdb->insert_id;
         if (!$grupo_id) {
@@ -463,6 +499,7 @@ class Riverso_Family_Module {
                 'codigo_grupo' => $codigo_grupo,
                 'nombre' => $nombre,
                 'tipo_sustitucion' => $tipo_sustitucion,
+                'tipo_comercial' => $tipo_comercial,
             ]);
         }
 
@@ -2170,7 +2207,7 @@ class Riverso_Family_Module {
      * @param array $member
      * @return int|null envase_id
      */
-    private function upsert_envase_for_member(array $member) {
+    public function upsert_envase_for_member(array $member) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
@@ -3367,6 +3404,127 @@ class Riverso_Family_Module {
             'target_id' => $target_id,
             'pack_conflicts' => $this->detect_pack_qty_conflicts($grupo_id, $members),
         ]);
+    }
+
+    /* ===================== Pack / Kit comerciales ===================== */
+
+    public function ajax_commercial_get() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $snap = Riverso_Family_Commercial_Service::get_instance()->get_snapshot($grupo_id);
+        if (is_wp_error($snap)) {
+            wp_send_json_error(['message' => $snap->get_error_message()]);
+        }
+        wp_send_json_success(['commercial' => $snap]);
+    }
+
+    public function ajax_commercial_set_tipo() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $tipo = sanitize_key($_POST['tipo_comercial'] ?? '');
+        $confirm = !empty($_POST['confirm']);
+        $result = Riverso_Family_Commercial_Service::get_instance()->set_tipo_comercial($grupo_id, $tipo, $confirm);
+        if (is_wp_error($result)) {
+            $payload = ['message' => $result->get_error_message()];
+            $data = $result->get_error_data();
+            if (is_array($data)) {
+                $payload = array_merge($payload, $data);
+            }
+            $payload['code'] = $result->get_error_code();
+            wp_send_json_error($payload);
+        }
+        wp_send_json_success(['commercial' => $result]);
+    }
+
+    public function ajax_commercial_save_pack() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $tiers = isset($_POST['tiers']) ? json_decode(stripslashes((string) $_POST['tiers']), true) : [];
+        if (!is_array($tiers)) {
+            $tiers = [];
+        }
+        $result = Riverso_Family_Commercial_Service::get_instance()->save_pack_config($grupo_id, [
+            'pack_modo' => $_POST['pack_modo'] ?? 'ilimitado',
+            'pack_base_producto_id' => absint($_POST['pack_base_producto_id'] ?? 0),
+            'create_base_sku' => sanitize_text_field($_POST['create_base_sku'] ?? ''),
+            'create_base_nombre' => sanitize_text_field($_POST['create_base_nombre'] ?? ''),
+            'create_base_precio' => isset($_POST['create_base_precio']) ? $_POST['create_base_precio'] : null,
+            'tiers' => $tiers,
+        ]);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['commercial' => $result]);
+    }
+
+    public function ajax_commercial_create_product() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+        $result = Riverso_Family_Commercial_Service::get_instance()->create_local_product([
+            'canonical_sku' => sanitize_text_field($_POST['canonical_sku'] ?? ''),
+            'nombre' => sanitize_text_field($_POST['nombre'] ?? ''),
+            'p_asignado' => isset($_POST['p_asignado']) ? $_POST['p_asignado'] : null,
+            'origen_datos' => sanitize_text_field($_POST['origen_datos'] ?? 'family_commercial_create'),
+        ]);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        if ($grupo_id && !empty($result['producto_base_id'])) {
+            $this->ensure_member($grupo_id, (int) $result['producto_base_id'], 100);
+        }
+        wp_send_json_success(['product' => $result]);
+    }
+
+    public function ajax_commercial_save_kit() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $components = isset($_POST['components'])
+            ? json_decode(stripslashes((string) $_POST['components']), true)
+            : [];
+        if (!is_array($components)) {
+            $components = [];
+        }
+        $pct = isset($_POST['descuento_pct']) ? floatval($_POST['descuento_pct']) : 0;
+        // UI envía porcentaje 0–100.
+        $result = Riverso_Family_Commercial_Service::get_instance()->save_kit_config($grupo_id, [
+            'pack_modo' => $_POST['pack_modo'] ?? 'ilimitado',
+            'descuento_modo' => $_POST['descuento_modo'] ?? 'precio',
+            'descuento_pct' => $pct,
+            'components' => $components,
+        ]);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['commercial' => $result]);
+    }
+
+    public function ajax_commercial_optimize() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_view_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $qty = absint($_POST['qty'] ?? 0);
+        $result = Riverso_Family_Commercial_Service::get_instance()->optimize_pack_combo($grupo_id, $qty);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['combo' => $result]);
     }
 }
 

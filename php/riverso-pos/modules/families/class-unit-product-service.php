@@ -874,6 +874,29 @@ class Riverso_Unit_Product_Service {
     }
 
     /**
+     * Flags SKU local/online para un miembro (misma lógica que Family Module).
+     *
+     * @param array $row producto_base o miembro con canonical_sku + woo ids
+     * @return array{sku_local:string,sku_online:string,es_local:bool,es_online:bool}
+     */
+    public function member_sku_flags(array $row) {
+        $sku_local = trim((string) ($row['canonical_sku'] ?? ''));
+        $sku_online = $this->resolve_woo_sku(
+            absint($row['woocommerce_variation_id'] ?? 0),
+            absint($row['woocommerce_product_id'] ?? 0)
+        );
+        $es_online = $sku_online !== ''
+            || absint($row['woocommerce_product_id'] ?? 0) > 0
+            || absint($row['woocommerce_variation_id'] ?? 0) > 0;
+        return [
+            'sku_local' => $sku_local,
+            'sku_online' => $sku_online,
+            'es_local' => $sku_local !== '',
+            'es_online' => $es_online,
+        ];
+    }
+
+    /**
      * Preview de herencia de códigos/barcodes/tareas antes de vincular unitario.
      *
      * @param int $grupo_id
@@ -2525,7 +2548,8 @@ class Riverso_Unit_Product_Service {
             : null;
 
         $members = $wpdb->get_results($wpdb->prepare(
-            "SELECT em.producto_base_id, pb.canonical_sku, pb.nombre_canonico, pb.es_unidad_minima
+            "SELECT em.producto_base_id, pb.canonical_sku, pb.nombre_canonico, pb.es_unidad_minima,
+                    pb.woocommerce_product_id, pb.woocommerce_variation_id
              FROM {$prefix}equivalence_members em
              INNER JOIN {$prefix}producto_base pb ON pb.id = em.producto_base_id
              WHERE em.grupo_id = %d AND em.activo = 1",
@@ -2559,7 +2583,8 @@ class Riverso_Unit_Product_Service {
                 }
             }
 
-            $rows[] = [
+            $sku_flags = $this->member_sku_flags($m);
+            $rows[] = array_merge([
                 'producto_base_id' => $base_id,
                 'canonical_sku' => $m['canonical_sku'],
                 'nombre_canonico' => $m['nombre_canonico'],
@@ -2571,7 +2596,9 @@ class Riverso_Unit_Product_Service {
                 'margen' => ($unit_price !== null && $coste_u) ? round($unit_price - $coste_u, 2) : null,
                 'regla_sombreada' => $shadowed,
                 'regla_producto_id' => $product_rule_id ? intval($product_rule_id) : null,
-            ];
+                'woocommerce_product_id' => absint($m['woocommerce_product_id'] ?? 0),
+                'woocommerce_variation_id' => absint($m['woocommerce_variation_id'] ?? 0),
+            ], $sku_flags);
         }
 
         return [
@@ -2579,6 +2606,785 @@ class Riverso_Unit_Product_Service {
             'family_rule_id' => $family_rule_id ? intval($family_rule_id) : null,
             'members' => $rows,
         ];
+    }
+
+    /**
+     * Escala simple de regla para familia unitaria (pasos por qty real + tramos).
+     *
+     * @param int        $grupo_id
+     * @param float|null $p_asignado
+     * @param array|null $preview Resultado de preview_member_prices
+     * @param array|null $rule    get_rule_with_tiers
+     * @return array|null
+     */
+    public function build_family_rule_visual($grupo_id, $p_asignado = null, $preview = null, $rule = null) {
+        $grupo_id = intval($grupo_id);
+        $snapshot = $this->get_unit_snapshot($grupo_id);
+        if (is_wp_error($snapshot) || empty($snapshot['es_producto_unitario'])) {
+            return null;
+        }
+
+        if (!is_array($preview)) {
+            $preview = $this->preview_member_prices($grupo_id, $p_asignado);
+            if (is_wp_error($preview)) {
+                $preview = ['error' => $preview->get_error_message(), 'members' => [], 'p_asignado' => $p_asignado];
+            }
+        }
+
+        $p = isset($preview['p_asignado']) ? (float) $preview['p_asignado'] : ($p_asignado !== null ? (float) $p_asignado : null);
+        $unit = $snapshot['unit'] ?? null;
+        $unit_id = (int) ($snapshot['unit_producto_base_id'] ?? 0);
+
+        if ($rule === null && class_exists('Riverso_Price_Rules_Module')) {
+            $rules = Riverso_Price_Rules_Module::get_instance();
+            $rule_id = $rules->get_assigned_rule_id('familia', $grupo_id);
+            $rule = $rule_id ? $rules->get_rule_with_tiers($rule_id) : null;
+        }
+
+        $steps = [];
+        $members = is_array($preview['members'] ?? null) ? $preview['members'] : [];
+        if (!$members) {
+            global $wpdb;
+            $prefix = $wpdb->prefix . 'riverso_';
+            $members = $wpdb->get_results($wpdb->prepare(
+                "SELECT em.producto_base_id, pb.canonical_sku, pb.nombre_canonico, pb.es_unidad_minima,
+                        pb.woocommerce_product_id, pb.woocommerce_variation_id
+                 FROM {$prefix}equivalence_members em
+                 INNER JOIN {$prefix}producto_base pb ON pb.id = em.producto_base_id
+                 WHERE em.grupo_id = %d AND em.activo = 1",
+                $grupo_id
+            ), ARRAY_A) ?: [];
+            foreach ($members as &$mrow) {
+                $env = $this->get_canonical_envase((int) $mrow['producto_base_id']);
+                $mrow['cantidad_unidades'] = $env ? floatval($env['cantidad_unidades']) : 1.0;
+                $mrow['precio_unitario_regla'] = null;
+                $mrow['precio_total_presentacion'] = null;
+                $mrow = array_merge($mrow, $this->member_sku_flags($mrow));
+            }
+            unset($mrow);
+        }
+        usort($members, static function ($a, $b) {
+            $qa = (float) ($a['cantidad_unidades'] ?? 1);
+            $qb = (float) ($b['cantidad_unidades'] ?? 1);
+            if ($qa === $qb) {
+                return strcmp((string) ($a['canonical_sku'] ?? ''), (string) ($b['canonical_sku'] ?? ''));
+            }
+            return $qa <=> $qb;
+        });
+        foreach ($members as $m) {
+            $qty = (float) ($m['cantidad_unidades'] ?? 1);
+            if ($qty <= 0) {
+                $qty = 1.0;
+            }
+            $is_unit = $unit_id > 0
+                ? ((int) ($m['producto_base_id'] ?? 0) === $unit_id)
+                : ((int) ($m['es_unidad_minima'] ?? 0) === 1 || $qty <= 1.0001);
+            $pu = isset($m['precio_unitario_regla']) ? $m['precio_unitario_regla'] : null;
+            if ($pu === null && $p !== null && class_exists('Riverso_Price_Rules_Module') && $rule) {
+                $pu = Riverso_Price_Rules_Module::get_instance()->apply_for_base(
+                    (int) $m['producto_base_id'],
+                    $qty,
+                    $p
+                );
+            }
+            $steps[] = [
+                'producto_base_id' => (int) ($m['producto_base_id'] ?? 0),
+                'canonical_sku' => (string) ($m['canonical_sku'] ?? ''),
+                'sku_local' => (string) ($m['sku_local'] ?? $m['canonical_sku'] ?? ''),
+                'sku_online' => (string) ($m['sku_online'] ?? ''),
+                'es_local' => !empty($m['es_local']) || trim((string) ($m['canonical_sku'] ?? '')) !== '',
+                'es_online' => !empty($m['es_online']),
+                'nombre_canonico' => (string) ($m['nombre_canonico'] ?? ''),
+                'cantidad_unidades' => $qty,
+                'precio_unitario_regla' => $pu !== null ? (float) $pu : null,
+                'precio_total_presentacion' => $pu !== null ? round((float) $pu * $qty, 2) : null,
+                'es_unitario' => $is_unit,
+            ];
+        }
+
+        $tiers_out = [];
+        $tiers = is_array($rule['tiers'] ?? null) ? $rule['tiers'] : [];
+        $engine_ok = class_exists('Riverso_Price_Rule_Engine');
+        foreach ($tiers as $t) {
+            $desde = isset($t['cantidad_desde']) ? (float) $t['cantidad_desde'] : (isset($t['desde']) ? (float) $t['desde'] : 1.0);
+            if ($desde <= 0) {
+                $desde = 1.0;
+            }
+            $hasta = null;
+            if (isset($t['cantidad_hasta']) && $t['cantidad_hasta'] !== '' && $t['cantidad_hasta'] !== null) {
+                $hasta = (float) $t['cantidad_hasta'];
+            } elseif (isset($t['hasta']) && $t['hasta'] !== '' && $t['hasta'] !== null) {
+                $hasta = (float) $t['hasta'];
+            }
+            $formula = (string) ($t['formula'] ?? '');
+            $pu = null;
+            if ($p !== null && $engine_ok && $tiers) {
+                $pu = Riverso_Price_Rule_Engine::evaluate($tiers, $p, $desde);
+            }
+            $tiers_out[] = [
+                'desde' => $desde,
+                'hasta' => $hasta,
+                'formula' => $formula,
+                'precio_unitario' => $pu !== null ? (float) $pu : null,
+            ];
+        }
+
+        return [
+            'es_producto_unitario' => 1,
+            'grupo_id' => $grupo_id,
+            'p_asignado' => $p,
+            'unit' => $unit ? [
+                'producto_base_id' => $unit_id,
+                'canonical_sku' => (string) ($unit['canonical_sku'] ?? ''),
+                'nombre_canonico' => (string) ($unit['nombre_canonico'] ?? ''),
+                'cantidad_unidades' => 1.0,
+            ] : null,
+            'rule' => $rule ? [
+                'id' => (int) ($rule['id'] ?? 0),
+                'codigo' => (string) ($rule['codigo'] ?? ''),
+                'nombre' => (string) ($rule['nombre'] ?? ''),
+            ] : null,
+            'steps' => $steps,
+            'tiers' => $tiers_out,
+            'error' => isset($preview['error']) ? (string) $preview['error'] : null,
+        ];
+    }
+
+    /**
+     * Códigos de barra y proveedor activos por integrante de la familia.
+     *
+     * @param int $grupo_id
+     * @return array{members:array,unit_producto_base_id:?int}
+     */
+    public function get_family_member_codes($grupo_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $grupo_id = intval($grupo_id);
+        $unit_id = $this->get_unit_base_id($grupo_id);
+        $pack_map = $this->get_pack_members_by_qty($grupo_id, 0);
+
+        $members = $wpdb->get_results($wpdb->prepare(
+            "SELECT em.producto_base_id, pb.canonical_sku, pb.nombre_canonico, pb.es_unidad_minima,
+                    pb.woocommerce_product_id, pb.woocommerce_variation_id
+             FROM {$prefix}equivalence_members em
+             INNER JOIN {$prefix}producto_base pb ON pb.id = em.producto_base_id AND pb.deleted_at IS NULL
+             WHERE em.grupo_id = %d AND em.activo = 1
+             ORDER BY pb.es_unidad_minima DESC, pb.canonical_sku ASC",
+            $grupo_id
+        ), ARRAY_A) ?: [];
+
+        $out = [];
+        foreach ($members as $m) {
+            $base_id = (int) $m['producto_base_id'];
+            $envase = $this->get_canonical_envase($base_id);
+            $qty = $envase ? floatval($envase['cantidad_unidades']) : 1.0;
+            if ($qty <= 0) {
+                $qty = 1.0;
+            }
+            $is_unit = $unit_id > 0 ? ($base_id === $unit_id) : ((int) ($m['es_unidad_minima'] ?? 0) === 1);
+            $sku_flags = $this->member_sku_flags($m);
+
+            $barcodes = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, codigo, cantidad, factor_a_unidad_base, estado, tipo, activo
+                 FROM {$prefix}codigo_barra
+                 WHERE producto_base_id = %d AND activo = 1
+                   AND (estado IS NULL OR estado NOT IN ('en_desuso','rechazado'))
+                 ORDER BY id ASC",
+                $base_id
+            ), ARRAY_A) ?: [];
+
+            $codes_bc = [];
+            foreach ($barcodes as $bc) {
+                $bc_qty = floatval($bc['cantidad'] ?? 0);
+                if ($bc_qty <= 0) {
+                    $bc_qty = floatval($bc['factor_a_unidad_base'] ?? 0);
+                }
+                if ($bc_qty <= 0) {
+                    $bc_qty = $qty;
+                }
+                $suggested = null;
+                $qty_key = $this->qty_key($bc_qty);
+                if ($is_unit && $bc_qty > 1.0001 && isset($pack_map[$qty_key])) {
+                    $suggested = $pack_map[$qty_key];
+                }
+                if ($is_unit && !$suggested) {
+                    $elsewhere = $wpdb->get_row($wpdb->prepare(
+                        "SELECT pb.id AS producto_base_id, pb.canonical_sku, pb.nombre_canonico,
+                                e.cantidad_unidades, e.id AS envase_id
+                         FROM {$prefix}codigo_barra cb2
+                         INNER JOIN {$prefix}producto_base pb ON pb.id = cb2.producto_base_id AND pb.deleted_at IS NULL
+                         INNER JOIN {$prefix}equivalence_members em
+                            ON em.producto_base_id = pb.id AND em.grupo_id = %d AND em.activo = 1
+                         LEFT JOIN {$prefix}envases e ON e.producto_base_id = pb.id AND e.activo = 1
+                         WHERE cb2.codigo = %s AND cb2.activo = 1 AND cb2.producto_base_id <> %d
+                         ORDER BY (e.cantidad_unidades > 1) DESC LIMIT 1",
+                        $grupo_id,
+                        (string) $bc['codigo'],
+                        $base_id
+                    ), ARRAY_A);
+                    if ($elsewhere && floatval($elsewhere['cantidad_unidades'] ?? 0) > 1) {
+                        $suggested = [
+                            'producto_base_id' => (int) $elsewhere['producto_base_id'],
+                            'canonical_sku' => $elsewhere['canonical_sku'],
+                            'nombre_canonico' => $elsewhere['nombre_canonico'],
+                            'cantidad_unidades' => floatval($elsewhere['cantidad_unidades']),
+                            'envase_id' => !empty($elsewhere['envase_id']) ? (int) $elsewhere['envase_id'] : null,
+                        ];
+                    }
+                }
+                $codes_bc[] = [
+                    'id' => (int) $bc['id'],
+                    'tipo' => 'barcode',
+                    'codigo' => (string) ($bc['codigo'] ?? ''),
+                    'cantidad' => $bc_qty,
+                    'estado' => (string) ($bc['estado'] ?? ''),
+                    'suggested_destino' => $suggested,
+                    'mismatch' => (bool) $suggested,
+                ];
+            }
+
+            $pps = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, codigo_proveedor, factor_conversion, proveedor_id, activo
+                 FROM {$prefix}producto_proveedor
+                 WHERE producto_base_id = %d AND activo = 1
+                 ORDER BY id ASC",
+                $base_id
+            ), ARRAY_A) ?: [];
+
+            $codes_pp = [];
+            foreach ($pps as $pp) {
+                $pp_qty = floatval($pp['factor_conversion'] ?? 0);
+                if ($pp_qty <= 0) {
+                    $pp_qty = $qty;
+                }
+                // Si el factor es 1 pero el código parece de caja, intentar qty del barcode homónimo.
+                if ($is_unit && $pp_qty <= 1.0001) {
+                    $homonym = $wpdb->get_row($wpdb->prepare(
+                        "SELECT cantidad, factor_a_unidad_base FROM {$prefix}codigo_barra
+                         WHERE codigo = %s AND producto_base_id = %d AND activo = 1
+                         ORDER BY id ASC LIMIT 1",
+                        (string) $pp['codigo_proveedor'],
+                        $base_id
+                    ), ARRAY_A);
+                    if ($homonym) {
+                        $hq = floatval($homonym['cantidad'] ?? 0);
+                        if ($hq <= 0) {
+                            $hq = floatval($homonym['factor_a_unidad_base'] ?? 0);
+                        }
+                        if ($hq > 1.0001) {
+                            $pp_qty = $hq;
+                        }
+                    }
+                }
+                $suggested = null;
+                $qty_key = $this->qty_key($pp_qty);
+                if ($is_unit && $pp_qty > 1.0001 && isset($pack_map[$qty_key])) {
+                    $suggested = $pack_map[$qty_key];
+                }
+                // Mismo código ya en otro integrante → sugerir ese destino.
+                if ($is_unit && !$suggested) {
+                    $elsewhere = $wpdb->get_row($wpdb->prepare(
+                        "SELECT pb.id AS producto_base_id, pb.canonical_sku, pb.nombre_canonico,
+                                e.cantidad_unidades, e.id AS envase_id
+                         FROM {$prefix}producto_proveedor pp2
+                         INNER JOIN {$prefix}producto_base pb ON pb.id = pp2.producto_base_id AND pb.deleted_at IS NULL
+                         INNER JOIN {$prefix}equivalence_members em
+                            ON em.producto_base_id = pb.id AND em.grupo_id = %d AND em.activo = 1
+                         LEFT JOIN {$prefix}envases e ON e.producto_base_id = pb.id AND e.activo = 1
+                         WHERE pp2.codigo_proveedor = %s AND pp2.activo = 1 AND pp2.producto_base_id <> %d
+                         ORDER BY (e.cantidad_unidades > 1) DESC LIMIT 1",
+                        $grupo_id,
+                        (string) $pp['codigo_proveedor'],
+                        $base_id
+                    ), ARRAY_A);
+                    if (!$elsewhere) {
+                        $elsewhere = $wpdb->get_row($wpdb->prepare(
+                            "SELECT pb.id AS producto_base_id, pb.canonical_sku, pb.nombre_canonico,
+                                    e.cantidad_unidades, e.id AS envase_id
+                             FROM {$prefix}codigo_barra cb
+                             INNER JOIN {$prefix}producto_base pb ON pb.id = cb.producto_base_id AND pb.deleted_at IS NULL
+                             INNER JOIN {$prefix}equivalence_members em
+                                ON em.producto_base_id = pb.id AND em.grupo_id = %d AND em.activo = 1
+                             LEFT JOIN {$prefix}envases e ON e.producto_base_id = pb.id AND e.activo = 1
+                             WHERE cb.codigo = %s AND cb.activo = 1 AND cb.producto_base_id <> %d
+                             ORDER BY (e.cantidad_unidades > 1) DESC LIMIT 1",
+                            $grupo_id,
+                            (string) $pp['codigo_proveedor'],
+                            $base_id
+                        ), ARRAY_A);
+                    }
+                    if ($elsewhere && floatval($elsewhere['cantidad_unidades'] ?? 0) > 1) {
+                        $suggested = [
+                            'producto_base_id' => (int) $elsewhere['producto_base_id'],
+                            'canonical_sku' => $elsewhere['canonical_sku'],
+                            'nombre_canonico' => $elsewhere['nombre_canonico'],
+                            'cantidad_unidades' => floatval($elsewhere['cantidad_unidades']),
+                            'envase_id' => !empty($elsewhere['envase_id']) ? (int) $elsewhere['envase_id'] : null,
+                        ];
+                    }
+                }
+                $codes_pp[] = [
+                    'id' => (int) $pp['id'],
+                    'tipo' => 'supplier',
+                    'codigo' => (string) ($pp['codigo_proveedor'] ?? ''),
+                    'cantidad' => $pp_qty,
+                    'proveedor_id' => (int) ($pp['proveedor_id'] ?? 0),
+                    'suggested_destino' => $suggested,
+                    'mismatch' => (bool) $suggested,
+                ];
+            }
+
+            $out[] = array_merge([
+                'producto_base_id' => $base_id,
+                'canonical_sku' => (string) ($m['canonical_sku'] ?? ''),
+                'nombre_canonico' => (string) ($m['nombre_canonico'] ?? ''),
+                'cantidad_unidades' => $qty,
+                'es_unitario' => $is_unit,
+                'es_unitario_familia' => $is_unit,
+                'woocommerce_product_id' => absint($m['woocommerce_product_id'] ?? 0),
+                'woocommerce_variation_id' => absint($m['woocommerce_variation_id'] ?? 0),
+                'barcodes' => $codes_bc,
+                'supplier_codes' => $codes_pp,
+            ], $sku_flags);
+        }
+
+        $pack_conflicts = [];
+        if (class_exists('Riverso_Family_Module')) {
+            $fam = Riverso_Family_Module::get_instance();
+            if (method_exists($fam, 'detect_pack_qty_conflicts')) {
+                $pack_conflicts = $fam->detect_pack_qty_conflicts($grupo_id, $out);
+            }
+        }
+
+        return [
+            'unit_producto_base_id' => $unit_id ?: null,
+            'members' => $out,
+            'pack_conflicts' => $pack_conflicts,
+            'destinos' => array_map(static function ($m) {
+                return [
+                    'producto_base_id' => (int) $m['producto_base_id'],
+                    'canonical_sku' => (string) $m['canonical_sku'],
+                    'sku_local' => (string) ($m['sku_local'] ?? ''),
+                    'sku_online' => (string) ($m['sku_online'] ?? ''),
+                    'es_local' => !empty($m['es_local']),
+                    'es_online' => !empty($m['es_online']),
+                    'nombre_canonico' => (string) $m['nombre_canonico'],
+                    'cantidad_unidades' => (float) $m['cantidad_unidades'],
+                    'es_unitario' => !empty($m['es_unitario']),
+                ];
+            }, $out),
+        ];
+    }
+
+    /**
+     * SKUs a mostrar en columna folio: unitario (qty) · envase (qty).
+     *
+     * @param int    $producto_base_id Producto resuelto de la línea
+     * @param string $codigo_proveedor
+     * @param int    $grupo_id
+     * @return array
+     */
+    public function resolve_folio_sku_pair($producto_base_id, $codigo_proveedor = '', $grupo_id = 0) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $producto_base_id = intval($producto_base_id);
+        $codigo_proveedor = trim((string) $codigo_proveedor);
+        $grupo_id = intval($grupo_id);
+
+        $ctx = $grupo_id
+            ? null
+            : $this->resolve_family_unit_for_base($producto_base_id);
+        if ($ctx) {
+            $grupo_id = (int) ($ctx['grupo_id'] ?? 0);
+        }
+        $unit_id = $grupo_id ? $this->get_unit_base_id($grupo_id) : 0;
+        if (!$grupo_id || !$unit_id) {
+            $pb = $wpdb->get_row($wpdb->prepare(
+                "SELECT canonical_sku FROM {$prefix}producto_base WHERE id = %d",
+                $producto_base_id
+            ), ARRAY_A);
+            $env = $this->get_canonical_envase($producto_base_id);
+            $qty = $env ? floatval($env['cantidad_unidades']) : 1.0;
+            return [
+                'unit_sku' => (string) ($pb['canonical_sku'] ?? ''),
+                'unit_qty' => $qty > 0 ? $qty : 1.0,
+                'pack_sku' => null,
+                'pack_qty' => null,
+                'pack_producto_base_id' => null,
+            ];
+        }
+
+        $unit_row = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, canonical_sku FROM {$prefix}producto_base WHERE id = %d",
+            $unit_id
+        ), ARRAY_A);
+        $unit_env = $this->get_canonical_envase($unit_id);
+        $unit_qty = $unit_env ? floatval($unit_env['cantidad_unidades']) : 1.0;
+        if ($unit_qty <= 0) {
+            $unit_qty = 1.0;
+        }
+
+        $pack_id = null;
+        $pack_sku = null;
+        $pack_qty = null;
+
+        if ($producto_base_id !== $unit_id) {
+            $pack_id = $producto_base_id;
+        } elseif ($codigo_proveedor !== '') {
+            $code_qty = $this->resolve_code_qty_hint($codigo_proveedor, $producto_base_id);
+            if ($code_qty > 1.0001) {
+                $pack_map = $this->get_pack_members_by_qty($grupo_id, $unit_id);
+                $key = $this->qty_key($code_qty);
+                if (isset($pack_map[$key])) {
+                    $pack_id = (int) $pack_map[$key]['producto_base_id'];
+                }
+            }
+            // Mismo código ya vive en otro integrante (p. ej. 02TADB en 148 y también en 247570).
+            if (!$pack_id) {
+                $other = $wpdb->get_row($wpdb->prepare(
+                    "SELECT pb.id, e.cantidad_unidades
+                     FROM {$prefix}codigo_barra cb
+                     INNER JOIN {$prefix}producto_base pb ON pb.id = cb.producto_base_id AND pb.deleted_at IS NULL
+                     INNER JOIN {$prefix}equivalence_members em
+                        ON em.producto_base_id = pb.id AND em.grupo_id = %d AND em.activo = 1
+                     LEFT JOIN {$prefix}envases e ON e.producto_base_id = pb.id AND e.activo = 1
+                     WHERE cb.codigo = %s AND cb.activo = 1 AND cb.producto_base_id <> %d
+                     ORDER BY (e.cantidad_unidades > 1) DESC, e.cantidad_unidades DESC
+                     LIMIT 1",
+                    $grupo_id,
+                    $codigo_proveedor,
+                    $unit_id
+                ), ARRAY_A);
+                if (!$other) {
+                    $other = $wpdb->get_row($wpdb->prepare(
+                        "SELECT pb.id, e.cantidad_unidades
+                         FROM {$prefix}producto_proveedor pp
+                         INNER JOIN {$prefix}producto_base pb ON pb.id = pp.producto_base_id AND pb.deleted_at IS NULL
+                         INNER JOIN {$prefix}equivalence_members em
+                            ON em.producto_base_id = pb.id AND em.grupo_id = %d AND em.activo = 1
+                         LEFT JOIN {$prefix}envases e ON e.producto_base_id = pb.id AND e.activo = 1
+                         WHERE pp.codigo_proveedor = %s AND pp.activo = 1 AND pp.producto_base_id <> %d
+                         ORDER BY (e.cantidad_unidades > 1) DESC, e.cantidad_unidades DESC
+                         LIMIT 1",
+                        $grupo_id,
+                        $codigo_proveedor,
+                        $unit_id
+                    ), ARRAY_A);
+                }
+                if ($other) {
+                    $pack_id = (int) $other['id'];
+                }
+            }
+        }
+
+        if ($pack_id) {
+            $pack_row = $wpdb->get_row($wpdb->prepare(
+                "SELECT canonical_sku FROM {$prefix}producto_base WHERE id = %d",
+                $pack_id
+            ), ARRAY_A);
+            $pack_env = $this->get_canonical_envase($pack_id);
+            $pack_qty = $pack_env ? floatval($pack_env['cantidad_unidades']) : null;
+            $pack_sku = (string) ($pack_row['canonical_sku'] ?? '');
+        }
+
+        return [
+            'unit_sku' => (string) ($unit_row['canonical_sku'] ?? ''),
+            'unit_qty' => $unit_qty,
+            'unit_producto_base_id' => $unit_id,
+            'pack_sku' => $pack_sku ?: null,
+            'pack_qty' => $pack_qty,
+            'pack_producto_base_id' => $pack_id,
+        ];
+    }
+
+    /**
+     * Cantidad asociada a un código (barcode o factor proveedor).
+     *
+     * @param string $codigo
+     * @param int    $producto_base_id
+     * @return float
+     */
+    public function resolve_code_qty_hint($codigo, $producto_base_id = 0) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $codigo = trim((string) $codigo);
+        $producto_base_id = intval($producto_base_id);
+        if ($codigo === '') {
+            return 1.0;
+        }
+
+        // Preferir cantidad > 1 aunque el código esté mal asignado al unitario.
+        $bc = $wpdb->get_row($wpdb->prepare(
+            "SELECT cantidad, factor_a_unidad_base FROM {$prefix}codigo_barra
+             WHERE codigo = %s AND activo = 1
+             ORDER BY (cantidad > 1) DESC, (factor_a_unidad_base > 1) DESC,
+                      (producto_base_id = %d) DESC, id ASC
+             LIMIT 1",
+            $codigo,
+            $producto_base_id > 0 ? $producto_base_id : 0
+        ), ARRAY_A);
+        if ($bc) {
+            $q = floatval($bc['cantidad'] ?? 0);
+            if ($q <= 0) {
+                $q = floatval($bc['factor_a_unidad_base'] ?? 0);
+            }
+            if ($q > 0) {
+                return $q;
+            }
+        }
+
+        $pp = $wpdb->get_row($wpdb->prepare(
+            "SELECT factor_conversion FROM {$prefix}producto_proveedor
+             WHERE codigo_proveedor = %s AND activo = 1
+             ORDER BY (factor_conversion > 1) DESC, (producto_base_id = %d) DESC, id ASC
+             LIMIT 1",
+            $codigo,
+            $producto_base_id > 0 ? $producto_base_id : 0
+        ), ARRAY_A);
+        if ($pp) {
+            $q = floatval($pp['factor_conversion'] ?? 0);
+            if ($q > 0) {
+                return $q;
+            }
+        }
+
+        $env = $wpdb->get_row($wpdb->prepare(
+            "SELECT cantidad_unidades FROM {$prefix}envases
+             WHERE codigo_proveedor = %s AND activo = 1
+             ORDER BY cantidad_unidades DESC LIMIT 1",
+            $codigo
+        ), ARRAY_A);
+        if ($env) {
+            $q = floatval($env['cantidad_unidades'] ?? 0);
+            if ($q > 0) {
+                return $q;
+            }
+        }
+
+        return 1.0;
+    }
+
+    /**
+     * Mueve o desvincula un código entre integrantes de la misma familia.
+     *
+     * @param int    $grupo_id
+     * @param string $code_tipo barcode|supplier
+     * @param int    $code_id
+     * @param string $accion move|unlink
+     * @param int    $destino_producto_base_id
+     * @param array  $opts
+     * @return array|WP_Error
+     */
+    public function map_family_member_code($grupo_id, $code_tipo, $code_id, $accion, $destino_producto_base_id = 0, array $opts = []) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $grupo_id = intval($grupo_id);
+        $code_id = intval($code_id);
+        $destino_producto_base_id = intval($destino_producto_base_id);
+        $code_tipo = $code_tipo === 'supplier' ? 'supplier' : 'barcode';
+        $accion = $accion === 'unlink' ? 'unlink' : 'move';
+
+        if ($grupo_id <= 0 || $code_id <= 0) {
+            return new WP_Error('invalid', 'Parámetros inválidos');
+        }
+
+        $member_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT producto_base_id FROM {$prefix}equivalence_members
+             WHERE grupo_id = %d AND activo = 1",
+            $grupo_id
+        )) ?: [];
+        $member_ids = array_map('intval', $member_ids);
+        if (!$member_ids) {
+            return new WP_Error('empty', 'La familia no tiene integrantes');
+        }
+
+        if ($code_tipo === 'barcode') {
+            $row = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM {$prefix}codigo_barra WHERE id = %d",
+                $code_id
+            ), ARRAY_A);
+            if (!$row) {
+                return new WP_Error('not_found', 'Código de barra no encontrado');
+            }
+            $from_id = (int) ($row['producto_base_id'] ?? 0);
+            if (!in_array($from_id, $member_ids, true)) {
+                return new WP_Error('mismatch', 'El código no pertenece a un integrante de esta familia');
+            }
+
+            if ($accion === 'unlink') {
+                $ok = $wpdb->update(
+                    "{$prefix}codigo_barra",
+                    [
+                        'estado' => 'en_desuso',
+                        'activo' => 0,
+                        'motivo_estado' => $opts['motivo'] ?? 'Desvinculado desde familia (precios)',
+                        'estado_por' => get_current_user_id() ?: null,
+                        'estado_at' => current_time('mysql'),
+                    ],
+                    ['id' => $code_id],
+                    ['%s', '%d', '%s', '%d', '%s'],
+                    ['%d']
+                );
+                if ($ok === false) {
+                    return new WP_Error('db_error', $wpdb->last_error ?: 'No se pudo desvincular');
+                }
+                return [
+                    'accion' => 'unlink',
+                    'tipo' => 'barcode',
+                    'code_id' => $code_id,
+                    'from_producto_base_id' => $from_id,
+                ];
+            }
+
+            if ($destino_producto_base_id <= 0 || !in_array($destino_producto_base_id, $member_ids, true)) {
+                return new WP_Error('invalid', 'Destino inválido');
+            }
+            if ($destino_producto_base_id === $from_id) {
+                return ['accion' => 'move', 'tipo' => 'barcode', 'moved' => false, 'code_id' => $code_id];
+            }
+
+            $dest_env = $this->get_canonical_envase($destino_producto_base_id);
+            $cantidad = $dest_env ? floatval($dest_env['cantidad_unidades']) : floatval($row['cantidad'] ?? 1);
+            if ($cantidad <= 0) {
+                $cantidad = 1.0;
+            }
+
+            // Si el destino ya tiene el mismo código activo, conservar destino y desactivar origen.
+            $clash = $wpdb->get_row($wpdb->prepare(
+                "SELECT id FROM {$prefix}codigo_barra
+                 WHERE codigo = %s AND producto_base_id = %d AND id <> %d AND activo = 1
+                 LIMIT 1",
+                (string) $row['codigo'],
+                $destino_producto_base_id,
+                $code_id
+            ), ARRAY_A);
+            if ($clash) {
+                $wpdb->update(
+                    "{$prefix}codigo_barra",
+                    [
+                        'estado' => 'en_desuso',
+                        'activo' => 0,
+                        'motivo_estado' => 'Duplicado: ya existe en destino (mapear familia)',
+                        'estado_por' => get_current_user_id() ?: null,
+                        'estado_at' => current_time('mysql'),
+                    ],
+                    ['id' => $code_id],
+                    ['%s', '%d', '%s', '%d', '%s'],
+                    ['%d']
+                );
+                return [
+                    'accion' => 'move',
+                    'tipo' => 'barcode',
+                    'moved' => true,
+                    'deduped' => true,
+                    'code_id' => $code_id,
+                    'kept_code_id' => (int) $clash['id'],
+                    'from_producto_base_id' => $from_id,
+                    'destino_producto_base_id' => $destino_producto_base_id,
+                ];
+            }
+
+            $moved = $this->move_barcode_to_pack($code_id, $destino_producto_base_id, $cantidad, [
+                'verify' => true,
+                'motivo' => $opts['motivo'] ?? 'Mapeado entre integrantes de familia',
+                'envase_id' => $dest_env ? (int) $dest_env['id'] : 0,
+            ]);
+            if (is_wp_error($moved)) {
+                return $moved;
+            }
+            return [
+                'accion' => 'move',
+                'tipo' => 'barcode',
+                'moved' => true,
+                'code_id' => $code_id,
+                'from_producto_base_id' => $from_id,
+                'destino_producto_base_id' => $destino_producto_base_id,
+                'cantidad' => $cantidad,
+            ];
+        }
+
+        // supplier
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}producto_proveedor WHERE id = %d",
+            $code_id
+        ), ARRAY_A);
+        if (!$row) {
+            return new WP_Error('not_found', 'Código de proveedor no encontrado');
+        }
+        $from_id = (int) ($row['producto_base_id'] ?? 0);
+        if (!in_array($from_id, $member_ids, true)) {
+            return new WP_Error('mismatch', 'El código no pertenece a un integrante de esta familia');
+        }
+
+        if ($accion === 'unlink') {
+            $ok = $wpdb->update(
+                "{$prefix}producto_proveedor",
+                [
+                    'activo' => 0,
+                    'updated_at' => current_time('mysql'),
+                ],
+                ['id' => $code_id],
+                ['%d', '%s'],
+                ['%d']
+            );
+            if ($ok === false) {
+                return new WP_Error('db_error', $wpdb->last_error ?: 'No se pudo desvincular');
+            }
+            return [
+                'accion' => 'unlink',
+                'tipo' => 'supplier',
+                'code_id' => $code_id,
+                'from_producto_base_id' => $from_id,
+            ];
+        }
+
+        if ($destino_producto_base_id <= 0 || !in_array($destino_producto_base_id, $member_ids, true)) {
+            return new WP_Error('invalid', 'Destino inválido');
+        }
+        if ($destino_producto_base_id === $from_id) {
+            return ['accion' => 'move', 'tipo' => 'supplier', 'moved' => false, 'code_id' => $code_id];
+        }
+
+        $clash = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, producto_base_id FROM {$prefix}producto_proveedor
+             WHERE proveedor_id = %d AND codigo_proveedor = %s AND id <> %d AND activo = 1
+             LIMIT 1",
+            (int) $row['proveedor_id'],
+            $row['codigo_proveedor'],
+            $code_id
+        ), ARRAY_A);
+        if ($clash && (int) $clash['producto_base_id'] === $destino_producto_base_id) {
+            $wpdb->update(
+                "{$prefix}producto_proveedor",
+                ['activo' => 0, 'updated_at' => current_time('mysql')],
+                ['id' => $code_id],
+                ['%d', '%s'],
+                ['%d']
+            );
+            return [
+                'accion' => 'move',
+                'tipo' => 'supplier',
+                'moved' => true,
+                'deduped' => true,
+                'code_id' => $code_id,
+                'kept_code_id' => (int) $clash['id'],
+                'from_producto_base_id' => $from_id,
+                'destino_producto_base_id' => $destino_producto_base_id,
+            ];
+        }
+
+        $moved = $this->move_supplier_code_to_product($code_id, $destino_producto_base_id, [
+            'verify' => true,
+            'motivo' => $opts['motivo'] ?? 'Mapeado entre integrantes de familia',
+        ]);
+        if (is_wp_error($moved)) {
+            return $moved;
+        }
+        return array_merge(is_array($moved) ? $moved : [], [
+            'accion' => 'move',
+            'tipo' => 'supplier',
+            'code_id' => $code_id,
+        ]);
     }
 
     /**

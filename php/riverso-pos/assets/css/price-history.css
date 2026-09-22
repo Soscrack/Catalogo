@@ -755,6 +755,41 @@
     opacity: 0.72;
 }
 
+/* Recuadro sticky: cabecera visible al scrollear filas; mínimo ~2 filas vía JS */
+#rpf-lines {
+    --rpf-adminbar: 32px;
+    position: sticky;
+    top: var(--rpf-adminbar);
+    max-height: calc(100vh - var(--rpf-adminbar));
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    z-index: 5;
+}
+
+@media screen and (max-width: 782px) {
+    #rpf-lines {
+        --rpf-adminbar: 46px;
+    }
+}
+
+.rpf-lines-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    margin: 0;
+}
+
+.rpf-lines-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f6f7f7;
+    box-shadow: 0 1px 0 #c3c4c7;
+}
+
 .rpf-session-header {
     margin-bottom: 12px;
 }
@@ -958,6 +993,118 @@
 
 .rpf-comp-subtitle {
     margin: 16px 0 8px;
+}
+
+.rpf-bc-list {
+    margin-top: 4px;
+}
+
+.rpf-bc-hint {
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: #555;
+}
+
+.rpf-bc-parked {
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+    font-size: 12px;
+}
+
+.rpf-bc-parked ul {
+    margin: 6px 0 0 18px;
+}
+
+.rpf-bc-group-title {
+    margin: 0 0 8px;
+    font-size: 13px;
+}
+
+.rpf-bc-item {
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+}
+
+.rpf-bc-item.is-inactive {
+    opacity: 0.85;
+    background: #f6f7f7;
+}
+
+.rpf-bc-meta {
+    color: #999;
+}
+
+.rpf-bc-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.rpf-bc-badge-legacy {
+    background: #9c27b0;
+    color: #fff;
+}
+
+.rpf-bc-badge-pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.rpf-bc-badge-inactive {
+    background: #757575;
+    color: #fff;
+}
+
+.rpf-bc-badge-ean {
+    background: #0073aa;
+    color: #fff;
+}
+
+.rpf-bc-badge-supplier {
+    background: #ff6b35;
+    color: #fff;
+}
+
+.rpf-bc-badge-internal {
+    background: #666;
+    color: #fff;
+}
+
+.rpf-bc-actions {
+    margin-top: 6px;
+}
+
+.rpf-bc-remap-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 100200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.rpf-bc-remap-card {
+    background: #fff;
+    max-width: 560px;
+    width: 94%;
+    max-height: 90vh;
+    overflow: auto;
+    border-radius: 6px;
+    padding: 18px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
 .rpf-comp-manual {
@@ -1263,4 +1410,217 @@
 .rpf-paso-hint {
     display: block;
     margin-top: 2px;
+}
+
+/* Visualizador regla familia unitaria */
+.rpe-family-visual,
+.rpf-rule-visual {
+    margin: 10px 0 14px;
+    padding: 12px;
+    border: 1px solid #c3c4c7;
+    border-radius: 6px;
+    background: #f6f7f7;
+}
+
+.rpf-rule-visual-head {
+    margin-bottom: 10px;
+}
+
+.rpf-rule-scale {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 6px;
+    margin: 8px 0 10px;
+}
+
+.rpf-rule-scale-sep {
+    align-self: center;
+    color: #8c8f94;
+    font-weight: 600;
+}
+
+.rpf-rule-step {
+    min-width: 110px;
+    padding: 8px 10px;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    background: #fff;
+    font-size: 12px;
+}
+
+.rpf-rule-step.is-unit {
+    border-color: #2271b1;
+    box-shadow: inset 0 0 0 1px #2271b1;
+}
+
+.rpf-rule-step-qty {
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.rpf-rule-step-sku {
+    margin: 2px 0 6px;
+}
+
+.rpf-rule-step-pu,
+.rpf-rule-step-tot {
+    font-variant-numeric: tabular-nums;
+}
+
+.rpf-rule-tiers {
+    margin: 0;
+    padding-left: 1.2em;
+    font-size: 12px;
+}
+
+.rpf-rule-tier-range {
+    font-weight: 600;
+}
+
+.rpf-rule-visual-actions {
+    margin-top: 10px;
+}
+
+.rpf-rule-view-modal {
+    z-index: 100300;
+}
+
+.rpf-rule-view-card {
+    max-width: 960px;
+    width: 96%;
+    max-height: 90vh;
+    overflow: auto;
+}
+
+.rpf-rule-view-meta {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 4px 12px;
+    margin: 0 0 12px;
+    font-size: 13px;
+}
+
+.rpf-rule-view-meta dt {
+    margin: 0;
+    color: #646970;
+    font-weight: 600;
+}
+
+.rpf-rule-view-meta dd {
+    margin: 0;
+}
+
+.rpf-rule-view-tiers {
+    font-size: 12px;
+}
+
+.rpf-rule-view-tiers code {
+    font-size: 11px;
+}
+
+.rpf-rule-view-assigns {
+    margin: 0;
+    padding-left: 1.2em;
+    font-size: 12px;
+    max-height: 180px;
+    overflow: auto;
+}
+
+.rpf-family-codes {
+    margin-top: 16px;
+    padding-top: 8px;
+    border-top: 1px solid #dcdcde;
+}
+
+.rpf-family-codes-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+    margin-bottom: 6px;
+}
+
+.rpf-code-mode-toggle {
+    display: inline-flex;
+    gap: 4px;
+}
+
+.rpf-code-mode-toggle .rpf-code-mode-btn.is-active {
+    font-weight: 600;
+}
+
+.rpf-fam-member {
+    margin: 0 0 12px;
+    padding: 8px 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.rpf-fam-member-head {
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.rpf-fam-code-list {
+    margin: 0;
+    padding-left: 1.1em;
+}
+
+.rpf-fam-code {
+    margin: 0 0 8px;
+}
+
+.rpf-fam-code.is-mismatch {
+    background: #fff8e5;
+    border-left: 3px solid #dba617;
+    padding: 4px 8px;
+    margin-left: -8px;
+    list-style-position: inside;
+}
+
+.rpf-fam-mismatch-hint {
+    color: #996800;
+    font-size: 12px;
+}
+
+.rpf-fam-code-actions {
+    margin-top: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+}
+
+.rpf-fam-code-actions select {
+    max-width: 220px;
+}
+
+.rpf-family-card {
+    max-width: 920px;
+    width: 96%;
+}
+
+.rpf-sku-cell {
+    white-space: nowrap;
+}
+
+.rpf-sku-pair {
+    display: inline-block;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.rpf-sku-local code {
+    color: #1565c0;
+}
+
+.rpf-sku-online code {
+    color: #2e7d32;
+}
+
+.rpf-rule-step-sku .rpf-sku-pair {
+    display: block;
 }

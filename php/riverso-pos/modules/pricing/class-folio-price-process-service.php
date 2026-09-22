@@ -2433,6 +2433,15 @@ class Riverso_Folio_Price_Process_Service {
                 }
             }
 
+            $sku_pair = null;
+            if (!empty($target['es_familia_unitaria']) && $unit_svc) {
+                $sku_pair = $unit_svc->resolve_folio_sku_pair(
+                    (int) $product['producto_base_id'],
+                    $code,
+                    (int) $target['grupo_id']
+                );
+            }
+
             // Vigente (no “anterior”): indica si ya hay P local guardado.
             $line = array_merge($line, [
                 'producto_base_id' => (int) $product['producto_base_id'],
@@ -2441,6 +2450,10 @@ class Riverso_Folio_Price_Process_Service {
                 'nombre' => $product['nombre'],
                 'is_child' => !empty($target['is_child']),
                 'unit_sku' => $target['unit_sku'],
+                'unit_qty' => $sku_pair['unit_qty'] ?? null,
+                'pack_sku' => $sku_pair['pack_sku'] ?? null,
+                'pack_qty' => $sku_pair['pack_qty'] ?? null,
+                'pack_producto_base_id' => $sku_pair['pack_producto_base_id'] ?? null,
                 'grupo_id' => (int) $target['grupo_id'],
                 'es_familia_unitaria' => !empty($target['es_familia_unitaria']),
                 'requires_online' => $woo_id > 0,
@@ -2576,17 +2589,66 @@ class Riverso_Folio_Price_Process_Service {
         }
         $preview = $unit->preview_member_prices(absint($grupo_id), $p_asignado !== null ? (float) $p_asignado : null);
         if (is_wp_error($preview)) {
-            return $preview;
+            $preview = [
+                'error' => $preview->get_error_message(),
+                'p_asignado' => $p_asignado,
+                'members' => [],
+            ];
         }
         $rules = $this->rules();
         $rule_id = $rules ? $rules->get_assigned_rule_id('familia', absint($grupo_id)) : null;
         $rule = ($rules && $rule_id) ? $rules->get_rule_with_tiers($rule_id) : null;
+        $visual = !empty($snapshot['es_producto_unitario'])
+            ? $unit->build_family_rule_visual(absint($grupo_id), $p_asignado, $preview, $rule)
+            : null;
+        $codes = !empty($snapshot['es_producto_unitario'])
+            ? $unit->get_family_member_codes(absint($grupo_id))
+            : null;
 
         return [
             'snapshot' => $snapshot,
             'preview' => $preview,
             'rule' => $rule,
+            'visual' => $visual,
+            'codes' => $codes,
+            'pack_conflicts' => is_array($codes) ? ($codes['pack_conflicts'] ?? []) : [],
+            'es_producto_unitario' => !empty($snapshot['es_producto_unitario']),
         ];
+    }
+
+    /**
+     * Mueve o desvincula un código entre integrantes (desde Centro de Precios).
+     *
+     * @param int    $grupo_id
+     * @param string $code_tipo
+     * @param int    $code_id
+     * @param string $accion
+     * @param int    $destino_producto_base_id
+     * @return array|WP_Error
+     */
+    public function map_family_code($grupo_id, $code_tipo, $code_id, $accion, $destino_producto_base_id = 0) {
+        $unit = $this->unit_service();
+        if (!$unit) {
+            return new WP_Error('no_unit', 'Servicio de familia no disponible');
+        }
+        $result = $unit->map_family_member_code(
+            absint($grupo_id),
+            $code_tipo,
+            absint($code_id),
+            $accion,
+            absint($destino_producto_base_id),
+            ['motivo' => 'Desde centro de precios — Ver familia']
+        );
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        $refresh = $this->preview_family(absint($grupo_id), null);
+        if (is_wp_error($refresh)) {
+            return array_merge(is_array($result) ? $result : [], ['refresh_error' => $refresh->get_error_message()]);
+        }
+        return array_merge(is_array($result) ? $result : [], [
+            'family' => $refresh,
+        ]);
     }
 
     public function save_line($factura_id, $item_id, $p_asignado, $p_online = null, $amount_mode = 'bruto') {

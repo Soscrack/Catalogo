@@ -116,6 +116,7 @@ if (!defined('ABSPATH')) {
         <div class="rpe-section" id="rpe-family-section" hidden>
             <h4>Familia <span id="rpe-family-name"></span></h4>
             <p class="description" id="rpe-family-meta"></p>
+            <div id="rpe-family-visual" class="rpe-family-visual" hidden></div>
             <table class="wp-list-table widefat striped">
                 <thead>
                     <tr>

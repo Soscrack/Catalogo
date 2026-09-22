@@ -940,6 +940,7 @@
     function renderProcessLines(lines, isHybrid) {
         if (!lines.length) {
             $('#rpf-lines').html('<p>Sin ítems de producto.</p>');
+            syncRpfLinesPaneMetrics();
             renderRpfPdfFooter();
             return;
         }
@@ -961,7 +962,7 @@
             var rowClass = (blocked || hybridOmitted) ? 'rpf-row-blocked' : '';
             if (hybridOmitted) rowClass += ' rpf-row-hybrid-omitted';
             var iva = ln.iva_tipo || 'afecto';
-            var sku = ln.is_child ? (ln.unit_sku || ln.sku) + ' <span class="description">(unitario)</span>' : (ln.sku || '—');
+            var sku = formatFolioSkuCell(ln);
             var draft = rpfDraftPrices[ln.item_id] || {};
             var displayLocal = draft.local != null && draft.local !== ''
                 ? draft.local
@@ -1167,7 +1168,7 @@
             }
             html += '<td>' + ln.numero_linea + '</td>' +
                 '<td><code>' + esc(ln.codigo_proveedor || '') + '</code></td>' +
-                '<td><code>' + sku + '</code></td>' +
+                '<td class="rpf-sku-cell">' + sku + '</td>' +
                 '<td>' + esc(ln.nombre || ln.descripcion || '') +
                     (ln.legacy_used ? ' <span class="description">(legacy)</span>' : '') + '</td>' +
                 '<td>' + money(rpfCostDisplay(costoAntNeto, iva)) +
@@ -1193,7 +1194,54 @@
             html = '<p class="description rpf-hybrid-hint">Podés marcar o desmarcar filas ya ingresadas; el árbol de tareas se actualiza solo para las que faltan. Podés guardar filas válidas aunque otras tengan error.</p>' + html;
         }
         $('#rpf-lines').html(html);
+        syncRpfLinesPaneMetrics();
         renderRpfPdfFooter();
+    }
+
+    /** Altura de la barra de admin de WordPress (0 si no hay). */
+    function rpfAdminBarHeight() {
+        var $bar = $('#wpadminbar');
+        if ($bar.length && $bar.is(':visible')) {
+            return $bar.outerHeight() || 32;
+        }
+        return 0;
+    }
+
+    /**
+     * Ajusta top/max-height del recuadro de líneas y min-height = thead + hasta 2 filas.
+     */
+    function syncRpfLinesPaneMetrics() {
+        var $pane = $('#rpf-lines');
+        if (!$pane.length) {
+            return;
+        }
+        var adminH = rpfAdminBarHeight();
+        $pane[0].style.setProperty('--rpf-adminbar', adminH + 'px');
+        $pane.css({
+            top: adminH + 'px',
+            maxHeight: 'calc(100vh - ' + adminH + 'px)'
+        });
+        var $table = $pane.find('.rpf-lines-table').first();
+        if (!$table.length) {
+            $pane.css('min-height', '');
+            return;
+        }
+        var headH = $table.find('thead').outerHeight() || 0;
+        var $rows = $table.find('tbody tr');
+        var rowsToMeasure = Math.min(2, $rows.length);
+        var rowsH = 0;
+        var i;
+        for (i = 0; i < rowsToMeasure; i++) {
+            rowsH += $($rows[i]).outerHeight() || 0;
+        }
+        var hintH = $pane.find('.rpf-hybrid-hint').outerHeight(true) || 0;
+        var minH = hintH + headH + rowsH;
+        if (minH > 0) {
+            var maxAvail = Math.max(0, window.innerHeight - adminH);
+            $pane.css('min-height', Math.min(minH, maxAvail) + 'px');
+        } else {
+            $pane.css('min-height', '');
+        }
     }
 
     function renderRpfPdfFooter() {
@@ -1790,33 +1838,238 @@
         $('#rpf-bc-proveedor').html(options);
     }
 
-    function rpfBcRenderList(barcodes) {
-        var list = barcodes || [];
-        if (!list.length) {
-            $('#rpf-bc-list-wrap').attr('hidden', true);
-            $('#rpf-bc-list-body').empty();
-            $('#rpf-bc-empty').removeAttr('hidden');
+    function rpfBcIsLegacy(barcode) {
+        var origen = String(barcode.origen_datos || barcode.origen || '').toLowerCase();
+        var migrado = String(barcode.migrado_de_tabla || '').toLowerCase();
+        return origen.indexOf('legacy') >= 0 || migrado !== '' || !!barcode.legacy_ref;
+    }
+
+    function rpfBcApplyProductItem(item) {
+        if (!rpfBcCtx || !item) {
             return;
         }
+        if (item.canonical_sku) {
+            rpfBcCtx.sku = item.canonical_sku;
+        }
+        if (item.nombre_canonico || item.nombre) {
+            rpfBcCtx.nombre = item.nombre_canonico || item.nombre;
+        }
+        rpfBcCtx.barcode_remap_context = item.barcode_remap_context || null;
+        $('#rpf-bc-product-label').html(
+            '<code>' + esc(rpfBcCtx.sku || '') + '</code> ' + esc(rpfBcCtx.nombre || '')
+        );
+        rpfBcFillProveedores(item.proveedores || []);
+        rpfBcRenderList(item.barcodes || []);
+        rpfBcSyncSupplierVisibility();
+    }
+
+    function rpfBcRenderActions(b) {
+        if (!canAssignBarcodes) {
+            return '';
+        }
+        var remapCtx = (rpfBcCtx && rpfBcCtx.barcode_remap_context) || {};
+        var showWizard = !!remapCtx.show_wizard;
+        if (b.inactivo) {
+            return '<div class="rpf-bc-actions">' +
+                '<button type="button" class="button button-small button-primary rpf-bc-activate" data-id="' + esc(String(b.id)) + '">Activar</button> ' +
+                '<button type="button" class="button button-small rpf-bc-delete" data-id="' + esc(String(b.id)) + '" style="color:#b32d2e;">Eliminar</button>' +
+                '</div>';
+        }
+        if (rpfBcIsLegacy(b)) {
+            if (showWizard) {
+                return '<div class="rpf-bc-actions">' +
+                    '<button type="button" class="button button-small button-primary rpf-bc-remap" data-id="' + esc(String(b.id)) + '">Mapear…</button> ' +
+                    '<button type="button" class="button button-small rpf-bc-reject" data-id="' + esc(String(b.id)) + '">Rechazar</button>' +
+                    '</div>';
+            }
+            return '<div class="rpf-bc-actions">' +
+                '<button type="button" class="button button-small button-primary rpf-bc-accept" data-id="' + esc(String(b.id)) + '">Aceptar</button> ' +
+                '<button type="button" class="button button-small rpf-bc-reject" data-id="' + esc(String(b.id)) + '">Rechazar</button>' +
+                '</div>';
+        }
+        var extra = '';
+        if (showWizard && Number(b.cantidad || 1) <= 1) {
+            extra = '<button type="button" class="button button-small rpf-bc-remap" data-id="' + esc(String(b.id)) + '">Mapear a hijo…</button> ';
+        }
+        return '<div class="rpf-bc-actions">' + extra +
+            '<button type="button" class="button button-small rpf-bc-deactivate" data-barcode="' + esc(b.codigo || '') + '" data-id="' + esc(String(b.id)) + '">Desactivar</button>' +
+            '</div>';
+    }
+
+    function rpfBcRenderList(barcodes) {
+        var list = barcodes || [];
+        var remapCtx = (rpfBcCtx && rpfBcCtx.barcode_remap_context) || {};
+        var html = '';
+
+        if (remapCtx.show_wizard) {
+            html += '<p class="description rpf-bc-hint">Este producto es o puede ser unitario: puedes mapear barcodes a hijos/envases.</p>';
+        }
+
+        var parked = (remapCtx.parked_suggestions || []).filter(function (x) {
+            return x.can_resume;
+        });
+        if (parked.length && canAssignBarcodes) {
+            html += '<div class="rpf-bc-parked"><strong>Tareas aparcadas con destino sugerido</strong><ul>';
+            parked.forEach(function (item) {
+                var dest = item.suggested_destino || {};
+                html += '<li><code>' + esc(item.codigo) + '</code> → ' +
+                    esc(dest.canonical_sku || '') + ' (' +
+                    esc(String(dest.cantidad_unidades || item.cantidad_pack || '')) + ' u) ' +
+                    '<button type="button" class="button button-small rpf-bc-resume-parked"' +
+                    ' data-barcode-id="' + esc(String(item.barcode_id)) + '"' +
+                    ' data-from-product="' + esc(String(item.producto_base_id || '')) + '"' +
+                    ' data-destino="' + esc(String(dest.producto_base_id || '')) + '"' +
+                    ' data-qty="' + esc(String(item.cantidad_pack || dest.cantidad_unidades || '')) + '">' +
+                    'Mapear ahora</button></li>';
+            });
+            html += '</ul></div>';
+        }
+
+        if (!list.length && !parked.length) {
+            $('#rpf-bc-list-wrap').attr('hidden', true);
+            $('#rpf-bc-list-body').empty();
+            $('#rpf-bc-empty').text('Sin códigos de barra para este SKU.').removeAttr('hidden');
+            return;
+        }
+
+        if (!list.length) {
+            $('#rpf-bc-empty').attr('hidden', true);
+            $('#rpf-bc-list-wrap').removeAttr('hidden');
+            $('#rpf-bc-list-body').html(html);
+            return;
+        }
+
+        var byType = {
+            ean13: [],
+            supplier: [],
+            internal: [],
+            legacy: [],
+            inactive: []
+        };
+        list.forEach(function (b) {
+            if (b.inactivo) {
+                byType.inactive.push(b);
+                return;
+            }
+            if (rpfBcIsLegacy(b)) {
+                byType.legacy.push(b);
+                return;
+            }
+            var tipo = b.tipo || 'ean13';
+            if (!byType[tipo]) {
+                byType[tipo] = [];
+            }
+            byType[tipo].push(b);
+        });
+
+        var pendingBadge = '<span class="rpf-bc-badge rpf-bc-badge-pending">Por confirmar</span>';
+        var inactiveBadge = '<span class="rpf-bc-badge rpf-bc-badge-inactive">Inactivo</span>';
+
+        function itemCard(b, badges, details) {
+            var detailsHtml = details.length
+                ? '<br><small class="rpf-bc-meta">' + details.join(' | ') + '</small>'
+                : '';
+            return '<div class="rpf-bc-item' + (b.inactivo ? ' is-inactive' : '') + '">' +
+                '<code>' + esc(b.codigo || '') + '</code>' +
+                badges +
+                detailsHtml +
+                rpfBcRenderActions(b) +
+                '</div>';
+        }
+
+        if (byType.legacy.length) {
+            html += '<h5 class="rpf-bc-group-title">Legacy por confirmar</h5>';
+            byType.legacy.forEach(function (b) {
+                var details = [];
+                details.push('Cantidad: ' + esc(String(b.cantidad != null ? b.cantidad : 1)) + ' ' +
+                    esc(b.unidad_medida || b.unidad || 'unidad'));
+                if (b.origen_datos) {
+                    details.push('Origen: ' + esc(b.origen_datos));
+                }
+                html += itemCard(
+                    b,
+                    '<span class="rpf-bc-badge rpf-bc-badge-legacy">Legacy</span>' + pendingBadge,
+                    details
+                );
+            });
+        }
+
+        if (byType.ean13.length) {
+            html += '<h5 class="rpf-bc-group-title"' + (byType.legacy.length ? ' style="margin-top:16px;"' : '') + '>EAN-13</h5>';
+            byType.ean13.forEach(function (b) {
+                var details = [];
+                if (b.cantidad && Number(b.cantidad) !== 1) {
+                    details.push('Cantidad: ' + esc(String(b.cantidad)) + ' ' + esc(b.unidad_medida || 'unidad'));
+                }
+                if (b.origen_datos) {
+                    details.push('Origen: ' + esc(b.origen_datos));
+                }
+                html += itemCard(
+                    b,
+                    '<span class="rpf-bc-badge rpf-bc-badge-ean">EAN-13</span>',
+                    details
+                );
+            });
+        }
+
+        if (byType.supplier.length) {
+            html += '<h5 class="rpf-bc-group-title" style="margin-top:16px;">Códigos de Proveedor</h5>';
+            byType.supplier.forEach(function (b) {
+                var details = [];
+                if (b.proveedor_nombre) {
+                    details.push(esc(b.proveedor_nombre));
+                }
+                if (b.cantidad && Number(b.cantidad) !== 1) {
+                    details.push('Cantidad: ' + esc(String(b.cantidad)));
+                }
+                if (b.origen_datos) {
+                    details.push('Origen: ' + esc(b.origen_datos));
+                }
+                html += itemCard(
+                    b,
+                    '<span class="rpf-bc-badge rpf-bc-badge-supplier">Proveedor</span>',
+                    details
+                );
+            });
+        }
+
+        if (byType.internal.length) {
+            html += '<h5 class="rpf-bc-group-title" style="margin-top:16px;">Códigos Internos</h5>';
+            byType.internal.forEach(function (b) {
+                var details = [];
+                if (b.cantidad && Number(b.cantidad) !== 1) {
+                    details.push('Cantidad: ' + esc(String(b.cantidad)));
+                }
+                html += itemCard(
+                    b,
+                    '<span class="rpf-bc-badge rpf-bc-badge-internal">Interno</span>',
+                    details
+                );
+            });
+        }
+
+        if (byType.inactive.length) {
+            html += '<h5 class="rpf-bc-group-title" style="margin-top:16px;">Inactivos</h5>';
+            byType.inactive.forEach(function (b) {
+                var details = [];
+                if (b.estado) {
+                    details.push('Estado: ' + esc(b.estado));
+                }
+                if (b.motivo_estado) {
+                    details.push(esc(b.motivo_estado));
+                }
+                html += itemCard(b, inactiveBadge, details);
+            });
+        }
+
         $('#rpf-bc-empty').attr('hidden', true);
         $('#rpf-bc-list-wrap').removeAttr('hidden');
-        $('#rpf-bc-list-body').html(list.map(function (b) {
-            var tipo = b.tipo || '—';
-            var qty = (b.cantidad != null ? b.cantidad : 1) + ' ' + (b.unidad_medida || b.unidad || 'unidad');
-            var estado = b.estado || '—';
-            var origen = b.origen_datos || b.origen || '—';
-            return '<tr>' +
-                '<td><code>' + esc(b.codigo || '') + '</code></td>' +
-                '<td>' + esc(tipo) + '</td>' +
-                '<td>' + esc(String(qty)) + '</td>' +
-                '<td>' + esc(estado) + '</td>' +
-                '<td>' + esc(origen) + '</td>' +
-                '</tr>';
-        }).join(''));
+        $('#rpf-bc-list-body').html(html);
     }
 
     function closeRpfBcModal() {
         $('#rpf-bc-modal').hide().attr('aria-hidden', 'true');
+        $('#rpf-bc-remap-overlay').remove();
         rpfBcCtx = null;
         rpfBcClearForm();
     }
@@ -1830,7 +2083,8 @@
         rpfBcCtx = {
             producto_base_id: pbId,
             sku: opts.sku || '',
-            nombre: opts.nombre || ''
+            nombre: opts.nombre || '',
+            barcode_remap_context: null
         };
         rpfBcClearForm();
         var productUrl = rpfBcProductUrl(pbId);
@@ -1874,19 +2128,7 @@
                 $('#rpf-bc-empty').text((res.data && res.data.message) || 'Error al cargar barcodes').removeAttr('hidden');
                 return;
             }
-            var item = (res.data && res.data.item) || {};
-            if (item.canonical_sku) {
-                rpfBcCtx.sku = item.canonical_sku;
-            }
-            if (item.nombre_canonico || item.nombre) {
-                rpfBcCtx.nombre = item.nombre_canonico || item.nombre;
-            }
-            $('#rpf-bc-product-label').html(
-                '<code>' + esc(rpfBcCtx.sku || '') + '</code> ' + esc(rpfBcCtx.nombre || '')
-            );
-            rpfBcFillProveedores(item.proveedores || []);
-            rpfBcRenderList(item.barcodes || []);
-            rpfBcSyncSupplierVisibility();
+            rpfBcApplyProductItem((res.data && res.data.item) || {});
         }).fail(function () {
             $('#rpf-bc-loading').attr('hidden', true);
             $('#rpf-bc-empty').text('Error de red al cargar barcodes').removeAttr('hidden');
@@ -1927,8 +2169,7 @@
             $('#rpf-bc-reason').val('');
             var item = (res.data && res.data.item) || null;
             if (item && item.barcodes) {
-                rpfBcFillProveedores(item.proveedores || []);
-                rpfBcRenderList(item.barcodes);
+                rpfBcApplyProductItem(item);
             } else {
                 loadRpfBarcodes();
             }
@@ -1939,7 +2180,480 @@
         });
     }
 
+    function rpfBcRefreshFromResponse(res, fallbackMsg) {
+        if (!res || !res.success) {
+            window.alert((res && res.data && res.data.message) || fallbackMsg || 'No se pudo completar la acción');
+            return false;
+        }
+        if (res.data && res.data.message) {
+            rpfBcShowMsg(esc(res.data.message), false);
+        }
+        var item = (res.data && res.data.item) || null;
+        if (item) {
+            rpfBcApplyProductItem(item);
+        } else {
+            loadRpfBarcodes();
+        }
+        return true;
+    }
+
+    function openRpfBcRemapWizard(barcodeId) {
+        if (!canAssignBarcodes || !rpfBcCtx || !barcodeId) {
+            return;
+        }
+        post('riverso_products_barcode_remap_preview', {
+            barcode_id: barcodeId,
+            product_id: rpfBcCtx.producto_base_id
+        }).done(function (r) {
+            if (!r.success) {
+                window.alert((r.data && r.data.message) || 'No se pudo cargar preview');
+                return;
+            }
+            showRpfBcRemapModal(r.data.preview || {});
+        }).fail(function () {
+            window.alert('Error de red al cargar preview');
+        });
+    }
+
+    function showRpfBcRemapModal(preview) {
+        $('#rpf-bc-remap-overlay').remove();
+        var bc = preview.barcode || {};
+        var members = preview.members_caja || [];
+        var suggested = preview.suggested_destino || null;
+        var optionsHtml = '';
+        members.forEach(function (m) {
+            var selected = suggested && Number(suggested.producto_base_id) === Number(m.producto_base_id) ? ' selected' : '';
+            optionsHtml += '<option value="' + esc(String(m.producto_base_id)) + '" data-qty="' +
+                esc(String(m.cantidad_unidades)) + '"' + selected + '>' +
+                esc(m.canonical_sku || '') + ' · ' + esc(String(m.cantidad_unidades)) + ' u · ' +
+                esc(m.nombre_canonico || '') + '</option>';
+        });
+        var canCreate = !!preview.can_create_child;
+        var canAssign = !!preview.can_assign_child;
+        var canMove = !!preview.can_move_child && members.length > 0;
+        var familyNote = preview.family && preview.family.grupo_id
+            ? ('Familia #' + preview.family.grupo_id)
+            : 'Sin familia: confirma aquí, rechaza o aparca (no crear/asignar hijo).';
+        var excludeIds = [Number(rpfBcCtx.producto_base_id)].concat(members.map(function (m) {
+            return Number(m.producto_base_id);
+        }));
+        var qtyDefault = suggested
+            ? Number(suggested.cantidad_unidades)
+            : (Number(bc.cantidad) > 1 ? Number(bc.cantidad) : '');
+
+        var html = '<div id="rpf-bc-remap-overlay" class="rpf-bc-remap-overlay" role="dialog" aria-modal="true">' +
+            '<div class="rpf-bc-remap-card">' +
+            '<h2 style="margin-top:0;">Mapear código de barra</h2>' +
+            '<p>Código <code>' + esc(bc.codigo || '') + '</code> · qty ' +
+            esc(String(bc.cantidad != null ? bc.cantidad : 1)) +
+            '<br><small>' + esc(familyNote) + '</small></p>' +
+            '<p><label>Acción<br><select id="rpf-bc-remap-accion" style="width:100%;">' +
+            '<option value="keep_unit">Confirmar aquí (unitario, qty 1)</option>' +
+            (canMove ? '<option value="move_child"' + (suggested ? ' selected' : '') + '>Mover a hijo de la familia</option>' : '') +
+            (canAssign ? '<option value="assign_child">Asignar hijo (buscar SKU y vincular a familia)</option>' : '') +
+            (canCreate ? '<option value="create_child">Crear hijo/envase y mapear</option>' : '') +
+            '<option value="park_presentacion"' + (preview.parked ? ' selected' : '') + '>Aparcar (pendiente de presentación)</option>' +
+            '<option value="reject">Rechazar</option>' +
+            '</select></label></p>' +
+            '<div id="rpf-bc-remap-move-wrap" style="display:none;"><p><label>Hijo destino (ya en familia)<br>' +
+            '<select id="rpf-bc-remap-destino" style="width:100%;">' +
+            (optionsHtml || '<option value="">— Sin hijos —</option>') +
+            '</select></label></p></div>' +
+            '<div id="rpf-bc-remap-assign-wrap" style="display:none;">' +
+            '<p><label>Buscar producto hijo<br>' +
+            '<input type="text" id="rpf-bc-remap-assign-search" placeholder="SKU o nombre…" style="width:100%;"></label></p>' +
+            '<div id="rpf-bc-remap-assign-results" style="display:none;border:1px solid #ddd;max-height:160px;overflow:auto;font-size:12px;"></div>' +
+            '<div id="rpf-bc-remap-assign-selected" style="display:none;margin:8px 0;padding:8px;background:#e8f5e9;border-radius:4px;font-size:12px;"></div>' +
+            '<input type="hidden" id="rpf-bc-remap-assign-id" value="">' +
+            '</div>' +
+            '<div id="rpf-bc-remap-qty-wrap" style="display:none;"><p><label>Cantidad del envase (&gt; 1)<br>' +
+            '<input type="number" id="rpf-bc-remap-qty" min="2" step="1" value="' + esc(String(qtyDefault)) + '" style="width:100%;"></label></p></div>' +
+            '<p style="text-align:right;">' +
+            '<button type="button" class="button" id="rpf-bc-remap-cancel">Cancelar</button> ' +
+            '<button type="button" class="button button-primary" id="rpf-bc-remap-confirm">Confirmar</button>' +
+            '</p></div></div>';
+        $('body').append(html);
+
+        var assignSearchTimer = null;
+        function syncFields() {
+            var accion = $('#rpf-bc-remap-accion').val();
+            $('#rpf-bc-remap-move-wrap').toggle(accion === 'move_child');
+            $('#rpf-bc-remap-assign-wrap').toggle(accion === 'assign_child');
+            $('#rpf-bc-remap-qty-wrap').toggle(
+                accion === 'create_child' || accion === 'park_presentacion' ||
+                accion === 'move_child' || accion === 'assign_child'
+            );
+            if (accion === 'move_child') {
+                var q = $('#rpf-bc-remap-destino option:selected').data('qty');
+                if (q) {
+                    $('#rpf-bc-remap-qty').val(q);
+                }
+            }
+        }
+        $('#rpf-bc-remap-accion, #rpf-bc-remap-destino').on('change', syncFields);
+        syncFields();
+
+        $('#rpf-bc-remap-assign-search').on('input', function () {
+            var q = ($(this).val() || '').trim();
+            clearTimeout(assignSearchTimer);
+            if (q.length < 2) {
+                $('#rpf-bc-remap-assign-results').hide().empty();
+                return;
+            }
+            assignSearchTimer = setTimeout(function () {
+                post('riverso_products_list', {
+                    search: q,
+                    limit: 12,
+                    status: 'active'
+                }).done(function (r) {
+                    if (!r.success) {
+                        $('#rpf-bc-remap-assign-results').html('<div style="padding:8px;color:#c62828;">Error de búsqueda</div>').show();
+                        return;
+                    }
+                    var items = (r.data.items || []).filter(function (p) {
+                        return excludeIds.indexOf(Number(p.id)) < 0;
+                    });
+                    if (!items.length) {
+                        $('#rpf-bc-remap-assign-results').html('<div style="padding:8px;color:#999;">Sin resultados</div>').show();
+                        return;
+                    }
+                    var htmlRes = '';
+                    items.forEach(function (p) {
+                        htmlRes += '<div class="rpf-bc-remap-assign-option" data-id="' + esc(String(p.id)) + '"' +
+                            ' data-sku="' + esc(p.canonical_sku || '') + '"' +
+                            ' data-name="' + esc(p.nombre_canonico || '') + '"' +
+                            ' style="padding:8px;border-bottom:1px solid #eee;cursor:pointer;">' +
+                            '<code>' + esc(p.canonical_sku || '—') + '</code> · ' + esc(p.nombre_canonico || '') +
+                            '</div>';
+                    });
+                    $('#rpf-bc-remap-assign-results').html(htmlRes).show();
+                });
+            }, 280);
+        });
+
+        $(document).off('click.rpfBcRemapAssign').on('click.rpfBcRemapAssign', '.rpf-bc-remap-assign-option', function () {
+            var id = $(this).data('id');
+            var sku = $(this).data('sku');
+            var name = $(this).data('name');
+            $('#rpf-bc-remap-assign-id').val(id);
+            $('#rpf-bc-remap-assign-selected').html(
+                'Seleccionado: <code>' + esc(String(sku)) + '</code> · ' + esc(String(name))
+            ).show();
+            $('#rpf-bc-remap-assign-results').hide();
+            $('#rpf-bc-remap-assign-search').val(sku || name);
+        });
+
+        $('#rpf-bc-remap-cancel').on('click', function () {
+            $(document).off('click.rpfBcRemapAssign');
+            $('#rpf-bc-remap-overlay').remove();
+        });
+
+        $('#rpf-bc-remap-confirm').on('click', function () {
+            var accion = $('#rpf-bc-remap-accion').val();
+            var destino = $('#rpf-bc-remap-destino').val() || 0;
+            if (accion === 'assign_child') {
+                destino = $('#rpf-bc-remap-assign-id').val() || 0;
+                if (!destino) {
+                    window.alert('Busca y selecciona el producto hijo a asignar');
+                    return;
+                }
+            }
+            var $btn = $(this).prop('disabled', true).text('Guardando…');
+            post('riverso_products_barcode_remap', {
+                barcode_id: bc.id,
+                product_id: rpfBcCtx.producto_base_id,
+                accion: accion,
+                destino_producto_base_id: destino,
+                cantidad_pack: parseFloat($('#rpf-bc-remap-qty').val() || '0') || 0,
+                verify: 1,
+                audit_reason: 'Remapeo desde centro de precios'
+            }).done(function (resp) {
+                if (!resp.success) {
+                    window.alert((resp.data && resp.data.message) || 'No se pudo guardar');
+                    $btn.prop('disabled', false).text('Confirmar');
+                    return;
+                }
+                $(document).off('click.rpfBcRemapAssign');
+                $('#rpf-bc-remap-overlay').remove();
+                rpfBcRefreshFromResponse(resp, 'Listo');
+            }).fail(function () {
+                window.alert('Error de red');
+                $btn.prop('disabled', false).text('Confirmar');
+            });
+        });
+    }
+
+    var rpfFamilyCtx = null;
+
+    function fmtQty(q) {
+        if (q == null || q === '' || isNaN(Number(q))) {
+            return '—';
+        }
+        var n = Number(q);
+        if (Math.abs(n - Math.round(n)) < 0.0001) {
+            return String(Math.round(n));
+        }
+        return String(Math.round(n * 10000) / 10000);
+    }
+
+    function formatMemberSkus(m) {
+        var local = (m && (m.sku_local || m.canonical_sku)) ? String(m.sku_local || m.canonical_sku) : '';
+        var online = (m && m.sku_online) ? String(m.sku_online) : '';
+        return '<span class="rpf-sku-pair">' +
+            '<span class="rpf-sku-local">Local: <code>' + esc(local || '—') + '</code></span>' +
+            ' <span class="rpf-sku-online">Online: <code>' + esc(online || '—') + '</code></span>' +
+            '</span>';
+    }
+
+    function findMergeablePair(conflicts, idA, idB) {
+        var a = Number(idA);
+        var b = Number(idB);
+        var list = conflicts || [];
+        for (var i = 0; i < list.length; i++) {
+            var c = list[i];
+            if (!c || !c.mergeable) {
+                continue;
+            }
+            var src = Number(c.source_id);
+            var tgt = Number(c.target_id);
+            if ((src === a && tgt === b) || (src === b && tgt === a)) {
+                return { source_id: src, target_id: tgt, conflict: c };
+            }
+        }
+        return null;
+    }
+
+    function findMergeTargetForOnline(conflicts, onlineId) {
+        var oid = Number(onlineId);
+        var list = conflicts || [];
+        for (var i = 0; i < list.length; i++) {
+            var c = list[i];
+            if (c && c.mergeable && Number(c.source_id) === oid) {
+                return { source_id: oid, target_id: Number(c.target_id), conflict: c };
+            }
+        }
+        return null;
+    }
+
+    function renderFamilyRuleVisual(visual, opts) {
+        opts = opts || {};
+        if (!visual || !visual.es_producto_unitario) {
+            return '';
+        }
+        var html = '<div class="rpf-rule-visual">';
+        var rule = visual.rule || {};
+        var unit = visual.unit || {};
+        html += '<div class="rpf-rule-visual-head">';
+        if (rule.id) {
+            html += '<strong>' + esc(rule.codigo || ('Regla #' + rule.id)) + '</strong>';
+            if (rule.nombre) {
+                html += ' — ' + esc(rule.nombre);
+            }
+        } else {
+            html += '<strong>Sin regla de familia</strong>';
+        }
+        if (unit.canonical_sku) {
+            html += '<div class="description" style="margin:4px 0 0;">P unitario <code>' +
+                esc(unit.canonical_sku) + '</code> (1): <strong>' + money(visual.p_asignado) + '</strong></div>';
+        } else if (visual.p_asignado != null) {
+            html += '<div class="description" style="margin:4px 0 0;">P: <strong>' + money(visual.p_asignado) + '</strong></div>';
+        }
+        html += '</div>';
+        if (visual.error) {
+            html += '<p class="description" style="color:#b32d2e;">' + esc(visual.error) + '</p>';
+        }
+        var steps = visual.steps || [];
+        if (steps.length) {
+            html += '<div class="rpf-rule-scale">';
+            steps.forEach(function (s, idx) {
+                if (idx > 0) {
+                    html += '<span class="rpf-rule-scale-sep" aria-hidden="true">→</span>';
+                }
+                html += '<div class="rpf-rule-step' + (s.es_unitario ? ' is-unit' : '') + '">';
+                html += '<div class="rpf-rule-step-qty">' + esc(fmtQty(s.cantidad_unidades)) + ' u</div>';
+                html += '<div class="rpf-rule-step-sku">' + formatMemberSkus(s);
+                if (s.es_unitario) {
+                    html += ' <span class="rpe-unit-badge">Unitario</span>';
+                }
+                html += '</div>';
+                html += '<div class="rpf-rule-step-pu">' + money(s.precio_unitario_regla) + ' <span class="description">P/u</span></div>';
+                html += '<div class="rpf-rule-step-tot">' + money(s.precio_total_presentacion) + ' <span class="description">total</span></div>';
+                html += '</div>';
+            });
+            html += '</div>';
+        }
+        if (rule && rule.id) {
+            html += '<p class="rpf-rule-visual-actions" style="margin:10px 0 0;">' +
+                '<button type="button" class="button button-small rpf-ver-regla"' +
+                ' data-rule-id="' + esc(String(rule.id)) + '"' +
+                ' data-p="' + esc(visual.p_asignado != null ? String(visual.p_asignado) : '') + '">' +
+                'Ver Regla</button></p>';
+        }
+        html += '</div>';
+        return html;
+    }
+
+    var rpfFamilyCodeMode = 'supplier'; // 'supplier' | 'barcode'
+
+    function renderFamilyCodesBlock(codes, grupoId, mode) {
+        if (!codes || !codes.members || !codes.members.length) {
+            return '';
+        }
+        mode = mode === 'barcode' ? 'barcode' : 'supplier';
+        rpfFamilyCodeMode = mode;
+        var destinos = codes.destinos || codes.members || [];
+        var canMap = canAssignBarcodes || canManageFamilies;
+        var html = '<div class="rpf-family-codes" data-grupo="' + esc(String(grupoId || '')) + '">';
+        html += '<div class="rpf-family-codes-head">';
+        html += '<h3 style="margin:0;">Códigos por integrante</h3>';
+        html += '<div class="rpf-code-mode-toggle" role="group" aria-label="Tipo de código">';
+        html += '<button type="button" class="button button-small rpf-code-mode-btn' +
+            (mode === 'supplier' ? ' button-primary is-active' : '') +
+            '" data-mode="supplier">Código Proveedor</button>';
+        html += '<button type="button" class="button button-small rpf-code-mode-btn' +
+            (mode === 'barcode' ? ' button-primary is-active' : '') +
+            '" data-mode="barcode">Barcode</button>';
+        html += '</div></div>';
+        html += '<p class="description">Al guardar el precio del folio se actualiza solo el P del producto unitario. Usa Mapear si un código quedó en la cantidad equivocada.</p>';
+        html += '<div class="rpf-family-codes-body">';
+        html += renderFamilyCodesList(codes, grupoId, mode, destinos, canMap);
+        html += '</div></div>';
+        return html;
+    }
+
+    function renderFamilyCodesList(codes, grupoId, mode, destinos, canMap) {
+        mode = mode === 'barcode' ? 'barcode' : 'supplier';
+        destinos = destinos || codes.destinos || codes.members || [];
+        canMap = !!canMap;
+        var anyShown = false;
+        var html = '';
+        codes.members.forEach(function (m) {
+            var list = mode === 'barcode' ? (m.barcodes || []) : (m.supplier_codes || []);
+            html += '<div class="rpf-fam-member" data-producto="' + m.producto_base_id + '">';
+            html += '<div class="rpf-fam-member-head">' + formatMemberSkus(m) + ' ';
+            html += esc(m.nombre_canonico || '');
+            html += ' <span class="description">(' + esc(fmtQty(m.cantidad_unidades)) + ' u)</span>';
+            if (m.es_unitario) {
+                html += ' <span class="rpe-unit-badge">Unitario</span>';
+            }
+            var mergePair = null;
+            if (canMap && m.es_online && !m.es_local) {
+                mergePair = findMergeTargetForOnline(
+                    (codes && codes.pack_conflicts) || (rpfFamilyCtx && rpfFamilyCtx.data && rpfFamilyCtx.data.pack_conflicts) || [],
+                    m.producto_base_id
+                );
+            }
+            if (mergePair) {
+                html += ' <button type="button" class="button button-small button-primary rpf-fam-link-lo"' +
+                    ' data-grupo="' + grupoId + '"' +
+                    ' data-source="' + mergePair.source_id + '"' +
+                    ' data-target="' + mergePair.target_id + '">Vincular Local+Online</button>';
+            }
+            html += '</div>';
+            if (!list.length) {
+                html += '<p class="description" style="margin:4px 0 8px;">Sin ' +
+                    (mode === 'barcode' ? 'barcodes' : 'códigos de proveedor') +
+                    ' activos</p></div>';
+                return;
+            }
+            anyShown = true;
+            html += '<ul class="rpf-fam-code-list">';
+            list.forEach(function (c) {
+                var mismatch = !!c.mismatch;
+                html += '<li class="rpf-fam-code' + (mismatch ? ' is-mismatch' : '') + '">';
+                html += '<code>' + esc(c.codigo) + '</code> ';
+                html += '<span class="description">qty ' + esc(fmtQty(c.cantidad)) + '</span>';
+                if (mismatch && c.suggested_destino) {
+                    html += ' <span class="rpf-fam-mismatch-hint">→ sugerido ' +
+                        esc(c.suggested_destino.canonical_sku || '') +
+                        ' (' + esc(fmtQty(c.suggested_destino.cantidad_unidades)) + ')</span>';
+                }
+                if (canMap) {
+                    html += '<div class="rpf-fam-code-actions">';
+                    html += '<label class="description">Mapear a </label>';
+                    html += '<select class="rpf-fam-map-dest" data-tipo="' + esc(c.tipo) + '" data-id="' + c.id + '">';
+                    destinos.forEach(function (d) {
+                        if (d.producto_base_id === m.producto_base_id) {
+                            return;
+                        }
+                        var sel = '';
+                        if (c.suggested_destino && Number(c.suggested_destino.producto_base_id) === Number(d.producto_base_id)) {
+                            sel = ' selected';
+                        }
+                        html += '<option value="' + d.producto_base_id + '"' + sel + '>' +
+                            esc(d.canonical_sku) + ' (' + esc(fmtQty(d.cantidad_unidades)) + ')</option>';
+                    });
+                    html += '</select> ';
+                    html += '<button type="button" class="button button-small rpf-fam-map-btn" data-tipo="' +
+                        esc(c.tipo) + '" data-id="' + c.id + '" data-grupo="' + grupoId + '">Mapear</button> ';
+                    html += '<button type="button" class="button button-small rpf-fam-unlink-btn" data-tipo="' +
+                        esc(c.tipo) + '" data-id="' + c.id + '" data-grupo="' + grupoId + '">Desvincular</button>';
+                    html += '</div>';
+                }
+                html += '</li>';
+            });
+            html += '</ul></div>';
+        });
+        if (!anyShown) {
+            html = '<p class="description">No hay ' +
+                (mode === 'barcode' ? 'barcodes' : 'códigos de proveedor') +
+                ' activos en esta familia.</p>' + html;
+        }
+        return html;
+    }
+
+    function paintFamilyModalBody(d, itemId) {
+        rpfFamilyCtx = { grupo_id: (d.snapshot && d.snapshot.grupo_id) || 0, item_id: itemId || 0, data: d };
+        var snap = d.snapshot || {};
+        var prev = d.preview || {};
+        var rule = d.rule || {};
+        var html = '';
+        html += '<p><strong>Costo unitario calc.:</strong> ' + money(snap.coste_calculado || (snap.coste && snap.coste.coste)) + '</p>';
+        if (d.es_producto_unitario && d.visual) {
+            html += renderFamilyRuleVisual(d.visual);
+        } else if (rule && rule.id) {
+            html += '<p><strong>Regla ' + esc(rule.codigo || '') + '</strong>';
+            if (rule.nombre) {
+                html += ' — ' + esc(rule.nombre);
+            }
+            html += ' <button type="button" class="button button-small rpf-ver-regla" data-rule-id="' +
+                esc(String(rule.id)) + '" data-p="' + esc(prev.p_asignado != null ? String(prev.p_asignado) : '') +
+                '">Ver Regla</button></p>';
+        } else {
+            html += '<p class="description">Sin regla de familia asignada.</p>';
+        }
+        html += '<h3>Integrantes (P = ' + money(prev.p_asignado) + ')</h3>';
+        html += '<table class="widefat striped"><thead><tr><th>SKU</th><th>Qty</th><th>P/u regla</th><th>Total</th><th>Costo u.</th><th>Margen</th></tr></thead><tbody>';
+        (prev.members || []).forEach(function (m) {
+            html += '<tr><td>' + formatMemberSkus(m) +
+                '</td><td>' + esc(m.cantidad_unidades) +
+                '</td><td>' + money(m.precio_unitario_regla) + '</td><td>' + money(m.precio_total_presentacion) +
+                '</td><td>' + money(m.coste_unitario) + '</td><td>' + money(m.margen) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        html += '<p class="description">Al guardar se actualiza solo el P del producto unitario; los hijos se calculan por la regla.</p>';
+        if (d.es_producto_unitario && d.codes) {
+            html += renderFamilyCodesBlock(
+                d.codes,
+                snap.grupo_id || (d.visual && d.visual.grupo_id) || 0,
+                rpfFamilyCodeMode || 'supplier'
+            );
+        }
+        var grupoId = snap.grupo_id || (d.visual && d.visual.grupo_id) || (rpfFamilyCtx && rpfFamilyCtx.grupo_id) || 0;
+        if (grupoId) {
+            var famUrl = (cfg.admin_url || '') + 'admin.php?page=riverso-pos-categories&tab=families&grupo_id=' +
+                encodeURIComponent(String(grupoId));
+            html += '<p class="rpf-family-open-admin" style="margin:16px 0 0;padding-top:12px;border-top:1px solid #dcdcde;">' +
+                '<a class="button button-primary" href="' + esc(famUrl) + '" target="_blank" rel="noopener">' +
+                'Abrir Familia</a>' +
+                ' <span class="description">Editor completo en Categorías → Familias</span></p>';
+        }
+        $('#rpf-family-body').html(html);
+        $('#rpf-family-modal').show().attr('aria-hidden', 'false');
+    }
+
     function openFamilyModal(grupoId, itemId) {
+        rpfFamilyCodeMode = 'supplier';
         var $row = $('#rpf-lines tr[data-item="' + itemId + '"]');
         var p = $row.find('.rpf-p-local').val();
         var iva = $row.attr('data-iva') || 'afecto';
@@ -1955,33 +2669,253 @@
                 window.alert((res && res.data && res.data.message) || 'No se pudo cargar la familia');
                 return;
             }
-            var d = res.data || {};
-            var snap = d.snapshot || {};
-            var prev = d.preview || {};
-            var rule = d.rule || {};
-            var html = '';
-            html += '<p><strong>Costo unitario calc.:</strong> ' + money(snap.coste_calculado || (snap.coste && snap.coste.coste)) + '</p>';
-            if (rule && rule.id) {
-                html += '<h3>Regla ' + esc(rule.codigo || '') + ' — ' + esc(rule.nombre || '') + '</h3><ul>';
-                (rule.tiers || []).forEach(function (t) {
-                    html += '<li>' + esc(t.cantidad_desde ?? t.desde ?? '') + '–' + esc(t.cantidad_hasta ?? t.hasta ?? '∞') +
-                        ': <code>' + esc(t.formula || '') + '</code></li>';
-                });
-                html += '</ul>';
-            } else {
-                html += '<p class="description">Sin regla de familia asignada.</p>';
+            paintFamilyModalBody(res.data || {}, itemId);
+        });
+    }
+
+    function familyMapCode(grupoId, codeTipo, codeId, accion, destinoId) {
+        var payload = {
+            grupo_id: grupoId,
+            code_tipo: codeTipo,
+            code_id: codeId,
+            accion: accion,
+            destino_producto_base_id: destinoId || 0
+        };
+        return post('riverso_price_folio_family_map_code', payload);
+    }
+
+    /**
+     * Merge Local+Online vía endpoints de familias (mismo flujo que Productos).
+     * @returns {jQuery.Promise<boolean>}
+     */
+    function runRpfPackMerge(grupoId, sourceId, targetId) {
+        var d = $.Deferred();
+        post('riverso_families_pack_merge_preview', {
+            grupo_id: grupoId,
+            source_id: sourceId,
+            target_id: targetId
+        }).done(function (resp) {
+            var merge = resp.data && resp.data.merge;
+            if (!resp.success && !merge) {
+                window.alert((resp.data && resp.data.message) || 'No se pudo obtener preview del merge');
+                d.resolve(false);
+                return;
             }
-            html += '<h3>Integrantes (P = ' + money(prev.p_asignado) + ')</h3>';
-            html += '<table class="widefat striped"><thead><tr><th>SKU</th><th>Qty</th><th>P/u regla</th><th>Total</th><th>Costo u.</th><th>Margen</th></tr></thead><tbody>';
-            (prev.members || []).forEach(function (m) {
-                html += '<tr><td><code>' + esc(m.canonical_sku) + '</code></td><td>' + esc(m.cantidad_unidades) +
-                    '</td><td>' + money(m.precio_unitario_regla) + '</td><td>' + money(m.precio_total_presentacion) +
-                    '</td><td>' + money(m.coste_unitario) + '</td><td>' + money(m.margen) + '</td></tr>';
+            var openModal = (window.RiversoFamilyEditor && typeof window.RiversoFamilyEditor.openPackMergeModal === 'function')
+                ? window.RiversoFamilyEditor.openPackMergeModal
+                : null;
+            var confirmPromise = openModal
+                ? openModal(merge)
+                : $.when(window.confirm(
+                    (merge && merge.message) || '¿Confirmar merge Local+Online?'
+                ));
+            $.when(confirmPromise).done(function (confirmed) {
+                if (!confirmed) {
+                    d.resolve(false);
+                    return;
+                }
+                post('riverso_families_pack_merge_confirm', {
+                    grupo_id: grupoId,
+                    source_id: sourceId,
+                    target_id: targetId
+                }).done(function (r2) {
+                    if (!r2.success) {
+                        window.alert((r2.data && r2.data.message) || 'Merge falló');
+                        d.resolve(false);
+                        return;
+                    }
+                    window.alert((r2.data && r2.data.message) || 'Merge completado');
+                    d.resolve(true);
+                }).fail(function () {
+                    window.alert('Error de red al confirmar merge');
+                    d.resolve(false);
+                });
             });
-            html += '</tbody></table>';
-            html += '<p class="description">Al guardar se actualiza solo el P del producto unitario; los hijos se calculan por la regla.</p>';
-            $('#rpf-family-body').html(html);
-            $('#rpf-family-modal').show().attr('aria-hidden', 'false');
+        }).fail(function () {
+            window.alert('Error de red al obtener preview del merge');
+            d.resolve(false);
+        });
+        return d.promise();
+    }
+
+    function closeRuleViewModal() {
+        $('#rpf-rule-view-modal').hide().attr('aria-hidden', 'true');
+        $('#rpf-rule-view-body').html('<p class="description">Cargando…</p>');
+        $('#rpf-rule-view-admin-link').attr('hidden', true).attr('href', '#');
+    }
+
+    function renderRuleViewHtml(rule, pAsignado) {
+        if (!rule) {
+            return '<p class="description">Regla no encontrada.</p>';
+        }
+        var adminBase = (cfg.admin_url || '') + 'admin.php?page=riverso-pos-price-rules&id=' + encodeURIComponent(rule.id || '');
+        $('#rpf-rule-view-title').text((rule.codigo || 'Regla') + (rule.nombre ? (' — ' + rule.nombre) : ''));
+        $('#rpf-rule-view-admin-link').attr('href', adminBase).removeAttr('hidden');
+
+        var html = '';
+        html += '<dl class="rpf-rule-view-meta">';
+        html += '<dt>Código</dt><dd><code>' + esc(rule.codigo || '') + '</code></dd>';
+        html += '<dt>Nombre</dt><dd>' + esc(rule.nombre || '—') + '</dd>';
+        html += '<dt>Estado</dt><dd>' + esc(rule.estado || '—') + '</dd>';
+        html += '<dt>Versión</dt><dd>' + esc(rule.version != null ? String(rule.version) : '—') + '</dd>';
+        if (pAsignado != null && pAsignado !== '' && !isNaN(Number(pAsignado))) {
+            html += '<dt>P de referencia</dt><dd><strong>' + money(pAsignado) + '</strong> <span class="description">(bruto)</span></dd>';
+        }
+        html += '</dl>';
+
+        var tiers = rule.tiers || [];
+        if (!tiers.length) {
+            html += '<p class="description">Esta regla no tiene tramos.</p>';
+            return html;
+        }
+
+        html += '<h3 style="margin:12px 0 8px;">Tramos</h3>';
+        html += '<table class="widefat striped rpf-rule-view-tiers"><thead><tr>' +
+            '<th>#</th><th>Desde</th><th>Hasta</th><th>Fórmula P/u</th><th>Fórmula T</th>' +
+            '<th>Piso u.</th><th>Piso total</th>';
+        if (pAsignado != null && pAsignado !== '' && !isNaN(Number(pAsignado))) {
+            html += '<th>P/u c/P</th>';
+        }
+        html += '</tr></thead><tbody>';
+
+        tiers.forEach(function (t, idx) {
+            var desde = t.cantidad_desde != null ? t.cantidad_desde : (t.desde != null ? t.desde : t.qty_min);
+            var hasta = t.cantidad_hasta != null ? t.cantidad_hasta : (t.hasta != null ? t.hasta : t.qty_max);
+            var formula = t.formula || '';
+            var formulaT = t.formula_total || '';
+            var pisoU = t.total_minimo;
+            var pisoT = t.piso_total;
+            html += '<tr>';
+            html += '<td>' + (t.orden != null ? esc(String(t.orden)) : String(idx + 1)) + '</td>';
+            html += '<td>' + esc(fmtQty(desde)) + '</td>';
+            html += '<td>' + esc(hasta != null && hasta !== '' ? fmtQty(hasta) : '∞') + '</td>';
+            html += '<td><code>' + esc(formula || '—') + '</code></td>';
+            html += '<td>' + (formulaT ? ('<code>' + esc(formulaT) + '</code>') : '—') + '</td>';
+            html += '<td>' + (pisoU != null && pisoU !== '' ? money(pisoU) : '—') + '</td>';
+            html += '<td>' + (pisoT != null && pisoT !== '' ? money(pisoT) : '—') + '</td>';
+            if (pAsignado != null && pAsignado !== '' && !isNaN(Number(pAsignado))) {
+                var evalPu = null;
+                var qtyEval = Number(desde);
+                if (isNaN(qtyEval) || qtyEval <= 0) {
+                    qtyEval = 1;
+                }
+                // Preferir valor ya calculado en el visual si coincide.
+                if (t.precio_unitario != null) {
+                    evalPu = t.precio_unitario;
+                }
+                html += '<td>' + (evalPu != null ? money(evalPu) : '—') + '</td>';
+            }
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+
+        var assigns = rule.assignments || [];
+        if (assigns.length) {
+            html += '<h3 style="margin:16px 0 8px;">Asignaciones (' + assigns.length + ')</h3>';
+            html += '<ul class="rpf-rule-view-assigns">';
+            assigns.slice(0, 40).forEach(function (a) {
+                var label = a.nombre || a.label || ((a.target_tipo || '') + ' #' + (a.target_id || ''));
+                html += '<li><span class="description">' + esc(a.target_tipo || '') + '</span> ' +
+                    esc(label);
+                if (a.sku) {
+                    html += ' <code>' + esc(a.sku) + '</code>';
+                }
+                html += '</li>';
+            });
+            if (assigns.length > 40) {
+                html += '<li class="description">… y ' + (assigns.length - 40) + ' más</li>';
+            }
+            html += '</ul>';
+        }
+        return html;
+    }
+
+    function openRuleViewModal(ruleId, pAsignado) {
+        ruleId = parseInt(ruleId, 10) || 0;
+        if (!ruleId) {
+            window.alert('No hay regla asignada');
+            return;
+        }
+        $('#rpf-rule-view-body').html('<p class="description">Cargando regla…</p>');
+        $('#rpf-rule-view-modal').css('display', 'flex').attr('aria-hidden', 'false');
+
+        // Si ya tenemos la regla completa en el modal de familia, usarla y enriquecer.
+        var cached = null;
+        if (rpfFamilyCtx && rpfFamilyCtx.data && rpfFamilyCtx.data.rule
+            && Number(rpfFamilyCtx.data.rule.id) === ruleId) {
+            cached = rpfFamilyCtx.data.rule;
+        }
+        if (cached && cached.tiers && cached.tiers.length) {
+            // Completar P/u evaluados con visual.tiers si existen.
+            var vtiers = (rpfFamilyCtx.data.visual && rpfFamilyCtx.data.visual.tiers) || [];
+            if (vtiers.length && cached.tiers) {
+                cached = $.extend(true, {}, cached);
+                cached.tiers = cached.tiers.map(function (t, i) {
+                    var vt = vtiers[i];
+                    if (vt && vt.precio_unitario != null) {
+                        t = $.extend({}, t, { precio_unitario: vt.precio_unitario });
+                    }
+                    return t;
+                });
+            }
+            $('#rpf-rule-view-body').html(renderRuleViewHtml(cached, pAsignado));
+        }
+
+        post('riverso_price_rule_get', { rule_id: ruleId }).done(function (res) {
+            if (!res || !res.success) {
+                if (!cached) {
+                    $('#rpf-rule-view-body').html(
+                        '<p class="description" style="color:#b32d2e;">' +
+                        esc((res && res.data && res.data.message) || 'No se pudo cargar la regla') +
+                        '</p>'
+                    );
+                }
+                return;
+            }
+            var rule = (res.data && res.data.rule) || null;
+            if (!rule) {
+                return;
+            }
+            function paint(finalRule) {
+                $('#rpf-rule-view-body').html(renderRuleViewHtml(finalRule, pAsignado));
+            }
+            if (pAsignado == null || pAsignado === '' || isNaN(Number(pAsignado))) {
+                paint(rule);
+                return;
+            }
+            var enriched = $.extend(true, {}, rule);
+            enriched.tiers = (rule.tiers || []).slice();
+            var pending = enriched.tiers.length;
+            if (!pending) {
+                paint(rule);
+                return;
+            }
+            enriched.tiers.forEach(function (t, i) {
+                var qty = Number(t.cantidad_desde != null ? t.cantidad_desde : t.desde);
+                if (isNaN(qty) || qty <= 0) {
+                    qty = 1;
+                }
+                post('riverso_price_rule_preview', {
+                    rule_id: ruleId,
+                    p_asignado: pAsignado,
+                    qty: qty
+                }).done(function (pr) {
+                    if (pr && pr.success && pr.data && enriched.tiers[i]) {
+                        enriched.tiers[i] = $.extend({}, enriched.tiers[i], {
+                            precio_unitario: pr.data.price
+                        });
+                    }
+                }).always(function () {
+                    pending -= 1;
+                    if (pending <= 0) {
+                        paint(enriched);
+                    }
+                });
+            });
+        }).fail(function () {
+            if (!cached) {
+                $('#rpf-rule-view-body').html('<p class="description" style="color:#b32d2e;">Error de red</p>');
+            }
         });
     }
 
@@ -2233,16 +3167,25 @@
     function renderFamily(family) {
         if (!family) {
             $('#rpe-family-section').attr('hidden', true);
+            $('#rpe-family-visual').attr('hidden', true).empty();
             return;
         }
         $('#rpe-family-section').removeAttr('hidden');
         $('#rpe-family-name').text(family.nombre || '');
         var meta = family.regla_id ? ('Regla #' + family.regla_id) : 'Sin regla de familia asignada';
+        if (family.regla && family.regla.codigo) {
+            meta = (family.regla.codigo || '') + (family.regla.nombre ? (' — ' + family.regla.nombre) : '');
+        }
         meta += ' · P del unitario es bruto (TPV)';
         if (family.preview && family.preview.error) {
             meta += ' — ' + family.preview.error;
         }
         $('#rpe-family-meta').text(meta);
+        if (family.es_producto_unitario && family.visual) {
+            $('#rpe-family-visual').html(renderFamilyRuleVisual(family.visual)).removeAttr('hidden');
+        } else {
+            $('#rpe-family-visual').attr('hidden', true).empty();
+        }
         var members = family.members || [];
         if (!members.length) {
             $('#rpe-family-body').html('<tr><td colspan="7">Sin miembros</td></tr>');
@@ -2262,7 +3205,7 @@
                 costeHtml += '<br><span class="description">(' + costeAltLabel + ' ' + money(costeAlt) + ')</span>';
             }
             return '<tr>' +
-                '<td><code>' + esc(m.canonical_sku) + '</code></td>' +
+                '<td>' + formatMemberSkus(m) + '</td>' +
                 '<td>' + esc(m.nombre_canonico) + unitBadge + '</td>' +
                 '<td style="text-align:right">' + (m.cantidad_unidades != null ? m.cantidad_unidades : '—') + '</td>' +
                 '<td style="text-align:right">' + money(m.precio_unitario_regla) +
@@ -2273,6 +3216,22 @@
                 '<td style="text-align:right">' + money(m.margen) + '</td>' +
                 '</tr>';
         }).join(''));
+    }
+
+    function formatFolioSkuCell(ln) {
+        if (ln.es_familia_unitaria && ln.unit_sku) {
+            var unitQty = ln.unit_qty != null ? ln.unit_qty : 1;
+            var html = '<code>' + esc(ln.unit_sku) + '</code> <span class="description">(' + esc(fmtQty(unitQty)) + ')</span>';
+            if (ln.pack_sku && String(ln.pack_sku) !== String(ln.unit_sku)) {
+                html += ' <span class="description">·</span> <code>' + esc(ln.pack_sku) + '</code> <span class="description">(' +
+                    esc(fmtQty(ln.pack_qty)) + ')</span>';
+            }
+            return html;
+        }
+        if (ln.is_child) {
+            return '<code>' + esc(ln.unit_sku || ln.sku || '') + '</code> <span class="description">(unitario)</span>';
+        }
+        return '<code>' + esc(ln.sku || '—') + '</code>';
     }
 
     function deltaClass(delta) {
@@ -2763,6 +3722,12 @@
         $('.riverso-price-history-app .nav-tab').on('click', function (e) {
             e.preventDefault();
             switchTab($(this).data('tab'));
+        });
+
+        $(window).on('resize', function () {
+            if ($('#rpf-session-panel').is(':visible')) {
+                syncRpfLinesPaneMetrics();
+            }
         });
 
         updateViewHints();
@@ -3345,6 +4310,189 @@
         $(document).on('click', '.rpf-family', function () {
             openFamilyModal($(this).data('grupo'), $(this).data('item'));
         });
+
+        $(document).on('click', '.rpf-code-mode-btn', function () {
+            var mode = $(this).data('mode') === 'barcode' ? 'barcode' : 'supplier';
+            if (mode === rpfFamilyCodeMode) {
+                return;
+            }
+            rpfFamilyCodeMode = mode;
+            var $wrap = $(this).closest('.rpf-family-codes');
+            var grupoId = parseInt($wrap.attr('data-grupo'), 10) || (rpfFamilyCtx && rpfFamilyCtx.grupo_id) || 0;
+            var codes = rpfFamilyCtx && rpfFamilyCtx.data && rpfFamilyCtx.data.codes;
+            if (!codes) {
+                return;
+            }
+            $wrap.find('.rpf-code-mode-btn').removeClass('button-primary is-active');
+            $wrap.find('.rpf-code-mode-btn[data-mode="' + mode + '"]').addClass('button-primary is-active');
+            var canMap = canAssignBarcodes || canManageFamilies;
+            $wrap.find('.rpf-family-codes-body').html(
+                renderFamilyCodesList(codes, grupoId, mode, codes.destinos || codes.members || [], canMap)
+            );
+        });
+
+        $(document).on('click', '.rpf-ver-regla', function () {
+            var ruleId = $(this).data('rule-id');
+            var p = $(this).attr('data-p');
+            openRuleViewModal(ruleId, p);
+        });
+
+        $(document).on('click', '.rpf-rule-view-close, .rpf-rule-view-backdrop', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeRuleViewModal();
+        });
+
+        $(document).on('click', '.rpf-fam-map-btn', function () {
+            var $btn = $(this);
+            var grupoId = $btn.data('grupo');
+            var tipo = $btn.data('tipo');
+            var codeId = $btn.data('id');
+            var fromId = parseInt($btn.closest('.rpf-fam-member').attr('data-producto'), 10) || 0;
+            var $sel = $btn.closest('li').find('.rpf-fam-map-dest');
+            var dest = parseInt($sel.val(), 10) || 0;
+            if (!dest) {
+                window.alert('Elige un integrante destino');
+                return;
+            }
+            var conflicts = (rpfFamilyCtx && rpfFamilyCtx.data && (
+                rpfFamilyCtx.data.pack_conflicts ||
+                (rpfFamilyCtx.data.codes && rpfFamilyCtx.data.codes.pack_conflicts)
+            )) || [];
+            var pair = findMergeablePair(conflicts, fromId, dest);
+
+            function afterMapSuccess(res) {
+                var fam = (res && res.data && res.data.family) || null;
+                if (fam) {
+                    paintFamilyModalBody(fam, rpfFamilyCtx && rpfFamilyCtx.item_id);
+                } else {
+                    openFamilyModal(grupoId, rpfFamilyCtx && rpfFamilyCtx.item_id);
+                }
+                if (rpfFacturaId) {
+                    post('riverso_price_folio_process_get', { factura_id: rpfFacturaId }).done(function (r2) {
+                        if (r2 && r2.success) {
+                            showSession(r2.data || {});
+                        }
+                    });
+                }
+            }
+
+            function doMoveCode() {
+                $btn.prop('disabled', true).text('…');
+                familyMapCode(grupoId, tipo, codeId, 'move', dest).done(function (res) {
+                    if (!res || !res.success) {
+                        window.alert((res && res.data && res.data.message) || 'No se pudo mapear');
+                        $btn.prop('disabled', false).text('Mapear');
+                        return;
+                    }
+                    afterMapSuccess(res);
+                }).fail(function () {
+                    window.alert('Error de red');
+                    $btn.prop('disabled', false).text('Mapear');
+                });
+            }
+
+            if (pair && (canManageFamilies || canAssignBarcodes)) {
+                if (!window.confirm(
+                    'Este mapeo une un producto solo Online con uno solo Local de la misma cantidad.\n' +
+                    'Se hará el merge Local+Online (como en Productos) y luego el código quedará en el Local.'
+                )) {
+                    return;
+                }
+                $btn.prop('disabled', true).text('…');
+                runRpfPackMerge(grupoId, pair.source_id, pair.target_id).done(function (mergedOk) {
+                    if (!mergedOk) {
+                        $btn.prop('disabled', false).text('Mapear');
+                        return;
+                    }
+                    // Tras el merge el stub online desaparece; el código ya puede estar en el local.
+                    // Si el destino elegido era el online, el código debe quedar en el local sobreviviente.
+                    var finalDest = pair.target_id;
+                    familyMapCode(grupoId, tipo, codeId, 'move', finalDest).done(function (res) {
+                        if (!res || !res.success) {
+                            // Merge ok pero el código ya no está en el origen (heredado): refrescar igual.
+                            openFamilyModal(grupoId, rpfFamilyCtx && rpfFamilyCtx.item_id);
+                            if (rpfFacturaId) {
+                                post('riverso_price_folio_process_get', { factura_id: rpfFacturaId }).done(function (r2) {
+                                    if (r2 && r2.success) {
+                                        showSession(r2.data || {});
+                                    }
+                                });
+                            }
+                            return;
+                        }
+                        afterMapSuccess(res);
+                    }).fail(function () {
+                        openFamilyModal(grupoId, rpfFamilyCtx && rpfFamilyCtx.item_id);
+                    });
+                }).fail(function () {
+                    $btn.prop('disabled', false).text('Mapear');
+                });
+                return;
+            }
+
+            if (!window.confirm('¿Mover este código al integrante seleccionado?')) {
+                return;
+            }
+            doMoveCode();
+        });
+
+        $(document).on('click', '.rpf-fam-link-lo', function () {
+            var $btn = $(this);
+            var grupoId = $btn.data('grupo');
+            var sourceId = parseInt($btn.data('source'), 10) || 0;
+            var targetId = parseInt($btn.data('target'), 10) || 0;
+            if (!grupoId || !sourceId || !targetId) {
+                return;
+            }
+            if (!window.confirm('¿Vincular Local+Online (merge) para este envase?')) {
+                return;
+            }
+            $btn.prop('disabled', true).text('…');
+            runRpfPackMerge(grupoId, sourceId, targetId).done(function (ok) {
+                if (!ok) {
+                    $btn.prop('disabled', false).text('Vincular Local+Online');
+                    return;
+                }
+                openFamilyModal(grupoId, rpfFamilyCtx && rpfFamilyCtx.item_id);
+                if (rpfFacturaId) {
+                    post('riverso_price_folio_process_get', { factura_id: rpfFacturaId }).done(function (r2) {
+                        if (r2 && r2.success) {
+                            showSession(r2.data || {});
+                        }
+                    });
+                }
+            }).fail(function () {
+                $btn.prop('disabled', false).text('Vincular Local+Online');
+            });
+        });
+
+        $(document).on('click', '.rpf-fam-unlink-btn', function () {
+            var $btn = $(this);
+            var grupoId = $btn.data('grupo');
+            var tipo = $btn.data('tipo');
+            var codeId = $btn.data('id');
+            if (!window.confirm('¿Desvincular este código del integrante actual?')) {
+                return;
+            }
+            $btn.prop('disabled', true).text('…');
+            familyMapCode(grupoId, tipo, codeId, 'unlink', 0).done(function (res) {
+                if (!res || !res.success) {
+                    window.alert((res && res.data && res.data.message) || 'No se pudo desvincular');
+                    $btn.prop('disabled', false).text('Desvincular');
+                    return;
+                }
+                var fam = (res.data && res.data.family) || null;
+                if (fam) {
+                    paintFamilyModalBody(fam, rpfFamilyCtx && rpfFamilyCtx.item_id);
+                } else {
+                    openFamilyModal(grupoId, rpfFamilyCtx && rpfFamilyCtx.item_id);
+                }
+            }).fail(function () {
+                window.alert('Error de red');
+                $btn.prop('disabled', false).text('Desvincular');
+            });
+        });
         $('#rpf-complete').on('click', function () {
             if (!canManage || !rpfFacturaId) return;
             var isHybrid = !!(rpfSession && rpfSession.is_hybrid);
@@ -3425,7 +4573,7 @@
                 $tickets.prop('disabled', false);
             });
         });
-        $('.rpf-modal-close, .rpf-modal-backdrop').on('click', function () {
+        $('#rpf-family-modal .rpf-modal-close, #rpf-family-modal .rpf-modal-backdrop').on('click', function () {
             $('#rpf-family-modal').hide().attr('aria-hidden', 'true');
         });
         $(document).on('click', '.rpf-create-local-open', function () {
@@ -3689,6 +4837,12 @@
         $(document).on('click', '#rpf-create-family-role-member', function () {
             renderCreateFamilyQtyStep();
         });
+        $(document).on('click', '#rpf-create-family-role-pack', function () {
+            launchFamilyEditorFromCreate('pack');
+        });
+        $(document).on('click', '#rpf-create-family-role-kit', function () {
+            launchFamilyEditorFromCreate('kit');
+        });
         $(document).on('click', '#rpf-create-family-role-manual', function () {
             launchFamilyEditorFromCreate('manual');
         });
@@ -3729,6 +4883,136 @@
         });
         $(document).on('click', '#rpf-bc-save', function () {
             submitRpfBcAdd();
+        });
+        $(document).on('click', '.rpf-bc-activate', function () {
+            if (!canAssignBarcodes || !rpfBcCtx) {
+                return;
+            }
+            var barcodeId = $(this).data('id');
+            if (!barcodeId) {
+                return;
+            }
+            post('riverso_products_activate_barcode', {
+                product_id: rpfBcCtx.producto_base_id,
+                barcode_id: barcodeId
+            }).done(function (r) {
+                rpfBcRefreshFromResponse(r, 'No se pudo activar el código');
+            }).fail(function () {
+                window.alert('Error de red al activar');
+            });
+        });
+        $(document).on('click', '.rpf-bc-delete', function () {
+            if (!canAssignBarcodes || !rpfBcCtx) {
+                return;
+            }
+            var barcodeId = $(this).data('id');
+            if (!barcodeId) {
+                return;
+            }
+            if (!window.confirm('¿Estás seguro? Borrado permanente.')) {
+                return;
+            }
+            post('riverso_products_delete_barcode', {
+                product_id: rpfBcCtx.producto_base_id,
+                barcode_id: barcodeId
+            }).done(function (r) {
+                rpfBcRefreshFromResponse(r, 'No se pudo eliminar');
+            }).fail(function () {
+                window.alert('Error de red al eliminar');
+            });
+        });
+        $(document).on('click', '.rpf-bc-deactivate', function () {
+            if (!canAssignBarcodes || !rpfBcCtx) {
+                return;
+            }
+            var barcodeId = $(this).data('id');
+            var barcode = $(this).data('barcode') || '';
+            var reason = window.prompt('Motivo de remoción:');
+            if (reason === null) {
+                return;
+            }
+            post('riverso_products_remove_barcode', {
+                product_id: rpfBcCtx.producto_base_id,
+                barcode_id: barcodeId || 0,
+                barcode: barcode,
+                audit_reason: reason || 'Desactivado desde centro de precios'
+            }).done(function (r) {
+                rpfBcRefreshFromResponse(r, 'No se pudo desactivar');
+            }).fail(function () {
+                window.alert('Error de red al desactivar');
+            });
+        });
+        $(document).on('click', '.rpf-bc-accept', function () {
+            if (!canAssignBarcodes || !rpfBcCtx) {
+                return;
+            }
+            var barcodeId = $(this).data('id');
+            var ctx = rpfBcCtx.barcode_remap_context || {};
+            if (ctx.show_wizard) {
+                openRpfBcRemapWizard(barcodeId);
+                return;
+            }
+            if (!window.confirm('¿Aceptar este código legacy como Código de Proveedor?\nQuedará en el mapeo interno y será editable.')) {
+                return;
+            }
+            post('riverso_products_accept_legacy_barcode', {
+                barcode_id: barcodeId,
+                product_id: rpfBcCtx.producto_base_id,
+                audit_reason: 'Aceptado desde centro de precios'
+            }).done(function (r) {
+                rpfBcRefreshFromResponse(r, 'No se pudo aceptar');
+            }).fail(function () {
+                window.alert('Error de red al aceptar');
+            });
+        });
+        $(document).on('click', '.rpf-bc-reject', function () {
+            if (!canAssignBarcodes || !rpfBcCtx) {
+                return;
+            }
+            var barcodeId = $(this).data('id');
+            if (!window.confirm('¿Rechazar y eliminar este código legacy?')) {
+                return;
+            }
+            post('riverso_products_reject_legacy_barcode', {
+                barcode_id: barcodeId,
+                product_id: rpfBcCtx.producto_base_id,
+                audit_reason: 'Rechazado desde centro de precios'
+            }).done(function (r) {
+                rpfBcRefreshFromResponse(r, 'No se pudo rechazar');
+            }).fail(function () {
+                window.alert('Error de red al rechazar');
+            });
+        });
+        $(document).on('click', '.rpf-bc-remap', function () {
+            openRpfBcRemapWizard($(this).data('id'));
+        });
+        $(document).on('click', '.rpf-bc-resume-parked', function () {
+            if (!canAssignBarcodes || !rpfBcCtx) {
+                return;
+            }
+            var barcodeId = $(this).data('barcode-id');
+            var fromProduct = $(this).data('from-product');
+            var destino = $(this).data('destino');
+            var qty = $(this).data('qty');
+            if (!barcodeId || !destino) {
+                return;
+            }
+            if (!window.confirm('¿Mapear este código aparcado al hijo sugerido y confirmarlo?')) {
+                return;
+            }
+            post('riverso_products_barcode_remap', {
+                barcode_id: barcodeId,
+                product_id: fromProduct || rpfBcCtx.producto_base_id,
+                accion: 'move_child',
+                destino_producto_base_id: destino,
+                cantidad_pack: qty || 0,
+                verify: 1,
+                audit_reason: 'Reanudado desde tarea aparcada (centro de precios)'
+            }).done(function (r) {
+                rpfBcRefreshFromResponse(r, 'No se pudo mapear');
+            }).fail(function () {
+                window.alert('Error de red al mapear');
+            });
         });
         $(document).on('click', '#rpf-comp-google', function () {
             var nombre = (rpfCompCtx && rpfCompCtx.nombre) || '';
@@ -4978,12 +6262,18 @@
             'Unitario / granel</button>' +
             '<button type="button" class="button button-primary" id="rpf-create-family-role-member">' +
             'Miembro en envase</button>' +
+            '<button type="button" class="button button-primary" id="rpf-create-family-role-pack">' +
+            'Familia pack (mismo producto, tamaños)</button>' +
+            '<button type="button" class="button button-primary" id="rpf-create-family-role-kit">' +
+            'Familia kit (productos distintos)</button>' +
             '<button type="button" class="button" id="rpf-create-family-role-manual">' +
             'Manual (editor completo)</button>' +
             '</div>' +
-            '<p class="description">Unitario = este SKU es la unidad mínima (R-1 al guardar). ' +
-            'Miembro = pack/caja (se pide cantidad de envase). ' +
-            'Manual = mismo editor de Categorías; el producto queda como miembro pendiente.</p>'
+            '<p class="description">Unitario = unidad mínima (R-1). ' +
+            'Miembro = pack/caja con cantidad de envase. ' +
+            'Pack = precios por cantidad (6, 10…) con descuento. ' +
+            'Kit = conjunto de SKUs distintos con un precio. ' +
+            'Manual = editor completo sin tipo comercial.</p>'
         );
         $('#rpf-create-family-footer').html(
             '<button type="button" class="button" id="rpf-create-family-cancel">Cancelar</button>'
@@ -5049,8 +6339,25 @@
             pending.cantidad_unidades = 1;
             seed.convertProductoBaseId = productId;
             seed.confirmR1 = true;
+            seed.tipo_comercial = 'unitario';
         } else if (role === 'member') {
             pending.cantidad_unidades = rpfCreateFamily.cantidad_unidades;
+        } else if (role === 'pack') {
+            pending.cantidad_unidades = 1;
+            seed.tipo_comercial = 'pack';
+            seed.pack_modo = 'ilimitado';
+            seed.packBaseProductoId = productId;
+            seed.convertProductoBaseId = productId;
+        } else if (role === 'kit') {
+            seed.tipo_comercial = 'kit';
+            seed.pack_modo = 'ilimitado';
+            seed.kitSeedComponents = [{
+                producto_base_id: productId,
+                canonical_sku: rpfCreateFamily.sku || '',
+                nombre_canonico: rpfCreateFamily.producto_nombre || '',
+                cantidad: 1,
+                orden: 1
+            }];
         }
         // manual: miembro pendiente sin envase ni unitario
 

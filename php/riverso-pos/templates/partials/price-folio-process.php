@@ -173,7 +173,7 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
         </p>
         <div id="rpf-session-header" class="rpf-session-header"></div>
         <div id="rpf-blockers" class="rpf-blockers" style="display:none;"></div>
-        <div id="rpf-lines" style="overflow:auto;"></div>
+        <div id="rpf-lines"></div>
         <div id="rpf-pdf-footer" class="rpf-pdf-footer" style="display:none;">
             <button type="button" class="button" id="rpf-btn-ver-pdf">Ver PDF</button>
             <div id="rpf-pdf-viewer-wrap" style="display:none;margin-top:10px;">
@@ -185,9 +185,9 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
 
 <div id="rpf-family-modal" class="rpf-modal" style="display:none;" aria-hidden="true">
     <div class="rpf-modal-backdrop"></div>
-    <div class="rpf-modal-card">
+    <div class="rpf-modal-card rpf-family-card">
         <div class="rpf-modal-head">
-            <h2 style="margin:0;">Familia — costos y regla</h2>
+            <h2 style="margin:0;">Familia — regla y códigos</h2>
             <button type="button" class="button rpf-modal-close">Cerrar</button>
         </div>
         <div id="rpf-family-body" class="rpf-modal-body"></div>
@@ -386,18 +386,7 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
 
             <div id="rpf-bc-list-wrap" hidden>
                 <h4 class="rpf-comp-subtitle">Códigos asociados</h4>
-                <table class="wp-list-table widefat striped">
-                    <thead>
-                        <tr>
-                            <th>Código</th>
-                            <th>Tipo</th>
-                            <th>Cantidad</th>
-                            <th>Estado</th>
-                            <th>Origen</th>
-                        </tr>
-                    </thead>
-                    <tbody id="rpf-bc-list-body"></tbody>
-                </table>
+                <div id="rpf-bc-list-body" class="rpf-bc-list"></div>
             </div>
 
             <div id="rpf-bc-form-wrap" class="rpf-comp-manual" hidden>
@@ -453,6 +442,22 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
                     <button type="button" class="button button-primary" id="rpf-bc-save">Agregar código de barra</button>
                 </p>
             </div>
+        </div>
+    </div>
+</div>
+
+<div id="rpf-rule-view-modal" class="rpf-modal rpf-rule-view-modal" style="display:none;" aria-hidden="true">
+    <div class="rpf-modal-backdrop rpf-rule-view-backdrop"></div>
+    <div class="rpf-modal-card rpf-rule-view-card">
+        <div class="rpf-modal-head">
+            <h2 id="rpf-rule-view-title" style="margin:0;">Regla de precios</h2>
+            <div class="rpf-comp-head-actions">
+                <a class="button button-small" id="rpf-rule-view-admin-link" href="#" target="_blank" rel="noopener" hidden>Abrir en Reglas</a>
+                <button type="button" class="button rpf-rule-view-close">Cerrar</button>
+            </div>
+        </div>
+        <div id="rpf-rule-view-body" class="rpf-modal-body">
+            <p class="description">Cargando…</p>
         </div>
     </div>
 </div>

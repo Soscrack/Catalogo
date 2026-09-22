@@ -1799,9 +1799,14 @@ jQuery(function($){
                 supplier: [],
                 internal: [],
                 legacy: [],
+                inactive: [],
             };
             
             barcodes.forEach(b => {
+                if (b.inactivo) {
+                    byType.inactive.push(b);
+                    return;
+                }
                 if (isLegacyBarcode(b)) {
                     byType.legacy.push(b);
                     return;
@@ -1812,6 +1817,12 @@ jQuery(function($){
             });
 
             const renderBarcodeActions = (b) => {
+                if (b.inactivo) {
+                    return `<div style="margin-top:6px;">
+                        <button type="button" class="button button-small button-primary barcode-activate" data-id="${b.id}">Activar</button>
+                        <button type="button" class="button button-small barcode-delete-permanent" data-id="${b.id}" style="color:#b32d2e;">Eliminar</button>
+                    </div>`;
+                }
                 const showWizard = !!(currentProduct && currentProduct.barcode_remap_context && currentProduct.barcode_remap_context.show_wizard);
                 if (isLegacyBarcode(b)) {
                     if (showWizard) {
@@ -1829,10 +1840,11 @@ jQuery(function($){
                 if (showWizard && Number(b.cantidad || 1) <= 1) {
                     extra = `<button type="button" class="button button-small barcode-remap" data-id="${b.id}" style="margin-top:4px;margin-right:4px;">Mapear a hijo…</button>`;
                 }
-                return `<br>${extra}<button class="button button-small barcode-remove" data-barcode="${esc(b.codigo)}" style="margin-top:4px;">Desactivar</button>`;
+                return `<br>${extra}<button class="button button-small barcode-remove" data-barcode="${esc(b.codigo)}" data-id="${b.id}" style="margin-top:4px;">Desactivar</button>`;
             };
 
             const pendingBadge = '<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:3px;font-size:11px;margin-left:6px;">Por confirmar</span>';
+            const inactiveBadge = '<span style="background:#757575;color:white;padding:2px 8px;border-radius:3px;font-size:11px;margin-left:6px;">Inactivo</span>';
 
             if (byType.legacy.length > 0) {
                 html += '<h5>Legacy por confirmar</h5>';
@@ -1901,6 +1913,22 @@ jQuery(function($){
                     html += `<div class="barcode-item" style="margin-bottom:8px;">
                         <code>${esc(b.codigo)}</code>
                         <span style="background:#666; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-left:8px;">Interno</span>
+                        ${detallesHtml}
+                        ${renderBarcodeActions(b)}
+                    </div>`;
+                });
+            }
+
+            if (byType.inactive.length > 0) {
+                html += '<h5 style="margin-top:16px;">Inactivos</h5>';
+                byType.inactive.forEach(b => {
+                    const detalles = [];
+                    if (b.estado) detalles.push(`Estado: ${b.estado}`);
+                    if (b.motivo_estado) detalles.push(b.motivo_estado);
+                    const detallesHtml = detalles.length > 0 ? `<br><small style="color:#999;">${detalles.join(' | ')}</small>` : '';
+                    html += `<div class="barcode-item" style="margin-bottom:8px;opacity:0.8;">
+                        <code>${esc(b.codigo)}</code>
+                        ${inactiveBadge}
                         ${detallesHtml}
                         ${renderBarcodeActions(b)}
                     </div>`;
@@ -3706,6 +3734,7 @@ jQuery(function($){
 
     $(document).on('click', '.barcode-remove', function(){
         const barcode = $(this).data('barcode');
+        const barcodeId = $(this).data('id');
         const reason = prompt('Motivo de remoción:');
         if (reason === null) return;
 
@@ -3713,6 +3742,7 @@ jQuery(function($){
             action: 'riverso_products_remove_barcode',
             nonce,
             product_id: currentProduct.id,
+            barcode_id: barcodeId || 0,
             barcode: barcode,
             audit_reason: reason
         }, function(r){
@@ -3721,7 +3751,48 @@ jQuery(function($){
                 return;
             }
             alert(r.data.message);
-            showDetail(r.data.item);
+            if (r.data.item) {
+                showDetail(r.data.item);
+            }
+        });
+    });
+
+    $(document).on('click', '.barcode-activate', function(){
+        const barcodeId = $(this).data('id');
+        if (!barcodeId || !currentProduct) return;
+        $.post(ajaxurl, {
+            action: 'riverso_products_activate_barcode',
+            nonce,
+            product_id: currentProduct.id,
+            barcode_id: barcodeId
+        }, function(r){
+            if (!r.success) {
+                alert((r.data && r.data.message) ? r.data.message : 'No se pudo activar el código');
+                return;
+            }
+            if (r.data.item) {
+                showDetail(r.data.item);
+            }
+        });
+    });
+
+    $(document).on('click', '.barcode-delete-permanent', function(){
+        const barcodeId = $(this).data('id');
+        if (!barcodeId || !currentProduct) return;
+        if (!confirm('¿Estás seguro? Borrado permanente.')) return;
+        $.post(ajaxurl, {
+            action: 'riverso_products_delete_barcode',
+            nonce,
+            product_id: currentProduct.id,
+            barcode_id: barcodeId
+        }, function(r){
+            if (!r.success) {
+                alert('Error: ' + ((r.data && r.data.message) ? r.data.message : 'No se pudo eliminar'));
+                return;
+            }
+            if (r.data.item) {
+                showDetail(r.data.item);
+            }
         });
     });
 

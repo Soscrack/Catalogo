@@ -12,6 +12,12 @@ if (!defined('ABSPATH')) {
 $nonce = wp_create_nonce('riverso_pos_nonce');
 ?>
 <div class="wrap riverso-tpv-export-wrap">
+    <style>
+        .te-withheld-box summary { cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 10px 14px; color: #996800; font-weight: 600; }
+        .te-withheld-box summary::-webkit-details-marker { display: none; }
+        .te-withheld-box .te-withheld-chevron { transition: transform .15s ease; }
+        .te-withheld-box[open] .te-withheld-chevron { transform: rotate(90deg); }
+    </style>
     <h1><?php esc_html_e('Export catálogo TPV', 'riverso-pos'); ?></h1>
     <p class="description">
         Genera un archivo <code>.xlsx</code> con dos hojas (<strong>Productos</strong> y <strong>CodigosBarra</strong>)
@@ -262,8 +268,12 @@ $nonce = wp_create_nonce('riverso_pos_nonce');
         let html = '';
 
         if (familyPending > 0) {
-            html += '<div style="margin:0 0 12px;padding:12px 14px;border:1px solid #dba617;border-left:4px solid #dba617;background:#fff8e5;border-radius:2px;">';
-            html += '<p style="margin:0 0 8px;color:#996800;"><strong>Productos creados pero no exportables a TPV</strong></p>';
+            html += '<details class="te-withheld-box" style="margin:0 0 12px;border:1px solid #dba617;border-left:4px solid #dba617;background:#fff8e5;border-radius:2px;">';
+            html += '<summary>' +
+                '<span class="dashicons dashicons-arrow-right-alt2 te-withheld-chevron" aria-hidden="true"></span>' +
+                '<span>Productos creados pero no exportables a TPV (' + familyPending + ')</span>' +
+                '</summary>';
+            html += '<div style="padding:0 14px 12px 36px;">';
             html += '<p class="description" style="margin:0 0 10px;">' +
                 esc(d.empty_hint || ('Hay ' + familyPending + ' producto(s) retenidos: falta resolver si son familia.')) +
                 '</p>';
@@ -287,7 +297,7 @@ $nonce = wp_create_nonce('riverso_pos_nonce');
                         ' de ' + familyPending + ' retenidos.</p>';
                 }
             }
-            html += '</div>';
+            html += '</div></details>';
         } else if (d.total <= 0) {
             html += '<p style="color:#b32d2e;margin:0 0 10px;"><strong>Sin filas para exportar.</strong> ' + esc(d.empty_hint || '') + '</p>';
         } else if (changedTotal <= 0 && $('#te-only-changed').is(':checked')) {

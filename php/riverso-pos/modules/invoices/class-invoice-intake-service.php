@@ -316,6 +316,9 @@ class Riverso_Invoice_Intake_Service {
         return $out;
     }
 
+    /** Glosa usada al inventar D/R de folio por gap neto vs suma de líneas. */
+    const DSC_RCG_INFERRED_GLOSA = 'Inferido por diferencia de totales';
+
     /**
      * Infiere un DscRcgGlobal $ a partir de suma(MontoItem) − monto_neto.
      *
@@ -331,10 +334,41 @@ class Riverso_Invoice_Intake_Service {
             'tpo_mov' => $gap > 0 ? 'D' : 'R',
             'tpo_valor' => '$',
             'valor' => abs($gap),
-            'glosa' => 'Inferido por diferencia de totales',
+            'glosa' => self::DSC_RCG_INFERRED_GLOSA,
             'ind_exe' => null,
             'monto_calculado' => abs($gap),
         ]];
+    }
+
+    /**
+     * ¿La entrada DscRcgGlobal fue inventada por gap de totales (no viene del XML)?
+     *
+     * @param array $entry
+     * @return bool
+     */
+    public function is_inferred_dsc_rcg_entry(array $entry) {
+        $glosa = trim((string) ($entry['glosa'] ?? $entry['GlosaDR'] ?? ''));
+        return strcasecmp($glosa, self::DSC_RCG_INFERRED_GLOSA) === 0;
+    }
+
+    /**
+     * Quita entradas inferidas; conserva D/R reales del documento.
+     *
+     * @param array $entries
+     * @return array
+     */
+    public function drop_inferred_dsc_rcg_entries(array $entries) {
+        $out = [];
+        foreach ($entries as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            if ($this->is_inferred_dsc_rcg_entry($entry)) {
+                continue;
+            }
+            $out[] = $entry;
+        }
+        return $out;
     }
 
     /**
@@ -350,8 +384,12 @@ class Riverso_Invoice_Intake_Service {
         }
         $monto_neto = (float) ($factura_data['totales']['neto'] ?? 0);
 
-        $entries = $this->normalize_dsc_rcg_global_entries(
-            (array) ($factura_data['dsc_rcg_global'] ?? [])
+        // Descartar D/R inventados por un gap previo (p.ej. línea mal marcada como flete).
+        // Si el hueco sigue, se vuelve a inferir con la clasificación actual.
+        $entries = $this->drop_inferred_dsc_rcg_entries(
+            $this->normalize_dsc_rcg_global_entries(
+                (array) ($factura_data['dsc_rcg_global'] ?? [])
+            )
         );
 
         $product_idxs = [];
@@ -592,6 +630,22 @@ class Riverso_Invoice_Intake_Service {
             'entries' => count($factura_data['dsc_rcg_global']),
             'ok' => (int) ($factura_data['dsc_rcg_global_ok'] ?? 1),
         ];
+    }
+
+    /**
+     * Tras reclasificar líneas (flete↔producto/gasto): refresca flete inline y
+     * recalcula D/R de folio (descarta inferidos obsoletos y re-infiere si aplica).
+     *
+     * @param int $factura_id
+     * @return array|WP_Error
+     */
+    public function refresh_folio_costs_after_item_tipo_change($factura_id) {
+        $factura_id = (int) $factura_id;
+        if ($factura_id <= 0) {
+            return new WP_Error('invalid', 'factura_id inválido');
+        }
+        $this->refresh_product_shipping_total($factura_id);
+        return $this->apply_folio_dr_costs_to_factura($factura_id);
     }
 
     /**

@@ -350,12 +350,24 @@ class Riverso_POS_Activator {
         self::create_phase49_costo_envio_manual($prefix);
         self::create_phase50_messaging_quotes($prefix, $charset_collate);
         self::create_phase51_folio_dr_costs($prefix);
+        self::create_phase51b_repair_inferred_folio_dr($prefix);
         self::create_phase52_quote_folio_discount($prefix);
+        self::create_phase53_family_commercial($prefix, $charset_collate);
 
         // Inicializar servicios core
         self::init_core_services();
         
         update_option('riverso_pos_db_version', RIVERSO_POS_VERSION);
+    }
+
+    /**
+     * Garantiza schema pack/kit (deploy sin bump de versión).
+     */
+    public static function ensure_family_commercial_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::create_phase53_family_commercial($prefix, $charset_collate);
     }
 
     /**
@@ -4844,6 +4856,161 @@ class Riverso_POS_Activator {
                 'details'    => 'Fase 51: costo tras D/R de folio + landed sobre esa base',
             ]);
         }
+    }
+
+    /**
+     * Fase 51b: recalcula facturas cuyo D/R de folio fue inferido por gap
+     * (p.ej. línea mal marcada como flete y luego corregida a producto).
+     * Descarta el inferido y vuelve a repartir con la clasificación actual.
+     */
+    private static function create_phase51b_repair_inferred_folio_dr($prefix) {
+        if (get_option('riverso_pos_phase51b_repair_inferred_folio_dr') === '1') {
+            return;
+        }
+
+        global $wpdb;
+        $facturas = "{$prefix}facturas";
+        $glosa = 'Inferido por diferencia de totales';
+
+        if (!class_exists('Riverso_Invoice_Intake_Service')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'modules/invoices/class-invoice-intake-service.php';
+            if (file_exists($path)) {
+                require_once $path;
+            }
+        }
+
+        $done = 0;
+        if (class_exists('Riverso_Invoice_Intake_Service')
+            && method_exists('Riverso_Invoice_Intake_Service', 'refresh_folio_costs_after_item_tipo_change')) {
+            $intake = Riverso_Invoice_Intake_Service::get_instance();
+            $like = '%' . $wpdb->esc_like($glosa) . '%';
+            $ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM {$facturas}
+                 WHERE dsc_rcg_global IS NOT NULL
+                   AND dsc_rcg_global LIKE %s
+                   AND (documento_subtipo IS NULL
+                        OR documento_subtipo IN ('productos','guia_despacho','nota_credito',''))
+                 ORDER BY id ASC
+                 LIMIT 1000",
+                $like
+            )) ?: [];
+            foreach ($ids as $id) {
+                $result = $intake->refresh_folio_costs_after_item_tipo_change((int) $id);
+                if (!is_wp_error($result)) {
+                    $done++;
+                }
+            }
+        }
+
+        update_option('riverso_pos_phase51b_repair_inferred_folio_dr', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase51b_repair_inferred_folio_dr', 'riverso_facturas', 0, [
+                'actor_type' => 'computer',
+                'details'    => sprintf(
+                    'Fase 51b: recalculo D/R inferido obsoleto (%d facturas)',
+                    $done
+                ),
+            ]);
+        }
+    }
+
+    /**
+     * Fase 53: tipos comerciales pack/kit en familias + tramos y componentes.
+     */
+    private static function create_phase53_family_commercial($prefix, $charset_collate) {
+        if (get_option('riverso_pos_phase53_family_commercial') === '1') {
+            return;
+        }
+
+        self::ensure_phase53_family_commercial_schema($prefix, $charset_collate);
+
+        global $wpdb;
+        // Familias ya configuradas como unitarias → tipo_comercial unitario.
+        $wpdb->query(
+            "UPDATE {$prefix}equivalence_groups
+             SET tipo_comercial = 'unitario'
+             WHERE es_producto_unitario = 1
+               AND (tipo_comercial IS NULL OR tipo_comercial = '')"
+        );
+
+        update_option('riverso_pos_phase53_family_commercial', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase53_family_commercial', 'equivalence_groups', 0, [
+                'actor_type' => 'computer',
+                'details' => 'Fase 53: tipo_comercial pack/kit + tablas de tramos/componentes',
+            ]);
+        }
+    }
+
+    /**
+     * Columnas y tablas pack/kit (idempotente).
+     */
+    private static function ensure_phase53_family_commercial_schema($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        self::add_column_if_missing(
+            "{$prefix}equivalence_groups",
+            'tipo_comercial',
+            "tipo_comercial VARCHAR(20) NOT NULL DEFAULT ''"
+        );
+        self::add_column_if_missing(
+            "{$prefix}equivalence_groups",
+            'pack_modo',
+            "pack_modo VARCHAR(20) NOT NULL DEFAULT 'ilimitado'"
+        );
+        self::add_column_if_missing(
+            "{$prefix}equivalence_groups",
+            'pack_base_producto_id',
+            "pack_base_producto_id BIGINT UNSIGNED NULL DEFAULT NULL"
+        );
+        self::add_column_if_missing(
+            "{$prefix}equivalence_groups",
+            'kit_sku_producto_id',
+            "kit_sku_producto_id BIGINT UNSIGNED NULL DEFAULT NULL"
+        );
+        self::add_column_if_missing(
+            "{$prefix}equivalence_groups",
+            'kit_descuento_modo',
+            "kit_descuento_modo VARCHAR(20) NOT NULL DEFAULT 'precio'"
+        );
+        self::add_column_if_missing(
+            "{$prefix}equivalence_groups",
+            'kit_descuento_pct',
+            "kit_descuento_pct DECIMAL(8,4) NOT NULL DEFAULT 0"
+        );
+
+        $sql_tiers = "CREATE TABLE {$prefix}family_pack_tiers (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            grupo_id BIGINT UNSIGNED NOT NULL,
+            cantidad INT UNSIGNED NOT NULL,
+            descuento_modo VARCHAR(20) NOT NULL DEFAULT 'precio',
+            descuento_pct DECIMAL(8,4) NOT NULL DEFAULT 0,
+            producto_pack_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            orden INT NOT NULL DEFAULT 0,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_grupo (grupo_id),
+            KEY idx_grupo_qty (grupo_id, cantidad),
+            KEY idx_producto_pack (producto_pack_id)
+        ) {$charset_collate};";
+        dbDelta($sql_tiers);
+
+        $sql_kit = "CREATE TABLE {$prefix}family_kit_components (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            grupo_id BIGINT UNSIGNED NOT NULL,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            cantidad DECIMAL(12,4) NOT NULL DEFAULT 1,
+            orden INT NOT NULL DEFAULT 0,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_grupo_producto (grupo_id, producto_base_id),
+            KEY idx_producto (producto_base_id)
+        ) {$charset_collate};";
+        dbDelta($sql_kit);
     }
 
     /**

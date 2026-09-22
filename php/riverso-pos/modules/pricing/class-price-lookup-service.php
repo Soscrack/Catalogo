@@ -825,7 +825,8 @@ class Riverso_Price_Lookup_Service {
 
         if (!$members) {
             $members = $wpdb->get_results($wpdb->prepare(
-                "SELECT em.producto_base_id, pb.canonical_sku, pb.nombre_canonico, pb.es_unidad_minima
+                "SELECT em.producto_base_id, pb.canonical_sku, pb.nombre_canonico, pb.es_unidad_minima,
+                        pb.woocommerce_product_id, pb.woocommerce_variation_id
                  FROM {$this->prefix}equivalence_members em
                  INNER JOIN {$this->prefix}producto_base pb ON pb.id = em.producto_base_id
                  WHERE em.grupo_id = %d AND em.activo = 1
@@ -835,6 +836,10 @@ class Riverso_Price_Lookup_Service {
         }
 
         foreach ($members as &$m) {
+            if (!isset($m['sku_local']) && class_exists('Riverso_Unit_Product_Service')) {
+                $flags = Riverso_Unit_Product_Service::get_instance()->member_sku_flags($m);
+                $m = array_merge($m, $flags);
+            }
             // Coste de lote/factura es neto contable; bruto = neto × 1.19.
             // Precios de regla son brutos (P TPV).
             $coste_neto = isset($m['coste_unitario']) && $m['coste_unitario'] !== null
@@ -858,19 +863,51 @@ class Riverso_Price_Lookup_Service {
         unset($m);
 
         $rule_id = null;
+        $rule = null;
         if (class_exists('Riverso_Price_Rules_Module')) {
-            $rule_id = Riverso_Price_Rules_Module::get_instance()->get_assigned_rule_id('familia', $grupo_id);
+            $rules_mod = Riverso_Price_Rules_Module::get_instance();
+            $rule_id = $rules_mod->get_assigned_rule_id('familia', $grupo_id);
+            $rule = $rule_id ? $rules_mod->get_rule_with_tiers($rule_id) : null;
+        }
+
+        $es_unitario = 0;
+        $visual = null;
+        $codes = null;
+        if (class_exists('Riverso_Unit_Product_Service')) {
+            $unit_svc = Riverso_Unit_Product_Service::get_instance();
+            $snap = $unit_svc->get_unit_snapshot($grupo_id);
+            if (!is_wp_error($snap)) {
+                $es_unitario = !empty($snap['es_producto_unitario']) ? 1 : 0;
+            }
+            if ($es_unitario) {
+                $visual = $unit_svc->build_family_rule_visual(
+                    $grupo_id,
+                    $p_asignado,
+                    is_array($preview) && empty($preview['error']) ? $preview : null,
+                    $rule
+                );
+                $codes = $unit_svc->get_family_member_codes($grupo_id);
+            }
         }
 
         return [
             'grupo_id' => $grupo_id,
             'nombre' => $group['nombre'],
             'regla_id' => $rule_id,
+            'regla' => $rule ? [
+                'id' => (int) ($rule['id'] ?? 0),
+                'codigo' => (string) ($rule['codigo'] ?? ''),
+                'nombre' => (string) ($rule['nombre'] ?? ''),
+            ] : null,
+            'es_producto_unitario' => $es_unitario,
             'p_asignado_familia' => $p_asignado,
             'precios_son_brutos' => true,
             'iva_tipo' => $iva_tipo,
             'members' => is_array($members) ? $members : [],
             'preview' => is_array($preview) ? $preview : null,
+            'visual' => $visual,
+            'codes' => $codes,
+            'pack_conflicts' => is_array($codes) ? ($codes['pack_conflicts'] ?? []) : [],
         ];
     }
 

@@ -839,7 +839,7 @@ class Riverso_Barcode_Model {
         return $wpdb->update("{$prefix}codigo_barra", $data, ['id' => $id]) !== false;
     }
 
-    public static function get_by_product($producto_base_id, $proveedor_id = null) {
+    public static function get_by_product($producto_base_id, $proveedor_id = null, $include_inactive = false) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         $producto_base_id = absint($producto_base_id);
@@ -859,10 +859,15 @@ class Riverso_Barcode_Model {
             $query_args[] = absint($proveedor_id);
         }
 
+        if ($include_inactive) {
+            $estado_sql = "estado IN ('verificado', 'propuesto', 'rechazado', 'en_desuso')";
+        } else {
+            $estado_sql = "activo = 1 AND estado IN ('verificado', 'propuesto')";
+        }
+
         $query = $wpdb->prepare(
             "SELECT * FROM {$prefix}codigo_barra
-             WHERE activo = 1
-               AND estado IN ('verificado', 'propuesto')
+             WHERE {$estado_sql}
                AND (
                     producto_base_id = %d
                  OR (
@@ -881,7 +886,7 @@ class Riverso_Barcode_Model {
     }
 
     /**
-     * Una fila por código: prioriza verificado y el vínculo a producto_base.
+     * Una fila por código: prioriza vigente, verificado y el vínculo a producto_base.
      */
     private static function dedupe_product_barcodes(array $rows) {
         $best = [];
@@ -890,8 +895,14 @@ class Riverso_Barcode_Model {
             if ($codigo === '') {
                 continue;
             }
+            $estado = (string) ($row['estado'] ?? '');
+            $activo = intval($row['activo'] ?? 0) === 1;
+            $vigente = $activo && in_array($estado, ['verificado', 'propuesto'], true);
             $score = 0;
-            if (($row['estado'] ?? '') === 'verificado') {
+            if ($vigente) {
+                $score += 16;
+            }
+            if ($estado === 'verificado') {
                 $score += 8;
             }
             if (!empty($row['producto_base_id'])) {

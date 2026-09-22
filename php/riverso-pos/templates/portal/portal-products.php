@@ -1807,6 +1807,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
             return origen.includes('legacy') || migrado !== '' || !!barcode.legacy_ref;
         };
         const barcodePriority = (barcode) => {
+            if (barcode.inactivo) return 0;
             if ((barcode.estado || '') === 'verificado') return 3;
             if (isLegacyBarcode(barcode)) return 2;
             return 1;
@@ -1846,11 +1847,20 @@ $can_manage_families = current_user_can('riverso_manage_families');
         }
         html += '<table style="width: 100%; font-size: 13px; border-collapse: collapse;">';
         groupedBarcodes.forEach(barcode => {
-            const isLegacy = isLegacyBarcode(barcode);
-            const tipo = isLegacy ? 'legacy' : (barcode.tipo || 'ean13');
+            const isInactive = !!barcode.inactivo;
+            const isLegacy = !isInactive && isLegacyBarcode(barcode);
+            const tipo = isInactive
+                ? (barcode.estado || 'inactivo')
+                : (isLegacy ? 'legacy' : (barcode.tipo || 'ean13'));
             const unidad = barcode.unidad_medida || barcode.unidad || 'unidad';
+            const inactiveBadge = isInactive
+                ? ' <span style="background:#757575;color:#fff;padding:1px 6px;border-radius:3px;font-size:11px;">Inactivo</span>'
+                : '';
             let actions = '';
-            if (isLegacy) {
+            if (isInactive) {
+                actions = `<button class="btn-small success barcode-activate-btn" data-id="${barcode.id}" style="margin-right: 6px;">Activar</button>` +
+                    `<button class="btn-small danger barcode-delete-btn" data-id="${barcode.id}">Eliminar</button>`;
+            } else if (isLegacy) {
                 if (showWizard) {
                     actions = `<button class="btn-small success barcode-remap-btn" data-id="${barcode.id}" style="margin-right: 6px;">Mapear…</button>` +
                         `<button class="btn-small danger barcode-reject-legacy-btn" data-id="${barcode.id}">Rechazar</button>`;
@@ -1865,8 +1875,11 @@ $can_manage_families = current_user_can('riverso_manage_families');
                     actions = `<button class="btn-small barcode-remap-btn" data-id="${barcode.id}" style="margin-right: 6px;">Mapear a hijo…</button>` + actions;
                 }
             }
-            html += `<tr style="border-bottom: 1px solid #eee;">
-                <td style="padding: 8px;"><code>${esc(barcode.codigo)}</code></td>
+            const rowStyle = isInactive
+                ? 'border-bottom: 1px solid #eee; opacity: 0.75; background: #fafafa;'
+                : 'border-bottom: 1px solid #eee;';
+            html += `<tr style="${rowStyle}">
+                <td style="padding: 8px;"><code>${esc(barcode.codigo)}</code>${inactiveBadge}</td>
                 <td style="padding: 8px;">${esc(tipo)} - ${esc(barcode.cantidad || 1)} ${esc(unidad)}</td>
                 <td style="padding: 8px; text-align: right;">${actions}</td>
             </tr>`;
@@ -2906,6 +2919,14 @@ $can_manage_families = current_user_can('riverso_manage_families');
         window.portalProducts.removeBarcode($(this).data('id'));
     });
 
+    $(document).on('click', '.barcode-activate-btn', function() {
+        window.portalProducts.activateBarcode($(this).data('id'));
+    });
+
+    $(document).on('click', '.barcode-delete-btn', function() {
+        window.portalProducts.deleteBarcode($(this).data('id'));
+    });
+
     $(document).on('click', '.barcode-edit-btn', function() {
         window.portalProducts.editBarcode($(this).data('id'));
     });
@@ -3435,6 +3456,35 @@ $can_manage_families = current_user_can('riverso_manage_families');
                     }
                 });
             }
+        },
+        activateBarcode: function(barcodeId) {
+            if (!currentProduct || !barcodeId) return;
+            post('riverso_products_activate_barcode', {
+                barcode_id: barcodeId,
+                product_id: currentProduct.id
+            }).done(function(r) {
+                if (r.success) {
+                    openDetail(currentProduct.id);
+                    return;
+                }
+                alert((r.data && r.data.message) ? r.data.message : 'No se pudo activar el código');
+            });
+        },
+        deleteBarcode: function(barcodeId) {
+            if (!currentProduct || !barcodeId) return;
+            if (!confirm('¿Estás seguro? Borrado permanente.')) {
+                return;
+            }
+            post('riverso_products_delete_barcode', {
+                barcode_id: barcodeId,
+                product_id: currentProduct.id
+            }).done(function(r) {
+                if (r.success) {
+                    openDetail(currentProduct.id);
+                } else {
+                    alert('Error: ' + ((r.data && r.data.message) ? r.data.message : 'No se pudo eliminar'));
+                }
+            });
         },
         acceptLegacyBarcode: function(barcodeId) {
             const ctx = (currentProduct && currentProduct.barcode_remap_context) || {};

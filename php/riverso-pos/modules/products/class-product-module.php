@@ -45,6 +45,8 @@ class Riverso_Product_Module {
         add_action('wp_ajax_riverso_products_add_barcode', [$this, 'ajax_add_barcode']);
         add_action('wp_ajax_riverso_products_update_barcode', [$this, 'ajax_update_barcode']);
         add_action('wp_ajax_riverso_products_remove_barcode', [$this, 'ajax_remove_barcode']);
+        add_action('wp_ajax_riverso_products_delete_barcode', [$this, 'ajax_delete_barcode']);
+        add_action('wp_ajax_riverso_products_activate_barcode', [$this, 'ajax_activate_barcode']);
         add_action('wp_ajax_riverso_products_accept_legacy_barcode', [$this, 'ajax_accept_legacy_barcode']);
         add_action('wp_ajax_riverso_products_reject_legacy_barcode', [$this, 'ajax_reject_legacy_barcode']);
         add_action('wp_ajax_riverso_products_barcode_remap_preview', [$this, 'ajax_barcode_remap_preview']);
@@ -974,10 +976,13 @@ class Riverso_Product_Module {
         
         $barcodes = [];
         if (class_exists('Riverso_Barcode_Model')) {
-            $barcodes = Riverso_Barcode_Model::get_by_product($product_id);
-            
-            // Enriquecer con nombre de proveedor si aplica
+            $barcodes = Riverso_Barcode_Model::get_by_product($product_id, null, true);
+
+            // Enriquecer con nombre de proveedor y flag de inactivo
             foreach ($barcodes as &$barcode) {
+                $estado = (string) ($barcode['estado'] ?? '');
+                $activo = intval($barcode['activo'] ?? 0) === 1;
+                $barcode['inactivo'] = !$activo || in_array($estado, ['rechazado', 'en_desuso'], true);
                 if (!empty($barcode['proveedor_id'])) {
                     $proveedor = $wpdb->get_row($wpdb->prepare(
                         "SELECT nombre FROM {$prefix}proveedores WHERE id = %d",
@@ -986,6 +991,7 @@ class Riverso_Product_Module {
                     $barcode['proveedor_nombre'] = $proveedor['nombre'] ?? '';
                 }
             }
+            unset($barcode);
         }
         return is_array($barcodes) ? $barcodes : [];
     }
@@ -1059,7 +1065,15 @@ class Riverso_Product_Module {
 
         foreach ($by_code as $codigo => $rows) {
             $legacy_rows = array_values(array_filter($rows, function ($row) {
-                return Riverso_Barcode_Model::is_legacy_row($row);
+                if (!Riverso_Barcode_Model::is_legacy_row($row)) {
+                    return false;
+                }
+                $estado = (string) ($row['estado'] ?? '');
+                $activo = intval($row['activo'] ?? 0) === 1;
+                if (!$activo || in_array($estado, ['rechazado', 'en_desuso'], true)) {
+                    return false;
+                }
+                return true;
             }));
             if (!$legacy_rows) {
                 continue;
@@ -3240,7 +3254,235 @@ class Riverso_Product_Module {
             (int) ($barcode->producto_base_id ?? $product_id)
         );
 
-        wp_send_json_success(['message' => 'Código de barra marcado como en desuso']);
+        $owner_id = (int) ($barcode->producto_base_id ?? $product_id);
+        $item = $owner_id ? $this->get_product($owner_id) : null;
+        wp_send_json_success([
+            'message' => 'Código de barra marcado como en desuso',
+            'item' => $item,
+        ]);
+    }
+
+    /**
+     * Borrado permanente de un código inactivo (rechazado / en_desuso).
+     */
+    public function ajax_delete_barcode() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $barcode_id = absint($_POST['barcode_id'] ?? 0);
+        $product_id = absint($_POST['product_id'] ?? 0);
+        if (!$barcode_id) {
+            wp_send_json_error(['message' => 'Parámetros inválidos']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $barcode = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}codigo_barra WHERE id = %d",
+            $barcode_id
+        ), ARRAY_A);
+        if (!$barcode) {
+            wp_send_json_error(['message' => 'Código de barra no encontrado']);
+        }
+
+        $pb_id = (int) ($barcode['producto_base_id'] ?? 0);
+        if ($product_id && $pb_id && $pb_id !== $product_id) {
+            wp_send_json_error(['message' => 'El código no pertenece a este producto']);
+        }
+
+        $estado = (string) ($barcode['estado'] ?? '');
+        $activo = intval($barcode['activo'] ?? 0) === 1;
+        $inactivo = !$activo || in_array($estado, ['rechazado', 'en_desuso'], true);
+        if (!$inactivo) {
+            wp_send_json_error(['message' => 'Solo se pueden eliminar códigos inactivos. Desactívalo primero.']);
+        }
+
+        $codigo = (string) ($barcode['codigo'] ?? '');
+        $owner_id = $pb_id ?: $product_id;
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('barcode_deleted', 'codigo_barra', $barcode_id, [
+                'actor_type' => 'human',
+                'producto_base_id' => $owner_id,
+                'codigo' => $codigo,
+                'estado_anterior' => $estado,
+                'razon' => 'Borrado permanente desde hub de productos',
+            ]);
+        }
+
+        $this->close_legacy_barcode_tasks($barcode_id, $codigo, $owner_id);
+        $this->purge_legacy_barcode_copies($codigo, $owner_id);
+
+        $deleted = $wpdb->delete("{$prefix}codigo_barra", ['id' => $barcode_id], ['%d']);
+        if ($deleted === false) {
+            wp_send_json_error(['message' => 'No se pudo eliminar el código de barra']);
+        }
+
+        $item = $owner_id ? $this->get_product($owner_id) : null;
+        wp_send_json_success([
+            'message' => 'Código de barra eliminado permanentemente',
+            'item' => $item,
+        ]);
+    }
+
+    /**
+     * Reactiva un código inactivo si no hay otro vigente con el mismo código.
+     */
+    public function ajax_activate_barcode() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_products')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+
+        $barcode_id = absint($_POST['barcode_id'] ?? 0);
+        $product_id = absint($_POST['product_id'] ?? 0);
+        if (!$barcode_id) {
+            wp_send_json_error(['message' => 'Parámetros inválidos']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $barcode = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$prefix}codigo_barra WHERE id = %d",
+            $barcode_id
+        ), ARRAY_A);
+        if (!$barcode) {
+            wp_send_json_error(['message' => 'Código de barra no encontrado']);
+        }
+
+        $pb_id = (int) ($barcode['producto_base_id'] ?? 0);
+        if ($product_id && $pb_id && $pb_id !== $product_id) {
+            wp_send_json_error(['message' => 'El código no pertenece a este producto']);
+        }
+
+        $estado = (string) ($barcode['estado'] ?? '');
+        $activo = intval($barcode['activo'] ?? 0) === 1;
+        $inactivo = !$activo || in_array($estado, ['rechazado', 'en_desuso'], true);
+        if (!$inactivo) {
+            wp_send_json_error(['message' => 'Este código ya está activo']);
+        }
+
+        $codigo = (string) ($barcode['codigo'] ?? '');
+        if ($codigo === '') {
+            wp_send_json_error(['message' => 'Código inválido']);
+        }
+
+        $other = $wpdb->get_row($wpdb->prepare(
+            "SELECT cb.id, cb.producto_base_id, cb.estado, pb.canonical_sku, pb.nombre_canonico
+             FROM {$prefix}codigo_barra cb
+             LEFT JOIN {$prefix}producto_base pb ON pb.id = cb.producto_base_id
+             WHERE cb.codigo = %s
+               AND cb.id <> %d
+               AND cb.activo = 1
+               AND cb.estado IN ('verificado', 'propuesto')
+             ORDER BY CASE cb.estado WHEN 'verificado' THEN 0 ELSE 1 END, cb.id ASC
+             LIMIT 1",
+            $codigo,
+            $barcode_id
+        ), ARRAY_A);
+
+        if ($other) {
+            $sku = trim((string) ($other['canonical_sku'] ?? ''));
+            $nombre = trim((string) ($other['nombre_canonico'] ?? ''));
+            $label = $sku !== '' ? $sku : ('producto #' . (int) ($other['producto_base_id'] ?? 0));
+            if ($nombre !== '') {
+                $label .= ' — ' . $nombre;
+            }
+            wp_send_json_error([
+                'message' => 'No se puede activar: el código ya está activo en ' . $label . '.',
+                'warning' => true,
+                'other_producto_base_id' => (int) ($other['producto_base_id'] ?? 0),
+                'other_sku' => $sku,
+            ]);
+        }
+
+        $ok = class_exists('Riverso_Barcode_Model')
+            ? Riverso_Barcode_Model::set_status(
+                $barcode_id,
+                'propuesto',
+                'Reactivado desde hub de productos.'
+            )
+            : false;
+        if (!$ok) {
+            wp_send_json_error(['message' => 'No se pudo activar el código']);
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('barcode_activated', 'codigo_barra', $barcode_id, [
+                'actor_type' => 'human',
+                'producto_base_id' => $pb_id ?: $product_id,
+                'codigo' => $codigo,
+                'estado_anterior' => $estado,
+            ]);
+        }
+
+        $item = $this->get_product($pb_id ?: $product_id);
+        wp_send_json_success([
+            'message' => 'Código activado (propuesto)',
+            'item' => $item,
+        ]);
+    }
+
+    /**
+     * Apaga copias legacy del mismo código para el producto indicado.
+     */
+    private function purge_legacy_barcode_copies($codigo, $producto_base_id) {
+        global $wpdb;
+        $codigo = trim((string) $codigo);
+        $producto_base_id = absint($producto_base_id);
+        if ($codigo === '') {
+            return;
+        }
+
+        $prefix = $wpdb->prefix . 'riverso_';
+        $sku = '';
+        if ($producto_base_id > 0) {
+            $sku = (string) $wpdb->get_var($wpdb->prepare(
+                "SELECT canonical_sku FROM {$prefix}producto_base WHERE id = %d",
+                $producto_base_id
+            ));
+        }
+
+        $legacy_table = $wpdb->prefix . 'riverso_barcodes';
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $legacy_table)) === $legacy_table) {
+            if ($sku !== '') {
+                $wpdb->update(
+                    $legacy_table,
+                    ['is_active' => 0],
+                    ['barcode' => $codigo, 'sku' => $sku],
+                    ['%d'],
+                    ['%s', '%s']
+                );
+            }
+            if ($producto_base_id > 0) {
+                $woo = $wpdb->get_row($wpdb->prepare(
+                    "SELECT woocommerce_product_id, woocommerce_variation_id
+                     FROM {$prefix}producto_base WHERE id = %d",
+                    $producto_base_id
+                ), ARRAY_A);
+                $woo_id = absint($woo['woocommerce_product_id'] ?? 0);
+                if ($woo_id > 0) {
+                    $wpdb->query($wpdb->prepare(
+                        "UPDATE {$legacy_table}
+                         SET is_active = 0
+                         WHERE barcode = %s AND product_id = %d",
+                        $codigo,
+                        $woo_id
+                    ));
+                }
+            }
+        }
+
+        $tienda_table = $prefix . 'tienda_local_barcodes';
+        if ($sku !== '' && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $tienda_table)) === $tienda_table) {
+            $wpdb->delete(
+                $tienda_table,
+                ['barcode' => $codigo, 'sku' => $sku],
+                ['%s', '%s']
+            );
+        }
     }
 
     public function ajax_accept_legacy_barcode() {

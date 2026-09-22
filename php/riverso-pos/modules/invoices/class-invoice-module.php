@@ -2804,6 +2804,18 @@ class Riverso_Invoice_Module {
             }
         }
 
+        // Reclasificar flete↔producto cambia el pool de líneas: quitar D/R inferido
+        // obsoleto y recalcular costos de folio + flete inline.
+        $prev_tipo = strtolower(trim((string) ($item->item_tipo ?? 'producto')));
+        if ($prev_tipo === 'flete') {
+            $prev_tipo = 'envio';
+        }
+        $folio_refresh = null;
+        if ($prev_tipo !== $item_tipo
+            && method_exists($this->intake(), 'refresh_folio_costs_after_item_tipo_change')) {
+            $folio_refresh = $this->intake()->refresh_folio_costs_after_item_tipo_change((int) $item->factura_id);
+        }
+
         if (class_exists('Riverso_Audit_Module')) {
             Riverso_Audit_Module::get_instance()->log(
                 'invoice_item_tipo_updated',
@@ -2814,6 +2826,7 @@ class Riverso_Invoice_Module {
                     'item_id'   => $item_id,
                     'item_tipo' => $item_tipo,
                     'prev_tipo' => $item->item_tipo ?? '',
+                    'folio_dr_refreshed' => !is_wp_error($folio_refresh) && $folio_refresh !== null,
                 ],
                 sprintf('Tipo de línea #%d → %s', $item_id, $item_tipo)
             );
@@ -2853,6 +2866,11 @@ class Riverso_Invoice_Module {
         $modo_ingreso = 'solo_costos';
 
         $this->intake()->apply_item_tipos_for_subtipo($factura_id, $documento_subtipo);
+
+        if (in_array($documento_subtipo, ['productos', 'guia_despacho', 'nota_credito'], true)
+            && method_exists($this->intake(), 'refresh_folio_costs_after_item_tipo_change')) {
+            $this->intake()->refresh_folio_costs_after_item_tipo_change($factura_id);
+        }
 
         $wpdb->update(
             "{$prefix}facturas",

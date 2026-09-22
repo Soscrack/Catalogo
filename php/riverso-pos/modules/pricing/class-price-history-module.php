@@ -103,6 +103,7 @@ class Riverso_Price_History_Module {
         add_action('wp_ajax_riverso_price_folio_process_set_estado', [$this, 'ajax_folio_process_set_estado']);
         add_action('wp_ajax_riverso_price_folio_process_archive', [$this, 'ajax_folio_process_archive']);
         add_action('wp_ajax_riverso_price_folio_process_family', [$this, 'ajax_folio_process_family']);
+        add_action('wp_ajax_riverso_price_folio_family_map_code', [$this, 'ajax_folio_family_map_code']);
         add_action('wp_ajax_riverso_price_folio_process_hybrid_items', [$this, 'ajax_folio_process_hybrid_items']);
         add_action('wp_ajax_riverso_price_folio_process_start_hybrid', [$this, 'ajax_folio_process_start_hybrid']);
         add_action('wp_ajax_riverso_price_folio_process_update_omitidos', [$this, 'ajax_folio_process_update_omitidos']);
@@ -743,6 +744,28 @@ class Riverso_Price_History_Module {
             ? floatval($_POST['p_asignado'])
             : null;
         $result = $svc->preview_family(absint($_POST['grupo_id'] ?? 0), $p);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success($result);
+    }
+
+    public function ajax_folio_family_map_code() {
+        $this->check_view();
+        if (!current_user_can('riverso_manage_products') && !current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Sin permisos para mapear códigos'], 403);
+        }
+        $svc = $this->folio_process();
+        if (!$svc) {
+            wp_send_json_error(['message' => 'Servicio no disponible']);
+        }
+        $result = $svc->map_family_code(
+            absint($_POST['grupo_id'] ?? 0),
+            sanitize_key($_POST['code_tipo'] ?? 'barcode'),
+            absint($_POST['code_id'] ?? 0),
+            sanitize_key($_POST['accion'] ?? 'move'),
+            absint($_POST['destino_producto_base_id'] ?? 0)
+        );
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
         }

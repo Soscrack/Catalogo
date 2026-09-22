@@ -72,7 +72,11 @@
             '.riverso-fp-inline-skus .sku-online code{color:#2e7d32;}' +
             '.riverso-family-modal-panel .unit-rule-suggest{border:1px solid #c3c4c7;background:#fff;max-height:180px;overflow-y:auto;margin-top:6px;}' +
             '.riverso-family-modal-panel .unit-rule-item{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid #f0f0f1;padding:7px 10px;cursor:pointer;}' +
-            '.riverso-family-modal-panel .unit-rule-item:hover{background:#f0f6fc;}';
+            '.riverso-family-modal-panel .unit-rule-item:hover{background:#f0f6fc;}' +
+            '.riverso-family-modal-panel .commercial-tipo-row{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0 12px;}' +
+            '.riverso-family-modal-panel .commercial-tipo-row label{font-size:13px;display:flex;align-items:center;gap:4px;}' +
+            '.riverso-family-modal-panel .pack-tier-row,.riverso-family-modal-panel .kit-comp-row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin:6px 0;padding:8px;background:#fff;border:1px solid #c8e6c9;border-radius:4px;}' +
+            '.riverso-family-modal-panel .factor-warn{color:#c62828;font-weight:700;}';
         document.head.appendChild(css);
     }
 
@@ -1072,7 +1076,9 @@
         post('riverso_families_create', {
             nombre: nombre,
             codigo_grupo: codigo,
-            tipo_sustitucion: tipo
+            tipo_sustitucion: tipo,
+            tipo_comercial: currentTipoComercial($modal),
+            pack_modo: $modal.find('.pack-modo').val() || $modal.find('.kit-modo').val() || 'ilimitado'
         }).done(function (resp) {
             if (!resp.success || !resp.data || !resp.data.family) {
                 d.reject({ message: (resp.data && resp.data.message) || 'No se pudo crear la familia' });
@@ -1384,20 +1390,693 @@
     }
 
     function loadUnitPanelIntoModal($modal, familyId, members) {
-        if (!familyId) {
-            $modal.find('.riverso-unit-panel-wrap').html(renderUnitPanel(null, 0, members || []));
-            bindUnitPanel($modal);
+        refreshCommercialPanels($modal, familyId, null);
+    }
+
+    function currentTipoComercial($modal) {
+        var v = $modal.find('input[name="family-tipo-comercial"]:checked').val();
+        return v || '';
+    }
+
+    function fmtPct(f) {
+        if (f === null || f === undefined || isNaN(Number(f))) {
+            return '—';
+        }
+        return (Number(f) * 100).toFixed(1) + '%';
+    }
+
+    function renderCommercialTipoSelector(tipo) {
+        tipo = tipo || '';
+        var opts = [
+            { v: 'unitario', l: 'Producto unitario' },
+            { v: 'pack', l: 'Producto pack' },
+            { v: 'kit', l: 'Producto kit' }
+        ];
+        var html = '<div class="riverso-commercial-tipo" style="margin:12px 0;padding:12px;border:1px solid #bdbdbd;border-radius:4px;background:#fafafa;">' +
+            '<strong>Tipo de familia (comercial)</strong>' +
+            '<p style="margin:4px 0 8px;font-size:12px;color:#666;">Excluyentes: solo uno activo. Cambiar avisa si ya había configuración.</p>' +
+            '<div class="commercial-tipo-row">';
+        opts.forEach(function (o) {
+            html += '<label><input type="radio" name="family-tipo-comercial" value="' + o.v + '"' +
+                (tipo === o.v ? ' checked' : '') +
+                (canManage() ? '' : ' disabled') + '> ' + o.l + '</label>';
+        });
+        html += '<label><input type="radio" name="family-tipo-comercial" value=""' +
+            (tipo === '' ? ' checked' : '') +
+            (canManage() ? '' : ' disabled') + '> Sin tipo</label>';
+        html += '</div></div>';
+        return html;
+    }
+
+    function renderPackPanel(commercial) {
+        commercial = commercial || {};
+        var modo = commercial.pack_modo || 'ilimitado';
+        var base = commercial.base || {};
+        var tiers = commercial.pack_tiers || [];
+        var baseId = commercial.pack_base_producto_id || (base.producto_base_id || '');
+        var baseLabel = base.canonical_sku
+            ? ('SKU ' + base.canonical_sku + ' — ' + (base.nombre_canonico || ''))
+            : 'Sin SKU base';
+        var pTxt = base.p_asignado != null ? ('$' + Number(base.p_asignado).toLocaleString('es-CL')) : '—';
+        var html = '<div class="riverso-pack-panel" style="margin:12px 0;padding:12px;border:1px solid #81c784;border-radius:4px;background:#e8f5e9;">' +
+            '<strong>Producto pack</strong>' +
+            '<div style="margin-top:8px;font-size:13px;">' +
+            '<label>Modo stock<br><select class="pack-modo">' +
+            '<option value="ilimitado"' + (modo === 'ilimitado' ? ' selected' : '') + '>Ilimitado (default, sin SKU extra)</option>' +
+            '<option value="limitado"' + (modo === 'limitado' ? ' selected' : '') + '>Limitado (SKU por tamaño + embolsado)</option>' +
+            '</select></label>' +
+            '<div style="margin-top:8px;">Base: <code class="pack-base-label">' + esc(baseLabel) + '</code> · P: <strong>' + pTxt + '</strong>' +
+            '<input type="hidden" class="pack-base-id" value="' + esc(String(baseId || '')) + '">' +
+            '</div>' +
+            '<div style="margin-top:8px;"><strong>Buscar SKU base</strong><br>' +
+            '<input type="text" class="pack-base-search regular-text" placeholder="SKU o nombre…" style="width:100%;box-sizing:border-box;">' +
+            '<div class="pack-base-results" style="margin-top:6px;"></div></div>' +
+            '<div style="margin-top:12px;padding-top:10px;border-top:1px dashed #81c784;">' +
+            '<p style="margin:0 0 8px;font-size:12px;color:#666;">O crear producto unitario nuevo:</p>' +
+            '<label style="display:block;margin-bottom:6px;">SKU nuevo<br>' +
+            '<input type="text" class="pack-new-sku" value="" style="width:140px;"> ' +
+            '<button type="button" class="button button-small pack-next-sku">Generar SKU</button></label>' +
+            '<label style="display:block;margin-bottom:6px;">Nombre<br>' +
+            '<input type="text" class="pack-new-nombre large-text" value="" style="width:100%;box-sizing:border-box;" ' +
+            'placeholder="Ej. Tornillo M6 suelto"></label>' +
+            '<label style="display:block;margin-bottom:6px;">Precio asignado (P)<br>' +
+            '<input type="number" step="0.01" class="pack-new-precio" value="" style="width:120px;"></label>' +
+            '<button type="button" class="button button-small pack-create-base" style="margin-top:4px;">Crear y usar como base</button>' +
+            '</div>' +
+            '<div style="margin-top:12px;"><strong>Tramos de pack</strong> ' +
+            '<button type="button" class="button button-small pack-tier-add">+ Tramo</button></div>' +
+            '<div class="pack-tiers-wrap">';
+        if (!tiers.length) {
+            html += renderPackTierRow({ cantidad: 6, descuento_modo: 'precio', descuento_pct: 0.1 });
+        } else {
+            tiers.forEach(function (t) {
+                html += renderPackTierRow(t);
+            });
+        }
+        html += '</div>';
+        if (modo === 'limitado') {
+            html += '<p style="margin:10px 0 0;font-size:12px;color:#555;">Pack limitado: al guardar se crean/actualizan SKUs por tamaño y su precio (T50 al total). ' +
+                'Armá packs en <a href="' + esc(commercial.manufacturing_url || 'admin.php?page=riverso-pos-manufacturing') +
+                '" target="_blank" rel="noopener">Embolsar</a>.</p>';
+        }
+        html += '<div style="margin-top:12px;padding-top:10px;border-top:1px dashed #81c784;">' +
+            '<strong>Combinación conveniente</strong><br>' +
+            '<label>Cantidad del cliente <input type="number" class="pack-combo-qty" min="1" step="1" value="13" style="width:80px;"> ' +
+            '<button type="button" class="button button-small pack-combo-run">Calcular</button></label>' +
+            '<div class="pack-combo-result" style="margin-top:8px;font-size:12px;"></div></div>' +
+            '<button type="button" class="button button-primary pack-save" style="margin-top:10px;">Guardar pack</button>' +
+            '</div></div>';
+        return html;
+    }
+
+    function renderPackTierRow(t) {
+        t = t || {};
+        var pct = t.descuento_pct != null
+            ? (Number(t.descuento_pct) <= 1 ? Number(t.descuento_pct) * 100 : Number(t.descuento_pct))
+            : 10;
+        var modo = t.descuento_modo || 'precio';
+        var prev = t.preview || {};
+        var warn = prev.factor_warn
+            ? ' <span class="factor-warn">⚠ factor ' + esc(String(prev.factor)) + ' &lt; 1.1</span>'
+            : (prev.factor != null ? ' · factor ' + esc(String(prev.factor)) : '');
+        var prevHtml = prev.total != null
+            ? ('<div style="width:100%;font-size:11px;color:#555;">Total T50: <strong>$' +
+                Number(prev.total).toLocaleString('es-CL') + '</strong> · desc. precio ' +
+                fmtPct(prev.descuento_al_precio) + ' · desc. margen ' + fmtPct(prev.descuento_al_margen) + warn +
+                (t.pack_sku ? (' · SKU <code>' + esc(t.pack_sku) + '</code>') : '') +
+                '</div>')
+            : (prev.error ? '<div style="width:100%;font-size:11px;color:#c62828;">' + esc(prev.error) + '</div>' : '');
+        return '<div class="pack-tier-row" data-tier-id="' + esc(String(t.id || '')) + '">' +
+            '<label>Cant. <input type="number" class="pack-tier-qty" min="2" step="1" value="' + esc(String(t.cantidad || 6)) + '" style="width:70px;"></label>' +
+            '<label>Modo <select class="pack-tier-modo">' +
+            '<option value="precio"' + (modo === 'precio' ? ' selected' : '') + '>Desc. al precio</option>' +
+            '<option value="margen"' + (modo === 'margen' ? ' selected' : '') + '>Desc. al margen</option>' +
+            '</select></label>' +
+            '<label>Desc. % <input type="number" class="pack-tier-pct" min="0" max="99.99" step="0.1" value="' +
+            esc(String(pct)) + '" style="width:80px;"></label>' +
+            '<input type="hidden" class="pack-tier-product" value="' + esc(String(t.producto_pack_id || '')) + '">' +
+            '<button type="button" class="button button-small pack-tier-remove">Quitar</button>' +
+            prevHtml +
+            '</div>';
+    }
+
+    function renderKitPanel(commercial) {
+        commercial = commercial || {};
+        var modo = commercial.pack_modo || 'ilimitado';
+        var comps = commercial.kit_components || [];
+        var pricing = commercial.kit_pricing || {};
+        var dModo = commercial.kit_descuento_modo || 'precio';
+        var dPct = commercial.kit_descuento_pct != null
+            ? (Number(commercial.kit_descuento_pct) <= 1
+                ? Number(commercial.kit_descuento_pct) * 100
+                : Number(commercial.kit_descuento_pct))
+            : 10;
+        var html = '<div class="riverso-kit-panel" style="margin:12px 0;padding:12px;border:1px solid #ffb74d;border-radius:4px;background:#fff8e1;">' +
+            '<strong>Producto kit</strong>' +
+            '<div style="margin-top:8px;font-size:13px;">' +
+            '<label>Modo stock<br><select class="kit-modo">' +
+            '<option value="ilimitado"' + (modo === 'ilimitado' ? ' selected' : '') + '>Ilimitado (default)</option>' +
+            '<option value="limitado"' + (modo === 'limitado' ? ' selected' : '') + '>Limitado (SKU del kit)</option>' +
+            '</select></label>' +
+            '<div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;">' +
+            '<label>Modo descuento<br><select class="kit-desc-modo">' +
+            '<option value="precio"' + (dModo === 'precio' ? ' selected' : '') + '>Desc. al precio</option>' +
+            '<option value="margen"' + (dModo === 'margen' ? ' selected' : '') + '>Desc. al margen</option>' +
+            '</select></label>' +
+            '<label>Desc. %<br><input type="number" class="kit-desc-pct" min="0" max="99.99" step="0.1" value="' +
+            esc(String(dPct)) + '" style="width:90px;"></label></div>' +
+            '<div style="margin-top:10px;"><strong>Componentes</strong> ' +
+            '<button type="button" class="button button-small kit-comp-add">+ Componente</button></div>' +
+            '<div class="kit-comps-wrap">';
+        if (!comps.length) {
+            html += '<p class="description kit-comps-empty">Agregá productos distintos (ej. brochas 1″, 2″, 3″).</p>';
+        } else {
+            comps.forEach(function (c) {
+                html += renderKitCompRow(c);
+            });
+        }
+        html += '</div>';
+        html += '<div style="margin-top:8px;"><input type="text" class="kit-comp-search regular-text" placeholder="Buscar producto para el kit…" style="width:100%;box-sizing:border-box;">' +
+            '<div class="kit-comp-results" style="margin-top:6px;"></div></div>';
+        html += '<div style="margin-top:12px;padding-top:10px;border-top:1px dashed #ffcc80;">' +
+            '<p style="margin:0 0 8px;font-size:12px;color:#666;">O crear producto unitario nuevo:</p>' +
+            '<label style="display:block;margin-bottom:6px;">SKU nuevo<br>' +
+            '<input type="text" class="kit-new-sku" value="" style="width:140px;"> ' +
+            '<button type="button" class="button button-small kit-next-sku">Generar SKU</button></label>' +
+            '<label style="display:block;margin-bottom:6px;">Nombre<br>' +
+            '<input type="text" class="kit-new-nombre large-text" value="" style="width:100%;box-sizing:border-box;"></label>' +
+            '<label style="display:block;margin-bottom:6px;">Precio asignado (P)<br>' +
+            '<input type="number" step="0.01" class="kit-new-precio" value="" style="width:120px;"></label>' +
+            '<label style="display:block;margin-bottom:6px;">Cantidad en el kit<br>' +
+            '<input type="number" class="kit-new-qty" min="0.0001" step="1" value="1" style="width:80px;"></label>' +
+            '<button type="button" class="button button-small kit-create-comp" style="margin-top:4px;">Crear y agregar al kit</button>' +
+            '</div>';
+        if (pricing && pricing.total != null) {
+            var warn = pricing.factor_warn
+                ? ' <span class="factor-warn">⚠ factor ' + esc(String(pricing.factor)) + ' &lt; 1.1</span>'
+                : '';
+            html += '<div class="kit-pricing-box" style="margin-top:10px;padding:8px;background:#fff;border:1px solid #ffcc80;border-radius:4px;font-size:12px;">' +
+                'Suma sueltos: <strong>$' + Number(pricing.suma_precios).toLocaleString('es-CL') + '</strong><br>' +
+                'Precio kit T50: <strong>$' + Number(pricing.total).toLocaleString('es-CL') + '</strong><br>' +
+                'Desc. al precio: ' + fmtPct(pricing.descuento_al_precio) +
+                ' · Desc. al margen: ' + fmtPct(pricing.descuento_al_margen) +
+                (pricing.factor != null ? (' · Factor: ' + esc(String(pricing.factor))) : '') + warn +
+                (commercial.kit_sku_producto_id ? ('<br>SKU kit id: ' + commercial.kit_sku_producto_id) : '') +
+                '</div>';
+        } else if (pricing && pricing.error) {
+            html += '<p style="color:#c62828;font-size:12px;">' + esc(pricing.error) + '</p>';
+        }
+        html += '<button type="button" class="button button-primary kit-save" style="margin-top:10px;">Guardar kit</button>' +
+            '</div></div>';
+        return html;
+    }
+
+    function renderKitCompRow(c) {
+        c = c || {};
+        return '<div class="kit-comp-row" data-pid="' + esc(String(c.producto_base_id || '')) + '">' +
+            '<div style="flex:1;min-width:160px;"><code>' + esc(c.canonical_sku || '') + '</code> ' +
+            esc(c.nombre_canonico || '') +
+            (c.p_asignado != null ? (' · P $' + Number(c.p_asignado).toLocaleString('es-CL')) : ' · sin precio') +
+            '</div>' +
+            '<label>Cant. <input type="number" class="kit-comp-qty" min="0.0001" step="1" value="' +
+            esc(String(c.cantidad != null ? c.cantidad : 1)) + '" style="width:70px;"></label>' +
+            '<button type="button" class="button button-small kit-comp-remove">Quitar</button></div>';
+    }
+
+    function refreshCommercialPanels($modal, familyId, commercial) {
+        var tipo = currentTipoComercial($modal);
+        var $wrap = $modal.find('.riverso-unit-panel-wrap');
+
+        function paint(com) {
+            com = com || {};
+            if (tipo === 'unitario' || tipo === '') {
+                if (tipo === 'unitario' || !tipo) {
+                    // unitario: panel unitario; vacío: sin panel comercial
+                }
+            }
+            if (tipo === 'unitario') {
+                if (!familyId) {
+                    $wrap.html(renderUnitPanel(null, 0, []));
+                    bindUnitPanel($modal);
+                    return;
+                }
+                post('riverso_families_unit_get', { grupo_id: familyId }).done(function (r) {
+                    var unit = r.success ? r.data.unit : null;
+                    $wrap.html(renderUnitPanel(unit, familyId, []));
+                    bindUnitPanel($modal);
+                    var uid = unit && unit.unit && unit.unit.id;
+                    if (uid) {
+                        loadLinkPreview($modal, familyId, uid);
+                    }
+                });
+                return;
+            }
+            if (tipo === 'pack') {
+                $wrap.html(renderPackPanel(com));
+                bindPackPanel($modal);
+                return;
+            }
+            if (tipo === 'kit') {
+                $wrap.html(renderKitPanel(com));
+                bindKitPanel($modal);
+                return;
+            }
+            $wrap.empty();
+        }
+
+        if (commercial) {
+            paint(commercial);
             return;
         }
-        post('riverso_families_unit_get', { grupo_id: familyId }).done(function (r) {
-            var unit = r.success ? r.data.unit : null;
-            var html = renderUnitPanel(unit, familyId, members);
-            $modal.find('.riverso-unit-panel-wrap').html(html);
-            bindUnitPanel($modal);
-            var uid = unit && unit.unit && unit.unit.id;
-            if (uid) {
-                loadLinkPreview($modal, familyId, uid);
+        if (!familyId || (tipo !== 'pack' && tipo !== 'kit')) {
+            paint(null);
+            return;
+        }
+        post('riverso_families_commercial_get', { grupo_id: familyId }).done(function (r) {
+            paint(r.success ? r.data.commercial : null);
+        }).fail(function () {
+            paint(null);
+        });
+    }
+
+    function collectPackTiers($modal) {
+        var tiers = [];
+        $modal.find('.pack-tier-row').each(function (i) {
+            var $r = $(this);
+            tiers.push({
+                id: $r.data('tier-id') || 0,
+                cantidad: parseInt($r.find('.pack-tier-qty').val(), 10) || 0,
+                descuento_modo: $r.find('.pack-tier-modo').val() || 'precio',
+                descuento_pct: parseFloat($r.find('.pack-tier-pct').val()) || 0,
+                producto_pack_id: parseInt($r.find('.pack-tier-product').val(), 10) || 0,
+                orden: i + 1
+            });
+        });
+        return tiers;
+    }
+
+    function savePackFromPanel($modal, familyId) {
+        var d = $.Deferred();
+        var baseId = parseInt($modal.find('.pack-base-id').val(), 10) || 0;
+        var newSku = ($modal.find('.pack-new-sku').val() || '').trim();
+        var newNombre = ($modal.find('.pack-new-nombre').val() || '').trim();
+        if (!baseId && !newSku && !newNombre) {
+            d.reject({ message: 'Elegí el SKU base del pack o creá uno nuevo' });
+            return d.promise();
+        }
+        var payload = {
+            grupo_id: familyId,
+            pack_modo: $modal.find('.pack-modo').val() || 'ilimitado',
+            pack_base_producto_id: baseId,
+            tiers: JSON.stringify(collectPackTiers($modal))
+        };
+        if (!baseId) {
+            payload.create_base_sku = newSku;
+            payload.create_base_nombre = newNombre;
+            payload.create_base_precio = $modal.find('.pack-new-precio').val() || '';
+        }
+        post('riverso_families_commercial_save_pack', payload).done(function (r) {
+            if (!r.success) {
+                d.reject({ message: (r.data && r.data.message) || 'Error al guardar pack' });
+                return;
             }
+            refreshCommercialPanels($modal, familyId, r.data.commercial);
+            d.resolve({ ok: true, message: 'Pack guardado', commercial: r.data.commercial });
+        }).fail(function () {
+            d.reject({ message: 'Error de red al guardar pack' });
+        });
+        return d.promise();
+    }
+
+    function collectKitComponents($modal) {
+        var comps = [];
+        $modal.find('.kit-comp-row').each(function (i) {
+            var $r = $(this);
+            comps.push({
+                producto_base_id: parseInt($r.data('pid'), 10) || 0,
+                cantidad: parseFloat($r.find('.kit-comp-qty').val()) || 1,
+                orden: i + 1
+            });
+        });
+        return comps;
+    }
+
+    function saveKitFromPanel($modal, familyId) {
+        var d = $.Deferred();
+        post('riverso_families_commercial_save_kit', {
+            grupo_id: familyId,
+            pack_modo: $modal.find('.kit-modo').val() || 'ilimitado',
+            descuento_modo: $modal.find('.kit-desc-modo').val() || 'precio',
+            descuento_pct: parseFloat($modal.find('.kit-desc-pct').val()) || 0,
+            components: JSON.stringify(collectKitComponents($modal))
+        }).done(function (r) {
+            if (!r.success) {
+                d.reject({ message: (r.data && r.data.message) || 'Error al guardar kit' });
+                return;
+            }
+            refreshCommercialPanels($modal, familyId, r.data.commercial);
+            d.resolve({ ok: true, message: 'Kit guardado', commercial: r.data.commercial });
+        }).fail(function () {
+            d.reject({ message: 'Error de red al guardar kit' });
+        });
+        return d.promise();
+    }
+
+    function bindPackPanel($modal) {
+        if (!canManage()) {
+            return;
+        }
+        var searchTimer = null;
+        $modal.find('.pack-tier-add').off('click.pack').on('click.pack', function () {
+            $modal.find('.pack-tiers-wrap').append(renderPackTierRow({ cantidad: 10, descuento_modo: 'precio', descuento_pct: 0.15 }));
+        });
+        $modal.off('click.packTier').on('click.packTier', '.pack-tier-remove', function () {
+            $(this).closest('.pack-tier-row').remove();
+        });
+        $modal.find('.pack-save').off('click.pack').on('click.pack', function () {
+            var fid = currentFamilyId($modal);
+            if (!fid) {
+                alert('Guardá la familia primero (nombre) o usá Guardar todo');
+                return;
+            }
+            var $btn = $(this).prop('disabled', true).text('Guardando…');
+            savePackFromPanel($modal, fid).done(function (res) {
+                alert(res.message || 'Pack guardado');
+            }).fail(function (err) {
+                alert((err && err.message) || 'Error');
+            }).always(function () {
+                $btn.prop('disabled', false).text('Guardar pack');
+            });
+        });
+        $modal.find('.pack-combo-run').off('click.pack').on('click.pack', function () {
+            var fid = currentFamilyId($modal);
+            var qty = parseInt($modal.find('.pack-combo-qty').val(), 10) || 0;
+            var $out = $modal.find('.pack-combo-result');
+            if (!fid || qty < 1) {
+                $out.html('<span style="color:#c62828;">Indicá cantidad y guardá la familia.</span>');
+                return;
+            }
+            $out.text('Calculando…');
+            post('riverso_families_commercial_optimize', { grupo_id: fid, qty: qty }).done(function (r) {
+                if (!r.success) {
+                    $out.html('<span style="color:#c62828;">' + esc((r.data && r.data.message) || 'Error') + '</span>');
+                    return;
+                }
+                var c = r.data.combo;
+                var parts = (c.items || []).map(function (it) {
+                    if (it.type === 'suelto') {
+                        return it.count + ' suelto(s) × $' + Number(it.unit_cost).toLocaleString('es-CL');
+                    }
+                    return it.count + '× pack ' + it.pack_qty + ' ($' + Number(it.unit_cost).toLocaleString('es-CL') + ' c/u)';
+                });
+                var alt = (c.alternatives || []).map(function (a) {
+                    return '<li>' + esc(a.label) + ': $' + Number(a.total).toLocaleString('es-CL') + '</li>';
+                }).join('');
+                $out.html(
+                    '<strong>Óptimo: $' + Number(c.total).toLocaleString('es-CL') + '</strong><br>' +
+                    esc(parts.join(' + ')) +
+                    (alt ? ('<ul style="margin:6px 0 0 18px;">' + alt + '</ul>') : '')
+                );
+            }).fail(function () {
+                $out.html('<span style="color:#c62828;">Error de red</span>');
+            });
+        });
+        $modal.find('.pack-next-sku').off('click.pack').on('click.pack', function () {
+            post('riverso_products_next_sku', {}).done(function (r) {
+                if (r.success && r.data && r.data.next_sku) {
+                    $modal.find('.pack-new-sku').val(r.data.next_sku);
+                    $modal.find('.pack-base-id').val('');
+                    $modal.find('.pack-base-label').text('Nuevo (sin guardar aún)');
+                }
+            });
+        });
+        $modal.find('.pack-create-base').off('click.pack').on('click.pack', function () {
+            var fid = currentFamilyId($modal);
+            var sku = ($modal.find('.pack-new-sku').val() || '').trim();
+            var nombre = ($modal.find('.pack-new-nombre').val() || '').trim();
+            if (!nombre) {
+                alert('Indicá el nombre del producto nuevo');
+                return;
+            }
+            var $btn = $(this).prop('disabled', true).text('Creando…');
+            post('riverso_families_commercial_create_product', {
+                grupo_id: fid || 0,
+                canonical_sku: sku,
+                nombre: nombre,
+                p_asignado: $modal.find('.pack-new-precio').val() || '',
+                origen_datos: 'family_pack_base'
+            }).done(function (r) {
+                if (!r.success || !r.data || !r.data.product) {
+                    alert((r.data && r.data.message) || 'No se pudo crear el producto');
+                    return;
+                }
+                var p = r.data.product;
+                $modal.find('.pack-base-id').val(String(p.producto_base_id));
+                $modal.find('.pack-base-label').text('SKU ' + (p.canonical_sku || '') + ' — ' + (p.nombre_canonico || ''));
+                $modal.find('.pack-new-sku').val(p.canonical_sku || '');
+                $modal.find('.pack-new-nombre').val(p.nombre_canonico || '');
+                alert('Producto creado y seleccionado como base: SKU ' + (p.canonical_sku || p.producto_base_id));
+            }).fail(function () {
+                alert('Error de red');
+            }).always(function () {
+                $btn.prop('disabled', false).text('Crear y usar como base');
+            });
+        });
+        $modal.find('.pack-base-search').off('input.pack').on('input.pack', function () {
+            var q = $(this).val().trim();
+            var $res = $modal.find('.pack-base-results');
+            clearTimeout(searchTimer);
+            if (q.length < 2) {
+                $res.empty();
+                return;
+            }
+            searchTimer = setTimeout(function () {
+                post('riverso_families_search_candidates', {
+                    q: q,
+                    grupo_id: currentFamilyId($modal) || 0,
+                    limit: 8
+                }).done(function (resp) {
+                    if (!resp.success) {
+                        $res.html('<span style="color:#c62828;">' + esc((resp.data && resp.data.message) || 'Error') + '</span>');
+                        return;
+                    }
+                    var items = (resp.data && resp.data.candidates) || resp.data.items || [];
+                    if (!items.length) {
+                        $res.html('<span style="color:#999;">Sin resultados</span>');
+                        return;
+                    }
+                    $res.html(items.map(function (it) {
+                        var id = it.producto_base_id || it.id;
+                        var sku = it.sku_local || it.canonical_sku || '';
+                        var nom = it.nombre_canonico || it.nombre || '';
+                        return '<button type="button" class="button button-small pack-base-pick" data-id="' +
+                            esc(String(id)) + '" data-sku="' + esc(sku) + '" data-nombre="' + esc(nom) +
+                            '" style="display:block;margin:2px 0;text-align:left;">' +
+                            '<code>' + esc(sku) + '</code> ' + esc(nom) + '</button>';
+                    }).join(''));
+                });
+            }, 250);
+        });
+        $modal.off('click.packPick').on('click.packPick', '.pack-base-pick', function () {
+            var id = $(this).data('id');
+            var sku = $(this).data('sku');
+            var nom = $(this).data('nombre');
+            $modal.find('.pack-base-id').val(id);
+            $modal.find('.pack-base-label').text('SKU ' + sku + ' — ' + nom);
+            $modal.find('.pack-base-results').empty();
+            $modal.find('.pack-base-search').val('');
+            $modal.find('.pack-new-sku').val('');
+            $modal.find('.pack-new-nombre').val('');
+            $modal.find('.pack-new-precio').val('');
+        });
+    }
+
+    function bindKitPanel($modal) {
+        if (!canManage()) {
+            return;
+        }
+        var searchTimer = null;
+        $modal.find('.kit-save').off('click.kit').on('click.kit', function () {
+            var fid = currentFamilyId($modal);
+            if (!fid) {
+                alert('Guardá la familia primero o usá Guardar todo');
+                return;
+            }
+            var $btn = $(this).prop('disabled', true).text('Guardando…');
+            saveKitFromPanel($modal, fid).done(function (res) {
+                alert(res.message || 'Kit guardado');
+            }).fail(function (err) {
+                alert((err && err.message) || 'Error');
+            }).always(function () {
+                $btn.prop('disabled', false).text('Guardar kit');
+            });
+        });
+        $modal.find('.kit-next-sku').off('click.kit').on('click.kit', function () {
+            post('riverso_products_next_sku', {}).done(function (r) {
+                if (r.success && r.data && r.data.next_sku) {
+                    $modal.find('.kit-new-sku').val(r.data.next_sku);
+                }
+            });
+        });
+        $modal.find('.kit-create-comp').off('click.kit').on('click.kit', function () {
+            var fid = currentFamilyId($modal);
+            var sku = ($modal.find('.kit-new-sku').val() || '').trim();
+            var nombre = ($modal.find('.kit-new-nombre').val() || '').trim();
+            var qty = parseFloat($modal.find('.kit-new-qty').val()) || 1;
+            if (!nombre) {
+                alert('Indicá el nombre del producto nuevo');
+                return;
+            }
+            var $btn = $(this).prop('disabled', true).text('Creando…');
+            post('riverso_families_commercial_create_product', {
+                grupo_id: fid || 0,
+                canonical_sku: sku,
+                nombre: nombre,
+                p_asignado: $modal.find('.kit-new-precio').val() || '',
+                origen_datos: 'family_kit_component'
+            }).done(function (r) {
+                if (!r.success || !r.data || !r.data.product) {
+                    alert((r.data && r.data.message) || 'No se pudo crear el producto');
+                    return;
+                }
+                var p = r.data.product;
+                $modal.find('.kit-comps-empty').remove();
+                $modal.find('.kit-comps-wrap').append(renderKitCompRow({
+                    producto_base_id: p.producto_base_id,
+                    canonical_sku: p.canonical_sku,
+                    nombre_canonico: p.nombre_canonico,
+                    p_asignado: p.p_asignado,
+                    cantidad: qty
+                }));
+                $modal.find('.kit-new-sku').val('');
+                $modal.find('.kit-new-nombre').val('');
+                $modal.find('.kit-new-precio').val('');
+                $modal.find('.kit-new-qty').val('1');
+                alert('Producto creado y agregado al kit: SKU ' + (p.canonical_sku || p.producto_base_id));
+            }).fail(function () {
+                alert('Error de red');
+            }).always(function () {
+                $btn.prop('disabled', false).text('Crear y agregar al kit');
+            });
+        });
+        $modal.off('click.kitRm').on('click.kitRm', '.kit-comp-remove', function () {
+            $(this).closest('.kit-comp-row').remove();
+            if (!$modal.find('.kit-comp-row').length) {
+                $modal.find('.kit-comps-wrap').html('<p class="description kit-comps-empty">Agregá productos distintos.</p>');
+            }
+        });
+        $modal.find('.kit-comp-search').off('input.kit').on('input.kit', function () {
+            var q = $(this).val().trim();
+            var $res = $modal.find('.kit-comp-results');
+            clearTimeout(searchTimer);
+            if (q.length < 2) {
+                $res.empty();
+                return;
+            }
+            searchTimer = setTimeout(function () {
+                post('riverso_families_search_candidates', {
+                    q: q,
+                    grupo_id: currentFamilyId($modal) || 0,
+                    limit: 8
+                }).done(function (resp) {
+                    var items = (resp.data && resp.data.candidates) || (resp.data && resp.data.items) || [];
+                    if (!resp.success || !items.length) {
+                        $res.html('<span style="color:#999;">Sin resultados</span>');
+                        return;
+                    }
+                    $res.html(items.map(function (it) {
+                        var id = it.producto_base_id || it.id;
+                        var sku = it.sku_local || it.canonical_sku || '';
+                        var nom = it.nombre_canonico || it.nombre || '';
+                        return '<button type="button" class="button button-small kit-comp-pick" data-id="' +
+                            esc(String(id)) + '" data-sku="' + esc(sku) + '" data-nombre="' + esc(nom) +
+                            '" style="display:block;margin:2px 0;text-align:left;">' +
+                            '<code>' + esc(sku) + '</code> ' + esc(nom) + '</button>';
+                    }).join(''));
+                });
+            }, 250);
+        });
+        $modal.off('click.kitPick').on('click.kitPick', '.kit-comp-pick', function () {
+            var id = $(this).data('id');
+            var sku = $(this).data('sku');
+            var nom = $(this).data('nombre');
+            if ($modal.find('.kit-comp-row[data-pid="' + id + '"]').length) {
+                alert('Ese producto ya está en el kit');
+                return;
+            }
+            $modal.find('.kit-comps-empty').remove();
+            $modal.find('.kit-comps-wrap').append(renderKitCompRow({
+                producto_base_id: id,
+                canonical_sku: sku,
+                nombre_canonico: nom,
+                cantidad: 1
+            }));
+            $modal.find('.kit-comp-results').empty();
+            $modal.find('.kit-comp-search').val('');
+        });
+    }
+
+    function bindCommercialTipo($modal, initialTipo) {
+        $modal.data('tipoComercial', initialTipo || '');
+        $modal.find('input[name="family-tipo-comercial"]').off('change.tipoCom').on('change.tipoCom', function () {
+            var nuevo = $(this).val() || '';
+            var prev = $modal.data('tipoComercial') || '';
+            var fid = currentFamilyId($modal);
+
+            function applyLocal() {
+                $modal.data('tipoComercial', nuevo);
+                refreshCommercialPanels($modal, fid, null);
+            }
+
+            if (!fid) {
+                applyLocal();
+                return;
+            }
+            if (prev && prev !== nuevo) {
+                var msg = '¿Cambiar el tipo de «' + (prev || 'sin tipo') + '» a «' + (nuevo || 'sin tipo') + '»?\n\n' +
+                    'Se dejará de usar la configuración del tipo anterior (unitario / tramos pack / componentes kit).';
+                if (!confirm(msg)) {
+                    $modal.find('input[name="family-tipo-comercial"][value="' + prev + '"]').prop('checked', true);
+                    return;
+                }
+            }
+            post('riverso_families_commercial_set_tipo', {
+                grupo_id: fid,
+                tipo_comercial: nuevo,
+                confirm: 1
+            }).done(function (r) {
+                if (!r.success) {
+                    if (r.data && r.data.code === 'needs_confirm') {
+                        var impact = (r.data.impact || []).join('\n');
+                        if (!confirm((r.data.message || 'Confirmar cambio') + '\n\n' + impact)) {
+                            $modal.find('input[name="family-tipo-comercial"][value="' + prev + '"]').prop('checked', true);
+                            return;
+                        }
+                        post('riverso_families_commercial_set_tipo', {
+                            grupo_id: fid,
+                            tipo_comercial: nuevo,
+                            confirm: 1
+                        }).done(function (r2) {
+                            if (!r2.success) {
+                                alert((r2.data && r2.data.message) || 'No se pudo cambiar el tipo');
+                                $modal.find('input[name="family-tipo-comercial"][value="' + prev + '"]').prop('checked', true);
+                                return;
+                            }
+                            $modal.data('tipoComercial', nuevo);
+                            refreshCommercialPanels($modal, fid, r2.data.commercial);
+                        });
+                        return;
+                    }
+                    alert((r.data && r.data.message) || 'No se pudo cambiar el tipo');
+                    $modal.find('input[name="family-tipo-comercial"][value="' + prev + '"]').prop('checked', true);
+                    return;
+                }
+                $modal.data('tipoComercial', nuevo);
+                refreshCommercialPanels($modal, fid, r.data.commercial);
+            }).fail(function () {
+                alert('Error de red');
+                $modal.find('input[name="family-tipo-comercial"][value="' + prev + '"]').prop('checked', true);
+            });
         });
     }
 
@@ -1584,6 +2263,7 @@
             nombre: seed.nombre || '',
             codigo_grupo: seed.codigo_grupo || '',
             tipo_sustitucion: seed.tipo_sustitucion || 'exacta',
+            tipo_comercial: seed.tipo_comercial || (seed.convertProductoBaseId ? 'unitario' : ''),
             members: [],
             pending: [],
             stock: { stock_unidades: null, warnings: [] }
@@ -1592,7 +2272,11 @@
             onCreated: onCreated,
             pendingMembers: seed.pendingMembers || [],
             convertProductoBaseId: seed.convertProductoBaseId || 0,
-            confirmR1: !!seed.confirmR1
+            confirmR1: !!seed.confirmR1,
+            tipo_comercial: seed.tipo_comercial || (seed.convertProductoBaseId ? 'unitario' : ''),
+            pack_modo: seed.pack_modo || 'ilimitado',
+            packBaseProductoId: seed.packBaseProductoId || seed.convertProductoBaseId || 0,
+            kitSeedComponents: seed.kitSeedComponents || null
         });
     }
 
@@ -1602,6 +2286,50 @@
         pending.forEach(function (item) {
             addPendingMember($modal, item);
         });
+
+        var tipo = opts.tipo_comercial || currentTipoComercial($modal);
+        if (tipo === 'pack') {
+            var packBase = parseInt(opts.packBaseProductoId || opts.convertProductoBaseId || 0, 10) || 0;
+            if (packBase) {
+                var matchP = pending.filter(function (m) {
+                    return parseInt(m.producto_base_id || m.id || 0, 10) === packBase;
+                })[0] || null;
+                $modal.find('.pack-base-id').val(String(packBase));
+                if (matchP) {
+                    var skuP = matchP.sku_local || matchP.canonical_sku || '';
+                    var nomP = matchP.nombre_canonico || matchP.nombre || '';
+                    $modal.find('.pack-base-label').text('SKU ' + skuP + ' — ' + nomP);
+                }
+            }
+            if (opts.pack_modo) {
+                $modal.find('.pack-modo').val(opts.pack_modo);
+            }
+            return;
+        }
+        if (tipo === 'kit') {
+            if (opts.pack_modo) {
+                $modal.find('.kit-modo').val(opts.pack_modo);
+            }
+            var kitComps = opts.kitSeedComponents;
+            if (!kitComps && pending.length) {
+                kitComps = pending.map(function (m, i) {
+                    return {
+                        producto_base_id: m.producto_base_id || m.id,
+                        canonical_sku: m.sku_local || m.canonical_sku || '',
+                        nombre_canonico: m.nombre_canonico || m.nombre || '',
+                        cantidad: 1,
+                        orden: i + 1
+                    };
+                });
+            }
+            if (kitComps && kitComps.length) {
+                $modal.find('.kit-comps-empty').remove();
+                kitComps.forEach(function (c) {
+                    $modal.find('.kit-comps-wrap').append(renderKitCompRow(c));
+                });
+            }
+            return;
+        }
 
         var convertId = parseInt(opts.convertProductoBaseId || 0, 10) || 0;
         if (!convertId) {
@@ -1655,6 +2383,10 @@
             : '—';
         var manage = canManage();
         var codigoDisabled = !isCreate;
+        var tipoComercialInit = fam.tipo_comercial || opts.tipo_comercial || '';
+        if (!tipoComercialInit && (fam.es_producto_unitario || opts.convertProductoBaseId)) {
+            tipoComercialInit = 'unitario';
+        }
         var metaBlock = manage
             ? (
                 '<label style="display:block;margin-bottom:10px;"><strong>Nombre:</strong><br>' +
@@ -1672,11 +2404,14 @@
                 '<option value="exacta"' + (fam.tipo_sustitucion === 'exacta' ? ' selected' : '') + '>Exacta</option>' +
                 '<option value="preferida"' + (fam.tipo_sustitucion === 'preferida' ? ' selected' : '') + '>Preferida</option>' +
                 '<option value="complementaria"' + (fam.tipo_sustitucion === 'complementaria' ? ' selected' : '') + '>Complementaria</option>' +
-                '</select></label>'
+                '</select></label>' +
+                renderCommercialTipoSelector(tipoComercialInit)
             )
             : (
                 '<p style="margin:0 0 12px;"><strong>' + esc(fam.nombre) + '</strong><br>' +
-                '<small style="color:#666;">' + esc(fam.codigo_grupo) + ' · ' + esc(fam.tipo_sustitucion || '') + '</small></p>'
+                '<small style="color:#666;">' + esc(fam.codigo_grupo) + ' · ' + esc(fam.tipo_sustitucion || '') +
+                (tipoComercialInit ? (' · ' + esc(tipoComercialInit)) : '') +
+                '</small></p>'
             );
 
         var searchBlock = manage
@@ -1722,7 +2457,12 @@
 
         $('body').append($modal);
         bindOverlay($modal);
+        var initialTipo = tipoComercialInit;
+        bindCommercialTipo($modal, initialTipo);
         loadUnitPanelIntoModal($modal, familyId, fam.members || []);
+        if (fam.commercial) {
+            refreshCommercialPanels($modal, familyId, fam.commercial);
+        }
         refreshNameSuggestions($modal);
         if (isCreate) {
             applyCreateSeed($modal, opts);
@@ -1986,15 +2726,24 @@
                     refreshEditMembers($modal, fid);
                     return;
                 }
-                // Disparar guardado unitario mientras el modal sigue en DOM; cerrar enseguida.
-                var unitPromise = saveUnitFromPanel($modal, fid);
+                var tipoCom = currentTipoComercial($modal);
+                var commercialPromise;
+                if (tipoCom === 'pack' && $modal.find('.riverso-pack-panel').length) {
+                    commercialPromise = savePackFromPanel($modal, fid);
+                } else if (tipoCom === 'kit' && $modal.find('.riverso-kit-panel').length) {
+                    commercialPromise = saveKitFromPanel($modal, fid);
+                } else if (tipoCom === 'unitario') {
+                    commercialPromise = saveUnitFromPanel($modal, fid);
+                } else {
+                    commercialPromise = $.Deferred().resolve({ skipped: true }).promise();
+                }
                 finalizeFamilySave($modal, $btn, fid, 'Datos de familia guardados');
-                unitPromise.done(function (unitRes) {
-                    if (unitRes && !unitRes.skipped && unitRes.message) {
-                        alert(unitRes.message);
+                commercialPromise.done(function (res) {
+                    if (res && !res.skipped && res.message) {
+                        alert(res.message);
                     }
                 }).fail(function (err) {
-                    alert('Producto unitario NO guardado:\n' + ((err && err.message) || 'Error'));
+                    alert('Configuración comercial NO guardada:\n' + ((err && err.message) || 'Error'));
                 });
             }).fail(function () {
                 $btn.prop('disabled', false).text('Guardar todo');
@@ -2089,6 +2838,7 @@
         closeAll: closeAll,
         renderListPreview: renderListPreview,
         renderMemberSkusInline: renderMemberSkusInline,
-        skuLines: skuLines
+        skuLines: skuLines,
+        openPackMergeModal: openPackMergeModal
     };
 })(window, window.jQuery);

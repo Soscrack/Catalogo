@@ -255,7 +255,371 @@ class Riverso_Invoice_Intake_Service {
         }
         unset($item);
 
+        $this->allocate_global_dr_to_factura_data($factura_data);
+
         return $factura_data;
+    }
+
+    /**
+     * Normaliza entradas DscRcgGlobal (XML o escaneo) a estructura interna.
+     *
+     * @param array $entries
+     * @return array<int,array{nro:int,tpo_mov:string,tpo_valor:string,valor:float,glosa:string,ind_exe:?int,monto_calculado:?float}>
+     */
+    public function normalize_dsc_rcg_global_entries(array $entries) {
+        $out = [];
+        $n = 1;
+        foreach ($entries as $raw) {
+            if (!is_array($raw)) {
+                continue;
+            }
+            $tpo_mov = strtoupper(trim((string) ($raw['tpo_mov'] ?? $raw['TpoMov'] ?? $raw['tipo'] ?? '')));
+            if ($tpo_mov === 'DESCUENTO') {
+                $tpo_mov = 'D';
+            } elseif ($tpo_mov === 'RECARGO') {
+                $tpo_mov = 'R';
+            }
+            if ($tpo_mov !== 'D' && $tpo_mov !== 'R') {
+                continue;
+            }
+            $tpo_valor = trim((string) ($raw['tpo_valor'] ?? $raw['TpoValor'] ?? $raw['tipo_valor'] ?? '$'));
+            if ($tpo_valor === 'pct' || $tpo_valor === 'PCT' || $tpo_valor === 'porcentaje') {
+                $tpo_valor = '%';
+            }
+            if ($tpo_valor !== '%' && $tpo_valor !== '$') {
+                $tpo_valor = '$';
+            }
+            $valor = isset($raw['valor']) ? (float) $raw['valor']
+                : (isset($raw['ValorDR']) ? (float) $raw['ValorDR']
+                : (isset($raw['monto']) ? (float) $raw['monto']
+                : (isset($raw['porcentaje']) ? (float) $raw['porcentaje'] : 0)));
+            if ($valor == 0.0) {
+                continue;
+            }
+            $ind_exe = null;
+            if (isset($raw['ind_exe']) && $raw['ind_exe'] !== '' && $raw['ind_exe'] !== null) {
+                $ind_exe = (int) $raw['ind_exe'];
+            } elseif (isset($raw['IndExeDR']) && $raw['IndExeDR'] !== '' && $raw['IndExeDR'] !== null) {
+                $ind_exe = (int) $raw['IndExeDR'];
+            }
+            $out[] = [
+                'nro' => (int) ($raw['nro'] ?? $raw['NroLinDR'] ?? $n),
+                'tpo_mov' => $tpo_mov,
+                'tpo_valor' => $tpo_valor,
+                'valor' => $valor,
+                'glosa' => trim((string) ($raw['glosa'] ?? $raw['GlosaDR'] ?? '')),
+                'ind_exe' => $ind_exe,
+                'monto_calculado' => isset($raw['monto_calculado']) ? (float) $raw['monto_calculado'] : null,
+            ];
+            $n++;
+        }
+        return $out;
+    }
+
+    /**
+     * Infiere un DscRcgGlobal $ a partir de suma(MontoItem) − monto_neto.
+     *
+     * @return array
+     */
+    public function infer_dsc_rcg_global_from_gap($sum_lineas, $monto_neto) {
+        $gap = round((float) $sum_lineas - (float) $monto_neto, 2);
+        if (abs($gap) < 0.5) {
+            return [];
+        }
+        return [[
+            'nro' => 1,
+            'tpo_mov' => $gap > 0 ? 'D' : 'R',
+            'tpo_valor' => '$',
+            'valor' => abs($gap),
+            'glosa' => 'Inferido por diferencia de totales',
+            'ind_exe' => null,
+            'monto_calculado' => abs($gap),
+        ]];
+    }
+
+    /**
+     * Reparte D/R de folio sobre ítems (en memoria) y calcula costo_neto/bruto_folio.
+     *
+     * @param array $factura_data
+     * @return array
+     */
+    public function allocate_global_dr_to_factura_data(array &$factura_data) {
+        $tasa_iva = (float) ($factura_data['totales']['tasa_iva'] ?? 19);
+        if ($tasa_iva <= 0) {
+            $tasa_iva = 19.0;
+        }
+        $monto_neto = (float) ($factura_data['totales']['neto'] ?? 0);
+
+        $entries = $this->normalize_dsc_rcg_global_entries(
+            (array) ($factura_data['dsc_rcg_global'] ?? [])
+        );
+
+        $product_idxs = [];
+        $sum_lineas = 0.0;
+        foreach ($factura_data['items'] as $idx => $item) {
+            $tipo = strtolower(trim((string) ($item['item_tipo'] ?? 'producto')));
+            if ($tipo === 'flete') {
+                $tipo = 'envio';
+            }
+            if (in_array($tipo, ['envio', 'gasto'], true)) {
+                $factura_data['items'][$idx]['dsc_rcg_global_cuota'] = 0.0;
+                $neto_final = (float) ($item['costo_neto_final'] ?? $item['monto'] ?? $item['monto_total'] ?? 0);
+                $factura_data['items'][$idx]['costo_neto_folio'] = $neto_final;
+                $factura_data['items'][$idx]['costo_bruto_folio'] = (float) ($item['costo_bruto_final'] ?? $neto_final);
+                continue;
+            }
+            $product_idxs[] = $idx;
+            $sum_lineas += (float) ($item['costo_neto_final'] ?? $item['monto'] ?? $item['monto_total'] ?? 0);
+        }
+
+        if (!$entries && $monto_neto > 0 && $sum_lineas > 0) {
+            $entries = $this->infer_dsc_rcg_global_from_gap($sum_lineas, $monto_neto);
+        }
+        $factura_data['dsc_rcg_global'] = $entries;
+
+        // Cuotas acumuladas por índice
+        $cuotas = [];
+        foreach ($product_idxs as $idx) {
+            $cuotas[$idx] = 0.0;
+        }
+
+        foreach ($entries as &$entry) {
+            $sign = ($entry['tpo_mov'] === 'D') ? -1.0 : 1.0;
+            $pool = 0.0;
+            $pool_idxs = [];
+            foreach ($product_idxs as $idx) {
+                $item = $factura_data['items'][$idx];
+                // IndExeDR: 1=solo exento, 2=solo afecto; sin flag = todos los productos
+                $ind = $entry['ind_exe'];
+                $is_exento = !empty($item['exento']) || (float) ($item['tasa_iva'] ?? $tasa_iva) <= 0;
+                if ($ind === 1 && !$is_exento) {
+                    continue;
+                }
+                if ($ind === 2 && $is_exento) {
+                    continue;
+                }
+                $line_neto = (float) ($item['costo_neto_final'] ?? $item['monto'] ?? $item['monto_total'] ?? 0);
+                if ($line_neto <= 0) {
+                    continue;
+                }
+                $pool += $line_neto;
+                $pool_idxs[] = $idx;
+            }
+            if ($pool <= 0 || !$pool_idxs) {
+                $entry['monto_calculado'] = 0.0;
+                continue;
+            }
+
+            if ($entry['tpo_valor'] === '%') {
+                $amount = round($pool * ((float) $entry['valor']) / 100, 0);
+            } else {
+                $amount = round((float) $entry['valor'], 0);
+            }
+            $entry['monto_calculado'] = $amount;
+            $signed = $sign * $amount;
+
+            $assigned = 0.0;
+            $last = count($pool_idxs) - 1;
+            foreach ($pool_idxs as $i => $idx) {
+                $line_neto = (float) ($factura_data['items'][$idx]['costo_neto_final']
+                    ?? $factura_data['items'][$idx]['monto']
+                    ?? $factura_data['items'][$idx]['monto_total']
+                    ?? 0);
+                if ($i === $last) {
+                    $share = round($signed - $assigned, 4);
+                } else {
+                    $share = round($signed * ($line_neto / $pool), 4);
+                    $assigned += $share;
+                }
+                $cuotas[$idx] = ($cuotas[$idx] ?? 0) + $share;
+            }
+        }
+        unset($entry);
+
+        $sum_folio = 0.0;
+        foreach ($product_idxs as $idx) {
+            $item = &$factura_data['items'][$idx];
+            $neto_final = (float) ($item['costo_neto_final'] ?? $item['monto'] ?? $item['monto_total'] ?? 0);
+            $cuota = round((float) ($cuotas[$idx] ?? 0), 4);
+            $neto_folio = round($neto_final + $cuota, 4);
+            $esp = (float) ($item['impuesto_especifico_monto'] ?? 0);
+            $iva = round($neto_folio * $tasa_iva / 100, 0);
+            $bruto_folio = round($neto_folio + $iva + $esp, 4);
+
+            $item['dsc_rcg_global_cuota'] = $cuota;
+            $item['costo_neto_folio'] = $neto_folio;
+            $item['costo_bruto_folio'] = $bruto_folio;
+            $sum_folio += $neto_folio;
+            unset($item);
+        }
+
+        $ok = true;
+        if ($monto_neto > 0 && $product_idxs) {
+            // Ajuste residual de 1 peso al ítem de mayor monto para cuadrar con MntNeto
+            $diff = round($monto_neto - $sum_folio, 4);
+            if (abs($diff) >= 0.01 && abs($diff) <= 2.0) {
+                $best = $product_idxs[0];
+                $best_monto = 0.0;
+                foreach ($product_idxs as $idx) {
+                    $m = (float) ($factura_data['items'][$idx]['costo_neto_final'] ?? 0);
+                    if ($m > $best_monto) {
+                        $best_monto = $m;
+                        $best = $idx;
+                    }
+                }
+                $factura_data['items'][$best]['costo_neto_folio'] = round(
+                    (float) $factura_data['items'][$best]['costo_neto_folio'] + $diff,
+                    4
+                );
+                $factura_data['items'][$best]['dsc_rcg_global_cuota'] = round(
+                    (float) $factura_data['items'][$best]['dsc_rcg_global_cuota'] + $diff,
+                    4
+                );
+                $nf = (float) $factura_data['items'][$best]['costo_neto_folio'];
+                $esp = (float) ($factura_data['items'][$best]['impuesto_especifico_monto'] ?? 0);
+                $factura_data['items'][$best]['costo_bruto_folio'] = round(
+                    $nf + round($nf * $tasa_iva / 100, 0) + $esp,
+                    4
+                );
+                $sum_folio = $monto_neto;
+                $diff = 0.0;
+            }
+            $ok = abs($diff) < 1.0;
+        }
+        $factura_data['dsc_rcg_global_ok'] = $ok ? 1 : 0;
+
+        return $factura_data;
+    }
+
+    /**
+     * Persiste y/o recalcula costos de folio + landed para una factura ya guardada.
+     */
+    public function apply_folio_dr_costs_to_factura($factura_id, array $options = []) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $factura_id = (int) $factura_id;
+        if ($factura_id <= 0) {
+            return new WP_Error('invalid', 'factura_id inválido');
+        }
+
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-activator.php';
+        if (method_exists('Riverso_POS_Activator', 'ensure_folio_dr_cost_columns')) {
+            Riverso_POS_Activator::ensure_folio_dr_cost_columns();
+        }
+
+        $factura = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, monto_neto, tasa_iva, dsc_rcg_global, documento_subtipo
+             FROM {$prefix}facturas WHERE id = %d",
+            $factura_id
+        ), ARRAY_A);
+        if (!$factura) {
+            return new WP_Error('not_found', 'Factura no encontrada');
+        }
+
+        $items = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$prefix}factura_items WHERE factura_id = %d ORDER BY numero_linea ASC, id ASC",
+            $factura_id
+        ), ARRAY_A) ?: [];
+
+        $entries = [];
+        if (!empty($options['dsc_rcg_global']) && is_array($options['dsc_rcg_global'])) {
+            $entries = $options['dsc_rcg_global'];
+        } elseif (!empty($factura['dsc_rcg_global'])) {
+            $decoded = json_decode((string) $factura['dsc_rcg_global'], true);
+            if (is_array($decoded)) {
+                $entries = $decoded;
+            }
+        }
+
+        $factura_data = [
+            'totales' => [
+                'neto' => (float) $factura['monto_neto'],
+                'tasa_iva' => (float) ($factura['tasa_iva'] ?? 19),
+            ],
+            'dsc_rcg_global' => $entries,
+            'items' => [],
+        ];
+        foreach ($items as $row) {
+            $factura_data['items'][] = [
+                'item_tipo' => $row['item_tipo'] ?? 'producto',
+                'monto' => (float) $row['monto_total'],
+                'monto_total' => (float) $row['monto_total'],
+                'costo_neto_final' => isset($row['costo_neto_final']) && $row['costo_neto_final'] !== null
+                    ? (float) $row['costo_neto_final']
+                    : (float) $row['monto_total'],
+                'costo_bruto_final' => isset($row['costo_bruto_final']) ? (float) $row['costo_bruto_final'] : null,
+                'impuesto_especifico_monto' => isset($row['impuesto_especifico_monto'])
+                    ? (float) $row['impuesto_especifico_monto'] : 0,
+                '_db_id' => (int) $row['id'],
+            ];
+        }
+
+        $this->allocate_global_dr_to_factura_data($factura_data);
+
+        $wpdb->update(
+            "{$prefix}facturas",
+            [
+                'dsc_rcg_global' => wp_json_encode($factura_data['dsc_rcg_global']),
+                'dsc_rcg_global_ok' => (int) ($factura_data['dsc_rcg_global_ok'] ?? 1),
+            ],
+            ['id' => $factura_id],
+            ['%s', '%d'],
+            ['%d']
+        );
+
+        foreach ($factura_data['items'] as $item) {
+            $iid = (int) ($item['_db_id'] ?? 0);
+            if ($iid <= 0) {
+                continue;
+            }
+            $wpdb->update(
+                "{$prefix}factura_items",
+                [
+                    'costo_neto_folio' => $item['costo_neto_folio'] ?? null,
+                    'costo_bruto_folio' => $item['costo_bruto_folio'] ?? null,
+                    'dsc_rcg_global_cuota' => $item['dsc_rcg_global_cuota'] ?? null,
+                ],
+                ['id' => $iid],
+                ['%f', '%f', '%f'],
+                ['%d']
+            );
+        }
+
+        $this->prorate_shipping_costs($factura_id);
+
+        return [
+            'factura_id' => $factura_id,
+            'entries' => count($factura_data['dsc_rcg_global']),
+            'ok' => (int) ($factura_data['dsc_rcg_global_ok'] ?? 1),
+        ];
+    }
+
+    /**
+     * Backfill masivo de costos de folio (fase 51).
+     */
+    public function backfill_folio_dr_costs($limit = 0) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-activator.php';
+        if (method_exists('Riverso_POS_Activator', 'ensure_folio_dr_cost_columns')) {
+            Riverso_POS_Activator::ensure_folio_dr_cost_columns();
+        }
+
+        $sql = "SELECT id FROM {$prefix}facturas
+                WHERE documento_subtipo IS NULL
+                   OR documento_subtipo IN ('productos', 'guia_despacho', '')
+                ORDER BY id ASC";
+        if ((int) $limit > 0) {
+            $sql .= ' LIMIT ' . (int) $limit;
+        }
+        $ids = $wpdb->get_col($sql) ?: [];
+        $done = 0;
+        foreach ($ids as $id) {
+            $this->apply_folio_dr_costs_to_factura((int) $id);
+            $done++;
+        }
+        return $done;
     }
 
     /**
@@ -2525,7 +2889,19 @@ class Riverso_Invoice_Intake_Service {
                 $qty = 1;
             }
 
-            $product_cost_unit = (float) $item->precio_unitario;
+            // Base unitaria = costo tras D/R de folio (o tras D/R de fila si aún no hay folio).
+            $folio_total = null;
+            if (isset($item->costo_neto_folio) && $item->costo_neto_folio !== null && $item->costo_neto_folio !== ''
+                && (float) $item->costo_neto_folio > 0) {
+                $folio_total = (float) $item->costo_neto_folio;
+            } elseif (isset($item->costo_neto_final) && $item->costo_neto_final !== null && $item->costo_neto_final !== ''
+                && (float) $item->costo_neto_final > 0) {
+                $folio_total = (float) $item->costo_neto_final;
+            }
+            $product_cost_unit = $folio_total !== null
+                ? round($folio_total / $qty, 4)
+                : (float) $item->precio_unitario;
+
             $shipping_share = 0.0;
 
             if ($total_shipping > 0 && $base_total > 0) {

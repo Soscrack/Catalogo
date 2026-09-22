@@ -151,7 +151,7 @@ VERSION=$(sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   echo defined("RIVERSO_POS_VERSION") ? RIVERSO_POS_VERSION : "missing";
 ')
 fi
-test "$VERSION" = "1.7.8"
+test "$VERSION" = "1.8.1"
 
 if [ "$SKIP_MIGRATION" = "1" ]; then
   echo "schema-skip competencia tables should be applied via tools/migrate_competencia_remote.py"
@@ -168,14 +168,14 @@ sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   }}
   $facturas = $wpdb->prefix . "riverso_facturas";
   $items = $wpdb->prefix . "riverso_factura_items";
-  foreach (["estado_pago", "tasa_iva", "impuestos_adicionales", "tipo_confirmado"] as $colName) {{
+  foreach (["estado_pago", "tasa_iva", "impuestos_adicionales", "tipo_confirmado", "dsc_rcg_global", "dsc_rcg_global_ok"] as $colName) {{
     $col = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM `$facturas` LIKE %s", $colName));
     if (empty($col)) {{
       fwrite(STDERR, "Missing column $colName on $facturas" . PHP_EOL);
       exit(1);
     }}
   }}
-  foreach (["costo_neto_base", "costo_bruto_base", "costo_neto_final", "costo_bruto_final", "descuento_monto", "recargo_monto", "impuesto_especifico_monto"] as $colName) {{
+  foreach (["costo_neto_base", "costo_bruto_base", "costo_neto_final", "costo_bruto_final", "costo_neto_folio", "costo_bruto_folio", "dsc_rcg_global_cuota", "descuento_monto", "recargo_monto", "impuesto_especifico_monto"] as $colName) {{
     $col = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM `$items` LIKE %s", $colName));
     if (empty($col)) {{
       fwrite(STDERR, "Missing column $colName on $items" . PHP_EOL);

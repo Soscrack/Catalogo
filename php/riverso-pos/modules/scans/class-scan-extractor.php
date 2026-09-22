@@ -58,8 +58,9 @@ Antes de extraer campos, identifica cuántos documentos distintos hay:
 - **folio**: número sin puntos ni espacios (1.291.575 → 1291575; Nº 257423 → 257423)
 - **fecha_emision**, **fecha_vencimiento**: YYYY-MM-DD
 - **forma_pago**: Crédito, Contado, "FACTURA 30 DIAS", etc.
-- **items[]**: numero, codigo, descripcion, cantidad, unidad, precio_unitario, monto_total, descuento_pct, confianza
+- **items[]**: numero, codigo, descripcion, cantidad, unidad, precio_unitario, monto_total, descuento_pct, recargo_pct, confianza
 - **totales**: neto, exento, iva, flete, total, tasa_iva (usualmente 19)
+- **dsc_rcg_global[]** (opcional): descuentos/recargos del DOCUMENTO (pie de factura, no de línea). Campos: tipo (D o R), tipo_valor (% o $), valor, glosa
 - **referencias[]**: tipo + folio + fecha + razon
 
 ## Referencias — tipos permitidos en campo "tipo"
@@ -74,6 +75,7 @@ Antes de extraer campos, identifica cuántos documentos distintos hay:
 - Coma = decimal (si aparece): 24,00 → 24
 - precio_unitario y monto_total en pesos enteros salvo que haya decimales explícitos
 - Si hay línea de FLETE separada, incluir en totales.flete
+- Si el neto impreso NO cuadra con la suma de montos de ítems, busca descuento/recargo global en el pie (p.ej. "Descuento 3%", "Dcto. comercial $27.917") y llénalo en dsc_rcg_global[]
 
 ## Anotaciones manuscritas y sellos
 - **anotaciones_manuscritas[]**: texto escrito a mano ("NETO FLETE 6.000", "x2" junto a cantidad, correcciones)
@@ -331,6 +333,7 @@ PROMPT;
             ],
             'items'         => [],
             'referencias'   => [],
+            'dsc_rcg_global'=> [],
             '_scan_meta'    => [
                 'anotaciones_manuscritas' => $doc['anotaciones_manuscritas'] ?? [],
                 'sellos_recepcion'        => $doc['sellos_recepcion'] ?? [],
@@ -341,6 +344,30 @@ PROMPT;
                 'tipo_documento'          => $doc['tipo_documento'] ?? '',
             ],
         ];
+
+        foreach ($doc['dsc_rcg_global'] ?? [] as $dr) {
+            $tipo = strtoupper(trim((string) ($dr['tipo'] ?? $dr['tpo_mov'] ?? '')));
+            if ($tipo === 'DESCUENTO') {
+                $tipo = 'D';
+            } elseif ($tipo === 'RECARGO') {
+                $tipo = 'R';
+            }
+            if ($tipo !== 'D' && $tipo !== 'R') {
+                continue;
+            }
+            $tpo_valor = trim((string) ($dr['tipo_valor'] ?? $dr['tpo_valor'] ?? '$'));
+            if ($tpo_valor === 'pct' || $tpo_valor === 'PCT' || $tpo_valor === 'porcentaje') {
+                $tpo_valor = '%';
+            }
+            $factura['dsc_rcg_global'][] = [
+                'nro' => (int) ($dr['nro'] ?? 0),
+                'tpo_mov' => $tipo,
+                'tpo_valor' => ($tpo_valor === '%') ? '%' : '$',
+                'valor' => (float) ($dr['valor'] ?? $dr['monto'] ?? 0),
+                'glosa' => trim((string) ($dr['glosa'] ?? '')),
+                'ind_exe' => null,
+            ];
+        }
 
         $num = 1;
         foreach ($doc['items'] ?? [] as $item) {
@@ -364,7 +391,7 @@ PROMPT;
                 'monto'               => $monto,
                 'descuento_porcentaje'=> isset($item['descuento_pct']) ? (float) $item['descuento_pct'] : null,
                 'descuento_monto'     => null,
-                'recargo_porcentaje'  => null,
+                'recargo_porcentaje'  => isset($item['recargo_pct']) ? (float) $item['recargo_pct'] : null,
                 'recargo_monto'       => null,
                 'cod_imp_adic'        => null,
                 'codigos'             => [],

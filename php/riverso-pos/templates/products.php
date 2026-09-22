@@ -1074,7 +1074,7 @@ jQuery(function($){
     const canReview = <?php echo $can_review ? 'true' : 'false'; ?>;
 
     let currentProduct = null;
-    /** Base de costo en vista hub: 'referencia' | 'tras_dr' (default) */
+    /** Base de costo en vista hub: 'referencia' | 'tras_dr' | 'tras_dr_folio' | 'tras_dr_flete' */
     let productCostMode = 'tras_dr';
     /** Vista de montos: 'neto' (default hub) | 'bruto' */
     let productViewMode = 'neto';
@@ -1088,9 +1088,13 @@ jQuery(function($){
         if (!precio) return { neto: null, bruto: null };
         const bases = precio.costo_bases;
         if (bases && typeof bases === 'object') {
-            const key = mode === 'referencia' ? 'referencia' : 'tras_dr';
+            const key = mode === 'referencia' ? 'referencia'
+                : (mode === 'tras_dr_flete' ? 'tras_dr_flete'
+                : (mode === 'tras_dr_folio' ? 'tras_dr_folio' : 'tras_dr'));
             let pair = bases[key];
             if (!pair && key === 'referencia') pair = bases.tras_dr;
+            if (!pair && key === 'tras_dr_folio') pair = bases.tras_dr;
+            if (!pair && key === 'tras_dr_flete') pair = bases.tras_dr_folio || bases.tras_dr;
             if (pair) {
                 const neto = (pair.neto != null && !isNaN(pair.neto)) ? Number(pair.neto) : null;
                 let bruto = (pair.bruto != null && !isNaN(pair.bruto)) ? Number(pair.bruto) : null;
@@ -1128,7 +1132,10 @@ jQuery(function($){
 
     function productCostModeLabel(mode) {
         mode = mode || productCostMode;
-        return mode === 'referencia' ? 'Costo referencia' : 'Costo con Descuento/Recargo';
+        if (mode === 'referencia') return 'Costo referencia';
+        if (mode === 'tras_dr_folio') return 'Costo tras Descuento/Recargo Folio';
+        if (mode === 'tras_dr_flete') return 'Costo más flete';
+        return 'Costo con Descuento/Recargo';
     }
 
     function productViewToggleHtml() {
@@ -1140,9 +1147,14 @@ jQuery(function($){
 
     function productCostToggleHtml(extraClass) {
         const cls = extraClass ? ' ' + extraClass : '';
-        return '<div class="riverso-cost-mode-toggle' + cls + '" role="group" aria-label="Base de costo" style="display:inline-flex;gap:0;margin:0 0 8px;">' +
-            '<button type="button" class="button riverso-cost-mode-btn' + (productCostMode === 'referencia' ? ' button-primary is-active' : '') + '" data-cost-mode="referencia" title="Precio lista / antes de D/R">Costo referencia</button>' +
-            '<button type="button" class="button riverso-cost-mode-btn' + (productCostMode === 'tras_dr' ? ' button-primary is-active' : '') + '" data-cost-mode="tras_dr" title="Tras descuento y recargo">Costo con Descuento/Recargo</button>' +
+        const btn = (mode, title, label) =>
+            '<button type="button" class="button riverso-cost-mode-btn' + (productCostMode === mode ? ' button-primary is-active' : '') +
+            '" data-cost-mode="' + mode + '" title="' + title + '">' + label + '</button>';
+        return '<div class="riverso-cost-mode-toggle' + cls + '" role="group" aria-label="Base de costo" style="display:inline-flex;flex-wrap:wrap;gap:0;margin:0 0 8px;">' +
+            btn('referencia', 'Precio lista / antes de D/R', 'Costo referencia') +
+            btn('tras_dr', 'Tras descuento y recargo de la fila', 'Costo con Descuento/Recargo') +
+            btn('tras_dr_folio', 'Tras D/R de fila y del folio', 'Costo tras Descuento/Recargo Folio') +
+            btn('tras_dr_flete', 'Tras D/R de folio más flete', 'Costo más flete') +
             '</div>';
     }
 
@@ -2213,7 +2225,7 @@ jQuery(function($){
     $(document).on('click', '.riverso-cost-mode-btn', function(e){
         e.preventDefault();
         const mode = $(this).data('cost-mode');
-        if (mode !== 'referencia' && mode !== 'tras_dr') return;
+        if (mode !== 'referencia' && mode !== 'tras_dr' && mode !== 'tras_dr_folio' && mode !== 'tras_dr_flete') return;
         if (productCostMode === mode) {
             syncProductCostModeButtons();
             return;

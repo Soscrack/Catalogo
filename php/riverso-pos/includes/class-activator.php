@@ -349,11 +349,56 @@ class Riverso_POS_Activator {
         self::create_phase48_flete_gratuito($prefix);
         self::create_phase49_costo_envio_manual($prefix);
         self::create_phase50_messaging_quotes($prefix, $charset_collate);
+        self::create_phase51_folio_dr_costs($prefix);
+        self::create_phase52_quote_folio_discount($prefix);
 
         // Inicializar servicios core
         self::init_core_services();
         
         update_option('riverso_pos_db_version', RIVERSO_POS_VERSION);
+    }
+
+    /**
+     * Garantiza columnas de D/R de folio (deploy sin bump de versión).
+     */
+    public static function ensure_folio_dr_cost_columns() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        self::ensure_phase51_folio_dr_schema($prefix);
+    }
+
+    /**
+     * Solo schema fase 51 (sin backfill).
+     */
+    private static function ensure_phase51_folio_dr_schema($prefix) {
+        $facturas = "{$prefix}facturas";
+        $items = "{$prefix}factura_items";
+
+        self::add_column_if_missing(
+            $facturas,
+            'dsc_rcg_global',
+            "dsc_rcg_global LONGTEXT DEFAULT NULL COMMENT 'JSON DscRcgGlobal del DTE'"
+        );
+        self::add_column_if_missing(
+            $facturas,
+            'dsc_rcg_global_ok',
+            "dsc_rcg_global_ok TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 si suma netos folio cuadra con monto_neto'"
+        );
+        self::add_column_if_missing(
+            $items,
+            'costo_neto_folio',
+            "costo_neto_folio DECIMAL(12,4) DEFAULT NULL COMMENT 'Neto tras D/R de fila + D/R de folio'"
+        );
+        self::add_column_if_missing(
+            $items,
+            'costo_bruto_folio',
+            "costo_bruto_folio DECIMAL(12,4) DEFAULT NULL COMMENT 'Bruto tras D/R de folio'"
+        );
+        self::add_column_if_missing(
+            $items,
+            'dsc_rcg_global_cuota',
+            "dsc_rcg_global_cuota DECIMAL(12,4) DEFAULT NULL COMMENT 'Cuota neta de D/R global asignada a la línea'"
+        );
     }
     
     /**
@@ -4736,6 +4781,112 @@ class Riverso_POS_Activator {
                     'details'    => 'Fase 50: inbox + descuentos/validez/whatsapp en cotizaciones',
                 ]);
             }
+        }
+    }
+
+    /**
+     * Fase 51: DscRcgGlobal (D/R de folio) + costos neto/bruto tras reparto documental.
+     */
+    private static function create_phase51_folio_dr_costs($prefix) {
+        self::ensure_phase51_folio_dr_schema($prefix);
+
+        if (get_option('riverso_pos_phase51_folio_dr_costs') === '1') {
+            return;
+        }
+
+        global $wpdb;
+        $items = "{$prefix}factura_items";
+        $facturas = "{$prefix}facturas";
+
+        // Default rápido: sin D/R de folio → folio = final (fila).
+        $wpdb->query(
+            "UPDATE {$items}
+             SET costo_neto_folio = COALESCE(costo_neto_folio, costo_neto_final),
+                 costo_bruto_folio = COALESCE(costo_bruto_folio, costo_bruto_final),
+                 dsc_rcg_global_cuota = COALESCE(dsc_rcg_global_cuota, 0)
+             WHERE costo_neto_folio IS NULL
+               AND costo_neto_final IS NOT NULL"
+        );
+
+        // Solo recalcular facturas con gap neto vs suma de líneas (candidato a DscRcgGlobal).
+        if (!class_exists('Riverso_Invoice_Intake_Service')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'modules/invoices/class-invoice-intake-service.php';
+            if (file_exists($path)) {
+                require_once $path;
+            }
+        }
+        if (class_exists('Riverso_Invoice_Intake_Service')
+            && method_exists('Riverso_Invoice_Intake_Service', 'apply_folio_dr_costs_to_factura')) {
+            $intake = Riverso_Invoice_Intake_Service::get_instance();
+            $ids = $wpdb->get_col(
+                "SELECT f.id
+                 FROM {$facturas} f
+                 INNER JOIN (
+                    SELECT factura_id, SUM(monto_total) AS sum_lineas
+                    FROM {$items}
+                    WHERE item_tipo = 'producto' OR item_tipo IS NULL OR item_tipo = ''
+                    GROUP BY factura_id
+                 ) s ON s.factura_id = f.id
+                 WHERE (f.documento_subtipo IS NULL OR f.documento_subtipo IN ('productos','guia_despacho',''))
+                   AND ABS(s.sum_lineas - f.monto_neto) >= 0.5
+                 ORDER BY f.id ASC
+                 LIMIT 500"
+            ) ?: [];
+            foreach ($ids as $id) {
+                $intake->apply_folio_dr_costs_to_factura((int) $id);
+            }
+        }
+
+        update_option('riverso_pos_phase51_folio_dr_costs', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase51_folio_dr_costs', 'riverso_facturas', 0, [
+                'actor_type' => 'computer',
+                'details'    => 'Fase 51: costo tras D/R de folio + landed sobre esa base',
+            ]);
+        }
+    }
+
+    /**
+     * Fase 52: totales de cotización con descuento/recargo de cabecera (folio).
+     */
+    private static function create_phase52_quote_folio_discount($prefix) {
+        if (get_option('riverso_pos_phase52_quote_folio_discount') === '1') {
+            return;
+        }
+
+        global $wpdb;
+        $quotes = "{$prefix}cotizaciones_recibidas";
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $quotes)) !== $quotes) {
+            update_option('riverso_pos_phase52_quote_folio_discount', '1');
+            return;
+        }
+
+        if (!class_exists('Riverso_POS_Received_Quote_Module')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'modules/quotes/class-received-quote-module.php';
+            if (file_exists($path)) {
+                require_once $path;
+            }
+        }
+        if (class_exists('Riverso_POS_Received_Quote_Module')) {
+            $mod = Riverso_POS_Received_Quote_Module::get_instance();
+            $ids = $wpdb->get_col(
+                "SELECT id FROM {$quotes}
+                 WHERE (descuento_monto IS NOT NULL AND descuento_monto <> 0)
+                    OR (descuento_pct IS NOT NULL AND descuento_pct <> 0)
+                 ORDER BY id ASC
+                 LIMIT 2000"
+            ) ?: [];
+            foreach ($ids as $id) {
+                $mod->recalculate_quote_totals((int) $id);
+            }
+        }
+
+        update_option('riverso_pos_phase52_quote_folio_discount', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase52_quote_folio_discount', 'cotizaciones_recibidas', 0, [
+                'actor_type' => 'computer',
+                'details'    => 'Fase 52: totales de cotización con descuento de folio',
+            ]);
         }
     }
 

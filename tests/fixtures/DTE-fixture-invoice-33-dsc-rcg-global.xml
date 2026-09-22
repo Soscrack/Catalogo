@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<DTE xmlns="http://www.sii.cl/SiiDte" version="1.0">
+	<Documento ID="FIXTURE20260324T33F729815">
+		<Encabezado>
+			<IdDoc>
+				<TipoDTE>33</TipoDTE>
+				<Folio>729815</Folio>
+				<FchEmis>2026-03-24</FchEmis>
+			</IdDoc>
+			<Emisor>
+				<RUTEmisor>96565870-K</RUTEmisor>
+				<RznSoc>TECBOLT SA</RznSoc>
+				<GiroEmis>DISTRIBUIDOR</GiroEmis>
+			</Emisor>
+			<Receptor>
+				<RUTRecep>76443852-3</RUTRecep>
+				<RznSocRecep>COMERCIALIZADORA TEST</RznSocRecep>
+			</Receptor>
+			<Totales>
+				<MntNeto>902638</MntNeto>
+				<MntExe>0</MntExe>
+				<TasaIVA>19</TasaIVA>
+				<IVA>171501</IVA>
+				<MntTotal>1074139</MntTotal>
+			</Totales>
+		</Encabezado>
+		<Detalle>
+			<NroLinDet>1</NroLinDet>
+			<CdgItem>
+				<TpoCodigo>INT1</TpoCodigo>
+				<VlrCodigo>14RLBI</VlrCodigo>
+			</CdgItem>
+			<NmbItem>ROS.BDG.PH.INX</NmbItem>
+			<QtyItem>200</QtyItem>
+			<UnmdItem>UN</UnmdItem>
+			<PrcItem>26.68</PrcItem>
+			<MontoItem>5336</MontoItem>
+		</Detalle>
+		<Detalle>
+			<NroLinDet>2</NroLinDet>
+			<CdgItem>
+				<TpoCodigo>INT1</TpoCodigo>
+				<VlrCodigo>124RLHN</VlrCodigo>
+			</CdgItem>
+			<NmbItem>R.ATPF.HEX</NmbItem>
+			<QtyItem>2000</QtyItem>
+			<UnmdItem>UN</UnmdItem>
+			<PrcItem>30.97</PrcItem>
+			<MontoItem>61940</MontoItem>
+		</Detalle>
+		<Detalle>
+			<NroLinDet>3</NroLinDet>
+			<CdgItem>
+				<TpoCodigo>INT1</TpoCodigo>
+				<VlrCodigo>REST</VlrCodigo>
+			</CdgItem>
+			<NmbItem>RESTO LINEAS</NmbItem>
+			<QtyItem>1</QtyItem>
+			<UnmdItem>UN</UnmdItem>
+			<PrcItem>863279</PrcItem>
+			<MontoItem>863279</MontoItem>
+		</Detalle>
+		<DscRcgGlobal>
+			<NroLinDR>1</NroLinDR>
+			<TpoMov>D</TpoMov>
+			<TpoValor>$</TpoValor>
+			<ValorDR>27917</ValorDR>
+		</DscRcgGlobal>
+	</Documento>
+</DTE>

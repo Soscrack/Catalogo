@@ -18,7 +18,9 @@ if (!defined('ABSPATH')) {
             </div>
             <div class="rpe-view-toggle rpe-cost-toggle" role="group" aria-label="Base de costo" style="margin-left:8px;">
                 <button type="button" class="button rpe-cost-btn" data-cost="referencia" title="Precio lista / antes de D/R">Costo referencia</button>
-                <button type="button" class="button rpe-cost-btn is-active" data-cost="tras_dr" title="Tras descuento y recargo">Costo con Descuento/Recargo</button>
+                <button type="button" class="button rpe-cost-btn is-active" data-cost="tras_dr" title="Tras descuento y recargo de la fila">Costo con Descuento/Recargo</button>
+                <button type="button" class="button rpe-cost-btn" data-cost="tras_dr_folio" title="Tras D/R de fila y del folio">Costo tras Descuento/Recargo Folio</button>
+                <button type="button" class="button rpe-cost-btn" data-cost="tras_dr_flete" title="Tras D/R de folio más flete">Costo más flete</button>
             </div>
         </div>
         <div class="rce-search-row">

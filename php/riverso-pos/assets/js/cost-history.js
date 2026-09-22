@@ -111,11 +111,17 @@
         }
         viewMode = viewMode || state.costViewMode;
         costMode = costMode || state.costMode;
-        var key = costMode === 'referencia' ? 'referencia' : 'tras_dr';
+        var key = costMode === 'referencia' ? 'referencia'
+            : (costMode === 'tras_dr_flete' ? 'tras_dr_flete'
+            : (costMode === 'tras_dr_folio' ? 'tras_dr_folio' : 'tras_dr'));
         var pair = bases[key];
         if (!pair || typeof pair !== 'object') {
             if (key === 'referencia' && bases.tras_dr) {
                 pair = bases.tras_dr;
+            } else if (key === 'tras_dr_folio' && bases.tras_dr) {
+                pair = bases.tras_dr;
+            } else if (key === 'tras_dr_flete' && (bases.tras_dr_folio || bases.tras_dr)) {
+                pair = bases.tras_dr_folio || bases.tras_dr;
             } else {
                 return null;
             }
@@ -212,7 +218,7 @@
     }
 
     function setCostMode(mode) {
-        if (mode !== 'referencia' && mode !== 'tras_dr') {
+        if (mode !== 'referencia' && mode !== 'tras_dr' && mode !== 'tras_dr_folio' && mode !== 'tras_dr_flete') {
             return;
         }
         if (state.costMode === mode) {
@@ -684,7 +690,9 @@
                       : null;
         }
         $box.toggleClass('is-legacy', legacy).removeAttr('hidden');
-        var modeLabel = state.costMode === 'referencia' ? 'referencia' : 'tras D/R';
+        var modeLabel = state.costMode === 'referencia' ? 'referencia'
+            : (state.costMode === 'tras_dr_folio' ? 'tras D/R folio'
+            : (state.costMode === 'tras_dr_flete' ? 'más flete' : 'tras D/R'));
         $('#rce-highlight-label').text(legacy ? 'Costo legacy' : 'Último costo (' + modeLabel + ')');
         // Siempre: bruto principal + neto secundario (valores de la base activa)
         $('#rce-highlight-cost').text(formatMoney(bruto) + ' bruto');
@@ -1215,7 +1223,9 @@
                           : null;
             }
             $hl.toggleClass('is-legacy', legacy);
-            var modeLabel = state.costMode === 'referencia' ? 'referencia' : 'tras D/R';
+            var modeLabel = state.costMode === 'referencia' ? 'referencia'
+                : (state.costMode === 'tras_dr_folio' ? 'tras D/R folio'
+                : (state.costMode === 'tras_dr_flete' ? 'más flete' : 'tras D/R'));
             $('#rce-evo-highlight-label').text(legacy ? 'Costo legacy' : 'Último costo (' + modeLabel + ')');
             $('#rce-evo-highlight-cost').text(formatMoney(bruto) + ' bruto');
             $('#rce-evo-highlight-cost-alt').text(formatMoney(neto) + ' neto');

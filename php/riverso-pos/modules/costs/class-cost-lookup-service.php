@@ -115,13 +115,15 @@ class Riverso_Cost_Lookup_Service {
     }
 
     /**
-     * Dos bases de costo unitario (sin landed): referencia (antes D/R) y tras D/R.
-     * Cada base incluye neto + bruto.
+     * Bases de costo unitario: referencia, tras D/R de fila, tras D/R de folio, tras D/R+flete.
+     * Cada base incluye neto + bruto. tras_dr_flete solo si hay costo_landed_unitario.
      *
      * @param object|array $row
      * @return array{
      *   referencia:?array{neto:?float,bruto:?float},
-     *   tras_dr:?array{neto:?float,bruto:?float}
+     *   tras_dr:?array{neto:?float,bruto:?float},
+     *   tras_dr_folio:?array{neto:?float,bruto:?float},
+     *   tras_dr_flete:?array{neto:?float,bruto:?float}
      * }
      */
     public static function unit_cost_bases_packed($row) {
@@ -183,12 +185,56 @@ class Riverso_Cost_Lookup_Service {
             }
         }
 
+        $folio_neto = null;
+        if (isset($row['costo_neto_folio']) && $row['costo_neto_folio'] !== null && $row['costo_neto_folio'] !== ''
+            && floatval($row['costo_neto_folio']) > 0) {
+            $folio_neto = round(floatval($row['costo_neto_folio']) / $qty, 4);
+        } elseif ($dr_neto !== null) {
+            $folio_neto = $dr_neto;
+        }
+
+        $folio_bruto = null;
+        if ($folio_neto !== null) {
+            if (isset($row['costo_bruto_folio']) && $row['costo_bruto_folio'] !== null && $row['costo_bruto_folio'] !== ''
+                && floatval($row['costo_bruto_folio']) > 0) {
+                $folio_bruto = round(floatval($row['costo_bruto_folio']) / $qty, 4);
+            } else {
+                $folio_bruto = self::neto_unit_to_bruto(
+                    $folio_neto,
+                    $tipo_dte,
+                    isset($row['costo_neto_folio']) ? floatval($row['costo_neto_folio']) : 0,
+                    isset($row['costo_bruto_folio']) ? floatval($row['costo_bruto_folio']) : 0
+                );
+            }
+        }
+
+        $flete_neto = null;
+        $flete_bruto = null;
+        if (isset($row['costo_landed_unitario']) && $row['costo_landed_unitario'] !== null && $row['costo_landed_unitario'] !== ''
+            && floatval($row['costo_landed_unitario']) > 0) {
+            $flete_neto = round(floatval($row['costo_landed_unitario']), 4);
+            $esp_unit = 0.0;
+            if (isset($row['impuesto_especifico_monto']) && (float) $row['impuesto_especifico_monto'] > 0 && $qty > 0) {
+                $esp_unit = (float) $row['impuesto_especifico_monto'] / $qty;
+            }
+            $flete_bruto = self::neto_unit_to_bruto($flete_neto, $tipo_dte);
+            if ($esp_unit > 0 && $flete_bruto !== null) {
+                $flete_bruto = round($flete_bruto + $esp_unit, 4);
+            }
+        }
+
         return [
             'referencia' => $ref_neto !== null
                 ? ['neto' => $ref_neto, 'bruto' => $ref_bruto]
                 : null,
             'tras_dr' => $dr_neto !== null
                 ? ['neto' => $dr_neto, 'bruto' => $dr_bruto]
+                : null,
+            'tras_dr_folio' => $folio_neto !== null
+                ? ['neto' => $folio_neto, 'bruto' => $folio_bruto]
+                : null,
+            'tras_dr_flete' => $flete_neto !== null
+                ? ['neto' => $flete_neto, 'bruto' => $flete_bruto]
                 : null,
         ];
     }
@@ -212,17 +258,28 @@ class Riverso_Cost_Lookup_Service {
         return [
             'referencia' => $pair,
             'tras_dr' => $pair,
+            'tras_dr_folio' => $pair,
         ];
     }
 
     /**
      * Bases de costo de un ítem de cotización recibida.
-     * Referencia = precio lista; tras D/R = costo_neto.
+     * Referencia = precio lista; tras D/R = costo_neto (fila);
+     * tras D/R folio = costo_neto tras descuento/recargo de documento.
      *
      * @param object|array $item
-     * @return array{referencia:?array{neto:?float,bruto:?float},tras_dr:?array{neto:?float,bruto:?float}}
+     * @param array        $folio_ctx {
+     *   @type float|null $descuento_monto
+     *   @type float|null $descuento_pct
+     *   @type float      $sum_lineas  Suma de (costo_neto * cantidad) del documento
+     * }
+     * @return array{
+     *   referencia:?array{neto:?float,bruto:?float},
+     *   tras_dr:?array{neto:?float,bruto:?float},
+     *   tras_dr_folio:?array{neto:?float,bruto:?float}
+     * }
      */
-    public static function quote_item_cost_bases($item) {
+    public static function quote_item_cost_bases($item, array $folio_ctx = []) {
         $item = (array) $item;
         $neto = isset($item['costo_neto']) && $item['costo_neto'] !== null && $item['costo_neto'] !== ''
             ? (float) $item['costo_neto']
@@ -236,6 +293,9 @@ class Riverso_Cost_Lookup_Service {
             && (float) $item['costo_total'] > 0
             ? (float) $item['costo_total']
             : null;
+        $qty = isset($item['cantidad']) && (float) $item['cantidad'] > 0
+            ? (float) $item['cantidad']
+            : 1.0;
 
         $ref_neto = $lista !== null ? $lista : $neto;
         $dr_neto = $neto;
@@ -251,12 +311,36 @@ class Riverso_Cost_Lookup_Service {
             }
         }
 
+        $folio_neto = $dr_neto;
+        $folio_bruto = $dr_bruto;
+        if ($dr_neto !== null) {
+            $sum_lineas = isset($folio_ctx['sum_lineas']) ? (float) $folio_ctx['sum_lineas'] : 0.0;
+            $dsc = null;
+            if (isset($folio_ctx['descuento_monto']) && $folio_ctx['descuento_monto'] !== null
+                && $folio_ctx['descuento_monto'] !== '' && (float) $folio_ctx['descuento_monto'] != 0.0) {
+                $dsc = (float) $folio_ctx['descuento_monto'];
+            } elseif (isset($folio_ctx['descuento_pct']) && $folio_ctx['descuento_pct'] !== null
+                && $folio_ctx['descuento_pct'] !== '' && (float) $folio_ctx['descuento_pct'] != 0.0
+                && $sum_lineas > 0) {
+                $dsc = round($sum_lineas * ((float) $folio_ctx['descuento_pct']) / 100, 0);
+            }
+            if ($dsc !== null && $sum_lineas > 0) {
+                $line_amount = $dr_neto * $qty;
+                $cuota = $dsc * ($line_amount / $sum_lineas);
+                $folio_neto = round(($line_amount - $cuota) / $qty, 4);
+                $folio_bruto = self::neto_unit_to_bruto($folio_neto);
+            }
+        }
+
         return [
             'referencia' => $ref_neto !== null
                 ? ['neto' => $ref_neto, 'bruto' => $ref_bruto]
                 : null,
             'tras_dr' => $dr_neto !== null
                 ? ['neto' => $dr_neto, 'bruto' => $dr_bruto]
+                : null,
+            'tras_dr_folio' => $folio_neto !== null
+                ? ['neto' => $folio_neto, 'bruto' => $folio_bruto]
                 : null,
         ];
     }
@@ -1678,7 +1762,7 @@ class Riverso_Cost_Lookup_Service {
 
         $sql = "SELECT fi.id AS item_id, fi.numero_linea, fi.nombre, fi.cantidad, fi.unidad,
                        fi.codigo_proveedor, fi.sku_local, fi.precio_unitario,
-                       fi.costo_neto_final, fi.costo_landed_unitario,
+                       fi.costo_neto_final, fi.costo_neto_folio, fi.costo_landed_unitario,
                        f.id AS factura_id, f.tipo_dte, f.folio, f.fecha_emision, f.proveedor_id,
                        COALESCE(p.nombre, f.razon_social_emisor) AS proveedor_nombre
                 FROM {$this->prefix}factura_items fi
@@ -1979,9 +2063,19 @@ class Riverso_Cost_Lookup_Service {
         $fecha = $quote['fecha_documento'] ?: current_time('Y-m-d');
         $rows = [];
 
+        $sum_lineas = 0.0;
+        foreach ($items ?: [] as $item) {
+            $sum_lineas += (float) ($item['costo_neto'] ?? 0) * (float) ($item['cantidad'] ?? 0);
+        }
+        $folio_ctx = [
+            'descuento_monto' => isset($quote['descuento_monto']) ? $quote['descuento_monto'] : null,
+            'descuento_pct' => isset($quote['descuento_pct']) ? $quote['descuento_pct'] : null,
+            'sum_lineas' => $sum_lineas,
+        ];
+
         foreach ($items ?: [] as $item) {
             $code = trim((string) ($item['codigo_proveedor'] ?? ''));
-            $bases = self::quote_item_cost_bases($item);
+            $bases = self::quote_item_cost_bases($item, $folio_ctx);
             $current = $bases['tras_dr']['neto'] ?? ($item['costo_neto'] !== null ? (float) $item['costo_neto'] : null);
 
             $resolved = $this->resolve_quote_item_reference($item, $proveedor_id, $fecha, $cotizacion_id);
@@ -2039,6 +2133,9 @@ class Riverso_Cost_Lookup_Service {
                 'estado' => $quote['estado'],
                 'tipo_fuente' => $quote['tipo_fuente'],
                 'total' => floatval($quote['total']),
+                'subtotal' => floatval($quote['subtotal'] ?? 0),
+                'descuento_pct' => isset($quote['descuento_pct']) ? (float) $quote['descuento_pct'] : null,
+                'descuento_monto' => isset($quote['descuento_monto']) ? (float) $quote['descuento_monto'] : null,
             ],
             'rows' => $rows,
             'compare_base' => $compare_base,
@@ -2093,7 +2190,8 @@ class Riverso_Cost_Lookup_Service {
 
         $row = $wpdb->get_row($wpdb->prepare(
             "SELECT c.id AS cotizacion_id, c.numero_documento AS folio, c.fecha_documento AS fecha_emision,
-                    ci.cantidad, ci.costo_neto, ci.costo_total
+                    c.descuento_pct, c.descuento_monto,
+                    ci.cantidad, ci.costo_neto, ci.costo_total, ci.precio_lista, ci.costo_impuesto
              FROM {$this->prefix}cotizacion_items ci
              INNER JOIN {$this->prefix}cotizaciones_recibidas c ON c.id = ci.cotizacion_id
              WHERE c.proveedor_id = %d
@@ -2117,7 +2215,22 @@ class Riverso_Cost_Lookup_Service {
         if ($neto === null) {
             return null;
         }
-        $packed = self::pack_unit_costs($neto);
+
+        $sum_lineas = (float) $wpdb->get_var($wpdb->prepare(
+            "SELECT COALESCE(SUM(costo_neto * cantidad), 0)
+             FROM {$this->prefix}cotizacion_items WHERE cotizacion_id = %d",
+            (int) $row['cotizacion_id']
+        ));
+        $bases = self::quote_item_cost_bases($row, [
+            'descuento_monto' => $row['descuento_monto'] ?? null,
+            'descuento_pct' => $row['descuento_pct'] ?? null,
+            'sum_lineas' => $sum_lineas,
+        ]);
+        $dr = $bases['tras_dr'] ?? null;
+        $packed = self::pack_unit_costs(
+            $dr['neto'] ?? $neto,
+            $dr['bruto'] ?? null
+        );
         return [
             'cotizacion_id' => (int) $row['cotizacion_id'],
             'folio' => $row['folio'] ?: ('COT-' . $row['cotizacion_id']),
@@ -2126,7 +2239,7 @@ class Riverso_Cost_Lookup_Service {
             'costo_unitario' => $packed['costo_unitario'],
             'costo_unitario_neto' => $packed['costo_unitario_neto'],
             'costo_unitario_bruto' => $packed['costo_unitario_bruto'],
-            'costo_bases' => self::pack_same_bases($neto, $packed['costo_unitario_bruto']),
+            'costo_bases' => $bases,
         ];
     }
 
@@ -2492,7 +2605,7 @@ class Riverso_Cost_Lookup_Service {
         $sql = "SELECT f.id AS factura_id, f.tipo_dte, f.folio, f.fecha_emision,
                        f.proveedor_id, p.nombre AS proveedor_nombre,
                        fi.cantidad, fi.precio_unitario, fi.costo_neto_base, fi.costo_bruto_base,
-                       fi.costo_neto_final, fi.costo_bruto_final, fi.costo_landed_unitario,
+                       fi.costo_neto_final, fi.costo_bruto_final, fi.costo_neto_folio, fi.costo_bruto_folio, fi.costo_landed_unitario,
                        fi.codigo_proveedor
                 FROM {$this->prefix}factura_items fi
                 INNER JOIN {$this->prefix}facturas f ON f.id = fi.factura_id
@@ -2719,7 +2832,7 @@ class Riverso_Cost_Lookup_Service {
         $row = $wpdb->get_row($wpdb->prepare(
             "SELECT f.id AS factura_id, f.tipo_dte, f.folio, f.fecha_emision,
                     fi.cantidad, fi.precio_unitario, fi.costo_neto_base, fi.costo_bruto_base,
-                    fi.costo_neto_final, fi.costo_bruto_final, fi.costo_landed_unitario
+                    fi.costo_neto_final, fi.costo_bruto_final, fi.costo_neto_folio, fi.costo_bruto_folio, fi.costo_landed_unitario
              FROM {$this->prefix}factura_items fi
              INNER JOIN {$this->prefix}facturas f ON f.id = fi.factura_id
              WHERE fi.item_tipo = 'producto'
@@ -3003,7 +3116,7 @@ class Riverso_Cost_Lookup_Service {
                        f.documento_subtipo, f.proveedor_id, p.nombre AS proveedor_nombre,
                        fi.id AS item_id, fi.numero_linea, fi.nombre, fi.cantidad, fi.unidad,
                        fi.precio_unitario, fi.costo_neto_base, fi.costo_bruto_base,
-                       fi.costo_neto_final, fi.costo_bruto_final, fi.costo_landed_unitario,
+                       fi.costo_neto_final, fi.costo_bruto_final, fi.costo_neto_folio, fi.costo_bruto_folio, fi.costo_landed_unitario,
                        fi.codigo_proveedor, fi.sku_local, fi.monto_total
                 FROM {$this->prefix}factura_items fi
                 INNER JOIN {$this->prefix}facturas f ON f.id = fi.factura_id
@@ -3073,9 +3186,10 @@ class Riverso_Cost_Lookup_Service {
         }
 
         $sql = "SELECT c.id AS cotizacion_id, c.numero_documento AS folio, c.fecha_documento AS fecha_emision,
-                       c.estado, c.proveedor_id, p.nombre AS proveedor_nombre,
+                       c.estado, c.proveedor_id, c.descuento_pct, c.descuento_monto, p.nombre AS proveedor_nombre,
                        ci.id AS item_id, ci.linea AS numero_linea, ci.descripcion AS nombre,
-                       ci.cantidad, ci.unidad, ci.costo_neto, ci.codigo_proveedor, ci.costo_total
+                       ci.cantidad, ci.unidad, ci.costo_neto, ci.codigo_proveedor, ci.costo_total,
+                       ci.precio_lista, ci.costo_impuesto
                 FROM {$this->prefix}cotizacion_items ci
                 INNER JOIN {$this->prefix}cotizaciones_recibidas c ON c.id = ci.cotizacion_id
                 LEFT JOIN {$this->prefix}proveedores p ON p.id = c.proveedor_id
@@ -3093,17 +3207,31 @@ class Riverso_Cost_Lookup_Service {
         $params[] = (int) $limit;
 
         $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
+        $sum_cache = [];
         $out = [];
         foreach ($rows ?: [] as $row) {
-            $neto = $row['costo_neto'] !== null ? floatval($row['costo_neto']) : null;
-            $packed = self::pack_unit_costs($neto);
-            $bases = self::pack_same_bases($neto, $packed['costo_unitario_bruto']);
+            $cid = (int) $row['cotizacion_id'];
+            if (!isset($sum_cache[$cid])) {
+                $sum_cache[$cid] = (float) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COALESCE(SUM(costo_neto * cantidad), 0)
+                     FROM {$this->prefix}cotizacion_items WHERE cotizacion_id = %d",
+                    $cid
+                ));
+            }
+            $bases = self::quote_item_cost_bases($row, [
+                'descuento_monto' => $row['descuento_monto'] ?? null,
+                'descuento_pct' => $row['descuento_pct'] ?? null,
+                'sum_lineas' => $sum_cache[$cid],
+            ]);
+            $dr = $bases['tras_dr'] ?? null;
+            $neto = $dr['neto'] ?? ($row['costo_neto'] !== null ? floatval($row['costo_neto']) : null);
+            $packed = self::pack_unit_costs($neto, $dr['bruto'] ?? null);
             $out[] = [
                 'source_kind' => 'quote',
                 'factura_id' => null,
-                'cotizacion_id' => (int) $row['cotizacion_id'],
+                'cotizacion_id' => $cid,
                 'tipo_dte' => null,
-                'folio' => $row['folio'] ?: ('COT-' . $row['cotizacion_id']),
+                'folio' => $row['folio'] ?: ('COT-' . $cid),
                 'fecha_emision' => $row['fecha_emision'],
                 'estado' => $row['estado'],
                 'documento_subtipo' => 'cotizacion',

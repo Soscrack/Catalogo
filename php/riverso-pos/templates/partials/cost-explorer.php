@@ -74,7 +74,9 @@ $received_quotes_url = admin_url('admin.php?page=riverso-pos-received-quotes');
                     </div>
                     <div class="rce-view-toggle" role="group" aria-label="Base de costo" data-rce-cost-mode>
                         <button type="button" class="button rce-cost-btn" data-cost="referencia" title="Precio lista / antes de D/R">Costo referencia</button>
-                        <button type="button" class="button rce-cost-btn is-active" data-cost="tras_dr" title="Tras descuento y recargo">Costo tras Descuento/Recargo</button>
+                        <button type="button" class="button rce-cost-btn is-active" data-cost="tras_dr" title="Tras descuento y recargo de la fila">Costo tras Descuento/Recargo</button>
+                        <button type="button" class="button rce-cost-btn" data-cost="tras_dr_folio" title="Tras D/R de fila y del folio">Costo tras Descuento/Recargo Folio</button>
+                        <button type="button" class="button rce-cost-btn" data-cost="tras_dr_flete" title="Tras D/R de folio más flete">Costo más flete</button>
                     </div>
                     <label for="rce-doc-type">Tipo</label>
                     <select id="rce-doc-type" class="rce-doc-type" title="Tipo de documento">
@@ -109,7 +111,9 @@ $received_quotes_url = admin_url('admin.php?page=riverso-pos-received-quotes');
                     </div>
                     <div class="rce-view-toggle" role="group" aria-label="Base de costo en gráfico" data-rce-cost-mode>
                         <button type="button" class="button rce-cost-btn" data-cost="referencia" title="Precio lista / antes de D/R">Costo referencia</button>
-                        <button type="button" class="button rce-cost-btn is-active" data-cost="tras_dr" title="Tras descuento y recargo">Costo tras Descuento/Recargo</button>
+                        <button type="button" class="button rce-cost-btn is-active" data-cost="tras_dr" title="Tras descuento y recargo de la fila">Costo tras Descuento/Recargo</button>
+                        <button type="button" class="button rce-cost-btn" data-cost="tras_dr_folio" title="Tras D/R de fila y del folio">Costo tras Descuento/Recargo Folio</button>
+                        <button type="button" class="button rce-cost-btn" data-cost="tras_dr_flete" title="Tras D/R de folio más flete">Costo más flete</button>
                     </div>
                     <select id="rce-chart-months" class="rce-chart-months">
                         <option value="6">Últimos 6 meses</option>
@@ -163,7 +167,9 @@ $received_quotes_url = admin_url('admin.php?page=riverso-pos-received-quotes');
                 </div>
                 <div class="rce-view-toggle" role="group" aria-label="Base de costo" data-rce-cost-mode>
                     <button type="button" class="button rce-cost-btn" data-cost="referencia" title="Precio lista / antes de D/R">Costo referencia</button>
-                    <button type="button" class="button rce-cost-btn is-active" data-cost="tras_dr" title="Tras descuento y recargo">Costo tras Descuento/Recargo</button>
+                    <button type="button" class="button rce-cost-btn is-active" data-cost="tras_dr" title="Tras descuento y recargo de la fila">Costo tras Descuento/Recargo</button>
+                    <button type="button" class="button rce-cost-btn" data-cost="tras_dr_folio" title="Tras D/R de fila y del folio">Costo tras Descuento/Recargo Folio</button>
+                    <button type="button" class="button rce-cost-btn" data-cost="tras_dr_flete" title="Tras D/R de folio más flete">Costo más flete</button>
                 </div>
                 <label for="rce-evo-doc-type">Tipo de documento</label>
                 <select id="rce-evo-doc-type" title="Tipo de documento">

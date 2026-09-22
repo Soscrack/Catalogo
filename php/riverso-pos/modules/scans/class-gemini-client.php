@@ -186,9 +186,21 @@ class Riverso_Gemini_Client {
                 'precio_unitario' => ['type' => 'NUMBER'],
                 'monto_total'     => ['type' => 'NUMBER'],
                 'descuento_pct'   => ['type' => 'NUMBER', 'nullable' => true],
+                'recargo_pct'     => ['type' => 'NUMBER', 'nullable' => true],
                 'confianza'       => ['type' => 'NUMBER'],
             ],
             'required' => ['numero', 'descripcion', 'cantidad', 'precio_unitario', 'monto_total'],
+        ];
+
+        $dr_global_schema = [
+            'type'       => 'OBJECT',
+            'properties' => [
+                'tipo'       => ['type' => 'STRING'],
+                'tipo_valor' => ['type' => 'STRING', 'nullable' => true],
+                'valor'      => ['type' => 'NUMBER'],
+                'glosa'      => ['type' => 'STRING', 'nullable' => true],
+            ],
+            'required' => ['tipo', 'valor'],
         ];
 
         $ref_schema = [
@@ -234,6 +246,7 @@ class Riverso_Gemini_Client {
                 'fecha_vencimiento'       => ['type' => 'STRING', 'nullable' => true],
                 'forma_pago'              => ['type' => 'STRING', 'nullable' => true],
                 'items'                   => ['type' => 'ARRAY', 'items' => $item_schema],
+                'dsc_rcg_global'          => ['type' => 'ARRAY', 'items' => $dr_global_schema],
                 'totales'                 => [
                     'type'       => 'OBJECT',
                     'properties' => [

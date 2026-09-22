@@ -1499,6 +1499,11 @@ class Riverso_Product_Module {
 
         $product = $this->get_product($id);
         $this->trigger_counterpart_tasks($id);
+        $old_nombre = trim((string) ($old['nombre_canonico'] ?? ''));
+        $new_nombre = trim((string) ($product['nombre_canonico'] ?? ''));
+        if ($old && $old_nombre !== $new_nombre && class_exists('Riverso_Task_Module')) {
+            Riverso_Task_Module::get_instance()->refresh_open_product_task_labels($id);
+        }
 
         // Evento desacoplado para integraciones (FACTO, etc.)
         $event = ($action === 'product_created') ? 'product.created' : 'product.updated';
@@ -1523,8 +1528,9 @@ class Riverso_Product_Module {
 
     /**
      * Marca el mapa FACTO como pendiente de export Excel (CRUD por planilla).
+     * Público para que Pricing (folios, explorador) pueda encolar el mismo flag.
      */
-    private function mark_facto_pending_export($producto_base_id) {
+    public function mark_facto_pending_export($producto_base_id) {
         global $wpdb;
         $table = $wpdb->prefix . 'riverso_facto_producto_map';
         $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
@@ -5007,7 +5013,7 @@ class Riverso_Product_Module {
         ), ARRAY_A);
         $producto_base_id = (int) ($precio_actualizado['producto_base_id'] ?? 0);
         if ($producto_base_id > 0) {
-            $this->mark_facto_pending_export($producto_base_id);
+            // pendiente_excel lo marca set_assigned_price() al cambiar p_asignado local.
             $sku = (string) $wpdb->get_var($wpdb->prepare(
                 "SELECT canonical_sku FROM {$prefix}producto_base WHERE id = %d",
                 $producto_base_id

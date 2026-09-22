@@ -647,6 +647,21 @@ class Riverso_Task_Module {
                 $referencia_id
             ));
             if ($existing) {
+                $patch = [];
+                $titulo = trim((string) $titulo);
+                if ($titulo !== '') {
+                    $patch['titulo'] = $titulo;
+                }
+                if (array_key_exists('descripcion', $extra)) {
+                    $patch['descripcion'] = $extra['descripcion'];
+                }
+                if ($patch) {
+                    $wpdb->update(
+                        "{$prefix}tareas",
+                        $patch,
+                        ['id' => (int) $existing]
+                    );
+                }
                 return intval($existing);
             }
         }
@@ -1033,5 +1048,149 @@ class Riverso_Task_Module {
             'types' => self::TASK_TYPES,
             'categories' => self::TASK_CATEGORIES,
         ]);
+    }
+
+    /**
+     * Título y descripción vigentes para una tarea de producto.
+     *
+     * @return array{titulo:?string,descripcion:?string}
+     */
+    public static function product_task_copy($tipo, $label, $sku = '') {
+        $label = trim((string) $label);
+        $sku = trim((string) $sku);
+        if ($label === '') {
+            $label = $sku !== '' ? $sku : 'producto';
+        }
+        switch ((string) $tipo) {
+            case 'preguntar_familia':
+                return [
+                    'titulo' => sprintf('¿Necesita familia "%s"?', $label),
+                    'descripcion' => sprintf(
+                        'Indica si el producto "%s" debe pertenecer a una familia de equivalencia o queda solo.',
+                        $label
+                    ),
+                ];
+            case 'asignar_familia':
+                return [
+                    'titulo' => sprintf('Asignar familia a "%s"', $label),
+                    'descripcion' => sprintf(
+                        'El producto "%s" requiere familia. Asignarlo como miembro o producto unitario.',
+                        $label
+                    ),
+                ];
+            case 'crear_contraparte_online':
+                return [
+                    'titulo' => sprintf('Crear o asignar contraparte online para "%s"', $label),
+                    'descripcion' => sprintf(
+                        'Producto local "%s" (SKU %s) sin vínculo WooCommerce. Crear nuevo producto online o asignar uno existente.',
+                        $label,
+                        $sku !== '' ? $sku : '—'
+                    ),
+                ];
+            case 'relacionar_producto_proveedor':
+                return [
+                    'titulo' => sprintf('Asignar código proveedor a "%s"', $label),
+                    'descripcion' => sprintf(
+                        'Producto "%s" (SKU %s) ya tiene contraparte online, pero falta código proveedor.',
+                        $label,
+                        $sku !== '' ? $sku : '—'
+                    ),
+                ];
+            case 'barcode_faltante':
+                return [
+                    'titulo' => $sku !== '' ? ('Asignar código de barra: ' . $sku) : null,
+                    'descripcion' => sprintf(
+                        "El producto '%s' (SKU: %s) no tiene código de barra asignado.\n\nEscanear código de barra del producto y vincularlo.",
+                        $label,
+                        $sku !== '' ? $sku : '—'
+                    ),
+                ];
+            default:
+                return ['titulo' => null, 'descripcion' => null];
+        }
+    }
+
+    /**
+     * Actualiza textos de tareas abiertas que incrustan el nombre del producto.
+     *
+     * @return int filas tocadas
+     */
+    public function refresh_open_product_task_labels($producto_base_id) {
+        global $wpdb;
+        $producto_base_id = absint($producto_base_id);
+        if ($producto_base_id <= 0) {
+            return 0;
+        }
+        $prefix = $wpdb->prefix . 'riverso_';
+        $pb = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, canonical_sku, nombre_canonico FROM {$prefix}producto_base WHERE id = %d",
+            $producto_base_id
+        ), ARRAY_A);
+        if (!$pb) {
+            return 0;
+        }
+        $label = trim((string) ($pb['nombre_canonico'] ?? ''));
+        $sku = trim((string) ($pb['canonical_sku'] ?? ''));
+        if ($label === '') {
+            $label = $sku !== '' ? $sku : ('Producto #' . $producto_base_id);
+        }
+
+        $tasks = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, tipo, titulo, descripcion, datos_extra
+             FROM {$prefix}tareas
+             WHERE estado NOT IN ('completada', 'cancelada')
+               AND (
+                    (referencia_tipo IN ('producto_base', 'producto') AND referencia_id = %d)
+                    OR (
+                        tipo = 'confirmar_barcode_legacy'
+                        AND datos_extra IS NOT NULL
+                        AND CAST(JSON_UNQUOTE(JSON_EXTRACT(datos_extra, '$.producto_base_id')) AS UNSIGNED) = %d
+                    )
+               )",
+            $producto_base_id,
+            $producto_base_id
+        ), ARRAY_A) ?: [];
+
+        $updated = 0;
+        foreach ($tasks as $task) {
+            $copy = self::product_task_copy($task['tipo'], $label, $sku);
+            $patch = [];
+            if (!empty($copy['titulo']) && (string) $task['titulo'] !== $copy['titulo']) {
+                $patch['titulo'] = mb_substr($copy['titulo'], 0, 255);
+            }
+            if (!empty($copy['descripcion']) && (string) ($task['descripcion'] ?? '') !== $copy['descripcion']) {
+                $patch['descripcion'] = $copy['descripcion'];
+            }
+            if ((string) $task['tipo'] === 'confirmar_barcode_legacy') {
+                $desc = (string) ($task['descripcion'] ?? '');
+                if ($desc !== '' && strpos($desc, $label) === false) {
+                    $patched = preg_replace(
+                        '/del producto "[^"]*"/u',
+                        'del producto "' . str_replace(['\\', '"'], ['\\\\', '\\"'], $label) . '"',
+                        $desc,
+                        1
+                    );
+                    if (is_string($patched) && $patched !== $desc) {
+                        $patch['descripcion'] = $patched;
+                    }
+                }
+            }
+            $extra = $task['datos_extra'] ?? null;
+            if (is_string($extra) && $extra !== '') {
+                $decoded = json_decode($extra, true);
+                if (is_array($decoded) && isset($decoded['product_name']) && $decoded['product_name'] !== $label) {
+                    $decoded['product_name'] = $label;
+                    $patch['datos_extra'] = wp_json_encode($decoded, JSON_UNESCAPED_UNICODE);
+                }
+            }
+            if (!$patch) {
+                continue;
+            }
+            $ok = $wpdb->update("{$prefix}tareas", $patch, ['id' => (int) $task['id']]);
+            if ($ok !== false) {
+                $updated++;
+            }
+        }
+        return $updated;
     }
 }

@@ -1496,9 +1496,9 @@ class Riverso_Folio_Price_Process_Service {
     }
 
     /**
-     * Tres bases de costo unitario neto: referencia, tras D/R, tras D/R+flete.
+     * Bases de costo unitario neto: referencia, tras D/R fila, tras D/R folio, tras D/R+flete.
      *
-     * @return array{referencia:?float,tras_dr:?float,tras_dr_flete:?float,flete_ok:bool}
+     * @return array{referencia:?float,tras_dr:?float,tras_dr_folio:?float,tras_dr_flete:?float,flete_ok:bool}
      */
     private function unit_cost_bases_from_item(array $item, $flete_ok = false) {
         $qty = (float) ($item['cantidad'] ?? 0);
@@ -1525,6 +1525,14 @@ class Riverso_Folio_Price_Process_Service {
             $tras_dr = $referencia;
         }
 
+        $tras_dr_folio = null;
+        if (isset($item['costo_neto_folio']) && $item['costo_neto_folio'] !== null && $item['costo_neto_folio'] !== ''
+            && (float) $item['costo_neto_folio'] > 0) {
+            $tras_dr_folio = round((float) $item['costo_neto_folio'] / $qty, 4);
+        } elseif ($tras_dr !== null) {
+            $tras_dr_folio = $tras_dr;
+        }
+
         $flete_ok = (bool) $flete_ok;
         $tras_dr_flete = null;
         if ($flete_ok) {
@@ -1532,13 +1540,14 @@ class Riverso_Folio_Price_Process_Service {
                 && (float) $item['costo_landed_unitario'] > 0) {
                 $tras_dr_flete = round((float) $item['costo_landed_unitario'], 4);
             } else {
-                $tras_dr_flete = $tras_dr;
+                $tras_dr_flete = $tras_dr_folio;
             }
         }
 
         return [
             'referencia' => $referencia,
             'tras_dr' => $tras_dr,
+            'tras_dr_folio' => $tras_dr_folio,
             'tras_dr_flete' => $tras_dr_flete,
             'flete_ok' => $flete_ok,
         ];
@@ -2012,7 +2021,7 @@ class Riverso_Folio_Price_Process_Service {
         );
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT f.id AS factura_id, f.folio, f.fecha_emision, fi.codigo_proveedor,
-                    fi.cantidad, fi.precio_unitario, fi.costo_neto_base, fi.costo_neto_final, fi.costo_landed_unitario
+                    fi.cantidad, fi.precio_unitario, fi.costo_neto_base, fi.costo_neto_final, fi.costo_neto_folio, fi.costo_landed_unitario
              FROM {$prefix}factura_items fi
              INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
              WHERE (fi.item_tipo = 'producto' OR fi.item_tipo IS NULL OR fi.item_tipo = '')
@@ -2092,7 +2101,7 @@ class Riverso_Folio_Price_Process_Service {
         $id_list = implode(',', array_map('intval', array_values($ids)));
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT pp.producto_base_id, f.id AS factura_id, f.folio, f.fecha_emision,
-                    fi.cantidad, fi.precio_unitario, fi.costo_neto_base, fi.costo_neto_final, fi.costo_landed_unitario
+                    fi.cantidad, fi.precio_unitario, fi.costo_neto_base, fi.costo_neto_final, fi.costo_neto_folio, fi.costo_landed_unitario
              FROM {$prefix}factura_items fi
              INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
              INNER JOIN {$prefix}producto_proveedor pp
@@ -2334,6 +2343,7 @@ class Riverso_Folio_Price_Process_Service {
                 $costo_anterior_bases = [
                     'referencia' => (float) $costo_anterior,
                     'tras_dr' => (float) $costo_anterior,
+                    'tras_dr_folio' => (float) $costo_anterior,
                     'tras_dr_flete' => ($prior_flete_ok === true) ? (float) $costo_anterior : null,
                     'flete_ok' => $prior_flete_ok === true,
                 ];
@@ -2358,6 +2368,7 @@ class Riverso_Folio_Price_Process_Service {
                         $costo_anterior_bases = [
                             'referencia' => (float) $costo_anterior,
                             'tras_dr' => (float) $costo_anterior,
+                            'tras_dr_folio' => (float) $costo_anterior,
                             'tras_dr_flete' => null,
                             'flete_ok' => false,
                         ];

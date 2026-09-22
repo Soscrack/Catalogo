@@ -198,7 +198,9 @@ $riverso_cost_history_context = isset($riverso_cost_history_context) ? $riverso_
                         </div>
                         <div class="rce-view-toggle" role="group" aria-label="Base de costo" id="folio-cost-toggle">
                             <button type="button" class="button rce-cost-btn" data-folio-cost="referencia" title="Precio lista / antes de D/R">Costo referencia</button>
-                            <button type="button" class="button rce-cost-btn is-active" data-folio-cost="tras_dr" title="Tras descuento y recargo">Costo tras Descuento/Recargo</button>
+                            <button type="button" class="button rce-cost-btn is-active" data-folio-cost="tras_dr" title="Tras descuento y recargo de la fila">Costo tras Descuento/Recargo</button>
+                            <button type="button" class="button rce-cost-btn" data-folio-cost="tras_dr_folio" title="Tras D/R de fila y del folio">Costo tras Descuento/Recargo Folio</button>
+                            <button type="button" class="button rce-cost-btn" data-folio-cost="tras_dr_flete" title="Tras D/R de folio más flete">Costo más flete</button>
                         </div>
                         <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
                             <input type="checkbox" id="folio-toggle-decimals" checked>
@@ -604,7 +606,9 @@ $riverso_cost_history_context = isset($riverso_cost_history_context) ? $riverso_
                 </div>
                 <div class="rce-view-toggle" role="group" aria-label="Base de costo" id="alerts-folio-cost-toggle">
                     <button type="button" class="button rce-cost-btn" data-folio-cost="referencia" title="Precio lista / antes de D/R">Costo referencia</button>
-                    <button type="button" class="button rce-cost-btn is-active" data-folio-cost="tras_dr" title="Tras descuento y recargo">Costo tras Descuento/Recargo</button>
+                    <button type="button" class="button rce-cost-btn is-active" data-folio-cost="tras_dr" title="Tras descuento y recargo de la fila">Costo tras Descuento/Recargo</button>
+                    <button type="button" class="button rce-cost-btn" data-folio-cost="tras_dr_folio" title="Tras D/R de fila y del folio">Costo tras Descuento/Recargo Folio</button>
+                    <button type="button" class="button rce-cost-btn" data-folio-cost="tras_dr_flete" title="Tras D/R de folio más flete">Costo más flete</button>
                 </div>
                 <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
                     <input type="checkbox" id="alerts-folio-toggle-decimals" checked>
@@ -2064,20 +2068,30 @@ jQuery(document).ready(function($) {
     }
 
     function folioCostLabel() {
-        return folioCostMode === 'referencia' ? 'costo referencia' : 'tras Descuento/Recargo';
+        if (folioCostMode === 'referencia') return 'costo referencia';
+        if (folioCostMode === 'tras_dr_folio') return 'tras Descuento/Recargo Folio';
+        if (folioCostMode === 'tras_dr_flete') return 'más flete';
+        return 'tras Descuento/Recargo';
     }
 
     function folioCostLabelShort() {
-        return folioCostMode === 'referencia' ? 'Costo referencia' : 'Costo tras Descuento/Recargo';
+        if (folioCostMode === 'referencia') return 'Costo referencia';
+        if (folioCostMode === 'tras_dr_folio') return 'Costo tras Descuento/Recargo Folio';
+        if (folioCostMode === 'tras_dr_flete') return 'Costo más flete';
+        return 'Costo tras Descuento/Recargo';
     }
 
     function pickFolioBase(bases, viewMode, costMode) {
         if (!bases || typeof bases !== 'object') return null;
         viewMode = viewMode || folioViewMode;
         costMode = costMode || folioCostMode;
-        const key = costMode === 'referencia' ? 'referencia' : 'tras_dr';
+        const key = costMode === 'referencia' ? 'referencia'
+            : (costMode === 'tras_dr_flete' ? 'tras_dr_flete'
+            : (costMode === 'tras_dr_folio' ? 'tras_dr_folio' : 'tras_dr'));
         let pair = bases[key];
         if (!pair && key === 'referencia') pair = bases.tras_dr;
+        if (!pair && key === 'tras_dr_folio') pair = bases.tras_dr;
+        if (!pair && key === 'tras_dr_flete') pair = bases.tras_dr_folio || bases.tras_dr;
         if (!pair || typeof pair !== 'object') return null;
         const v = viewMode === 'bruto' ? pair.bruto : pair.neto;
         if (v === null || v === undefined || v === '' || isNaN(v)) return null;
@@ -2172,7 +2186,7 @@ jQuery(document).ready(function($) {
     }
 
     function setFolioCostMode(mode) {
-        if (mode !== 'referencia' && mode !== 'tras_dr') return;
+        if (mode !== 'referencia' && mode !== 'tras_dr' && mode !== 'tras_dr_folio' && mode !== 'tras_dr_flete') return;
         folioCostMode = mode;
         syncFolioViewToggles();
         if (lastFolioAnalysis) {

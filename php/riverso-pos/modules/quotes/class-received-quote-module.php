@@ -2090,26 +2090,97 @@ class Riverso_POS_Received_Quote_Module {
     }
 
     /**
-     * Recalcular totales de cotización
+     * Recalcular totales de cotización (aplica descuento de folio de cabecera).
      */
-    private function recalculate_quote_totals($quote_id) {
+    public function recalculate_quote_totals($quote_id) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
+        $quote_id = (int) $quote_id;
 
-        $totals = $wpdb->get_row($wpdb->prepare("
-            SELECT 
-                SUM(costo_neto * cantidad) as subtotal,
-                SUM(costo_impuesto * cantidad) as impuesto,
-                SUM(costo_total * cantidad) as total
-            FROM {$prefix}cotizacion_items
-            WHERE cotizacion_id = %d
-        ", $quote_id));
+        $quote = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, tasa_iva, descuento_pct, descuento_monto, datos_parseados
+             FROM {$prefix}cotizaciones_recibidas WHERE id = %d",
+            $quote_id
+        ), ARRAY_A);
+        if (!$quote) {
+            return;
+        }
 
-        $wpdb->update("{$prefix}cotizaciones_recibidas", [
-            'subtotal'  => $totals->subtotal ?: 0,
-            'impuesto'  => $totals->impuesto ?: 0,
-            'total'     => $totals->total ?: 0
-        ], ['id' => $quote_id]);
+        $totals = $wpdb->get_row($wpdb->prepare(
+            "SELECT
+                COALESCE(SUM(costo_neto * cantidad), 0) AS subtotal,
+                COALESCE(SUM(costo_impuesto * cantidad), 0) AS impuesto_lineas,
+                COALESCE(SUM(costo_total * cantidad), 0) AS bruto_lineas
+             FROM {$prefix}cotizacion_items
+             WHERE cotizacion_id = %d",
+            $quote_id
+        ));
+
+        $subtotal = round((float) ($totals->subtotal ?? 0), 2);
+        $tasa = (float) ($quote['tasa_iva'] ?? 19);
+        if ($tasa < 0) {
+            $tasa = 19.0;
+        }
+
+        $descuento_monto = null;
+        if (isset($quote['descuento_monto']) && $quote['descuento_monto'] !== null && $quote['descuento_monto'] !== ''
+            && (float) $quote['descuento_monto'] != 0.0) {
+            $descuento_monto = round((float) $quote['descuento_monto'], 2);
+        } elseif (isset($quote['descuento_pct']) && $quote['descuento_pct'] !== null && $quote['descuento_pct'] !== ''
+            && (float) $quote['descuento_pct'] != 0.0 && $subtotal > 0) {
+            $descuento_monto = round($subtotal * ((float) $quote['descuento_pct']) / 100, 0);
+        }
+
+        // Inferir desde datos_parseados si el extractor vio total/subtotal y no hay descuento guardado.
+        if ($descuento_monto === null && $subtotal > 0 && !empty($quote['datos_parseados'])) {
+            $parsed = json_decode((string) $quote['datos_parseados'], true);
+            if (is_array($parsed)) {
+                if (isset($parsed['descuento_monto']) && (float) $parsed['descuento_monto'] > 0) {
+                    $descuento_monto = round((float) $parsed['descuento_monto'], 2);
+                } elseif (isset($parsed['descuento_pct']) && (float) $parsed['descuento_pct'] > 0) {
+                    $descuento_monto = round($subtotal * ((float) $parsed['descuento_pct']) / 100, 0);
+                } elseif (isset($parsed['subtotal']) && (float) $parsed['subtotal'] > 0) {
+                    $gap = round($subtotal - (float) $parsed['subtotal'], 2);
+                    if ($gap >= 0.5) {
+                        $descuento_monto = $gap;
+                    }
+                } elseif (isset($parsed['total']) && (float) $parsed['total'] > 0 && $tasa > 0) {
+                    $parsed_neto = round((float) $parsed['total'] / (1 + $tasa / 100), 0);
+                    $gap = round($subtotal - $parsed_neto, 2);
+                    if ($gap >= 0.5) {
+                        $descuento_monto = $gap;
+                    }
+                }
+            }
+        }
+
+        $descuento_monto = (float) ($descuento_monto ?? 0);
+        if ($descuento_monto < 0) {
+            $descuento_monto = 0;
+        }
+        if ($descuento_monto > $subtotal) {
+            $descuento_monto = $subtotal;
+        }
+
+        $neto_folio = round($subtotal - $descuento_monto, 2);
+        $impuesto = $tasa > 0 ? round($neto_folio * $tasa / 100, 0) : 0.0;
+        $total = round($neto_folio + $impuesto, 2);
+
+        $update = [
+            'subtotal' => $subtotal,
+            'impuesto' => $impuesto,
+            'total' => $total,
+        ];
+        // Persistir monto inferido si la cabecera no lo tenía.
+        if ($descuento_monto > 0
+            && (empty($quote['descuento_monto']) || (float) $quote['descuento_monto'] == 0.0)) {
+            $update['descuento_monto'] = $descuento_monto;
+            if ((empty($quote['descuento_pct']) || (float) $quote['descuento_pct'] == 0.0) && $subtotal > 0) {
+                $update['descuento_pct'] = round($descuento_monto * 100 / $subtotal, 4);
+            }
+        }
+
+        $wpdb->update("{$prefix}cotizaciones_recibidas", $update, ['id' => $quote_id]);
     }
 
     /**

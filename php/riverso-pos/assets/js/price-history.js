@@ -42,7 +42,7 @@
     var explorerCostMode = 'tras_dr';
     /** Vista de montos en Procesar folios: default neto (base del documento). */
     var rpfViewMode = 'neto';
-    /** Base de costo: referencia | tras_dr | tras_dr_flete. Default tras D/R. */
+    /** Base de costo: referencia | tras_dr | tras_dr_folio | tras_dr_flete. Default tras D/R. */
     var rpfCostMode = 'tras_dr';
     /** Borradores de inputs al cambiar Neto/Bruto (item_id → {local, online, margin}). */
     var rpfDraftPrices = {};
@@ -161,8 +161,9 @@
             '</span>' +
             '<span id="rpf-cost-toggle" class="rpe-view-toggle rpf-cost-toggle" role="group" aria-label="Base de costo" style="margin-left:10px;">' +
             '<button type="button" class="button rpf-cost-btn" data-cost="referencia" title="Precio lista / costo antes de D/R">Costo referencia</button>' +
-            '<button type="button" class="button rpf-cost-btn" data-cost="tras_dr" title="Tras descuento y recargo">Costo tras Descuento/Recargo</button>' +
-            '<button type="button" class="button rpf-cost-btn" data-cost="tras_dr_flete" title="Tras D/R más flete">Costo tras D/R + flete</button>' +
+            '<button type="button" class="button rpf-cost-btn" data-cost="tras_dr" title="Tras descuento y recargo de la fila">Costo tras Descuento/Recargo</button>' +
+            '<button type="button" class="button rpf-cost-btn" data-cost="tras_dr_folio" title="Tras D/R de fila y del folio">Costo tras Descuento/Recargo Folio</button>' +
+            '<button type="button" class="button rpf-cost-btn" data-cost="tras_dr_flete" title="Tras D/R de folio más flete">Costo más flete</button>' +
             '<button type="button" class="button" id="rpf-btn-flete" title="Ver y asignar flete del folio">Flete</button>' +
             '</span>'
         );
@@ -194,9 +195,13 @@
             return fallback != null && fallback !== '' && !isNaN(fallback) ? Number(fallback) : null;
         }
         var key = mode === 'referencia' ? 'referencia'
-            : (mode === 'tras_dr_flete' ? 'tras_dr_flete' : 'tras_dr');
+            : (mode === 'tras_dr_flete' ? 'tras_dr_flete'
+            : (mode === 'tras_dr_folio' ? 'tras_dr_folio' : 'tras_dr'));
         var v = bases[key];
         if (v === null || v === undefined || v === '' || isNaN(v)) {
+            if (mode === 'tras_dr_folio' && bases.tras_dr != null && bases.tras_dr !== '' && !isNaN(bases.tras_dr)) {
+                return Number(bases.tras_dr);
+            }
             if (mode !== 'tras_dr_flete' && fallback != null && fallback !== '' && !isNaN(fallback)) {
                 return Number(fallback);
             }
@@ -500,10 +505,18 @@
         if (!bases) {
             return null;
         }
-        var key = mode === 'referencia' ? 'referencia' : 'tras_dr';
+        var key = mode === 'referencia' ? 'referencia'
+            : (mode === 'tras_dr_flete' ? 'tras_dr_flete'
+            : (mode === 'tras_dr_folio' ? 'tras_dr_folio' : 'tras_dr'));
         var pair = bases[key];
         if (!pair && key === 'referencia') {
             pair = bases.tras_dr;
+        }
+        if (!pair && key === 'tras_dr_folio') {
+            pair = bases.tras_dr;
+        }
+        if (!pair && key === 'tras_dr_flete') {
+            pair = bases.tras_dr_folio || bases.tras_dr;
         }
         if (!pair || typeof pair !== 'object') {
             return null;
@@ -2770,7 +2783,7 @@
         $(document).on('click', '.rpe-cost-toggle .rpe-cost-btn', function (e) {
             e.preventDefault();
             var mode = $(this).data('cost');
-            if (mode !== 'referencia' && mode !== 'tras_dr') {
+            if (mode !== 'referencia' && mode !== 'tras_dr' && mode !== 'tras_dr_folio' && mode !== 'tras_dr_flete') {
                 return;
             }
             if (explorerCostMode === mode) {
@@ -2800,7 +2813,7 @@
                 return;
             }
             var mode = $(this).data('cost');
-            if (mode !== 'referencia' && mode !== 'tras_dr' && mode !== 'tras_dr_flete') {
+            if (mode !== 'referencia' && mode !== 'tras_dr' && mode !== 'tras_dr_folio' && mode !== 'tras_dr_flete') {
                 return;
             }
             if (mode === 'tras_dr_flete' && !rpfInvoiceFleteOk()) {

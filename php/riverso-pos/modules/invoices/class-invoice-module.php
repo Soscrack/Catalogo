@@ -212,6 +212,7 @@ class Riverso_Invoice_Module {
             ],
             'items' => [],
             'referencias' => [],
+            'dsc_rcg_global' => [],
         ];
 
         if (isset($totales->ImptoReten)) {
@@ -220,6 +221,20 @@ class Riverso_Invoice_Module {
                     'tipo_imp' => (int) ($imp->TipoImp ?? 0),
                     'tasa_imp' => (float) ($imp->TasaImp ?? 0),
                     'monto_imp' => (float) ($imp->MontoImp ?? 0),
+                ];
+            }
+        }
+
+        // DscRcgGlobal: descuentos/recargos a nivel documento
+        if (isset($doc->DscRcgGlobal)) {
+            foreach ($doc->DscRcgGlobal as $dr) {
+                $factura['dsc_rcg_global'][] = [
+                    'nro' => (int) ($dr->NroLinDR ?? 0),
+                    'tpo_mov' => strtoupper(trim((string) ($dr->TpoMov ?? ''))),
+                    'tpo_valor' => trim((string) ($dr->TpoValor ?? '$')),
+                    'valor' => (float) ($dr->ValorDR ?? 0),
+                    'glosa' => trim((string) ($dr->GlosaDR ?? '')),
+                    'ind_exe' => isset($dr->IndExeDR) ? (int) $dr->IndExeDR : null,
                 ];
             }
         }
@@ -514,6 +529,23 @@ class Riverso_Invoice_Module {
             ? wp_json_encode($factura_data['totales']['impuestos_adicionales'])
             : null;
 
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-activator.php';
+        if (method_exists('Riverso_POS_Activator', 'ensure_folio_dr_cost_columns')) {
+            Riverso_POS_Activator::ensure_folio_dr_cost_columns();
+        }
+
+        // Asegurar D/R de folio calculado antes de persistir
+        if (empty($factura_data['items'][0]['costo_neto_folio'] ?? null)) {
+            $this->intake()->enrich_factura_items_costs($factura_data);
+        }
+
+        $dsc_rcg_json = !empty($factura_data['dsc_rcg_global'])
+            ? wp_json_encode($factura_data['dsc_rcg_global'])
+            : null;
+        $dsc_rcg_ok = isset($factura_data['dsc_rcg_global_ok'])
+            ? (int) $factura_data['dsc_rcg_global_ok']
+            : 1;
+
         // Insertar factura
         $result = $wpdb->insert(
             "{$prefix}facturas",
@@ -541,8 +573,10 @@ class Riverso_Invoice_Module {
                     : 'solo_costos',
                 'tipo_confirmado' => !empty($options['tipo_confirmado']) ? 1 : 0,
                 'origen_ingreso'  => sanitize_text_field($options['origen_ingreso'] ?? 'xml'),
+                'dsc_rcg_global' => $dsc_rcg_json,
+                'dsc_rcg_global_ok' => $dsc_rcg_ok,
             ],
-            ['%d', '%s', '%d', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%d', '%s', '%d', '%s', '%s', '%d', '%f', '%s', '%d', '%s']
+            ['%d', '%s', '%d', '%s', '%s', '%s', '%f', '%f', '%f', '%f', '%s', '%d', '%s', '%d', '%s', '%s', '%d', '%f', '%s', '%d', '%s', '%s', '%d']
         );
 
         if (!$result) {
@@ -607,9 +641,19 @@ class Riverso_Invoice_Module {
             }
 
             $costs = $this->intake()->compute_item_cost_breakdown($item, $tasa_iva);
-            $landed_unit = $item_tipo === 'producto'
-                ? ($costs['costo_unitario_neto_final'] ?? $item['precio'])
-                : null;
+            // Preferir costos de folio ya calculados en enrich
+            $neto_folio = isset($item['costo_neto_folio']) ? (float) $item['costo_neto_folio']
+                : (isset($costs['costo_neto_final']) ? (float) $costs['costo_neto_final'] : null);
+            $bruto_folio = isset($item['costo_bruto_folio']) ? (float) $item['costo_bruto_folio']
+                : (isset($costs['costo_bruto_final']) ? (float) $costs['costo_bruto_final'] : null);
+            $cuota_folio = isset($item['dsc_rcg_global_cuota']) ? (float) $item['dsc_rcg_global_cuota'] : null;
+            $qty_item = (float) ($item['cantidad'] ?? 0);
+            if ($qty_item <= 0) {
+                $qty_item = 1;
+            }
+            $landed_unit = $item_tipo === 'producto' && $neto_folio !== null
+                ? round($neto_folio / $qty_item, 4)
+                : ($item_tipo === 'producto' ? ($costs['costo_unitario_neto_final'] ?? $item['precio']) : null);
 
             $wpdb->insert(
                 "{$prefix}factura_items",
@@ -634,6 +678,9 @@ class Riverso_Invoice_Module {
                     'costo_bruto_base' => $costs['costo_bruto_base'],
                     'costo_neto_final' => $costs['costo_neto_final'],
                     'costo_bruto_final' => $costs['costo_bruto_final'],
+                    'costo_neto_folio' => $neto_folio,
+                    'costo_bruto_folio' => $bruto_folio,
+                    'dsc_rcg_global_cuota' => $cuota_folio,
                     'monto_total' => $item['monto'],
                     'product_id' => $product_id,
                     'sku_local' => $codigo_local,
@@ -644,8 +691,8 @@ class Riverso_Invoice_Module {
                 [
                     '%d', '%d', '%s', '%s', '%s', '%s', '%f', '%s', '%f',
                     '%f', '%f', '%f', '%f', '%s', '%f', '%f',
-                    '%f', '%f', '%f', '%f', '%f',
-                    '%d', '%s', '%s', '%s', '%f',
+                    '%f', '%f', '%f', '%f', '%f', '%f', '%f',
+                    '%f', '%d', '%s', '%s', '%s', '%f',
                 ]
             );
         }
@@ -814,7 +861,7 @@ class Riverso_Invoice_Module {
             ? ['documento_subtipo' => $merge_subtipo, 'respect_existing' => true]
             : ['force_keywords' => true];
         $this->intake()->classify_factura_items($factura_data, $classify_opts);
-        if (empty($factura_data['items'][0]['costo_neto_final'] ?? null)) {
+        if (empty($factura_data['items'][0]['costo_neto_folio'] ?? null)) {
             $this->intake()->enrich_factura_items_costs($factura_data);
         }
 
@@ -854,6 +901,17 @@ class Riverso_Invoice_Module {
             ? wp_json_encode($factura_data['totales']['impuestos_adicionales'])
             : null;
         $costo_envio_inline = (float) ($factura_data['costo_envio_inline'] ?? 0);
+        $dsc_rcg_json = !empty($factura_data['dsc_rcg_global'])
+            ? wp_json_encode($factura_data['dsc_rcg_global'])
+            : null;
+        $dsc_rcg_ok = isset($factura_data['dsc_rcg_global_ok'])
+            ? (int) $factura_data['dsc_rcg_global_ok']
+            : 1;
+
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-activator.php';
+        if (method_exists('Riverso_POS_Activator', 'ensure_folio_dr_cost_columns')) {
+            Riverso_POS_Activator::ensure_folio_dr_cost_columns();
+        }
 
         $wpdb->update("{$prefix}facturas", [
             'tipo_dte'            => (int) $factura_data['tipo_dte'],
@@ -872,6 +930,8 @@ class Riverso_Invoice_Module {
                 ? (float) ($row['costo_envio_total'] ?? 0)
                 : $costo_envio_inline,
             'tipo_confirmado'     => !empty($options['tipo_confirmado']) ? 1 : (int) ($row['tipo_confirmado'] ?? 0),
+            'dsc_rcg_global'      => $dsc_rcg_json,
+            'dsc_rcg_global_ok'   => $dsc_rcg_ok,
         ], ['id' => $factura_id]);
 
         riverso_factura_mark_xml_attached($factura_id);
@@ -903,8 +963,18 @@ class Riverso_Invoice_Module {
                 $modo_ingreso
             );
             $items_updated = true;
-        } elseif ($warning === null) {
-            $warning = 'XML unido, pero no se actualizaron ítems porque la factura ya tiene recepción o no está en solo costos.';
+        } else {
+            // XML trae DscRcgGlobal aunque no se reemplacen ítems: repartir sobre líneas existentes.
+            if (!empty($factura_data['dsc_rcg_global'])
+                && in_array($documento_subtipo, ['productos', 'guia_despacho'], true)
+                && method_exists($this->intake(), 'apply_folio_dr_costs_to_factura')) {
+                $this->intake()->apply_folio_dr_costs_to_factura($factura_id, [
+                    'dsc_rcg_global' => $factura_data['dsc_rcg_global'],
+                ]);
+            }
+            if ($warning === null) {
+                $warning = 'XML unido, pero no se actualizaron ítems porque la factura ya tiene recepción o no está en solo costos.';
+            }
         }
 
         $link = function_exists('riverso_link_scans_to_factura')
@@ -1377,9 +1447,18 @@ class Riverso_Invoice_Module {
             }
 
             $costs = $this->intake()->compute_item_cost_breakdown($item, $tasa_iva);
-            $landed_unit = $item_tipo === 'producto'
-                ? ($costs['costo_unitario_neto_final'] ?? $item['precio'])
-                : null;
+            $neto_folio = isset($item['costo_neto_folio']) ? (float) $item['costo_neto_folio']
+                : (isset($costs['costo_neto_final']) ? (float) $costs['costo_neto_final'] : null);
+            $bruto_folio = isset($item['costo_bruto_folio']) ? (float) $item['costo_bruto_folio']
+                : (isset($costs['costo_bruto_final']) ? (float) $costs['costo_bruto_final'] : null);
+            $cuota_folio = isset($item['dsc_rcg_global_cuota']) ? (float) $item['dsc_rcg_global_cuota'] : null;
+            $qty_item = (float) ($item['cantidad'] ?? 0);
+            if ($qty_item <= 0) {
+                $qty_item = 1;
+            }
+            $landed_unit = $item_tipo === 'producto' && $neto_folio !== null
+                ? round($neto_folio / $qty_item, 4)
+                : ($item_tipo === 'producto' ? ($costs['costo_unitario_neto_final'] ?? $item['precio']) : null);
 
             $wpdb->insert(
                 "{$prefix}factura_items",
@@ -1404,6 +1483,9 @@ class Riverso_Invoice_Module {
                     'costo_bruto_base' => $costs['costo_bruto_base'],
                     'costo_neto_final' => $costs['costo_neto_final'],
                     'costo_bruto_final' => $costs['costo_bruto_final'],
+                    'costo_neto_folio' => $neto_folio,
+                    'costo_bruto_folio' => $bruto_folio,
+                    'dsc_rcg_global_cuota' => $cuota_folio,
                     'monto_total' => $item['monto'] ?? 0,
                     'product_id' => $product_id,
                     'sku_local' => $codigo_local,

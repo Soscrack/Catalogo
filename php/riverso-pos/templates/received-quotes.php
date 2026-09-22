@@ -261,6 +261,10 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
                 <span class="label">Subtotal:</span>
                 <span class="value" id="total-subtotal">$0</span>
             </div>
+            <div class="total-item" id="total-descuento-wrap" style="display:none;">
+                <span class="label">Descuento folio:</span>
+                <span class="value" id="total-descuento">$0</span>
+            </div>
             <div class="total-item">
                 <span class="label">IVA:</span>
                 <span class="value" id="total-impuesto">$0</span>
@@ -403,7 +407,8 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
                     </div>
                     <div class="rce-view-toggle" role="group" aria-label="Base de costo" id="quote-eval-cost-toggle">
                         <button type="button" class="button rce-cost-btn" data-quote-cost="referencia" title="Precio lista / antes de D/R">Costo referencia</button>
-                        <button type="button" class="button rce-cost-btn is-active" data-quote-cost="tras_dr" title="Tras descuento y recargo">Costo tras Descuento/Recargo</button>
+                        <button type="button" class="button rce-cost-btn is-active" data-quote-cost="tras_dr" title="Tras descuento y recargo de la fila">Costo tras Descuento/Recargo</button>
+                        <button type="button" class="button rce-cost-btn" data-quote-cost="tras_dr_folio" title="Tras D/R de fila y del folio">Costo tras Descuento/Recargo Folio</button>
                     </div>
                     <label class="quote-eval-decimals">
                         <input type="checkbox" id="quote-eval-toggle-decimals" checked>
@@ -1025,6 +1030,12 @@ tr.quote-por-confirmar {
     font-size: 24px;
     font-weight: 600;
 }
+.comparison-summary .summary-value .summary-total-hint {
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0.65;
+    margin-left: 2px;
+}
 
 .quote-eval-modal {
     max-width: 1280px;
@@ -1177,9 +1188,11 @@ jQuery(document).ready(function($) {
         if (!bases || typeof bases !== 'object') return null;
         viewMode = viewMode || quoteEvalViewMode;
         costMode = costMode || quoteEvalCostMode;
-        const key = costMode === 'referencia' ? 'referencia' : 'tras_dr';
+        const key = costMode === 'referencia' ? 'referencia'
+            : (costMode === 'tras_dr_folio' ? 'tras_dr_folio' : 'tras_dr');
         let pair = bases[key];
         if (!pair && key === 'referencia') pair = bases.tras_dr;
+        if (!pair && key === 'tras_dr_folio') pair = bases.tras_dr;
         if (!pair || typeof pair !== 'object') return null;
         const v = viewMode === 'bruto' ? pair.bruto : pair.neto;
         if (v === null || v === undefined || v === '' || isNaN(v)) return null;
@@ -1278,7 +1291,9 @@ jQuery(document).ready(function($) {
     }
 
     function quoteEvalCostLabel() {
-        return quoteEvalCostMode === 'referencia' ? 'Costo referencia' : 'Costo tras Descuento/Recargo';
+        if (quoteEvalCostMode === 'referencia') return 'Costo referencia';
+        if (quoteEvalCostMode === 'tras_dr_folio') return 'Costo tras Descuento/Recargo Folio';
+        return 'Costo tras Descuento/Recargo';
     }
 
     function originCell(cost, ref, fallbackLabel) {
@@ -1466,6 +1481,18 @@ jQuery(document).ready(function($) {
             }
             
             $('#total-subtotal').text(formatMoney(q.subtotal));
+            const dscMonto = Number(q.descuento_monto || 0);
+            const dscPct = Number(q.descuento_pct || 0);
+            if (dscMonto > 0 || dscPct > 0) {
+                let dscLabel = formatMoney(dscMonto);
+                if (dscPct > 0) {
+                    dscLabel += ' (' + dscPct + '%)';
+                }
+                $('#total-descuento').text(dscLabel);
+                $('#total-descuento-wrap').show();
+            } else {
+                $('#total-descuento-wrap').hide();
+            }
             $('#total-impuesto').text(formatMoney(q.impuesto));
             $('#total-total').text(formatMoney(q.total));
             
@@ -1502,6 +1529,8 @@ jQuery(document).ready(function($) {
             $('#archivo-info').html('<span class="no-archivo">Sin archivo adjunto</span>');
             $('#archivo-actions').hide();
             $('#total-subtotal, #total-impuesto, #total-total').text('$0');
+            $('#total-descuento-wrap').hide();
+            $('#total-descuento').text('$0');
             $('#btn-aprobar').hide();
             $('#btn-convertir-oc').hide();
             $('#btn-ver-correo').hide().attr('href', '#');
@@ -2121,16 +2150,28 @@ jQuery(document).ready(function($) {
         $('#tabla-comparacion thead th').eq(6).text('Legacy' + suffix);
 
         const rowsData = data.rows || [];
-        let aumentos = 0, bajas = 0;
+        // Δ ≤ $0,01 CLP = ruido de aproximación; no cuenta como alza/baja significativa.
+        const DELTA_SIGNIFICATIVO = 0.01;
+        let aumentos = 0, bajas = 0, aumentosSig = 0, bajasSig = 0;
         rowsData.forEach(function(row) {
             const m = quoteEvalRowMetrics(row);
-            if (m.trend === 'subio') aumentos++;
-            if (m.trend === 'bajo') bajas++;
+            if (m.trend === 'subio') {
+                aumentos++;
+                if (m.delta != null && Number(m.delta) > DELTA_SIGNIFICATIVO) aumentosSig++;
+            }
+            if (m.trend === 'bajo') {
+                bajas++;
+                if (m.delta != null && Number(m.delta) < -DELTA_SIGNIFICATIVO) bajasSig++;
+            }
         });
+        function summaryCountHtml(sig, total, cls) {
+            return '<div class="summary-value ' + cls + '">' + sig +
+                '<span class="summary-total-hint">(' + total + ')</span></div>';
+        }
         $('#comparison-summary').html(
             '<div class="summary-item"><div class="summary-value">' + rowsData.length + '</div><div>Ítems</div></div>' +
-            '<div class="summary-item"><div class="summary-value cost-up">' + aumentos + '</div><div>Alzas</div></div>' +
-            '<div class="summary-item"><div class="summary-value cost-down">' + bajas + '</div><div>Bajas</div></div>' +
+            '<div class="summary-item">' + summaryCountHtml(aumentosSig, aumentos, 'cost-up') + '<div>Alzas</div></div>' +
+            '<div class="summary-item">' + summaryCountHtml(bajasSig, bajas, 'cost-down') + '<div>Bajas</div></div>' +
             '<div class="summary-item"><div class="summary-value">' + escapeHtml(costTag) + '</div><div>' + escapeHtml(viewTag) + '</div></div>'
         );
 
@@ -2244,7 +2285,9 @@ jQuery(document).ready(function($) {
         });
         const baseNote = quoteEvalCostMode === 'referencia'
             ? 'Costo referencia = precio lista / costo antes de descuentos y recargos.'
-            : 'Costo tras Descuento/Recargo = costo unitario después de descuentos y recargos.';
+            : (quoteEvalCostMode === 'tras_dr_folio'
+                ? 'Costo tras Descuento/Recargo Folio = costo unitario después del D/R de fila y del descuento/recargo del documento.'
+                : 'Costo tras Descuento/Recargo = costo unitario después de descuentos y recargos de la fila.');
         return '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">' +
             '<title>Evaluación ' + escapeHtml(title) + '</title>' +
             '<style>body{font-family:Arial,sans-serif;margin:24px;color:#111;}h1{margin:0 0 8px;font-size:22px;}' +
@@ -2322,7 +2365,9 @@ jQuery(document).ready(function($) {
         if (lastQuoteEval) renderQuoteEval(lastQuoteEval);
     });
     $('#quote-eval-cost-toggle').on('click', '.rce-cost-btn', function() {
-        quoteEvalCostMode = $(this).data('quote-cost') || 'tras_dr';
+        const mode = $(this).data('quote-cost') || 'tras_dr';
+        if (mode !== 'referencia' && mode !== 'tras_dr' && mode !== 'tras_dr_folio') return;
+        quoteEvalCostMode = mode;
         syncQuoteEvalToggles();
         if (lastQuoteEval) renderQuoteEval(lastQuoteEval);
     });
@@ -2395,9 +2440,9 @@ jQuery(document).ready(function($) {
         const items = [];
         (data.rows || []).forEach(function(row) {
             const m = quoteEvalRowMetrics(row);
-            // No reclamar alzas menores a +$0,01
+            // No reclamar alzas ≤ +$0,01 (ruido de aproximación)
             if (m.trend !== 'subio' || m.previous == null) return;
-            if (m.delta == null || Number(m.delta) < 0.01) return;
+            if (m.delta == null || Number(m.delta) <= 0.01) return;
             items.push({
                 codigo: (row.codigo_proveedor || '').trim(),
                 nombre: (row.nombre || '').trim(),

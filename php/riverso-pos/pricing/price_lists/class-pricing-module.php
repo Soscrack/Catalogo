@@ -609,6 +609,21 @@ class Riverso_Pricing_Module {
             );
         }
 
+        // FACTO export solo encola por sync_state=pendiente_excel; TPV detecta diffs
+        // por hash. Un cambio de precio local (folios, explorador, Productos) debe
+        // marcar el mapa para que aparezca en «Solo pendientes».
+        $canal = (string) ($row['canal'] ?? '');
+        $prev = $row['p_asignado'];
+        $price_changed = ($prev === null || $prev === '')
+            ? true
+            : abs((float) $prev - $p_asignado) > 0.000001;
+        if ($canal === self::CANAL_LOCAL && $price_changed) {
+            $producto_base_id = (int) ($row['producto_base_id'] ?? 0);
+            if ($producto_base_id > 0 && class_exists('Riverso_Product_Module')) {
+                Riverso_Product_Module::get_instance()->mark_facto_pending_export($producto_base_id);
+            }
+        }
+
         return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$prefix}precios WHERE id = %d", $precio_id), ARRAY_A);
     }
 

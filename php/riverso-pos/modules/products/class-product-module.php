@@ -697,6 +697,9 @@ class Riverso_Product_Module {
             $prov['needs_confirm'] = function_exists('riverso_pp_needs_human_confirm')
                 ? riverso_pp_needs_human_confirm($prov)
                 : false;
+            $prov['vinculo'] = function_exists('riverso_pp_vinculo_info')
+                ? riverso_pp_vinculo_info($prov)
+                : null;
             $this->enrich_supplier_purchase_units($prov, (int) $id);
         }
         unset($prov);
@@ -790,39 +793,61 @@ class Riverso_Product_Module {
             ), ARRAY_A);
         }
 
-        $product['barcode_remap_context'] = null;
-        $product['code_remap_context'] = null;
-        if (class_exists('Riverso_Unit_Product_Service')) {
-            $svc = Riverso_Unit_Product_Service::get_instance();
-            $family_ctx = $svc->resolve_family_context_for_remap($id);
-            $is_unitario = !empty($product['es_unidad_minima'])
-                || (!empty($family_ctx['unit_producto_base_id'])
-                    && intval($family_ctx['unit_producto_base_id']) === $id);
-            $decision = $product['familia_decision'] ?? null;
-            $can_be_unitario = $is_unitario
-                || empty($decision)
-                || $decision === 'requiere'
-                || (!empty($family_ctx['grupo_id']) && empty($family_ctx['unit_producto_base_id']));
-            $parked = [];
-            if (!empty($family_ctx['grupo_id'])) {
-                $parked = $svc->list_resumable_parked_barcode_tasks(intval($family_ctx['grupo_id']));
-            }
-            $product['barcode_remap_context'] = [
-                'show_wizard' => (bool) ($is_unitario || $can_be_unitario),
+        $ctx = $this->build_barcode_remap_context($id, $product);
+        $product['barcode_remap_context'] = $ctx['barcode_remap_context'];
+        $product['code_remap_context'] = $ctx['code_remap_context'];
+
+        return $product;
+    }
+
+    /**
+     * Contexto de remapeo barcode/código (wizard de familia/unitario).
+     *
+     * @param int   $id
+     * @param array $product Fila o subset de producto_base (necesita es_unidad_minima, familia_decision).
+     * @return array{barcode_remap_context:?array,code_remap_context:?array}
+     */
+    public function build_barcode_remap_context($id, array $product = []) {
+        $id = absint($id);
+        $empty = [
+            'barcode_remap_context' => null,
+            'code_remap_context' => null,
+        ];
+        if (!$id || !class_exists('Riverso_Unit_Product_Service')) {
+            return $empty;
+        }
+
+        $svc = Riverso_Unit_Product_Service::get_instance();
+        $family_ctx = $svc->resolve_family_context_for_remap($id);
+        $is_unitario = !empty($product['es_unidad_minima'])
+            || (!empty($family_ctx['unit_producto_base_id'])
+                && intval($family_ctx['unit_producto_base_id']) === $id);
+        $decision = $product['familia_decision'] ?? null;
+        $can_be_unitario = $is_unitario
+            || empty($decision)
+            || $decision === 'requiere'
+            || (!empty($family_ctx['grupo_id']) && empty($family_ctx['unit_producto_base_id']));
+        $parked = [];
+        if (!empty($family_ctx['grupo_id'])) {
+            $parked = $svc->list_resumable_parked_barcode_tasks(intval($family_ctx['grupo_id']));
+        }
+        $show = (bool) ($is_unitario || $can_be_unitario);
+
+        return [
+            'barcode_remap_context' => [
+                'show_wizard' => $show,
                 'is_unitario' => (bool) $is_unitario,
                 'can_be_unitario' => (bool) $can_be_unitario,
                 'family' => $family_ctx,
                 'parked_suggestions' => $parked,
-            ];
-            $product['code_remap_context'] = [
-                'show_wizard' => (bool) ($is_unitario || $can_be_unitario),
+            ],
+            'code_remap_context' => [
+                'show_wizard' => $show,
                 'is_unitario' => (bool) $is_unitario,
                 'can_be_unitario' => (bool) $can_be_unitario,
                 'family' => $family_ctx,
-            ];
-        }
-
-        return $product;
+            ],
+        ];
     }
 
     /**
@@ -2059,9 +2084,12 @@ class Riverso_Product_Module {
         // crear producto_proveedor. Un ingreso manual nuevo no tiene ese ID, así
         // que hay que persistir el par canónico aquí.
         if (!$pp_id) {
+            $vinculo = function_exists('riverso_pp_vinculo_write_payload')
+                ? riverso_pp_vinculo_write_payload('manual', ['user_id' => get_current_user_id()])
+                : [];
             $inserted = $wpdb->insert(
                 "{$prefix}producto_proveedor",
-                [
+                array_merge([
                     'producto_base_id' => $product_id,
                     'proveedor_id' => $supplier_id,
                     'codigo_proveedor' => $supplier_code,
@@ -2071,8 +2099,8 @@ class Riverso_Product_Module {
                     'requires_human_review' => 0,
                     'origen_datos' => 'manual',
                     'created_at' => current_time('mysql'),
-                ],
-                ['%d', '%d', '%s', '%d', '%s', '%s', '%d', '%s', '%s']
+                ], $vinculo),
+                null
             );
             $pp_id = (int) $wpdb->insert_id;
             if (!$pp_id) {
@@ -2089,6 +2117,20 @@ class Riverso_Product_Module {
                     'message' => 'No se pudo guardar el código de proveedor: '
                         . ($wpdb->last_error ?: 'error de base de datos'),
                 ]);
+            }
+        } elseif ($pp_id) {
+            // Reasignación / vínculo manual sobre fila existente: marcar origen si falta.
+            $has_vinculo = $wpdb->get_var($wpdb->prepare(
+                "SELECT vinculo_origen FROM {$prefix}producto_proveedor WHERE id = %d",
+                $pp_id
+            ));
+            if ($has_vinculo === null || $has_vinculo === '') {
+                $vinculo = function_exists('riverso_pp_vinculo_write_payload')
+                    ? riverso_pp_vinculo_write_payload('manual', ['user_id' => get_current_user_id()])
+                    : [];
+                if ($vinculo) {
+                    $wpdb->update("{$prefix}producto_proveedor", $vinculo, ['id' => $pp_id]);
+                }
             }
         }
 

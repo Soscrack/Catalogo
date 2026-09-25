@@ -175,6 +175,18 @@
     vertical-align: middle;
 }
 
+.pqs-folio-link {
+    margin-left: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.pqs-folio-link:hover,
+.pqs-folio-link:focus {
+    text-decoration: underline;
+}
+
 .pqs-toggles,
 .pqs-cost-modes {
     display: flex;
@@ -395,4 +407,122 @@
     .pqs-input {
         min-width: 100%;
     }
+}
+
+/* Modo edición */
+.pqs-viewer.pqs-editing {
+    border-color: #2271b1;
+    box-shadow: 0 0 0 1px #2271b1;
+}
+
+.pqs-viewer:not(.pqs-editing) .pqs-edit-only {
+    display: none !important;
+}
+
+.pqs-viewer.pqs-editing .pqs-view-only {
+    display: none !important;
+}
+
+.pqs-viewer.pqs-editing .pqs-edit-only {
+    display: block !important;
+}
+
+.pqs-viewer.pqs-editing .pqs-nombre-edit,
+.pqs-viewer.pqs-editing .pqs-stock-edit,
+.pqs-viewer.pqs-editing #pqs-edit-precio-wrap .pqs-task-form {
+    display: flex !important;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.pqs-edit-precio-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.pqs-edit-hint {
+    display: block;
+    margin-top: 4px;
+    color: #646970;
+    font-size: 12px;
+}
+
+.pqs-related {
+    margin-top: 16px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 12px 14px;
+}
+
+.pqs-related h3 {
+    margin: 0 0 10px;
+    font-size: 14px;
+}
+
+.pqs-related mark {
+    background: #fff3cd;
+    padding: 0 2px;
+}
+
+.pqs-relation-edit {
+    margin-top: 8px;
+}
+
+.pqs-relation-edit .pqs-task-form {
+    margin-top: 6px;
+}
+
+.pqs-chip-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.pqs-chip .pqs-chip-remove,
+.pqs-supplier-row .pqs-chip-remove,
+.pqs-loc-actions .button-small {
+    margin-left: 4px;
+}
+
+.pqs-legacy-info {
+    font-size: 12px;
+    color: #646970;
+    margin: 4px 0 8px;
+}
+
+.pqs-legacy-info code {
+    background: #f0f0f1;
+    padding: 1px 4px;
+}
+
+.pqs-confirm-dialog {
+    width: min(480px, 94vw);
+    padding: 0;
+}
+
+.pqs-confirm-dialog .pqs-modal-header,
+.pqs-confirm-dialog .pqs-modal-body {
+    padding: 14px 16px;
+}
+
+.pqs-confirm-dialog.is-danger #pqs-confirm-ok {
+    background: #d63638;
+    border-color: #d63638;
+    color: #fff;
+}
+
+.pqs-confirm-check {
+    display: block;
+    margin-top: 12px;
+    font-weight: 600;
+}
+
+.pqs-sup-suggestions {
+    margin-top: 4px;
 }

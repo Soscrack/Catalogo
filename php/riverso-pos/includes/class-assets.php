@@ -112,6 +112,13 @@ class Riverso_POS_Assets {
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('riverso_pos_nonce'),
             'can_manage' => current_user_can('riverso_manage_products'),
+            'can_manage_prices' => current_user_can('riverso_manage_prices') || current_user_can('manage_options'),
+            'can_manage_families' => current_user_can('riverso_manage_families') || current_user_can('manage_options'),
+            'can_edit_stock' => current_user_can('riverso_edit_stock') || current_user_can('manage_options'),
+            'can_edit_locations' => current_user_can('riverso_edit_warehouse')
+                || current_user_can('riverso_edit_stock')
+                || current_user_can('manage_options'),
+            'iva_factor' => 1.19,
             'categories_url' => admin_url('admin.php?page=riverso-pos-categories'),
         ]);
     }

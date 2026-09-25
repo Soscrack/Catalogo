@@ -1640,6 +1640,17 @@ class Riverso_Supplier_Links_Module {
                 $formats[] = '%d';
                 $update['review_status'] = 'aprobado';
                 $formats[] = '%s';
+                // Solo si aún no hay origen de vínculo registrado.
+                if (empty($existing['vinculo_origen']) && function_exists('riverso_pp_vinculo_write_payload')) {
+                    $vinculo = riverso_pp_vinculo_write_payload('manual', [
+                        'user_id' => get_current_user_id(),
+                        'at' => $now,
+                    ]);
+                    foreach ($vinculo as $k => $v) {
+                        $update[$k] = $v;
+                        $formats[] = $v === null ? '%s' : (is_int($v) ? '%d' : '%s');
+                    }
+                }
             }
         }
 
@@ -1695,12 +1706,16 @@ class Riverso_Supplier_Links_Module {
             'review_status' => 'aprobado',
             'activo' => 1,
         ];
+        if (empty($existing['vinculo_origen']) && function_exists('riverso_pp_vinculo_write_payload')) {
+            $update = array_merge($update, riverso_pp_vinculo_write_payload('manual', [
+                'user_id' => get_current_user_id(),
+                'at' => $now,
+            ]));
+        }
         $ok = $wpdb->update(
             $wpdb->prefix . 'riverso_producto_proveedor',
             $update,
-            ['id' => absint($pp_id)],
-            ['%s', '%s', '%s', '%d', '%s', '%d'],
-            ['%d']
+            ['id' => absint($pp_id)]
         );
         if ($ok === false) {
             return new WP_Error('db_error', 'No se pudo confirmar el código');

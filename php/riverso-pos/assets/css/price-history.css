@@ -466,6 +466,20 @@
     vertical-align: middle;
 }
 
+.rpe-origin-badge.rpe-origin-link,
+.rpe-origin-badge .rpe-origin-link {
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+}
+
+.rpe-origin-badge.rpe-origin-link:hover,
+.rpe-origin-badge.rpe-origin-link:focus,
+.rpe-origin-badge .rpe-origin-link:hover,
+.rpe-origin-badge .rpe-origin-link:focus {
+    text-decoration: underline;
+}
+
 .rpe-origin-badge[data-key="legacy"] { background: #f3e8ff; color: #6b21a8; }
 .rpe-origin-badge[data-key="manual"] { background: #e8f0fe; color: #0a4b78; }
 .rpe-origin-badge[data-key="folio"] { background: #fcf9e8; color: #996800; }

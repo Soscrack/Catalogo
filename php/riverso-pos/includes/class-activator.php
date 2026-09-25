@@ -354,6 +354,7 @@ class Riverso_POS_Activator {
         self::create_phase52_quote_folio_discount($prefix);
         self::create_phase53_family_commercial($prefix, $charset_collate);
         self::create_phase54_emparejamientos($prefix, $charset_collate);
+        self::create_phase55_pp_vinculo($prefix);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -5262,6 +5263,104 @@ class Riverso_POS_Activator {
                 'actor_type' => 'computer',
                 'details' => 'Reenumeración por messaging_messages.sent_at',
                 'groups' => count($groups),
+            ]);
+        }
+    }
+
+    /**
+     * Fase 55: columnas vinculo_* en producto_proveedor + backfill desde audit_log.
+     */
+    private static function create_phase55_pp_vinculo($prefix) {
+        $table = "{$prefix}producto_proveedor";
+        self::add_column_if_missing($table, 'vinculo_origen', 'vinculo_origen VARCHAR(20) NULL DEFAULT NULL');
+        self::add_column_if_missing($table, 'vinculo_factura_id', 'vinculo_factura_id BIGINT UNSIGNED NULL DEFAULT NULL');
+        self::add_column_if_missing($table, 'vinculo_factura_item_id', 'vinculo_factura_item_id BIGINT UNSIGNED NULL DEFAULT NULL');
+        self::add_column_if_missing($table, 'vinculo_user_id', 'vinculo_user_id BIGINT UNSIGNED NULL DEFAULT NULL');
+        self::add_column_if_missing($table, 'vinculo_at', 'vinculo_at DATETIME NULL DEFAULT NULL');
+        self::add_index_if_missing($table, 'idx_vinculo_origen', 'KEY idx_vinculo_origen (vinculo_origen)');
+        self::add_index_if_missing($table, 'idx_vinculo_factura', 'KEY idx_vinculo_factura (vinculo_factura_id)');
+
+        if (get_option('riverso_pos_pp_vinculo_backfill') === '1') {
+            return;
+        }
+
+        global $wpdb;
+        $audit = "{$prefix}audit_log";
+        $filled = 0;
+
+        // Tomar el audit más reciente por (entity_id, codigo_proveedor).
+        $rows = $wpdb->get_results(
+            "SELECT id, entity_id, user_id, new_value, created_at
+             FROM `{$audit}`
+             WHERE entity_type = 'sku_mapping'
+               AND action IN ('sku_mapping_assigned', 'sku_mapping_changed')
+             ORDER BY id DESC
+             LIMIT 5000",
+            ARRAY_A
+        ) ?: [];
+
+        $seen = [];
+        foreach ($rows as $ar) {
+            $base_id = absint($ar['entity_id'] ?? 0);
+            $nv = json_decode((string) ($ar['new_value'] ?? ''), true);
+            if (!$base_id || !is_array($nv)) {
+                continue;
+            }
+            $codigo = trim((string) ($nv['codigo_proveedor'] ?? ''));
+            if ($codigo === '') {
+                continue;
+            }
+            $key = $base_id . '|' . strtoupper($codigo);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+
+            $item_id = absint($nv['factura_item_id'] ?? 0);
+            $factura_id = 0;
+            if ($item_id) {
+                $factura_id = absint($wpdb->get_var($wpdb->prepare(
+                    "SELECT factura_id FROM {$prefix}factura_items WHERE id = %d",
+                    $item_id
+                )));
+            }
+
+            $origen = ($item_id || $factura_id) ? 'folio' : 'manual';
+            $user_id = absint($ar['user_id'] ?? 0);
+            $at = !empty($ar['created_at'])
+                ? (string) $ar['created_at']
+                : (!empty($nv['modified_at']) ? (string) $nv['modified_at'] : current_time('mysql'));
+
+            $factura_sql = $factura_id ? (string) $factura_id : 'NULL';
+            $item_sql = $item_id ? (string) $item_id : 'NULL';
+            $user_sql = $user_id ? (string) $user_id : 'NULL';
+
+            $ok = $wpdb->query($wpdb->prepare(
+                "UPDATE `{$table}`
+                 SET vinculo_origen = %s,
+                     vinculo_factura_id = {$factura_sql},
+                     vinculo_factura_item_id = {$item_sql},
+                     vinculo_user_id = {$user_sql},
+                     vinculo_at = %s
+                 WHERE producto_base_id = %d
+                   AND codigo_proveedor = %s
+                   AND (vinculo_origen IS NULL OR vinculo_origen = '')",
+                $origen,
+                $at,
+                $base_id,
+                $codigo
+            ));
+            if ($ok) {
+                $filled += (int) $ok;
+            }
+        }
+
+        update_option('riverso_pos_pp_vinculo_backfill', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase55_pp_vinculo', 'producto_proveedor', 0, [
+                'actor_type' => 'computer',
+                'details' => 'Fase 55: columnas vinculo_* + backfill desde audit_log',
+                'filled' => $filled,
             ]);
         }
     }

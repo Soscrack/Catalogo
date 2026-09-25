@@ -212,6 +212,306 @@ function riverso_pp_origen_label($row) {
 }
 
 /**
+ * Información de vínculo código-proveedor ↔ SKU (folio / manual / legacy…).
+ *
+ * Prioridad: columnas vinculo_* → audit_log → primer folio visto → origen_datos.
+ *
+ * @param array $pp Fila de producto_proveedor (puede incluir proveedor_nombre).
+ * @return array{
+ *   tipo:string,label:string,badge:string,tooltip:string,
+ *   folio:?string,factura_id:?int,factura_item_id:?int,
+ *   fecha_documento:?string,usuario:?string,fecha_vinculo:?string,
+ *   primer_folio_visto:?string,origen_datos_label:string
+ * }
+ */
+function riverso_pp_vinculo_info(array $pp) {
+    global $wpdb;
+    $prefix = $wpdb->prefix . 'riverso_';
+
+    $origen_datos_label = riverso_pp_origen_label($pp);
+    $created_at = !empty($pp['created_at']) ? (string) $pp['created_at'] : null;
+    $out = [
+        'tipo' => '',
+        'label' => $origen_datos_label,
+        'badge' => $origen_datos_label,
+        'tooltip' => '',
+        'folio' => null,
+        'factura_id' => null,
+        'factura_item_id' => null,
+        'fecha_documento' => null,
+        'usuario' => null,
+        'fecha_vinculo' => null,
+        'primer_folio_visto' => null,
+        'origen_datos_label' => $origen_datos_label,
+    ];
+
+    $tipo = sanitize_key((string) ($pp['vinculo_origen'] ?? ''));
+    $factura_id = absint($pp['vinculo_factura_id'] ?? 0);
+    $item_id = absint($pp['vinculo_factura_item_id'] ?? 0);
+    $user_id = absint($pp['vinculo_user_id'] ?? 0);
+    $vinculo_at = !empty($pp['vinculo_at']) ? (string) $pp['vinculo_at'] : null;
+
+    // 1) Columnas vinculo_*
+    if ($tipo !== '' || $factura_id || $item_id || $vinculo_at) {
+        if ($item_id && !$factura_id) {
+            $factura_id = absint($wpdb->get_var($wpdb->prepare(
+                "SELECT factura_id FROM {$prefix}factura_items WHERE id = %d",
+                $item_id
+            )));
+        }
+        $folio = null;
+        $fecha_doc = null;
+        $prov_nombre = (string) ($pp['proveedor_nombre'] ?? '');
+        if ($factura_id) {
+            $f = $wpdb->get_row($wpdb->prepare(
+                "SELECT f.folio, f.fecha_emision, COALESCE(pr.nombre, f.razon_social_emisor) AS proveedor
+                 FROM {$prefix}facturas f
+                 LEFT JOIN {$prefix}proveedores pr ON pr.id = f.proveedor_id
+                 WHERE f.id = %d",
+                $factura_id
+            ), ARRAY_A);
+            if ($f) {
+                $folio = (string) ($f['folio'] ?? '');
+                $fecha_doc = (string) ($f['fecha_emision'] ?? '');
+                if ($prov_nombre === '' && !empty($f['proveedor'])) {
+                    $prov_nombre = (string) $f['proveedor'];
+                }
+            }
+        }
+        $usuario = null;
+        if ($user_id) {
+            $u = get_userdata($user_id);
+            $usuario = $u ? ($u->display_name ?: $u->user_login) : null;
+        }
+
+        if ($tipo === '') {
+            $tipo = $folio ? 'folio' : 'manual';
+        }
+
+        $out['tipo'] = $tipo;
+        $out['folio'] = $folio;
+        $out['factura_id'] = $factura_id ?: null;
+        $out['factura_item_id'] = $item_id ?: null;
+        $out['fecha_documento'] = $fecha_doc ?: null;
+        $out['usuario'] = $usuario;
+        $out['fecha_vinculo'] = $vinculo_at;
+
+        if ($tipo === 'folio' && $folio) {
+            $out['badge'] = 'Folio ' . $folio;
+            $out['label'] = 'Folio ' . $folio;
+        } elseif ($tipo === 'mapeo') {
+            $out['badge'] = 'Mapeo';
+            $out['label'] = 'Mapeo manual';
+        } elseif ($tipo === 'catalogo') {
+            $out['badge'] = 'Catálogo';
+            $out['label'] = 'Catálogo';
+        } elseif ($tipo === 'legacy') {
+            $out['badge'] = 'Legacy';
+            $out['label'] = 'Legacy';
+        } else {
+            $out['badge'] = 'Manual';
+            $out['label'] = 'Manual';
+        }
+
+        $parts = [];
+        if ($tipo === 'folio' && $folio) {
+            $parts[] = 'Vinculado desde folio ' . $folio
+                . ($prov_nombre !== '' ? ' (' . $prov_nombre : '')
+                . ($fecha_doc ? ($prov_nombre !== '' ? ', emitido ' : ' (emitido ') . $fecha_doc : '')
+                . (($prov_nombre !== '' || $fecha_doc) ? ')' : '');
+        } elseif ($tipo === 'mapeo') {
+            $parts[] = 'Vinculado por mapeo manual';
+        } elseif ($tipo === 'manual') {
+            $parts[] = 'Vinculado manualmente';
+        } else {
+            $parts[] = 'Origen: ' . $out['label'];
+        }
+        if ($usuario) {
+            $parts[] = 'por ' . $usuario;
+        }
+        if ($vinculo_at) {
+            $parts[] = 'el ' . substr($vinculo_at, 0, 10);
+        }
+        if ($created_at && (!$vinculo_at || substr($created_at, 0, 10) !== substr($vinculo_at, 0, 10))) {
+            $parts[] = 'Código registrado ' . substr($created_at, 0, 10)
+                . ' (' . strtolower($origen_datos_label) . ')';
+        }
+        $out['tooltip'] = implode(' ', $parts) . '.';
+        return $out;
+    }
+
+    // 2) Fallback audit_log
+    $pp_id = absint($pp['id'] ?? 0);
+    $base_id = absint($pp['producto_base_id'] ?? 0);
+    $codigo = trim((string) ($pp['codigo_proveedor'] ?? ''));
+    if ($base_id && $codigo !== '') {
+        $audit_table = $prefix . 'audit_log';
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, action, user_name, new_value, created_at
+             FROM {$audit_table}
+             WHERE entity_type = 'sku_mapping'
+               AND entity_id = %d
+               AND action IN ('sku_mapping_assigned', 'sku_mapping_changed')
+             ORDER BY id DESC
+             LIMIT 20",
+            $base_id
+        ), ARRAY_A) ?: [];
+
+        foreach ($rows as $ar) {
+            $nv = json_decode((string) ($ar['new_value'] ?? ''), true);
+            if (!is_array($nv)) {
+                continue;
+            }
+            $code_nv = trim((string) ($nv['codigo_proveedor'] ?? ''));
+            if ($code_nv !== '' && strcasecmp($code_nv, $codigo) !== 0) {
+                continue;
+            }
+            $item_id = absint($nv['factura_item_id'] ?? 0);
+            $folio = null;
+            $fecha_doc = null;
+            $factura_id = 0;
+            $prov_nombre = (string) ($pp['proveedor_nombre'] ?? '');
+            if ($item_id) {
+                $f = $wpdb->get_row($wpdb->prepare(
+                    "SELECT f.id, f.folio, f.fecha_emision, COALESCE(pr.nombre, f.razon_social_emisor) AS proveedor
+                     FROM {$prefix}factura_items fi
+                     INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
+                     LEFT JOIN {$prefix}proveedores pr ON pr.id = f.proveedor_id
+                     WHERE fi.id = %d",
+                    $item_id
+                ), ARRAY_A);
+                if ($f) {
+                    $factura_id = absint($f['id']);
+                    $folio = (string) ($f['folio'] ?? '');
+                    $fecha_doc = (string) ($f['fecha_emision'] ?? '');
+                    if ($prov_nombre === '' && !empty($f['proveedor'])) {
+                        $prov_nombre = (string) $f['proveedor'];
+                    }
+                }
+            }
+            $fecha_v = (string) ($ar['created_at'] ?? ($nv['modified_at'] ?? ''));
+            $usuario = trim((string) ($ar['user_name'] ?? ''));
+
+            if ($folio) {
+                $out['tipo'] = 'folio';
+                $out['badge'] = 'Folio ' . $folio;
+                $out['label'] = 'Folio ' . $folio;
+                $out['folio'] = $folio;
+                $out['factura_id'] = $factura_id ?: null;
+                $out['factura_item_id'] = $item_id ?: null;
+                $out['fecha_documento'] = $fecha_doc ?: null;
+                $out['usuario'] = $usuario !== '' ? $usuario : null;
+                $out['fecha_vinculo'] = $fecha_v !== '' ? $fecha_v : null;
+                $parts = ['Vinculado desde folio ' . $folio];
+                if ($prov_nombre !== '' || $fecha_doc) {
+                    $parts[0] .= ' (' . ($prov_nombre !== '' ? $prov_nombre : '')
+                        . ($fecha_doc ? (($prov_nombre !== '' ? ', emitido ' : 'emitido ') . $fecha_doc) : '')
+                        . ')';
+                }
+                if ($usuario !== '') {
+                    $parts[] = 'por ' . $usuario;
+                }
+                if ($fecha_v !== '') {
+                    $parts[] = 'el ' . substr($fecha_v, 0, 10);
+                }
+                if ($created_at) {
+                    $parts[] = 'Código registrado ' . substr($created_at, 0, 10)
+                        . ' (' . strtolower($origen_datos_label) . ')';
+                }
+                $out['tooltip'] = implode(' ', $parts) . '.';
+                return $out;
+            }
+            break;
+        }
+    }
+
+    // 3) Primer folio visto (sin vínculo registrado)
+    $proveedor_id = absint($pp['proveedor_id'] ?? 0);
+    if ($proveedor_id && $codigo !== '') {
+        $visto = $wpdb->get_row($wpdb->prepare(
+            "SELECT f.folio, f.fecha_emision, COALESCE(pr.nombre, f.razon_social_emisor) AS proveedor
+             FROM {$prefix}factura_items fi
+             INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
+             LEFT JOIN {$prefix}proveedores pr ON pr.id = f.proveedor_id
+             WHERE f.proveedor_id = %d AND fi.codigo_proveedor = %s
+             ORDER BY f.fecha_emision ASC, fi.id ASC
+             LIMIT 1",
+            $proveedor_id,
+            $codigo
+        ), ARRAY_A);
+        if ($visto && !empty($visto['folio'])) {
+            $out['tipo'] = 'visto_folio';
+            $out['badge'] = 'Visto en folio ' . $visto['folio'];
+            $out['label'] = $out['badge'];
+            $out['folio'] = (string) $visto['folio'];
+            $out['fecha_documento'] = (string) ($visto['fecha_emision'] ?? '');
+            $out['primer_folio_visto'] = (string) $visto['folio'];
+            $out['tooltip'] = 'Visto en folio ' . $visto['folio']
+                . (!empty($visto['proveedor']) ? ' (' . $visto['proveedor'] . ')' : '')
+                . (!empty($visto['fecha_emision']) ? ', emitido ' . $visto['fecha_emision'] : '')
+                . '. Origen del registro: ' . strtolower($origen_datos_label)
+                . ($created_at ? ' · registrado ' . substr($created_at, 0, 10) : '')
+                . '.';
+            return $out;
+        }
+    }
+
+    // 4) Solo origen_datos + created_at
+    $out['tipo'] = sanitize_key((string) ($pp['origen_datos'] ?? 'manual')) ?: 'manual';
+    $out['badge'] = $origen_datos_label;
+    $out['label'] = $origen_datos_label;
+    $out['fecha_vinculo'] = $created_at;
+    $out['tooltip'] = 'Origen: ' . $origen_datos_label
+        . ($created_at ? ' · Ingreso: ' . substr($created_at, 0, 10) : '')
+        . '.';
+    return $out;
+}
+
+/**
+ * Payload de columnas vinculo_* para UPDATE/INSERT en producto_proveedor.
+ *
+ * @param string   $origen folio|manual|catalogo|legacy|mapeo
+ * @param array    $opts   factura_item_id, factura_id, user_id, at
+ * @param bool     $only_if_empty Si true, el llamador debe filtrar filas sin vinculo_origen.
+ * @return array
+ */
+function riverso_pp_vinculo_write_payload($origen, array $opts = []) {
+    global $wpdb;
+    $prefix = $wpdb->prefix . 'riverso_';
+    $origen = sanitize_key((string) $origen);
+    $allowed = ['folio', 'manual', 'catalogo', 'legacy', 'mapeo'];
+    if (!in_array($origen, $allowed, true)) {
+        $origen = 'manual';
+    }
+
+    $item_id = absint($opts['factura_item_id'] ?? 0);
+    $factura_id = absint($opts['factura_id'] ?? 0);
+    if ($item_id && !$factura_id) {
+        $factura_id = absint($wpdb->get_var($wpdb->prepare(
+            "SELECT factura_id FROM {$prefix}factura_items WHERE id = %d",
+            $item_id
+        )));
+    }
+    if ($factura_id && $origen === 'manual') {
+        $origen = 'folio';
+    }
+
+    $user_id = absint($opts['user_id'] ?? 0);
+    if (!$user_id && function_exists('get_current_user_id')) {
+        $user_id = absint(get_current_user_id());
+    }
+    $at = !empty($opts['at']) ? (string) $opts['at'] : current_time('mysql');
+
+    return [
+        'vinculo_origen' => $origen,
+        'vinculo_factura_id' => $factura_id ?: null,
+        'vinculo_factura_item_id' => $item_id ?: null,
+        'vinculo_user_id' => $user_id ?: null,
+        'vinculo_at' => $at,
+    ];
+}
+
+/**
  * ¿El código proveedor requiere confirmación humana del vínculo a SKU local?
  *
  * @param array $row

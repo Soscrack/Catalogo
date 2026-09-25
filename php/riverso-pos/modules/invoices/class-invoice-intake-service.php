@@ -1691,29 +1691,50 @@ class Riverso_Invoice_Intake_Service {
                 $codigo_proveedor
             ));
             if ($pp_id) {
+                $vinculo = function_exists('riverso_pp_vinculo_write_payload')
+                    ? riverso_pp_vinculo_write_payload(
+                        !empty($opts['factura_item_id']) ? 'folio' : (sanitize_key($opts['vinculo_origen'] ?? '') ?: 'manual'),
+                        [
+                            'factura_item_id' => $opts['factura_item_id'] ?? 0,
+                            'factura_id' => $opts['factura_id'] ?? 0,
+                            'user_id' => get_current_user_id(),
+                            'at' => $modified_at,
+                        ]
+                    )
+                    : [];
+                $update = array_merge([
+                    'producto_base_id' => $base_id,
+                    'activo' => 1,
+                    'match_estado' => 'VERIFIED',
+                    'updated_at' => $modified_at,
+                ], $vinculo);
                 $wpdb->update(
                     "{$prefix}producto_proveedor",
-                    [
-                        'producto_base_id' => $base_id,
-                        'activo' => 1,
-                        'match_estado' => 'VERIFIED',
-                        'updated_at' => current_time('mysql'),
-                    ],
-                    ['id' => (int) $pp_id],
-                    ['%d', '%d', '%s', '%s'],
-                    ['%d']
+                    $update,
+                    ['id' => (int) $pp_id]
                 );
             } else {
-                $wpdb->insert("{$prefix}producto_proveedor", [
+                $vinculo = function_exists('riverso_pp_vinculo_write_payload')
+                    ? riverso_pp_vinculo_write_payload(
+                        !empty($opts['factura_item_id']) ? 'folio' : (sanitize_key($opts['vinculo_origen'] ?? '') ?: 'manual'),
+                        [
+                            'factura_item_id' => $opts['factura_item_id'] ?? 0,
+                            'factura_id' => $opts['factura_id'] ?? 0,
+                            'user_id' => get_current_user_id(),
+                            'at' => $modified_at,
+                        ]
+                    )
+                    : [];
+                $wpdb->insert("{$prefix}producto_proveedor", array_merge([
                     'producto_base_id' => $base_id,
                     'proveedor_id' => $proveedor_id,
                     'codigo_proveedor' => $codigo_proveedor,
                     'nombre_proveedor' => $opts['descripcion'] ?? null,
                     'activo' => 1,
                     'match_estado' => 'VERIFIED',
-                    'origen_datos' => 'manual',
-                    'created_at' => current_time('mysql'),
-                ]);
+                    'origen_datos' => !empty($opts['origen_datos']) ? sanitize_key($opts['origen_datos']) : 'manual',
+                    'created_at' => $modified_at,
+                ], $vinculo));
             }
         }
 

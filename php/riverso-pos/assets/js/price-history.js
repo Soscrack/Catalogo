@@ -582,22 +582,46 @@
         return origin.key || '';
     }
 
+    function originFolioUrl(origin) {
+        if (!origin || typeof origin === 'string') {
+            return '';
+        }
+        return origin.folio_url || '';
+    }
+
     function originBadgeHtml(origin) {
         var label = originLabel(origin);
         if (!label || label === '—') {
             return '';
         }
-        return '<span class="rpe-origin-badge" data-key="' + esc(originKey(origin)) + '">' + esc(label) + '</span>';
+        var key = originKey(origin);
+        var url = originFolioUrl(origin);
+        if (url) {
+            return '<a class="rpe-origin-badge rpe-origin-link" data-key="' + esc(key) + '" href="' +
+                esc(url) + '" title="Abrir revisión de folio">' + esc(label) + '</a>';
+        }
+        return '<span class="rpe-origin-badge" data-key="' + esc(key) + '">' + esc(label) + '</span>';
     }
 
     function setOriginBadge($el, origin) {
         var label = originLabel(origin);
         var key = originKey(origin);
+        var url = originFolioUrl(origin);
         if (!label || label === '—') {
-            $el.text('').attr('data-key', '').hide();
+            $el.text('').attr('data-key', '').removeAttr('href').removeClass('rpe-origin-link').hide();
             return;
         }
-        $el.text(label).attr('data-key', key).show();
+        $el.attr('data-key', key).show();
+        if (url) {
+            if ($el.is('a')) {
+                $el.attr('href', url).addClass('rpe-origin-link').text(label);
+            } else {
+                $el.html('<a class="rpe-origin-link" href="' + esc(url) +
+                    '" title="Abrir revisión de folio">' + esc(label) + '</a>');
+            }
+        } else {
+            $el.removeAttr('href').removeClass('rpe-origin-link').text(label);
+        }
     }
 
     function pickExplorerCostPair(basesOrRow, mode) {
@@ -3917,7 +3941,11 @@
             return '<tr>' +
                 '<td>' + esc(h.created_at) + '</td>' +
                 '<td>' + esc(h.canal) + '</td>' +
-                '<td>' + originBadgeHtml({ key: h.source_type_key || h.source_type, label: origen }) + '</td>' +
+                '<td>' + originBadgeHtml({
+                    key: h.source_type_key || h.source_type,
+                    label: origen,
+                    folio_url: h.folio_url || ''
+                }) + '</td>' +
                 '<td style="text-align:right">' + money(h.p_asignado_anterior) + '</td>' +
                 '<td style="text-align:right">' + money(h.p_asignado_nuevo) + '</td>' +
                 '<td style="text-align:right">' + money(h.margen_unitario) + '</td>' +

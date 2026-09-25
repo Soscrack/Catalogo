@@ -59,6 +59,9 @@ class Riverso_Price_Lookup_Service {
         $fecha = isset($extra['fecha']) ? (string) $extra['fecha'] : '';
         $folio = isset($extra['folio']) ? (string) $extra['folio'] : '';
         $detalle = isset($extra['detalle']) ? (string) $extra['detalle'] : '';
+        $factura_id = !empty($extra['factura_id']) ? (int) $extra['factura_id'] : 0;
+        $fecha_emision = isset($extra['fecha_emision']) ? (string) $extra['fecha_emision'] : '';
+        $emparejamiento_id = !empty($extra['emparejamiento_id']) ? (int) $extra['emparejamiento_id'] : 0;
 
         if ($key === '') {
             return [
@@ -67,6 +70,10 @@ class Riverso_Price_Lookup_Service {
                 'fecha' => '',
                 'folio' => '',
                 'detalle' => '',
+                'factura_id' => 0,
+                'fecha_emision' => '',
+                'emparejamiento_id' => 0,
+                'folio_url' => '',
             ];
         }
 
@@ -76,14 +83,37 @@ class Riverso_Price_Lookup_Service {
 
         if (($key === 'folio' || $key === 'costo') && $folio !== '') {
             $label = 'Revisión de folio #' . $folio;
+            $fecha_label = $fecha_emision !== '' ? $fecha_emision : $fecha;
+            if ($fecha_label !== '') {
+                $label .= ' · ' . $this->format_origin_date($fecha_label);
+            }
+            if ($emparejamiento_id > 0) {
+                $label .= ' (Emparejamiento)';
+            }
         } elseif ($fecha !== '') {
             $label = $base . ' · ' . $this->format_origin_date($fecha);
+            if ($emparejamiento_id > 0 && class_exists('Riverso_Pricing_Module')
+                && method_exists('Riverso_Pricing_Module', 'source_type_label_with_pairing')
+            ) {
+                $label = Riverso_Pricing_Module::source_type_label_with_pairing($key, $emparejamiento_id)
+                    . ' · ' . $this->format_origin_date($fecha);
+            }
         } else {
             $label = $base;
+            if ($emparejamiento_id > 0 && class_exists('Riverso_Pricing_Module')
+                && method_exists('Riverso_Pricing_Module', 'source_type_label_with_pairing')
+            ) {
+                $label = Riverso_Pricing_Module::source_type_label_with_pairing($key, $emparejamiento_id);
+            }
         }
 
         if ($detalle !== '') {
             $label = $detalle;
+        }
+
+        $folio_url = '';
+        if (($key === 'folio' || $key === 'costo') && $factura_id > 0) {
+            $folio_url = admin_url('admin.php?page=riverso-pos-pricing&tab=process&factura_id=' . $factura_id);
         }
 
         return [
@@ -92,6 +122,10 @@ class Riverso_Price_Lookup_Service {
             'fecha' => $fecha,
             'folio' => $folio,
             'detalle' => $detalle,
+            'factura_id' => $factura_id,
+            'fecha_emision' => $fecha_emision,
+            'emparejamiento_id' => $emparejamiento_id,
+            'folio_url' => $folio_url,
         ];
     }
 
@@ -331,6 +365,42 @@ class Riverso_Price_Lookup_Service {
         }
 
         foreach ($by_pb as $pb => $events) {
+            // Precio: orden real de aplicación (id), no fecha de emisión de factura.
+            // Así un folio procesado después de un manual gana aunque la factura sea más antigua.
+            $price_events = $events;
+            usort($price_events, static function ($a, $b) {
+                return ((int) ($a['id'] ?? 0)) <=> ((int) ($b['id'] ?? 0));
+            });
+
+            $price_evt = null;
+            foreach ($price_events as $row) {
+                if ($row['p_asignado_nuevo'] === null || $row['p_asignado_nuevo'] === '') {
+                    continue;
+                }
+                $st = sanitize_key((string) ($row['source_type'] ?? ''));
+                // recalc / system sin cambio real no fijan el precio comercial.
+                if ($st === 'recalc') {
+                    continue;
+                }
+                if ($st === 'system') {
+                    $prev = $row['p_asignado_anterior'];
+                    $next = $row['p_asignado_nuevo'];
+                    if ($prev !== null && $prev !== '' && $this->values_close((float) $prev, (float) $next)) {
+                        continue;
+                    }
+                }
+                // Folio más antiguo que el vigente: solo constancia, no aplicó.
+                $notas = (string) ($row['notas'] ?? '');
+                if ($st === 'folio' && strpos($notas, '(no aplicado:') !== false) {
+                    continue;
+                }
+                $price_evt = $row;
+            }
+            if ($price_evt) {
+                $out[$pb]['price'] = $price_evt;
+            }
+
+            // Costo: orden por fecha efectiva (emisión de factura para folio).
             usort($events, static function ($a, $b) {
                 $da = (string) ($a['_effective_date'] ?? '');
                 $db = (string) ($b['_effective_date'] ?? '');
@@ -344,17 +414,6 @@ class Riverso_Price_Lookup_Service {
                 }
                 return ((int) ($a['id'] ?? 0)) <=> ((int) ($b['id'] ?? 0));
             });
-
-            $price_evt = null;
-            foreach ($events as $row) {
-                if ($row['p_asignado_nuevo'] === null || $row['p_asignado_nuevo'] === '') {
-                    continue;
-                }
-                $price_evt = $row;
-            }
-            if ($price_evt) {
-                $out[$pb]['price'] = $price_evt;
-            }
 
             $prev_c = null;
             $has_prev = false;
@@ -730,25 +789,39 @@ class Riverso_Price_Lookup_Service {
     }
 
     /**
-     * Extrae fecha/folio de un evento de historial para origin_pack.
+     * Extrae fecha/folio/factura de un evento de historial para origin_pack.
      *
      * @param array|null $evt
-     * @return array{fecha:string,folio:string}
+     * @return array{fecha:string,folio:string,factura_id:int,fecha_emision:string,emparejamiento_id:int}
      */
     private function origin_meta_from_event($evt) {
         if (!is_array($evt)) {
-            return ['fecha' => '', 'folio' => ''];
+            return [
+                'fecha' => '',
+                'folio' => '',
+                'factura_id' => 0,
+                'fecha_emision' => '',
+                'emparejamiento_id' => 0,
+            ];
+        }
+        $factura_id = !empty($evt['source_document_id']) ? (int) $evt['source_document_id'] : 0;
+        $fecha_emision = '';
+        if (!empty($evt['factura_fecha'])) {
+            $fecha_emision = (string) $evt['factura_fecha'];
         }
         return [
             'fecha' => (string) ($evt['created_at'] ?? ''),
             'folio' => (string) ($evt['folio'] ?? ''),
+            'factura_id' => $factura_id,
+            'fecha_emision' => $fecha_emision,
+            'emparejamiento_id' => !empty($evt['emparejamiento_id']) ? (int) $evt['emparejamiento_id'] : 0,
         ];
     }
 
     /**
      * Infiere origen de precio y costo sin columnas nuevas.
      *
-     * Precio = último historial con p_asignado_nuevo.
+     * Precio = último historial real que fijó p_asignado (ignora recalc/system sin cambio).
      * Costo = último historial con cambio real de c_ref (o folio/recalc/import).
      * Si c_ref vigente sigue igual a legacy y no hubo cambio real de costo → Legacy.
      *
@@ -785,8 +858,6 @@ class Riverso_Price_Lookup_Service {
                 $meta = $this->origin_meta_from_event($price_evt);
                 if ($st === 'folio') {
                     $origen_precio = $this->origin_pack('folio', $meta);
-                } elseif ($st === 'recalc') {
-                    $origen_precio = $this->origin_pack('system', $meta);
                 } elseif ($st !== '') {
                     $origen_precio = $this->origin_pack($st, $meta);
                 }
@@ -1179,9 +1250,11 @@ class Riverso_Price_Lookup_Service {
     public function get_product_history($producto_base_id, $limit = 50) {
         global $wpdb;
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT h.*, u.display_name AS usuario_nombre
+            "SELECT h.*, u.display_name AS usuario_nombre,
+                    f.folio AS factura_folio, f.fecha_emision AS factura_fecha
              FROM {$this->prefix}precio_historial h
              LEFT JOIN {$wpdb->users} u ON u.ID = h.usuario_id
+             LEFT JOIN {$this->prefix}facturas f ON f.id = h.source_document_id
              WHERE h.producto_base_id = %d
              ORDER BY h.created_at DESC
              LIMIT %d",
@@ -1193,6 +1266,16 @@ class Riverso_Price_Lookup_Service {
             $key = sanitize_key((string) ($h['source_type'] ?? ''));
             $h['source_type_key'] = $key;
             $emp_id = !empty($h['emparejamiento_id']) ? (int) $h['emparejamiento_id'] : 0;
+            $factura_id = !empty($h['source_document_id']) ? (int) $h['source_document_id'] : 0;
+            $folio = !empty($h['factura_folio']) ? (string) $h['factura_folio'] : '';
+            $h['folio'] = $folio;
+            $h['factura_id'] = $factura_id;
+            $h['folio_url'] = '';
+            if (($key === 'folio' || $key === 'costo') && $factura_id > 0) {
+                $h['folio_url'] = admin_url(
+                    'admin.php?page=riverso-pos-pricing&tab=process&factura_id=' . $factura_id
+                );
+            }
             if (class_exists('Riverso_Pricing_Module')) {
                 $base_key = $key === 'folio' ? 'folio' : $key;
                 $h['source_type_label'] = method_exists('Riverso_Pricing_Module', 'source_type_label_with_pairing')
@@ -1201,8 +1284,21 @@ class Riverso_Price_Lookup_Service {
             } else {
                 $h['source_type_label'] = $key;
             }
-            if ($key === 'folio' && !$emp_id) {
-                $h['source_type_label'] = 'Revisión de folio';
+            if ($key === 'folio') {
+                $label = 'Revisión de folio';
+                if ($folio !== '') {
+                    $label .= ' #' . $folio;
+                }
+                if (!empty($h['factura_fecha'])) {
+                    $ts = strtotime((string) $h['factura_fecha']);
+                    if ($ts) {
+                        $label .= ' · ' . date('d/m/Y', $ts);
+                    }
+                }
+                if ($emp_id) {
+                    $label .= ' (Emparejamiento)';
+                }
+                $h['source_type_label'] = $label;
             }
         }
         unset($h);

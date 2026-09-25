@@ -360,6 +360,7 @@ class Riverso_Manual_Mapping_Module {
                 'descripcion' => $descripcion,
                 'actor_type' => 'human',
                 'origen_datos' => 'manual',
+                'vinculo_origen' => 'mapeo',
             ]
         );
 

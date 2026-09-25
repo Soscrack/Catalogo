@@ -1143,6 +1143,12 @@ jQuery(function($){
                     }
                 }, 150);
             });
+        },
+        openBarcodeRemap: function(productId, barcodeId, onDone) {
+            openBarcodeRemapWizardAdmin(barcodeId, {
+                productId: productId,
+                onDone: onDone
+            });
         }
     };
 
@@ -1813,10 +1819,22 @@ jQuery(function($){
             }
             html += '<h4 style="margin-top:0;">Códigos asignados:</h4>';
             suppliers.forEach(s => {
-                const fuente = s.origen_label || s.fuente_display || 'Manual';
-                const badgeColor = fuente.includes('Catálogo') ? '#0073aa' : fuente.includes('Factur') ? '#ff6b35' : fuente.includes('Legacy') ? '#9c27b0' : '#666';
+                const vinculo = s.vinculo || {};
+                const fuente = vinculo.badge || s.origen_label || s.fuente_display || 'Manual';
+                const badgeColor = (vinculo.tipo === 'folio' || String(fuente).startsWith('Folio'))
+                    ? '#ff6b35'
+                    : (String(fuente).includes('Catálogo') ? '#0073aa'
+                        : (String(fuente).includes('Legacy') ? '#9c27b0'
+                            : (String(fuente).includes('Mapeo') ? '#6f42c1' : '#666')));
                 const barcodeProveedor = s.codigo_barras_proveedor ? `<br><small style="color:#999;">Barcode Proveedor: <code>${esc(s.codigo_barras_proveedor)}</code></small>` : '';
-                const fecha = s.fecha_ingreso ? String(s.fecha_ingreso).split(' ')[0] : '';
+                const fechaVinculo = vinculo.fecha_vinculo
+                    ? String(vinculo.fecha_vinculo).split(' ')[0]
+                    : (s.fecha_ingreso ? String(s.fecha_ingreso).split(' ')[0] : '');
+                const fechaLabel = vinculo.fecha_vinculo ? 'Vinculado' : 'Ingreso';
+                const tip = vinculo.tooltip || ((s.origen_label || '') + (fechaVinculo ? ' · ' + fechaLabel + ': ' + fechaVinculo : ''));
+                const helpBtn = tip
+                    ? ` <span class="pqs-help" title="${esc(tip)}" style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#2271b1;color:#fff;font-size:11px;font-weight:700;cursor:help;margin-left:4px;">?</span>`
+                    : '';
                 let actionBtns = '';
                 if (showCodeRemap) {
                     actionBtns += `<button type="button" class="button button-small btn-pp-remap" data-id="${s.id}">Mapear…</button> `;
@@ -1856,10 +1874,11 @@ jQuery(function($){
                     <div>
                         <strong>${esc(s.codigo_proveedor)}</strong> 
                         <span style="background:${badgeColor}; color:white; padding:2px 8px; border-radius:3px; font-size:11px; margin-left:8px;">${esc(fuente)}</span>
+                        ${helpBtn}
                         ${pendingBadge}<br>
                         <small>${esc(s.proveedor_nombre || 'Proveedor')}</small><br>
                         <small style="color:#999;">${esc(s.nombre_proveedor || '')}</small>
-                        ${fecha ? `<br><small style="color:#999;">Ingreso: ${esc(fecha)}</small>` : ''}
+                        ${fechaVinculo ? `<br><small style="color:#999;">${esc(fechaLabel)}: ${esc(fechaVinculo)}</small>` : ''}
                         ${barcodeProveedor}
                         ${confirmBtns}
                         ${purchaseUnitsHtml}
@@ -4003,23 +4022,31 @@ jQuery(function($){
         });
     });
 
-    function openBarcodeRemapWizardAdmin(barcodeId) {
-        if (!currentProduct || !barcodeId) return;
+    function openBarcodeRemapWizardAdmin(barcodeId, opts) {
+        opts = opts || {};
+        const productId = opts.productId || (currentProduct && currentProduct.id);
+        if (!productId || !barcodeId) return;
         $.post(ajaxurl, {
             action: 'riverso_products_barcode_remap_preview',
             nonce,
             barcode_id: barcodeId,
-            product_id: currentProduct.id
+            product_id: productId
         }, function(r){
             if (!r.success) {
                 alert('Error: ' + ((r.data && r.data.message) ? r.data.message : 'No se pudo cargar preview'));
                 return;
             }
-            showBarcodeRemapModalAdmin(r.data.preview || {});
+            showBarcodeRemapModalAdmin(r.data.preview || {}, Object.assign({}, opts, { productId: productId }));
         });
     }
 
-    function showBarcodeRemapModalAdmin(preview) {
+    function showBarcodeRemapModalAdmin(preview, opts) {
+        opts = opts || {};
+        const productId = opts.productId || (currentProduct && currentProduct.id);
+        const onDone = typeof opts.onDone === 'function'
+            ? opts.onDone
+            : function(item) { showDetail(item || currentProduct); };
+
         $('#barcode-remap-overlay-admin').remove();
         const bc = preview.barcode || {};
         const members = preview.members_caja || [];
@@ -4037,7 +4064,7 @@ jQuery(function($){
         const familyNote = preview.family && preview.family.grupo_id
             ? ('Familia #' + preview.family.grupo_id)
             : 'Sin familia: confirma aquí, rechaza o aparca (no crear/asignar hijo).';
-        const excludeIds = [Number(currentProduct.id)].concat(members.map(function(m){ return Number(m.producto_base_id); }));
+        const excludeIds = [Number(productId)].concat(members.map(function(m){ return Number(m.producto_base_id); }));
 
         const html = '<div id="barcode-remap-overlay-admin" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:100000;display:flex;align-items:center;justify-content:center;">'
             + '<div style="background:#fff;max-width:560px;width:94%;max-height:90vh;overflow:auto;border-radius:6px;padding:18px;">'
@@ -4139,22 +4166,49 @@ jQuery(function($){
         $('#bc-remap-confirm-admin').on('click', function(){
             const accion = $('#bc-remap-accion-admin').val();
             let destino = $('#bc-remap-destino-admin').val() || 0;
+            let destinoLabel = '';
             if (accion === 'assign_child') {
                 destino = $('#bc-remap-assign-id-admin').val() || 0;
                 if (!destino) {
                     alert('Busca y selecciona el producto hijo a asignar');
                     return;
                 }
+                destinoLabel = $('#bc-remap-assign-selected-admin').text() || ('ID ' + destino);
+            } else if (accion === 'move_child') {
+                destinoLabel = $('#bc-remap-destino-admin option:selected').text() || '';
+            }
+            const qty = parseFloat($('#bc-remap-qty-admin').val() || '0') || 0;
+            const accionLabels = {
+                keep_unit: 'Confirmar aquí (unitario, qty 1)',
+                move_child: 'Mover a hijo de la familia',
+                assign_child: 'Asignar hijo y mapear',
+                create_child: 'Crear hijo/envase y mapear',
+                park_presentacion: 'Aparcar (pendiente de presentación)',
+                reject: 'Rechazar y eliminar',
+            };
+            let confirmMsg = '¿Estás seguro?\n\nCódigo: ' + (bc.codigo || '') +
+                '\nAcción: ' + (accionLabels[accion] || accion);
+            if (destinoLabel) {
+                confirmMsg += '\nDestino: ' + destinoLabel;
+            }
+            if (qty > 1 && (accion === 'move_child' || accion === 'assign_child' || accion === 'create_child' || accion === 'park_presentacion')) {
+                confirmMsg += '\nCantidad envase: ' + qty;
+            }
+            if (accion === 'reject') {
+                confirmMsg += '\n\nSe rechazará/eliminará el código legacy.';
+            }
+            if (!confirm(confirmMsg)) {
+                return;
             }
             const $btn = $(this).prop('disabled', true).text('Guardando…');
             $.post(ajaxurl, {
                 action: 'riverso_products_barcode_remap',
                 nonce,
                 barcode_id: bc.id,
-                product_id: currentProduct.id,
+                product_id: productId,
                 accion: accion,
                 destino_producto_base_id: destino,
-                cantidad_pack: parseFloat($('#bc-remap-qty-admin').val() || '0') || 0,
+                cantidad_pack: qty,
                 verify: 1,
                 audit_reason: 'Remapeo desde hub de productos (admin)'
             }, function(resp){
@@ -4166,7 +4220,7 @@ jQuery(function($){
                 $(document).off('click.bcRemapAssignAdmin');
                 $('#barcode-remap-overlay-admin').remove();
                 alert(resp.data.message || 'Listo');
-                showDetail(resp.data.item || currentProduct);
+                onDone(resp.data.item || null, resp.data);
             }).fail(function(){
                 alert('Error de red');
                 $btn.prop('disabled', false).text('Confirmar');

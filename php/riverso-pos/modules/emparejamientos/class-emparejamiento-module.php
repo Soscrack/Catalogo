@@ -1397,12 +1397,36 @@ class Riverso_Emparejamiento_Module {
 
     public function ajax_search_candidates() {
         $this->check_manage();
+        $palabras_raw = $_POST['palabras'] ?? [];
+        if (!is_array($palabras_raw)) {
+            $palabras_raw = $palabras_raw !== '' && $palabras_raw !== null
+                ? [$palabras_raw]
+                : [];
+        }
+        $palabras = [];
+        $seen = [];
+        foreach ($palabras_raw as $palabra) {
+            $w = trim(sanitize_text_field(wp_unslash((string) $palabra)));
+            if ($w === '') {
+                continue;
+            }
+            $key = function_exists('mb_strtolower') ? mb_strtolower($w, 'UTF-8') : strtolower($w);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $palabras[] = $w;
+            if (count($palabras) >= 10) {
+                break;
+            }
+        }
         $filters = [
             'q' => trim(sanitize_text_field(wp_unslash($_POST['q'] ?? ''))),
             'nombre' => trim(sanitize_text_field(wp_unslash($_POST['nombre'] ?? ''))),
             'sku' => trim(sanitize_text_field(wp_unslash($_POST['sku'] ?? ''))),
             'barcode' => trim(sanitize_text_field(wp_unslash($_POST['barcode'] ?? ''))),
             'codigo_proveedor' => trim(sanitize_text_field(wp_unslash($_POST['codigo_proveedor'] ?? ''))),
+            'palabras' => $palabras,
             'mode' => sanitize_key($_POST['mode'] ?? 'quick'),
             'limit' => absint($_POST['limit'] ?? 40),
         ];
@@ -1411,7 +1435,7 @@ class Riverso_Emparejamiento_Module {
 
     /**
      * Busca candidatos elegibles por SKU, barcode y/o código proveedor (modo quick),
-     * o por filtros separados (modo advanced: nombre, sku, barcode, codigo_proveedor).
+     * o por filtros separados (modo advanced: nombre, sku, barcode, codigo_proveedor, palabras).
      *
      * @param array $filters
      * @return array
@@ -1427,6 +1451,7 @@ class Riverso_Emparejamiento_Module {
         $sku = trim((string) ($filters['sku'] ?? ''));
         $barcode = trim((string) ($filters['barcode'] ?? ''));
         $codigo_proveedor = trim((string) ($filters['codigo_proveedor'] ?? ''));
+        $palabras = is_array($filters['palabras'] ?? null) ? $filters['palabras'] : [];
 
         $where = [
             "(pb.deleted_at IS NULL OR pb.deleted_at = '0000-00-00 00:00:00')",
@@ -1465,6 +1490,15 @@ class Riverso_Emparejamiento_Module {
                 $params[] = $codigo_proveedor;
                 $params[] = '%' . $wpdb->esc_like($codigo_proveedor) . '%';
                 $params[] = '%' . $wpdb->esc_like($compact) . '%';
+                $has = true;
+            }
+            foreach ($palabras as $palabra) {
+                $w = trim((string) $palabra);
+                if ($w === '' || strlen($w) < 1) {
+                    continue;
+                }
+                $where[] = 'pb.nombre_canonico LIKE %s';
+                $params[] = '%' . $wpdb->esc_like($w) . '%';
                 $has = true;
             }
             if (!$has) {

@@ -242,6 +242,12 @@
         var cost = pickCost(pricing, state.costMode, state.viewMode);
         var m = calcMargin(price, cost);
 
+        var bruto = pricing ? pricing.p_asignado : null;
+        $('#pqs-v-precio-bruto .pqs-hero-price-value').text(
+            bruto != null ? '$' + fmtMoney(bruto) : 'Sin precio'
+        );
+        $('#pqs-v-precio-bruto').toggleClass('is-empty', !(Number(bruto) > 0));
+
         $('#pqs-v-precio').text(fmtMoney(price));
         if (state.editing) {
             $('#pqs-edit-precio').val(price != null ? price : '');
@@ -1772,6 +1778,13 @@
             }
             bindEvents();
             updatePricingUi();
+            try {
+                var quick = (new URLSearchParams(window.location.search).get('quick') || '').trim();
+                if (quick) {
+                    $('#pqs-input').val(quick);
+                    doLookup();
+                }
+            } catch (e) { /* ignore */ }
         },
         loadSummary: loadSummary,
         lookup: doLookup,

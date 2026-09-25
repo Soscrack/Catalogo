@@ -60,6 +60,13 @@
             '.riverso-emp-adv-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:10px 0 12px;}' +
             '.riverso-emp-adv-filters label{font-size:12px;font-weight:600;display:block;}' +
             '.riverso-emp-adv-filters input{width:100%;padding:6px;box-sizing:border-box;margin-top:3px;font-weight:400;}' +
+            '.riverso-emp-adv-words-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px;}' +
+            '.riverso-emp-adv-words-row > label{font-size:12px;font-weight:600;margin:0;}' +
+            '.riverso-emp-adv-words-row .emp-adv-word{min-width:140px;padding:6px;box-sizing:border-box;}' +
+            '.riverso-emp-adv-words{display:flex;flex-wrap:wrap;gap:6px;width:100%;min-height:0;}' +
+            '.riverso-emp-adv-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:#f0f0f1;border:1px solid #c3c4c7;border-radius:12px;font-size:12px;font-weight:400;}' +
+            '.riverso-emp-adv-chip .emp-adv-word-remove{border:0;background:transparent;color:#646970;cursor:pointer;padding:0 2px;font-size:14px;line-height:1;}' +
+            '.riverso-emp-adv-chip .emp-adv-word-remove:hover{color:#b32d2e;}' +
             '.riverso-emp-adv-grid{width:100%;border-collapse:collapse;font-size:13px;}' +
             '.riverso-emp-adv-grid th,.riverso-emp-adv-grid td{border:1px solid #e2e4e7;padding:7px 8px;text-align:left;vertical-align:top;}' +
             '.riverso-emp-adv-grid th{background:#f6f7f7;}' +
@@ -1327,6 +1334,7 @@
     function openAdvancedSearch($parentModal) {
         ensureStyles();
         closeAdvancedSearch();
+        var words = [];
         var $adv = $(
             '<div class="riverso-emp-adv-overlay">' +
             '<div class="riverso-emp-adv-panel">' +
@@ -1341,6 +1349,12 @@
             '<label>Código de barras<input type="search" class="emp-adv-barcode" autocomplete="off"></label>' +
             '<label>Código proveedor<input type="search" class="emp-adv-proveedor" autocomplete="off"></label>' +
             '</div>' +
+            '<div class="riverso-emp-adv-words-row">' +
+            '<label for="emp-adv-word-input">Contiene palabra:</label>' +
+            '<input type="text" id="emp-adv-word-input" class="emp-adv-word" autocomplete="off" placeholder="Una palabra…">' +
+            '<button type="button" class="button emp-adv-word-add">Agregar</button>' +
+            '<div class="riverso-emp-adv-words emp-adv-words"></div>' +
+            '</div>' +
             '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
             '<button type="button" class="button button-primary emp-adv-search">Buscar</button>' +
             '<button type="button" class="button emp-adv-clear">Limpiar</button>' +
@@ -1351,6 +1365,35 @@
         $adv.data('parentModal', $parentModal);
         $('body').append($adv);
 
+        function renderWords() {
+            var $box = $adv.find('.emp-adv-words');
+            if (!words.length) {
+                $box.empty();
+                return;
+            }
+            $box.html(words.map(function(w, idx) {
+                return '<span class="riverso-emp-adv-chip">' + esc(w) +
+                    '<button type="button" class="emp-adv-word-remove" data-idx="' + idx +
+                    '" title="Quitar" aria-label="Quitar">×</button></span>';
+            }).join(''));
+        }
+
+        function addWord() {
+            var raw = ($adv.find('.emp-adv-word').val() || '').trim();
+            if (!raw) {
+                return;
+            }
+            var lower = raw.toLowerCase();
+            var exists = words.some(function(w) {
+                return w.toLowerCase() === lower;
+            });
+            if (!exists) {
+                words.push(raw);
+                renderWords();
+            }
+            $adv.find('.emp-adv-word').val('').focus();
+        }
+
         function runAdvSearch() {
             var payload = {
                 mode: 'advanced',
@@ -1358,9 +1401,11 @@
                 sku: ($adv.find('.emp-adv-sku').val() || '').trim(),
                 barcode: ($adv.find('.emp-adv-barcode').val() || '').trim(),
                 codigo_proveedor: ($adv.find('.emp-adv-proveedor').val() || '').trim(),
+                palabras: words.slice(),
                 limit: 50
             };
-            if (!payload.nombre && !payload.sku && !payload.barcode && !payload.codigo_proveedor) {
+            if (!payload.nombre && !payload.sku && !payload.barcode &&
+                !payload.codigo_proveedor && !words.length) {
                 $adv.find('.emp-adv-results').html(
                     '<p style="color:#666;">Indicá al menos un filtro.</p>'
                 );
@@ -1383,9 +1428,29 @@
         $adv.on('click', '.emp-adv-close', function() { closeAdvancedSearch(); });
         $adv.on('click', '.emp-adv-search', runAdvSearch);
         $adv.on('click', '.emp-adv-clear', function() {
-            $adv.find('.emp-adv-nombre, .emp-adv-sku, .emp-adv-barcode, .emp-adv-proveedor').val('');
+            $adv.find('.emp-adv-nombre, .emp-adv-sku, .emp-adv-barcode, .emp-adv-proveedor, .emp-adv-word').val('');
+            words = [];
+            renderWords();
             $adv.find('.emp-adv-results').html('<p style="color:#999;">Completá al menos un filtro y buscá.</p>');
             $adv.find('.emp-adv-nombre').focus();
+        });
+        $adv.on('click', '.emp-adv-word-add', function() {
+            addWord();
+        });
+        $adv.on('click', '.emp-adv-word-remove', function(e) {
+            e.preventDefault();
+            var idx = parseInt($(this).attr('data-idx'), 10);
+            if (isNaN(idx) || idx < 0 || idx >= words.length) {
+                return;
+            }
+            words.splice(idx, 1);
+            renderWords();
+        });
+        $adv.on('keydown', '.emp-adv-word', function(e) {
+            if (e.key === 'Enter' || e.keyCode === 13) {
+                e.preventDefault();
+                addWord();
+            }
         });
         $adv.on('keydown', '.emp-adv-nombre, .emp-adv-sku, .emp-adv-barcode, .emp-adv-proveedor', function(e) {
             if (e.key === 'Enter' || e.keyCode === 13) {

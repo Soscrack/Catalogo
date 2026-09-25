@@ -79,6 +79,48 @@
     width: fit-content;
 }
 
+.pqs-hero-price {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 8px 14px;
+    width: fit-content;
+    background: #fff3cd;
+    border: 2px solid #dba617;
+    border-radius: 4px;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+}
+
+.pqs-hero-price-value {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.1;
+    color: #1d2327;
+    font-variant-numeric: tabular-nums;
+}
+
+.pqs-hero-price-label {
+    font-size: 12px;
+    color: #614c00;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.pqs-hero-price.is-empty {
+    background: #fcf0f1;
+    border-color: #d63638;
+}
+
+.pqs-hero-price.is-empty .pqs-hero-price-value {
+    color: #b32d2e;
+    font-size: 20px;
+}
+
+.pqs-hero-price.is-empty .pqs-hero-price-label {
+    color: #8a2424;
+}
+
 .pqs-viewer-actions {
     display: flex;
     gap: 8px;

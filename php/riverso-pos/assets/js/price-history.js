@@ -3700,20 +3700,39 @@
         }).join(''));
     }
 
+    function rpfSkuQuickLink(sku) {
+        var s = sku != null ? String(sku).trim() : '';
+        if (!s || s === '—' || !productsAdminUrl) {
+            return '';
+        }
+        var sep = productsAdminUrl.indexOf('?') >= 0 ? '&' : '?';
+        var href = productsAdminUrl + sep + 'tab=rapida&quick=' + encodeURIComponent(s);
+        return ' <a class="rpf-sku-quick" href="' + esc(href) +
+            '" target="_blank" rel="noopener" title="Abrir en Búsqueda rápida">?</a>';
+    }
+
     function formatFolioSkuCell(ln) {
         if (ln.es_familia_unitaria && ln.unit_sku) {
             var unitQty = ln.unit_qty != null ? ln.unit_qty : 1;
-            var html = '<code>' + esc(ln.unit_sku) + '</code> <span class="description">(' + esc(fmtQty(unitQty)) + ')</span>';
+            var html = '<code>' + esc(ln.unit_sku) + '</code>' + rpfSkuQuickLink(ln.unit_sku) +
+                ' <span class="description">(' + esc(fmtQty(unitQty)) + ')</span>';
             if (ln.pack_sku && String(ln.pack_sku) !== String(ln.unit_sku)) {
-                html += ' <span class="description">·</span> <code>' + esc(ln.pack_sku) + '</code> <span class="description">(' +
-                    esc(fmtQty(ln.pack_qty)) + ')</span>';
+                html += ' <span class="description">·</span> <code>' + esc(ln.pack_sku) + '</code>' +
+                    rpfSkuQuickLink(ln.pack_sku) +
+                    ' <span class="description">(' + esc(fmtQty(ln.pack_qty)) + ')</span>';
             }
             return html;
         }
         if (ln.is_child) {
-            return '<code>' + esc(ln.unit_sku || ln.sku || '') + '</code> <span class="description">(unitario)</span>';
+            var childSku = ln.unit_sku || ln.sku || '';
+            return '<code>' + esc(childSku) + '</code>' + rpfSkuQuickLink(childSku) +
+                ' <span class="description">(unitario)</span>';
         }
-        return '<code>' + esc(ln.sku || '—') + '</code>';
+        var plainSku = ln.sku || '';
+        if (!plainSku) {
+            return '<code>—</code>';
+        }
+        return '<code>' + esc(plainSku) + '</code>' + rpfSkuQuickLink(plainSku);
     }
 
     function deltaClass(delta) {

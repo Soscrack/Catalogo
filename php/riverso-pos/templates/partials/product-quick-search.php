@@ -48,6 +48,10 @@ $can_manage_pqs = !empty($can_manage);
                     <input type="text" id="pqs-edit-nombre" class="regular-text" style="min-width:280px;max-width:100%;">
                     <button type="button" class="button button-small button-primary" id="pqs-save-nombre">Guardar nombre</button>
                 </div>
+                <div id="pqs-v-precio-bruto" class="pqs-hero-price">
+                    <span class="pqs-hero-price-value">—</span>
+                    <span class="pqs-hero-price-label">bruto</span>
+                </div>
             </div>
             <div class="pqs-viewer-actions">
                 <?php if ($can_manage_pqs): ?>

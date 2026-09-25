@@ -114,6 +114,7 @@ if (!defined('ABSPATH')) {
                 <option value="vinculado">Solo vinculados</option>
                 <option value="pendiente">Solo pendientes</option>
                 <option value="por_confirmar">Por confirmar</option>
+                <option value="unidades_compra">Unidades de compra pendientes</option>
             </select>
             <select id="filter-origen">
                 <option value="">Todos los orígenes</option>
@@ -308,6 +309,22 @@ if (!defined('ABSPATH')) {
                 <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
                     <button type="button" class="button button-primary" id="edit-code-btn-confirm">Confirmar vínculo</button>
                     <button type="button" class="button" id="edit-code-btn-reject">Rechazar código</button>
+                </div>
+            </div>
+
+            <div id="edit-code-purchase-units" class="edit-code-purchase-units" style="display:none;margin-top:14px;padding:10px;background:#f6f7f7;border:1px solid #dcdcde;border-radius:4px;">
+                <label style="display:block;margin-bottom:4px;"><strong>Unidades por unidad facturada</strong>
+                    <span id="edit-code-pu-task-badge" style="display:none;background:#e8f0fe;color:#174ea6;padding:2px 8px;border-radius:3px;font-size:11px;margin-left:6px;">Pendiente</span>
+                </label>
+                <p class="description" id="edit-code-pu-family-hint" style="display:none;margin:0 0 6px;">
+                    Envase de familia: las unidades las resuelve la familia; no se edita el factor de compra.
+                </p>
+                <div id="edit-code-pu-controls">
+                    <p class="description" style="margin:0 0 6px;">Si el proveedor factura 1 caja y llegan N unidades, poné N (ej. 12). 1 = la cantidad del documento es la unidad.</p>
+                    <input type="number" class="small-text" id="edit-code-pu-factor" min="1" step="1" value="1">
+                    <button type="button" class="button button-small button-primary" id="edit-code-pu-save">Guardar</button>
+                    <button type="button" class="button button-small" id="edit-code-pu-unit" title="Cantidad facturada = unidad real">Es unidad (1)</button>
+                    <button type="button" class="button button-small" id="edit-code-pu-request" style="display:none;">Pedir confirmación</button>
                 </div>
             </div>
 
@@ -979,17 +996,21 @@ jQuery(function($) {
             codes.forEach(function(code) {
                 const vinculado = !!code.producto_base_id;
                 const needsConfirm = !!code.needs_confirm;
+                const puPending = !!code.purchase_units_pending;
                 let estadoHtml = vinculado
                     ? '<span class="status-activo">Vinculado</span>'
                     : '<span class="status-inactivo">Pendiente</span>';
                 if (needsConfirm) {
                     estadoHtml = '<span class="badge-por-confirmar">Por confirmar</span>';
                 }
+                if (puPending) {
+                    estadoHtml += '<br><span class="badge-por-confirmar" style="background:#e8f0fe;color:#174ea6;">Unidades compra</span>';
+                }
                 const confirmBtns = needsConfirm
                     ? `<button class="button button-small button-primary btn-confirm-code" data-id="${code.id}" title="Confirmar">Confirmar</button>
                        <button class="button button-small btn-reject-code" data-id="${code.id}" title="Rechazar">Rechazar</button>`
                     : '';
-                const rowClass = needsConfirm ? 'code-row-por-confirmar' : '';
+                const rowClass = (needsConfirm || puPending) ? 'code-row-por-confirmar' : '';
                 let skuHtml = `<strong>${esc(code.sku_local || '-')}</strong>`;
                 if (needsConfirm && code.sku_local) {
                     skuHtml = `<span class="sku-pending-badge">POR CONFIRMAR</span><br><small><strong>${esc(code.sku_local)}</strong></small>`;
@@ -1194,7 +1215,112 @@ jQuery(function($) {
                 $('#edit-code-task-hint').text(hint);
             }
 
+            paintEditPurchaseUnits(code);
+
             $('#modal-edit-code').show();
+        });
+    });
+
+    function paintEditPurchaseUnits(code) {
+        const $box = $('#edit-code-purchase-units');
+        const linked = !!code.producto_base_id;
+        if (!linked) {
+            $box.hide();
+            return;
+        }
+        $box.show();
+        const familyPack = !!code.purchase_units_family_pack;
+        const pending = !!code.purchase_units_pending;
+        const factor = code.purchase_units_factor != null
+            ? Number(code.purchase_units_factor)
+            : Number(code.factor_conversion || 1);
+        $('#edit-code-pu-family-hint').toggle(familyPack);
+        if (familyPack) {
+            const qty = code.purchase_units_pack_qty != null ? code.purchase_units_pack_qty : '—';
+            $('#edit-code-pu-family-hint').text(
+                'Envase de familia: ' + qty + ' u. Las unidades las resuelve la familia; no se edita el factor de compra.'
+            );
+        }
+        $('#edit-code-pu-controls').toggle(!familyPack);
+        $('#edit-code-pu-task-badge').toggle(pending && !familyPack);
+        $('#edit-code-pu-factor').val(factor > 0 ? factor : 1);
+        $('#edit-code-pu-request').toggle(!familyPack && !pending);
+    }
+
+    function saveEditPurchaseUnits(isUnitReal) {
+        const id = $('#edit-code-id').val();
+        if (!id) return;
+        const payload = {
+            action: 'riverso_products_set_purchase_units',
+            nonce: nonce,
+            pp_id: id
+        };
+        if (isUnitReal) {
+            payload.is_unit_real = 1;
+            payload.factor = 1;
+        } else {
+            const factor = parseFloat($('#edit-code-pu-factor').val());
+            if (!(factor >= 1)) {
+                $('#edit-code-error').text('Indicá un factor ≥ 1').show();
+                return;
+            }
+            if (factor > 1 && factor < 2) {
+                $('#edit-code-error').text('Si no es la unidad real, el factor debe ser ≥ 2').show();
+                return;
+            }
+            payload.factor = factor;
+            if (factor === 1) {
+                payload.is_unit_real = 1;
+            }
+        }
+        $('#edit-code-error').hide().empty();
+        $('#edit-code-pu-save, #edit-code-pu-unit').prop('disabled', true);
+        $.post(ajaxurl, payload, function(response) {
+            $('#edit-code-pu-save, #edit-code-pu-unit').prop('disabled', false);
+            if (!response.success) {
+                $('#edit-code-error').text(response.data?.message || 'No se pudo guardar el factor').show();
+                return;
+            }
+            $.post(ajaxurl, {action: 'riverso_codes_get', nonce: nonce, pp_id: id}, function(r2) {
+                if (r2 && r2.success && r2.data && r2.data.code) {
+                    paintEditPurchaseUnits(r2.data.code);
+                }
+                loadAllCodes(codesPage);
+            });
+        }).fail(function() {
+            $('#edit-code-pu-save, #edit-code-pu-unit').prop('disabled', false);
+            $('#edit-code-error').text('Error de red').show();
+        });
+    }
+
+    $('#edit-code-pu-save').on('click', function() {
+        saveEditPurchaseUnits(false);
+    });
+    $('#edit-code-pu-unit').on('click', function() {
+        $('#edit-code-pu-factor').val(1);
+        saveEditPurchaseUnits(true);
+    });
+    $('#edit-code-pu-request').on('click', function() {
+        const id = $('#edit-code-id').val();
+        if (!id) return;
+        const $btn = $(this).prop('disabled', true).text('…');
+        $.post(ajaxurl, {
+            action: 'riverso_codes_purchase_units_request',
+            nonce: nonce,
+            pp_id: id
+        }, function(response) {
+            $btn.prop('disabled', false).text('Pedir confirmación');
+            if (!response.success) {
+                $('#edit-code-error').text(response.data?.message || 'No se pudo abrir la tarea').show();
+                return;
+            }
+            if (response.data && response.data.code) {
+                paintEditPurchaseUnits(response.data.code);
+            }
+            loadAllCodes(codesPage);
+        }).fail(function() {
+            $btn.prop('disabled', false).text('Pedir confirmación');
+            $('#edit-code-error').text('Error de red').show();
         });
     });
 
@@ -1494,5 +1620,24 @@ jQuery(function($) {
     loadStats();
     loadPendingCodes();
     loadProviders();
+
+    try {
+        const params = new URLSearchParams(window.location.search || '');
+        const need = params.get('need') || '';
+        const pp = parseInt(params.get('pp') || '0', 10) || 0;
+        if (need === 'purchase_units') {
+            $('#filter-estado').val('unidades_compra');
+            $('.nav-tab[data-tab="todos"]').trigger('click');
+            if (pp > 0) {
+                $('<button type="button" class="btn-edit-code">')
+                    .attr('data-id', pp)
+                    .appendTo('body')
+                    .trigger('click')
+                    .remove();
+            }
+        }
+    } catch (e) {
+        // ignore
+    }
 });
 </script>

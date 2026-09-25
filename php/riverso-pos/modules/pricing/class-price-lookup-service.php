@@ -496,6 +496,18 @@ class Riverso_Price_Lookup_Service {
         $history = $this->get_product_history($producto_base_id, 50);
         $chart = $this->get_chart_series($producto_base_id);
 
+        $emparejamiento = null;
+        if (class_exists('Riverso_Emparejamiento_Module')) {
+            $emp = Riverso_Emparejamiento_Module::get_instance()->get_of_product($producto_base_id);
+            if ($emp && !empty($emp['emparejar_precios'])) {
+                $emparejamiento = [
+                    'id' => (int) $emp['id'],
+                    'nombre' => (string) ($emp['nombre'] ?? ''),
+                    'codigo' => (string) ($emp['codigo'] ?? ''),
+                ];
+            }
+        }
+
         return [
             'product' => [
                 'producto_base_id' => (int) $product['id'],
@@ -513,7 +525,51 @@ class Riverso_Price_Lookup_Service {
             'competencia' => $competencia,
             'history' => $history,
             'chart' => $chart,
+            'emparejamiento' => $emparejamiento,
         ];
+    }
+
+    /**
+     * Pack de canal local (precio, bases de costo, orígenes) sin familia/historial/chart.
+     * Usado por emparejamientos (preview márgenes / hidratar miembros).
+     *
+     * @param int $producto_base_id
+     * @return array|null
+     */
+    public function get_local_price_pack($producto_base_id) {
+        global $wpdb;
+        $producto_base_id = absint($producto_base_id);
+        if ($producto_base_id <= 0) {
+            return null;
+        }
+
+        $product = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, canonical_sku, facto_iva_tipo
+             FROM {$this->prefix}producto_base
+             WHERE id = %d",
+            $producto_base_id
+        ), ARRAY_A);
+        if (!$product) {
+            return null;
+        }
+
+        $pricing = $this->pricing();
+        $local = $pricing ? $pricing->get_local_price($producto_base_id) : null;
+        $sku = (string) ($product['canonical_sku'] ?? '');
+        $legacy_map = $this->load_legacy_by_skus($sku !== '' ? [$sku] : []);
+        $legacy = $legacy_map[$sku] ?? null;
+        $hist_local = $this->load_latest_history_by_products([$producto_base_id], 'local');
+        $iva = $product['facto_iva_tipo'] ?? 'afecto';
+
+        return $this->decorate_price_row(
+            $local,
+            'local',
+            $iva,
+            $sku,
+            $legacy,
+            $hist_local[$producto_base_id] ?? null,
+            $producto_base_id
+        );
     }
 
     /**
@@ -1136,10 +1192,16 @@ class Riverso_Price_Lookup_Service {
         foreach ($rows as &$h) {
             $key = sanitize_key((string) ($h['source_type'] ?? ''));
             $h['source_type_key'] = $key;
-            $h['source_type_label'] = class_exists('Riverso_Pricing_Module')
-                ? Riverso_Pricing_Module::source_type_label($key === 'folio' ? 'folio' : $key)
-                : $key;
-            if ($key === 'folio') {
+            $emp_id = !empty($h['emparejamiento_id']) ? (int) $h['emparejamiento_id'] : 0;
+            if (class_exists('Riverso_Pricing_Module')) {
+                $base_key = $key === 'folio' ? 'folio' : $key;
+                $h['source_type_label'] = method_exists('Riverso_Pricing_Module', 'source_type_label_with_pairing')
+                    ? Riverso_Pricing_Module::source_type_label_with_pairing($base_key, $emp_id ?: null)
+                    : Riverso_Pricing_Module::source_type_label($base_key);
+            } else {
+                $h['source_type_label'] = $key;
+            }
+            if ($key === 'folio' && !$emp_id) {
                 $h['source_type_label'] = 'Revisión de folio';
             }
         }

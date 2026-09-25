@@ -192,6 +192,23 @@ $movement_types = Riverso_Warehouse_Module::MOVEMENT_TYPES;
                 <tr><td colspan="9">Cargando...</td></tr>
             </tbody>
         </table>
+        <h3 style="margin-top:24px;">Emparejamientos (stock sumado)</h3>
+        <p style="color:#666;margin-top:0;">Alertas del grupo sin mezclar el stock propio de cada SKU. Umbrales se editan en Categorías → Emparejamientos.</p>
+        <table class="wp-list-table widefat fixed striped">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Nombre</th>
+                    <th>Stock sumado</th>
+                    <th>Mín.</th>
+                    <th>Crítico</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody id="stock-emp-body">
+                <tr><td colspan="6">—</td></tr>
+            </tbody>
+        </table>
     </div>
 </div>
 
@@ -948,6 +965,28 @@ jQuery(function($) {
                     (canEditStock ? '<td>' + editBtn + '</td>' : '') +
                     '</tr>';
             }).join(''));
+
+            const empBody = $('#stock-emp-body');
+            const emps = response.data.emparejamientos || [];
+            if (!emps.length) {
+                empBody.html('<tr><td colspan="6">Sin emparejamientos de stock</td></tr>');
+            } else {
+                empBody.html(emps.map(function(e) {
+                    const alerts = [];
+                    if (parseInt(e.alerta, 10) === 1) alerts.push('<span class="wh-badge wh-badge-warn">Alerta</span>');
+                    if (parseInt(e.critico, 10) === 1) alerts.push('<span class="wh-badge wh-badge-err">Crítico</span>');
+                    const bg = parseInt(e.critico, 10) === 1 ? 'background:#ffebee;' : (parseInt(e.alerta, 10) === 1 ? 'background:#fff8e1;' : '');
+                    const link = 'admin.php?page=riverso-pos-categories&tab=emparejamientos&emparejamiento_id=' + e.id;
+                    return '<tr style="' + bg + '">' +
+                        '<td><a href="' + link + '"><code>' + (e.codigo || '') + '</code></a></td>' +
+                        '<td>' + (e.nombre || '') + '</td>' +
+                        '<td>' + (e.stock_unidades != null ? e.stock_unidades : '—') + '</td>' +
+                        '<td>' + (e.stock_minimo == null ? '—' : e.stock_minimo) + '</td>' +
+                        '<td>' + (e.stock_critico == null ? '—' : e.stock_critico) + '</td>' +
+                        '<td>' + (alerts.length ? alerts.join(' ') : '—') + '</td>' +
+                        '</tr>';
+                }).join(''));
+            }
         }).fail(function() {
             tbody.html('<tr><td colspan="9">Error de conexión</td></tr>');
         });

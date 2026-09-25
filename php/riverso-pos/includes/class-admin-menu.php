@@ -179,6 +179,7 @@ class Riverso_POS_Admin_Menu {
     public function render_categories() {
         require_once RIVERSO_POS_PLUGIN_DIR . 'modules/products/class-product-module.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'modules/families/class-family-module.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'modules/emparejamientos/class-emparejamiento-module.php';
         $this->render_page('categories-families');
     }
     

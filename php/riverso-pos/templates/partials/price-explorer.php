@@ -78,6 +78,9 @@ if (!defined('ABSPATH')) {
                     <dt>Estado</dt><dd id="rpe-local-estado">—</dd>
                 </dl>
                 <button type="button" class="button button-primary rpe-save" data-canal="local">Guardar local</button>
+                <div style="margin-top:8px;">
+                    <button type="button" class="button" id="rpe-emp-price-local" style="display:none;" title="Vista previa y precio compartido del emparejamiento">Precio emparejado</button>
+                </div>
             </div>
             <div class="rpe-channel-card" data-canal="online">
                 <h4>Precio online <span id="rpe-online-badge" class="rpe-badge rpe-badge-off">No en uso</span></h4>
@@ -242,6 +245,10 @@ if (!defined('ABSPATH')) {
             <div class="rpe-save-actions">
                 <button type="button" class="button rpe-save-cancel">Cancelar</button>
                 <button type="button" class="button button-primary" id="rpe-save-confirm">Guardar</button>
+            </div>
+            <div id="rpe-emp-price-modal-wrap" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #ddd;">
+                <button type="button" class="button" id="rpe-emp-price-modal" title="Vista previa y precio compartido del emparejamiento">Precio emparejado</button>
+                <p class="description" style="margin:6px 0 0;">Revisá márgenes de todos los miembros y aplicá el precio compartido.</p>
             </div>
         </div>
     </div>

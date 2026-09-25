@@ -241,8 +241,140 @@
     margin-left: 4px;
 }
 
-.rpf-pdf-footer {
-    margin-top: 12px;
+.rpf-folio-dock {
+    position: sticky;
+    bottom: 0;
+    z-index: 8;
+    margin-top: 28px;
+    padding-top: 16px;
+    border-top: 2px solid #c3c4c7;
+    background: #fff;
+    border-left: 1px solid #c3c4c7;
+    border-right: 1px solid #c3c4c7;
+    border-bottom: 1px solid #c3c4c7;
+    border-radius: 4px;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.rpf-folio-dock-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    border-bottom: 1px solid transparent;
+    background: #f6f7f7;
+}
+
+.rpf-folio-dock.rpf-dock-open .rpf-folio-dock-bar {
+    border-bottom-color: #c3c4c7;
+}
+
+.rpf-folio-dock-body {
+    max-height: min(640px, 58vh);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    background: #fff;
+}
+
+.rpf-pdf-select {
+    max-width: 260px;
+    min-width: 140px;
+}
+
+.rpf-dock-origen,
+.rpf-origen-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    background: #e2e8f0;
+    color: #334155;
+}
+
+.rpf-origen-xml {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.rpf-origen-escaneo {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.rpf-origen-ambos {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.rpf-origen-facto {
+    background: #f3e8ff;
+    color: #6b21a8;
+}
+
+.rpf-pdf-viewer-wrap {
+    padding: 12px;
+}
+
+.rpf-pdf-viewer-wrap iframe {
+    width: 100%;
+    height: min(560px, 52vh);
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    background: #fff;
+    display: block;
+}
+
+.rpf-info-panel {
+    padding: 14px 16px;
+}
+
+.rpf-info-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.rpf-info-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px 16px;
+    flex: 1;
+    min-width: 240px;
+}
+
+.rpf-info-meta > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.rpf-info-origen {
+    min-width: 180px;
+}
+
+.rpf-info-items-title {
+    margin: 0 0 8px;
+    font-size: 13px;
+}
+
+.rpf-info-items-wrap {
+    overflow-x: auto;
+}
+
+.rpf-info-items-table {
+    margin: 0;
+    font-size: 12px;
+}
+
+.rpf-info-items-table th,
+.rpf-info-items-table td {
+    padding: 6px 8px;
 }
 
 .rpf-flete-card {
@@ -619,6 +751,31 @@
     white-space: nowrap;
 }
 
+.rpf-chip-purchase-units {
+    background: #e7f5ee;
+    color: #0a7a3e;
+    border: 1px solid #b8e0c8;
+}
+
+.rpf-chip-warn {
+    background: #fcf0e3;
+    color: #8a4b08;
+    border: 1px solid #f0c36d;
+}
+
+.rpf-purchase-units {
+    margin-top: 6px;
+    padding: 6px 8px;
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    max-width: 280px;
+}
+
+.rpf-row-highlight td {
+    background: #fff8e5 !important;
+}
+
 .rpf-badge {
     display: inline-block;
     padding: 2px 8px;
@@ -767,6 +924,7 @@
     border: 1px solid #ccd0d4;
     border-radius: 4px;
     z-index: 5;
+    margin-bottom: 8px;
 }
 
 @media screen and (max-width: 782px) {
@@ -1229,6 +1387,25 @@
     font-weight: 600;
 }
 
+.rpf-pu-options {
+    margin: 12px 0 0;
+    display: grid;
+    gap: 8px;
+}
+
+.rpf-pu-option {
+    margin: 0;
+    padding: 8px 10px;
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+}
+
+.rpf-pu-option strong {
+    display: block;
+    margin-bottom: 2px;
+}
+
 /* Guía en cadena */
 .rpf-guide {
     background: #f0f6fc;
@@ -1397,6 +1574,7 @@
 .rpf-tipo-sku { background: #f0f6fc; color: #0a4b78; }
 .rpf-tipo-familia,
 .rpf-tipo-familia_task { background: #fcf9e8; color: #996800; }
+.rpf-tipo-purchase_units { background: #edfaef; color: #1e4620; }
 .rpf-tipo-factura { background: #f0f0f1; color: #50575e; }
 
 .rpf-blocker-pasos {

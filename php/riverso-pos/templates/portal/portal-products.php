@@ -1784,11 +1784,33 @@ $can_manage_families = current_user_can('riverso_manage_families');
             if (showCodeRemap && id) {
                 actions = `<button class="btn-small success code-remap-btn" data-id="${id}">Mapear…</button>`;
             }
+            const factor = code.purchase_units_factor != null
+                ? Number(code.purchase_units_factor)
+                : Number(code.factor_conversion || 1);
+            const taskBadge = code.purchase_units_task_id
+                ? ' <span style="background:#e8f0fe;color:#174ea6;padding:1px 6px;border-radius:3px;font-size:11px;">Pendiente</span>'
+                : '';
+            let purchaseRow = '';
+            if (code.purchase_units_family_pack) {
+                purchaseRow = `<tr><td colspan="3" style="padding:4px 8px 10px;font-size:12px;color:#555;">
+                    Envase familia: <strong>${esc(String(code.purchase_units_pack_qty != null ? code.purchase_units_pack_qty : '—'))} u</strong>
+                    (sin factor de compra)
+                </td></tr>`;
+            } else if (id && code.purchase_units_can_edit !== false) {
+                purchaseRow = `<tr><td colspan="3" style="padding:4px 8px 12px;">
+                    <div class="pp-purchase-units" style="padding:8px;background:#f6f7f7;border-radius:4px;">
+                        <label style="font-size:12px;"><strong>Unidades por u. facturada</strong>${taskBadge}</label><br>
+                        <input type="number" class="pp-pu-factor" data-id="${id}" min="1" step="1" value="${esc(String(factor > 0 ? factor : 1))}" style="width:80px;margin-top:4px;">
+                        <button type="button" class="btn-small success btn-pp-pu-save" data-id="${id}">Guardar</button>
+                        <button type="button" class="btn-small btn-pp-pu-unit" data-id="${id}">Es unidad (1)</button>
+                    </div>
+                </td></tr>`;
+            }
             html += `<tr style="border-bottom: 1px solid #eee;">
                 <td style="padding: 8px;">${esc(nombre)}</td>
                 <td style="padding: 8px;"><code>${esc(codigo)}</code>${pending}</td>
                 <td style="padding: 8px; text-align: right;">${actions}</td>
-            </tr>`;
+            </tr>${purchaseRow}`;
         });
         html += '</table>';
         $('#suppliers-list').html(html);
@@ -3122,6 +3144,51 @@ $can_manage_families = current_user_can('riverso_manage_families');
             }
             window.showCodeRemapModal(r.data.preview || {});
         });
+    });
+
+    function savePortalPurchaseUnits(ppId, factor, isUnitReal) {
+        if (!canManage) {
+            alert('Sin permisos');
+            return;
+        }
+        const $btns = $('.btn-pp-pu-save[data-id="' + ppId + '"], .btn-pp-pu-unit[data-id="' + ppId + '"]');
+        $btns.prop('disabled', true);
+        post('riverso_products_set_purchase_units', {
+            pp_id: ppId,
+            factor: factor,
+            is_unit_real: isUnitReal ? 1 : 0
+        }).done(function(r) {
+            $btns.prop('disabled', false);
+            if (!r.success) {
+                alert((r.data && r.data.message) || 'No se pudo guardar');
+                return;
+            }
+            if (currentProduct && currentProduct.id) {
+                openDetail(currentProduct.id);
+            }
+        }).fail(function() {
+            $btns.prop('disabled', false);
+            alert('Error de red');
+        });
+    }
+
+    $(document).on('click', '.btn-pp-pu-save', function() {
+        const id = $(this).data('id');
+        const $wrap = $(this).closest('.pp-purchase-units');
+        const factor = parseFloat($wrap.find('.pp-pu-factor').val());
+        if (!(factor >= 1)) {
+            alert('Indicá un factor ≥ 1');
+            return;
+        }
+        if (factor > 1 && factor < 2) {
+            alert('Si no es la unidad real, el factor debe ser ≥ 2');
+            return;
+        }
+        savePortalPurchaseUnits(id, factor, factor <= 1);
+    });
+
+    $(document).on('click', '.btn-pp-pu-unit', function() {
+        savePortalPurchaseUnits($(this).data('id'), 1, true);
     });
 
     $(document).on('click', '.barcode-remap-btn', function() {

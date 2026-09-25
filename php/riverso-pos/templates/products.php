@@ -10,6 +10,11 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
     <h1>Hub de Productos</h1>
     <p>Gestión centralizada: crear Local, vincular Online, asignar códigos proveedor, agregar barcodes y monitorear completitud.</p>
 
+    <div style="border-bottom:2px solid #ddd; margin-bottom:20px;">
+        <button type="button" class="nav-tab nav-tab-active" id="tab-rapida-btn" data-tab="rapida">Búsqueda rápida</button>
+        <button type="button" class="nav-tab" id="tab-busqueda-btn" data-tab="busqueda">Búsqueda</button>
+    </div>
+
     <?php
     $from_precio = isset($_GET['from']) && sanitize_key(wp_unslash($_GET['from'])) === 'precio-folio';
     $need = isset($_GET['need']) ? sanitize_key(wp_unslash($_GET['need'])) : '';
@@ -43,6 +48,14 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
         </p>
     </div>
     <?php endif; ?>
+
+    <!-- TAB: Búsqueda rápida -->
+    <div id="tab-rapida-content" class="tab-content" style="display:block;">
+        <?php require RIVERSO_POS_PLUGIN_DIR . 'templates/partials/product-quick-search.php'; ?>
+    </div>
+
+    <!-- TAB: Búsqueda (interfaz actual) -->
+    <div id="tab-busqueda-content" class="tab-content" style="display:none;">
 
     <div style="display:flex; gap:8px; align-items:center; margin:12px 0; flex-wrap:wrap;">
         <select id="products-status">
@@ -650,6 +663,10 @@ $can_review = current_user_can('riverso_review_products') || $can_manage;
             </div>
         </div>
     </div>
+    <?php endif; /* can_manage: editor + detail */ ?>
+    </div><!-- /#tab-busqueda-content -->
+
+    <?php if ($can_manage): ?>
     <!-- HELP PANEL: COMPLETITUD -->
     <div id="help-completeness" style="display:none; margin-top:18px; background:#f9f9f9; border-left:4px solid #2271b1; padding:12px; border-radius:2px;">
         <h3 style="margin-top:0;">Guía de Completitud</h3>
@@ -1073,6 +1090,62 @@ jQuery(function($){
     const canManage = <?php echo $can_manage ? 'true' : 'false'; ?>;
     const canReview = <?php echo $can_review ? 'true' : 'false'; ?>;
 
+    // --- Subventanas Hub: Búsqueda rápida / Búsqueda ---
+    function showProductsHubTab(name, updateUrl) {
+        const isRapida = name !== 'busqueda';
+        $('#tab-rapida-btn, #tab-busqueda-btn').removeClass('nav-tab-active');
+        $('#tab-rapida-content, #tab-busqueda-content').hide();
+        if (isRapida) {
+            $('#tab-rapida-btn').addClass('nav-tab-active');
+            $('#tab-rapida-content').show();
+        } else {
+            $('#tab-busqueda-btn').addClass('nav-tab-active');
+            $('#tab-busqueda-content').show();
+        }
+        if (updateUrl !== false) {
+            try {
+                const u = new URL(window.location.href);
+                u.searchParams.set('tab', isRapida ? 'rapida' : 'busqueda');
+                // No pisar tabs de detalle en deep links con action=detail
+                if (u.searchParams.get('action') !== 'detail') {
+                    history.replaceState(null, '', u.toString());
+                }
+            } catch (e) { /* ignore */ }
+        }
+    }
+
+    $('#tab-rapida-btn').on('click', function(){ showProductsHubTab('rapida'); });
+    $('#tab-busqueda-btn').on('click', function(){ showProductsHubTab('busqueda'); });
+
+    window.RiversoProductsHub = {
+        showTab: showProductsHubTab,
+        openDetail: function(id, opts) {
+            opts = opts || {};
+            showProductsHubTab('busqueda', true);
+            id = parseInt(id, 10);
+            if (!id) return;
+            $.post(ajaxurl, {
+                action: 'riverso_products_get',
+                nonce: nonce,
+                id: id
+            }, function(r) {
+                if (!r || !r.success) {
+                    alert((r && r.data && r.data.message) || 'No se pudo abrir el producto');
+                    return;
+                }
+                showDetail(r.data.item);
+                setTimeout(function() {
+                    const targetTab = opts.tab || 'local';
+                    $('[data-tab="' + targetTab + '"].detail-tab').trigger('click');
+                    if (opts.edit && canManage) {
+                        enterEditMode();
+                        setTimeout(function(){ $('#local-sku-edit').focus().select(); }, 100);
+                    }
+                }, 150);
+            });
+        }
+    };
+
     let currentProduct = null;
     /** Base de costo en vista hub: 'referencia' | 'tras_dr' | 'tras_dr_folio' | 'tras_dr_flete' */
     let productCostMode = 'tras_dr';
@@ -1367,9 +1440,17 @@ jQuery(function($){
             }
 
             const isFamilyUnit = parseInt(it.unit_of_grupo_id || 0, 10) > 0;
+            const empId = parseInt(it.emparejamiento_id || 0, 10);
+            const empNombre = it.emparejamiento_nombre || it.emparejamiento_codigo || '';
+            if (empId > 0) {
+                actions += ` <button type="button" class="button button-small product-emp-price" data-emp-id="${empId}" data-emp-nombre="${esc(empNombre)}" title="${esc(empNombre || 'Emparejamiento')}">Precio emparejado</button>`;
+                if (canManage) {
+                    actions += ` <button type="button" class="button button-small product-emp-edit" data-emp-id="${empId}">Editar emparejamiento</button>`;
+                }
+            }
             return `<tr>
                 <td>${it.id}</td>
-                <td>${renderSkuCell(skuLocal, 'SKU Local')}${isFamilyUnit ? ' <span style="background:#e8f5e9;color:#2e7d32;font-size:10px;padding:1px 4px;border-radius:3px;" title="Unidad mínima de familia">U</span>' : ''}</td>
+                <td>${renderSkuCell(skuLocal, 'SKU Local')}${isFamilyUnit ? ' <span style="background:#e8f5e9;color:#2e7d32;font-size:10px;padding:1px 4px;border-radius:3px;" title="Unidad mínima de familia">U</span>' : ''}${empId > 0 ? ' <span style="background:#e3f2fd;color:#1565c0;font-size:10px;padding:1px 4px;border-radius:3px;" title="Emparejado: ' + esc(empNombre) + '">E</span>' : ''}</td>
                 <td>${renderSkuCell(skuOnline, 'SKU Online')}</td>
                 <td>${esc(it.nombre_canonico || '-')}</td>
                 <td><span class="completeness-badge ${cat}">${completenessLabel(cat)}</span></td>
@@ -1750,7 +1831,27 @@ jQuery(function($){
                 const pendingBadge = s.needs_confirm
                     ? '<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:3px;font-size:11px;margin-left:6px;">Por confirmar</span>'
                     : '';
-                
+                const factor = s.purchase_units_factor != null ? Number(s.purchase_units_factor) : Number(s.factor_conversion || 1);
+                const taskBadge = s.purchase_units_task_id
+                    ? ' <span style="background:#e8f0fe;color:#174ea6;padding:2px 8px;border-radius:3px;font-size:11px;">Unidades de compra pendientes</span>'
+                    : '';
+                let purchaseUnitsHtml = '';
+                if (s.purchase_units_family_pack) {
+                    purchaseUnitsHtml = `<div style="margin-top:8px;font-size:12px;color:#555;">
+                        Envase de familia: <strong>${esc(String(s.purchase_units_pack_qty != null ? s.purchase_units_pack_qty : '—'))} u</strong>.
+                        El coste/stock lo convierte la familia; no se edita factor de compra.
+                    </div>`;
+                } else if (s.purchase_units_can_edit !== false && s.id) {
+                    purchaseUnitsHtml = `<div class="pp-purchase-units" style="margin-top:8px;padding:8px;background:#f6f7f7;border:1px solid #dcdcde;border-radius:4px;max-width:340px;">
+                        <label style="display:block;font-size:12px;margin-bottom:4px;"><strong>Unidades por unidad facturada</strong>
+                        ${taskBadge}</label>
+                        <p class="description" style="margin:0 0 6px;">Si el proveedor factura 1 caja y llegan N unidades, poné N (ej. 12). 1 = la cantidad del documento es la unidad.</p>
+                        <input type="number" class="small-text pp-pu-factor" data-id="${s.id}" min="1" step="1" value="${esc(String(factor > 0 ? factor : 1))}">
+                        <button type="button" class="button button-small button-primary btn-pp-pu-save" data-id="${s.id}">Guardar</button>
+                        <button type="button" class="button button-small btn-pp-pu-unit" data-id="${s.id}" title="Cantidad facturada = unidad real">Es unidad (1)</button>
+                    </div>`;
+                }
+
                 html += `<div class="supplier-code-item">
                     <div>
                         <strong>${esc(s.codigo_proveedor)}</strong> 
@@ -1761,6 +1862,7 @@ jQuery(function($){
                         ${fecha ? `<br><small style="color:#999;">Ingreso: ${esc(fecha)}</small>` : ''}
                         ${barcodeProveedor}
                         ${confirmBtns}
+                        ${purchaseUnitsHtml}
                     </div>
                 </div>`;
             });
@@ -2848,6 +2950,54 @@ jQuery(function($){
                 });
             }
         });
+    });
+
+    function savePurchaseUnits(ppId, factor, isUnitReal) {
+        const $btns = $('.btn-pp-pu-save[data-id="' + ppId + '"], .btn-pp-pu-unit[data-id="' + ppId + '"]');
+        $btns.prop('disabled', true);
+        $.post(ajaxurl, {
+            action: 'riverso_products_set_purchase_units',
+            nonce,
+            pp_id: ppId,
+            factor: factor,
+            is_unit_real: isUnitReal ? 1 : 0
+        }, function(r) {
+            $btns.prop('disabled', false);
+            if (!r.success) {
+                alert(r.data?.message || 'No se pudo guardar');
+                return;
+            }
+            if (r.data?.item) {
+                showDetail(r.data.item);
+            } else if (currentProduct && currentProduct.id) {
+                $.post(ajaxurl, { action: 'riverso_products_get', nonce, id: currentProduct.id }, function(resp){
+                    if (resp.success) showDetail(resp.data.item || resp.data);
+                });
+            }
+        }).fail(function() {
+            $btns.prop('disabled', false);
+            alert('Error de red');
+        });
+    }
+
+    $(document).on('click', '.btn-pp-pu-save', function() {
+        const id = $(this).data('id');
+        const $wrap = $(this).closest('.pp-purchase-units');
+        const factor = parseFloat($wrap.find('.pp-pu-factor').val());
+        if (!(factor >= 1)) {
+            alert('Indicá un factor ≥ 1');
+            return;
+        }
+        if (factor > 1 && factor < 2) {
+            alert('Si no es la unidad real, el factor debe ser ≥ 2');
+            return;
+        }
+        savePurchaseUnits(id, factor, factor <= 1);
+    });
+
+    $(document).on('click', '.btn-pp-pu-unit', function() {
+        const id = $(this).data('id');
+        savePurchaseUnits(id, 1, true);
     });
 
     $(document).on('click', '.btn-pp-reject', function(){
@@ -4250,6 +4400,30 @@ jQuery(function($){
         });
     });
 
+    // Precio emparejado / Editar emparejamiento (listado)
+    $(document).on('click', '.product-emp-price', function(e){
+        e.preventDefault();
+        const empId = parseInt($(this).data('emp-id'), 10) || 0;
+        const empNombre = $(this).data('emp-nombre') || '';
+        if (!empId || !window.RiversoEmparejamientoEditor || typeof RiversoEmparejamientoEditor.openMarginPreview !== 'function') {
+            alert('Editor de emparejamientos no disponible');
+            return;
+        }
+        RiversoEmparejamientoEditor.openMarginPreview(empId, {
+            title: empNombre ? ('Precio emparejado — ' + empNombre) : 'Precio emparejado',
+            showEdit: canManage
+        });
+    });
+    $(document).on('click', '.product-emp-edit', function(e){
+        e.preventDefault();
+        const empId = parseInt($(this).data('emp-id'), 10) || 0;
+        if (!empId || !window.RiversoEmparejamientoEditor || typeof RiversoEmparejamientoEditor.open !== 'function') {
+            alert('Editor de emparejamientos no disponible');
+            return;
+        }
+        RiversoEmparejamientoEditor.open(empId);
+    });
+
     // Evento: editar producto (formulario rápido arriba de la lista)
     $(document).on('click', '.product-edit', function(e){
         e.preventDefault();
@@ -4902,17 +5076,38 @@ jQuery(function($){
 
     load();
 
+    // Subventana inicial + deep links
+    (function initProductsHubTab() {
+        const params = new URLSearchParams(window.location.search);
+        const hubTab = params.get('tab') || '';
+        const forceBusqueda = params.get('action') === 'detail'
+            || params.get('from') === 'precio-folio'
+            || !!(params.get('search') || params.get('codigo'));
+        if (forceBusqueda || hubTab === 'busqueda') {
+            showProductsHubTab('busqueda', false);
+        } else {
+            showProductsHubTab('rapida', false);
+        }
+    })();
+
     // Deep link desde tareas: ?action=detail&id=X&tab=local&edit=1
     (function openDeepLinkFromTask() {
         const params = new URLSearchParams(window.location.search);
         const action = params.get('action');
         const id = parseInt(params.get('id') || '0', 10);
-        const tab = params.get('tab') || '';
+        let tab = params.get('tab') || '';
         const edit = params.get('edit') === '1';
 
         if (action !== 'detail' || !id) {
             return;
         }
+
+        // tab=rapida|busqueda son del hub; el detalle usa local/online/...
+        if (tab === 'rapida' || tab === 'busqueda') {
+            tab = 'local';
+        }
+
+        showProductsHubTab('busqueda', false);
 
         $.post(ajaxurl, {
             action: 'riverso_products_get',
@@ -4942,6 +5137,7 @@ jQuery(function($){
         if (params.get('from') !== 'precio-folio') {
             return;
         }
+        showProductsHubTab('busqueda', false);
         const search = (params.get('search') || params.get('codigo') || '').trim();
         const create = params.get('create') || '';
         if (search) {

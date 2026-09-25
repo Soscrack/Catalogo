@@ -3165,6 +3165,135 @@ class Riverso_Unit_Product_Service {
     }
 
     /**
+     * Unidades reales por unidad facturada (código de proveedor).
+     *
+     * Si el código ya es presentación de una familia unitaria (pack_qty > 1),
+     * no se aplica factor_conversion: la familia convierte el coste/stock.
+     *
+     * @param int    $producto_base_id
+     * @param string $codigo_proveedor
+     * @param int    $proveedor_id
+     * @param int    $grupo_id
+     * @return array{
+     *   factor:float,
+     *   apply_factor:bool,
+     *   is_family_pack:bool,
+     *   pack_qty:?float,
+     *   producto_proveedor_id:?int,
+     *   factor_source:string
+     * }
+     */
+    public function resolve_purchase_units($producto_base_id, $codigo_proveedor = '', $proveedor_id = 0, $grupo_id = 0) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $producto_base_id = intval($producto_base_id);
+        $codigo_proveedor = trim((string) $codigo_proveedor);
+        $proveedor_id = intval($proveedor_id);
+        $grupo_id = intval($grupo_id);
+
+        $sku_pair = $this->resolve_folio_sku_pair($producto_base_id, $codigo_proveedor, $grupo_id);
+        $pack_qty = isset($sku_pair['pack_qty']) && $sku_pair['pack_qty'] !== null
+            ? floatval($sku_pair['pack_qty'])
+            : null;
+        $is_family_pack = $pack_qty !== null && $pack_qty > 1.0001;
+
+        $pp_id = null;
+        $factor_from_pp = null;
+        if ($codigo_proveedor !== '') {
+            if ($proveedor_id > 0) {
+                $pp = $wpdb->get_row($wpdb->prepare(
+                    "SELECT id, factor_conversion FROM {$prefix}producto_proveedor
+                     WHERE proveedor_id = %d AND codigo_proveedor = %s AND activo = 1
+                     ORDER BY (producto_base_id = %d) DESC, es_preferido DESC, id ASC
+                     LIMIT 1",
+                    $proveedor_id,
+                    $codigo_proveedor,
+                    $producto_base_id > 0 ? $producto_base_id : 0
+                ), ARRAY_A);
+            } else {
+                $pp = $wpdb->get_row($wpdb->prepare(
+                    "SELECT id, factor_conversion FROM {$prefix}producto_proveedor
+                     WHERE codigo_proveedor = %s AND activo = 1
+                     ORDER BY (producto_base_id = %d) DESC, (factor_conversion > 1) DESC, id ASC
+                     LIMIT 1",
+                    $codigo_proveedor,
+                    $producto_base_id > 0 ? $producto_base_id : 0
+                ), ARRAY_A);
+            }
+            if ($pp) {
+                $pp_id = (int) $pp['id'];
+                $factor_from_pp = floatval($pp['factor_conversion'] ?? 0);
+            }
+        }
+
+        if ($is_family_pack) {
+            return [
+                'factor' => 1.0,
+                'apply_factor' => false,
+                'is_family_pack' => true,
+                'pack_qty' => $pack_qty,
+                'producto_proveedor_id' => $pp_id,
+                'factor_source' => 'family_pack',
+            ];
+        }
+
+        $factor = 1.0;
+        $source = 'default';
+        // Solo factor_conversion del código de proveedor (confirmado en Procesar folios).
+        // No usar barcode/envase aquí: un “Sí” (factor 1) no debe reabrirse por un hint de 12.
+        if ($factor_from_pp !== null && $factor_from_pp > 0) {
+            $factor = $factor_from_pp;
+            $source = 'producto_proveedor';
+        }
+        if ($factor < 1) {
+            $factor = 1.0;
+        }
+
+        $apply = $factor > 1.0001;
+
+        return [
+            'factor' => round($factor, 4),
+            'apply_factor' => $apply,
+            'is_family_pack' => false,
+            'pack_qty' => $pack_qty,
+            'producto_proveedor_id' => $pp_id,
+            'factor_source' => $source,
+        ];
+    }
+
+    /**
+     * Persiste factor_conversion en producto_proveedor (unidades reales por unidad facturada).
+     *
+     * @param int   $producto_proveedor_id
+     * @param float $factor
+     * @return true|WP_Error
+     */
+    public function set_purchase_units_factor($producto_proveedor_id, $factor) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $producto_proveedor_id = intval($producto_proveedor_id);
+        $factor = floatval($factor);
+        if ($producto_proveedor_id <= 0) {
+            return new WP_Error('invalid', 'producto_proveedor_id requerido');
+        }
+        if ($factor < 1) {
+            return new WP_Error('invalid', 'El factor debe ser ≥ 1');
+        }
+
+        $ok = $wpdb->update(
+            "{$prefix}producto_proveedor",
+            ['factor_conversion' => $factor],
+            ['id' => $producto_proveedor_id],
+            ['%f'],
+            ['%d']
+        );
+        if ($ok === false) {
+            return new WP_Error('db_error', $wpdb->last_error ?: 'No se pudo guardar el factor');
+        }
+        return true;
+    }
+
+    /**
      * Mueve o desvincula un código entre integrantes de la misma familia.
      *
      * @param int    $grupo_id

@@ -52,6 +52,7 @@ class Riverso_Family_Module {
         add_action('wp_ajax_riverso_families_add_member', [$this, 'ajax_add_member']);
         add_action('wp_ajax_riverso_families_remove_member', [$this, 'ajax_remove_member']);
         add_action('wp_ajax_riverso_families_set_member_envase', [$this, 'ajax_set_member_envase']);
+        add_action('wp_ajax_riverso_families_create_member', [$this, 'ajax_create_member']);
         add_action('wp_ajax_riverso_families_search_candidates', [$this, 'ajax_search_candidates']);
         add_action('wp_ajax_riverso_families_create_local_from_member', [$this, 'ajax_create_local_from_member']);
         add_action('wp_ajax_riverso_families_tree', [$this, 'ajax_family_tree']);
@@ -895,6 +896,67 @@ class Riverso_Family_Module {
     }
 
     /**
+     * Catálogo activo de tipos de envase (slug + nombre) para el editor de familias.
+     *
+     * @return array<int, array{slug:string,nombre:string}>
+     */
+    public static function get_active_envase_tipos() {
+        global $wpdb;
+        $defaults = [
+            ['slug' => 'envase', 'nombre' => 'Envase'],
+            ['slug' => 'caja', 'nombre' => 'Caja'],
+            ['slug' => 'balde', 'nombre' => 'Balde'],
+            ['slug' => 'bolsa_fabrica', 'nombre' => 'Bolsa fábrica'],
+            ['slug' => 'bolsa_interna', 'nombre' => 'Bolsa interna'],
+            ['slug' => 'otro', 'nombre' => 'Otro'],
+        ];
+        $table = $wpdb->prefix . 'riverso_envase_tipos';
+        $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+        if ($exists !== $table) {
+            return $defaults;
+        }
+        $rows = $wpdb->get_results(
+            "SELECT slug, nombre FROM {$table} WHERE activo = 1 ORDER BY orden ASC, nombre ASC",
+            ARRAY_A
+        ) ?: [];
+        if (empty($rows)) {
+            return $defaults;
+        }
+        $out = [];
+        foreach ($rows as $row) {
+            $slug = sanitize_key($row['slug'] ?? '');
+            $nombre = sanitize_text_field($row['nombre'] ?? '');
+            if ($slug === '') {
+                continue;
+            }
+            $out[] = [
+                'slug' => $slug,
+                'nombre' => $nombre !== '' ? $nombre : ucfirst(str_replace('_', ' ', $slug)),
+            ];
+        }
+        return $out ?: $defaults;
+    }
+
+    /**
+     * Normaliza tipo_envase contra el catálogo permitido.
+     *
+     * @param string $tipo
+     * @param string $fallback
+     * @return string
+     */
+    public static function normalize_tipo_envase($tipo, $fallback = 'envase') {
+        $tipo = sanitize_key((string) $tipo);
+        $fallback = sanitize_key((string) $fallback) ?: 'envase';
+        $allowed = class_exists('Riverso_Packaging_Module')
+            ? Riverso_Packaging_Module::allowed_tipo_envase()
+            : ['envase', 'caja', 'balde', 'bolsa_fabrica', 'bolsa_interna', 'otro'];
+        if ($tipo === '' || !in_array($tipo, $allowed, true)) {
+            return in_array($fallback, $allowed, true) ? $fallback : 'envase';
+        }
+        return $tipo;
+    }
+
+    /**
      * AJAX: Definir/actualizar cantidad_unidades de envase de un miembro.
      */
     public function ajax_set_member_envase() {
@@ -907,6 +969,9 @@ class Riverso_Family_Module {
         $grupo_id = absint($_POST['grupo_id'] ?? 0);
         $producto_base_id = absint($_POST['producto_base_id'] ?? 0);
         $cantidad = floatval($_POST['cantidad_unidades'] ?? 0);
+        $tipo_envase = isset($_POST['tipo_envase'])
+            ? self::normalize_tipo_envase($_POST['tipo_envase'])
+            : null;
 
         if (!$grupo_id || !$producto_base_id) {
             wp_send_json_error(['message' => 'grupo_id y producto_base_id requeridos']);
@@ -927,11 +992,16 @@ class Riverso_Family_Module {
             wp_send_json_error(['message' => 'El producto no es miembro activo de esta familia']);
         }
 
-        $envase_id = $this->upsert_envase_for_member([
+        $payload = [
             'producto_base_id' => $producto_base_id,
             'cantidad_unidades' => $cantidad,
             'origen_datos' => 'family_editor',
-        ]);
+            'replace_canonical' => true,
+        ];
+        if ($tipo_envase !== null) {
+            $payload['tipo_envase'] = $tipo_envase;
+        }
+        $envase_id = $this->upsert_envase_for_member($payload);
         if (!$envase_id) {
             wp_send_json_error(['message' => 'No se pudo guardar el envase']);
         }
@@ -940,6 +1010,7 @@ class Riverso_Family_Module {
             Riverso_POS_Audit::log('family_member_envase_set', 'equivalence_groups', $grupo_id, [
                 'producto_base_id' => $producto_base_id,
                 'cantidad_unidades' => $cantidad,
+                'tipo_envase' => $tipo_envase,
                 'envase_id' => $envase_id,
             ]);
         }
@@ -949,9 +1020,115 @@ class Riverso_Family_Module {
         wp_send_json_success([
             'envase_id' => $envase_id,
             'cantidad_unidades' => $cantidad,
+            'tipo_envase' => $tipo_envase,
             'stock' => $stock,
             'pack_conflicts' => $this->detect_pack_qty_conflicts($grupo_id, $members),
             'message' => 'Cantidad de envase guardada',
+        ]);
+    }
+
+    /**
+     * AJAX: Crear SKU local nuevo y (opcional) agregarlo como miembro con envase.
+     */
+    public function ajax_create_member() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!current_user_can('riverso_manage_families')) {
+            wp_send_json_error(['message' => 'Permiso denegado'], 403);
+        }
+
+        $grupo_id = absint($_POST['grupo_id'] ?? 0);
+        $nombre = sanitize_text_field($_POST['nombre'] ?? '');
+        $sku = sanitize_text_field($_POST['canonical_sku'] ?? '');
+        $cantidad = floatval($_POST['cantidad_unidades'] ?? 0);
+        $tipo_envase = self::normalize_tipo_envase(
+            $_POST['tipo_envase'] ?? '',
+            $cantidad > 1.0001 ? 'caja' : 'envase'
+        );
+
+        if ($nombre === '') {
+            wp_send_json_error(['message' => 'Indicá el nombre del producto nuevo']);
+        }
+        if ($cantidad <= 0) {
+            wp_send_json_error(['message' => 'Cantidad de envase debe ser mayor a 0']);
+        }
+        if ($sku !== '' && !preg_match('/^\d{1,6}$/', $sku)) {
+            wp_send_json_error(['message' => 'SKU Local debe ser numérico y máximo 6 dígitos']);
+        }
+
+        if ($grupo_id) {
+            global $wpdb;
+            $prefix = $wpdb->prefix . 'riverso_';
+            $family = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, activo FROM {$prefix}equivalence_groups WHERE id = %d",
+                $grupo_id
+            ), ARRAY_A);
+            if (!$family || !intval($family['activo'])) {
+                wp_send_json_error(['message' => 'Familia no encontrada']);
+            }
+        }
+
+        if (!class_exists('Riverso_Family_Commercial_Service')) {
+            wp_send_json_error(['message' => 'Servicio comercial no disponible']);
+        }
+
+        $created = Riverso_Family_Commercial_Service::get_instance()->create_local_product([
+            'canonical_sku' => $sku,
+            'nombre' => $nombre,
+            'origen_datos' => 'family_member_create',
+        ]);
+        if (is_wp_error($created)) {
+            wp_send_json_error(['message' => $created->get_error_message()]);
+        }
+
+        $producto_base_id = (int) ($created['producto_base_id'] ?? 0);
+        $member_id = null;
+        $envase_id = null;
+        $members = [];
+        $stock = null;
+        $pack_conflicts = [];
+
+        if ($grupo_id && $producto_base_id) {
+            $member_id = $this->ensure_member($grupo_id, $producto_base_id, 100);
+            $envase_id = $this->upsert_envase_for_member([
+                'producto_base_id' => $producto_base_id,
+                'cantidad_unidades' => $cantidad,
+                'tipo_envase' => $tipo_envase,
+                'origen_datos' => 'family_member_create',
+                'replace_canonical' => true,
+            ]);
+            if (!$envase_id) {
+                wp_send_json_error(['message' => 'Producto creado, pero no se pudo guardar el envase']);
+            }
+            $stock = $this->compute_family_stock($grupo_id);
+            $members = $this->load_family_members_enriched($grupo_id);
+            $pack_conflicts = $this->detect_pack_qty_conflicts($grupo_id, $members);
+
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('family_member_created', 'equivalence_groups', $grupo_id, [
+                    'producto_base_id' => $producto_base_id,
+                    'canonical_sku' => $created['canonical_sku'] ?? $sku,
+                    'cantidad_unidades' => $cantidad,
+                    'tipo_envase' => $tipo_envase,
+                    'envase_id' => $envase_id,
+                    'member_id' => $member_id,
+                ]);
+            }
+        }
+
+        wp_send_json_success([
+            'product' => $created,
+            'producto_base_id' => $producto_base_id,
+            'member_id' => $member_id,
+            'envase_id' => $envase_id,
+            'cantidad_unidades' => $cantidad,
+            'tipo_envase' => $tipo_envase,
+            'stock' => $stock,
+            'members' => $members,
+            'pack_conflicts' => $pack_conflicts,
+            'message' => $grupo_id
+                ? 'Miembro creado y agregado a la familia'
+                : 'Producto creado; se agregará al guardar la familia',
         ]);
     }
 
@@ -1048,6 +1225,8 @@ class Riverso_Family_Module {
         if (class_exists('Riverso_Product_Module')) {
             Riverso_Product_Module::get_instance()->resolve_family_assigned($producto_base_id);
         }
+
+        do_action('riverso_family_member_changed', $grupo_id, $producto_base_id);
 
         $parked_suggestions = 0;
         if (class_exists('Riverso_Unit_Product_Service')) {
@@ -1945,6 +2124,7 @@ class Riverso_Family_Module {
             if (class_exists('Riverso_Product_Module')) {
                 Riverso_Product_Module::get_instance()->resolve_family_assigned($producto_base_id);
             }
+            do_action('riverso_family_member_changed', $grupo_id, $producto_base_id);
             return intval($existing['id']);
         }
 
@@ -1966,6 +2146,7 @@ class Riverso_Family_Module {
             Riverso_Unit_Product_Service::get_instance()
                 ->annotate_parked_barcode_tasks_for_family($grupo_id);
         }
+        do_action('riverso_family_member_changed', $grupo_id, $producto_base_id);
         return intval($wpdb->insert_id);
     }
 
@@ -2218,6 +2399,7 @@ class Riverso_Family_Module {
             return null;
         }
 
+        $replace_canonical = !empty($member['replace_canonical']);
         $existing_id = null;
         if ($codigo !== '') {
             $existing_id = $wpdb->get_var($wpdb->prepare(
@@ -2226,6 +2408,18 @@ class Riverso_Family_Module {
                  LIMIT 1",
                 $base_id,
                 $codigo
+            ));
+        }
+        // El editor muestra un solo envase (el de mayor cantidad). Hay que
+        // actualizar esa fila; si se busca por la cantidad nueva se inserta
+        // otra y la anterior sigue ganando el ORDER BY.
+        if (!$existing_id && $replace_canonical) {
+            $existing_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}envases
+                 WHERE producto_base_id = %d AND activo = 1
+                 ORDER BY (cantidad_unidades > 1) DESC, cantidad_unidades DESC
+                 LIMIT 1",
+                $base_id
             ));
         }
         if (!$existing_id) {
@@ -2249,10 +2443,14 @@ class Riverso_Family_Module {
             ));
         }
 
+        $has_tipo = array_key_exists('tipo_envase', $member);
+        $tipo_envase = $has_tipo
+            ? self::normalize_tipo_envase($member['tipo_envase'])
+            : 'envase';
+
         $data = [
             'producto_base_id' => $base_id,
             'cantidad_unidades' => $cantidad,
-            'tipo_envase' => 'envase',
             'es_vendible' => 1,
             'lleva_stock_propio' => 1,
             'permite_apertura' => 1,
@@ -2261,6 +2459,10 @@ class Riverso_Family_Module {
             'review_status' => 'aprobado',
             'activo' => 1,
         ];
+        // Solo fijar tipo si viene explícito, o al insertar (default envase).
+        if ($has_tipo || !$existing_id) {
+            $data['tipo_envase'] = $tipo_envase;
+        }
         if ($codigo !== '') {
             $data['codigo_proveedor'] = $codigo;
         }
@@ -2278,12 +2480,26 @@ class Riverso_Family_Module {
         $data = $this->filter_envase_columns($data);
 
         if ($existing_id) {
-            $wpdb->update("{$prefix}envases", $data, ['id' => intval($existing_id)]);
-            return intval($existing_id);
+            $updated = $wpdb->update("{$prefix}envases", $data, ['id' => intval($existing_id)]);
+            if ($updated === false) {
+                return null;
+            }
+            $saved_id = intval($existing_id);
+        } else {
+            $ok = $wpdb->insert("{$prefix}envases", $data);
+            $saved_id = $ok ? intval($wpdb->insert_id) : null;
         }
 
-        $ok = $wpdb->insert("{$prefix}envases", $data);
-        return $ok ? intval($wpdb->insert_id) : null;
+        if ($saved_id && $replace_canonical) {
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}envases SET activo = 0
+                 WHERE producto_base_id = %d AND id <> %d AND activo = 1",
+                $base_id,
+                $saved_id
+            ));
+        }
+
+        return $saved_id;
     }
 
     /**
@@ -2419,6 +2635,7 @@ class Riverso_Family_Module {
                 'nombre_canonico' => $m['nombre_canonico'] ?? null,
                 'stock_packs' => $packs,
                 'cantidad_unidades' => $cantidad > 0 ? $cantidad : null,
+                'tipo_envase' => $envase ? sanitize_key($envase['tipo_envase'] ?? 'envase') : null,
                 'envase_id' => $envase ? intval($envase['id']) : null,
                 'stock_abierto' => $abierto,
                 'stock_unidades' => null,

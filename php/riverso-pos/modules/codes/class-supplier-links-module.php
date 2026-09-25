@@ -45,6 +45,7 @@ class Riverso_Supplier_Links_Module {
         add_action('wp_ajax_riverso_codes_update', array($this, 'ajax_update_code'));
         add_action('wp_ajax_riverso_codes_confirm', array($this, 'ajax_confirm_code'));
         add_action('wp_ajax_riverso_codes_reject', array($this, 'ajax_reject_code'));
+        add_action('wp_ajax_riverso_codes_purchase_units_request', array($this, 'ajax_purchase_units_request'));
     }
     
     /**
@@ -1412,7 +1413,106 @@ class Riverso_Supplier_Links_Module {
         $row['has_open_task'] = !empty($open_task);
         $row['open_task'] = $open_task ?: null;
 
+        $pu_task = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, titulo, estado, tipo FROM {$prefix}tareas
+             WHERE tipo = 'confirmar_unidades_compra'
+               AND referencia_tipo = 'producto_proveedor'
+               AND referencia_id = %d
+               AND estado NOT IN ('completada', 'cancelada')
+             ORDER BY id DESC LIMIT 1",
+            $pp_id
+        ), ARRAY_A);
+        $row['purchase_units_task_id'] = $pu_task ? (int) $pu_task['id'] : null;
+        $row['purchase_units_task'] = $pu_task ?: null;
+        $row['purchase_units_pending'] = !empty($pu_task);
+        $row['purchase_units_factor'] = isset($row['factor_conversion']) && $row['factor_conversion'] !== null && $row['factor_conversion'] !== ''
+            ? (float) $row['factor_conversion']
+            : 1.0;
+        $row['purchase_units_family_pack'] = false;
+        $row['purchase_units_pack_qty'] = null;
+        $row['purchase_units_can_edit'] = absint($row['producto_base_id']) > 0;
+
+        if ($row['purchase_units_can_edit']) {
+            if (!class_exists('Riverso_Unit_Product_Service')) {
+                $path = defined('RIVERSO_POS_PLUGIN_DIR')
+                    ? RIVERSO_POS_PLUGIN_DIR . 'modules/families/class-unit-product-service.php'
+                    : '';
+                if ($path && file_exists($path)) {
+                    require_once $path;
+                }
+            }
+            if (class_exists('Riverso_Unit_Product_Service')) {
+                $ctx = Riverso_Unit_Product_Service::get_instance()->resolve_purchase_units(
+                    (int) $row['producto_base_id'],
+                    (string) ($row['codigo_proveedor'] ?? ''),
+                    (int) ($row['proveedor_id'] ?? 0)
+                );
+                $row['purchase_units_factor'] = (float) ($ctx['factor'] ?? $row['purchase_units_factor']);
+                $row['purchase_units_family_pack'] = !empty($ctx['is_family_pack']);
+                $row['purchase_units_pack_qty'] = $ctx['pack_qty'] ?? null;
+                if (!empty($ctx['is_family_pack'])) {
+                    $row['purchase_units_can_edit'] = false;
+                }
+            }
+        }
+
         return $row;
+    }
+
+    /**
+     * Abre (o reutiliza) tarea confirmar_unidades_compra desde Códigos.
+     *
+     * @param int $pp_id
+     * @return array|WP_Error
+     */
+    public function request_purchase_units_confirm($pp_id) {
+        global $wpdb;
+        $pp_id = absint($pp_id);
+        $detail = $this->get_code_detail($pp_id);
+        if (is_wp_error($detail)) {
+            return $detail;
+        }
+        if (empty($detail['producto_base_id'])) {
+            return new WP_Error('no_sku', 'Vinculá un SKU local antes de pedir confirmación de unidades');
+        }
+        if (!empty($detail['purchase_units_family_pack'])) {
+            return new WP_Error(
+                'family_pack',
+                'Este código ya es un envase de familia. Las unidades las resuelve la familia.'
+            );
+        }
+        if (!empty($detail['purchase_units_task_id'])) {
+            return $detail;
+        }
+        if (!class_exists('Riverso_Task_Module')) {
+            return new WP_Error('unavailable', 'Módulo de tareas no disponible');
+        }
+
+        $code = (string) ($detail['codigo_proveedor'] ?? '');
+        $task_id = Riverso_Task_Module::get_instance()->create_review_task(
+            'confirmar_unidades_compra',
+            sprintf('Confirmar unidades de compra: %s', $code !== '' ? $code : ('#' . $pp_id)),
+            'producto_proveedor',
+            $pp_id,
+            [
+                'descripcion' => sprintf(
+                    "¿La cantidad facturada es la unidad real?\n\nCódigo: %s\nSKU: %s\n\nSi no, indicá cuántas unidades reales trae cada unidad facturada.",
+                    $code,
+                    $detail['canonical_sku'] ?? ''
+                ),
+                'prioridad' => 'normal',
+                'datos_extra' => [
+                    'codigo_proveedor' => $code,
+                    'producto_base_id' => (int) $detail['producto_base_id'],
+                    'source' => 'codes',
+                ],
+            ]
+        );
+        if (is_wp_error($task_id)) {
+            return $task_id;
+        }
+
+        return $this->get_code_detail($pp_id);
     }
 
     /**
@@ -1804,5 +1904,20 @@ class Riverso_Supplier_Links_Module {
             wp_send_json_error(array('message' => $result->get_error_message()));
         }
         wp_send_json_success(array('message' => 'Código rechazado', 'code' => $result));
+    }
+
+    public function ajax_purchase_units_request() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('riverso_manage_codes')) {
+            wp_send_json_error(array('message' => 'Sin permisos'), 403);
+        }
+        $result = $this->request_purchase_units_confirm($_POST['pp_id'] ?? 0);
+        if (is_wp_error($result)) {
+            wp_send_json_error(array('message' => $result->get_error_message()));
+        }
+        wp_send_json_success(array(
+            'message' => 'Confirmación de unidades pedida',
+            'code' => $result,
+        ));
     }
 }

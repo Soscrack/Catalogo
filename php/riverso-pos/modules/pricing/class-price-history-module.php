@@ -108,6 +108,8 @@ class Riverso_Price_History_Module {
         add_action('wp_ajax_riverso_price_folio_process_start_hybrid', [$this, 'ajax_folio_process_start_hybrid']);
         add_action('wp_ajax_riverso_price_folio_process_update_omitidos', [$this, 'ajax_folio_process_update_omitidos']);
         add_action('wp_ajax_riverso_price_folio_create_local_and_link', [$this, 'ajax_folio_create_local_and_link']);
+        add_action('wp_ajax_riverso_price_folio_purchase_units_start', [$this, 'ajax_folio_purchase_units_start']);
+        add_action('wp_ajax_riverso_price_folio_purchase_units_confirm', [$this, 'ajax_folio_purchase_units_confirm']);
     }
 
     public static function create_tables() {
@@ -455,6 +457,36 @@ class Riverso_Price_History_Module {
         if (!$producto_base_id || $p_asignado <= 0) {
             wp_send_json_error(['message' => 'Producto y precio requeridos']);
         }
+
+        if ($canal === 'local'
+            && class_exists('Riverso_Emparejamiento_Module')
+            && empty($_POST['confirm_emparejamiento'])
+        ) {
+            $emp = Riverso_Emparejamiento_Module::get_instance()->get_of_product($producto_base_id);
+            if ($emp && !empty($emp['emparejar_precios'])) {
+                $current_row = $pricing->get_local_price($producto_base_id);
+                $current_p = ($current_row && $current_row['p_asignado'] !== null && $current_row['p_asignado'] !== '')
+                    ? (float) $current_row['p_asignado']
+                    : null;
+                $price_unchanged = ($current_p !== null && abs($current_p - $p_asignado) <= 0.001);
+                if (!$price_unchanged) {
+                    $preview = Riverso_Emparejamiento_Module::get_instance()
+                        ->margin_preview_for_group((int) $emp['id'], $p_asignado);
+                    wp_send_json_error([
+                        'code' => 'emparejamiento_confirm',
+                        'message' => 'Este producto está emparejado. Al guardar se actualizará el precio de todos los miembros. Fuente: Manual (Emparejamiento).',
+                        'emparejamiento' => [
+                            'id' => (int) $emp['id'],
+                            'nombre' => $emp['nombre'],
+                            'codigo' => $emp['codigo'],
+                        ],
+                        'preview' => $preview,
+                        'p_asignado_anterior' => $current_p,
+                    ]);
+                }
+            }
+        }
+
         $meta = [
             'source_type' => 'manual',
             'notas' => $notas,
@@ -481,6 +513,36 @@ class Riverso_Price_History_Module {
         if (!$producto_base_id || $p_asignado <= 0) {
             wp_send_json_error(['message' => 'Datos inválidos']);
         }
+
+        if ($canal === 'local'
+            && class_exists('Riverso_Emparejamiento_Module')
+            && empty($_POST['confirm_emparejamiento'])
+        ) {
+            $emp = Riverso_Emparejamiento_Module::get_instance()->get_of_product($producto_base_id);
+            if ($emp && !empty($emp['emparejar_precios'])) {
+                $current_row = $pricing->get_local_price($producto_base_id);
+                $current_p = ($current_row && $current_row['p_asignado'] !== null && $current_row['p_asignado'] !== '')
+                    ? (float) $current_row['p_asignado']
+                    : null;
+                $price_unchanged = ($current_p !== null && abs($current_p - $p_asignado) <= 0.001);
+                if (!$price_unchanged) {
+                    $preview = Riverso_Emparejamiento_Module::get_instance()
+                        ->margin_preview_for_group((int) $emp['id'], $p_asignado);
+                    wp_send_json_error([
+                        'code' => 'emparejamiento_confirm',
+                        'message' => 'Este producto está emparejado. Al guardar se actualizará el precio de todos los miembros. Fuente: Manual (Emparejamiento).',
+                        'emparejamiento' => [
+                            'id' => (int) $emp['id'],
+                            'nombre' => $emp['nombre'],
+                            'codigo' => $emp['codigo'],
+                        ],
+                        'preview' => $preview,
+                        'p_asignado_anterior' => $current_p,
+                    ]);
+                }
+            }
+        }
+
         $meta = ['source_type' => 'manual'];
         if ($canal === 'online') {
             $meta['en_uso'] = 0;
@@ -674,10 +736,21 @@ class Riverso_Price_History_Module {
             absint($_POST['item_id'] ?? 0),
             floatval($_POST['p_asignado'] ?? 0),
             $p_online,
-            $amount_mode
+            $amount_mode,
+            [
+                'confirm_emparejamiento' => !empty($_POST['confirm_emparejamiento']),
+            ]
         );
         if (is_wp_error($result)) {
-            wp_send_json_error(['message' => $result->get_error_message()]);
+            $payload = [
+                'message' => $result->get_error_message(),
+                'code' => $result->get_error_code(),
+            ];
+            $data = $result->get_error_data();
+            if (is_array($data)) {
+                $payload = array_merge($payload, $data);
+            }
+            wp_send_json_error($payload);
         }
         wp_send_json_success($result);
     }
@@ -866,5 +939,49 @@ class Riverso_Price_History_Module {
             'session' => is_wp_error($session) ? null : $session,
             'message' => $result['message'] ?? 'Producto creado y vinculado',
         ]);
+    }
+
+    /**
+     * AJAX: abrir/reutilizar tarea confirmar unidades de compra.
+     */
+    public function ajax_folio_purchase_units_start() {
+        $this->check_manage();
+        $svc = $this->folio_process();
+        if (!$svc) {
+            wp_send_json_error(['message' => 'Servicio no disponible']);
+        }
+        $result = $svc->start_purchase_units_confirm(
+            absint($_POST['factura_id'] ?? 0),
+            absint($_POST['item_id'] ?? 0)
+        );
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['session' => $result]);
+    }
+
+    /**
+     * AJAX: sí/no + cantidad de unidades reales por unidad facturada.
+     */
+    public function ajax_folio_purchase_units_confirm() {
+        $this->check_manage();
+        $svc = $this->folio_process();
+        if (!$svc) {
+            wp_send_json_error(['message' => 'Servicio no disponible']);
+        }
+        $is_unit = !empty($_POST['is_unit_real']);
+        $units = isset($_POST['units_per_qty']) && $_POST['units_per_qty'] !== ''
+            ? floatval($_POST['units_per_qty'])
+            : null;
+        $result = $svc->confirm_purchase_units(
+            absint($_POST['factura_id'] ?? 0),
+            absint($_POST['item_id'] ?? 0),
+            $is_unit,
+            $units
+        );
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['session' => $result]);
     }
 }

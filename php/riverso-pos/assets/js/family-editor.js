@@ -25,6 +25,167 @@
         return cfg().canManage !== false;
     }
 
+    function envaseTipos() {
+        var list = cfg().envaseTipos;
+        if (Array.isArray(list) && list.length) {
+            return list;
+        }
+        return [
+            { slug: 'envase', nombre: 'Envase' },
+            { slug: 'caja', nombre: 'Caja' },
+            { slug: 'balde', nombre: 'Balde' }
+        ];
+    }
+
+    function envaseTipoLabel(slug) {
+        var key = String(slug || '').toLowerCase();
+        var found = envaseTipos().find(function (t) {
+            return String(t.slug || '').toLowerCase() === key;
+        });
+        if (found && found.nombre) {
+            return found.nombre;
+        }
+        if (!key) {
+            return 'Envase';
+        }
+        return key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
+    }
+
+    function formatEnvaseQtyLabel(qty) {
+        var n = Number(qty);
+        if (!(n > 0)) {
+            return '';
+        }
+        return String(n).replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
+    }
+
+    function formatMemberEnvaseText(m) {
+        var qty = m && m.cantidad_unidades != null ? Number(m.cantidad_unidades) : 0;
+        if (!(qty > 0)) {
+            return '';
+        }
+        var tipoLabel = envaseTipoLabel(m.tipo_envase || 'envase');
+        return ' · ' + tipoLabel + ' ' + formatEnvaseQtyLabel(qty);
+    }
+
+    function buildEnvaseTipoOptions(selected) {
+        var sel = String(selected || 'caja');
+        return envaseTipos().map(function (t) {
+            var slug = String(t.slug || '');
+            return '<option value="' + esc(slug) + '"' +
+                (slug === sel ? ' selected' : '') + '>' +
+                esc(t.nombre || slug) + '</option>';
+        }).join('');
+    }
+
+    function defaultTipoForQty(qty) {
+        return Number(qty) > 1 ? 'caja' : 'envase';
+    }
+
+    function resolveCreateMemberBaseName($modal) {
+        var unitNombre = ($modal.find('.unit-nombre').val() || '').trim();
+        if (unitNombre) {
+            return unitNombre;
+        }
+        var unitLabel = ($modal.find('.unit-nombre-label').first().text() || '').trim();
+        if (unitLabel) {
+            return unitLabel;
+        }
+        var familyName = ($modal.find('.family-edit-nombre').val() || '').trim();
+        if (familyName) {
+            return familyName;
+        }
+        var unitFromList = '';
+        var firstLocal = '';
+        $modal.find('.riverso-family-members-list li').each(function () {
+            var $li = $(this);
+            var text = ($li.find('strong').first().text() || '').trim();
+            if (!text) {
+                return;
+            }
+            var isUnit = $li.find('[title="Producto unitario de la familia"]').length > 0;
+            if (isUnit && !unitFromList) {
+                unitFromList = text;
+            }
+            if (!firstLocal) {
+                firstLocal = text;
+            }
+        });
+        return unitFromList || firstLocal;
+    }
+
+    function suggestCreateMemberNombre($modal) {
+        var base = resolveCreateMemberBaseName($modal);
+        var qty = parseFloat($modal.find('.riverso-create-member-qty').val());
+        var tipoSlug = ($modal.find('.riverso-create-member-tipo').val() || defaultTipoForQty(qty)).toString();
+        var tipoLabel = envaseTipoLabel(tipoSlug);
+        var qtyLabel = formatEnvaseQtyLabel(qty);
+        if (!base) {
+            return qtyLabel ? (tipoLabel + ' ' + qtyLabel) : '';
+        }
+        if (!qtyLabel) {
+            return base;
+        }
+        return base + ' (' + tipoLabel + ' ' + qtyLabel + ')';
+    }
+
+    function applyCreateMemberNombreSuggestion($modal, force) {
+        var $nombre = $modal.find('.riverso-create-member-nombre');
+        if (!$nombre.length) {
+            return;
+        }
+        if (!force && $modal.data('createMemberNombreTouched')) {
+            return;
+        }
+        $nombre.val(suggestCreateMemberNombre($modal));
+    }
+
+    function syncCreateMemberTipoDefault($modal) {
+        if ($modal.data('createMemberTipoTouched')) {
+            return;
+        }
+        var qty = parseFloat($modal.find('.riverso-create-member-qty').val());
+        var desired = defaultTipoForQty(qty);
+        var $tipo = $modal.find('.riverso-create-member-tipo');
+        if ($tipo.length && $tipo.find('option[value="' + desired + '"]').length) {
+            $tipo.val(desired);
+        }
+    }
+
+    function resetCreateMemberForm($modal) {
+        $modal.data('createMemberNombreTouched', false);
+        $modal.data('createMemberTipoTouched', false);
+        $modal.find('.riverso-create-member-sku').val('');
+        $modal.find('.riverso-create-member-qty').val('100');
+        syncCreateMemberTipoDefault($modal);
+        applyCreateMemberNombreSuggestion($modal, true);
+    }
+
+    function renderCreateMemberBlock() {
+        return '<div class="riverso-create-member-block" style="margin-top:14px;padding:12px;border:1px solid #c8e6c9;border-radius:4px;background:#f1f8e9;">' +
+            '<strong style="display:block;margin-bottom:8px;">Crear miembro</strong>' +
+            '<p style="margin:0 0 8px;font-size:12px;color:#666;">Crea un SKU local nuevo (caja, balde, etc.) y lo agrega a esta familia.</p>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">' +
+            '<label style="font-size:12px;">SKU<br>' +
+            '<input type="text" class="riverso-create-member-sku" placeholder="Vacío = siguiente" ' +
+            'style="width:110px;padding:6px;box-sizing:border-box;" maxlength="6" inputmode="numeric"> ' +
+            '<button type="button" class="button button-small riverso-create-member-next-sku">Generar SKU</button></label>' +
+            '<label style="font-size:12px;flex:1;min-width:180px;">Nombre<br>' +
+            '<input type="text" class="riverso-create-member-nombre" ' +
+            'style="width:100%;padding:6px;box-sizing:border-box;" placeholder="Se sugiere del unitario"></label>' +
+            '</div>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:8px;">' +
+            '<label style="font-size:12px;">Tipo envase<br>' +
+            '<select class="riverso-create-member-tipo" style="padding:6px;min-width:120px;">' +
+            buildEnvaseTipoOptions('caja') +
+            '</select></label>' +
+            '<label style="font-size:12px;">Cant. envase<br>' +
+            '<input type="number" min="0.0001" step="1" class="riverso-create-member-qty" value="100" ' +
+            'style="width:90px;padding:6px;box-sizing:border-box;"></label>' +
+            '<button type="button" class="button button-primary riverso-create-member-submit">Crear miembro</button>' +
+            '</div></div>';
+    }
+
     function esc(v) {
         return $('<div>').text(v === null || v === undefined ? '' : String(v)).html();
     }
@@ -256,7 +417,7 @@
         }
         return '<ul class="riverso-family-members-list" style="list-style:none;margin:0;padding:0;">' + members.map(function (m) {
             var hasQty = m.cantidad_unidades != null && Number(m.cantidad_unidades) > 0;
-            var units = hasQty ? (' · envase ' + m.cantidad_unidades) : '';
+            var units = formatMemberEnvaseText(m);
             var stockU = m.stock_unidades != null
                 ? (' · ' + Number(m.stock_unidades).toLocaleString('es-CL') + ' u')
                 : '';
@@ -890,6 +1051,7 @@
                 es_local: !!m.es_local,
                 es_online: !!m.es_online,
                 cantidad_unidades: m.cantidad_unidades != null ? m.cantidad_unidades : null,
+                tipo_envase: m.tipo_envase || null,
                 es_unitario_familia: false
             };
         });
@@ -915,7 +1077,8 @@
             es_local: !!item.es_local,
             es_online: !!item.es_online,
             cantidad_unidades: item.cantidad_unidades != null && item.cantidad_unidades !== ''
-                ? Number(item.cantidad_unidades) : null
+                ? Number(item.cantidad_unidades) : null,
+            tipo_envase: item.tipo_envase || null
         });
         setPendingMembers($modal, list);
         renderPendingMembersList($modal);
@@ -986,11 +1149,15 @@
                     next();
                     return;
                 }
-                post('riverso_families_set_member_envase', {
+                var envasePayload = {
                     grupo_id: familyId,
                     producto_base_id: m.producto_base_id,
                     cantidad_unidades: qty
-                }).always(function () {
+                };
+                if (m.tipo_envase) {
+                    envasePayload.tipo_envase = m.tipo_envase;
+                }
+                post('riverso_families_set_member_envase', envasePayload).always(function () {
                     next();
                 });
             }).fail(function () {
@@ -1618,6 +1785,7 @@
                 if (!familyId) {
                     $wrap.html(renderUnitPanel(null, 0, []));
                     bindUnitPanel($modal);
+                    applyCreateMemberNombreSuggestion($modal);
                     return;
                 }
                 post('riverso_families_unit_get', { grupo_id: familyId }).done(function (r) {
@@ -1628,6 +1796,7 @@
                     if (uid) {
                         loadLinkPreview($modal, familyId, uid);
                     }
+                    applyCreateMemberNombreSuggestion($modal);
                 });
                 return;
             }
@@ -2420,6 +2589,7 @@
                 '<strong>Agregar miembro</strong>' +
                 '<input type="search" class="riverso-family-search-input" placeholder="Buscar por SKU, barcode, código proveedor o nombre…" style="width:100%;padding:8px;margin:8px 0;box-sizing:border-box;">' +
                 '<div class="riverso-family-search-results" style="min-height:24px;"></div>' +
+                renderCreateMemberBlock() +
                 '</div>'
             )
             : '';
@@ -2463,6 +2633,7 @@
         if (fam.commercial) {
             refreshCommercialPanels($modal, familyId, fam.commercial);
         }
+        resetCreateMemberForm($modal);
         refreshNameSuggestions($modal);
         if (isCreate) {
             applyCreateSeed($modal, opts);
@@ -2572,6 +2743,106 @@
                 refreshEditMembers($modal, fid);
             }).fail(function () {
                 $btn.prop('disabled', false).text('Guardar envase');
+                alert('Error de red');
+            });
+        });
+
+        $modal.on('input', '.riverso-create-member-nombre', function () {
+            $modal.data('createMemberNombreTouched', true);
+        });
+        $modal.on('change', '.riverso-create-member-tipo', function () {
+            $modal.data('createMemberTipoTouched', true);
+            applyCreateMemberNombreSuggestion($modal);
+        });
+        $modal.on('input change', '.riverso-create-member-qty', function () {
+            syncCreateMemberTipoDefault($modal);
+            applyCreateMemberNombreSuggestion($modal);
+        });
+        $modal.on('input', '.family-edit-nombre, .unit-nombre', function () {
+            applyCreateMemberNombreSuggestion($modal);
+        });
+        $modal.on('click', '.riverso-create-member-next-sku', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            var $btn = $(this).prop('disabled', true);
+            post('riverso_products_next_sku', {}).done(function (resp) {
+                $btn.prop('disabled', false);
+                if (resp.success && resp.data && resp.data.next_sku) {
+                    $modal.find('.riverso-create-member-sku').val(String(resp.data.next_sku));
+                } else {
+                    alert((resp.data && resp.data.message) || 'No se pudo generar SKU');
+                }
+            }).fail(function () {
+                $btn.prop('disabled', false);
+                alert('Error de red');
+            });
+        });
+        $modal.on('click', '.riverso-create-member-submit', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            var $btn = $(this);
+            var sku = ($modal.find('.riverso-create-member-sku').val() || '').trim();
+            var nombre = ($modal.find('.riverso-create-member-nombre').val() || '').trim();
+            var qty = parseFloat($modal.find('.riverso-create-member-qty').val());
+            var tipo = ($modal.find('.riverso-create-member-tipo').val() || defaultTipoForQty(qty)).toString();
+            if (!nombre) {
+                alert('Indicá el nombre del producto nuevo');
+                return;
+            }
+            if (!(qty > 0)) {
+                alert('Indica una cantidad de envase mayor a 0 (ej. 100)');
+                return;
+            }
+            if (sku !== '' && !/^\d{1,6}$/.test(sku)) {
+                alert('SKU Local debe ser numérico y máximo 6 dígitos');
+                return;
+            }
+            var fid = currentFamilyId($modal) || 0;
+            var payload = {
+                grupo_id: fid,
+                nombre: nombre,
+                cantidad_unidades: qty,
+                tipo_envase: tipo
+            };
+            if (sku) {
+                payload.canonical_sku = sku;
+            }
+            $btn.prop('disabled', true).text('Creando…');
+            post('riverso_families_create_member', payload).done(function (resp) {
+                $btn.prop('disabled', false).text('Crear miembro');
+                if (!resp.success) {
+                    alert((resp.data && resp.data.message) || 'No se pudo crear el miembro');
+                    return;
+                }
+                var prod = (resp.data && resp.data.product) || {};
+                var pid = parseInt(
+                    (resp.data && resp.data.producto_base_id) || prod.producto_base_id || 0,
+                    10
+                );
+                if (!fid) {
+                    if (!pid) {
+                        alert('Producto creado, pero falta id para agregarlo');
+                        return;
+                    }
+                    addPendingMember($modal, {
+                        producto_base_id: pid,
+                        nombre_canonico: prod.nombre_canonico || nombre,
+                        canonical_sku: prod.canonical_sku || sku,
+                        sku_local: prod.canonical_sku || sku,
+                        es_local: true,
+                        es_online: false,
+                        cantidad_unidades: qty,
+                        tipo_envase: tipo
+                    });
+                    resetCreateMemberForm($modal);
+                    return;
+                }
+                refreshEditMembers($modal, fid).always(function () {
+                    resetCreateMemberForm($modal);
+                    applyCreateMemberNombreSuggestion($modal, true);
+                });
+            }).fail(function () {
+                $btn.prop('disabled', false).text('Crear miembro');
                 alert('Error de red');
             });
         });

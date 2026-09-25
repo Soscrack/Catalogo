@@ -130,6 +130,56 @@ class Riverso_Folio_Price_Process_Service {
         return ['factura' => $factura, 'items' => $items];
     }
 
+    /**
+     * Todas las líneas del folio (producto, flete, gasto) para el panel Ver Info.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function load_factura_extracted_items($factura_id) {
+        global $wpdb;
+        $prefix = $this->prefix();
+        $factura_id = absint($factura_id);
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, numero_linea, codigo_proveedor, nombre, descripcion, item_tipo,
+                    cantidad, unidad, precio_unitario, monto_total,
+                    costo_neto_final, costo_bruto_final
+             FROM {$prefix}factura_items
+             WHERE factura_id = %d
+             ORDER BY numero_linea ASC, id ASC",
+            $factura_id
+        ), ARRAY_A) ?: [];
+
+        $out = [];
+        foreach ($rows as $row) {
+            $tipo = trim((string) ($row['item_tipo'] ?? ''));
+            if ($tipo === '') {
+                $tipo = 'producto';
+            }
+            $neto = isset($row['costo_neto_final']) && $row['costo_neto_final'] !== null && $row['costo_neto_final'] !== ''
+                ? (float) $row['costo_neto_final']
+                : (float) ($row['monto_total'] ?? 0);
+            $bruto = isset($row['costo_bruto_final']) && $row['costo_bruto_final'] !== null && $row['costo_bruto_final'] !== ''
+                ? (float) $row['costo_bruto_final']
+                : round($neto * 1.19, 2);
+            $out[] = [
+                'id' => (int) $row['id'],
+                'numero_linea' => (int) ($row['numero_linea'] ?? 0),
+                'codigo_proveedor' => (string) ($row['codigo_proveedor'] ?? ''),
+                'nombre' => (string) ($row['nombre'] ?? ''),
+                'descripcion' => (string) ($row['descripcion'] ?? ''),
+                'item_tipo' => $tipo,
+                'cantidad' => isset($row['cantidad']) ? (float) $row['cantidad'] : 0.0,
+                'unidad' => (string) ($row['unidad'] ?? ''),
+                'precio_unitario' => isset($row['precio_unitario']) ? (float) $row['precio_unitario'] : 0.0,
+                'neto_final' => $neto,
+                'bruto_final' => $bruto,
+            ];
+        }
+
+        return $out;
+    }
+
     private function resolve_item_product(array $item, $proveedor_id) {
         global $wpdb;
         $prefix = $this->prefix();
@@ -409,6 +459,249 @@ class Riverso_Folio_Price_Process_Service {
         return $blocker;
     }
 
+    /**
+     * Bloqueo: confirmar unidades reales por unidad facturada del código.
+     */
+    private function build_purchase_units_blocker($factura_id, array $item, array $resolved, array $ctx, array $task = []) {
+        $code = trim((string) ($item['codigo_proveedor'] ?? ''));
+        $item_id = (int) ($item['id'] ?? 0);
+        $pb_id = (int) ($resolved['producto_base_id'] ?? 0);
+        $sku = (string) ($resolved['sku'] ?? '');
+        $nombre = (string) ($resolved['nombre'] ?? $item['nombre'] ?? $item['descripcion'] ?? '');
+        $pp_id = (int) ($ctx['producto_proveedor_id'] ?? 0);
+        $task_id = (int) ($task['id'] ?? $ctx['task_id'] ?? 0);
+        $factor = (float) ($ctx['factor'] ?? 1);
+
+        $codes_url = $this->folio_guide_url('riverso-pos-codes', [
+            'need' => 'purchase_units',
+            'pp' => $pp_id,
+            'codigo' => $code,
+        ]);
+        $tasks_url = $this->folio_guide_url('riverso-pos-tasks', [
+            'need' => 'purchase_units',
+        ]);
+
+        $pasos = [
+            $this->playbook_step(
+                '1. Responder',
+                '',
+                'Abrí la ventana para indicar si llegaron las unidades del documento o un paquete con varias unidades.',
+                'confirm_purchase_units'
+            ),
+            $this->playbook_step(
+                '2. Alternativa: resolver en Códigos',
+                $codes_url,
+                'Editá el factor del código de proveedor y cerrá la tarea allá.'
+            ),
+            $this->playbook_step(
+                '3. Ver tarea en la bandeja',
+                $tasks_url,
+                'Tarea confirmar_unidades_compra del código.'
+            ),
+            $this->playbook_step(
+                '4. Volver a Procesar folios y actualizar',
+                $this->folio_guide_url('riverso-pos-pricing', [
+                    'tab' => 'process',
+                    'factura_id' => absint($factura_id),
+                ]),
+                'Pulsá «Ya resolví — actualizar» para que salga el ticket de error.'
+            ),
+        ];
+
+        $message = !empty($task['titulo'])
+            ? (string) $task['titulo']
+            : ('Confirmar unidades de compra'
+                . ($code !== '' ? ' «' . $code . '»' : '')
+                . ($nombre !== '' ? ' — ' . $nombre : ''));
+
+        return [
+            'tipo' => 'purchase_units',
+            'item_id' => $item_id,
+            'producto_base_id' => $pb_id,
+            'producto_proveedor_id' => $pp_id ?: null,
+            'codigo_proveedor' => $code,
+            'sku' => $sku,
+            'nombre' => $nombre,
+            'task_id' => $task_id ?: null,
+            'task_tipo' => 'confirmar_unidades_compra',
+            'purchase_units_factor' => $factor,
+            'can_confirm_purchase_units' => true,
+            'message' => $message,
+            'url' => $codes_url,
+            'pasos' => $pasos,
+        ];
+    }
+
+    /**
+     * Bloqueo emparejamiento (al final de la cadena, sobre el target unitario).
+     */
+    private function build_emparejamiento_blocker($factura_id, array $item, array $resolved, array $target) {
+        $item_id = (int) ($item['id'] ?? 0);
+        $pb_id = (int) ($resolved['producto_base_id'] ?? 0);
+        $target_id = (int) ($target['target_id'] ?? $pb_id);
+        $sku = (string) ($resolved['sku'] ?? '');
+        $nombre = (string) ($resolved['nombre'] ?? '');
+        $unit_sku = (string) ($target['unit_sku'] ?? '');
+
+        $decision = '';
+        if (class_exists('Riverso_Emparejamiento_Module') && $target_id > 0) {
+            $decision = (string) Riverso_Emparejamiento_Module::get_instance()->get_decision($target_id);
+        }
+        $can_answer = ($decision === '' || $decision === '0');
+        $needs_assign = ($decision === 'requiere' || $can_answer);
+
+        $cats_url = $this->folio_guide_url('riverso-pos-categories', [
+            'tab' => 'emparejamientos',
+        ]);
+
+        $pasos = [];
+        $step_n = 1;
+        if ($can_answer) {
+            $pasos[] = $this->playbook_step(
+                $step_n++ . '. Responder aquí',
+                '',
+                '¿Este producto (precio unitario) necesita emparejamiento de precio y/o stock?',
+                'answer_emparejamiento'
+            );
+        }
+        if ($needs_assign) {
+            $pasos[] = $this->playbook_step(
+                $step_n++ . '. Buscar emparejamiento existente',
+                '',
+                'Asigná el unitario a un emparejamiento ya creado.',
+                'search_emparejamiento'
+            );
+            $pasos[] = $this->playbook_step(
+                $step_n++ . '. Crear emparejamiento',
+                '',
+                'Creá uno nuevo y asigná este producto como miembro.',
+                'create_emparejamiento'
+            );
+        }
+        $pasos[] = $this->playbook_step(
+            $step_n++ . '. Alternativa: Categorías → Emparejamientos',
+            $cats_url,
+            'Gestioná emparejamientos en la pestaña dedicada.'
+        );
+        $pasos[] = $this->playbook_step(
+            $step_n++ . '. Volver y actualizar',
+            $this->folio_guide_url('riverso-pos-pricing', [
+                'tab' => 'process',
+                'factura_id' => absint($factura_id),
+            ]),
+            'Pulsá «Ya resolví — actualizar».'
+        );
+
+        $label = $unit_sku !== '' ? $unit_sku : $sku;
+        $message = $decision === 'requiere'
+            ? ('Asigná emparejamiento'
+                . ($label !== '' ? ' «' . $label . '»' : '')
+                . ($nombre !== '' ? ' — ' . $nombre : ''))
+            : ('¿Tiene emparejamiento?'
+                . ($label !== '' ? ' «' . $label . '»' : '')
+                . ($nombre !== '' ? ' — ' . $nombre : ''));
+
+        return [
+            'tipo' => 'emparejamiento',
+            'item_id' => $item_id,
+            'producto_base_id' => $pb_id,
+            'target_id' => $target_id,
+            'sku' => $sku,
+            'unit_sku' => $unit_sku,
+            'nombre' => $nombre,
+            'emparejamiento_decision' => $decision,
+            'can_answer_emparejamiento' => $can_answer,
+            'can_assign_emparejamiento' => $needs_assign,
+            'message' => $message,
+            'url' => $cats_url,
+            'pasos' => $pasos,
+        ];
+    }
+
+    /**
+     * Asegura tarea abierta de unidades de compra si el código aún no la completó.
+     * No borra precios: solo bloquea el guardado hasta responder.
+     *
+     * @param int   $factura_id
+     * @param array $item
+     * @param array $resolved
+     * @param array $target
+     * @param int   $proveedor_id
+     * @return array|null ctx con needs_confirm / task_id, o null si no aplica
+     */
+    private function ensure_purchase_units_gate($factura_id, array $item, array $resolved, array $target, $proveedor_id) {
+        global $wpdb;
+        $prefix = $this->prefix();
+        $ctx = $this->build_purchase_units_line_ctx($item, $resolved, $target, $proveedor_id);
+        if (empty($ctx['producto_proveedor_id']) || !empty($ctx['is_family_pack'])) {
+            return null;
+        }
+
+        $pp_id = (int) $ctx['producto_proveedor_id'];
+        $code = trim((string) ($item['codigo_proveedor'] ?? ''));
+
+        if (!empty($ctx['task_id'])) {
+            $ctx['needs_confirm'] = true;
+            return $ctx;
+        }
+
+        $completed = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}tareas
+             WHERE tipo = 'confirmar_unidades_compra'
+               AND referencia_tipo = 'producto_proveedor'
+               AND referencia_id = %d
+               AND estado = 'completada'
+             ORDER BY id DESC LIMIT 1",
+            $pp_id
+        ));
+        if ($completed > 0) {
+            $ctx['needs_confirm'] = false;
+            return $ctx;
+        }
+
+        if (!class_exists('Riverso_Task_Module')) {
+            $ctx['needs_confirm'] = true;
+            return $ctx;
+        }
+
+        $folio = '';
+        $factura = $wpdb->get_row($wpdb->prepare(
+            "SELECT folio FROM {$prefix}facturas WHERE id = %d",
+            absint($factura_id)
+        ), ARRAY_A);
+        if ($factura) {
+            $folio = (string) ($factura['folio'] ?? $factura_id);
+        }
+
+        $task_id = Riverso_Task_Module::get_instance()->create_review_task(
+            'confirmar_unidades_compra',
+            sprintf('Confirmar unidades de compra: %s', $code !== '' ? $code : ('ítem #' . (int) ($item['id'] ?? 0))),
+            'producto_proveedor',
+            $pp_id,
+            [
+                'descripcion' => sprintf(
+                    "¿La cantidad facturada es la unidad real?\n\nCódigo: %s\nSKU: %s\nFolio: %s\n\nSi no, indicá cuántas unidades reales trae cada unidad facturada.",
+                    $code,
+                    $resolved['sku'] ?? '',
+                    $folio
+                ),
+                'prioridad' => 'normal',
+                'datos_extra' => [
+                    'codigo_proveedor' => $code,
+                    'producto_base_id' => (int) ($resolved['producto_base_id'] ?? 0),
+                    'factura_id' => absint($factura_id),
+                    'factura_item_id' => (int) ($item['id'] ?? 0),
+                    'folio' => $folio,
+                ],
+            ]
+        );
+        if (!is_wp_error($task_id) && $task_id) {
+            $ctx['task_id'] = (int) $task_id;
+        }
+        $ctx['needs_confirm'] = true;
+        return $ctx;
+    }
+
     public function evaluate_gates($factura_id) {
         global $wpdb;
         $prefix = $this->prefix();
@@ -434,6 +727,7 @@ class Riverso_Folio_Price_Process_Service {
         $products = [];
         $seen_targets = [];
         $omitted = $this->omitted_item_ids($factura_id);
+        $seen_pu_pp = [];
 
         foreach ($loaded['items'] as $item) {
             $item_id = (int) ($item['id'] ?? 0);
@@ -475,12 +769,54 @@ class Riverso_Folio_Price_Process_Service {
                 $open_tasks = array_merge($open_tasks, $more);
             }
 
+            $familia_blocked = false;
             if ($open_tasks) {
+                $familia_blocked = true;
                 foreach ($open_tasks as $t) {
                     $blockers[] = $this->build_familia_blocker('familia_task', $factura_id, $item, $resolved, $t);
                 }
             } elseif (!$has_family && $decision !== 'no_requiere') {
+                $familia_blocked = true;
                 $blockers[] = $this->build_familia_blocker('familia', $factura_id, $item, $resolved);
+            }
+
+            // Unidades de compra: después de SKU y familia.
+            if (!$familia_blocked) {
+                $pu = $this->ensure_purchase_units_gate($factura_id, $item, $resolved, $target, $proveedor_id);
+                if ($pu && !empty($pu['needs_confirm']) && !empty($pu['producto_proveedor_id'])) {
+                    $pp_key = (int) $pu['producto_proveedor_id'];
+                    if (!isset($seen_pu_pp[$pp_key])) {
+                        $seen_pu_pp[$pp_key] = true;
+                        $task_row = [];
+                        if (!empty($pu['task_id'])) {
+                            $task_row = [
+                                'id' => (int) $pu['task_id'],
+                                'titulo' => sprintf(
+                                    'Confirmar unidades de compra: %s',
+                                    $code !== '' ? $code : ('ítem #' . $item_id)
+                                ),
+                            ];
+                        }
+                        $blockers[] = $this->build_purchase_units_blocker(
+                            $factura_id,
+                            $item,
+                            $resolved,
+                            $pu,
+                            $task_row
+                        );
+                    }
+                } elseif (class_exists('Riverso_Emparejamiento_Module')) {
+                    // Emparejamiento: sobre el target de precio (unitario), al final de la cadena.
+                    $emp = Riverso_Emparejamiento_Module::get_instance();
+                    if ($emp->needs_emparejamiento_gate($target_id)) {
+                        $blockers[] = $this->build_emparejamiento_blocker(
+                            $factura_id,
+                            $item,
+                            $resolved,
+                            $target
+                        );
+                    }
+                }
             }
 
             if (!isset($seen_targets[$target_id])) {
@@ -1496,6 +1832,308 @@ class Riverso_Folio_Price_Process_Service {
     }
 
     /**
+     * Divide costos unitarios del folio por el factor de unidades de compra.
+     *
+     * @param float|null $costo
+     * @param float      $factor
+     * @return float|null
+     */
+    private function scale_unit_cost_by_purchase_factor($costo, $factor) {
+        if ($costo === null || $costo === '') {
+            return null;
+        }
+        $factor = floatval($factor);
+        if ($factor <= 1.0001) {
+            return round((float) $costo, 4);
+        }
+        return round((float) $costo / $factor, 4);
+    }
+
+    /**
+     * @param array $bases
+     * @param float $factor
+     * @return array
+     */
+    private function scale_cost_bases_by_purchase_factor(array $bases, $factor) {
+        $factor = floatval($factor);
+        if ($factor <= 1.0001) {
+            return $bases;
+        }
+        foreach (['referencia', 'tras_dr', 'tras_dr_folio', 'tras_dr_flete'] as $key) {
+            if (array_key_exists($key, $bases) && $bases[$key] !== null && $bases[$key] !== '') {
+                $bases[$key] = round((float) $bases[$key] / $factor, 4);
+            }
+        }
+        return $bases;
+    }
+
+    /**
+     * Contexto de unidades de compra + tarea abierta para una línea.
+     *
+     * @param array $item
+     * @param array|null $product
+     * @param array|null $target
+     * @param int $proveedor_id
+     * @return array
+     */
+    private function build_purchase_units_line_ctx(array $item, $product, $target, $proveedor_id) {
+        $empty = [
+            'factor' => 1.0,
+            'apply_factor' => false,
+            'is_family_pack' => false,
+            'pack_qty' => null,
+            'producto_proveedor_id' => null,
+            'factor_source' => 'none',
+            'task_id' => null,
+            'needs_confirm' => false,
+            'can_confirm' => false,
+        ];
+        if (!$product) {
+            return $empty;
+        }
+
+        $unit_svc = $this->unit_service();
+        if (!$unit_svc || !method_exists($unit_svc, 'resolve_purchase_units')) {
+            return $empty;
+        }
+
+        $code = trim((string) ($item['codigo_proveedor'] ?? ''));
+        $pb_id = (int) ($product['producto_base_id'] ?? 0);
+        $grupo_id = (int) ($target['grupo_id'] ?? 0);
+        $ctx = $unit_svc->resolve_purchase_units($pb_id, $code, (int) $proveedor_id, $grupo_id);
+
+        $pp_id = !empty($ctx['producto_proveedor_id']) ? (int) $ctx['producto_proveedor_id'] : 0;
+        $task_id = null;
+        if ($pp_id > 0) {
+            global $wpdb;
+            $task_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$this->prefix()}tareas
+                 WHERE tipo = 'confirmar_unidades_compra'
+                   AND referencia_tipo = 'producto_proveedor'
+                   AND referencia_id = %d
+                   AND estado NOT IN ('completada', 'cancelada')
+                 ORDER BY id DESC LIMIT 1",
+                $pp_id
+            ));
+            $task_id = $task_id ? (int) $task_id : null;
+        }
+
+        $can_confirm = !$ctx['is_family_pack'] && $pp_id > 0 && $code !== '';
+
+        return [
+            'factor' => (float) ($ctx['factor'] ?? 1),
+            'apply_factor' => !empty($ctx['apply_factor']),
+            'is_family_pack' => !empty($ctx['is_family_pack']),
+            'pack_qty' => $ctx['pack_qty'] ?? null,
+            'producto_proveedor_id' => $pp_id ?: null,
+            'factor_source' => (string) ($ctx['factor_source'] ?? ''),
+            'task_id' => $task_id,
+            'needs_confirm' => $task_id !== null,
+            'can_confirm' => $can_confirm,
+        ];
+    }
+
+    /**
+     * Abre (o reutiliza) tarea confirmar_unidades_compra para el código del ítem.
+     *
+     * @return array|WP_Error session
+     */
+    public function start_purchase_units_confirm($factura_id, $item_id) {
+        $factura_id = absint($factura_id);
+        $item_id = absint($item_id);
+        $loaded = $this->load_factura_product_items($factura_id);
+        if (is_wp_error($loaded)) {
+            return $loaded;
+        }
+
+        $item = null;
+        foreach ($loaded['items'] as $row) {
+            if ((int) ($row['id'] ?? 0) === $item_id) {
+                $item = $row;
+                break;
+            }
+        }
+        if (!$item) {
+            return new WP_Error('not_found', 'Ítem no encontrado en el folio');
+        }
+
+        $proveedor_id = (int) ($loaded['factura']['proveedor_id'] ?? 0);
+        $product = $this->resolve_item_product($item, $proveedor_id);
+        if (!$product) {
+            return new WP_Error('no_sku', 'Asigná un SKU local antes de confirmar unidades');
+        }
+
+        $target = $this->resolve_price_target((int) $product['producto_base_id']);
+        $ctx = $this->build_purchase_units_line_ctx($item, $product, $target, $proveedor_id);
+        if (!empty($ctx['is_family_pack'])) {
+            return new WP_Error(
+                'family_pack',
+                'Este código ya es un envase de familia. Las unidades las resuelve la familia; no hace falta confirmar factor.'
+            );
+        }
+        if (empty($ctx['producto_proveedor_id'])) {
+            return new WP_Error('no_pp', 'No hay código de proveedor vinculado para confirmar unidades');
+        }
+
+        if (empty($ctx['task_id']) && class_exists('Riverso_Task_Module')) {
+            $code = trim((string) ($item['codigo_proveedor'] ?? ''));
+            $folio = (string) ($loaded['factura']['folio'] ?? $factura_id);
+            Riverso_Task_Module::get_instance()->create_review_task(
+                'confirmar_unidades_compra',
+                sprintf('Confirmar unidades de compra: %s', $code !== '' ? $code : ('ítem #' . $item_id)),
+                'producto_proveedor',
+                (int) $ctx['producto_proveedor_id'],
+                [
+                    'descripcion' => sprintf(
+                        "¿La cantidad facturada es la unidad real?\n\nCódigo: %s\nSKU: %s\nFolio: %s\n\nSi no, indicá cuántas unidades reales trae cada unidad facturada.",
+                        $code,
+                        $product['sku'] ?? '',
+                        $folio
+                    ),
+                    'prioridad' => 'normal',
+                    'datos_extra' => [
+                        'codigo_proveedor' => $code,
+                        'producto_base_id' => (int) $product['producto_base_id'],
+                        'factura_id' => $factura_id,
+                        'factura_item_id' => $item_id,
+                        'folio' => $folio,
+                    ],
+                ]
+            );
+        }
+
+        return $this->get_session($factura_id);
+    }
+
+    /**
+     * Resuelve la pregunta sí/no de unidades de compra y guarda factor_conversion.
+     *
+     * @param int         $factura_id
+     * @param int         $item_id
+     * @param bool        $is_unit_real  true = Sí (factor 1)
+     * @param float|null  $units_per_qty cantidad real si is_unit_real=false
+     * @return array|WP_Error session
+     */
+    public function confirm_purchase_units($factura_id, $item_id, $is_unit_real, $units_per_qty = null) {
+        $factura_id = absint($factura_id);
+        $item_id = absint($item_id);
+        $loaded = $this->load_factura_product_items($factura_id);
+        if (is_wp_error($loaded)) {
+            return $loaded;
+        }
+
+        $item = null;
+        foreach ($loaded['items'] as $row) {
+            if ((int) ($row['id'] ?? 0) === $item_id) {
+                $item = $row;
+                break;
+            }
+        }
+        if (!$item) {
+            return new WP_Error('not_found', 'Ítem no encontrado en el folio');
+        }
+
+        $proveedor_id = (int) ($loaded['factura']['proveedor_id'] ?? 0);
+        $product = $this->resolve_item_product($item, $proveedor_id);
+        if (!$product) {
+            return new WP_Error('no_sku', 'Asigná un SKU local antes de confirmar unidades');
+        }
+
+        $target = $this->resolve_price_target((int) $product['producto_base_id']);
+        $ctx = $this->build_purchase_units_line_ctx($item, $product, $target, $proveedor_id);
+        if (!empty($ctx['is_family_pack'])) {
+            return new WP_Error(
+                'family_pack',
+                'Este código ya es un envase de familia. No se guarda factor de compra.'
+            );
+        }
+        if (empty($ctx['producto_proveedor_id'])) {
+            return new WP_Error('no_pp', 'No hay código de proveedor vinculado');
+        }
+
+        $prev_factor = (float) ($ctx['factor'] ?? 1);
+        $factor = 1.0;
+        if (!$is_unit_real) {
+            $factor = floatval($units_per_qty);
+            if ($factor < 2) {
+                return new WP_Error('bad_qty', 'Indicá cuántas unidades reales trae cada unidad facturada (≥ 2)');
+            }
+        }
+
+        $unit_svc = $this->unit_service();
+        if (!$unit_svc || !method_exists($unit_svc, 'set_purchase_units_factor')) {
+            return new WP_Error('unavailable', 'Servicio de unidades no disponible');
+        }
+        $saved = $unit_svc->set_purchase_units_factor((int) $ctx['producto_proveedor_id'], $factor);
+        if (is_wp_error($saved)) {
+            return $saved;
+        }
+
+        if (!empty($ctx['task_id']) && class_exists('Riverso_Task_Module')) {
+            Riverso_Task_Module::get_instance()->complete_task(
+                (int) $ctx['task_id'],
+                $is_unit_real
+                    ? 'Cantidad facturada = unidad real (factor 1)'
+                    : sprintf('Unidades reales por unidad facturada: %s', $factor),
+                'system'
+            );
+        } elseif (class_exists('Riverso_Task_Module')) {
+            // Cerrar cualquier tarea abierta del mismo código aunque no viniera en ctx.
+            global $wpdb;
+            $open = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$this->prefix()}tareas
+                 WHERE tipo = 'confirmar_unidades_compra'
+                   AND referencia_tipo = 'producto_proveedor'
+                   AND referencia_id = %d
+                   AND estado NOT IN ('completada', 'cancelada')
+                 ORDER BY id DESC LIMIT 1",
+                (int) $ctx['producto_proveedor_id']
+            ));
+            if ($open) {
+                Riverso_Task_Module::get_instance()->complete_task(
+                    (int) $open,
+                    $is_unit_real
+                        ? 'Cantidad facturada = unidad real (factor 1)'
+                        : sprintf('Unidades reales por unidad facturada: %s', $factor),
+                    'system'
+                );
+            }
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('confirm_purchase_units', 'producto_proveedor', (int) $ctx['producto_proveedor_id'], [
+                'factura_id' => $factura_id,
+                'factura_item_id' => $item_id,
+                'factor' => $factor,
+                'prev_factor' => $prev_factor,
+                'is_unit_real' => $is_unit_real ? 1 : 0,
+                'codigo_proveedor' => trim((string) ($item['codigo_proveedor'] ?? '')),
+            ]);
+        }
+
+        $session = $this->get_session($factura_id);
+        if (is_wp_error($session) || !is_array($session)) {
+            return $session;
+        }
+
+        // No se borra el precio: si el factor cambió y hay precio, pedir reconfirmación.
+        $factor_changed = abs($prev_factor - $factor) > 0.0001;
+        if ($factor_changed && !empty($session['lines']) && is_array($session['lines'])) {
+            foreach ($session['lines'] as &$ln) {
+                if ((int) ($ln['item_id'] ?? 0) !== $item_id) {
+                    continue;
+                }
+                if (!empty($ln['has_local_price'])) {
+                    $ln['purchase_units_cost_reconfirm'] = true;
+                }
+            }
+            unset($ln);
+        }
+
+        return $session;
+    }
+
+    /**
      * Bases de costo unitario neto: referencia, tras D/R fila, tras D/R folio, tras D/R+flete.
      *
      * @return array{referencia:?float,tras_dr:?float,tras_dr_folio:?float,tras_dr_flete:?float,flete_ok:bool}
@@ -2259,8 +2897,20 @@ class Riverso_Folio_Price_Process_Service {
             $product = isset($item_ctx[$item_id])
                 ? $item_ctx[$item_id]['product']
                 : ($is_omitted ? $this->resolve_item_product($item, $proveedor_id) : null);
-            $costo_folio = $this->unit_cost_from_item($item);
-            $costo_folio_bases = $this->unit_cost_bases_from_item($item, $current_flete_ok);
+            $target_early = isset($item_ctx[$item_id]) ? $item_ctx[$item_id]['target'] : null;
+            $purchase_units = $this->build_purchase_units_line_ctx($item, $product, $target_early, $proveedor_id);
+            $purchase_factor = !empty($purchase_units['apply_factor'])
+                ? (float) $purchase_units['factor']
+                : 1.0;
+
+            $costo_folio = $this->scale_unit_cost_by_purchase_factor(
+                $this->unit_cost_from_item($item),
+                $purchase_factor
+            );
+            $costo_folio_bases = $this->scale_cost_bases_by_purchase_factor(
+                $this->unit_cost_bases_from_item($item, $current_flete_ok),
+                $purchase_factor
+            );
 
             $line = [
                 'item_id' => $item_id,
@@ -2274,6 +2924,13 @@ class Riverso_Folio_Price_Process_Service {
                 'blocked' => false,
                 'block_reason' => '',
                 'hybrid_omitted' => $is_omitted,
+                'purchase_units_factor' => (float) ($purchase_units['factor'] ?? 1),
+                'purchase_units_apply' => !empty($purchase_units['apply_factor']),
+                'purchase_units_family_pack' => !empty($purchase_units['is_family_pack']),
+                'purchase_units_task_id' => $purchase_units['task_id'] ?? null,
+                'purchase_units_needs_confirm' => !empty($purchase_units['needs_confirm']),
+                'purchase_units_can_confirm' => !empty($purchase_units['can_confirm']),
+                'purchase_units_pp_id' => $purchase_units['producto_proveedor_id'] ?? null,
             ];
 
             if ($is_omitted) {
@@ -2411,8 +3068,24 @@ class Riverso_Folio_Price_Process_Service {
             if ($has_local && $apply_mode === 'apply') {
                 $proposed = (float) $local['p_asignado'];
             }
-            $costo_cmp = $costo_folio !== null ? $costo_folio : $costo_anterior;
-            $margen_antes = $this->margin_pair($precio_anterior, $costo_anterior, $iva);
+            // Margen vs. costo "tras_dr" (default UI). costo_folio puede ser landed y
+            // desalinearse del modo de costo de la grilla.
+            $costo_margen_folio = null;
+            if (is_array($costo_folio_bases) && isset($costo_folio_bases['tras_dr'])
+                && $costo_folio_bases['tras_dr'] !== null && $costo_folio_bases['tras_dr'] !== '') {
+                $costo_margen_folio = (float) $costo_folio_bases['tras_dr'];
+            } elseif ($costo_folio !== null) {
+                $costo_margen_folio = (float) $costo_folio;
+            }
+            $costo_margen_ant = null;
+            if (is_array($costo_anterior_bases) && isset($costo_anterior_bases['tras_dr'])
+                && $costo_anterior_bases['tras_dr'] !== null && $costo_anterior_bases['tras_dr'] !== '') {
+                $costo_margen_ant = (float) $costo_anterior_bases['tras_dr'];
+            } elseif ($costo_anterior !== null) {
+                $costo_margen_ant = (float) $costo_anterior;
+            }
+            $costo_cmp = $costo_margen_folio !== null ? $costo_margen_folio : $costo_margen_ant;
+            $margen_antes = $this->margin_pair($precio_anterior, $costo_margen_ant, $iva);
             $margen_despues = $this->margin_pair($proposed, $costo_cmp, $iva);
 
             $woo_id = (int) $product['woo_id'];
@@ -2500,19 +3173,67 @@ class Riverso_Folio_Price_Process_Service {
                 ] : null,
             ]);
 
+            // Emparejamiento activo de precios (para botón / confirmación de márgenes).
+            if (class_exists('Riverso_Emparejamiento_Module') && $target_id > 0) {
+                $emp_of = Riverso_Emparejamiento_Module::get_instance()->get_of_product($target_id);
+                if ($emp_of && !empty($emp_of['emparejar_precios'])) {
+                    $line['emparejamiento_id'] = (int) $emp_of['id'];
+                    $line['emparejamiento_nombre'] = (string) ($emp_of['nombre'] ?? '');
+                    $line['emparejamiento_codigo'] = (string) ($emp_of['codigo'] ?? '');
+                }
+            }
+
             foreach ($gates['blockers'] as $b) {
-                if ((int) ($b['item_id'] ?? 0) === (int) $item['id']
-                    || (int) ($b['producto_base_id'] ?? 0) === (int) $product['producto_base_id']) {
-                    $line['blocked'] = true;
-                    if ($line['block_reason'] === '') {
-                        $line['block_reason'] = $b['message'];
+                $b_item = (int) ($b['item_id'] ?? 0);
+                $b_pb = (int) ($b['producto_base_id'] ?? 0);
+                $b_tipo = (string) ($b['tipo'] ?? '');
+                $b_pp = (int) ($b['producto_proveedor_id'] ?? 0);
+                $match = false;
+                if ($b_item > 0 && $b_item === (int) $item['id']) {
+                    $match = true;
+                } elseif ($b_tipo === 'purchase_units' && $b_pp > 0
+                    && (int) ($line['purchase_units_pp_id'] ?? 0) === $b_pp) {
+                    $match = true;
+                } elseif ($b_tipo !== 'purchase_units' && $b_pb > 0
+                    && $b_pb === (int) $product['producto_base_id']) {
+                    $match = true;
+                }
+                if (!$match) {
+                    continue;
+                }
+                $line['blocked'] = true;
+                if ($line['block_reason'] === '') {
+                    $line['block_reason'] = $b_tipo === 'purchase_units'
+                        ? 'Unidades de compra'
+                        : (string) ($b['message'] ?? 'Bloqueado');
+                }
+                if (!empty($b['can_answer_family'])) {
+                    $line['can_answer_family'] = true;
+                }
+                if (!empty($b['can_assign_family'])) {
+                    $line['can_assign_family'] = true;
+                }
+                if (!empty($b['can_answer_emparejamiento'])) {
+                    $line['can_answer_emparejamiento'] = true;
+                    if (!empty($b['target_id'])) {
+                        $line['emp_target_id'] = (int) $b['target_id'];
                     }
-                    if (!empty($b['can_answer_family'])) {
-                        $line['can_answer_family'] = true;
+                    if (!empty($b['unit_sku'])) {
+                        $line['emp_unit_sku'] = (string) $b['unit_sku'];
                     }
-                    if (!empty($b['can_assign_family'])) {
-                        $line['can_assign_family'] = true;
+                }
+                if (!empty($b['can_assign_emparejamiento'])) {
+                    $line['can_assign_emparejamiento'] = true;
+                    if (!empty($b['target_id'])) {
+                        $line['emp_target_id'] = (int) $b['target_id'];
                     }
+                    if (!empty($b['unit_sku'])) {
+                        $line['emp_unit_sku'] = (string) $b['unit_sku'];
+                    }
+                }
+                if (!empty($b['can_confirm_purchase_units'])) {
+                    $line['can_confirm_purchase_units'] = true;
+                    $line['purchase_units_needs_confirm'] = true;
                 }
             }
 
@@ -2540,10 +3261,30 @@ class Riverso_Folio_Price_Process_Service {
         }
 
         $adjuntos = [];
+        $adj_info = [
+            'origen_ingreso' => sanitize_text_field($loaded['factura']['origen_ingreso'] ?? 'xml'),
+            'origen_label'   => '',
+            'tiene_xml'      => true,
+            'tiene_escaneo'  => false,
+            'adjuntos'       => [],
+        ];
         if (function_exists('riverso_factura_get_adjuntos')) {
-            $adj_info = riverso_factura_get_adjuntos($factura_id, $loaded['factura']);
+            $adj_info = array_merge($adj_info, riverso_factura_get_adjuntos($factura_id, $loaded['factura']));
             $adjuntos = $adj_info['adjuntos'] ?? [];
         }
+        // Conservar facto (el helper de adjuntos lo normaliza a xml).
+        $origen_raw = sanitize_text_field($loaded['factura']['origen_ingreso'] ?? '');
+        if ($origen_raw === 'facto') {
+            $adj_info['origen_ingreso'] = 'facto';
+            $adj_info['tiene_xml'] = true;
+        }
+        if (function_exists('riverso_factura_origen_label')) {
+            $adj_info['origen_label'] = riverso_factura_origen_label($adj_info['origen_ingreso']);
+        } elseif (empty($adj_info['origen_label'])) {
+            $adj_info['origen_label'] = $adj_info['origen_ingreso'];
+        }
+
+        $items_extraidos = $this->load_factura_extracted_items($factura_id);
 
         return [
             'invoice' => [
@@ -2552,12 +3293,21 @@ class Riverso_Folio_Price_Process_Service {
                 'fecha_emision' => $loaded['factura']['fecha_emision'],
                 'proveedor_id' => $proveedor_id,
                 'proveedor_nombre' => $loaded['factura']['proveedor_nombre'] ?? '',
+                'rut_emisor' => $loaded['factura']['rut_emisor'] ?? '',
+                'tipo_dte' => isset($loaded['factura']['tipo_dte']) ? (int) $loaded['factura']['tipo_dte'] : null,
+                'monto_neto' => isset($loaded['factura']['monto_neto']) ? (float) $loaded['factura']['monto_neto'] : null,
+                'monto_iva' => isset($loaded['factura']['monto_iva']) ? (float) $loaded['factura']['monto_iva'] : null,
                 'monto_total' => isset($loaded['factura']['monto_total']) ? (float) $loaded['factura']['monto_total'] : null,
                 'estado_factura' => $loaded['factura']['estado'] ?? '',
                 'flete_ok' => $current_flete_ok,
                 'flete_gratuito' => (int) ($loaded['factura']['flete_gratuito'] ?? 0),
                 'costo_envio_manual' => (float) ($loaded['factura']['costo_envio_manual'] ?? 0),
+                'origen_ingreso' => $adj_info['origen_ingreso'] ?? 'xml',
+                'origen_label' => $adj_info['origen_label'] ?? 'XML',
+                'tiene_xml' => !empty($adj_info['tiene_xml']),
+                'tiene_escaneo' => !empty($adj_info['tiene_escaneo']),
                 'adjuntos' => $adjuntos,
+                'items_extraidos' => $items_extraidos,
                 'url_factura' => add_query_arg(
                     ['page' => 'riverso-pos-invoices', 'factura' => $factura_id],
                     admin_url('admin.php')
@@ -2651,11 +3401,12 @@ class Riverso_Folio_Price_Process_Service {
         ]);
     }
 
-    public function save_line($factura_id, $item_id, $p_asignado, $p_online = null, $amount_mode = 'bruto') {
+    public function save_line($factura_id, $item_id, $p_asignado, $p_online = null, $amount_mode = 'bruto', $opts = []) {
         $factura_id = absint($factura_id);
         $item_id = absint($item_id);
         $p_asignado = (float) $p_asignado;
         $amount_mode = ($amount_mode === 'neto') ? 'neto' : 'bruto';
+        $opts = is_array($opts) ? $opts : [];
         if ($p_asignado <= 0) {
             return new WP_Error('invalid', 'Precio local inválido');
         }
@@ -2719,6 +3470,30 @@ class Riverso_Folio_Price_Process_Service {
         }
 
         $target = $this->resolve_price_target($product['producto_base_id']);
+        $pu_ctx = $this->build_purchase_units_line_ctx(
+            $item,
+            $product,
+            $target,
+            (int) ($loaded['factura']['proveedor_id'] ?? 0)
+        );
+        if (!empty($pu_ctx['needs_confirm'])) {
+            return new WP_Error(
+                'purchase_units',
+                'Confirmá las unidades de compra antes de guardar el precio'
+            );
+        }
+
+        if (class_exists('Riverso_Emparejamiento_Module')) {
+            $emp = Riverso_Emparejamiento_Module::get_instance();
+            $target_check = (int) $target['target_id'];
+            if ($emp->needs_emparejamiento_gate($target_check)) {
+                return new WP_Error(
+                    'emparejamiento',
+                    'Respondé si el producto tiene emparejamiento antes de guardar el precio'
+                );
+            }
+        }
+
         $target_id = (int) $target['target_id'];
         $pricing = $this->pricing();
         if (!$pricing) {
@@ -2773,15 +3548,53 @@ class Riverso_Folio_Price_Process_Service {
                 . ')';
         }
 
+        // Si aplica al vigente y el producto está emparejado: pedir vista previa de márgenes
+        // solo si el precio nuevo difiere del vigente.
+        $local_row_early = $pricing->get_local_price($target_id);
+        $prev_local_early = ($local_row_early && $local_row_early['p_asignado'] !== null && $local_row_early['p_asignado'] !== '')
+            ? (float) $local_row_early['p_asignado']
+            : null;
+
+        if (!$historial_only
+            && empty($opts['confirm_emparejamiento'])
+            && class_exists('Riverso_Emparejamiento_Module')
+        ) {
+            $emp_mod = Riverso_Emparejamiento_Module::get_instance();
+            $emp_row = $emp_mod->get_of_product($target_id);
+            if ($emp_row && !empty($emp_row['emparejar_precios'])) {
+                $price_unchanged = ($prev_local_early !== null
+                    && abs($prev_local_early - (float) $p_asignado) <= 0.001);
+                if (!$price_unchanged) {
+                    $preview = $emp_mod->margin_preview_for_group((int) $emp_row['id'], $p_asignado);
+                    return new WP_Error(
+                        'emparejamiento_confirm',
+                        'Este producto está emparejado. Al guardar se actualizará el precio de todos los miembros.',
+                        [
+                            'code' => 'emparejamiento_confirm',
+                            'emparejamiento' => [
+                                'id' => (int) $emp_row['id'],
+                                'nombre' => $emp_row['nombre'] ?? '',
+                                'codigo' => $emp_row['codigo'] ?? '',
+                            ],
+                            'preview' => $preview,
+                            'p_asignado' => $p_asignado,
+                            'p_asignado_anterior' => $prev_local_early,
+                            'target_id' => $target_id,
+                            'item_id' => $item_id,
+                            'factura_id' => $factura_id,
+                        ]
+                    );
+                }
+            }
+        }
+
         $result = null;
         $online_result = null;
         $applied = false;
         global $wpdb;
 
-        $local_row = $pricing->get_local_price($target_id);
-        $prev_local = ($local_row && $local_row['p_asignado'] !== null && $local_row['p_asignado'] !== '')
-            ? (float) $local_row['p_asignado']
-            : null;
+        $local_row = $local_row_early;
+        $prev_local = $prev_local_early;
 
         if ($historial_only) {
             // Solo constancia en historial: no pisar precios.p_asignado ni c_ref.

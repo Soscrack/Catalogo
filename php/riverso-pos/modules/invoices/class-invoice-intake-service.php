@@ -3035,6 +3035,22 @@ class Riverso_Invoice_Intake_Service {
             return new WP_Error('no_supplier_product', 'No se pudo resolver producto_proveedor para el lote');
         }
 
+        $producto_base_id = $persisted['producto_base_id'] ?? $wpdb->get_var($wpdb->prepare(
+            "SELECT producto_base_id FROM {$prefix}producto_proveedor WHERE id = %d",
+            (int) $producto_proveedor_id
+        ));
+        $purchase = $this->resolve_purchase_units_for_item(
+            (int) $producto_base_id,
+            (string) ($item->codigo_proveedor ?? ''),
+            (int) $factura->proveedor_id
+        );
+        if (!empty($purchase['apply_factor']) && (float) $purchase['factor'] > 1.0001) {
+            $factor = (float) $purchase['factor'];
+            $qty = round($qty * $factor, 4);
+            $landed_unit = round($landed_unit / $factor, 4);
+            $shipping_unit = round($shipping_unit / $factor, 4);
+        }
+
         $product_id = wc_get_product_id_by_sku($item->sku_local);
         $wc_product = $product_id ? wc_get_product($product_id) : null;
         $variation_id = 0;
@@ -3083,10 +3099,6 @@ class Riverso_Invoice_Intake_Service {
         );
 
         $lote_id = (int) $wpdb->insert_id;
-        $producto_base_id = $persisted['producto_base_id'] ?? $wpdb->get_var($wpdb->prepare(
-            "SELECT producto_base_id FROM {$prefix}producto_proveedor WHERE id = %d",
-            (int) $producto_proveedor_id
-        ));
 
         if ($producto_base_id) {
             do_action('riverso_pos_lote_registrado', (int) $producto_base_id);
@@ -3113,6 +3125,24 @@ class Riverso_Invoice_Intake_Service {
         $qty = (float) ($item->qty_received ?: $item->cantidad);
         if ($qty <= 0) {
             return null;
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $pb_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT producto_base_id FROM {$prefix}producto_proveedor
+             WHERE proveedor_id = %d AND codigo_proveedor = %s AND activo = 1
+             ORDER BY es_preferido DESC, id ASC LIMIT 1",
+            (int) ($factura->proveedor_id ?? 0),
+            (string) ($item->codigo_proveedor ?? '')
+        ));
+        $purchase = $this->resolve_purchase_units_for_item(
+            (int) $pb_id,
+            (string) ($item->codigo_proveedor ?? ''),
+            (int) ($factura->proveedor_id ?? 0)
+        );
+        if (!empty($purchase['apply_factor']) && (float) $purchase['factor'] > 1.0001) {
+            $qty = round($qty * (float) $purchase['factor'], 4);
         }
 
         $product_id = wc_get_product_id_by_sku($item->sku_local);
@@ -3180,6 +3210,26 @@ class Riverso_Invoice_Intake_Service {
                 ? round(((float) $item->costo_neto_final) / $qty, 4)
                 : (float) $item->precio_unitario;
             $landed_unit = (float) ($item->costo_landed_unitario ?: $product_unit);
+
+            $pb_for_factor = $wpdb->get_var($wpdb->prepare(
+                "SELECT producto_base_id FROM {$prefix}producto_proveedor
+                 WHERE proveedor_id = %d AND codigo_proveedor = %s AND activo = 1
+                 ORDER BY es_preferido DESC, id ASC LIMIT 1",
+                (int) ($factura->proveedor_id ?? 0),
+                (string) ($item->codigo_proveedor ?? '')
+            ));
+            $purchase = $this->resolve_purchase_units_for_item(
+                (int) $pb_for_factor,
+                (string) ($item->codigo_proveedor ?? ''),
+                (int) ($factura->proveedor_id ?? 0)
+            );
+            if (!empty($purchase['apply_factor']) && (float) $purchase['factor'] > 1.0001) {
+                $factor = (float) $purchase['factor'];
+                $product_unit = round($product_unit / $factor, 4);
+                $landed_unit = round($landed_unit / $factor, 4);
+                $qty = round($qty * $factor, 4);
+            }
+
             $landed_total = $landed_unit * $qty;
             if ($landed_total <= 0) {
                 continue;
@@ -3335,6 +3385,38 @@ class Riverso_Invoice_Intake_Service {
             'costs' => $costs,
             'link_tasks' => count($tasks),
         ];
+    }
+
+    /**
+     * Factor de unidades reales por unidad facturada (excluye envases de familia).
+     *
+     * @param int    $producto_base_id
+     * @param string $codigo_proveedor
+     * @param int    $proveedor_id
+     * @return array{factor:float,apply_factor:bool,is_family_pack:bool}
+     */
+    private function resolve_purchase_units_for_item($producto_base_id, $codigo_proveedor, $proveedor_id = 0) {
+        $fallback = [
+            'factor' => 1.0,
+            'apply_factor' => false,
+            'is_family_pack' => false,
+        ];
+        if (!class_exists('Riverso_Unit_Product_Service')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'modules/families/class-unit-product-service.php';
+            if (file_exists($path)) {
+                require_once $path;
+            }
+        }
+        if (!class_exists('Riverso_Unit_Product_Service')
+            || !method_exists('Riverso_Unit_Product_Service', 'resolve_purchase_units')
+        ) {
+            return $fallback;
+        }
+        return Riverso_Unit_Product_Service::get_instance()->resolve_purchase_units(
+            (int) $producto_base_id,
+            (string) $codigo_proveedor,
+            (int) $proveedor_id
+        );
     }
 
     /**

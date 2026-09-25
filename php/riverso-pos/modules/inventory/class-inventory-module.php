@@ -1015,16 +1015,23 @@ class Riverso_Inventory_Count_Module {
 
     // ========== AJAX: ubicaciones de producto ==========
 
-    public function ajax_get_product_locations() {
-        $this->require_nonce();
-        if (!current_user_can('riverso_view_warehouse') && !current_user_can('riverso_view_products') && !current_user_can('manage_options')) {
-            wp_send_json_error(['message' => 'Sin permisos'], 403);
-        }
+    /**
+     * Preferidas + stock vigente por lugar + historial reciente.
+     * "actuales" usa producto_ubicacion (stock vigente), no el último conteo.
+     *
+     * @param int $producto_base_id
+     * @return array{preferidas:array,actuales:array,historial:array}
+     */
+    public function get_product_locations_data($producto_base_id) {
         global $wpdb;
         $prefix = $this->prefix();
-        $producto_id = $this->post_int('producto_base_id');
+        $producto_id = absint($producto_base_id);
         if (!$producto_id) {
-            wp_send_json_error(['message' => 'Producto requerido']);
+            return [
+                'preferidas' => [],
+                'actuales' => [],
+                'historial' => [],
+            ];
         }
 
         $preferidas = $wpdb->get_results($wpdb->prepare(
@@ -1036,23 +1043,14 @@ class Riverso_Inventory_Count_Module {
             $producto_id
         ), ARRAY_A) ?: [];
 
-        $latest_conteo = $wpdb->get_var($wpdb->prepare(
-            "SELECT MAX(conteo_id) FROM {$prefix}producto_ubicacion_historial WHERE producto_base_id = %d",
+        $actuales = $wpdb->get_results($wpdb->prepare(
+            "SELECT pu.*, u.codigo, u.nombre, u.zona, u.tipo
+             FROM {$prefix}producto_ubicacion pu
+             INNER JOIN {$prefix}ubicaciones u ON u.id = pu.ubicacion_id
+             WHERE pu.product_id = %d AND pu.cantidad <> 0
+             ORDER BY pu.es_principal DESC, u.codigo ASC",
             $producto_id
-        ));
-
-        $actuales = [];
-        if ($latest_conteo) {
-            $actuales = $wpdb->get_results($wpdb->prepare(
-                "SELECT h.*, u.codigo, u.nombre, u.zona, u.tipo
-                 FROM {$prefix}producto_ubicacion_historial h
-                 INNER JOIN {$prefix}ubicaciones u ON u.id = h.ubicacion_id
-                 WHERE h.producto_base_id = %d AND h.conteo_id = %d
-                 ORDER BY u.codigo",
-                $producto_id,
-                intval($latest_conteo)
-            ), ARRAY_A) ?: [];
-        }
+        ), ARRAY_A) ?: [];
 
         $historial = $wpdb->get_results($wpdb->prepare(
             "SELECT h.*, u.codigo, u.nombre, u.zona, c.nombre AS conteo_nombre, c.tipo_conteo
@@ -1065,11 +1063,131 @@ class Riverso_Inventory_Count_Module {
             $producto_id
         ), ARRAY_A) ?: [];
 
-        wp_send_json_success([
+        return [
             'preferidas' => $preferidas,
             'actuales' => $actuales,
             'historial' => $historial,
-        ]);
+        ];
+    }
+
+    /**
+     * Estado de stock de un producto (total, exacto/al_menos, confianza, min/critico).
+     *
+     * @param int $producto_base_id
+     * @return array|null
+     */
+    public function get_stock_status_for_product($producto_base_id) {
+        global $wpdb;
+        $prefix = $this->prefix();
+        $producto_id = absint($producto_base_id);
+        if (!$producto_id) {
+            return null;
+        }
+
+        $stock_total_sql = "(SELECT COALESCE(SUM(pu.cantidad),0) FROM {$prefix}producto_ubicacion pu WHERE pu.product_id = pb.id)";
+        $exacto_sql = "EXISTS (
+            SELECT 1 FROM {$prefix}conteos c
+            WHERE c.estado = 'cerrado'
+              AND c.tipo_conteo = 'producto'
+              AND c.producto_base_id = pb.id
+        )";
+        $al_menos_sql = "EXISTS (
+            SELECT 1
+            FROM {$prefix}producto_ubicacion_historial h
+            INNER JOIN {$prefix}conteos c ON c.id = h.conteo_id
+            WHERE c.estado = 'cerrado'
+              AND c.tipo_conteo = 'lugar'
+              AND h.producto_base_id = pb.id
+        )";
+        $prod_recent_sql = "EXISTS (
+            SELECT 1 FROM {$prefix}conteos c
+            WHERE c.estado = 'cerrado'
+              AND c.tipo_conteo = 'producto'
+              AND c.producto_base_id = pb.id
+              AND c.cerrado_en >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
+        )";
+        $total_pref_sql = "(SELECT COUNT(*) FROM {$prefix}producto_ubicacion_preferida p WHERE p.producto_base_id = pb.id)";
+        $pref_counted_sql = "(SELECT COUNT(DISTINCT h.ubicacion_id)
+            FROM {$prefix}producto_ubicacion_historial h
+            INNER JOIN {$prefix}conteos c ON c.id = h.conteo_id
+            INNER JOIN {$prefix}producto_ubicacion_preferida p2
+                ON p2.producto_base_id = pb.id AND p2.ubicacion_id = h.ubicacion_id
+            WHERE c.estado = 'cerrado'
+              AND c.tipo_conteo = 'lugar'
+              AND h.producto_base_id = pb.id
+              AND c.cerrado_en >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
+        )";
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT
+                pb.id,
+                pb.canonical_sku,
+                pb.nombre_canonico,
+                {$stock_total_sql} AS stock_total,
+                cfg.stock_minimo,
+                cfg.stock_critico,
+                CASE
+                    WHEN {$exacto_sql} THEN 'exacto'
+                    WHEN {$al_menos_sql} THEN 'al_menos'
+                    ELSE 'desconocido'
+                END AS estado_inventariado,
+                CASE
+                    WHEN {$stock_total_sql} < 0 THEN 'dudoso'
+                    WHEN {$prod_recent_sql} THEN 'confiable'
+                    WHEN ({$total_pref_sql} > 0 AND {$pref_counted_sql} = {$total_pref_sql}) THEN 'confiable'
+                    ELSE 'poco_confiable'
+                END AS estado_confianza,
+                COALESCE(
+                    (SELECT MAX(c.cerrado_en)
+                     FROM {$prefix}conteos c
+                     WHERE c.estado='cerrado' AND c.tipo_conteo='producto' AND c.producto_base_id=pb.id),
+                    (SELECT MAX(h.fecha_conteo)
+                     FROM {$prefix}producto_ubicacion_historial h
+                     INNER JOIN {$prefix}conteos c ON c.id = h.conteo_id
+                     WHERE c.estado='cerrado' AND c.tipo_conteo='lugar' AND h.producto_base_id=pb.id)
+                ) AS ultimo_conteo_fecha,
+                CASE
+                    WHEN cfg.stock_minimo IS NOT NULL AND {$stock_total_sql} <= cfg.stock_minimo THEN 1
+                    ELSE 0
+                END AS alerta,
+                CASE
+                    WHEN cfg.stock_critico IS NOT NULL AND {$stock_total_sql} <= cfg.stock_critico THEN 1
+                    ELSE 0
+                END AS critico
+             FROM {$prefix}producto_base pb
+             LEFT JOIN {$prefix}producto_stock_config cfg
+                ON cfg.producto_base_id = pb.id
+             WHERE pb.id = %d",
+            $producto_id
+        ), ARRAY_A);
+
+        if (!$row) {
+            return null;
+        }
+
+        $row['stock_total'] = (float) ($row['stock_total'] ?? 0);
+        $row['stock_minimo'] = $row['stock_minimo'] !== null ? (float) $row['stock_minimo'] : null;
+        $row['stock_critico'] = $row['stock_critico'] !== null ? (float) $row['stock_critico'] : null;
+        $row['alerta'] = (int) ($row['alerta'] ?? 0);
+        $row['critico'] = (int) ($row['critico'] ?? 0);
+        if (empty($row['ultimo_conteo_fecha'])) {
+            $row['ultimo_conteo_fecha'] = null;
+        }
+
+        return $row;
+    }
+
+    public function ajax_get_product_locations() {
+        $this->require_nonce();
+        if (!current_user_can('riverso_view_warehouse') && !current_user_can('riverso_view_products') && !current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+        $producto_id = $this->post_int('producto_base_id');
+        if (!$producto_id) {
+            wp_send_json_error(['message' => 'Producto requerido']);
+        }
+
+        wp_send_json_success($this->get_product_locations_data($producto_id));
     }
 
     public function ajax_save_preferred_location() {
@@ -2917,6 +3035,9 @@ class Riverso_Inventory_Count_Module {
             'items' => $rows,
             'page' => $page,
             'per_page' => $per_page,
+            'emparejamientos' => class_exists('Riverso_Emparejamiento_Module')
+                ? Riverso_Emparejamiento_Module::get_instance()->list_stock_alerts()
+                : [],
         ]);
     }
 

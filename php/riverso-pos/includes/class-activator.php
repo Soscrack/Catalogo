@@ -353,6 +353,7 @@ class Riverso_POS_Activator {
         self::create_phase51b_repair_inferred_folio_dr($prefix);
         self::create_phase52_quote_folio_discount($prefix);
         self::create_phase53_family_commercial($prefix, $charset_collate);
+        self::create_phase54_emparejamientos($prefix, $charset_collate);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -368,6 +369,16 @@ class Riverso_POS_Activator {
         $prefix = $wpdb->prefix . 'riverso_';
         $charset_collate = $wpdb->get_charset_collate();
         self::create_phase53_family_commercial($prefix, $charset_collate);
+    }
+
+    /**
+     * Garantiza schema de emparejamientos (deploy sin bump de versión).
+     */
+    public static function ensure_emparejamientos_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::ensure_phase54_emparejamientos_schema($prefix, $charset_collate);
     }
 
     /**
@@ -5011,6 +5022,82 @@ class Riverso_POS_Activator {
             KEY idx_producto (producto_base_id)
         ) {$charset_collate};";
         dbDelta($sql_kit);
+    }
+
+    /**
+     * Fase 54: emparejamientos de precio y/o stock entre productos unitarios.
+     */
+    private static function create_phase54_emparejamientos($prefix, $charset_collate) {
+        if (get_option('riverso_pos_phase54_emparejamientos') === '1') {
+            return;
+        }
+
+        self::ensure_phase54_emparejamientos_schema($prefix, $charset_collate);
+
+        update_option('riverso_pos_phase54_emparejamientos', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase54_emparejamientos', 'emparejamientos', 0, [
+                'actor_type' => 'computer',
+                'details' => 'Fase 54: emparejamientos precio/stock + decision por producto',
+            ]);
+        }
+    }
+
+    /**
+     * Tablas y columnas de emparejamientos (idempotente).
+     */
+    private static function ensure_phase54_emparejamientos_schema($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        self::add_column_if_missing(
+            "{$prefix}producto_base",
+            'emparejamiento_decision',
+            "emparejamiento_decision VARCHAR(20) NULL DEFAULT NULL"
+        );
+        self::add_column_if_missing(
+            "{$prefix}precio_historial",
+            'emparejamiento_id',
+            'emparejamiento_id BIGINT UNSIGNED NULL DEFAULT NULL'
+        );
+
+        $sql_groups = "CREATE TABLE {$prefix}emparejamientos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            codigo VARCHAR(40) NOT NULL,
+            nombre VARCHAR(191) NOT NULL,
+            emparejar_precios TINYINT(1) NOT NULL DEFAULT 0,
+            emparejar_stock TINYINT(1) NOT NULL DEFAULT 0,
+            stock_minimo INT DEFAULT NULL,
+            stock_critico INT DEFAULT NULL,
+            precios_usados TINYINT(1) NOT NULL DEFAULT 0,
+            stock_usados TINYINT(1) NOT NULL DEFAULT 0,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            notas TEXT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            created_by BIGINT UNSIGNED DEFAULT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_codigo (codigo),
+            KEY idx_activo (activo),
+            KEY idx_precios (emparejar_precios),
+            KEY idx_stock (emparejar_stock)
+        ) {$charset_collate};";
+        dbDelta($sql_groups);
+
+        $sql_members = "CREATE TABLE {$prefix}emparejamiento_miembros (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            emparejamiento_id BIGINT UNSIGNED NOT NULL,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            prioridad INT NOT NULL DEFAULT 100,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_emp_producto (emparejamiento_id, producto_base_id),
+            KEY idx_emparejamiento (emparejamiento_id),
+            KEY idx_producto (producto_base_id),
+            KEY idx_producto_activo (producto_base_id, activo)
+        ) {$charset_collate};";
+        dbDelta($sql_members);
     }
 
     /**

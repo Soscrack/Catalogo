@@ -57,11 +57,16 @@ class Riverso_POS_Assets {
             ]
         ]);
 
-        // Editor de familias (Categorías/Familias y productos; Precios lo encola en enqueue_price_history_assets)
+        // Editor de familias / emparejamientos (Categorías y Productos; Precios lo encola en enqueue_price_history_assets)
         if (strpos($hook, 'riverso-pos-categories') !== false
             || strpos($hook, 'riverso-pos-products') !== false
         ) {
             $this->enqueue_family_editor_assets();
+            $this->enqueue_emparejamiento_editor_assets();
+        }
+
+        if (strpos($hook, 'riverso-pos-products') !== false) {
+            $this->enqueue_product_quick_search_assets();
         }
 
         // Historial de costos: Chart.js + explorador
@@ -76,6 +81,39 @@ class Riverso_POS_Assets {
         if (strpos($hook, 'riverso-pos-pricing') !== false) {
             $this->enqueue_price_history_assets();
         }
+    }
+
+    /**
+     * Encola CSS/JS de búsqueda rápida del Hub de Productos.
+     */
+    private function enqueue_product_quick_search_assets() {
+        $css_path = RIVERSO_POS_PLUGIN_DIR . 'assets/css/product-quick-search.css';
+        $css_ver = file_exists($css_path) ? (string) filemtime($css_path) : RIVERSO_POS_VERSION;
+        wp_enqueue_style(
+            'riverso-product-quick-search',
+            RIVERSO_POS_PLUGIN_URL . 'assets/css/product-quick-search.css',
+            [],
+            $css_ver
+        );
+
+        $js_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/product-quick-search.js';
+        if (!file_exists($js_path)) {
+            return;
+        }
+        $js_ver = (string) filemtime($js_path);
+        wp_enqueue_script(
+            'riverso-product-quick-search',
+            RIVERSO_POS_PLUGIN_URL . 'assets/js/product-quick-search.js',
+            ['jquery'],
+            $js_ver,
+            true
+        );
+        wp_localize_script('riverso-product-quick-search', 'riversoProductQuickSearch', [
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('riverso_pos_nonce'),
+            'can_manage' => current_user_can('riverso_manage_products'),
+            'categories_url' => admin_url('admin.php?page=riverso-pos-categories'),
+        ]);
     }
 
     /**
@@ -159,6 +197,37 @@ class Riverso_POS_Assets {
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('riverso_pos_nonce'),
             'canManage' => current_user_can('riverso_manage_families'),
+            'envaseTipos' => class_exists('Riverso_Family_Module')
+                ? Riverso_Family_Module::get_active_envase_tipos()
+                : [
+                    ['slug' => 'envase', 'nombre' => 'Envase'],
+                    ['slug' => 'caja', 'nombre' => 'Caja'],
+                    ['slug' => 'balde', 'nombre' => 'Balde'],
+                ],
+        ]);
+    }
+
+    /**
+     * Encola emparejamiento-editor.js (Categorías / Emparejamientos).
+     */
+    private function enqueue_emparejamiento_editor_assets() {
+        $path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/emparejamiento-editor.js';
+        if (!file_exists($path)) {
+            return;
+        }
+        $ver = (string) filemtime($path);
+        wp_enqueue_script(
+            'riverso-emparejamiento-editor',
+            RIVERSO_POS_PLUGIN_URL . 'assets/js/emparejamiento-editor.js',
+            ['jquery'],
+            $ver,
+            true
+        );
+        wp_localize_script('riverso-emparejamiento-editor', 'riversoEmparejamiento', [
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('riverso_pos_nonce'),
+            'canManage' => current_user_can('riverso_manage_products')
+                || current_user_can('riverso_manage_prices'),
         ]);
     }
 
@@ -184,13 +253,14 @@ class Riverso_POS_Assets {
         );
 
         $this->enqueue_family_editor_assets();
+        $this->enqueue_emparejamiento_editor_assets();
 
         $js_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/price-history.js';
         $js_ver = file_exists($js_path) ? (string) filemtime($js_path) : RIVERSO_POS_VERSION;
         wp_enqueue_script(
             'riverso-price-history',
             RIVERSO_POS_PLUGIN_URL . 'assets/js/price-history.js',
-            ['jquery', 'chartjs', 'riverso-family-editor'],
+            ['jquery', 'chartjs', 'riverso-family-editor', 'riverso-emparejamiento-editor'],
             $js_ver,
             true
         );
@@ -207,6 +277,8 @@ class Riverso_POS_Assets {
             'can_answer_family' => current_user_can('riverso_manage_products')
                 || current_user_can('riverso_manage_families'),
             'can_manage_families' => current_user_can('riverso_manage_families'),
+            'can_manage_emparejamientos' => current_user_can('riverso_manage_products')
+                || current_user_can('riverso_manage_prices'),
             'can_manage_competencia' => current_user_can('riverso_manage_competencia'),
             'can_view_barcodes' => current_user_can('riverso_view_products'),
             'can_assign_barcodes' => current_user_can('riverso_manage_products'),
@@ -252,6 +324,13 @@ class Riverso_POS_Assets {
                     'ajaxUrl' => admin_url('admin-ajax.php'),
                     'nonce' => wp_create_nonce('riverso_pos_nonce'),
                     'canManage' => current_user_can('riverso_manage_families'),
+                    'envaseTipos' => class_exists('Riverso_Family_Module')
+                        ? Riverso_Family_Module::get_active_envase_tipos()
+                        : [
+                            ['slug' => 'envase', 'nombre' => 'Envase'],
+                            ['slug' => 'caja', 'nombre' => 'Caja'],
+                            ['slug' => 'balde', 'nombre' => 'Balde'],
+                        ],
                 ]);
             }
 

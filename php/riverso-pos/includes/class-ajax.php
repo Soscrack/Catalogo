@@ -635,6 +635,14 @@ class Riverso_POS_Ajax {
                         AND COALESCE(pp.review_status, '') = 'pendiente'
                         AND pb.canonical_sku IS NOT NULL
                         AND pb.canonical_sku <> ''";
+        } elseif ($estado === 'unidades_compra') {
+            $where[] = "EXISTS (
+                SELECT 1 FROM {$prefix}tareas t
+                WHERE t.tipo = 'confirmar_unidades_compra'
+                  AND t.referencia_tipo = 'producto_proveedor'
+                  AND t.referencia_id = pp.id
+                  AND t.estado NOT IN ('completada', 'cancelada')
+            )";
         }
 
         $origen = sanitize_key($_POST['origen'] ?? '');
@@ -668,7 +676,7 @@ class Riverso_POS_Ajax {
         $sql = "SELECT pp.id, pp.codigo_proveedor, pp.nombre_proveedor AS descripcion_proveedor,
                        pp.proveedor_id, pp.producto_base_id, pp.activo, pp.created_at,
                        pp.origen_datos, pp.catalogo_id, pp.review_status, pp.requires_human_review,
-                       pp.match_estado, pp.match_origen,
+                       pp.match_estado, pp.match_origen, pp.factor_conversion,
                        prov.nombre AS proveedor_nombre,
                        cat.nombre AS catalogo_nombre,
                        pb.canonical_sku AS sku_local, pb.nombre_canonico
@@ -679,6 +687,26 @@ class Riverso_POS_Ajax {
         $page_params = array_merge($params, [$per_page, $offset]);
         $codes = $wpdb->get_results($wpdb->prepare($sql, ...$page_params), ARRAY_A);
 
+        $pp_ids = array_map(static function ($c) {
+            return (int) ($c['id'] ?? 0);
+        }, $codes ?: []);
+        $pp_ids = array_values(array_filter($pp_ids));
+        $open_pu_tasks = [];
+        if ($pp_ids) {
+            $in = implode(',', array_map('intval', $pp_ids));
+            $task_rows = $wpdb->get_results(
+                "SELECT id, referencia_id FROM {$prefix}tareas
+                 WHERE tipo = 'confirmar_unidades_compra'
+                   AND referencia_tipo = 'producto_proveedor'
+                   AND referencia_id IN ({$in})
+                   AND estado NOT IN ('completada', 'cancelada')",
+                ARRAY_A
+            ) ?: [];
+            foreach ($task_rows as $tr) {
+                $open_pu_tasks[(int) $tr['referencia_id']] = (int) $tr['id'];
+            }
+        }
+
         foreach ($codes as &$code) {
             $code['fecha_ingreso'] = $code['created_at'] ?? null;
             $code['origen_label'] = function_exists('riverso_pp_origen_label')
@@ -687,6 +715,9 @@ class Riverso_POS_Ajax {
             $code['needs_confirm'] = function_exists('riverso_pp_needs_human_confirm')
                 ? riverso_pp_needs_human_confirm($code)
                 : false;
+            $pid = (int) ($code['id'] ?? 0);
+            $code['purchase_units_task_id'] = $open_pu_tasks[$pid] ?? null;
+            $code['purchase_units_pending'] = !empty($code['purchase_units_task_id']);
         }
         unset($code);
         

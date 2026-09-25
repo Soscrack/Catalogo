@@ -174,10 +174,18 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
         <div id="rpf-session-header" class="rpf-session-header"></div>
         <div id="rpf-blockers" class="rpf-blockers" style="display:none;"></div>
         <div id="rpf-lines"></div>
-        <div id="rpf-pdf-footer" class="rpf-pdf-footer" style="display:none;">
-            <button type="button" class="button" id="rpf-btn-ver-pdf">Ver PDF</button>
-            <div id="rpf-pdf-viewer-wrap" style="display:none;margin-top:10px;">
-                <iframe id="rpf-pdf-viewer" title="Documento" style="width:100%;height:480px;border:1px solid #c3c4c7;border-radius:4px;background:#fff;"></iframe>
+        <div id="rpf-folio-dock" class="rpf-folio-dock" style="display:none;">
+            <div class="rpf-folio-dock-bar">
+                <button type="button" class="button" id="rpf-btn-ver-pdf" disabled>Ver PDF</button>
+                <select id="rpf-pdf-select" class="rpf-pdf-select" style="display:none;" title="Documento a visualizar"></select>
+                <button type="button" class="button" id="rpf-btn-ver-info">Ver Info</button>
+                <span id="rpf-dock-origen" class="rpf-dock-origen" style="display:none;"></span>
+            </div>
+            <div id="rpf-folio-dock-body" class="rpf-folio-dock-body" style="display:none;">
+                <div id="rpf-pdf-viewer-wrap" class="rpf-pdf-viewer-wrap" style="display:none;">
+                    <iframe id="rpf-pdf-viewer" title="Documento"></iframe>
+                </div>
+                <div id="rpf-info-panel" class="rpf-info-panel" style="display:none;"></div>
             </div>
         </div>
     </div>
@@ -239,6 +247,42 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
         </div>
         <div id="rpf-answer-family-body" class="rpf-modal-body"></div>
         <div id="rpf-answer-family-footer" class="rpf-create-local-footer"></div>
+    </div>
+</div>
+
+<div id="rpf-answer-emp-modal" class="rpf-modal" style="display:none;" aria-hidden="true">
+    <div class="rpf-modal-backdrop rpf-answer-emp-backdrop"></div>
+    <div class="rpf-modal-card rpf-answer-family-card">
+        <div class="rpf-modal-head">
+            <h2 id="rpf-answer-emp-title" style="margin:0;">¿Tiene emparejamiento?</h2>
+            <button type="button" class="button rpf-answer-emp-close">Cerrar</button>
+        </div>
+        <div id="rpf-answer-emp-body" class="rpf-modal-body"></div>
+        <div id="rpf-answer-emp-footer" class="rpf-create-local-footer"></div>
+    </div>
+</div>
+
+<div id="rpf-search-emp-modal" class="rpf-modal" style="display:none;" aria-hidden="true">
+    <div class="rpf-modal-backdrop rpf-search-emp-backdrop"></div>
+    <div class="rpf-modal-card rpf-search-family-card">
+        <div class="rpf-modal-head">
+            <h2 id="rpf-search-emp-title" style="margin:0;">Buscar emparejamiento</h2>
+            <button type="button" class="button rpf-search-emp-close">Cerrar</button>
+        </div>
+        <div id="rpf-search-emp-body" class="rpf-modal-body"></div>
+        <div id="rpf-search-emp-footer" class="rpf-create-local-footer"></div>
+    </div>
+</div>
+
+<div id="rpf-pu-modal" class="rpf-modal" style="display:none;" aria-hidden="true">
+    <div class="rpf-modal-backdrop rpf-pu-backdrop"></div>
+    <div class="rpf-modal-card rpf-answer-family-card">
+        <div class="rpf-modal-head">
+            <h2 id="rpf-pu-title" style="margin:0;">Unidades de compra</h2>
+            <button type="button" class="button rpf-pu-close">Cerrar</button>
+        </div>
+        <div id="rpf-pu-body" class="rpf-modal-body"></div>
+        <div id="rpf-pu-footer" class="rpf-create-local-footer"></div>
     </div>
 </div>
 

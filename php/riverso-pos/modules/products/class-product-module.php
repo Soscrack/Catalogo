@@ -80,6 +80,7 @@ class Riverso_Product_Module {
 		add_action('wp_ajax_riverso_products_search_supplier_codes', [$this, 'ajax_search_supplier_codes']);
 		add_action('wp_ajax_riverso_products_assign_supplier_code', [$this, 'ajax_assign_supplier_code']);
 		add_action('wp_ajax_riverso_products_remove_supplier_code', [$this, 'ajax_remove_supplier_code']);
+		add_action('wp_ajax_riverso_products_set_purchase_units', [$this, 'ajax_set_purchase_units']);
 		add_action('wp_ajax_riverso_products_link_woo', [$this, 'ajax_link_woo']);
 		add_action('wp_ajax_riverso_products_create_woo', [$this, 'ajax_create_woo']);
 		add_action('wp_ajax_riverso_products_create_online_standalone', [$this, 'ajax_create_online']);
@@ -90,6 +91,14 @@ class Riverso_Product_Module {
 		add_action('wp_ajax_riverso_products_adopt_local', [$this, 'ajax_adopt_local']);
 		add_action('wp_ajax_riverso_products_undo_merge', [$this, 'ajax_undo_merge']);
 		add_action('wp_ajax_riverso_products_redo_merge', [$this, 'ajax_redo_merge']);
+
+		$quick_service = RIVERSO_POS_PLUGIN_DIR . 'modules/products/class-product-quick-view-service.php';
+		if (file_exists($quick_service)) {
+			require_once $quick_service;
+			if (class_exists('Riverso_Product_Quick_View_Service')) {
+				Riverso_Product_Quick_View_Service::get_instance()->register();
+			}
+		}
 	}
 
     private function get_completeness_category($product) {
@@ -261,6 +270,7 @@ class Riverso_Product_Module {
 
         $barcode_map = $this->batch_list_barcodes($results);
         $sku_online_map = $this->batch_list_online_skus($results);
+        $emp_map = $this->batch_list_emparejamientos($results);
 
         foreach ($results as &$item) {
             $id = (int) ($item['id'] ?? 0);
@@ -273,6 +283,10 @@ class Riverso_Product_Module {
             $bc = $barcode_map[$id] ?? ['count' => 0, 'sample' => ''];
             $item['barcodes_count'] = (int) ($bc['count'] ?? 0);
             $item['barcode_sample'] = (string) ($bc['sample'] ?? '');
+            $emp = $emp_map[$id] ?? null;
+            $item['emparejamiento_id'] = $emp ? (int) ($emp['emparejamiento_id'] ?? 0) : 0;
+            $item['emparejamiento_nombre'] = $emp ? (string) ($emp['nombre'] ?? '') : '';
+            $item['emparejamiento_codigo'] = $emp ? (string) ($emp['codigo'] ?? '') : '';
             $item['completeness_category'] = $this->get_completeness_category($item);
         }
         unset($item);
@@ -409,6 +423,53 @@ class Riverso_Product_Module {
             if ($pb_id > 0) {
                 $map[$pb_id] = (string) ($row['meta_value'] ?? '');
             }
+        }
+
+        return $map;
+    }
+
+    /**
+     * Emparejamientos activos de los productos de la página (un query, sin N+1).
+     *
+     * @param array $items Filas de producto_base.
+     * @return array<int, array{emparejamiento_id:int,nombre:string,codigo:string}>
+     */
+    private function batch_list_emparejamientos(array $items) {
+        global $wpdb;
+        $map = [];
+        $ids = [];
+        foreach ($items as $item) {
+            $pb_id = (int) ($item['id'] ?? 0);
+            if ($pb_id > 0) {
+                $ids[] = $pb_id;
+            }
+        }
+        $ids = array_values(array_unique($ids));
+        if (!$ids) {
+            return $map;
+        }
+
+        $prefix = $wpdb->prefix . 'riverso_';
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT m.producto_base_id, e.id AS emparejamiento_id, e.nombre, e.codigo
+             FROM {$prefix}emparejamiento_miembros m
+             INNER JOIN {$prefix}emparejamientos e ON e.id = m.emparejamiento_id
+             WHERE m.activo = 1 AND e.activo = 1
+               AND m.producto_base_id IN ({$placeholders})",
+            $ids
+        ), ARRAY_A) ?: [];
+
+        foreach ($rows as $row) {
+            $pb_id = (int) ($row['producto_base_id'] ?? 0);
+            if ($pb_id <= 0 || isset($map[$pb_id])) {
+                continue;
+            }
+            $map[$pb_id] = [
+                'emparejamiento_id' => (int) ($row['emparejamiento_id'] ?? 0),
+                'nombre' => (string) ($row['nombre'] ?? ''),
+                'codigo' => (string) ($row['codigo'] ?? ''),
+            ];
         }
 
         return $map;
@@ -636,6 +697,7 @@ class Riverso_Product_Module {
             $prov['needs_confirm'] = function_exists('riverso_pp_needs_human_confirm')
                 ? riverso_pp_needs_human_confirm($prov)
                 : false;
+            $this->enrich_supplier_purchase_units($prov, (int) $id);
         }
         unset($prov);
 
@@ -761,6 +823,65 @@ class Riverso_Product_Module {
         }
 
         return $product;
+    }
+
+    /**
+     * Factor de unidades de compra + tarea abierta + si es envase de familia.
+     *
+     * @param array $prov
+     * @param int   $producto_base_id
+     */
+    private function enrich_supplier_purchase_units(array &$prov, $producto_base_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $pp_id = (int) ($prov['id'] ?? 0);
+        $code = trim((string) ($prov['codigo_proveedor'] ?? ''));
+        $proveedor_id = (int) ($prov['proveedor_id'] ?? 0);
+        $factor = isset($prov['factor_conversion']) ? floatval($prov['factor_conversion']) : 1.0;
+        if ($factor < 1) {
+            $factor = 1.0;
+        }
+
+        $prov['purchase_units_factor'] = $factor;
+        $prov['purchase_units_family_pack'] = false;
+        $prov['purchase_units_pack_qty'] = null;
+        $prov['purchase_units_can_edit'] = $pp_id > 0 && $code !== '';
+        $prov['purchase_units_task_id'] = null;
+
+        if (!class_exists('Riverso_Unit_Product_Service')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'modules/families/class-unit-product-service.php';
+            if (file_exists($path)) {
+                require_once $path;
+            }
+        }
+        if (class_exists('Riverso_Unit_Product_Service')
+            && method_exists('Riverso_Unit_Product_Service', 'resolve_purchase_units')
+        ) {
+            $ctx = Riverso_Unit_Product_Service::get_instance()->resolve_purchase_units(
+                (int) $producto_base_id,
+                $code,
+                $proveedor_id
+            );
+            $prov['purchase_units_factor'] = (float) ($ctx['factor'] ?? $factor);
+            $prov['purchase_units_family_pack'] = !empty($ctx['is_family_pack']);
+            $prov['purchase_units_pack_qty'] = $ctx['pack_qty'] ?? null;
+            if (!empty($ctx['is_family_pack'])) {
+                $prov['purchase_units_can_edit'] = false;
+            }
+        }
+
+        if ($pp_id > 0) {
+            $task_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}tareas
+                 WHERE tipo = 'confirmar_unidades_compra'
+                   AND referencia_tipo = 'producto_proveedor'
+                   AND referencia_id = %d
+                   AND estado NOT IN ('completada', 'cancelada')
+                 ORDER BY id DESC LIMIT 1",
+                $pp_id
+            ));
+            $prov['purchase_units_task_id'] = $task_id ? (int) $task_id : null;
+        }
     }
 
     /**
@@ -970,7 +1091,7 @@ class Riverso_Product_Module {
         return $precio;
     }
 
-    private function get_product_barcodes($product_id) {
+    public function get_product_barcodes($product_id) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         
@@ -996,7 +1117,7 @@ class Riverso_Product_Module {
         return is_array($barcodes) ? $barcodes : [];
     }
 
-    private function get_product_tasks($product_id) {
+    public function get_product_tasks($product_id) {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         $product_id = absint($product_id);
@@ -6012,6 +6133,117 @@ class Riverso_Product_Module {
 		}
 
 		wp_send_json_success(['codigo_id' => $code_id]);
+	}
+
+	/**
+	 * AJAX: Unidades reales por unidad facturada (factor_conversion del código).
+	 * Completa tarea confirmar_unidades_compra si está abierta.
+	 */
+	public function ajax_set_purchase_units() {
+		check_ajax_referer('riverso_pos_nonce', 'nonce');
+		if (!current_user_can('riverso_manage_products') && !current_user_can('riverso_manage_codes')) {
+			wp_send_json_error(['message' => 'Sin permisos'], 403);
+		}
+
+		$pp_id = absint($_POST['pp_id'] ?? $_POST['producto_proveedor_id'] ?? 0);
+		$is_unit_real = !empty($_POST['is_unit_real']);
+		$factor = isset($_POST['factor']) && $_POST['factor'] !== ''
+			? floatval($_POST['factor'])
+			: (isset($_POST['units_per_qty']) ? floatval($_POST['units_per_qty']) : null);
+
+		if ($pp_id <= 0) {
+			wp_send_json_error(['message' => 'Código de proveedor requerido'], 400);
+		}
+
+		global $wpdb;
+		$prefix = $wpdb->prefix . 'riverso_';
+		$pp = $wpdb->get_row($wpdb->prepare(
+			"SELECT * FROM {$prefix}producto_proveedor WHERE id = %d AND activo = 1",
+			$pp_id
+		), ARRAY_A);
+		if (!$pp) {
+			wp_send_json_error(['message' => 'Código de proveedor no encontrado'], 404);
+		}
+
+		$producto_base_id = (int) ($pp['producto_base_id'] ?? 0);
+		if ($producto_base_id <= 0) {
+			wp_send_json_error(['message' => 'El código no está vinculado a un producto'], 400);
+		}
+
+		if (!class_exists('Riverso_Unit_Product_Service')) {
+			$path = RIVERSO_POS_PLUGIN_DIR . 'modules/families/class-unit-product-service.php';
+			if (file_exists($path)) {
+				require_once $path;
+			}
+		}
+		if (!class_exists('Riverso_Unit_Product_Service')) {
+			wp_send_json_error(['message' => 'Servicio no disponible'], 500);
+		}
+
+		$unit_svc = Riverso_Unit_Product_Service::get_instance();
+		$ctx = $unit_svc->resolve_purchase_units(
+			$producto_base_id,
+			(string) ($pp['codigo_proveedor'] ?? ''),
+			(int) ($pp['proveedor_id'] ?? 0)
+		);
+		if (!empty($ctx['is_family_pack'])) {
+			wp_send_json_error([
+				'message' => 'Este código ya es un envase de familia. Las unidades las resuelve la familia; no se edita el factor de compra.',
+			], 400);
+		}
+
+		if ($is_unit_real) {
+			$factor = 1.0;
+		} elseif ($factor === null || $factor < 1) {
+			wp_send_json_error(['message' => 'Indicá un factor ≥ 1 (o marcá que es la unidad real)'], 400);
+		}
+		if (!$is_unit_real && $factor < 2) {
+			wp_send_json_error(['message' => 'Si no es la unidad real, el factor debe ser ≥ 2'], 400);
+		}
+
+		$saved = $unit_svc->set_purchase_units_factor($pp_id, $factor);
+		if (is_wp_error($saved)) {
+			wp_send_json_error(['message' => $saved->get_error_message()], 400);
+		}
+
+		$task_id = $wpdb->get_var($wpdb->prepare(
+			"SELECT id FROM {$prefix}tareas
+			 WHERE tipo = 'confirmar_unidades_compra'
+			   AND referencia_tipo = 'producto_proveedor'
+			   AND referencia_id = %d
+			   AND estado NOT IN ('completada', 'cancelada')
+			 ORDER BY id DESC LIMIT 1",
+			$pp_id
+		));
+		if ($task_id && class_exists('Riverso_Task_Module')) {
+			Riverso_Task_Module::get_instance()->complete_task(
+				(int) $task_id,
+				$is_unit_real || $factor <= 1.0001
+					? 'Cantidad facturada = unidad real (factor 1) — hub productos'
+					: sprintf('Unidades reales por unidad facturada: %s — hub productos', $factor),
+				'system'
+			);
+		}
+
+		if (class_exists('Riverso_POS_Audit')) {
+			Riverso_POS_Audit::log('confirm_purchase_units', 'producto_proveedor', $pp_id, [
+				'producto_base_id' => $producto_base_id,
+				'factor' => $factor,
+				'is_unit_real' => ($is_unit_real || $factor <= 1.0001) ? 1 : 0,
+				'source' => 'product_hub',
+				'codigo_proveedor' => (string) ($pp['codigo_proveedor'] ?? ''),
+			]);
+		}
+
+		$item = $this->get_product($producto_base_id);
+		wp_send_json_success([
+			'factor' => $factor,
+			'pp_id' => $pp_id,
+			'item' => $item,
+			'message' => $factor > 1.0001
+				? sprintf('Guardado: %s = %s u por unidad facturada', $pp['codigo_proveedor'] ?? '', $factor)
+				: 'Guardado: la cantidad facturada es la unidad real',
+		]);
 	}
 
 	/**

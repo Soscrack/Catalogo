@@ -153,29 +153,31 @@ class Riverso_Pricing_Module {
             : null;
         $margen = ($nuevo !== null && $c_ref !== null) ? round($nuevo - $c_ref, 3) : null;
 
-        $ok = $wpdb->insert(
-            "{$prefix}precio_historial",
-            [
-                'producto_base_id' => $producto_base_id,
-                'canal' => $canal,
-                'woocommerce_variation_id' => intval($data['woocommerce_variation_id'] ?? 0),
-                'precio_sugerido' => isset($data['precio_sugerido']) ? $data['precio_sugerido'] : null,
-                'precio_aprobado' => isset($data['precio_aprobado']) ? $data['precio_aprobado'] : null,
-                'precio_online' => $canal === self::CANAL_ONLINE ? $nuevo : null,
-                'precio_local' => $canal === self::CANAL_LOCAL ? $nuevo : null,
-                'c_ref' => $c_ref,
-                'p_asignado_anterior' => isset($data['p_asignado_anterior']) && $data['p_asignado_anterior'] !== ''
-                    ? (float) $data['p_asignado_anterior']
-                    : null,
-                'p_asignado_nuevo' => $nuevo,
-                'margen_unitario' => $margen,
-                'source_type' => sanitize_key($data['source_type'] ?? 'manual'),
-                'source_document_id' => !empty($data['source_document_id']) ? intval($data['source_document_id']) : null,
-                'notas' => isset($data['notas']) ? sanitize_textarea_field($data['notas']) : null,
-                'usuario_id' => intval($data['usuario_id'] ?? get_current_user_id()),
-            ],
-            ['%d', '%s', '%d', '%f', '%f', '%f', '%f', '%f', '%f', '%f', '%f', '%s', '%d', '%s', '%d']
-        );
+        $row_data = [
+            'producto_base_id' => $producto_base_id,
+            'canal' => $canal,
+            'woocommerce_variation_id' => intval($data['woocommerce_variation_id'] ?? 0),
+            'precio_sugerido' => isset($data['precio_sugerido']) ? $data['precio_sugerido'] : null,
+            'precio_aprobado' => isset($data['precio_aprobado']) ? $data['precio_aprobado'] : null,
+            'precio_online' => $canal === self::CANAL_ONLINE ? $nuevo : null,
+            'precio_local' => $canal === self::CANAL_LOCAL ? $nuevo : null,
+            'c_ref' => $c_ref,
+            'p_asignado_anterior' => isset($data['p_asignado_anterior']) && $data['p_asignado_anterior'] !== ''
+                ? (float) $data['p_asignado_anterior']
+                : null,
+            'p_asignado_nuevo' => $nuevo,
+            'margen_unitario' => $margen,
+            'source_type' => sanitize_key($data['source_type'] ?? 'manual'),
+            'source_document_id' => !empty($data['source_document_id']) ? intval($data['source_document_id']) : null,
+            'notas' => isset($data['notas']) ? sanitize_textarea_field($data['notas']) : null,
+            'usuario_id' => intval($data['usuario_id'] ?? get_current_user_id()),
+        ];
+        $formats = ['%d', '%s', '%d', '%f', '%f', '%f', '%f', '%f', '%f', '%f', '%f', '%s', '%d', '%s', '%d'];
+        if (!empty($data['emparejamiento_id'])) {
+            $row_data['emparejamiento_id'] = intval($data['emparejamiento_id']);
+            $formats[] = '%d';
+        }
+        $ok = $wpdb->insert("{$prefix}precio_historial", $row_data, $formats);
 
         return $ok ? (int) $wpdb->insert_id : false;
     }
@@ -379,7 +381,23 @@ class Riverso_Pricing_Module {
             'system'     => 'Sistema',
             'tpv'        => 'TPV',
         ];
-        return $map[$key] ?? ($key !== '' ? $key : '—');
+        $label = $map[$key] ?? ($key !== '' ? $key : '—');
+        return $label;
+    }
+
+    /**
+     * Etiqueta de origen incluyendo marca de emparejamiento si aplica.
+     *
+     * @param string   $key
+     * @param int|null $emparejamiento_id
+     * @return string
+     */
+    public static function source_type_label_with_pairing($key, $emparejamiento_id = null) {
+        $label = self::source_type_label($key);
+        if (!empty($emparejamiento_id)) {
+            $label .= ' (Emparejamiento)';
+        }
+        return $label;
     }
 
     /**
@@ -579,6 +597,19 @@ class Riverso_Pricing_Module {
             ['%d']
         );
 
+        $emp_id = !empty($meta['emparejamiento_id']) ? intval($meta['emparejamiento_id']) : null;
+        if (!$emp_id && class_exists('Riverso_Emparejamiento_Module')) {
+            $emp_mod = Riverso_Emparejamiento_Module::get_instance();
+            if (!$emp_mod->is_syncing_prices()) {
+                $emp_row = $emp_mod->get_of_product((int) $row['producto_base_id']);
+                if ($emp_row && !empty($emp_row['emparejar_precios'])) {
+                    $emp_id = (int) $emp_row['id'];
+                }
+            } elseif (!empty($meta['emparejamiento_id'])) {
+                $emp_id = intval($meta['emparejamiento_id']);
+            }
+        }
+
         $this->record_price_change([
             'producto_base_id' => $row['producto_base_id'],
             'canal' => $row['canal'],
@@ -590,7 +621,25 @@ class Riverso_Pricing_Module {
             'source_type' => $meta['source_type'] ?? 'manual',
             'source_document_id' => $meta['source_document_id'] ?? null,
             'notas' => $meta['notas'] ?? null,
+            'emparejamiento_id' => $emp_id,
         ]);
+
+        // Propagar a miembros emparejados (solo si no estamos ya en sync y el canal es local).
+        if ($emp_id
+            && ($row['canal'] ?? '') === self::CANAL_LOCAL
+            && class_exists('Riverso_Emparejamiento_Module')
+            && empty($meta['skip_emparejamiento_propagate'])
+        ) {
+            $emp_mod = Riverso_Emparejamiento_Module::get_instance();
+            if (!$emp_mod->is_syncing_prices()) {
+                $emp_mod->maybe_propagate_price((int) $row['producto_base_id'], $p_asignado, [
+                    'source_type' => $meta['source_type'] ?? 'manual',
+                    'source_document_id' => $meta['source_document_id'] ?? null,
+                    'notas' => $meta['notas'] ?? null,
+                    'emparejamiento_id' => $emp_id,
+                ]);
+            }
+        }
 
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('price_changed', 'precio', $precio_id, [

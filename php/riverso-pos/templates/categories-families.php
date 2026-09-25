@@ -9,12 +9,13 @@ if (!$can_manage) {
 }
 ?>
 <div class="wrap">
-    <h1>Categorías y Familias</h1>
-    <p>Gestión centralizada de categorías WooCommerce y familias de productos con edición de árbol, movimiento de nodos e impacto de cambios.</p>
+    <h1>Categorías, Familias y Emparejamientos</h1>
+    <p>Gestión centralizada de categorías WooCommerce, familias de productos y emparejamientos de precio/stock.</p>
 
     <div style="border-bottom:2px solid #ddd; margin-bottom:20px;">
         <button class="nav-tab nav-tab-active" id="tab-categories-btn" data-tab="categories">Categorías</button>
         <button class="nav-tab" id="tab-families-btn" data-tab="families">Familias</button>
+        <button class="nav-tab" id="tab-emparejamientos-btn" data-tab="emparejamientos">Emparejamientos</button>
     </div>
 
     <!-- TAB: Categorías -->
@@ -132,6 +133,25 @@ if (!$can_manage) {
 
         <div id="families-list" style="border:1px solid #ddd; padding:12px; border-radius:4px; background:#fafafa; max-height:600px; overflow-y:auto; margin-bottom:16px;">
             <p style="color:#999; text-align:center;">Cargando familias...</p>
+        </div>
+    </div>
+
+    <!-- TAB: Emparejamientos -->
+    <div id="tab-emparejamientos-content" class="tab-content" style="display:none;">
+        <h2>Emparejamientos</h2>
+        <p style="color:#666; margin-bottom:16px;">
+            Agrupa productos sin familia o el producto unitario de una familia.
+            Podés activar <strong>Emparejar precios</strong> (mismo <code>p_asignado</code> unitario) y/o
+            <strong>Emparejar stock</strong> (suma para alertas, sin mezclar inventario propio).
+        </p>
+        <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="button button-primary" id="emparejamientos-add-new">+ Nuevo emparejamiento</button>
+        </div>
+        <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <input type="search" id="emparejamientos-search" placeholder="Nombre, código o SKU" style="min-width:280px; padding:6px 10px; flex:1; max-width:480px;" autocomplete="off">
+        </div>
+        <div id="emparejamientos-list" style="border:1px solid #ddd; padding:12px; border-radius:4px; background:#fafafa; max-height:600px; overflow-y:auto; margin-bottom:16px;">
+            <p style="color:#999; text-align:center;">Cargando emparejamientos...</p>
         </div>
     </div>
 
@@ -286,23 +306,39 @@ jQuery(function($) {
     function esc(v) { return $('<div>').text(v === null || v === undefined ? '' : v).html(); }
 
     // ===== TAB SWITCHING =====
+    function hideAllTabs() {
+        $('#tab-categories-btn, #tab-families-btn, #tab-emparejamientos-btn').removeClass('nav-tab-active');
+        $('#tab-categories-content, #tab-families-content, #tab-emparejamientos-content').hide();
+    }
+
     $('#tab-categories-btn').on('click', function() {
+        hideAllTabs();
         $('#tab-categories-btn').addClass('nav-tab-active');
-        $('#tab-families-btn').removeClass('nav-tab-active');
         $('#tab-categories-content').show();
-        $('#tab-families-content').hide();
     });
 
     function showFamiliesTab() {
+        hideAllTabs();
         $('#tab-families-btn').addClass('nav-tab-active');
-        $('#tab-categories-btn').removeClass('nav-tab-active');
         $('#tab-families-content').show();
-        $('#tab-categories-content').hide();
         loadFamilies();
     }
 
     $('#tab-families-btn').on('click', function() {
         showFamiliesTab();
+    });
+
+    function showEmparejamientosTab() {
+        hideAllTabs();
+        $('#tab-emparejamientos-btn').addClass('nav-tab-active');
+        $('#tab-emparejamientos-content').show();
+        if (window.RiversoEmparejamientoEditor) {
+            RiversoEmparejamientoEditor.loadList($('#emparejamientos-search').val());
+        }
+    }
+
+    $('#tab-emparejamientos-btn').on('click', function() {
+        showEmparejamientosTab();
     });
 
     // ===== CATEGORÍAS =====
@@ -1036,7 +1072,13 @@ jQuery(function($) {
     const urlParams = new URLSearchParams(window.location.search);
     const urlTab = urlParams.get('tab');
     const urlGrupoId = parseInt(urlParams.get('grupo_id') || '0', 10);
-    if (urlTab === 'families' || urlGrupoId) {
+    const urlEmpId = parseInt(urlParams.get('emparejamiento_id') || '0', 10);
+    if (urlTab === 'emparejamientos' || urlEmpId) {
+        showEmparejamientosTab();
+        if (urlEmpId && window.RiversoEmparejamientoEditor) {
+            RiversoEmparejamientoEditor.open(urlEmpId);
+        }
+    } else if (urlTab === 'families' || urlGrupoId) {
         showFamiliesTab();
         if (urlGrupoId) {
             const openFromUrl = function(tries) {

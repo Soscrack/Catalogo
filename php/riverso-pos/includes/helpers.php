@@ -135,6 +135,7 @@ function riverso_get_task_types() {
         'crear_contraparte_local' => ['label' => 'Crear contraparte local', 'icon' => 'admin-home', 'categoria' => 'productos'],
         'preguntar_familia' => ['label' => '¿Necesita familia?', 'icon' => 'groups', 'categoria' => 'productos'],
         'asignar_familia' => ['label' => 'Asignar familia', 'icon' => 'groups', 'categoria' => 'productos'],
+        'confirmar_unidades_compra' => ['label' => 'Confirmar unidades de compra', 'icon' => 'calculator', 'categoria' => 'precios'],
         'confirmar_estructura_atributos' => ['label' => 'Confirmar estructura de atributos', 'icon' => 'editor-ul', 'categoria' => 'administracion'],
         'autorizar_publicacion' => ['label' => 'Autorizar publicación', 'icon' => 'visibility', 'categoria' => 'administracion'],
         'revisar_calidad_catalogo' => ['label' => 'Revisar salud del catálogo', 'icon' => 'heart', 'categoria' => 'administracion'],
@@ -461,6 +462,24 @@ function riverso_resolve_task_target_by_reference($task_tipo, $referencia_tipo, 
             if (!$pb_id) {
                 $pb_id = absint($extra['producto_base_id'] ?? 0);
             }
+            if ($task_tipo === 'confirmar_unidades_compra') {
+                $factura_id = absint($extra['factura_id'] ?? 0);
+                $item_id = absint($extra['factura_item_id'] ?? 0);
+                $args = [
+                    'page' => 'riverso-pos-pricing',
+                    'tab' => 'process',
+                ];
+                if ($factura_id > 0) {
+                    $args['factura_id'] = $factura_id;
+                }
+                if ($item_id > 0) {
+                    $args['item_id'] = $item_id;
+                }
+                if ($context === 'portal') {
+                    return riverso_task_portal_module_url('pricing', $args);
+                }
+                return add_query_arg($args, admin_url('admin.php'));
+            }
             if ($pb_id) {
                 return riverso_build_task_product_hub_url((int) $pb_id, 'relacionar_producto_proveedor', $context);
             }
@@ -553,6 +572,7 @@ function riverso_resolve_task_target_by_type($task_tipo, array $extra = [], $ref
         'cotizacion' => 'riverso-pos-received-quotes',
         'devolucion' => 'riverso-pos-invoices',
         'aprobar_lista_precios' => 'riverso-pos-pricing',
+        'confirmar_unidades_compra' => 'riverso-pos-pricing',
         'asignar_regla_precio' => 'riverso-pos-price-rules',
         'revisar_calidad_catalogo' => 'riverso-pos-catalog-health',
         'confirmar_tipo_documento' => 'riverso-pos-invoices',
@@ -620,6 +640,17 @@ function riverso_resolve_task_target_by_type($task_tipo, array $extra = [], $ref
     }
     if (in_array($task_tipo, ['confirmar_tipo_documento', 'ingresar_flete'], true) && $referencia_id) {
         $args['factura'] = (int) $referencia_id;
+    }
+    if ($task_tipo === 'confirmar_unidades_compra') {
+        $factura_id = absint($extra['factura_id'] ?? 0);
+        $item_id = absint($extra['factura_item_id'] ?? 0);
+        $args['tab'] = 'process';
+        if ($factura_id > 0) {
+            $args['factura_id'] = $factura_id;
+        }
+        if ($item_id > 0) {
+            $args['item_id'] = $item_id;
+        }
     }
     if (in_array($task_tipo, ['etiquetado', 'bodegaje', 'recepcion', 'devolucion'], true) && $referencia_id) {
         $args['factura'] = (int) $referencia_id;

@@ -415,7 +415,9 @@
                 } else if (rpfFacturaId) {
                     refreshSession();
                 }
-                if (data && data.completed) {
+                if (data && data.corrected) {
+                    window.alert('Precio corregido (el folio sigue Ingresada).');
+                } else if (data && data.completed) {
                     window.alert('Folio completado: todos los productos tienen precio confirmado desde este folio.');
                 } else if (data && (data.historial_only || data.applied === false)) {
                     window.alert('Constancia en historial guardada. El precio vigente no cambió (hay un folio más reciente).');
@@ -1083,7 +1085,11 @@
                 (data.omitted_count ? ' (' + data.omitted_count + ' ya ingresadas)' : '') + '</span>' : '') +
             ' · Fecha ' + esc(inv.fecha_emision || '') +
             ' · Pendientes: ' + (data.pending_targets || 0) +
-            ' · Montos en <strong>' + (rpfViewMode === 'neto' ? 'neto' : 'bruto') + '</strong></p>'
+            ' · Montos en <strong>' + (rpfViewMode === 'neto' ? 'neto' : 'bruto') + '</strong>' +
+            (String(proc.estado || '') === 'ingresada' && !data.is_archived && !proc.is_archived
+                ? ' · <span class="description">Folio ingresado: puedes corregir precios fila por fila.</span>'
+                : '') +
+            '</p>'
         );
 
         renderBlockers(data.blockers || []);
@@ -1242,6 +1248,13 @@
                         ' data-emp-nombre="' + esc(ln.emparejamiento_nombre || ln.emparejamiento_codigo || '') + '"' +
                         ' title="' + esc(ln.emparejamiento_nombre || ln.emparejamiento_codigo || 'Emparejamiento') + '">' +
                         'Precio emparejado</button>';
+                }
+                if (canLinkSku && (ln.sku || ln.unit_sku)) {
+                    saveBtn += ' <button type="button" class="button button-small rpf-search-link-open"' +
+                        ' data-item="' + ln.item_id + '"' +
+                        ' data-codigo="' + esc(ln.codigo_proveedor || '') + '"' +
+                        ' data-nombre="' + esc(ln.nombre || ln.descripcion || '') + '"' +
+                        ' data-current-sku="' + esc(ln.sku || ln.unit_sku || '') + '">Cambiar SKU</button>';
                 }
             } else if (blocked) {
                 saveBtn = '<span class="description">' + esc(ln.block_reason || 'Bloqueado') + '</span>';
@@ -3711,6 +3724,56 @@
             '" target="_blank" rel="noopener" title="Abrir en Búsqueda rápida">?</a>';
     }
 
+    function rpfOriginTitle(origin) {
+        if (!origin || !origin.key) {
+            return 'Sin origen registrado';
+        }
+        var parts = [origin.label || origin.key];
+        if (origin.fecha && String(parts[0]).indexOf(String(origin.fecha)) < 0) {
+            parts.push('Fecha: ' + origin.fecha);
+        }
+        if (origin.folio && String(parts[0]).indexOf(String(origin.folio)) < 0) {
+            parts.push('Folio: ' + origin.folio);
+        }
+        return parts.join(' · ');
+    }
+
+    function rpfSearchLinkMoneyCell(bruto, neto, origin) {
+        var hasVal = bruto != null || neto != null;
+        if (!hasVal) {
+            return '<span class="rpf-search-link-money">—' +
+                '<span class="rpf-prior-origin" title="' + esc(rpfOriginTitle(origin)) +
+                '">?</span></span>';
+        }
+        return '<span class="rpf-search-link-money">' +
+            '<span class="rpf-search-link-money-bruto">Bruto ' + money(bruto) + '</span>' +
+            '<span class="description">Neto ' + money(neto) + '</span>' +
+            '<span class="rpf-prior-origin" title="' + esc(rpfOriginTitle(origin)) +
+            '">?</span></span>';
+    }
+
+    function rpfSearchLinkQuickUrl(productId, sku) {
+        if (!productsAdminUrl || !productId) {
+            return '';
+        }
+        var sep = productsAdminUrl.indexOf('?') >= 0 ? '&' : '?';
+        var href = productsAdminUrl + sep + 'tab=rapida&quick_id=' + encodeURIComponent(String(productId));
+        var s = sku != null ? String(sku).trim() : '';
+        if (s) {
+            href += '&quick=' + encodeURIComponent(s);
+        }
+        return href;
+    }
+
+    function rpfSearchLinkQuickBtn(productId, sku) {
+        var href = rpfSearchLinkQuickUrl(productId, sku);
+        if (!href) {
+            return '';
+        }
+        return ' <a class="button button-small" href="' + esc(href) +
+            '" target="_blank" rel="noopener" title="Abrir en Búsqueda rápida">Ver rápido</a>';
+    }
+
     function formatFolioSkuCell(ln) {
         if (ln.es_familia_unitaria && ln.unit_sku) {
             var unitQty = ln.unit_qty != null ? ln.unit_qty : 1;
@@ -4859,7 +4922,9 @@
                 if (res.data.session) {
                     showSession(res.data.session);
                 }
-                if (res.data.completed) {
+                if (res.data.corrected) {
+                    window.alert('Precio corregido (el folio sigue Ingresada).');
+                } else if (res.data.completed) {
                     window.alert('Folio completado: todos los productos tienen precio confirmado desde este folio.');
                 } else if (res.data.historial_only || res.data.applied === false) {
                     window.alert('Constancia en historial guardada. El precio vigente no cambió (hay un folio más reciente).');
@@ -5139,6 +5204,9 @@
             rpfPurchaseUnits.units = qty;
             renderPurchaseUnitsConfirm();
         });
+        $(document).on('input', '#rpf-pu-qty', function () {
+            updatePurchaseUnitsQtyPreview();
+        });
         $(document).on('click', '#rpf-pu-confirm', function () {
             submitPurchaseUnits();
         });
@@ -5268,7 +5336,8 @@
             openSearchLinkModal({
                 item_id: parseInt($(this).data('item'), 10) || 0,
                 codigo_proveedor: String($(this).data('codigo') || ''),
-                nombre: String($(this).data('nombre') || '')
+                nombre: String($(this).data('nombre') || ''),
+                current_sku: String($(this).data('current-sku') || '')
             });
         });
         $(document).on('click', '.rpf-search-link-close, .rpf-search-link-backdrop', function () {
@@ -5303,6 +5372,31 @@
         $(document).on('click', '#rpf-search-link-more', function () {
             fetchSearchLinkResults(false);
         });
+        $(document).on('click', '#rpf-search-link-word-add', function () {
+            addSearchLinkWord();
+        });
+        $(document).on('keydown', '#rpf-search-link-word', function (e) {
+            if (e.key === 'Enter' || e.keyCode === 13) {
+                e.preventDefault();
+                addSearchLinkWord();
+            }
+        });
+        $(document).on('click', '.rpf-search-link-word-remove', function (e) {
+            e.preventDefault();
+            if (!rpfSearchLink || rpfSearchLink.step !== 'search') {
+                return;
+            }
+            if (!Array.isArray(rpfSearchLink.words)) {
+                rpfSearchLink.words = [];
+            }
+            var idx = parseInt($(this).attr('data-idx'), 10);
+            if (isNaN(idx) || idx < 0 || idx >= rpfSearchLink.words.length) {
+                return;
+            }
+            rpfSearchLink.words.splice(idx, 1);
+            renderSearchLinkWords();
+            fetchSearchLinkResults(true);
+        });
         $(document).on('click', '.rpf-search-link-view', function () {
             var id = parseInt($(this).data('id'), 10) || 0;
             if (!id) {
@@ -5330,6 +5424,36 @@
         });
         $(document).on('click', '#rpf-search-link-force', function () {
             submitSearchLink(true);
+        });
+        $(document).on('click', '#rpf-search-link-unlink', function () {
+            if (!rpfSearchLink || !rpfFacturaId || !rpfSearchLink.current_sku) {
+                return;
+            }
+            if (!window.confirm(
+                '¿Desvincular el SKU ' + rpfSearchLink.current_sku +
+                ' del código ' + (rpfSearchLink.codigo_proveedor || '') +
+                '? La fila quedará Sin SKU.'
+            )) {
+                return;
+            }
+            var $btn = $(this).prop('disabled', true).text('Desvinculando…');
+            post('riverso_link_code', {
+                item_id: rpfSearchLink.item_id,
+                sku_local: '',
+                clear: 1,
+                crear_mapeo: 1
+            }).done(function (res) {
+                if (res && res.success) {
+                    closeSearchLinkModal();
+                    refreshSession();
+                    return;
+                }
+                window.alert((res && res.data && res.data.message) || 'No se pudo desvincular');
+                $btn.prop('disabled', false).text('Desvincular');
+            }).fail(function () {
+                window.alert('Error de red');
+                $btn.prop('disabled', false).text('Desvincular');
+            });
         });
         $(document).on('click', '.rpf-answer-family-open', function () {
             if (!canAnswerFamily) {
@@ -6051,6 +6175,13 @@
         $('#rpf-search-link-title').text('Buscar y vincular SKU');
     }
 
+    function searchLinkTitle() {
+        if (rpfSearchLink && rpfSearchLink.current_sku) {
+            return 'Cambiar SKU (actual: ' + rpfSearchLink.current_sku + ')';
+        }
+        return 'Buscar y vincular SKU';
+    }
+
     function openSearchLinkModal(opts) {
         opts = opts || {};
         var inv = (rpfSession && rpfSession.invoice) || {};
@@ -6064,9 +6195,11 @@
             item_id: itemId,
             codigo_proveedor: opts.codigo_proveedor || '',
             descripcion: opts.nombre || '',
+            current_sku: opts.current_sku || '',
             folio: inv.folio || '',
             proveedor_nombre: inv.proveedor_nombre || '',
             query: opts.codigo_proveedor || opts.nombre || '',
+            words: [],
             items: [],
             total: 0,
             offset: 0,
@@ -6095,12 +6228,14 @@
             return;
         }
         var q = String(rpfSearchLink.query || '').trim();
+        var words = Array.isArray(rpfSearchLink.words) ? rpfSearchLink.words.slice() : [];
+        var wordsKey = words.join('\u0001');
         if (reset) {
             rpfSearchLink.offset = 0;
             rpfSearchLink.items = [];
             rpfSearchLink.total = 0;
         }
-        if (q === '') {
+        if (q === '' && !words.length) {
             rpfSearchLink.loading = false;
             if (rpfSearchLink.step === 'search') {
                 renderSearchLinkSearch();
@@ -6113,14 +6248,22 @@
         }
         var reqOffset = rpfSearchLink.offset;
         var reqQuery = q;
+        var reqWordsKey = wordsKey;
         post('riverso_products_list', {
             search: q,
             status: 'active',
             completeness: 'todos',
             offset: reqOffset,
-            limit: rpfSearchLink.limit
+            limit: rpfSearchLink.limit,
+            palabras: words,
+            with_pricing: 1
         }).done(function (res) {
-            if (!rpfSearchLink || String(rpfSearchLink.query || '').trim() !== reqQuery) {
+            var curWords = (rpfSearchLink && Array.isArray(rpfSearchLink.words))
+                ? rpfSearchLink.words.join('\u0001')
+                : '';
+            if (!rpfSearchLink ||
+                String(rpfSearchLink.query || '').trim() !== reqQuery ||
+                curWords !== reqWordsKey) {
                 return;
             }
             rpfSearchLink.loading = false;
@@ -6155,24 +6298,74 @@
         });
     }
 
+    function renderSearchLinkWords() {
+        if (!rpfSearchLink) {
+            return;
+        }
+        var $box = $('#rpf-search-link-words');
+        if (!$box.length) {
+            return;
+        }
+        var words = Array.isArray(rpfSearchLink.words) ? rpfSearchLink.words : [];
+        if (!words.length) {
+            $box.empty();
+            return;
+        }
+        $box.html(words.map(function (w, idx) {
+            return '<span class="rpf-search-link-chip">' + esc(w) +
+                '<button type="button" class="rpf-search-link-word-remove" data-idx="' + idx +
+                '" title="Quitar" aria-label="Quitar">×</button></span>';
+        }).join(''));
+    }
+
+    function addSearchLinkWord() {
+        if (!rpfSearchLink || rpfSearchLink.step !== 'search') {
+            return;
+        }
+        if (!Array.isArray(rpfSearchLink.words)) {
+            rpfSearchLink.words = [];
+        }
+        var raw = String($('#rpf-search-link-word').val() || '').trim();
+        if (!raw) {
+            return;
+        }
+        var lower = raw.toLowerCase();
+        var exists = rpfSearchLink.words.some(function (w) {
+            return String(w).toLowerCase() === lower;
+        });
+        if (!exists) {
+            rpfSearchLink.words.push(raw);
+            renderSearchLinkWords();
+        }
+        $('#rpf-search-link-word').val('').trigger('focus');
+        fetchSearchLinkResults(true);
+    }
+
     function renderSearchLinkSearch() {
         if (!rpfSearchLink) {
             return;
         }
+        if (!Array.isArray(rpfSearchLink.words)) {
+            rpfSearchLink.words = [];
+        }
         rpfSearchLink.step = 'search';
         rpfSearchLink.conflictMessage = '';
-        $('#rpf-search-link-title').text('Buscar y vincular SKU');
+        $('#rpf-search-link-title').text(searchLinkTitle());
 
         if (!$('#rpf-search-link-q').length) {
             var hubLinkInit = '';
             if (productsAdminUrl) {
                 hubLinkInit = '<a class="button" href="#" id="rpf-search-link-hub" target="_blank" rel="noopener">Abrir en Hub</a>';
             }
+            var currentSkuRow = rpfSearchLink.current_sku
+                ? '<dt>SKU actual</dt><dd><code>' + esc(rpfSearchLink.current_sku) + '</code></dd>'
+                : '';
             $('#rpf-search-link-body').html(
                 '<dl class="rpf-create-local-meta">' +
                 '<dt>Proveedor</dt><dd>' + esc(rpfSearchLink.proveedor_nombre || '—') + '</dd>' +
                 '<dt>Folio</dt><dd><code>' + esc(rpfSearchLink.folio || '—') + '</code></dd>' +
                 '<dt>Código a vincular</dt><dd><code>' + esc(rpfSearchLink.codigo_proveedor || '—') + '</code></dd>' +
+                currentSkuRow +
                 '<dt>Detalle ítem</dt><dd>' + esc(rpfSearchLink.descripcion || '—') + '</dd>' +
                 '</dl>' +
                 '<div class="rpf-create-local-field rpf-search-link-field">' +
@@ -6182,12 +6375,19 @@
                 'value="' + esc(rpfSearchLink.query || '') + '">' +
                 '<button type="button" class="button" id="rpf-search-link-go">Buscar</button>' +
                 '</div>' +
+                '<div class="rpf-search-link-words-row">' +
+                '<label for="rpf-search-link-word">Contiene palabra:</label>' +
+                '<input type="text" id="rpf-search-link-word" autocomplete="off" placeholder="Una palabra…">' +
+                '<button type="button" class="button" id="rpf-search-link-word-add">Agregar</button>' +
+                '<div id="rpf-search-link-words" class="rpf-search-link-words"></div>' +
+                '</div>' +
                 '<p class="description">Se prellena con el código proveedor del ítem; podés editarlo.</p>' +
                 '</div>' +
                 '<div class="rpf-search-link-table-wrap">' +
                 '<table class="widefat striped rpf-search-link-table">' +
                 '<thead><tr>' +
-                '<th>ID</th><th>SKU</th><th>Nombre</th><th>Completitud</th><th>Código proveedor</th><th>Acciones</th>' +
+                '<th>ID</th><th>SKU</th><th>Nombre</th><th>Completitud</th><th>Código proveedor</th>' +
+                '<th>Precio</th><th>Costo</th><th>Acciones</th>' +
                 '</tr></thead>' +
                 '<tbody id="rpf-search-link-tbody"></tbody>' +
                 '</table></div>' +
@@ -6195,6 +6395,9 @@
             );
             $('#rpf-search-link-footer').html(
                 '<button type="button" class="button" id="rpf-search-link-cancel">Cerrar</button>' +
+                (rpfSearchLink.current_sku
+                    ? '<button type="button" class="button" id="rpf-search-link-unlink" style="color:#b32d2e;">Desvincular</button>'
+                    : '') +
                 '<span id="rpf-search-link-more-wrap"></span>' +
                 hubLinkInit
             );
@@ -6211,6 +6414,7 @@
         }
 
         updateSearchLinkHubHref();
+        renderSearchLinkWords();
         renderSearchLinkTable();
     }
 
@@ -6231,18 +6435,21 @@
         }
         var rows = '';
         if (rpfSearchLink.loading && !rpfSearchLink.items.length) {
-            rows = '<tr><td colspan="6">Buscando…</td></tr>';
-        } else if (!String(rpfSearchLink.query || '').trim()) {
-            rows = '<tr><td colspan="6">Escribí código proveedor, barcode o nombre.</td></tr>';
+            rows = '<tr><td colspan="8">Buscando…</td></tr>';
+        } else if (!String(rpfSearchLink.query || '').trim() &&
+            !(Array.isArray(rpfSearchLink.words) && rpfSearchLink.words.length)) {
+            rows = '<tr><td colspan="8">Escribí código proveedor, barcode o nombre.</td></tr>';
         } else if (!rpfSearchLink.items.length) {
-            rows = '<tr><td colspan="6">Sin resultados.</td></tr>';
+            rows = '<tr><td colspan="8">Sin resultados.</td></tr>';
         } else {
             rows = rpfSearchLink.items.map(function (it) {
                 var sku = String(it.sku_local || it.canonical_sku || '').trim();
                 var cat = it.completeness_category || 'incompleto';
                 var canPick = !!sku;
+                var pricing = it.pricing || null;
                 var actions = '<button type="button" class="button button-small rpf-search-link-view" data-id="' +
                     esc(String(it.id || '')) + '">Ver</button>';
+                actions += rpfSearchLinkQuickBtn(it.id, sku);
                 if (canLinkSku && canPick) {
                     actions += ' <button type="button" class="button button-small button-primary rpf-search-link-pick"' +
                         ' data-id="' + esc(String(it.id || '')) + '"' +
@@ -6258,6 +6465,16 @@
                     '<td><span class="rpf-completeness-badge ' + esc(cat) + '">' +
                     esc(completenessLabelRpf(cat)) + '</span></td>' +
                     '<td><code>' + esc(it.codigos_proveedor || '—') + '</code></td>' +
+                    '<td>' + rpfSearchLinkMoneyCell(
+                        pricing ? pricing.p_asignado : null,
+                        pricing ? pricing.p_neto : null,
+                        pricing ? pricing.origen_precio : null
+                    ) + '</td>' +
+                    '<td>' + rpfSearchLinkMoneyCell(
+                        pricing ? pricing.c_ref_bruto : null,
+                        pricing ? pricing.c_ref_neto : null,
+                        pricing ? pricing.origen_costo : null
+                    ) + '</td>' +
                     '<td class="rpf-search-link-actions">' + actions + '</td>' +
                     '</tr>';
             }).join('');
@@ -6327,11 +6544,21 @@
         var barcodes = (it.barcodes || []).map(function (b) {
             return b.codigo || b.code || '';
         }).filter(Boolean).join(', ') || '—';
+        var pricing = it.pricing || null;
+        if (!pricing && Array.isArray(rpfSearchLink.items)) {
+            var listed = rpfSearchLink.items.find(function (row) {
+                return String(row.id) === String(it.id);
+            });
+            if (listed && listed.pricing) {
+                pricing = listed.pricing;
+            }
+        }
         var hubUrl = productsAdminUrl
             ? (productsAdminUrl + (productsAdminUrl.indexOf('?') >= 0 ? '&' : '?') +
                 'action=detail&id=' + encodeURIComponent(String(it.id || '')))
             : '';
         var footer = '<button type="button" class="button" id="rpf-search-link-cancel">Volver</button>';
+        footer += rpfSearchLinkQuickBtn(it.id, sku);
         if (hubUrl) {
             footer += '<a class="button" href="' + esc(hubUrl) + '" target="_blank" rel="noopener">Abrir en Hub</a>';
         }
@@ -6353,6 +6580,16 @@
             esc(completenessLabelRpf(cat)) + '</span></dd>' +
             '<dt>Códigos proveedor</dt><dd><code>' + esc(codes) + '</code></dd>' +
             '<dt>Barcodes</dt><dd><code>' + esc(barcodes) + '</code></dd>' +
+            '<dt>Precio</dt><dd>' + rpfSearchLinkMoneyCell(
+                pricing ? pricing.p_asignado : null,
+                pricing ? pricing.p_neto : null,
+                pricing ? pricing.origen_precio : null
+            ) + '</dd>' +
+            '<dt>Costo</dt><dd>' + rpfSearchLinkMoneyCell(
+                pricing ? pricing.c_ref_bruto : null,
+                pricing ? pricing.c_ref_neto : null,
+                pricing ? pricing.origen_costo : null
+            ) + '</dd>' +
             '</dl>'
         );
         $('#rpf-search-link-footer').html(footer);
@@ -6364,18 +6601,26 @@
         }
         rpfSearchLink.step = 'confirm';
         var sel = rpfSearchLink.selected;
+        var isChange = !!rpfSearchLink.current_sku;
         var conflictBlock = rpfSearchLink.conflictMessage
             ? '<div class="notice notice-warning inline"><p>' + esc(rpfSearchLink.conflictMessage) + '</p></div>'
             : '';
-        $('#rpf-search-link-title').text('Confirmar vínculo');
+        $('#rpf-search-link-title').text(isChange
+            ? 'Reemplazar SKU (actual: ' + rpfSearchLink.current_sku + ')'
+            : 'Confirmar vínculo');
         $('#rpf-search-link-body').html(
             conflictBlock +
-            '<p>Se va a vincular el código del proveedor de este folio con el SKU seleccionado:</p>' +
+            '<p>' + (isChange
+                ? 'Se va a reemplazar el SKU de este código de proveedor:'
+                : 'Se va a vincular el código del proveedor de este folio con el SKU seleccionado:') + '</p>' +
             '<ul class="rpf-create-local-confirm">' +
             '<li><strong>Proveedor:</strong> ' + esc(rpfSearchLink.proveedor_nombre || '—') + '</li>' +
             '<li><strong>Folio:</strong> <code>' + esc(rpfSearchLink.folio || '—') + '</code></li>' +
             '<li><strong>Código proveedor:</strong> <code>' + esc(rpfSearchLink.codigo_proveedor || '—') + '</code></li>' +
-            '<li><strong>SKU:</strong> <code>' + esc(sel.sku || '—') + '</code></li>' +
+            (isChange
+                ? '<li><strong>SKU actual:</strong> <code>' + esc(rpfSearchLink.current_sku) + '</code></li>'
+                : '') +
+            '<li><strong>SKU nuevo:</strong> <code>' + esc(sel.sku || '—') + '</code></li>' +
             '<li><strong>Producto:</strong> ' + esc(sel.nombre || '—') + '</li>' +
             '<li><strong>Detalle ítem:</strong> ' + esc(rpfSearchLink.descripcion || '—') + '</li>' +
             '</ul>' +
@@ -6388,7 +6633,7 @@
                 'Reasignar de todas formas</button>';
         } else {
             footer += '<button type="button" class="button button-primary" id="rpf-search-link-confirm">' +
-                'Vincular</button>';
+                (isChange ? 'Reemplazar SKU' : 'Vincular') + '</button>';
         }
         $('#rpf-search-link-footer').html(footer);
     }
@@ -6444,6 +6689,29 @@
         $('#rpf-pu-title').text('Unidades de compra');
     }
 
+    function rpfPurchaseUnitsCostLabel() {
+        var map = {
+            referencia: 'Costo referencia',
+            tras_dr: 'Costo tras Descuento/Recargo',
+            tras_dr_folio: 'Costo tras Descuento/Recargo Folio',
+            tras_dr_flete: 'Costo más flete'
+        };
+        return map[rpfCostMode] || 'Costo folio';
+    }
+
+    function findSessionLineByItemId(itemId) {
+        var id = parseInt(itemId, 10) || 0;
+        if (!id || !rpfSession || !Array.isArray(rpfSession.lines)) {
+            return null;
+        }
+        for (var i = 0; i < rpfSession.lines.length; i++) {
+            if (parseInt(rpfSession.lines[i].item_id, 10) === id) {
+                return rpfSession.lines[i];
+            }
+        }
+        return null;
+    }
+
     function openPurchaseUnitsModal(opts) {
         opts = opts || {};
         var itemId = opts.item_id || 0;
@@ -6453,28 +6721,161 @@
         }
         var inv = (rpfSession && rpfSession.invoice) || {};
         var factor = Number(opts.factor);
+        var ln = findSessionLineByItemId(itemId);
+        var iva = (ln && ln.iva_tipo) || 'afecto';
+        var basesRaw = ln
+            ? (ln.costo_folio_bases_raw || ln.costo_folio_bases || null)
+            : null;
+        var costoRawFallback = ln
+            ? (ln.costo_folio_raw != null ? ln.costo_folio_raw : ln.costo_folio)
+            : null;
+        var costoNeto = rpfPickCostBase(basesRaw, rpfCostMode, costoRawFallback);
         rpfPurchaseUnits = {
             step: 'form',
             item_id: itemId,
-            codigo: opts.codigo || '',
-            sku: opts.sku || '',
-            nombre: opts.nombre || '',
+            codigo: opts.codigo || (ln && ln.codigo_proveedor) || '',
+            sku: opts.sku || (ln && ln.sku) || '',
+            nombre: opts.nombre || (ln && (ln.nombre || ln.descripcion)) || '',
             folio: inv.folio || '',
             factor: factor > 1 ? factor : '',
             is_unit_real: null,
-            units: null
+            units: null,
+            unidad: ln ? String(ln.unidad || '') : '',
+            cantidad: ln && ln.cantidad != null ? Number(ln.cantidad) : null,
+            costo_facturado_neto: costoNeto,
+            iva_tipo: iva,
+            cost_label: rpfPurchaseUnitsCostLabel()
         };
         $('#rpf-pu-modal').css('display', 'flex').attr('aria-hidden', 'false');
         renderPurchaseUnitsForm();
     }
 
-    function purchaseUnitsMetaHtml() {
+    function purchaseUnitsFmtCost(neto) {
+        if (!rpfPurchaseUnits) {
+            return '—';
+        }
+        return money(rpfCostDisplay(neto, rpfPurchaseUnits.iva_tipo));
+    }
+
+    function purchaseUnitsUnitCostNeto(units) {
+        if (!rpfPurchaseUnits) {
+            return null;
+        }
+        var c = rpfPurchaseUnits.costo_facturado_neto;
+        if (c === null || c === undefined || c === '' || isNaN(c)) {
+            return null;
+        }
+        var n = Number(units);
+        if (n >= 2) {
+            return rpfRound4(Number(c) / n);
+        }
+        return rpfRound4(Number(c));
+    }
+
+    function purchaseUnitsCostHtml(opts) {
+        opts = opts || {};
+        if (!rpfPurchaseUnits) {
+            return '';
+        }
+        var cantidad = rpfPurchaseUnits.cantidad;
+        var unidad = String(rpfPurchaseUnits.unidad || '').trim();
+        var cantLabel = '—';
+        if (cantidad != null && !isNaN(cantidad)) {
+            cantLabel = esc(String(cantidad));
+        }
+        var unidadLabel = unidad ? ('<code>' + esc(unidad) + '</code>') : '—';
+        var costoFact = purchaseUnitsFmtCost(rpfPurchaseUnits.costo_facturado_neto);
+        var suf = ' ' + rpfAmountSuffix();
+        var costLabel = esc(rpfPurchaseUnits.costo_facturado_neto != null
+            ? (rpfPurchaseUnits.cost_label || 'Costo folio')
+            : 'Costo folio');
+        var html = '<dt>Cantidad facturada</dt><dd>' + cantLabel + '</dd>' +
+            '<dt>Unidad de medida (factura)</dt><dd>' + unidadLabel +
+            ' <span class="description">campo UnmdItem del documento</span></dd>' +
+            '<dt>' + costLabel + ' / u. facturada ' + esc(suf) + '</dt><dd><strong>' +
+            costoFact + '</strong></dd>';
+
+        if (opts.scenario === 'yes') {
+            html += '<dt>Costo unitario real</dt><dd><strong>' + costoFact +
+                '</strong> <span class="description">(misma unidad facturada)</span></dd>';
+        } else if (opts.scenario === 'pack') {
+            var n = Number(opts.units);
+            var unitCost = (n >= 2) ? purchaseUnitsUnitCostNeto(n) : null;
+            var unitLabel = (unitCost != null) ? purchaseUnitsFmtCost(unitCost) : '—';
+            html += '<dt>Costo unitario real</dt><dd><strong id="rpf-pu-unit-cost">' +
+                unitLabel + '</strong> <span class="description" id="rpf-pu-unit-cost-hint">' +
+                (n >= 2
+                    ? ('(= ' + costoFact + ' ÷ ' + esc(String(n)) + ')')
+                    : '') +
+                '</span></dd>';
+            html += '<dt>Unidades reales totales</dt><dd id="rpf-pu-total-real">';
+            if (cantidad != null && !isNaN(cantidad) && n >= 2) {
+                var totalReal = rpfRound4(Number(cantidad) * n);
+                html += esc(String(cantidad)) + ' × ' + esc(String(n)) + ' = <strong>' +
+                    esc(String(totalReal)) + '</strong>';
+            } else {
+                html += '—';
+            }
+            html += '</dd>';
+        } else {
+            // Pantalla inicial: ambos escenarios
+            html += '<dt>Si es unidad real</dt><dd><strong>' + costoFact +
+                '</strong> <span class="description">c/u</span></dd>';
+            var sug = Number(rpfPurchaseUnits.factor);
+            if (sug >= 2) {
+                var sugCost = purchaseUnitsUnitCostNeto(sug);
+                html += '<dt>Si es paquete de ' + esc(String(sug)) + '</dt><dd><strong>' +
+                    purchaseUnitsFmtCost(sugCost) +
+                    '</strong> <span class="description">c/u (= ' + costoFact + ' ÷ ' +
+                    esc(String(sug)) + ')</span></dd>';
+            } else {
+                html += '<dt>Si es un paquete</dt><dd><span class="description">' +
+                    'El costo unitario será ' + costoFact + ' ÷ N</span></dd>';
+            }
+        }
+        return html;
+    }
+
+    function purchaseUnitsMetaHtml(opts) {
+        opts = opts || {};
         return '<dl class="rpf-create-local-meta">' +
             '<dt>Folio</dt><dd><code>' + esc(rpfPurchaseUnits.folio || '—') + '</code></dd>' +
             '<dt>Código</dt><dd><code>' + esc(rpfPurchaseUnits.codigo || '—') + '</code></dd>' +
             '<dt>SKU</dt><dd><code>' + esc(rpfPurchaseUnits.sku || '—') + '</code></dd>' +
             '<dt>Producto</dt><dd>' + esc(rpfPurchaseUnits.nombre || '—') + '</dd>' +
+            purchaseUnitsCostHtml(opts) +
             '</dl>';
+    }
+
+    function updatePurchaseUnitsQtyPreview() {
+        if (!rpfPurchaseUnits || rpfPurchaseUnits.step !== 'qty') {
+            return;
+        }
+        var n = parseFloat($('#rpf-pu-qty').val());
+        var unitCost = (n >= 2) ? purchaseUnitsUnitCostNeto(n) : null;
+        var $cost = $('#rpf-pu-unit-cost');
+        if ($cost.length) {
+            $cost.text(unitCost != null ? purchaseUnitsFmtCost(unitCost) : '—');
+        }
+        var $hint = $('#rpf-pu-unit-cost-hint');
+        if ($hint.length) {
+            if (n >= 2) {
+                $hint.text('(= ' + purchaseUnitsFmtCost(rpfPurchaseUnits.costo_facturado_neto) +
+                    ' ÷ ' + n + ')');
+            } else {
+                $hint.text('');
+            }
+        }
+        var $tot = $('#rpf-pu-total-real');
+        if ($tot.length) {
+            var cantidad = rpfPurchaseUnits.cantidad;
+            if (cantidad != null && !isNaN(cantidad) && n >= 2) {
+                $tot.html(esc(String(cantidad)) + ' × ' + esc(String(n)) +
+                    ' = <strong>' + esc(String(rpfRound4(Number(cantidad) * n))) + '</strong>');
+            } else {
+                $tot.text('—');
+            }
+        }
     }
 
     function renderPurchaseUnitsForm() {
@@ -6486,7 +6887,7 @@
         rpfPurchaseUnits.units = null;
         $('#rpf-pu-title').text('¿La cantidad facturada es la unidad real?');
         $('#rpf-pu-body').html(
-            purchaseUnitsMetaHtml() +
+            purchaseUnitsMetaHtml({ scenario: 'both' }) +
             '<p class="rpf-answer-family-question">Elegí qué llegó respecto de lo que dice el documento.</p>' +
             '<div class="rpf-pu-options">' +
             '<p class="rpf-pu-option"><strong>Sí, es la unidad real</strong>' +
@@ -6510,9 +6911,10 @@
         var preset = rpfPurchaseUnits.units && rpfPurchaseUnits.units >= 2
             ? rpfPurchaseUnits.units
             : (rpfPurchaseUnits.factor || '');
+        var nPreset = Number(preset);
         $('#rpf-pu-title').text('¿Cuántas unidades reales?');
         $('#rpf-pu-body').html(
-            purchaseUnitsMetaHtml() +
+            purchaseUnitsMetaHtml({ scenario: 'pack', units: nPreset >= 2 ? nPreset : 0 }) +
             '<p class="rpf-answer-family-question">Cada unidad facturada, ¿cuántas unidades reales trae?</p>' +
             '<p class="description">Si el documento registra 1 paquete y en realidad son 12, poné 12. Si son otra cantidad, poné ese número.</p>' +
             '<p style="margin-top:10px;"><label>Unidades reales<br>' +
@@ -6524,6 +6926,7 @@
             '<button type="button" class="button button-primary" id="rpf-pu-qty-next">Continuar</button>'
         );
         $('#rpf-pu-qty').trigger('focus');
+        updatePurchaseUnitsQtyPreview();
     }
 
     function renderPurchaseUnitsConfirm() {
@@ -6535,7 +6938,9 @@
         var units = rpfPurchaseUnits.units;
         $('#rpf-pu-title').text('Confirmar respuesta');
         $('#rpf-pu-body').html(
-            purchaseUnitsMetaHtml() +
+            purchaseUnitsMetaHtml(yes
+                ? { scenario: 'yes' }
+                : { scenario: 'pack', units: units }) +
             '<dl class="rpf-create-local-meta">' +
             '<dt>Respuesta</dt><dd><strong>' +
             (yes

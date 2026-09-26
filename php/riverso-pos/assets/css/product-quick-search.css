@@ -394,6 +394,60 @@
     min-width: 200px;
 }
 
+.pqs-lupa-words-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.pqs-lupa-words-row > label {
+    font-size: 12px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.pqs-lupa-words-row #pqs-lupa-word {
+    min-width: 140px;
+    padding: 6px;
+    box-sizing: border-box;
+}
+
+.pqs-lupa-words {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+    min-height: 0;
+}
+
+.pqs-lupa-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: #f0f0f1;
+    border: 1px solid #c3c4c7;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.pqs-lupa-chip .pqs-lupa-word-remove {
+    border: 0;
+    background: transparent;
+    color: #646970;
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.pqs-lupa-chip .pqs-lupa-word-remove:hover {
+    color: #b32d2e;
+}
+
 /* Popover miembros */
 .pqs-popover {
     position: fixed;

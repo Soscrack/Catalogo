@@ -20,6 +20,7 @@
         editing: false,
         lastQuery: '',
         related: [],
+        lupaWords: [],
         viewMode: localStorage.getItem('pqs_view_mode') || 'neto',
         costMode: localStorage.getItem('pqs_cost_mode') || 'referencia',
     };
@@ -426,6 +427,61 @@
         }).join('');
     }
 
+    function normalizeSupplierCodeKey(code) {
+        return String(code || '').trim().toUpperCase().replace(/^0+/, '') || '';
+    }
+
+    function findLinkedSupplierLabel(code) {
+        var key = normalizeSupplierCodeKey(code);
+        if (!key) {
+            return '';
+        }
+        var suppliers = (state.summary && state.summary.suppliers) || [];
+        for (var i = 0; i < suppliers.length; i++) {
+            var s = suppliers[i];
+            if (normalizeSupplierCodeKey(s.codigo_proveedor) === key) {
+                return String(s.display_name || s.proveedor_nombre || 'Proveedor').trim();
+            }
+        }
+        return '';
+    }
+
+    function renderSupplierCodesEditable(list) {
+        var codes = list || [];
+        if (!codes.length) {
+            return '';
+        }
+        return codes.map(function (b) {
+            var legacy = !!b.is_legacy;
+            var linked = findLinkedSupplierLabel(b.codigo);
+            var remove = '';
+            if (state.editing && canManage && b.id) {
+                remove = '<button type="button" class="button-link pqs-supcode-remove"' +
+                    ' data-barcode-id="' + esc(b.id) + '"' +
+                    ' data-codigo="' + esc(b.codigo || '') + '"' +
+                    ' data-legacy="' + (legacy ? '1' : '0') + '"' +
+                    (linked ? ' data-linked-supplier="' + esc(linked) + '"' : '') +
+                    ' title="Quitar código" style="color:#b32d2e;">×</button>';
+            }
+            var badge = legacy
+                ? ' <span class="pqs-badge" style="background:#9c27b0;">Legacy</span>'
+                : '';
+            return '<span class="pqs-chip-row"><span class="pqs-chip">' + esc(b.codigo) +
+                badge + remove + '</span></span>';
+        }).join('');
+    }
+
+    function paintSupplierCodesField(list) {
+        var codes = list || [];
+        if (codes.length) {
+            $('#pqs-field-supplier-codes').show();
+            $('#pqs-v-supplier-codes').html(renderSupplierCodesEditable(codes));
+        } else {
+            $('#pqs-field-supplier-codes').hide();
+            $('#pqs-v-supplier-codes').empty();
+        }
+    }
+
     function renderSuppliersEditable(suppliers) {
         if (!suppliers || !suppliers.length) {
             return '<span style="color:#666;">—</span>';
@@ -562,6 +618,7 @@
             $('#pqs-btn-refresh-relations').toggle(canManage || canManageFamilies);
             updatePricingUi();
             $('#pqs-v-barcodes').html(renderBarcodesEditable(state.summary.barcodes));
+            paintSupplierCodesField(state.summary.supplier_codes_as_barcode || []);
             $('#pqs-v-suppliers').html(renderSuppliersEditable(state.summary.suppliers));
             renderLocations((state.summary.locations && state.summary.locations.preferidas) || [], $('#pqs-v-loc-pref'), 'pref');
             renderRelation($('#pqs-v-family'), state.summary.family, 'family');
@@ -613,16 +670,7 @@
 
         $('#pqs-v-barcodes').html(renderBarcodesEditable(data.barcodes));
 
-        var supplierCodes = data.supplier_codes_as_barcode || [];
-        if (supplierCodes.length) {
-            $('#pqs-field-supplier-codes').show();
-            $('#pqs-v-supplier-codes').html(supplierCodes.map(function (b) {
-                return '<span class="pqs-chip">' + esc(b.codigo) + '</span>';
-            }).join(''));
-        } else {
-            $('#pqs-field-supplier-codes').hide();
-            $('#pqs-v-supplier-codes').empty();
-        }
+        paintSupplierCodesField(data.supplier_codes_as_barcode || []);
 
         var warnings = data.barcode_warnings || [];
         if (warnings.length) {
@@ -804,21 +852,58 @@
     function openLupa() {
         $('#pqs-lupa-modal').css('display', 'flex');
         $('#pqs-lupa-input').val($('#pqs-input').val() || '').focus();
+        renderLupaWords();
     }
 
     function closeLupa() {
         $('#pqs-lupa-modal').hide();
     }
 
+    function renderLupaWords() {
+        var $box = $('#pqs-lupa-words');
+        if (!$box.length) {
+            return;
+        }
+        if (!state.lupaWords.length) {
+            $box.empty();
+            return;
+        }
+        $box.html(state.lupaWords.map(function (w, idx) {
+            return '<span class="pqs-lupa-chip">' + esc(w) +
+                '<button type="button" class="pqs-lupa-word-remove" data-idx="' + idx +
+                '" title="Quitar" aria-label="Quitar">×</button></span>';
+        }).join(''));
+    }
+
+    function addLupaWord() {
+        var raw = ($('#pqs-lupa-word').val() || '').trim();
+        if (!raw) {
+            return;
+        }
+        var lower = raw.toLowerCase();
+        var exists = state.lupaWords.some(function (w) {
+            return w.toLowerCase() === lower;
+        });
+        if (!exists) {
+            state.lupaWords.push(raw);
+            renderLupaWords();
+        }
+        $('#pqs-lupa-word').val('').focus();
+    }
+
     function doLupaSearch() {
         var term = ($('#pqs-lupa-input').val() || '').trim();
         var field = $('#pqs-lupa-field').val() || 'todos';
-        if (term.length < 2) {
-            setStatus($('#pqs-lupa-status'), 'Escribí al menos 2 caracteres', 'empty');
+        if (term.length < 2 && !state.lupaWords.length) {
+            setStatus($('#pqs-lupa-status'), 'Escribí al menos 2 caracteres o agregá una palabra', 'empty');
             return;
         }
         setStatus($('#pqs-lupa-status'), 'Buscando…');
-        post('riverso_products_quick_search', { term: term, field: field }).then(function (r) {
+        post('riverso_products_quick_search', {
+            term: term,
+            field: field,
+            palabras: state.lupaWords.slice(),
+        }).then(function (r) {
             if (!r || !r.success) {
                 setStatus($('#pqs-lupa-status'), (r && r.data && r.data.message) || 'Error', 'error');
                 return;
@@ -998,6 +1083,22 @@
                 e.preventDefault();
                 doLupaSearch();
             }
+        });
+        $('#pqs-lupa-word-add').on('click', addLupaWord);
+        $('#pqs-lupa-word').on('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addLupaWord();
+            }
+        });
+        $('#pqs-lupa-words').on('click', '.pqs-lupa-word-remove', function (e) {
+            e.preventDefault();
+            var idx = parseInt($(this).attr('data-idx'), 10);
+            if (isNaN(idx) || idx < 0 || idx >= state.lupaWords.length) {
+                return;
+            }
+            state.lupaWords.splice(idx, 1);
+            renderLupaWords();
         });
 
         $(document).on('click', '#pqs-results-tbody .pqs-row', function () {
@@ -1364,6 +1465,46 @@
             }).fail(function () { /* cancel */ });
         });
 
+        $(document).on('click', '.pqs-supcode-remove', function () {
+            var barcodeId = $(this).data('barcode-id');
+            var code = String($(this).data('codigo') || '').trim();
+            var isLegacy = String($(this).data('legacy') || '') === '1';
+            var linked = String($(this).data('linked-supplier') || '').trim();
+            var body =
+                '<p>¿Quitar el código interno/proveedor <code>' + esc(code || barcodeId) +
+                '</code> del SKU <code>' + esc(currentSku()) + '</code>?</p>' +
+                '<p>Dejará de encontrar este producto al buscar o escanear ese código (búsqueda rápida y POS).</p>';
+            if (linked) {
+                body +=
+                    '<p><strong>Atención:</strong> este código también está vinculado como código de proveedor (' +
+                    esc(linked) + '). Ese vínculo <strong>NO</strong> se quita aquí; si también está mal, ' +
+                    'quítalo con la × en Proveedores (eso libera el SKU en las facturas).</p>';
+            }
+            if (isLegacy) {
+                body += '<p>Es un código legacy; se cerrarán sus tareas de confirmación pendientes.</p>';
+            }
+            body += '<p>El código queda como <strong>En desuso</strong> (no se borra) y queda registrado en la auditoría.</p>';
+            pqsConfirm({
+                title: 'Quitar código interno / proveedor',
+                bodyHtml: body,
+                okLabel: 'Quitar código',
+                danger: true,
+                requireCheck: true,
+            }).then(function () {
+                return post('riverso_products_remove_barcode', {
+                    barcode_id: barcodeId,
+                    product_id: state.productId,
+                    audit_reason: 'Código proveedor quitado desde Búsqueda rápida',
+                });
+            }).then(function (r) {
+                if (!r || !r.success) {
+                    alert((r && r.data && r.data.message) || 'No se pudo quitar');
+                    return;
+                }
+                refreshViewer();
+            }).fail(function () { /* cancel */ });
+        });
+
         $('#pqs-sup-search').on('input', function () {
             var $input = $(this);
             var q = ($input.val() || '').trim();
@@ -1416,7 +1557,7 @@
                 title: 'Quitar código de proveedor',
                 bodyHtml: '<p>¿Rechazar el vínculo <strong>' + esc(rowText) +
                     '</strong> del SKU <code>' + esc(currentSku()) + '</code>?</p>' +
-                    '<p>Quedará inactivo.</p>',
+                    '<p>Quedará inactivo. Se liberará el SKU en el código y en las facturas que lo usan.</p>',
                 okLabel: 'Rechazar vínculo',
                 danger: true,
                 requireCheck: true,
@@ -1426,6 +1567,11 @@
                 if (!r || !r.success) {
                     alert((r && r.data && r.data.message) || 'No se pudo rechazar');
                     return;
+                }
+                var msg = (r.data && r.data.message) || 'Código rechazado';
+                var cleared = parseInt((r.data && r.data.cleared_items) || 0, 10);
+                if (cleared > 0) {
+                    alert(msg);
                 }
                 refreshViewer();
             }).fail(function () { /* cancel */ });
@@ -1779,10 +1925,16 @@
             bindEvents();
             updatePricingUi();
             try {
-                var quick = (new URLSearchParams(window.location.search).get('quick') || '').trim();
-                if (quick) {
-                    $('#pqs-input').val(quick);
-                    doLookup();
+                var params = new URLSearchParams(window.location.search);
+                var quickId = parseInt(params.get('quick_id') || '', 10) || 0;
+                if (quickId > 0) {
+                    loadSummary(quickId);
+                } else {
+                    var quick = (params.get('quick') || '').trim();
+                    if (quick) {
+                        $('#pqs-input').val(quick);
+                        doLookup();
+                    }
                 }
             } catch (e) { /* ignore */ }
         },

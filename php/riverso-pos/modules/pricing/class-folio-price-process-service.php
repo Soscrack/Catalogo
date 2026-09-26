@@ -2903,12 +2903,14 @@ class Riverso_Folio_Price_Process_Service {
                 ? (float) $purchase_units['factor']
                 : 1.0;
 
+            $costo_folio_raw = $this->unit_cost_from_item($item);
+            $costo_folio_bases_raw = $this->unit_cost_bases_from_item($item, $current_flete_ok);
             $costo_folio = $this->scale_unit_cost_by_purchase_factor(
-                $this->unit_cost_from_item($item),
+                $costo_folio_raw,
                 $purchase_factor
             );
             $costo_folio_bases = $this->scale_cost_bases_by_purchase_factor(
-                $this->unit_cost_bases_from_item($item, $current_flete_ok),
+                $costo_folio_bases_raw,
                 $purchase_factor
             );
 
@@ -2918,8 +2920,11 @@ class Riverso_Folio_Price_Process_Service {
                 'codigo_proveedor' => $code,
                 'descripcion' => (string) ($item['nombre'] ?? $item['descripcion'] ?? ''),
                 'cantidad' => (float) ($item['cantidad'] ?? 0),
+                'unidad' => (string) ($item['unidad'] ?? ''),
                 'costo_folio' => $costo_folio,
                 'costo_folio_bases' => $costo_folio_bases,
+                'costo_folio_raw' => $costo_folio_raw,
+                'costo_folio_bases_raw' => $costo_folio_bases_raw,
                 'flete_ok' => $current_flete_ok,
                 'blocked' => false,
                 'block_reason' => '',
@@ -3413,17 +3418,21 @@ class Riverso_Folio_Price_Process_Service {
 
         $resolved = $this->resolve_estado($factura_id);
         $estado = (string) ($resolved['estado'] ?? '');
+        $is_correction = ($estado === self::STATE_INGRESADA);
 
         if (in_array($estado, [self::STATE_ANULADA, self::STATE_INGRESADA_MANUAL], true)) {
             return new WP_Error('manual', 'El folio está marcado manualmente y no se puede procesar.');
         }
-        if ($estado === self::STATE_INGRESADA) {
-            return new WP_Error('done', 'El folio ya está ingresado.');
+        if ($is_correction && !empty($resolved['is_archived'])) {
+            return new WP_Error('archived', 'El folio está archivado. Desarchívalo para corregir precios.');
         }
 
         // Permitir guardar filas válidas aunque el folio tenga errores en otras líneas.
         // Solo iniciar sesión formal si no hay blockers globales.
-        if ($estado === self::STATE_PENDING && empty($resolved['blockers'])) {
+        // Folios Ingresada (no archivados): corrección directa sin start_process ni cambio de estado.
+        if ($is_correction) {
+            // ok: corrección de precio en folio ya ingresado
+        } elseif ($estado === self::STATE_PENDING && empty($resolved['blockers'])) {
             $start = $this->start_process($factura_id);
             if (is_wp_error($start)) {
                 return $start;
@@ -3521,7 +3530,7 @@ class Riverso_Folio_Price_Process_Service {
         $meta = [
             'source_type' => 'folio',
             'source_document_id' => $factura_id,
-            'notas' => 'Procesar folio #' . $folio_label,
+            'notas' => ($is_correction ? 'Corrección folio #' : 'Procesar folio #') . $folio_label,
         ];
 
         $newest_map = $this->newest_applied_folio_by_targets([$target_id], 'local');
@@ -3542,7 +3551,7 @@ class Riverso_Folio_Price_Process_Service {
                 $newer_label = (string) ($newest['factura_id'] ?? '');
             }
             $newer_fecha = (string) ($newest['fecha'] ?? '');
-            $meta['notas'] = 'Procesar folio #' . $folio_label
+            $meta['notas'] = ($is_correction ? 'Corrección folio #' : 'Procesar folio #') . $folio_label
                 . ' (no aplicado: vigente folio #' . $newer_label
                 . ($newer_fecha !== '' ? ' · ' . $newer_fecha : '')
                 . ')';
@@ -3686,14 +3695,30 @@ class Riverso_Folio_Price_Process_Service {
 
         $this->invalidate_confirmation_caches($factura_id, $target_id);
 
-        $complete = $this->try_complete($factura_id);
-        $ready = is_array($complete) && !empty($complete['ready']);
-        $is_hybrid = is_array($complete) && !empty($complete['is_hybrid']);
-        // En modo normal, auto-completar al guardar la última línea.
-        // En híbrido, solo señalar que está listo (botón + confirmación).
+        if ($is_correction && class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('folio_price_correction', 'factura', $factura_id, [
+                'actor_type' => 'human',
+                'item_id' => $item_id,
+                'target_id' => $target_id,
+                'p_asignado_anterior' => $prev_local,
+                'p_asignado_nuevo' => $p_asignado,
+                'applied' => $applied,
+                'historial_only' => $historial_only,
+            ]);
+        }
+
+        $ready = false;
         $auto_done = false;
-        if ($ready && !$is_hybrid) {
-            $auto_done = $this->complete($factura_id) === true;
+        // Corrección en folio ya ingresado: no reescribir completed_at ni auto-completar.
+        if (!$is_correction) {
+            $complete = $this->try_complete($factura_id);
+            $ready = is_array($complete) && !empty($complete['ready']);
+            $is_hybrid = is_array($complete) && !empty($complete['is_hybrid']);
+            // En modo normal, auto-completar al guardar la última línea.
+            // En híbrido, solo señalar que está listo (botón + confirmación).
+            if ($ready && !$is_hybrid) {
+                $auto_done = $this->complete($factura_id) === true;
+            }
         }
 
         return [
@@ -3703,6 +3728,7 @@ class Riverso_Folio_Price_Process_Service {
             'applied' => $applied,
             'historial_only' => $historial_only,
             'completed' => $auto_done,
+            'corrected' => $is_correction,
             'ready_to_complete' => $ready,
             'session' => $this->get_session($factura_id),
         ];

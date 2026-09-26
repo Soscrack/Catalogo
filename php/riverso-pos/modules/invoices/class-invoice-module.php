@@ -3082,6 +3082,11 @@ class Riverso_Invoice_Module {
             ));
         }
 
+        $tasks_created = 0;
+        if ($clear) {
+            $tasks_created = $this->intake()->ensure_missing_code_tasks_for_items([$item_id]);
+        }
+
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log(
                 $clear ? 'sku_mapping_cleared' : 'sku_mapping_changed',
@@ -3107,12 +3112,16 @@ class Riverso_Invoice_Module {
         if ($applied_items > 1) {
             $base_message .= sprintf(' · aplicado a %d ítems posteriores a este documento', $applied_items);
         }
+        if ($tasks_created > 0) {
+            $base_message .= sprintf(' · %d tarea(s) de asignar SKU creadas', $tasks_created);
+        }
 
         wp_send_json_success([
             'message' => $base_message,
             'sku_local' => $new_sku,
             'estado' => $new_sku ? 'vinculado' : 'pendiente',
             'result' => $result,
+            'tasks_created' => $tasks_created,
         ]);
     }
 

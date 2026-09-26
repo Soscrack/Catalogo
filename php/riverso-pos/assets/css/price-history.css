@@ -1094,6 +1094,60 @@
     width: auto;
 }
 
+.rpf-search-link-words-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin: 8px 0;
+}
+
+.rpf-search-link-words-row > label {
+    font-size: 12px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.rpf-search-link-words-row #rpf-search-link-word {
+    min-width: 140px;
+    padding: 6px;
+    box-sizing: border-box;
+}
+
+.rpf-search-link-words {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+    min-height: 0;
+}
+
+.rpf-search-link-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: #f0f0f1;
+    border: 1px solid #c3c4c7;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.rpf-search-link-chip .rpf-search-link-word-remove {
+    border: 0;
+    background: transparent;
+    color: #646970;
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.rpf-search-link-chip .rpf-search-link-word-remove:hover {
+    color: #b32d2e;
+}
+
 .rpf-search-link-table-wrap {
     overflow: auto;
     max-height: min(360px, 45vh);
@@ -1113,6 +1167,31 @@
 
 .rpf-search-link-actions {
     white-space: nowrap;
+}
+
+.rpf-search-link-money {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    line-height: 1.25;
+    position: relative;
+    padding-right: 18px;
+}
+
+.rpf-search-link-money-bruto {
+    font-weight: 600;
+}
+
+.rpf-search-link-money .description {
+    display: block;
+    margin: 0;
+}
+
+.rpf-search-link-money .rpf-prior-origin {
+    position: absolute;
+    top: 0;
+    right: 0;
 }
 
 .rpf-completeness-badge {
@@ -1426,6 +1505,11 @@
 .rpf-pu-option strong {
     display: block;
     margin-bottom: 2px;
+}
+
+#rpf-pu-unit-cost {
+    font-weight: 600;
+    color: #1d2327;
 }
 
 /* Guía en cadena */

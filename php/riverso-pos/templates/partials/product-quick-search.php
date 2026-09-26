@@ -231,6 +231,12 @@ $can_manage_pqs = !empty($can_manage);
                 <input type="text" id="pqs-lupa-input" class="regular-text" placeholder="Buscar…" autocomplete="off">
                 <button type="button" class="button button-primary" id="pqs-lupa-search">Buscar</button>
             </div>
+            <div class="pqs-lupa-words-row">
+                <label for="pqs-lupa-word">Contiene palabra:</label>
+                <input type="text" id="pqs-lupa-word" autocomplete="off" placeholder="Una palabra…">
+                <button type="button" class="button" id="pqs-lupa-word-add">Agregar</button>
+                <div id="pqs-lupa-words" class="pqs-lupa-words"></div>
+            </div>
             <div id="pqs-lupa-status" class="pqs-status" style="display:none;"></div>
             <table class="wp-list-table widefat fixed striped pqs-grid">
                 <thead>

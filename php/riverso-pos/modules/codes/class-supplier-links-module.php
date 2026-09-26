@@ -1735,7 +1735,7 @@ class Riverso_Supplier_Links_Module {
     }
 
     /**
-     * Rechaza el vínculo legacy: desactiva el código y cierra la task.
+     * Rechaza el vínculo: desactiva el código, limpia mapeo/ítems y cierra la task.
      *
      * @return array|WP_Error
      */
@@ -1766,6 +1766,30 @@ class Riverso_Supplier_Links_Module {
             return new WP_Error('db_error', 'No se pudo rechazar el código');
         }
 
+        $cleared = ['items' => 0, 'invoices' => 0, 'costs' => 0, 'tasks' => 0];
+        $sku = trim((string) ($existing['canonical_sku'] ?? ''));
+        $proveedor_id = (int) ($existing['proveedor_id'] ?? 0);
+        $codigo = trim((string) ($existing['codigo_proveedor'] ?? ''));
+
+        if ($sku !== '' && $proveedor_id > 0 && $codigo !== '') {
+            if (!class_exists('Riverso_Invoice_Intake_Service')) {
+                $intake_file = RIVERSO_POS_PLUGIN_DIR . 'modules/invoices/class-invoice-intake-service.php';
+                if (is_readable($intake_file)) {
+                    require_once $intake_file;
+                }
+            }
+            if (class_exists('Riverso_Invoice_Intake_Service')) {
+                $intake = Riverso_Invoice_Intake_Service::get_instance();
+                $current_sku = trim((string) ($intake->get_code_current_sku($proveedor_id, $codigo) ?: ''));
+                if ($current_sku !== '' && $current_sku === $sku) {
+                    $intake->unlink_sku_from_code($proveedor_id, $codigo, $sku, [
+                        'actor_type' => 'human',
+                    ]);
+                }
+                $cleared = $intake->clear_items_for_code_sku($proveedor_id, $codigo, $sku);
+            }
+        }
+
         $this->close_codigo_proveedor_review_tasks($pp_id);
         $this->audit_log(
             'product_updated',
@@ -1776,7 +1800,17 @@ class Riverso_Supplier_Links_Module {
             $audit_reason !== '' ? $audit_reason : 'Rechazo humano de código proveedor'
         );
 
-        return $this->get_code_detail($pp_id);
+        $detail = $this->get_code_detail($pp_id);
+        if (is_wp_error($detail)) {
+            return $detail;
+        }
+        if (is_array($detail)) {
+            $detail['cleared_items'] = (int) ($cleared['items'] ?? 0);
+            $detail['cleared_invoices'] = (int) ($cleared['invoices'] ?? 0);
+            $detail['cleared_costs'] = (int) ($cleared['costs'] ?? 0);
+            $detail['cleared_tasks'] = (int) ($cleared['tasks'] ?? 0);
+        }
+        return $detail;
     }
 
     /**
@@ -1918,7 +1952,27 @@ class Riverso_Supplier_Links_Module {
         if (is_wp_error($result)) {
             wp_send_json_error(array('message' => $result->get_error_message()));
         }
-        wp_send_json_success(array('message' => 'Código rechazado', 'code' => $result));
+        $items = is_array($result) ? (int) ($result['cleared_items'] ?? 0) : 0;
+        $invoices = is_array($result) ? (int) ($result['cleared_invoices'] ?? 0) : 0;
+        $tasks = is_array($result) ? (int) ($result['cleared_tasks'] ?? 0) : 0;
+        $message = 'Código rechazado';
+        if ($items > 0) {
+            $message .= sprintf(
+                ' · se liberó el SKU en %d ítem(s) de %d factura(s)',
+                $items,
+                max(1, $invoices)
+            );
+        }
+        if ($tasks > 0) {
+            $message .= sprintf(' · %d tarea(s) de asignar SKU creadas', $tasks);
+        }
+        wp_send_json_success(array(
+            'message' => $message,
+            'code' => $result,
+            'cleared_items' => $items,
+            'cleared_invoices' => $invoices,
+            'cleared_tasks' => $tasks,
+        ));
     }
 
     public function ajax_purchase_units_request() {

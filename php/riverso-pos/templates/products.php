@@ -5,6 +5,7 @@ if (!defined('ABSPATH')) {
 $nonce = wp_create_nonce('riverso_pos_nonce');
 $can_manage = current_user_can('riverso_manage_products');
 $can_review = current_user_can('riverso_review_products') || $can_manage;
+$can_manage_codes = current_user_can('riverso_manage_codes');
 ?>
 <div class="wrap">
     <h1>Hub de Productos</h1>
@@ -1089,6 +1090,7 @@ jQuery(function($){
     const adminUrl = '<?php echo esc_js(admin_url()); ?>';
     const canManage = <?php echo $can_manage ? 'true' : 'false'; ?>;
     const canReview = <?php echo $can_review ? 'true' : 'false'; ?>;
+    const canManageCodes = <?php echo $can_manage_codes ? 'true' : 'false'; ?>;
 
     // --- Subventanas Hub: Búsqueda rápida / Búsqueda ---
     function showProductsHubTab(name, updateUrl) {
@@ -1842,6 +1844,8 @@ jQuery(function($){
                 if (s.needs_confirm) {
                     actionBtns += `<button type="button" class="button button-small button-primary btn-pp-confirm" data-id="${s.id}">Confirmar</button>
                         <button type="button" class="button button-small btn-pp-reject" data-id="${s.id}">Rechazar</button>`;
+                } else if (canManageCodes && s.id) {
+                    actionBtns += `<button type="button" class="button button-small btn-pp-unlink" data-id="${s.id}" data-codigo="${esc(s.codigo_proveedor || '')}" data-proveedor="${esc(s.proveedor_nombre || 'Proveedor')}" style="color:#b32d2e;">Desvincular</button>`;
                 }
                 const confirmBtns = actionBtns
                     ? `<div style="margin-top:6px;">${actionBtns}</div>`
@@ -3021,11 +3025,54 @@ jQuery(function($){
 
     $(document).on('click', '.btn-pp-reject', function(){
         const id = $(this).data('id');
-        if (!confirm('¿Rechazar este código? Quedará inactivo.')) return;
+        if (!confirm('¿Rechazar este código? Quedará inactivo.\n\nTambién se liberará el SKU en las facturas que lo usan y se creará una tarea «Vincular código proveedor» por cada ítem liberado.')) return;
         $.post(ajaxurl, { action: 'riverso_codes_reject', nonce, pp_id: id }, function(r){
             if (!r.success) {
                 alert(r.data?.message || 'Error al rechazar');
                 return;
+            }
+            if (r.data?.message) {
+                alert(r.data.message);
+            }
+            if (currentProduct && currentProduct.id) {
+                $.post(ajaxurl, { action: 'riverso_products_get', nonce, id: currentProduct.id }, function(resp){
+                    if (resp.success) showDetail(resp.data.item || resp.data);
+                });
+            }
+        });
+    });
+
+    $(document).on('click', '.btn-pp-unlink', function(){
+        if (!canManageCodes) return;
+        const id = $(this).data('id');
+        const codigo = String($(this).data('codigo') || '').trim();
+        const proveedor = String($(this).data('proveedor') || 'Proveedor').trim();
+        const sku = (currentProduct && (currentProduct.canonical_sku || currentProduct.sku_local)) || '—';
+        const msg =
+            'Desvincular el código ' + codigo + ' (' + proveedor + ') del SKU ' + sku + '.\n\n' +
+            'Se liberará el SKU en el mapeo del código y en todas las facturas donde este código tenga el SKU ' + sku + '.\n\n' +
+            'Esas filas quedarán Sin SKU en Precios (incluso en folios ya ingresados) y se creará una tarea «Vincular código proveedor» por cada ítem para volver a asignar SKU.\n\n' +
+            'Los costos de esos ítems quedarán pendientes de vinculación.\n\n' +
+            'El vínculo queda rechazado e inactivo (se registra en auditoría).';
+        if (!confirm(msg)) return;
+        const typed = window.prompt('Para confirmar, escribí el código exacto:\n' + codigo);
+        if (typed == null) return;
+        if (String(typed).trim() !== codigo) {
+            alert('El código no coincide. No se desvinculó.');
+            return;
+        }
+        $.post(ajaxurl, {
+            action: 'riverso_codes_reject',
+            nonce,
+            pp_id: id,
+            audit_reason: 'Desvinculado desde ficha de producto (Códigos)'
+        }, function(r){
+            if (!r.success) {
+                alert(r.data?.message || 'Error al desvincular');
+                return;
+            }
+            if (r.data?.message) {
+                alert(r.data.message);
             }
             if (currentProduct && currentProduct.id) {
                 $.post(ajaxurl, { action: 'riverso_products_get', nonce, id: currentProduct.id }, function(resp){

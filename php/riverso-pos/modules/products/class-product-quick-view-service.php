@@ -83,8 +83,32 @@ class Riverso_Product_Quick_View_Service {
         $field = isset($_POST['field']) ? sanitize_key(wp_unslash($_POST['field'])) : 'todos';
         $limit = min(40, max(5, absint($_POST['limit'] ?? 25)));
 
-        if (strlen($term) < 2) {
-            wp_send_json_error(['message' => 'Escribí al menos 2 caracteres']);
+        $palabras_raw = $_POST['palabras'] ?? [];
+        if (!is_array($palabras_raw)) {
+            $palabras_raw = $palabras_raw !== '' && $palabras_raw !== null
+                ? [$palabras_raw]
+                : [];
+        }
+        $palabras = [];
+        $seen = [];
+        foreach ($palabras_raw as $palabra) {
+            $w = trim(sanitize_text_field(wp_unslash((string) $palabra)));
+            if ($w === '') {
+                continue;
+            }
+            $key = function_exists('mb_strtolower') ? mb_strtolower($w, 'UTF-8') : strtolower($w);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $palabras[] = $w;
+            if (count($palabras) >= 10) {
+                break;
+            }
+        }
+
+        if (strlen($term) < 2 && empty($palabras)) {
+            wp_send_json_error(['message' => 'Escribí al menos 2 caracteres o agregá una palabra']);
         }
 
         $allowed = ['todos', 'nombre', 'proveedor', 'codigo_proveedor', 'sku', 'barcode', 'codigos'];
@@ -92,12 +116,13 @@ class Riverso_Product_Quick_View_Service {
             $field = 'todos';
         }
 
-        $ids = $this->search_product_ids($term, $field, $limit);
-        $items = $this->hydrate_grid_rows($ids, $term);
+        $ids = $this->search_product_ids($term, $field, $limit, $palabras);
+        $items = $this->hydrate_grid_rows($ids, $term !== '' ? $term : null);
 
         wp_send_json_success([
             'term' => $term,
             'field' => $field,
+            'palabras' => $palabras,
             'count' => count($items),
             'items' => $items,
         ]);
@@ -297,15 +322,49 @@ class Riverso_Product_Quick_View_Service {
      * @param string $term
      * @param string $field
      * @param int    $limit
+     * @param array  $palabras Palabras que deben aparecer todas en nombre_canonico (AND).
      * @return int[]
      */
-    private function search_product_ids($term, $field, $limit) {
+    private function search_product_ids($term, $field, $limit, array $palabras = []) {
         global $wpdb;
         $prefix = $this->prefix();
-        $like = '%' . $wpdb->esc_like($term) . '%';
+        $term = trim((string) $term);
+        $like = $term !== '' ? '%' . $wpdb->esc_like($term) . '%' : '';
         $ids = [];
 
         $base_where = "pb.estado = 'activo' AND pb.deleted_at IS NULL";
+        foreach ($palabras as $palabra) {
+            $w = trim((string) $palabra);
+            if ($w === '') {
+                continue;
+            }
+            $base_where .= $wpdb->prepare(
+                ' AND pb.nombre_canonico LIKE %s',
+                '%' . $wpdb->esc_like($w) . '%'
+            );
+        }
+
+        // Solo palabras: una consulta sobre producto_base.
+        if ($term === '' && !empty($palabras)) {
+            $rows = $wpdb->get_col($wpdb->prepare(
+                "SELECT pb.id FROM {$prefix}producto_base pb
+                 WHERE {$base_where}
+                 ORDER BY pb.nombre_canonico ASC
+                 LIMIT %d",
+                $limit
+            )) ?: [];
+            $unique = [];
+            foreach ($rows as $id) {
+                $id = (int) $id;
+                if ($id > 0) {
+                    $unique[$id] = true;
+                }
+                if (count($unique) >= $limit) {
+                    break;
+                }
+            }
+            return array_keys($unique);
+        }
 
         if ($field === 'sku' || $field === 'todos' || $field === 'codigos') {
             $rows = $wpdb->get_col($wpdb->prepare(

@@ -135,6 +135,7 @@ class Riverso_Product_Module {
         $limit = min(200, max(1, intval($args['limit'] ?? 20)));
         $has_search = ($search !== '');
         $woo_match = ['all' => [], 'exact' => []];
+        $palabras = is_array($args['palabras'] ?? null) ? $args['palabras'] : [];
 
         $where = [];
         $params = [];
@@ -207,6 +208,15 @@ class Riverso_Product_Module {
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
+        }
+
+        foreach ($palabras as $palabra) {
+            $w = trim((string) $palabra);
+            if ($w === '') {
+                continue;
+            }
+            $where[] = 'pb.nombre_canonico LIKE %s';
+            $params[] = '%' . $wpdb->esc_like($w) . '%';
         }
 
         $where_sql = implode(' AND ', $where);
@@ -1877,6 +1887,29 @@ class Riverso_Product_Module {
         if (!current_user_can('riverso_view_products')) {
             wp_send_json_error(['message' => 'Sin permisos'], 403);
         }
+        $palabras_raw = $_POST['palabras'] ?? [];
+        if (!is_array($palabras_raw)) {
+            $palabras_raw = $palabras_raw !== '' && $palabras_raw !== null
+                ? [$palabras_raw]
+                : [];
+        }
+        $palabras = [];
+        $seen = [];
+        foreach ($palabras_raw as $palabra) {
+            $w = trim(sanitize_text_field(wp_unslash((string) $palabra)));
+            if ($w === '') {
+                continue;
+            }
+            $key = function_exists('mb_strtolower') ? mb_strtolower($w, 'UTF-8') : strtolower($w);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $palabras[] = $w;
+            if (count($palabras) >= 10) {
+                break;
+            }
+        }
         $result = $this->list_products([
             'status' => sanitize_text_field($_POST['status'] ?? 'active'),
             'search' => sanitize_text_field($_POST['search'] ?? ''),
@@ -1884,7 +1917,36 @@ class Riverso_Product_Module {
             'catalog_id' => absint($_POST['catalog_id'] ?? 0),
             'offset' => intval($_POST['offset'] ?? 0),
             'limit' => intval($_POST['limit'] ?? 50),
+            'palabras' => $palabras,
         ]);
+
+        $with_pricing = !empty($_POST['with_pricing']) && (string) $_POST['with_pricing'] !== '0';
+        if ($with_pricing && !empty($result['items']) && class_exists('Riverso_Price_Lookup_Service')) {
+            $lookup = Riverso_Price_Lookup_Service::get_instance();
+            foreach ($result['items'] as &$item) {
+                $id = (int) ($item['id'] ?? 0);
+                if ($id <= 0) {
+                    $item['pricing'] = null;
+                    continue;
+                }
+                $pack = $lookup->get_local_price_pack($id);
+                if (!is_array($pack)) {
+                    $item['pricing'] = null;
+                    continue;
+                }
+                $item['pricing'] = [
+                    'p_asignado' => $pack['p_asignado'] ?? null,
+                    'p_neto' => $pack['p_neto'] ?? null,
+                    'c_ref_bruto' => $pack['c_ref_bruto'] ?? ($pack['c_ref'] ?? null),
+                    'c_ref_neto' => $pack['c_ref_neto'] ?? null,
+                    'iva_tipo' => $pack['iva_tipo'] ?? 'afecto',
+                    'origen_precio' => $pack['origen_precio'] ?? null,
+                    'origen_costo' => $pack['origen_costo'] ?? null,
+                ];
+            }
+            unset($item);
+        }
+
         wp_send_json_success($result);
     }
 

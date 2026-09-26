@@ -1987,6 +1987,145 @@ class Riverso_Invoice_Intake_Service {
     }
 
     /**
+     * Libera ítems de factura (y costos) que usan un SKU concreto para un par proveedor+código.
+     * No toca ítems del mismo código vinculados a otro SKU.
+     *
+     * @return array{items:int,invoices:int,costs:int,tasks:int}
+     */
+    public function clear_items_for_code_sku($proveedor_id, $codigo_proveedor, $sku_local) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $proveedor_id = (int) $proveedor_id;
+        $codigo_proveedor = trim((string) $codigo_proveedor);
+        $sku_local = trim((string) $sku_local);
+        $result = ['items' => 0, 'invoices' => 0, 'costs' => 0, 'tasks' => 0];
+        if (!$proveedor_id || $codigo_proveedor === '' || $sku_local === '') {
+            return $result;
+        }
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT fi.id AS item_id, f.id AS factura_id
+             FROM {$prefix}factura_items fi
+             INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
+             WHERE f.proveedor_id = %d
+               AND fi.codigo_proveedor = %s
+               AND fi.sku_local = %s
+               AND (fi.item_tipo = 'producto' OR fi.item_tipo IS NULL)",
+            $proveedor_id,
+            $codigo_proveedor,
+            $sku_local
+        ), ARRAY_A);
+
+        if (empty($rows)) {
+            return $result;
+        }
+
+        $item_ids = array_map('intval', array_column($rows, 'item_id'));
+        $factura_ids = array_values(array_unique(array_map('intval', array_column($rows, 'factura_id'))));
+        $placeholders = implode(',', array_fill(0, count($item_ids), '%d'));
+
+        $result['items'] = (int) $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}factura_items
+             SET sku_local = NULL,
+                 product_id = NULL,
+                 estado = 'pendiente'
+             WHERE id IN ($placeholders)",
+            ...$item_ids
+        ));
+
+        $result['costs'] = (int) $wpdb->query($wpdb->prepare(
+            "UPDATE {$prefix}cost_history
+             SET product_id = 0,
+                 pendiente_vinculacion = 1
+             WHERE source_type = 'invoice'
+               AND source_item_id IN ($placeholders)",
+            ...$item_ids
+        ));
+
+        foreach ($factura_ids as $factura_id) {
+            $this->sync_factura_item_status((int) $factura_id);
+        }
+        $result['invoices'] = count($factura_ids);
+        $result['tasks'] = $this->ensure_missing_code_tasks_for_items($item_ids);
+
+        return $result;
+    }
+
+    /**
+     * Crea tareas codigo_faltante para ítems sin SKU (dedup: no duplica abiertas).
+     *
+     * @param int[] $item_ids
+     * @return int cantidad de tareas creadas
+     */
+    public function ensure_missing_code_tasks_for_items(array $item_ids) {
+        if (!class_exists('Riverso_Task_Module')) {
+            return 0;
+        }
+        $item_ids = array_values(array_unique(array_filter(array_map('absint', $item_ids))));
+        if (!$item_ids) {
+            return 0;
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $placeholders = implode(',', array_fill(0, count($item_ids), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT fi.id, fi.codigo_proveedor, fi.descripcion, fi.nombre, fi.sku_local,
+                    p.nombre AS proveedor_nombre
+             FROM {$prefix}factura_items fi
+             INNER JOIN {$prefix}facturas f ON f.id = fi.factura_id
+             LEFT JOIN {$prefix}proveedores p ON p.id = f.proveedor_id
+             WHERE fi.id IN ($placeholders)
+               AND (fi.item_tipo = 'producto' OR fi.item_tipo IS NULL)
+               AND (fi.sku_local IS NULL OR fi.sku_local = '')
+               AND fi.codigo_proveedor IS NOT NULL AND fi.codigo_proveedor != ''",
+            ...$item_ids
+        ), ARRAY_A);
+
+        if (empty($rows)) {
+            return 0;
+        }
+
+        $task_module = Riverso_Task_Module::get_instance();
+        $created = 0;
+        foreach ($rows as $row) {
+            $item_id = (int) ($row['id'] ?? 0);
+            $codigo = trim((string) ($row['codigo_proveedor'] ?? ''));
+            if ($item_id <= 0 || $codigo === '') {
+                continue;
+            }
+
+            $existing = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$prefix}tareas
+                 WHERE tipo = 'codigo_faltante'
+                   AND referencia_tipo = 'factura_item'
+                   AND referencia_id = %d
+                   AND estado NOT IN ('completada', 'cancelada')
+                 LIMIT 1",
+                $item_id
+            ));
+            if ($existing > 0) {
+                continue;
+            }
+
+            $descripcion = (string) ($row['descripcion'] ?? $row['nombre'] ?? '');
+            $proveedor = (string) ($row['proveedor_nombre'] ?? 'Proveedor');
+            $task_id = $task_module->create_missing_code_task(
+                $item_id,
+                $codigo,
+                $descripcion,
+                $proveedor
+            );
+            if ($task_id && !is_wp_error($task_id)) {
+                $created++;
+            }
+        }
+
+        return $created;
+    }
+
+    /**
      * Historial de mapeos de un SKU o de un código proveedor.
      */
     public function get_sku_mapping_history($sku_local = '', $codigo_proveedor = '') {

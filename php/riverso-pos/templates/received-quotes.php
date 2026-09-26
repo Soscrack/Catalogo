@@ -419,7 +419,7 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
                         <button type="button" class="button rce-base-btn" data-quote-base="invoice">Facturas</button>
                         <button type="button" class="button rce-base-btn" data-quote-base="quote">Cotizaciones aprobadas</button>
                     </div>
-                    <button type="button" class="button" id="btn-draft-reclamo">Preparar reclamo</button>
+                    <button type="button" class="button" id="btn-draft-reclamo">Preparar revisión</button>
                     <button type="button" class="button" id="btn-print-quote-eval" disabled>
                         <span class="dashicons dashicons-printer" style="vertical-align:middle;margin-top:3px;"></span>
                         Imprimir
@@ -456,7 +456,7 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
     <div id="modal-reclamo" class="riverso-modal" style="display:none;">
         <div class="modal-content" style="max-width:720px;">
             <div class="modal-header">
-                <h3>Borrador de reclamo</h3>
+                <h3>Borrador de revisión</h3>
                 <button type="button" class="modal-close">&times;</button>
             </div>
             <div class="modal-body">
@@ -2432,7 +2432,7 @@ jQuery(document).ready(function($) {
         const proveedor = (quote.proveedor_nombre || '').trim() || 'estimados';
         const folio = (quote.numero_documento || quote.folio || '').trim();
         const docLabel = folio ? ('cotización ' + folio) : 'cotización';
-        const subject = folio ? ('Reclamo de precios — Cotización ' + folio) : 'Reclamo de precios';
+        const subject = folio ? ('Revisión de precios — Cotización ' + folio) : 'Revisión de precios';
         const greeting = 'Estimados ' + proveedor + ',\n\n';
         const intro = 'Junto con saludar, revisamos la ' + docLabel + ' y les pedimos por favor usar los precios anteriores en:\n\n';
         const closing = '\nQuedamos atentos a su confirmación.\n\nSaludos cordiales,\nCompras Riverso\n';
@@ -2452,7 +2452,7 @@ jQuery(document).ready(function($) {
         });
 
         if (!items.length) {
-            const empty = greeting + 'Revisamos la ' + docLabel + ' y no encontramos alzas con precio anterior para reclamar.\n' + closing;
+            const empty = greeting + 'Revisamos la ' + docLabel + ' y nos parece que los precios son correctos.\n' + closing;
             return { subject: subject, simple: empty, complex: empty, items: 0 };
         }
 
@@ -2530,7 +2530,7 @@ jQuery(document).ready(function($) {
         }, function(r) {
             if (!r.success) { alert(r.data.message); return; }
             showReclamoDrafts({
-                subject: r.data.subject || 'Reclamo de precios',
+                subject: r.data.subject || 'Revisión de precios',
                 simple: r.data.simple || r.data.draft || '',
                 complex: r.data.complex || r.data.draft || ''
             });

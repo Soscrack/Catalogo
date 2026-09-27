@@ -1860,4 +1860,661 @@ class Riverso_Competencia_Match_Service {
             'per_page' => $per_page,
         ];
     }
+
+    /**
+     * Parsea query del buscador: tokens AND, "frase exacta", -excluir.
+     *
+     * @return array{include:string[],exclude:string[],raw:string,is_url:bool,code:string}
+     */
+    public static function parse_buscador_query($search) {
+        $raw = trim((string) $search);
+        $include = [];
+        $exclude = [];
+
+        if ($raw === '') {
+            return [
+                'include' => [],
+                'exclude' => [],
+                'raw'     => '',
+                'is_url'  => false,
+                'code'    => '',
+            ];
+        }
+
+        // Frases entre comillas.
+        if (preg_match_all('/"([^"]+)"/', $raw, $quoted)) {
+            foreach ($quoted[1] as $phrase) {
+                $phrase = trim($phrase);
+                if ($phrase !== '') {
+                    $include[] = $phrase;
+                }
+            }
+            $raw_wo = preg_replace('/"[^"]+"/', ' ', $raw);
+        } else {
+            $raw_wo = $raw;
+        }
+
+        $parts = preg_split('/\s+/', trim((string) $raw_wo)) ?: [];
+        foreach ($parts as $part) {
+            $part = trim($part);
+            if ($part === '') {
+                continue;
+            }
+            if ($part[0] === '-' && strlen($part) > 1) {
+                $exclude[] = substr($part, 1);
+            } else {
+                $include[] = $part;
+            }
+        }
+
+        $is_url = (bool) preg_match('#^https?://#i', $raw);
+        $code = '';
+        if (!$is_url && count($include) === 1) {
+            $norm = self::normalize_code($include[0]);
+            // Parece código si tras normalizar queda algo sustancial y sin espacios.
+            if ($norm !== '' && strlen($norm) >= 3 && !preg_match('/\s/', $include[0])) {
+                $code = $norm;
+            }
+        }
+
+        return [
+            'include' => $include,
+            'exclude' => $exclude,
+            'raw'     => $raw,
+            'is_url'  => $is_url,
+            'code'    => $code,
+        ];
+    }
+
+    /**
+     * Limpia tokens para modo coincidencia=alguna: quita stopwords / cortos, max 8.
+     * Conserva tokens de medida (10x75, m8, 500ml, etc.).
+     *
+     * @param string[] $tokens
+     * @return string[]
+     */
+    public static function filter_alguna_tokens(array $tokens) {
+        static $stopwords = [
+            'de', 'del', 'la', 'las', 'el', 'los', 'un', 'una', 'unos', 'unas',
+            'y', 'o', 'en', 'con', 'para', 'por', 'sin', 'al', 'a', 'e', 'u',
+            'the', 'of', 'and', 'or', 'for', 'to', 'in',
+        ];
+        $out = [];
+        foreach ($tokens as $token) {
+            $token = trim((string) $token);
+            if ($token === '') {
+                continue;
+            }
+            $lower = function_exists('mb_strtolower')
+                ? mb_strtolower($token, 'UTF-8')
+                : strtolower($token);
+            // Medidas / códigos cortos válidos: 10x75, m8, 500ml, 1/2, etc.
+            $is_measure = (bool) preg_match(
+                '/^(\d+[x×]\d+|\d+(?:[.,]\d+)?(?:ml|mm|cm|l|uds?)|m\d{1,3}|\d+\/\d+)$/iu',
+                $token
+            );
+            if (!$is_measure) {
+                if (in_array($lower, $stopwords, true)) {
+                    continue;
+                }
+                $len = function_exists('mb_strlen') ? mb_strlen($token, 'UTF-8') : strlen($token);
+                if ($len < 3) {
+                    continue;
+                }
+            }
+            $out[] = $token;
+            if (count($out) >= 8) {
+                break;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Campos de búsqueda según selector "Buscar en".
+     *
+     * @return string[] columnas SQL (alias cp.)
+     */
+    private static function buscador_search_columns($campo) {
+        $campo = sanitize_key($campo);
+        switch ($campo) {
+            case 'nombre':
+                return ['cp.nombre'];
+            case 'url':
+                return ['cp.url_producto', 'cp.slug'];
+            case 'codigo':
+                return ['cp.codigo_externo', 'cp.codigo_normalizado'];
+            case 'marca':
+                return ['cp.marca'];
+            case 'todo':
+            default:
+                return [
+                    'cp.nombre',
+                    'cp.url_producto',
+                    'cp.slug',
+                    'cp.codigo_externo',
+                    'cp.codigo_normalizado',
+                    'cp.marca',
+                    'cp.nombre_categoria',
+                ];
+        }
+    }
+
+    /**
+     * Buscador de productos de competencia (todas las fuentes).
+     *
+     * @param array $args
+     * @return array{rows:array,total:int,page:int,per_page:int}
+     */
+    public static function search_competencia_productos($args = []) {
+        global $wpdb;
+        $prefix = self::prefix();
+
+        $search = isset($args['search']) ? trim((string) $args['search']) : '';
+        $campo = isset($args['campo']) ? sanitize_key($args['campo']) : 'todo';
+        $coincidencia = isset($args['coincidencia']) ? sanitize_key($args['coincidencia']) : 'todas';
+        if (!in_array($coincidencia, ['todas', 'alguna'], true)) {
+            $coincidencia = 'todas';
+        }
+        $estado = isset($args['estado']) ? sanitize_key($args['estado']) : '';
+        $tipo_match = isset($args['tipo_match']) ? sanitize_key($args['tipo_match']) : '';
+        $marca = isset($args['marca']) ? sanitize_text_field((string) $args['marca']) : '';
+        $categoria = isset($args['categoria']) ? sanitize_text_field((string) $args['categoria']) : '';
+        $orden = isset($args['orden']) ? sanitize_key($args['orden']) : 'relevancia';
+        $envase = isset($args['envase']) ? sanitize_key($args['envase']) : '';
+        $actualizado = isset($args['actualizado']) ? sanitize_key($args['actualizado']) : '';
+        $solo_precio = !empty($args['solo_precio']);
+        $excluir_oculto = !empty($args['excluir_oculto']);
+        $precio_min = isset($args['precio_min']) && $args['precio_min'] !== '' ? (float) $args['precio_min'] : null;
+        $precio_max = isset($args['precio_max']) && $args['precio_max'] !== '' ? (float) $args['precio_max'] : null;
+        $page = max(1, (int) ($args['page'] ?? 1));
+        $per_page = max(1, min(100, (int) ($args['per_page'] ?? 25)));
+        $offset = ($page - 1) * $per_page;
+
+        $fuentes = [];
+        if (!empty($args['fuentes']) && is_array($args['fuentes'])) {
+            foreach ($args['fuentes'] as $f) {
+                $f = sanitize_key($f);
+                if ($f !== '') {
+                    $fuentes[] = $f;
+                }
+            }
+            $fuentes = array_values(array_unique($fuentes));
+        } elseif (!empty($args['fuente'])) {
+            $f = sanitize_key($args['fuente']);
+            if ($f !== '') {
+                $fuentes[] = $f;
+            }
+        }
+
+        $parsed = self::parse_buscador_query($search);
+        $columns = self::buscador_search_columns($campo);
+
+        // Modo "alguna": limpiar stopwords / tokens cortos y limitar a 8.
+        $include_tokens = $parsed['include'];
+        if ($coincidencia === 'alguna' && !$parsed['is_url']) {
+            $include_tokens = self::filter_alguna_tokens($include_tokens);
+            // Si todo quedó filtrado, usar el primer token original o el raw truncado.
+            if (!$include_tokens && $parsed['include']) {
+                $fallback = $parsed['include'][0] ?? $parsed['raw'];
+                if ($fallback !== '') {
+                    $include_tokens = [$fallback];
+                }
+            }
+        }
+
+        $where = ['1=1'];
+        $params = [];
+        // Placeholders de relevancia van en SELECT (antes del WHERE) → params_rel primero en list.
+        $relevance_parts = ['0'];
+        $params_rel = [];
+        $url_hit_id = 0;
+
+        // Detección URL exacta → priorizar.
+        if ($parsed['is_url']) {
+            $found = self::find_producto_by_url($parsed['raw'], 0);
+            if ($found) {
+                $url_hit_id = (int) $found['id'];
+                $relevance_parts[] = '(CASE WHEN cp.id = %d THEN 100 ELSE 0 END)';
+                $params_rel[] = $url_hit_id;
+            }
+            $norm_url = self::normalize_product_url($parsed['raw']);
+            if ($norm_url !== '') {
+                $like_url = '%' . $wpdb->esc_like($norm_url) . '%';
+                $slug_from_url = basename(rtrim((string) wp_parse_url($norm_url, PHP_URL_PATH), '/'));
+                $where[] = '(cp.url_producto LIKE %s OR cp.slug LIKE %s)';
+                $params[] = $like_url;
+                $params[] = '%' . $wpdb->esc_like($slug_from_url) . '%';
+            }
+        } else {
+            $token_groups = [];
+            foreach ($include_tokens as $token) {
+                $token = trim($token);
+                if ($token === '') {
+                    continue;
+                }
+                $like = '%' . $wpdb->esc_like($token) . '%';
+                $ors = [];
+                foreach ($columns as $col) {
+                    $ors[] = "{$col} LIKE %s";
+                    $params[] = $like;
+                }
+                if ($ors) {
+                    $token_groups[] = '(' . implode(' OR ', $ors) . ')';
+                }
+                $relevance_parts[] = '(CASE WHEN cp.nombre LIKE %s THEN 10 ELSE 0 END)';
+                $params_rel[] = $like;
+                $relevance_parts[] = '(CASE WHEN cp.url_producto LIKE %s OR cp.slug LIKE %s THEN 6 ELSE 0 END)';
+                $params_rel[] = $like;
+                $params_rel[] = $like;
+                $relevance_parts[] = '(CASE WHEN cp.marca LIKE %s OR cp.nombre_categoria LIKE %s THEN 3 ELSE 0 END)';
+                $params_rel[] = $like;
+                $params_rel[] = $like;
+            }
+            if ($token_groups) {
+                $joiner = ($coincidencia === 'alguna') ? ' OR ' : ' AND ';
+                $where[] = '(' . implode($joiner, $token_groups) . ')';
+            }
+
+            $prefix_term = $include_tokens[0] ?? $parsed['raw'];
+            if ($prefix_term !== '') {
+                $starts = $wpdb->esc_like($prefix_term) . '%';
+                $relevance_parts[] = '(CASE WHEN cp.nombre LIKE %s THEN 30 ELSE 0 END)';
+                $params_rel[] = $starts;
+            }
+
+            if ($parsed['code'] !== '') {
+                $code = $parsed['code'];
+                $stripped = self::strip_package_prefix($code);
+                $code_prefix = $wpdb->esc_like($code) . '%';
+                $relevance_parts[] = '(CASE WHEN cp.codigo_normalizado = %s OR cp.codigo_externo = %s THEN 100
+                           WHEN cp.codigo_normalizado LIKE %s OR cp.codigo_externo LIKE %s THEN 50
+                           ELSE 0 END)';
+                $params_rel[] = $code;
+                $params_rel[] = $code;
+                $params_rel[] = $code_prefix;
+                $params_rel[] = $code_prefix;
+                if ($stripped !== '' && $stripped !== $code) {
+                    $relevance_parts[] = '(CASE WHEN cp.codigo_normalizado = %s THEN 85 ELSE 0 END)';
+                    $params_rel[] = $stripped;
+                }
+            }
+        }
+
+        foreach ($parsed['exclude'] as $token) {
+            $token = trim($token);
+            if ($token === '') {
+                continue;
+            }
+            $like = '%' . $wpdb->esc_like($token) . '%';
+            $ands = [];
+            foreach ($columns as $col) {
+                $ands[] = "({$col} IS NULL OR {$col} NOT LIKE %s)";
+                $params[] = $like;
+            }
+            if ($ands) {
+                $where[] = '(' . implode(' AND ', $ands) . ')';
+            }
+        }
+
+        if ($fuentes) {
+            $placeholders = implode(',', array_fill(0, count($fuentes), '%s'));
+            $where[] = "f.slug IN ({$placeholders})";
+            foreach ($fuentes as $f) {
+                $params[] = $f;
+            }
+        }
+
+        if ($estado === 'sin_vincular') {
+            $where[] = "(cm.id IS NULL OR cm.estado IN ('sin_match'))";
+        } elseif ($estado === 'sugerido') {
+            $where[] = "cm.estado = 'sugerido'";
+        } elseif ($estado === 'confirmado') {
+            $where[] = "cm.estado = 'confirmado'";
+        } elseif ($estado === 'rechazado') {
+            $where[] = "cm.estado = 'rechazado'";
+        }
+
+        if ($tipo_match !== '' && self::is_allowed_tipo_match($tipo_match)) {
+            $where[] = 'cm.tipo_match = %s';
+            $params[] = $tipo_match;
+            if ($estado === '') {
+                $where[] = "cm.estado = 'confirmado'";
+            }
+        }
+
+        if ($marca !== '') {
+            $where[] = 'cp.marca = %s';
+            $params[] = $marca;
+        }
+        if ($categoria !== '') {
+            $where[] = 'cp.nombre_categoria = %s';
+            $params[] = $categoria;
+        }
+
+        if ($solo_precio) {
+            $where[] = 'pr.precio_bruto_unitario IS NOT NULL AND pr.precio_bruto_unitario > 0';
+        }
+        if ($excluir_oculto) {
+            $where[] = '(pr.oculto IS NULL OR pr.oculto = 0)';
+        }
+        if ($precio_min !== null) {
+            $where[] = 'pr.precio_bruto_unitario >= %f';
+            $params[] = $precio_min;
+        }
+        if ($precio_max !== null) {
+            $where[] = 'pr.precio_bruto_unitario <= %f';
+            $params[] = $precio_max;
+        }
+
+        if ($envase === 'unitario') {
+            $where[] = '(pr.cantidad_min IS NULL OR pr.cantidad_min <= 1)';
+        } elseif ($envase === 'pack') {
+            $where[] = 'pr.cantidad_min > 1';
+        }
+
+        if (in_array($actualizado, ['7', '30', '90'], true)) {
+            $days = (int) $actualizado;
+            $where[] = 'pr.actualizado_at >= DATE_SUB(%s, INTERVAL %d DAY)';
+            $params[] = current_time('mysql');
+            $params[] = $days;
+        }
+
+        $where_sql = implode(' AND ', $where);
+        $relevance_sql = '(' . implode(' + ', $relevance_parts) . ')';
+
+        $from = "FROM {$prefix}competencia_productos cp
+            LEFT JOIN {$prefix}competencia_fuentes f ON f.id = cp.fuente_id
+            LEFT JOIN {$prefix}competencia_match cm ON cm.producto_competencia_id = cp.id
+            LEFT JOIN {$prefix}producto_base pb ON pb.id = cm.producto_base_id
+            LEFT JOIN {$prefix}competencia_precios pr ON pr.producto_id = cp.id";
+
+        $count_sql = "SELECT COUNT(*) {$from} WHERE {$where_sql}";
+        if ($params) {
+            $total = (int) $wpdb->get_var($wpdb->prepare($count_sql, $params));
+        } else {
+            $total = (int) $wpdb->get_var($count_sql);
+        }
+
+        switch ($orden) {
+            case 'precio_asc':
+                $order_sql = 'pr.precio_bruto_unitario ASC, cp.nombre ASC';
+                break;
+            case 'precio_desc':
+                $order_sql = 'pr.precio_bruto_unitario DESC, cp.nombre ASC';
+                break;
+            case 'nombre':
+                $order_sql = 'cp.nombre ASC';
+                break;
+            case 'reciente':
+                $order_sql = 'COALESCE(pr.actualizado_at, cp.updated_at) DESC, cp.id DESC';
+                break;
+            case 'relevancia':
+            default:
+                $order_sql = 'relevancia DESC, cp.nombre ASC';
+                break;
+        }
+
+        $list_sql = "SELECT cp.*, cm.id AS match_id, cm.producto_base_id, cm.metodo, cm.tipo_match,
+                cm.score AS match_score, cm.estado AS match_estado, cm.nota AS match_nota, cm.revisado_at,
+                pb.canonical_sku, pb.nombre_canonico, pb.woocommerce_product_id, pb.woocommerce_variation_id,
+                f.slug AS fuente_slug, f.nombre AS fuente_nombre,
+                pr.precio, pr.precio_lista, pr.precio_bruto_unitario, pr.precio_bruto_total,
+                pr.cantidad_min, pr.iva, pr.oculto AS precio_oculto, pr.snapshot_fecha, pr.actualizado_at,
+                {$relevance_sql} AS relevancia
+            {$from}
+            WHERE {$where_sql}
+            ORDER BY {$order_sql}
+            LIMIT %d OFFSET %d";
+
+        // Orden de placeholders: SELECT (relevancia) → WHERE → LIMIT/OFFSET.
+        $list_params = array_merge($params_rel, $params, [$per_page, $offset]);
+        $rows = $wpdb->get_results($wpdb->prepare($list_sql, $list_params), ARRAY_A) ?: [];
+
+        foreach ($rows as &$row) {
+            $row['url_producto'] = self::product_page_url($row);
+            $row['url_local'] = self::local_product_url($row);
+            $row['fuente_slug'] = (string) ($row['fuente_slug'] ?? '');
+            $row['fuente_nombre'] = (string) ($row['fuente_nombre'] ?? $row['fuente_slug']);
+            $row['match_estado'] = $row['match_estado'] ?? null;
+            if ($url_hit_id > 0 && (int) $row['id'] === $url_hit_id) {
+                $row['url_exact_hit'] = true;
+            }
+        }
+        unset($row);
+
+        return [
+            'rows'     => $rows,
+            'total'    => $total,
+            'page'     => $page,
+            'per_page' => $per_page,
+        ];
+    }
+
+    /**
+     * Opciones de filtro para el buscador (fuentes, categorías, marcas).
+     *
+     * @param string $fuente_slug slug opcional para acotar categorías/marcas
+     * @return array{fuentes:array,categorias:string[],marcas:string[]}
+     */
+    public static function buscador_filtros($fuente_slug = '') {
+        $fuente_slug = sanitize_key($fuente_slug);
+        $cache_key = 'riverso_comp_buscador_filtros_' . ($fuente_slug !== '' ? $fuente_slug : 'all');
+        $cached = get_transient($cache_key);
+        if (is_array($cached) && isset($cached['fuentes'])) {
+            return $cached;
+        }
+
+        global $wpdb;
+        $prefix = self::prefix();
+
+        $fuentes = $wpdb->get_results(
+            "SELECT id, slug, nombre FROM {$prefix}competencia_fuentes WHERE activo = 1 ORDER BY nombre ASC",
+            ARRAY_A
+        ) ?: [];
+
+        $cat_params = [];
+        $marca_params = [];
+        $fuente_join = '';
+        if ($fuente_slug !== '') {
+            $fuente_join = ' INNER JOIN ' . $prefix . 'competencia_fuentes f ON f.id = cp.fuente_id AND f.slug = %s';
+            $cat_params[] = $fuente_slug;
+            $marca_params[] = $fuente_slug;
+        }
+
+        $cat_sql = "SELECT DISTINCT cp.nombre_categoria AS val
+            FROM {$prefix}competencia_productos cp
+            {$fuente_join}
+            WHERE cp.nombre_categoria IS NOT NULL AND cp.nombre_categoria != ''
+            ORDER BY cp.nombre_categoria ASC
+            LIMIT 500";
+        if ($cat_params) {
+            $categorias = $wpdb->get_col($wpdb->prepare($cat_sql, $cat_params)) ?: [];
+        } else {
+            $categorias = $wpdb->get_col($cat_sql) ?: [];
+        }
+
+        $marca_sql = "SELECT DISTINCT cp.marca AS val
+            FROM {$prefix}competencia_productos cp
+            {$fuente_join}
+            WHERE cp.marca IS NOT NULL AND cp.marca != ''
+            ORDER BY cp.marca ASC
+            LIMIT 500";
+        if ($marca_params) {
+            $marcas = $wpdb->get_col($wpdb->prepare($marca_sql, $marca_params)) ?: [];
+        } else {
+            $marcas = $wpdb->get_col($marca_sql) ?: [];
+        }
+
+        $result = [
+            'fuentes'    => $fuentes,
+            'categorias' => array_values(array_filter(array_map('strval', $categorias))),
+            'marcas'     => array_values(array_filter(array_map('strval', $marcas))),
+        ];
+        set_transient($cache_key, $result, 10 * MINUTE_IN_SECONDS);
+        return $result;
+    }
+
+    /**
+     * Top N candidatos locales para un producto de competencia.
+     *
+     * @return array{producto:array|null,candidatos:array}
+     */
+    public static function candidatos_para_competencia($producto_competencia_id, $limit = 5) {
+        global $wpdb;
+        $prefix = self::prefix();
+        $producto_competencia_id = (int) $producto_competencia_id;
+        $limit = max(1, min(20, (int) $limit));
+
+        if ($producto_competencia_id <= 0) {
+            return ['producto' => null, 'candidatos' => []];
+        }
+
+        $producto = $wpdb->get_row($wpdb->prepare(
+            "SELECT cp.*, f.slug AS fuente_slug, f.nombre AS fuente_nombre
+             FROM {$prefix}competencia_productos cp
+             LEFT JOIN {$prefix}competencia_fuentes f ON f.id = cp.fuente_id
+             WHERE cp.id = %d",
+            $producto_competencia_id
+        ), ARRAY_A);
+
+        if (!$producto) {
+            return ['producto' => null, 'candidatos' => []];
+        }
+
+        $producto['url_producto'] = self::product_page_url($producto);
+
+        $scores = []; // producto_base_id => ['score'=>, 'metodo'=>, 'nota'=>]
+
+        $fuente_slug = (string) ($producto['fuente_slug'] ?? '');
+        $code = self::normalize_code($producto['codigo_normalizado'] ?? $producto['codigo_externo'] ?? '');
+        $codes = self::load_proveedor_codes();
+
+        if ($code !== '' && isset($codes[$code])) {
+            $scores[(int) $codes[$code]] = [
+                'score'  => 100.0,
+                'metodo' => 'codigo_exacto',
+                'nota'   => 'Match por codigo_proveedor exacto',
+            ];
+        }
+
+        if ($code !== '') {
+            $stripped = self::strip_package_prefix($code);
+            if ($stripped !== '' && $stripped !== $code && isset($codes[$stripped])) {
+                $pb = (int) $codes[$stripped];
+                if (!isset($scores[$pb]) || $scores[$pb]['score'] < 85) {
+                    $scores[$pb] = [
+                        'score'  => 85.0,
+                        'metodo' => 'codigo_prefijo',
+                        'nota'   => 'Match tras quitar prefijo de envase',
+                    ];
+                }
+            }
+        }
+
+        if (function_exists('riverso_mamut_online_to_local_sku')) {
+            $local_sku = riverso_mamut_online_to_local_sku($producto['codigo_externo'] ?? $code);
+            if ($local_sku) {
+                $pb_id = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM {$prefix}producto_base WHERE canonical_sku = %s AND deleted_at IS NULL LIMIT 1",
+                    $local_sku
+                ));
+                if ($pb_id > 0 && (!isset($scores[$pb_id]) || $scores[$pb_id]['score'] < 80)) {
+                    $scores[$pb_id] = [
+                        'score'  => 80.0,
+                        'metodo' => 'sku_mapping',
+                        'nota'   => 'sku_mapping.json -> SKU local ' . $local_sku,
+                    ];
+                }
+            }
+        }
+
+        // Similitud de nombre (+ tokens de medidas para DIMAFI).
+        $nombre_raw = (string) ($producto['nombre'] ?? '');
+        $nombre = self::normalize_name($nombre_raw);
+        if ($nombre !== '') {
+            $tokens_comp = self::extract_measure_tokens($nombre_raw);
+            $tokens_comp_set = [];
+            foreach ($tokens_comp as $t) {
+                $tokens_comp_set[$t] = true;
+            }
+            $use_measures = ($fuente_slug === 'dimafi');
+
+            foreach (self::load_productos_base() as $pb_id => $pb) {
+                $target_raw = (string) ($pb['nombre_canonico'] ?? '');
+                $target = self::normalize_name($target_raw);
+                if ($target === '') {
+                    continue;
+                }
+                similar_text($nombre, $target, $pct);
+                $score = (float) $pct;
+                $metodo = 'similitud';
+                $nota = 'similar_text sobre nombre';
+
+                if ($use_measures) {
+                    $tokens_pb = self::extract_measure_tokens($target_raw);
+                    $overlap = 0;
+                    foreach ($tokens_pb as $t) {
+                        if (isset($tokens_comp_set[$t])) {
+                            $overlap++;
+                        }
+                    }
+                    $bonus = min(20.0, $overlap * 6.0);
+                    $score += $bonus;
+                    if ($bonus > 0) {
+                        $metodo = 'similitud_medidas';
+                        $nota = 'similar_text + tokens de medidas';
+                    }
+                }
+
+                if ($score < 55) {
+                    continue;
+                }
+                $pb_id = (int) $pb_id;
+                if (!isset($scores[$pb_id]) || $scores[$pb_id]['score'] < $score) {
+                    $scores[$pb_id] = [
+                        'score'  => round($score, 2),
+                        'metodo' => $metodo,
+                        'nota'   => $nota,
+                    ];
+                }
+            }
+        }
+
+        uasort($scores, function ($a, $b) {
+            return $b['score'] <=> $a['score'];
+        });
+
+        $top = array_slice($scores, 0, $limit, true);
+        $candidatos = [];
+        if ($top) {
+            $ids = array_map('intval', array_keys($top));
+            $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+            $locals = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, canonical_sku, nombre_canonico, marca
+                 FROM {$prefix}producto_base
+                 WHERE id IN ({$placeholders}) AND deleted_at IS NULL",
+                $ids
+            ), ARRAY_A) ?: [];
+            $by_id = [];
+            foreach ($locals as $loc) {
+                $by_id[(int) $loc['id']] = $loc;
+            }
+            foreach ($top as $pb_id => $meta) {
+                if (!isset($by_id[$pb_id])) {
+                    continue;
+                }
+                $candidatos[] = array_merge($by_id[$pb_id], [
+                    'score'  => $meta['score'],
+                    'metodo' => $meta['metodo'],
+                    'nota'   => $meta['nota'],
+                ]);
+            }
+        }
+
+        return [
+            'producto'    => $producto,
+            'candidatos'  => $candidatos,
+        ];
+    }
 }

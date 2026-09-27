@@ -1,6 +1,6 @@
 <?php
 /**
- * Competencia — matching por fuente + Ingreso Manual + Fuentes.
+ * Competencia — matching por fuente + Ingreso Manual + Fuentes + Buscador.
  *
  * @package Riverso_POS
  */
@@ -16,7 +16,7 @@ if ($fuente === '') {
     $fuente = 'sande';
 }
 
-if (in_array($vista, ['ingreso', 'fuentes'], true)) {
+if (in_array($vista, ['ingreso', 'fuentes', 'buscador'], true)) {
     $modo = $vista;
 } else {
     $modo = 'matching';
@@ -27,6 +27,7 @@ $fuente_nombre = ($fuente === 'dimafi') ? 'DIMAFI' : 'Sande';
 $base_url = admin_url('admin.php?page=riverso-pos-competencia');
 $ingreso_url = add_query_arg('vista', 'ingreso', $base_url);
 $fuentes_url = add_query_arg('vista', 'fuentes', $base_url);
+$buscador_url = add_query_arg('vista', 'buscador', $base_url);
 $now_display = current_time('Y-m-d H:i:s');
 ?>
 <div class="wrap riverso-competencia-wrap">
@@ -48,6 +49,8 @@ $now_display = current_time('Y-m-d H:i:s');
            class="nav-tab <?php echo $modo === 'ingreso' ? 'nav-tab-active' : ''; ?>">Ingreso Manual</a>
         <a href="<?php echo esc_url($fuentes_url); ?>"
            class="nav-tab <?php echo $modo === 'fuentes' ? 'nav-tab-active' : ''; ?>">Fuentes</a>
+        <a href="<?php echo esc_url($buscador_url); ?>"
+           class="nav-tab <?php echo $modo === 'buscador' ? 'nav-tab-active' : ''; ?>">Buscador</a>
     </h2>
 
 <?php if ($modo === 'ingreso') : ?>
@@ -1288,6 +1291,991 @@ $now_display = current_time('Y-m-d H:i:s');
     });
 
     loadList();
+})(jQuery);
+</script>
+
+<?php elseif ($modo === 'buscador') : ?>
+
+    <div class="card" style="max-width:1400px;padding:16px 20px;margin-top:12px;">
+        <h2 style="margin-top:0;">Buscador de competencia</h2>
+        <p class="description" style="margin-top:0;">
+            Busca productos scrapeados (Sande, DIMAFI) o de ingreso manual y vincúlalos a un SKU local.
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;">
+            <label style="flex:2;min-width:260px;">
+                Buscar
+                <input type="search" id="cb-search" class="regular-text" style="width:100%;"
+                       placeholder="Palabra, código o URL…"
+                       value="<?php echo esc_attr(isset($_GET['q']) ? sanitize_text_field(wp_unslash($_GET['q'])) : ''); ?>">
+            </label>
+            <label>
+                Filtro
+                <select id="cb-modo" class="regular-text">
+                    <option value="todas">Contiene palabra</option>
+                    <option value="alguna">Contiene alguna palabra</option>
+                </select>
+            </label>
+            <button type="button" class="button button-primary" id="cb-search-btn">Buscar</button>
+            <button type="button" class="button" id="cb-toggle-filters" aria-expanded="false"
+                    style="margin-left:4px;">Ver más filtros ▾</button>
+        </div>
+        <div id="cb-more-filters" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid #dcdcde;">
+            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;">
+                <label>
+                    Buscar en
+                    <select id="cb-campo" class="regular-text">
+                        <option value="todo">Todo</option>
+                        <option value="nombre">Nombre</option>
+                        <option value="url">URL / slug</option>
+                        <option value="codigo">Código</option>
+                        <option value="marca">Marca</option>
+                    </select>
+                </label>
+                <label>
+                    Orden
+                    <select id="cb-orden" class="regular-text">
+                        <option value="relevancia">Relevancia</option>
+                        <option value="precio_asc">Precio ↑</option>
+                        <option value="precio_desc">Precio ↓</option>
+                        <option value="nombre">Nombre</option>
+                        <option value="reciente">Más reciente</option>
+                    </select>
+                </label>
+                <label>
+                    Fuentes
+                    <select id="cb-fuentes" class="regular-text" multiple size="3" style="min-width:140px;height:auto;"></select>
+                </label>
+                <label>
+                    Estado
+                    <select id="cb-estado" class="regular-text">
+                        <option value="">Todos</option>
+                        <option value="sin_vincular">Sin vincular</option>
+                        <option value="sugerido">Sugerido</option>
+                        <option value="confirmado">Confirmado</option>
+                        <option value="rechazado">Rechazado</option>
+                    </select>
+                </label>
+                <label>
+                    Tipo match
+                    <select id="cb-tipo-match" class="regular-text">
+                        <option value="">Todos</option>
+                        <option value="exacto">Exacto</option>
+                        <option value="exacto_envase">Exacto envase</option>
+                        <option value="similar">Similar</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </label>
+                <label>
+                    Categoría
+                    <select id="cb-categoria" class="regular-text" style="min-width:160px;">
+                        <option value="">Todas</option>
+                    </select>
+                </label>
+                <label>
+                    Marca
+                    <select id="cb-marca" class="regular-text" style="min-width:140px;">
+                        <option value="">Todas</option>
+                    </select>
+                </label>
+                <label>
+                    Envase
+                    <select id="cb-envase" class="regular-text">
+                        <option value="">Todos</option>
+                        <option value="unitario">1 u</option>
+                        <option value="pack">&gt; 1 u (pack)</option>
+                    </select>
+                </label>
+                <label>
+                    Actualizado
+                    <select id="cb-actualizado" class="regular-text">
+                        <option value="">Todos</option>
+                        <option value="7">Últimos 7 días</option>
+                        <option value="30">Últimos 30 días</option>
+                        <option value="90">Últimos 90 días</option>
+                    </select>
+                </label>
+                <label>
+                    Precio min
+                    <input type="number" id="cb-precio-min" class="regular-text" style="width:100px;" min="0" step="1" placeholder="—">
+                </label>
+                <label>
+                    Precio max
+                    <input type="number" id="cb-precio-max" class="regular-text" style="width:100px;" min="0" step="1" placeholder="—">
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;padding-bottom:4px;">
+                    <input type="checkbox" id="cb-solo-precio"> Solo con precio
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;padding-bottom:4px;">
+                    <input type="checkbox" id="cb-excluir-oculto"> Excluir ocultos
+                </label>
+                <button type="button" class="button" id="cb-clear-btn">Limpiar filtros</button>
+            </div>
+            <p class="description" style="margin:10px 0 0;">
+                Sintaxis: <code>"frase exacta"</code> y <code>-excluir</code>. Pegar una URL prioriza coincidencia exacta.
+            </p>
+        </div>
+    </div>
+
+    <div class="card" style="max-width:1400px;padding:0;margin-top:16px;overflow:hidden;">
+        <table class="widefat striped" id="cb-table">
+            <thead>
+                <tr>
+                    <th style="width:28px;"><input type="checkbox" id="cb-check-all" title="Seleccionar página"></th>
+                    <th>Fuente</th>
+                    <th>Producto</th>
+                    <th>Categoría / Marca</th>
+                    <th>Precio</th>
+                    <th>Estado / SKU</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="cb-tbody">
+                <tr><td colspan="7">Escribe al menos 2 caracteres o aplica filtros y pulsa Buscar.</td></tr>
+            </tbody>
+        </table>
+        <p style="padding:12px 16px;margin:0;">
+            <button type="button" class="button" id="cb-prev-btn" disabled>Anterior</button>
+            <span id="cb-page-label" style="margin:0 12px;">—</span>
+            <button type="button" class="button" id="cb-next-btn" disabled>Siguiente</button>
+        </p>
+    </div>
+
+<div id="cb-link-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100000;">
+    <div style="background:#fff;max-width:640px;margin:4vh auto;padding:20px;border-radius:6px;max-height:92vh;overflow:auto;">
+        <h2 style="margin-top:0;" id="cb-link-title">Vincular a SKU</h2>
+        <div id="cb-link-summary" style="margin-bottom:12px;"></div>
+        <div id="cb-link-reassign" style="display:none;margin-bottom:12px;padding:10px 12px;background:#fcf9e8;border-left:4px solid #dba617;"></div>
+
+        <h3 style="margin:0 0 8px;font-size:14px;">Candidatos sugeridos</h3>
+        <ul id="cb-candidatos" style="margin:0 0 16px;padding-left:18px;max-height:160px;overflow:auto;"></ul>
+
+        <h3 style="margin:0 0 8px;font-size:14px;">Buscar SKU local</h3>
+        <input type="search" id="cb-sku-search" class="regular-text" style="width:100%;" placeholder="SKU, nombre o código…">
+        <ul id="cb-sku-results" style="max-height:160px;overflow:auto;margin:8px 0 16px;padding-left:18px;"></ul>
+
+        <div id="cb-link-selected" style="display:none;margin-bottom:12px;padding:10px 12px;background:#f6f7f7;border-left:4px solid #2271b1;">
+            <strong>SKU seleccionado:</strong> <span id="cb-link-selected-label"></span>
+        </div>
+        <div id="cb-link-blockers" style="display:none;margin-bottom:12px;padding:10px 12px;background:#fcf0f1;border-left:4px solid #d63638;"></div>
+        <div id="cb-link-hint" class="description" style="display:none;margin-bottom:12px;"></div>
+
+        <label id="cb-link-tipo-wrap" style="display:none;margin-bottom:12px;">
+            Tipo de match <span style="color:#d63638;">*</span>
+            <select id="cb-link-tipo" style="width:100%;margin-top:4px;">
+                <option value="">— seleccionar —</option>
+                <option value="exacto">Exacto (mismo producto)</option>
+                <option value="exacto_envase">Exacto diferente U de envase</option>
+                <option value="similar">Similar (equivalente funcional)</option>
+                <option value="otro">Otro</option>
+            </select>
+            <span id="cb-link-tipo-error" style="display:none;color:#d63638;font-size:12px;">Debes seleccionar el tipo de match.</span>
+            <div id="cb-link-tipo-warnings" style="display:none;margin-top:8px;"></div>
+        </label>
+        <label id="cb-link-nota-wrap" style="display:none;margin-bottom:12px;">
+            Nota (opcional)
+            <textarea id="cb-link-nota" class="large-text" rows="2" style="width:100%;"></textarea>
+        </label>
+        <p style="margin:0;">
+            <button type="button" class="button button-primary" id="cb-link-submit" style="display:none;">Confirmar vínculo</button>
+            <button type="button" class="button" id="cb-link-cancel">Cerrar</button>
+        </p>
+    </div>
+</div>
+
+<div id="cb-reject-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100001;">
+    <div style="background:#fff;max-width:480px;margin:12vh auto;padding:20px;border-radius:6px;">
+        <h2 style="margin-top:0;">Rechazar producto</h2>
+        <div id="cb-reject-summary" style="margin-bottom:12px;"></div>
+        <label style="display:block;margin-bottom:12px;">
+            Nota (opcional)
+            <textarea id="cb-reject-nota" class="large-text" rows="2" style="width:100%;"></textarea>
+        </label>
+        <p style="margin:0;">
+            <button type="button" class="button button-primary" id="cb-reject-submit">Rechazar</button>
+            <button type="button" class="button" id="cb-reject-cancel">Cancelar</button>
+        </p>
+    </div>
+</div>
+
+<div id="cb-hist-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100002;">
+    <div style="background:#fff;max-width:640px;margin:6vh auto;padding:20px;border-radius:6px;max-height:88vh;overflow:auto;">
+        <h2 style="margin-top:0;" id="cb-hist-title">Historial de precios</h2>
+        <div id="cb-hist-meta" class="description" style="margin-bottom:12px;"></div>
+        <table class="widefat striped">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Bruto / u</th>
+                    <th>Bruto total</th>
+                    <th>Cant. mín</th>
+                    <th>Δ %</th>
+                </tr>
+            </thead>
+            <tbody id="cb-hist-body">
+                <tr><td colspan="5">Cargando…</td></tr>
+            </tbody>
+        </table>
+        <p style="margin-top:16px;">
+            <button type="button" class="button" id="cb-hist-close">Cerrar</button>
+        </p>
+    </div>
+</div>
+
+<script>
+(function($) {
+    const nonce = <?php echo wp_json_encode($nonce); ?>;
+    const baseUrl = <?php echo wp_json_encode($buscador_url); ?>;
+    let page = 1;
+    let searchTimer = null;
+    let skuTimer = null;
+    let listXhr = null;
+    let skuXhr = null;
+    let filtrosLoaded = false;
+    const SEARCH_DEBOUNCE_MS = 800;
+    const SEARCH_MIN_CHARS = 2;
+
+    let linkCtx = { id: 0, pb: 0, currentSku: '', currentPb: 0 };
+    let linkUnitContext = null;
+    let rejectId = 0;
+
+    function esc(s) {
+        return $('<div/>').text(s || '').html();
+    }
+    function escAttr(s) {
+        return String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;');
+    }
+    function abortXhr(xhr) {
+        if (xhr && xhr.readyState !== 4) xhr.abort();
+    }
+    function tipoMatchLabel(t) {
+        const map = {
+            exacto: 'Exacto',
+            exacto_envase: 'Exacto diferente U de envase',
+            similar: 'Similar',
+            otro: 'Otro'
+        };
+        return map[t] || t || '—';
+    }
+    function badgeU(show) {
+        return show
+            ? ' <span style="display:inline-block;padding:0 6px;border-radius:8px;background:#2271b1;color:#fff;font-size:11px;font-weight:600;">U</span>'
+            : '';
+    }
+    function fuenteBadge(slug, nombre) {
+        const s = (slug || '').toLowerCase();
+        let color = '#646970';
+        if (s === 'sande') color = '#2271b1';
+        else if (s === 'dimafi') color = '#8c5e00';
+        else if (s === 'manual') color = '#007017';
+        return '<span style="display:inline-block;padding:1px 8px;border-radius:10px;background:' +
+            color + ';color:#fff;font-size:11px;">' + esc(nombre || slug || '—') + '</span>';
+    }
+    function fmtMoney(val, digits) {
+        if (val === null || val === undefined || val === '') return '—';
+        const n = Number(val);
+        if (isNaN(n)) return '—';
+        const d = typeof digits === 'number' ? digits : 0;
+        return n.toLocaleString('es-CL', { minimumFractionDigits: Math.min(2, d), maximumFractionDigits: d || 0 });
+    }
+    function fmtPct(val) {
+        if (val === null || val === undefined || val === '') return '—';
+        const n = Number(val);
+        if (isNaN(n)) return '—';
+        const sign = n > 0 ? '+' : '';
+        const color = n > 0 ? '#b32d2e' : (n < 0 ? '#007017' : 'inherit');
+        return '<span style="color:' + color + ';">' + sign + n.toLocaleString('es-CL', {
+            minimumFractionDigits: 1, maximumFractionDigits: 2
+        }) + '%</span>';
+    }
+    function fmtPrice(row) {
+        const parts = [];
+        const brutoU = row.precio_bruto_unitario;
+        const brutoT = row.precio_bruto_total;
+        const qty = Number(row.cantidad_min || 0);
+        if (brutoU !== null && brutoU !== undefined && brutoU !== '') {
+            const u = Number(brutoU);
+            if (!isNaN(u)) {
+                parts.push('<strong>' + u.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 3 }) + '</strong> / u');
+            }
+        }
+        if (brutoT !== null && brutoT !== undefined && brutoT !== '') {
+            const t = Number(brutoT);
+            if (!isNaN(t)) {
+                const pack = qty > 1 ? ' / ' + qty.toLocaleString('es-CL') + ' u' : '';
+                parts.push(t.toLocaleString('es-CL', { maximumFractionDigits: 0 }) + pack);
+            }
+        }
+        let html = parts.join('<br>') || '—';
+        if (row.precio_oculto === '1' || row.precio_oculto === 1) {
+            html += ' <span class="description">(oculto)</span>';
+        }
+        return html;
+    }
+    function estadoLabel(estado) {
+        const map = {
+            sugerido: 'Sugerido',
+            confirmado: 'Confirmado',
+            rechazado: 'Rechazado',
+            sin_match: 'Sin match'
+        };
+        if (!estado) return '<span class="description">Sin vincular</span>';
+        return esc(map[estado] || estado);
+    }
+    function renderTipoWarnings($box, ctx, tipo) {
+        if (!$box || !$box.length) return;
+        ctx = ctx || {};
+        const parts = [];
+        if (tipo === 'exacto_envase') {
+            if (ctx.family_status === 'unknown' || ctx.family_status === 'missing') {
+                parts.push('<div style="padding:8px 10px;background:#fcf9e8;border-left:4px solid #dba617;"><strong>Advertencia familia:</strong> ' + esc(ctx.family_warning || 'Revisa el estado de familia.') + '</div>');
+            }
+            if (ctx.badge_u || ctx.is_unitario) {
+                parts.push('<div style="padding:8px 10px;background:#edf5fb;border-left:4px solid #2271b1;">Producto local unitario' + badgeU(true) + ' — se puede relacionar con cualquier unidad de envase (' + esc(String(ctx.cantidad_min || 1)) + ' u) con este tipo.</div>');
+            }
+        } else if (tipo && tipo !== 'exacto_envase' && ctx.units_differ) {
+            parts.push('<div style="padding:8px 10px;background:#fcf9e8;border-left:4px solid #dba617;"><strong>Unidades distintas:</strong> local ' + esc(ctx.local_unit_label || '1') + badgeU(!!ctx.badge_u) + ' vs competencia ' + esc(String(ctx.cantidad_min || 1)) + ' u. Si es el mismo producto con otro envase, usa “Exacto diferente U de envase”.</div>');
+        }
+        if (!parts.length) { $box.hide().empty(); return; }
+        $box.html(parts.join('')).show();
+    }
+    function confirmUnitsIfNeeded(tipo, ctx) {
+        ctx = ctx || {};
+        if (!tipo || tipo === 'exacto_envase' || !ctx.units_differ) return true;
+        return window.confirm('Las unidades son distintas (local ' + (ctx.local_unit_label || '1') + ' vs competencia ' + (ctx.cantidad_min || 1) + ' u). ¿Confirmas de todos modos?\n\nSi es el mismo producto con otro envase, cancela y elige “Exacto diferente U de envase”.');
+    }
+
+    function readFilters() {
+        const fuentes = ($('#cb-fuentes').val() || []);
+        return {
+            search: ($('#cb-search').val() || '').trim(),
+            campo: $('#cb-campo').val() || 'todo',
+            coincidencia: $('#cb-modo').val() || 'todas',
+            fuentes: Array.isArray(fuentes) ? fuentes : (fuentes ? [fuentes] : []),
+            estado: $('#cb-estado').val() || '',
+            tipo_match: $('#cb-tipo-match').val() || '',
+            marca: $('#cb-marca').val() || '',
+            categoria: $('#cb-categoria').val() || '',
+            orden: $('#cb-orden').val() || 'relevancia',
+            envase: $('#cb-envase').val() || '',
+            actualizado: $('#cb-actualizado').val() || '',
+            precio_min: $('#cb-precio-min').val() || '',
+            precio_max: $('#cb-precio-max').val() || '',
+            solo_precio: $('#cb-solo-precio').is(':checked') ? 1 : 0,
+            excluir_oculto: $('#cb-excluir-oculto').is(':checked') ? 1 : 0
+        };
+    }
+
+    function syncUrl(f) {
+        try {
+            const u = new URL(baseUrl, window.location.origin);
+            const keys = {
+                q: f.search,
+                modo: f.coincidencia !== 'todas' ? f.coincidencia : '',
+                campo: f.campo !== 'todo' ? f.campo : '',
+                fuentes: f.fuentes.join(','),
+                estado: f.estado,
+                tipo: f.tipo_match,
+                marca: f.marca,
+                cat: f.categoria,
+                orden: f.orden !== 'relevancia' ? f.orden : '',
+                envase: f.envase,
+                act: f.actualizado,
+                pmin: f.precio_min,
+                pmax: f.precio_max,
+                sp: f.solo_precio ? '1' : '',
+                xo: f.excluir_oculto ? '1' : '',
+                page: page > 1 ? String(page) : ''
+            };
+            Object.keys(keys).forEach(function(k) {
+                if (keys[k]) u.searchParams.set(k, keys[k]);
+                else u.searchParams.delete(k);
+            });
+            u.searchParams.set('vista', 'buscador');
+            window.history.replaceState({}, '', u.pathname + u.search);
+        } catch (e) { /* ignore */ }
+    }
+
+    function applyUrlParams() {
+        try {
+            const u = new URL(window.location.href);
+            const get = function(k) { return u.searchParams.get(k) || ''; };
+            if (get('campo')) $('#cb-campo').val(get('campo'));
+            if (get('modo')) $('#cb-modo').val(get('modo'));
+            if (get('estado')) $('#cb-estado').val(get('estado'));
+            if (get('tipo')) $('#cb-tipo-match').val(get('tipo'));
+            if (get('orden')) $('#cb-orden').val(get('orden'));
+            if (get('envase')) $('#cb-envase').val(get('envase'));
+            if (get('act')) $('#cb-actualizado').val(get('act'));
+            if (get('pmin')) $('#cb-precio-min').val(get('pmin'));
+            if (get('pmax')) $('#cb-precio-max').val(get('pmax'));
+            if (get('sp') === '1') $('#cb-solo-precio').prop('checked', true);
+            if (get('xo') === '1') $('#cb-excluir-oculto').prop('checked', true);
+            if (get('page')) page = Math.max(1, parseInt(get('page'), 10) || 1);
+            window._cbUrlFuentes = get('fuentes') ? get('fuentes').split(',').filter(Boolean) : [];
+            window._cbUrlMarca = get('marca');
+            window._cbUrlCat = get('cat');
+            // Abrir panel si hay filtros avanzados en la URL.
+            const hasAdvanced = !!(get('campo') || get('estado') || get('tipo') || get('orden') ||
+                get('envase') || get('act') || get('pmin') || get('pmax') || get('sp') || get('xo') ||
+                get('fuentes') || get('marca') || get('cat'));
+            if (hasAdvanced) {
+                setMoreFiltersOpen(true);
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    function setMoreFiltersOpen(open) {
+        $('#cb-more-filters').toggle(!!open);
+        $('#cb-toggle-filters')
+            .attr('aria-expanded', open ? 'true' : 'false')
+            .text(open ? 'Ocultar filtros ▴' : 'Ver más filtros ▾');
+    }
+
+    function loadFiltros(fuenteSlug) {
+        return $.post(ajaxurl, {
+            action: 'riverso_competencia_buscador_filtros',
+            nonce,
+            fuente: fuenteSlug || ''
+        }).done(function(res) {
+            if (!res.success) return;
+            const d = res.data || {};
+            if (!filtrosLoaded) {
+                const $f = $('#cb-fuentes').empty();
+                (d.fuentes || []).forEach(function(f) {
+                    $f.append($('<option>').val(f.slug).text(f.nombre || f.slug));
+                });
+                const pre = window._cbUrlFuentes || [];
+                if (pre.length) $f.val(pre);
+                filtrosLoaded = true;
+            }
+            const $cat = $('#cb-categoria').empty().append('<option value="">Todas</option>');
+            (d.categorias || []).forEach(function(c) {
+                $cat.append($('<option>').val(c).text(c));
+            });
+            const $marca = $('#cb-marca').empty().append('<option value="">Todas</option>');
+            (d.marcas || []).forEach(function(m) {
+                $marca.append($('<option>').val(m).text(m));
+            });
+            if (window._cbUrlCat) {
+                $cat.val(window._cbUrlCat);
+                window._cbUrlCat = '';
+            }
+            if (window._cbUrlMarca) {
+                $marca.val(window._cbUrlMarca);
+                window._cbUrlMarca = '';
+            }
+        });
+    }
+
+    function canSearch(f) {
+        if (f.search.length >= SEARCH_MIN_CHARS) return true;
+        if (f.fuentes.length || f.estado || f.tipo_match || f.marca || f.categoria) return true;
+        if (f.envase || f.actualizado || f.precio_min || f.precio_max) return true;
+        if (f.solo_precio || f.excluir_oculto) return true;
+        return false;
+    }
+
+    function loadList() {
+        const f = readFilters();
+        if (!canSearch(f)) {
+            $('#cb-tbody').html('<tr><td colspan="7">Escribe al menos 2 caracteres o aplica filtros y pulsa Buscar.</td></tr>');
+            $('#cb-page-label').text('—');
+            $('#cb-prev-btn, #cb-next-btn').prop('disabled', true);
+            return;
+        }
+        syncUrl(f);
+        abortXhr(listXhr);
+        $('#cb-tbody').html('<tr><td colspan="7">Cargando…</td></tr>');
+        listXhr = $.post(ajaxurl, {
+            action: 'riverso_competencia_buscador_search',
+            nonce,
+            search: f.search,
+            campo: f.campo,
+            coincidencia: f.coincidencia,
+            fuentes: f.fuentes,
+            estado: f.estado,
+            tipo_match: f.tipo_match,
+            marca: f.marca,
+            categoria: f.categoria,
+            orden: f.orden,
+            envase: f.envase,
+            actualizado: f.actualizado,
+            precio_min: f.precio_min,
+            precio_max: f.precio_max,
+            solo_precio: f.solo_precio,
+            excluir_oculto: f.excluir_oculto,
+            page,
+            per_page: 25
+        }).done(function(res) {
+            if (!res.success) {
+                $('#cb-tbody').html('<tr><td colspan="7">' + esc((res.data && res.data.message) || 'Error') + '</td></tr>');
+                return;
+            }
+            const rows = res.data.rows || [];
+            const total = res.data.total || 0;
+            const perPage = res.data.per_page || 25;
+            const pages = Math.max(1, Math.ceil(total / perPage));
+            $('#cb-page-label').text('Página ' + page + ' / ' + pages + ' (' + total + ' productos)');
+            $('#cb-prev-btn').prop('disabled', page <= 1);
+            $('#cb-next-btn').prop('disabled', page >= pages);
+            if (!rows.length) {
+                $('#cb-tbody').html('<tr><td colspan="7">Sin resultados</td></tr>');
+                return;
+            }
+            const html = rows.map(function(r) {
+                const nombre = r.url_producto
+                    ? '<a href="' + escAttr(r.url_producto) + '" target="_blank" rel="noopener noreferrer">' + esc(r.nombre || r.url_producto) + '</a>'
+                    : esc(r.nombre || '—');
+                const codigo = (r.codigo_externo || '').trim()
+                    ? '<code>' + esc(r.codigo_externo.trim()) + '</code><br>'
+                    : '';
+                const catMarca = [
+                    r.nombre_categoria ? esc(r.nombre_categoria) : '',
+                    r.marca ? esc(r.marca) : ''
+                ].filter(Boolean).join('<br>') || '<span class="description">—</span>';
+
+                let estadoHtml = estadoLabel(r.match_estado);
+                if (r.match_estado === 'confirmado' && (r.canonical_sku || r.nombre_canonico)) {
+                    const sku = r.url_local
+                        ? '<a href="' + escAttr(r.url_local) + '" target="_blank" rel="noopener noreferrer"><code>' + esc(r.canonical_sku) + '</code></a>'
+                        : '<code>' + esc(r.canonical_sku || '—') + '</code>';
+                    estadoHtml += '<br>' + sku + '<br><span class="description">' + esc(r.nombre_canonico || '') + '</span>';
+                    if (r.tipo_match) {
+                        estadoHtml += '<br><span class="description">' + esc(tipoMatchLabel(r.tipo_match)) + '</span>';
+                    }
+                } else if (r.match_estado === 'sugerido' && r.canonical_sku) {
+                    estadoHtml += '<br><span class="description">Sug: <code>' + esc(r.canonical_sku) + '</code></span>';
+                }
+
+                const actions = [];
+                if (r.url_producto) {
+                    actions.push('<a class="button" href="' + escAttr(r.url_producto) + '" target="_blank" rel="noopener noreferrer">Ver</a>');
+                }
+                const linkLabel = r.match_estado === 'confirmado' ? 'Reasignar' : 'Vincular a SKU';
+                actions.push(
+                    '<button type="button" class="button button-primary cb-link"' +
+                    ' data-id="' + r.id + '"' +
+                    ' data-nombre="' + escAttr(r.nombre || '') + '"' +
+                    ' data-codigo="' + escAttr((r.codigo_externo || '').trim()) + '"' +
+                    ' data-fuente="' + escAttr(r.fuente_nombre || r.fuente_slug || '') + '"' +
+                    ' data-url="' + escAttr(r.url_producto || '') + '"' +
+                    ' data-estado="' + escAttr(r.match_estado || '') + '"' +
+                    ' data-sku="' + escAttr(r.canonical_sku || '') + '"' +
+                    ' data-pb="' + escAttr(r.producto_base_id || 0) + '"' +
+                    '>' + linkLabel + '</button>'
+                );
+                if (!r.match_estado || r.match_estado === 'sugerido' || r.match_estado === 'sin_match') {
+                    actions.push(
+                        '<button type="button" class="button cb-reject" data-id="' + r.id +
+                        '" data-nombre="' + escAttr(r.nombre || '') +
+                        '" data-codigo="' + escAttr((r.codigo_externo || '').trim()) +
+                        '">Rechazar</button>'
+                    );
+                }
+                actions.push('<button type="button" class="button cb-serie" data-id="' + r.id + '">Serie</button>');
+
+                return '<tr>' +
+                    '<td><input type="checkbox" class="cb-row-check" value="' + r.id + '"></td>' +
+                    '<td>' + fuenteBadge(r.fuente_slug, r.fuente_nombre) + '</td>' +
+                    '<td>' + codigo + nombre + '</td>' +
+                    '<td>' + catMarca + '</td>' +
+                    '<td>' + fmtPrice(r) + '</td>' +
+                    '<td>' + estadoHtml + '</td>' +
+                    '<td style="white-space:nowrap;">' + actions.join(' ') + '</td>' +
+                    '</tr>';
+            }).join('');
+            $('#cb-tbody').html(html);
+            $('#cb-check-all').prop('checked', false);
+        }).fail(function(xhr) {
+            if (xhr.statusText === 'abort') return;
+            $('#cb-tbody').html('<tr><td colspan="7">Error al buscar</td></tr>');
+        });
+    }
+
+    function scheduleSearch(immediate) {
+        clearTimeout(searchTimer);
+        const run = function() {
+            page = 1;
+            loadList();
+        };
+        if (immediate) run();
+        else searchTimer = setTimeout(run, SEARCH_DEBOUNCE_MS);
+    }
+
+    function clearFilters() {
+        $('#cb-search').val('');
+        $('#cb-modo').val('todas');
+        $('#cb-campo').val('todo');
+        $('#cb-fuentes').val([]);
+        $('#cb-estado').val('');
+        $('#cb-tipo-match').val('');
+        $('#cb-categoria').val('');
+        $('#cb-marca').val('');
+        $('#cb-orden').val('relevancia');
+        $('#cb-envase').val('');
+        $('#cb-actualizado').val('');
+        $('#cb-precio-min').val('');
+        $('#cb-precio-max').val('');
+        $('#cb-solo-precio, #cb-excluir-oculto').prop('checked', false);
+        page = 1;
+        loadFiltros('');
+        $('#cb-tbody').html('<tr><td colspan="7">Escribe al menos 2 caracteres o aplica filtros y pulsa Buscar.</td></tr>');
+        $('#cb-page-label').text('—');
+        $('#cb-prev-btn, #cb-next-btn').prop('disabled', true);
+        syncUrl(readFilters());
+    }
+
+    // —— Modal vincular ——
+    function closeLinkModal() {
+        $('#cb-link-modal').hide();
+        linkCtx = { id: 0, pb: 0, currentSku: '', currentPb: 0 };
+        linkUnitContext = null;
+        $('#cb-sku-search').val('');
+        $('#cb-sku-results').empty();
+        $('#cb-candidatos').empty();
+        $('#cb-link-selected').hide();
+        $('#cb-link-tipo-wrap, #cb-link-nota-wrap, #cb-link-submit').hide();
+        $('#cb-link-blockers, #cb-link-hint, #cb-link-reassign, #cb-link-tipo-error, #cb-link-tipo-warnings').hide().empty();
+        $('#cb-link-tipo').val('');
+        $('#cb-link-nota').val('');
+    }
+
+    function selectLocalSku(pb, sku, nombre) {
+        linkCtx.pb = pb;
+        $('#cb-link-selected-label').html('<code>' + esc(sku) + '</code> — ' + esc(nombre || ''));
+        $('#cb-link-selected').show();
+        $('#cb-link-tipo-wrap, #cb-link-nota-wrap').show();
+        $('#cb-link-tipo').val('');
+        $('#cb-link-tipo-error').hide();
+        $('#cb-link-submit').prop('disabled', true).text('Confirmar vínculo').show();
+        $('#cb-link-blockers, #cb-link-hint').hide().empty();
+        $('#cb-sku-results').empty();
+        $('#cb-sku-search').val('');
+
+        if (linkCtx.currentPb > 0 && linkCtx.currentPb !== pb && linkCtx.currentSku) {
+            $('#cb-link-reassign').html(
+                '<strong>Actualmente vinculado a SKU <code>' + esc(linkCtx.currentSku) + '</code></strong> — se reasignará al confirmar.'
+            ).show();
+        } else {
+            $('#cb-link-reassign').hide().empty();
+        }
+
+        $.post(ajaxurl, {
+            action: 'riverso_competencia_confirm_preflight',
+            nonce,
+            producto_competencia_id: linkCtx.id,
+            producto_base_id: pb
+        }).done(function(res) {
+            if (!res.success) {
+                $('#cb-link-blockers').html('<p style="margin:0;"><strong>No se pudo validar el match.</strong></p>').show();
+                return;
+            }
+            const d = res.data || {};
+            linkUnitContext = d.unit_context || null;
+            const blockers = d.blockers || [];
+            if (blockers.length || d.message) {
+                let html = d.message ? '<p style="margin:0 0 8px;"><strong>' + esc(d.message) + '</strong></p>' : '';
+                if (blockers.length) {
+                    html += '<ul style="margin:0;padding-left:18px;">';
+                    blockers.forEach(function(b) {
+                        html += '<li>' + (b.url
+                            ? '<a href="' + escAttr(b.url) + '" target="_blank" rel="noopener noreferrer">' + esc(b.label || b.tipo) + '</a>'
+                            : esc(b.label || b.tipo)) + '</li>';
+                    });
+                    html += '</ul>';
+                }
+                $('#cb-link-blockers').html(html).show();
+            }
+            if (d.unit_hint) {
+                $('#cb-link-hint').text(d.unit_hint).show();
+            }
+            renderTipoWarnings($('#cb-link-tipo-warnings'), linkUnitContext, '');
+            if (d.can_confirm) {
+                $('#cb-link-submit').prop('disabled', false).show();
+            } else {
+                $('#cb-link-submit').hide();
+            }
+        });
+    }
+
+    function openLinkModal($btn) {
+        linkCtx = {
+            id: parseInt($btn.attr('data-id'), 10) || 0,
+            pb: 0,
+            currentSku: $btn.attr('data-sku') || '',
+            currentPb: parseInt($btn.attr('data-pb'), 10) || 0
+        };
+        const prodHtml = $btn.attr('data-url')
+            ? '<a href="' + escAttr($btn.attr('data-url')) + '" target="_blank" rel="noopener noreferrer">' + esc($btn.attr('data-nombre') || '') + '</a>'
+            : esc($btn.attr('data-nombre') || '—');
+        $('#cb-link-title').text($btn.attr('data-estado') === 'confirmado' ? 'Reasignar SKU' : 'Vincular a SKU');
+        $('#cb-link-summary').html(
+            '<div><strong>Fuente:</strong> ' + esc($btn.attr('data-fuente') || '') + '</div>' +
+            '<div><strong>Código:</strong> <code>' + esc($btn.attr('data-codigo') || '—') + '</code></div>' +
+            '<div><strong>Producto:</strong> ' + prodHtml + '</div>'
+        );
+        if (linkCtx.currentSku && $btn.attr('data-estado') === 'confirmado') {
+            $('#cb-link-reassign').html(
+                'Actualmente vinculado a <code>' + esc(linkCtx.currentSku) + '</code>. Elige otro SKU para reasignar.'
+            ).show();
+        } else {
+            $('#cb-link-reassign').hide().empty();
+        }
+        $('#cb-candidatos').html('<li class="description">Cargando candidatos…</li>');
+        $('#cb-link-selected').hide();
+        $('#cb-link-tipo-wrap, #cb-link-nota-wrap, #cb-link-submit').hide();
+        $('#cb-link-blockers, #cb-link-hint').hide().empty();
+        $('#cb-link-modal').show();
+
+        $.post(ajaxurl, {
+            action: 'riverso_competencia_buscador_candidatos',
+            nonce,
+            producto_competencia_id: linkCtx.id,
+            limit: 5
+        }).done(function(res) {
+            if (!res.success) {
+                $('#cb-candidatos').html('<li>No se pudieron cargar candidatos</li>');
+                return;
+            }
+            const cands = res.data.candidatos || [];
+            if (!cands.length) {
+                $('#cb-candidatos').html('<li class="description">Sin candidatos automáticos — busca manualmente abajo.</li>');
+                return;
+            }
+            const html = cands.map(function(c) {
+                return '<li style="margin-bottom:8px;">' +
+                    '<button type="button" class="button cb-pick-local" data-pb="' + c.id +
+                    '" data-sku="' + escAttr(c.canonical_sku || '') +
+                    '" data-nombre="' + escAttr(c.nombre_canonico || '') + '">Usar este</button> ' +
+                    '<code>' + esc(c.canonical_sku) + '</code> — ' + esc(c.nombre_canonico || '') +
+                    ' <span class="description">(' + esc(String(c.score || '')) + ' · ' + esc(c.metodo || '') + ')</span>' +
+                    '</li>';
+            }).join('');
+            $('#cb-candidatos').html(html);
+        }).fail(function() {
+            $('#cb-candidatos').html('<li>Error al cargar candidatos</li>');
+        });
+    }
+
+    function runSkuSearch(q) {
+        q = (q || '').trim();
+        if (!q || q.length < SEARCH_MIN_CHARS) {
+            $('#cb-sku-results').empty();
+            return;
+        }
+        abortXhr(skuXhr);
+        skuXhr = $.post(ajaxurl, { action: 'riverso_competencia_search_local', nonce, search: q })
+            .done(function(res) {
+                if (!res.success) return;
+                const items = (res.data.products || []).map(function(p) {
+                    return '<li style="margin-bottom:6px;"><button type="button" class="button cb-pick-local" data-pb="' + p.id +
+                        '" data-sku="' + escAttr(p.canonical_sku || '') +
+                        '" data-nombre="' + escAttr(p.nombre_canonico || '') + '">' +
+                        esc(p.canonical_sku) + ' — ' + esc(p.nombre_canonico) + '</button></li>';
+                }).join('');
+                $('#cb-sku-results').html(items || '<li>Sin resultados</li>');
+            });
+    }
+
+    // —— Reject / Serie ——
+    function openRejectModal($btn) {
+        rejectId = parseInt($btn.attr('data-id'), 10) || 0;
+        $('#cb-reject-summary').html(
+            '<p><code>' + esc($btn.attr('data-codigo') || '') + '</code> — ' + esc($btn.attr('data-nombre') || '') + '</p>' +
+            '<p class="description">Al rechazar, no se volverá a sugerir automáticamente.</p>'
+        );
+        $('#cb-reject-nota').val('');
+        $('#cb-reject-modal').show();
+    }
+
+    function openSerie(id) {
+        $('#cb-hist-title').text('Historial de precios');
+        $('#cb-hist-meta').text('Cargando…');
+        $('#cb-hist-body').html('<tr><td colspan="5">Cargando…</td></tr>');
+        $('#cb-hist-modal').show();
+        $.post(ajaxurl, {
+            action: 'riverso_competencia_price_series',
+            nonce,
+            producto_competencia_id: id
+        }).done(function(res) {
+            if (!res.success) {
+                $('#cb-hist-meta').text((res.data && res.data.message) || 'Error');
+                $('#cb-hist-body').html('<tr><td colspan="5">Sin datos</td></tr>');
+                return;
+            }
+            const p = res.data.producto || {};
+            const series = res.data.series || [];
+            $('#cb-hist-title').text('Historial — ' + ((p.codigo_externo || '').trim() || ('#' + p.id)));
+            $('#cb-hist-meta').html(
+                esc(p.nombre || '') +
+                '<br>Vigente: <strong>' + fmtMoney(p.precio_bruto_unitario, 3) + '</strong> / u' +
+                (p.actualizado_at ? ' · actualizado ' + esc(p.actualizado_at) : '')
+            );
+            if (!series.length) {
+                $('#cb-hist-body').html('<tr><td colspan="5">Sin snapshots aún</td></tr>');
+                return;
+            }
+            const html = series.map(function(pt) {
+                return '<tr>' +
+                    '<td>' + esc(pt.snapshot_fecha) + '</td>' +
+                    '<td><strong>' + fmtMoney(pt.precio_bruto_unitario, 3) + '</strong></td>' +
+                    '<td>' + fmtMoney(pt.precio_bruto_total, 0) + '</td>' +
+                    '<td>' + esc(pt.cantidad_min || '—') + '</td>' +
+                    '<td>' + fmtPct(pt.delta_pct) + '</td>' +
+                    '</tr>';
+            }).join('');
+            $('#cb-hist-body').html(html);
+        });
+    }
+
+    // Events
+    applyUrlParams();
+    loadFiltros('').always(function() {
+        const f = readFilters();
+        if (canSearch(f)) loadList();
+    });
+
+    $('#cb-search-btn').on('click', function() { scheduleSearch(true); });
+    $('#cb-clear-btn').on('click', clearFilters);
+    $('#cb-toggle-filters').on('click', function() {
+        const open = $('#cb-more-filters').is(':visible');
+        setMoreFiltersOpen(!open);
+    });
+    $('#cb-search').on('input', function() { scheduleSearch(false); });
+    $('#cb-search').on('keydown', function(e) {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            e.preventDefault();
+            scheduleSearch(true);
+        }
+    });
+    $('#cb-modo, #cb-campo, #cb-estado, #cb-tipo-match, #cb-orden, #cb-envase, #cb-actualizado, #cb-categoria, #cb-marca, #cb-solo-precio, #cb-excluir-oculto')
+        .on('change', function() { scheduleSearch(true); });
+    $('#cb-fuentes').on('change', function() {
+        const selected = $(this).val() || [];
+        const slug = (selected.length === 1) ? selected[0] : '';
+        loadFiltros(slug).always(function() { scheduleSearch(true); });
+    });
+    $('#cb-precio-min, #cb-precio-max').on('change', function() { scheduleSearch(true); });
+    $('#cb-prev-btn').on('click', function() { if (page > 1) { page--; loadList(); } });
+    $('#cb-next-btn').on('click', function() { page++; loadList(); });
+    $('#cb-check-all').on('change', function() {
+        $('.cb-row-check').prop('checked', $(this).is(':checked'));
+    });
+
+    $(document).on('click', '.cb-link', function() { openLinkModal($(this)); });
+    $(document).on('click', '.cb-reject', function() { openRejectModal($(this)); });
+    $(document).on('click', '.cb-serie', function() { openSerie($(this).data('id')); });
+    $(document).on('click', '.cb-pick-local', function() {
+        const $b = $(this);
+        selectLocalSku(parseInt($b.attr('data-pb'), 10), $b.attr('data-sku'), $b.attr('data-nombre'));
+    });
+
+    $('#cb-sku-search').on('input', function() {
+        clearTimeout(skuTimer);
+        const q = $(this).val();
+        skuTimer = setTimeout(function() { runSkuSearch(q); }, SEARCH_DEBOUNCE_MS);
+    });
+    $('#cb-sku-search').on('keydown', function(e) {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            e.preventDefault();
+            clearTimeout(skuTimer);
+            runSkuSearch($(this).val());
+        }
+    });
+
+    $('#cb-link-tipo').on('change', function() {
+        renderTipoWarnings($('#cb-link-tipo-warnings'), linkUnitContext, $(this).val() || '');
+    });
+
+    $('#cb-link-cancel, #cb-link-modal').on('click', function(e) {
+        if (e.target === this) closeLinkModal();
+    });
+
+    $('#cb-link-submit').on('click', function() {
+        if (!linkCtx.id || !linkCtx.pb) return;
+        const tipo = $('#cb-link-tipo').val() || '';
+        if (!tipo) {
+            $('#cb-link-tipo-error').show();
+            return;
+        }
+        $('#cb-link-tipo-error').hide();
+        if (linkCtx.currentPb > 0 && linkCtx.currentPb !== linkCtx.pb) {
+            if (!window.confirm('Este producto ya está vinculado a ' + (linkCtx.currentSku || 'otro SKU') + '. ¿Confirmas la reasignación?')) {
+                return;
+            }
+        }
+        if (!confirmUnitsIfNeeded(tipo, linkUnitContext)) return;
+        const $btn = $(this).prop('disabled', true).text('Guardando…');
+        $.post(ajaxurl, {
+            action: 'riverso_competencia_confirm_match',
+            nonce,
+            producto_competencia_id: linkCtx.id,
+            producto_base_id: linkCtx.pb,
+            tipo_match: tipo,
+            nota: $('#cb-link-nota').val() || '',
+            origen: 'buscador'
+        }).done(function(res) {
+            $btn.prop('disabled', false).text('Confirmar vínculo');
+            if (!res.success) {
+                let html = '<p style="margin:0 0 8px;"><strong>' + esc((res.data && res.data.message) || 'Error') + '</strong></p>';
+                const blockers = (res.data && res.data.blockers) || [];
+                if (blockers.length) {
+                    html += '<ul style="margin:0;padding-left:18px;">';
+                    blockers.forEach(function(b) {
+                        html += '<li>' + esc(b.label || b.tipo) + '</li>';
+                    });
+                    html += '</ul>';
+                }
+                $('#cb-link-blockers').html(html).show();
+                if (res.data && res.data.unit_hint) {
+                    $('#cb-link-hint').text(res.data.unit_hint).show();
+                }
+                return;
+            }
+            closeLinkModal();
+            loadList();
+        }).fail(function() {
+            $btn.prop('disabled', false).text('Confirmar vínculo');
+            alert('Error de red al confirmar');
+        });
+    });
+
+    $('#cb-reject-cancel, #cb-reject-modal').on('click', function(e) {
+        if (e.target === this) {
+            $('#cb-reject-modal').hide();
+            rejectId = 0;
+        }
+    });
+    $('#cb-reject-submit').on('click', function() {
+        if (!rejectId) return;
+        const $btn = $(this).prop('disabled', true);
+        $.post(ajaxurl, {
+            action: 'riverso_competencia_reject_match',
+            nonce,
+            producto_competencia_id: rejectId,
+            nota: $('#cb-reject-nota').val() || ''
+        }).done(function(res) {
+            $btn.prop('disabled', false);
+            if (!res.success) {
+                alert((res.data && res.data.message) || 'Error al rechazar');
+                return;
+            }
+            $('#cb-reject-modal').hide();
+            rejectId = 0;
+            loadList();
+        }).fail(function() {
+            $btn.prop('disabled', false);
+            alert('Error de red');
+        });
+    });
+
+    $('#cb-hist-close, #cb-hist-modal').on('click', function(e) {
+        if (e.target === this) $('#cb-hist-modal').hide();
+    });
 })(jQuery);
 </script>
 

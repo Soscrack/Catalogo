@@ -2069,6 +2069,7 @@
         $('#rpf-comp-modal').hide().attr('aria-hidden', 'true');
         rpfCompCtx = null;
         rpfCompClearForm();
+        rpfCiResetPanel();
     }
 
     function openRpfCompModal(opts) {
@@ -2084,6 +2085,7 @@
             unit_context: null
         };
         rpfCompClearForm();
+        rpfCiResetPanel();
         $('#rpf-comp-title').text('Competencia');
         $('#rpf-comp-product-label').html(
             '<code>' + esc(rpfCompCtx.sku) + '</code> ' + esc(rpfCompCtx.nombre)
@@ -2098,6 +2100,370 @@
         if (canManageCompetencia) {
             rpfCompRefreshUnitContext();
         }
+    }
+
+    // —— Buscar en Fuentes Internas (panel inline) ——
+    var rpfCiPage = 1;
+    var rpfCiTimer = null;
+    var rpfCiXhr = null;
+    var rpfCiExpandId = 0;
+    var rpfCiLinkUnitCtx = null;
+    var rpfCiLastData = null;
+    var RPF_CI_DEBOUNCE = 800;
+    var RPF_CI_PER_PAGE = 10;
+
+    function rpfCiResetPanel() {
+        $('#rpf-comp-internal-wrap').attr('hidden', true);
+        $('#rpf-ci-search').val('');
+        $('#rpf-ci-modo').val('alguna');
+        $('#rpf-ci-fuente').val('');
+        $('#rpf-ci-hide-linked').prop('checked', true);
+        $('#rpf-ci-body').html('<tr><td colspan="5" class="description">Pulsa “Buscar en Fuentes Internas” para buscar.</td></tr>');
+        $('#rpf-ci-page-label').text('—');
+        $('#rpf-ci-prev, #rpf-ci-next').prop('disabled', true);
+        $('#rpf-ci-status').text('');
+        rpfCiShowMsg('');
+        rpfCiPage = 1;
+        rpfCiExpandId = 0;
+        rpfCiLinkUnitCtx = null;
+        rpfCiLastData = null;
+        if (rpfCiXhr && rpfCiXhr.readyState !== 4) {
+            rpfCiXhr.abort();
+        }
+        rpfCiXhr = null;
+        clearTimeout(rpfCiTimer);
+    }
+
+    function rpfCiShowMsg(html, isError) {
+        var $msg = $('#rpf-ci-msg');
+        if (!html) {
+            $msg.hide().removeClass('is-error is-ok').empty();
+            return;
+        }
+        $msg.html(html)
+            .removeClass('is-error is-ok')
+            .addClass(isError ? 'is-error' : 'is-ok')
+            .show();
+    }
+
+    function rpfCiFuenteBadge(slug, nombre) {
+        var s = (slug || '').toLowerCase();
+        var color = '#646970';
+        if (s === 'sande') color = '#2271b1';
+        else if (s === 'dimafi') color = '#8c5e00';
+        else if (s === 'manual') color = '#007017';
+        return '<span style="display:inline-block;padding:1px 8px;border-radius:10px;background:' +
+            color + ';color:#fff;font-size:11px;">' + esc(nombre || slug || '—') + '</span>';
+    }
+
+    function rpfCiFmtPrice(row) {
+        var u = row.precio_bruto_unitario;
+        if (u === null || u === undefined || u === '') return '—';
+        var n = Number(u);
+        if (isNaN(n)) return '—';
+        return n.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
+    }
+
+    function rpfCiBuscadorUrl(q) {
+        var base = (typeof ajaxurl !== 'undefined')
+            ? ajaxurl.replace(/admin-ajax\.php.*/, 'admin.php')
+            : '/wp-admin/admin.php';
+        return base + '?page=riverso-pos-competencia&vista=buscador&q=' + encodeURIComponent(q || '');
+    }
+
+    function openRpfCiPanel() {
+        if (!rpfCompCtx || !rpfCompCtx.producto_base_id) {
+            return;
+        }
+        if (!canManageCompetencia) {
+            window.alert('Sin permisos para vincular competencia.');
+            return;
+        }
+        var nombre = rpfCompCtx.nombre || '';
+        $('#rpf-comp-internal-wrap').removeAttr('hidden');
+        $('#rpf-ci-search').val(nombre);
+        $('#rpf-ci-modo').val('alguna');
+        $('#rpf-ci-open-buscador').attr('href', rpfCiBuscadorUrl(nombre));
+        rpfCiPage = 1;
+        var $wrap = $('#rpf-comp-internal-wrap');
+        var $modalBody = $wrap.closest('.rpf-modal-body');
+        if ($modalBody.length) {
+            $modalBody.animate({ scrollTop: $wrap.position().top + $modalBody.scrollTop() - 20 }, 200);
+        }
+        rpfCiSearch(true);
+    }
+
+    function rpfCiSearch(immediate) {
+        clearTimeout(rpfCiTimer);
+        var run = function () {
+            if (!rpfCompCtx || !rpfCompCtx.producto_base_id) return;
+            var q = ($('#rpf-ci-search').val() || '').trim();
+            if (q.length < 2) {
+                $('#rpf-ci-body').html('<tr><td colspan="5" class="description">Escribe al menos 2 caracteres.</td></tr>');
+                $('#rpf-ci-page-label').text('—');
+                $('#rpf-ci-prev, #rpf-ci-next').prop('disabled', true);
+                $('#rpf-ci-status').text('');
+                return;
+            }
+            $('#rpf-ci-open-buscador').attr('href', rpfCiBuscadorUrl(q));
+            $('#rpf-ci-status').text('Buscando…');
+            $('#rpf-ci-body').html('<tr><td colspan="5">Cargando…</td></tr>');
+            if (rpfCiXhr && rpfCiXhr.readyState !== 4) {
+                rpfCiXhr.abort();
+            }
+            var fuente = $('#rpf-ci-fuente').val() || '';
+            var fuentes = fuente ? [fuente] : [];
+            rpfCiXhr = post('riverso_competencia_buscador_search', {
+                search: q,
+                campo: 'todo',
+                coincidencia: $('#rpf-ci-modo').val() || 'alguna',
+                fuentes: fuentes,
+                orden: 'relevancia',
+                page: rpfCiPage,
+                per_page: RPF_CI_PER_PAGE
+            });
+            rpfCiXhr.done(function (res) {
+                if (!res.success) {
+                    $('#rpf-ci-status').text((res.data && res.data.message) || 'Error');
+                    $('#rpf-ci-body').html('<tr><td colspan="5">' + esc((res.data && res.data.message) || 'Error') + '</td></tr>');
+                    return;
+                }
+                rpfCiLastData = res.data || {};
+                renderRpfCiRows(rpfCiLastData);
+            }).fail(function (xhr) {
+                if (xhr.statusText === 'abort') return;
+                $('#rpf-ci-status').text('Error de red');
+                $('#rpf-ci-body').html('<tr><td colspan="5">Error de red</td></tr>');
+            });
+        };
+        if (immediate) run();
+        else rpfCiTimer = setTimeout(run, RPF_CI_DEBOUNCE);
+    }
+
+    function renderRpfCiRows(data) {
+        var rows = data.rows || [];
+        var total = data.total || 0;
+        var perPage = data.per_page || RPF_CI_PER_PAGE;
+        var pages = Math.max(1, Math.ceil(total / perPage));
+        var hideLinked = $('#rpf-ci-hide-linked').is(':checked');
+        var pbId = rpfCompCtx ? rpfCompCtx.producto_base_id : 0;
+
+        var filtered = rows.filter(function (r) {
+            if (!hideLinked) return true;
+            return !(r.match_estado === 'confirmado' && parseInt(r.producto_base_id, 10) === pbId);
+        });
+
+        $('#rpf-ci-page-label').text('Página ' + rpfCiPage + ' / ' + pages + ' (' + total + ' productos)');
+        $('#rpf-ci-prev').prop('disabled', rpfCiPage <= 1);
+        $('#rpf-ci-next').prop('disabled', rpfCiPage >= pages);
+        $('#rpf-ci-status').text(filtered.length
+            ? (filtered.length + ' en esta página' + (hideLinked && filtered.length < rows.length ? ' (ocultos los ya vinculados)' : ''))
+            : 'Sin resultados');
+
+        if (!filtered.length) {
+            $('#rpf-ci-body').html('<tr><td colspan="5">Sin resultados</td></tr>');
+            return;
+        }
+
+        var html = filtered.map(function (r) {
+            var nombre = r.url_producto
+                ? '<a href="' + rpfCompEscAttr(r.url_producto) + '" target="_blank" rel="noopener noreferrer">' + esc(r.nombre || r.url_producto) + '</a>'
+                : esc(r.nombre || '—');
+            var codigo = (r.codigo_externo || '').trim()
+                ? '<br><code>' + esc(r.codigo_externo.trim()) + '</code>'
+                : '';
+            var estadoHtml = '';
+            var action = '';
+            var rowPb = parseInt(r.producto_base_id, 10) || 0;
+            if (r.match_estado === 'confirmado' && rowPb === pbId) {
+                estadoHtml = '<span style="display:inline-block;padding:1px 8px;border-radius:10px;background:#007017;color:#fff;font-size:11px;">Ya vinculado a este SKU</span>';
+                action = '—';
+            } else if (r.match_estado === 'confirmado' && rowPb > 0) {
+                estadoHtml = 'Vinculado a <code>' + esc(r.canonical_sku || ('#' + rowPb)) + '</code>';
+                action = '<button type="button" class="button button-small rpf-ci-link" data-id="' + r.id +
+                    '" data-nombre="' + rpfCompEscAttr(r.nombre || '') +
+                    '" data-codigo="' + rpfCompEscAttr((r.codigo_externo || '').trim()) +
+                    '" data-sku="' + rpfCompEscAttr(r.canonical_sku || '') +
+                    '" data-pb="' + rowPb +
+                    '" data-reassign="1">Reasignar aquí</button>';
+            } else {
+                if (r.match_estado === 'sugerido') {
+                    estadoHtml = 'Sugerido' + (r.canonical_sku ? ' → <code>' + esc(r.canonical_sku) + '</code>' : '');
+                } else if (r.match_estado === 'rechazado') {
+                    estadoHtml = 'Rechazado';
+                } else {
+                    estadoHtml = '<span class="description">Sin vincular</span>';
+                }
+                action = '<button type="button" class="button button-small button-primary rpf-ci-link" data-id="' + r.id +
+                    '" data-nombre="' + rpfCompEscAttr(r.nombre || '') +
+                    '" data-codigo="' + rpfCompEscAttr((r.codigo_externo || '').trim()) +
+                    '" data-sku="' + rpfCompEscAttr(r.canonical_sku || '') +
+                    '" data-pb="' + rowPb +
+                    '" data-reassign="0">Vincular a este SKU</button>';
+            }
+            var expand = '';
+            if (rpfCiExpandId === parseInt(r.id, 10)) {
+                expand = '<tr class="rpf-ci-expand" data-for="' + r.id + '"><td colspan="5">' +
+                    '<div class="rpf-ci-link-panel" style="padding:10px 12px;background:#f6f7f7;border-left:4px solid #2271b1;">' +
+                    '<div class="rpf-ci-preflight description">Cargando validación…</div>' +
+                    '<div class="rpf-ci-blockers" style="display:none;margin:8px 0;padding:8px 10px;background:#fcf0f1;border-left:4px solid #d63638;"></div>' +
+                    '<div class="rpf-ci-warnings" style="display:none;margin:8px 0;"></div>' +
+                    '<label style="display:block;margin:8px 0;">Tipo de match <span style="color:#d63638;">*</span>' +
+                    '<select class="rpf-ci-tipo" style="width:100%;max-width:320px;margin-top:4px;">' +
+                    '<option value="">— seleccionar —</option>' +
+                    '<option value="exacto">Exacto (mismo producto)</option>' +
+                    '<option value="exacto_envase">Exacto diferente U de envase</option>' +
+                    '<option value="similar">Similar (equivalente funcional)</option>' +
+                    '<option value="otro">Otro</option>' +
+                    '</select></label>' +
+                    '<label style="display:block;margin:8px 0;">Nota (opcional)' +
+                    '<textarea class="rpf-ci-nota large-text" rows="2" style="width:100%;max-width:480px;"></textarea></label>' +
+                    '<p style="margin:8px 0 0;">' +
+                    '<button type="button" class="button button-primary rpf-ci-confirm" data-id="' + r.id +
+                    '" data-reassign="' + (r.match_estado === 'confirmado' && rowPb && rowPb !== pbId ? '1' : '0') +
+                    '" data-sku="' + rpfCompEscAttr(r.canonical_sku || '') + '">Confirmar vínculo</button> ' +
+                    '<button type="button" class="button rpf-ci-cancel-link">Cancelar</button>' +
+                    '</p></div></td></tr>';
+            }
+            return '<tr data-ci-id="' + r.id + '">' +
+                '<td>' + rpfCiFuenteBadge(r.fuente_slug, r.fuente_nombre) + '</td>' +
+                '<td>' + nombre + codigo + '</td>' +
+                '<td style="text-align:right">' + rpfCiFmtPrice(r) + '</td>' +
+                '<td>' + estadoHtml + '</td>' +
+                '<td style="white-space:nowrap;">' + action + '</td>' +
+                '</tr>' + expand;
+        }).join('');
+        $('#rpf-ci-body').html(html);
+
+        if (rpfCiExpandId) {
+            rpfCiLoadPreflight(rpfCiExpandId);
+        }
+    }
+
+    function rpfCiLoadPreflight(compId) {
+        if (!rpfCompCtx || !rpfCompCtx.producto_base_id) return;
+        var $row = $('#rpf-ci-body tr.rpf-ci-expand[data-for="' + compId + '"]');
+        if (!$row.length) return;
+        post('riverso_competencia_confirm_preflight', {
+            producto_competencia_id: compId,
+            producto_base_id: rpfCompCtx.producto_base_id
+        }).done(function (res) {
+            if (!res.success) {
+                $row.find('.rpf-ci-preflight').text('No se pudo validar el match.');
+                $row.find('.rpf-ci-confirm').prop('disabled', true);
+                return;
+            }
+            var d = res.data || {};
+            rpfCiLinkUnitCtx = d.unit_context || null;
+            var sande = d.sande || {};
+            var local = d.local || {};
+            $row.find('.rpf-ci-preflight').html(
+                '<strong>Competencia:</strong> <code>' + esc(sande.codigo || '') + '</code> ' + esc(sande.nombre || '') +
+                ' <span class="description">(' + esc(String(sande.cantidad_min || (rpfCiLinkUnitCtx && rpfCiLinkUnitCtx.cantidad_min) || 1)) + ' u)</span><br>' +
+                '<strong>Local:</strong> <code>' + esc(local.canonical_sku || rpfCompCtx.sku || '') + '</code> ' +
+                esc(local.nombre_canonico || rpfCompCtx.nombre || '')
+            );
+            var blockers = d.blockers || [];
+            if (blockers.length || d.message) {
+                var html = d.message ? '<strong>' + esc(d.message) + '</strong>' : '';
+                if (blockers.length) {
+                    html += '<ul style="margin:6px 0 0;padding-left:18px;">';
+                    blockers.forEach(function (b) {
+                        html += '<li>' + esc(b.label || b.tipo) + '</li>';
+                    });
+                    html += '</ul>';
+                }
+                $row.find('.rpf-ci-blockers').html(html).show();
+            } else {
+                $row.find('.rpf-ci-blockers').hide().empty();
+            }
+            // Reuse tipo warnings renderer into this panel's box.
+            var $warn = $row.find('.rpf-ci-warnings');
+            rpfCompRenderTipoWarningsInto($warn, rpfCiLinkUnitCtx, $row.find('.rpf-ci-tipo').val() || '');
+            $row.find('.rpf-ci-confirm').prop('disabled', !d.can_confirm).toggle(!!d.can_confirm);
+        }).fail(function () {
+            $row.find('.rpf-ci-preflight').text('Error de red al validar.');
+            $row.find('.rpf-ci-confirm').prop('disabled', true);
+        });
+    }
+
+    function rpfCompRenderTipoWarningsInto($box, ctx, tipo) {
+        if (!$box || !$box.length) return;
+        ctx = ctx || {};
+        var parts = [];
+        if (tipo === 'exacto_envase') {
+            if (ctx.family_status === 'unknown' || ctx.family_status === 'missing') {
+                parts.push('<div style="padding:8px 10px;background:#fcf9e8;border-left:4px solid #dba617;">' +
+                    '<strong>Advertencia familia:</strong> ' + esc(ctx.family_warning || 'Revisa el estado de familia.') +
+                    '</div>');
+            }
+            if (ctx.badge_u || ctx.is_unitario) {
+                parts.push('<div style="padding:8px 10px;background:#edf5fb;border-left:4px solid #2271b1;">' +
+                    'Producto local unitario — se puede relacionar con cualquier unidad de envase (' +
+                    esc(String(ctx.cantidad_min || 1)) + ' u) con este tipo.</div>');
+            }
+        } else if (tipo && tipo !== 'exacto_envase' && ctx.units_differ) {
+            parts.push('<div style="padding:8px 10px;background:#fcf9e8;border-left:4px solid #dba617;">' +
+                '<strong>Unidades distintas:</strong> local ' + esc(ctx.local_unit_label || '1') +
+                ' vs competencia ' + esc(String(ctx.cantidad_min || 1)) + ' u.</div>');
+        }
+        if (!parts.length) {
+            $box.hide().empty();
+            return;
+        }
+        $box.html(parts.join('')).show();
+    }
+
+    function rpfCiConfirmLink($btn) {
+        if (!rpfCompCtx || !rpfCompCtx.producto_base_id) return;
+        var $panel = $btn.closest('.rpf-ci-link-panel');
+        var tipo = $panel.find('.rpf-ci-tipo').val() || '';
+        if (!tipo) {
+            window.alert('Debes seleccionar el tipo de match.');
+            return;
+        }
+        var reassign = $btn.attr('data-reassign') === '1';
+        var otherSku = $btn.attr('data-sku') || '';
+        if (reassign) {
+            if (!window.confirm('Este producto ya está vinculado a ' + (otherSku || 'otro SKU') + '. ¿Confirmas la reasignación a ' + (rpfCompCtx.sku || 'este SKU') + '?')) {
+                return;
+            }
+        }
+        if (!rpfCompConfirmUnitsIfNeeded(tipo, rpfCiLinkUnitCtx)) {
+            return;
+        }
+        var compId = parseInt($btn.attr('data-id'), 10) || 0;
+        $btn.prop('disabled', true).text('Guardando…');
+        post('riverso_competencia_confirm_match', {
+            producto_competencia_id: compId,
+            producto_base_id: rpfCompCtx.producto_base_id,
+            tipo_match: tipo,
+            nota: $panel.find('.rpf-ci-nota').val() || '',
+            origen: 'pricing'
+        }).done(function (res) {
+            $btn.prop('disabled', false).text('Confirmar vínculo');
+            if (!res.success) {
+                var html = '<strong>' + esc((res.data && res.data.message) || 'Error al confirmar') + '</strong>';
+                var blockers = (res.data && res.data.blockers) || [];
+                if (blockers.length) {
+                    html += '<ul style="margin:6px 0 0;padding-left:18px;">';
+                    blockers.forEach(function (b) {
+                        html += '<li>' + esc(b.label || b.tipo) + '</li>';
+                    });
+                    html += '</ul>';
+                }
+                $panel.find('.rpf-ci-blockers').html(html).show();
+                return;
+            }
+            rpfCiExpandId = 0;
+            rpfCiLinkUnitCtx = null;
+            rpfCiShowMsg('Vínculo confirmado con <code>' + esc(rpfCompCtx.sku || '') + '</code>.', false);
+            loadRpfCompetencia();
+            rpfCiSearch(true);
+        }).fail(function () {
+            $btn.prop('disabled', false).text('Confirmar vínculo');
+            window.alert('Error de red al confirmar');
+        });
     }
 
     function submitRpfCompManual() {
@@ -5903,6 +6269,70 @@
                 return;
             }
             window.open(rpfGoogleUrl(nombre), '_blank', 'noopener,noreferrer');
+        });
+        $(document).on('click', '#rpf-comp-internal', function () {
+            openRpfCiPanel();
+        });
+        $(document).on('click', '#rpf-ci-search-btn', function () {
+            rpfCiPage = 1;
+            rpfCiExpandId = 0;
+            rpfCiSearch(true);
+        });
+        $(document).on('input', '#rpf-ci-search', function () {
+            rpfCiPage = 1;
+            rpfCiExpandId = 0;
+            rpfCiSearch(false);
+        });
+        $(document).on('keydown', '#rpf-ci-search', function (e) {
+            if (e.key === 'Enter' || e.keyCode === 13) {
+                e.preventDefault();
+                rpfCiPage = 1;
+                rpfCiExpandId = 0;
+                rpfCiSearch(true);
+            }
+        });
+        $(document).on('change', '#rpf-ci-modo, #rpf-ci-fuente, #rpf-ci-hide-linked', function () {
+            rpfCiPage = 1;
+            rpfCiExpandId = 0;
+            if ($(this).is('#rpf-ci-hide-linked') && rpfCiLastData) {
+                renderRpfCiRows(rpfCiLastData);
+                return;
+            }
+            rpfCiSearch(true);
+        });
+        $(document).on('click', '#rpf-ci-prev', function () {
+            if (rpfCiPage > 1) {
+                rpfCiPage--;
+                rpfCiExpandId = 0;
+                rpfCiSearch(true);
+            }
+        });
+        $(document).on('click', '#rpf-ci-next', function () {
+            rpfCiPage++;
+            rpfCiExpandId = 0;
+            rpfCiSearch(true);
+        });
+        $(document).on('click', '.rpf-ci-link', function () {
+            rpfCiExpandId = parseInt($(this).attr('data-id'), 10) || 0;
+            rpfCiLinkUnitCtx = null;
+            rpfCiShowMsg('');
+            if (rpfCiLastData) {
+                renderRpfCiRows(rpfCiLastData);
+            }
+        });
+        $(document).on('click', '.rpf-ci-cancel-link', function () {
+            rpfCiExpandId = 0;
+            rpfCiLinkUnitCtx = null;
+            if (rpfCiLastData) {
+                renderRpfCiRows(rpfCiLastData);
+            }
+        });
+        $(document).on('change', '.rpf-ci-tipo', function () {
+            var $panel = $(this).closest('.rpf-ci-link-panel');
+            rpfCompRenderTipoWarningsInto($panel.find('.rpf-ci-warnings'), rpfCiLinkUnitCtx, $(this).val() || '');
+        });
+        $(document).on('click', '.rpf-ci-confirm', function () {
+            rpfCiConfirmLink($(this));
         });
         $(document).on('click', '#rpf-comp-save', function () {
             submitRpfCompManual();

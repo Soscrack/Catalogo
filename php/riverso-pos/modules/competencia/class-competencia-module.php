@@ -40,6 +40,9 @@ class Riverso_Competencia_Module {
         add_action('wp_ajax_riverso_competencia_eliminar_fuente', [$this, 'ajax_eliminar_fuente']);
         add_action('wp_ajax_riverso_competencia_list_sugerencias', [$this, 'ajax_list_sugerencias']);
         add_action('wp_ajax_riverso_competencia_unit_context', [$this, 'ajax_unit_context']);
+        add_action('wp_ajax_riverso_competencia_buscador_search', [$this, 'ajax_buscador_search']);
+        add_action('wp_ajax_riverso_competencia_buscador_filtros', [$this, 'ajax_buscador_filtros']);
+        add_action('wp_ajax_riverso_competencia_buscador_candidatos', [$this, 'ajax_buscador_candidatos']);
     }
 
     private function guard() {
@@ -146,11 +149,17 @@ class Riverso_Competencia_Module {
         }
 
         if (class_exists('Riverso_POS_Audit')) {
-            Riverso_POS_Audit::log('competencia.confirm', 'competencia', $competencia_id, [
+            $origen = isset($_POST['origen']) ? sanitize_key(wp_unslash($_POST['origen'])) : '';
+            $event = in_array($origen, ['buscador', 'pricing'], true)
+                ? 'competencia.buscador_link'
+                : 'competencia.confirm';
+            Riverso_POS_Audit::log($event, 'competencia', $competencia_id, [
                 'actor_type' => 'user',
                 'details'    => [
                     'match_id'         => $match_id,
                     'producto_base_id' => $producto_base_id,
+                    'tipo_match'       => $tipo_match,
+                    'origen'           => $origen !== '' ? $origen : 'matching',
                 ],
             ]);
         }
@@ -373,5 +382,61 @@ class Riverso_Competencia_Module {
             'can_confirm'  => !empty($family['can_confirm']),
             'message'      => $family['message'] ?? '',
         ]);
+    }
+
+    public function ajax_buscador_search() {
+        $this->guard();
+
+        $fuentes = [];
+        if (isset($_POST['fuentes'])) {
+            $raw = wp_unslash($_POST['fuentes']);
+            if (is_array($raw)) {
+                $fuentes = $raw;
+            } elseif (is_string($raw) && $raw !== '') {
+                $fuentes = array_filter(array_map('trim', explode(',', $raw)));
+            }
+        }
+
+        $result = Riverso_Competencia_Match_Service::search_competencia_productos([
+            'search'         => isset($_POST['search']) ? sanitize_text_field(wp_unslash($_POST['search'])) : '',
+            'campo'          => isset($_POST['campo']) ? sanitize_key(wp_unslash($_POST['campo'])) : 'todo',
+            'coincidencia'   => isset($_POST['coincidencia']) ? sanitize_key(wp_unslash($_POST['coincidencia'])) : 'todas',
+            'fuentes'        => $fuentes,
+            'estado'         => isset($_POST['estado']) ? sanitize_key(wp_unslash($_POST['estado'])) : '',
+            'tipo_match'     => isset($_POST['tipo_match']) ? sanitize_key(wp_unslash($_POST['tipo_match'])) : '',
+            'marca'          => isset($_POST['marca']) ? sanitize_text_field(wp_unslash($_POST['marca'])) : '',
+            'categoria'      => isset($_POST['categoria']) ? sanitize_text_field(wp_unslash($_POST['categoria'])) : '',
+            'orden'          => isset($_POST['orden']) ? sanitize_key(wp_unslash($_POST['orden'])) : 'relevancia',
+            'envase'         => isset($_POST['envase']) ? sanitize_key(wp_unslash($_POST['envase'])) : '',
+            'actualizado'    => isset($_POST['actualizado']) ? sanitize_key(wp_unslash($_POST['actualizado'])) : '',
+            'solo_precio'    => !empty($_POST['solo_precio']),
+            'excluir_oculto' => !empty($_POST['excluir_oculto']),
+            'precio_min'     => isset($_POST['precio_min']) ? wp_unslash($_POST['precio_min']) : '',
+            'precio_max'     => isset($_POST['precio_max']) ? wp_unslash($_POST['precio_max']) : '',
+            'page'           => isset($_POST['page']) ? (int) $_POST['page'] : 1,
+            'per_page'       => isset($_POST['per_page']) ? (int) $_POST['per_page'] : 25,
+        ]);
+        wp_send_json_success($result);
+    }
+
+    public function ajax_buscador_filtros() {
+        $this->guard();
+        $fuente = isset($_POST['fuente']) ? sanitize_key(wp_unslash($_POST['fuente'])) : '';
+        $result = Riverso_Competencia_Match_Service::buscador_filtros($fuente);
+        wp_send_json_success($result);
+    }
+
+    public function ajax_buscador_candidatos() {
+        $this->guard();
+        $id = isset($_POST['producto_competencia_id']) ? (int) $_POST['producto_competencia_id'] : 0;
+        $limit = isset($_POST['limit']) ? (int) $_POST['limit'] : 5;
+        if ($id <= 0) {
+            wp_send_json_error(['message' => 'ID inválido'], 400);
+        }
+        $result = Riverso_Competencia_Match_Service::candidatos_para_competencia($id, $limit);
+        if (empty($result['producto'])) {
+            wp_send_json_error(['message' => 'Producto no encontrado'], 404);
+        }
+        wp_send_json_success($result);
     }
 }

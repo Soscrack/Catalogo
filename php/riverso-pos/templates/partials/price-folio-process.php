@@ -403,6 +403,63 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
                 <p class="rpf-comp-form-actions">
                     <button type="button" class="button button-primary" id="rpf-comp-save">Guardar y confirmar</button>
                     <button type="button" class="button" id="rpf-comp-google">Buscar en Google</button>
+                    <button type="button" class="button" id="rpf-comp-internal">Buscar en Fuentes Internas</button>
+                </p>
+            </div>
+
+            <div id="rpf-comp-internal-wrap" class="rpf-comp-manual" hidden>
+                <h4 class="rpf-comp-subtitle">Fuentes internas</h4>
+                <p class="description" style="margin-top:0;">
+                    Busca en el catálogo scrapeado (Sande, DIMAFI) y en ingresos manuales, y vincula al SKU de esta fila.
+                </p>
+                <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:10px;">
+                    <label style="flex:2;min-width:200px;">
+                        Buscar
+                        <input type="search" id="rpf-ci-search" class="regular-text" style="width:100%;" placeholder="Palabra, código o URL…">
+                    </label>
+                    <label>
+                        Filtro
+                        <select id="rpf-ci-modo" class="regular-text">
+                            <option value="alguna">Contiene alguna palabra</option>
+                            <option value="todas">Contiene todas las palabras</option>
+                        </select>
+                    </label>
+                    <label>
+                        Fuente
+                        <select id="rpf-ci-fuente" class="regular-text">
+                            <option value="">Todas</option>
+                            <option value="sande">Sande</option>
+                            <option value="dimafi">DIMAFI</option>
+                            <option value="manual">Manual</option>
+                        </select>
+                    </label>
+                    <button type="button" class="button button-primary" id="rpf-ci-search-btn">Buscar</button>
+                </div>
+                <label style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;">
+                    <input type="checkbox" id="rpf-ci-hide-linked" checked>
+                    Ocultar ya vinculados a este SKU
+                </label>
+                <p id="rpf-ci-status" class="description" style="margin:0 0 8px;"></p>
+                <div id="rpf-ci-msg" class="rpf-comp-form-msg" style="display:none;"></div>
+                <table class="wp-list-table widefat striped" id="rpf-ci-table">
+                    <thead>
+                        <tr>
+                            <th>Fuente</th>
+                            <th>Producto</th>
+                            <th style="text-align:right">Precio/u</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rpf-ci-body">
+                        <tr><td colspan="5" class="description">Pulsa “Buscar en Fuentes Internas” para buscar.</td></tr>
+                    </tbody>
+                </table>
+                <p style="margin:10px 0 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                    <button type="button" class="button" id="rpf-ci-prev" disabled>Anterior</button>
+                    <span id="rpf-ci-page-label" class="description">—</span>
+                    <button type="button" class="button" id="rpf-ci-next" disabled>Siguiente</button>
+                    <a class="button" id="rpf-ci-open-buscador" href="#" target="_blank" rel="noopener" style="margin-left:auto;">Abrir en Buscador</a>
                 </p>
             </div>
         </div>

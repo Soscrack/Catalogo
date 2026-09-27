@@ -266,7 +266,7 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
                 <span class="value" id="total-descuento">$0</span>
             </div>
             <div class="total-item">
-                <span class="label">IVA:</span>
+                <span class="label" id="total-impuesto-label">IVA (19%):</span>
                 <span class="value" id="total-impuesto">$0</span>
             </div>
             <div class="total-item total-main">
@@ -293,29 +293,39 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
         <div class="riverso-card">
             <div class="card-header">
                 <h3><span class="dashicons dashicons-list-view"></span> Ítems de la Cotización</h3>
-                <button type="button" class="button" id="btn-agregar-item">
-                    <span class="dashicons dashicons-plus"></span> Agregar Ítem
-                </button>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button type="button" class="button" id="btn-auto-decidir" title="Aprobar sin alza significativa; reclamar alzas">
+                        <span class="dashicons dashicons-yes-alt"></span> Auto-decidir
+                    </button>
+                    <button type="button" class="button" id="btn-preparar-revision-items" title="Requiere que ningún ítem esté Pendiente" disabled>
+                        <span class="dashicons dashicons-email-alt"></span> Preparar revisión
+                    </button>
+                    <button type="button" class="button" id="btn-agregar-item">
+                        <span class="dashicons dashicons-plus"></span> Agregar Ítem
+                    </button>
+                </div>
             </div>
-            <table class="wp-list-table widefat fixed striped" id="tabla-items">
+            <div class="items-table-wrap">
+            <table class="wp-list-table widefat striped" id="tabla-items">
                 <thead>
                     <tr>
-                        <th style="width:40px">#</th>
-                        <th style="width:120px">Cód. Proveedor</th>
-                        <th>Descripción</th>
-                        <th style="width:80px">Cant.</th>
-                        <th style="width:100px;text-align:right">Costo Neto</th>
-                        <th style="width:100px;text-align:right">Total</th>
-                        <th style="width:120px">Match</th>
-                        <th style="width:100px">Decisión</th>
-                        <th style="width:100px">Δ Costo</th>
-                        <th style="width:100px">Acciones</th>
+                        <th class="col-linea">#</th>
+                        <th class="col-codigo">Cód. Proveedor</th>
+                        <th class="col-desc">Descripción</th>
+                        <th class="col-cant">Cant.</th>
+                        <th class="col-costo">Costo Neto</th>
+                        <th class="col-total">Total</th>
+                        <th class="col-match">Match</th>
+                        <th class="col-decision">Decisión</th>
+                        <th class="col-delta">Δ Costo</th>
+                        <th class="col-acciones">Acciones</th>
                     </tr>
                 </thead>
                 <tbody id="lista-items">
                     <tr><td colspan="10" class="empty">Sin ítems. Agregue ítems manualmente o suba un archivo.</td></tr>
                 </tbody>
             </table>
+            </div>
         </div>
     </div>
 
@@ -364,8 +374,9 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
                             <input type="number" id="item-costo-neto" name="costo_neto" value="0" min="0" step="0.01" required>
                         </div>
                         <div class="form-group">
-                            <label for="item-costo-impuesto">IVA</label>
-                            <input type="number" id="item-costo-impuesto" name="costo_impuesto" value="0" min="0" step="0.01">
+                            <label for="item-costo-impuesto">IVA <span id="item-tasa-iva" class="iva-rate-badge">19%</span></label>
+                            <input type="number" id="item-costo-impuesto" name="costo_impuesto" value="0" min="0" step="0.0001" readonly tabindex="-1">
+                            <small id="item-tasa-iva-note" class="item-iva-note">19% del costo neto</small>
                         </div>
                         <div class="form-group">
                             <label for="item-costo-total">Total</label>
@@ -504,13 +515,16 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
                         <label>Decisión</label>
                         <div class="decision-buttons">
                             <button type="button" class="button decision-btn" data-decision="accepted">
-                                <span class="dashicons dashicons-yes"></span> Aceptar
+                                <span class="dashicons dashicons-yes"></span> Aprobar
                             </button>
-                            <button type="button" class="button decision-btn" data-decision="modified">
-                                <span class="dashicons dashicons-edit"></span> Modificado
+                            <button type="button" class="button decision-btn" data-decision="claim">
+                                <span class="dashicons dashicons-warning"></span> Reclamar
                             </button>
-                            <button type="button" class="button decision-btn" data-decision="rejected">
-                                <span class="dashicons dashicons-no"></span> Rechazar
+                            <button type="button" class="button decision-btn" data-decision="remove">
+                                <span class="dashicons dashicons-dismiss"></span> Quitar
+                            </button>
+                            <button type="button" class="button decision-btn" data-decision="add">
+                                <span class="dashicons dashicons-plus-alt"></span> Agregar
                             </button>
                         </div>
                         <input type="hidden" id="decision-value" value="">
@@ -748,6 +762,91 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
     margin-bottom: 5px;
     font-weight: 500;
 }
+.iva-rate-badge,
+.item-iva-rate {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #e7f1fb;
+    color: #1d4e89;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.6;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.item-iva-rate {
+    margin-left: 8px;
+}
+.item-iva-note {
+    display: block;
+    margin-top: 4px;
+    color: #1d4e89;
+    font-size: 11px;
+}
+#item-costo-impuesto[readonly],
+#item-costo-total[readonly] {
+    background: #f6f7f7;
+    color: #1d2327;
+    cursor: default;
+}
+.items-table-wrap {
+    overflow-x: auto;
+    width: 100%;
+}
+#tabla-items {
+    table-layout: auto;
+    width: 100%;
+    min-width: 980px;
+    border-collapse: collapse;
+}
+#tabla-items th,
+#tabla-items td {
+    vertical-align: top;
+    padding: 10px 12px;
+}
+#tabla-items .col-linea,
+#tabla-items td:nth-child(1) {
+    width: 44px;
+    white-space: nowrap;
+}
+#tabla-items .col-codigo,
+#tabla-items td:nth-child(2) {
+    width: 120px;
+    white-space: nowrap;
+}
+#tabla-items .col-desc,
+#tabla-items td:nth-child(3) {
+    min-width: 240px;
+    max-width: 420px;
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+}
+#tabla-items .col-cant,
+#tabla-items td:nth-child(4),
+#tabla-items .col-costo,
+#tabla-items td:nth-child(5),
+#tabla-items .col-total,
+#tabla-items td:nth-child(6),
+#tabla-items .col-delta,
+#tabla-items td:nth-child(9) {
+    white-space: nowrap;
+    text-align: right;
+}
+#tabla-items .col-match,
+#tabla-items td:nth-child(7),
+#tabla-items .col-decision,
+#tabla-items td:nth-child(8) {
+    white-space: nowrap;
+}
+#tabla-items .col-acciones,
+#tabla-items td:nth-child(10) {
+    width: 110px;
+    white-space: nowrap;
+}
 .form-group input,
 .form-group select,
 .form-group textarea {
@@ -855,8 +954,19 @@ tr.quote-por-confirmar {
 
 .decision-pending { color: #6b7280; }
 .decision-accepted { color: #065f46; }
+.decision-accepted_increase { color: #854d0e; }
+.decision-claim { color: #b45309; }
+.decision-remove { color: #991b1b; }
+.decision-add { color: #1e40af; }
 .decision-modified { color: #1e40af; }
 .decision-rejected { color: #991b1b; }
+
+.decision-buttons {
+    display: flex;
+    gap: 8px;
+    margin: 10px 0;
+    flex-wrap: wrap;
+}
 
 .cost-up { color: #dc2626; }
 .cost-down { color: #16a34a; }
@@ -906,8 +1016,9 @@ tr.quote-por-confirmar {
 
 .decision-buttons {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     margin: 10px 0;
+    flex-wrap: wrap;
 }
 .decision-btn.selected {
     background: #2271b1;
@@ -1143,6 +1254,17 @@ jQuery(document).ready(function($) {
         return '$' + parseFloat(val || 0).toLocaleString('es-CL', {minimumFractionDigits: 0, maximumFractionDigits: 0});
     }
 
+    // Costo de ítem: 3 decimales fijos (ej. 6,190 y 73.661,000).
+    function formatItemCost(val) {
+        const num = Number(val);
+        if (!isFinite(num)) return '$0,000';
+        const negative = num < 0;
+        const fixed = (Math.round(Math.abs(num) * 1000) / 1000).toFixed(3);
+        const parts = fixed.split('.');
+        const intPart = Number(parts[0]).toLocaleString('es-CL');
+        return (negative ? '-$' : '$') + intPart + ',' + parts[1];
+    }
+
     function escapeHtml(s) {
         return String(s == null ? '' : s)
             .replace(/&/g, '&amp;')
@@ -1163,6 +1285,60 @@ jQuery(document).ready(function($) {
         const parts = fixed.split('.');
         const intPart = Number(parts[0]).toLocaleString('es-CL');
         return parts.length > 1 ? ('$' + intPart + ',' + parts[1]) : ('$' + intPart);
+    }
+
+    function ivaRatePct(neto, impuesto, tasaStored) {
+        const n = Number(neto);
+        const i = Number(impuesto);
+        let computed = null;
+        if (isFinite(n) && n > 0 && isFinite(i) && i >= 0) {
+            computed = (i / n) * 100;
+        }
+        const stored = (tasaStored !== null && tasaStored !== undefined && tasaStored !== '' && isFinite(Number(tasaStored)))
+            ? Number(tasaStored) : null;
+        if (computed !== null && stored !== null && Math.abs(computed - stored) < 0.05) {
+            return stored;
+        }
+        if (computed !== null) return computed;
+        return stored;
+    }
+
+    function formatIvaRate(pct) {
+        if (pct === null || pct === undefined || !isFinite(Number(pct))) return '—';
+        const n = Number(pct);
+        const nearest = Math.round(n);
+        const shown = Math.abs(n - nearest) < 0.05 ? nearest : Math.round(n * 10) / 10;
+        if (Number.isInteger(shown)) return shown + '%';
+        return shown.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+    }
+
+    function syncItemIvaRate() {
+        const neto = parseFloat($('#item-costo-neto').val()) || 0;
+        const iva = parseFloat($('#item-costo-impuesto').val()) || 0;
+        const stored = $('#item-tasa-iva').data('rate');
+        const pct = ivaRatePct(neto, iva, stored);
+        const label = formatIvaRate(pct);
+        $('#item-tasa-iva').text(label);
+        $('#item-tasa-iva-note').text(pct === null ? '' : (label + ' del costo neto'));
+    }
+
+    function itemIvaRateDefault() {
+        const fromBadge = Number($('#item-tasa-iva').data('rate'));
+        if (isFinite(fromBadge) && fromBadge >= 0) return fromBadge;
+        if (cotizacionActual && cotizacionActual.tasa_iva !== null && cotizacionActual.tasa_iva !== undefined && cotizacionActual.tasa_iva !== '') {
+            const fromQuote = Number(cotizacionActual.tasa_iva);
+            if (isFinite(fromQuote) && fromQuote >= 0) return fromQuote;
+        }
+        return 19;
+    }
+
+    function recalcItemIvaFromNeto() {
+        const neto = parseFloat($('#item-costo-neto').val()) || 0;
+        const tasa = itemIvaRateDefault();
+        const iva = Math.round(neto * (tasa / 100) * 10000) / 10000;
+        $('#item-costo-impuesto').val(iva.toFixed(4));
+        $('#item-costo-total').val((neto + iva).toFixed(4));
+        syncItemIvaRate();
     }
 
     function formatDeltaPct(n) {
@@ -1493,6 +1669,8 @@ jQuery(document).ready(function($) {
             } else {
                 $('#total-descuento-wrap').hide();
             }
+            const tasaFolio = (q.tasa_iva !== null && q.tasa_iva !== undefined && q.tasa_iva !== '') ? Number(q.tasa_iva) : 19;
+            $('#total-impuesto-label').text('IVA (' + formatIvaRate(tasaFolio) + '):');
             $('#total-impuesto').text(formatMoney(q.impuesto));
             $('#total-total').text(formatMoney(q.total));
             
@@ -1758,10 +1936,35 @@ jQuery(document).ready(function($) {
         syncParseErrorUi(q);
     }
 
+    function countPendingDecisions() {
+        if (!itemsActuales || !itemsActuales.length) return 0;
+        return itemsActuales.filter(function(item) {
+            const st = String(item.decision_status || 'pending');
+            return st === 'pending' || st === '';
+        }).length;
+    }
+
+    function syncPrepararRevisionItemsBtn() {
+        const pending = countPendingDecisions();
+        const hasItems = !!(itemsActuales && itemsActuales.length);
+        const ok = hasItems && pending === 0;
+        const $btn = $('#btn-preparar-revision-items');
+        $btn.prop('disabled', !ok);
+        $btn.attr(
+            'title',
+            ok
+                ? 'Armar mensaje según decisiones'
+                : (hasItems
+                    ? ('Hay ' + pending + ' ítem(s) Pendiente(s). Decida todos antes de preparar la revisión.')
+                    : 'Agregue ítems y decida todos antes de preparar la revisión.')
+        );
+    }
+
     function renderItems() {
         const tbody = $('#lista-items');
         if (!itemsActuales.length) {
             tbody.html('<tr><td colspan="10" class="empty">Sin ítems. Agregue ítems manualmente.</td></tr>');
+            syncPrepararRevisionItemsBtn();
             return;
         }
 
@@ -1770,22 +1973,43 @@ jQuery(document).ready(function($) {
 
         let html = '';
         itemsActuales.forEach(item => {
-            const diffClass = item.diferencia_costo > 0 ? 'cost-up' : (item.diferencia_costo < 0 ? 'cost-down' : '');
-            const diffText = item.diferencia_porcentaje ? `${item.diferencia_porcentaje > 0 ? '+' : ''}${item.diferencia_porcentaje}%` : '-';
-            
+            const pct = (item.diferencia_porcentaje !== null && item.diferencia_porcentaje !== undefined && item.diferencia_porcentaje !== '')
+                ? Number(item.diferencia_porcentaje) : null;
+            const delta = (item.diferencia_costo !== null && item.diferencia_costo !== undefined && item.diferencia_costo !== '')
+                ? Number(item.diferencia_costo) : null;
+            let diffClass = '';
+            if (item.costo_trend === 'subio' || (delta !== null && isFinite(delta) && delta > 0)) diffClass = 'cost-up';
+            else if (item.costo_trend === 'bajo' || (delta !== null && isFinite(delta) && delta < 0)) diffClass = 'cost-down';
+
+            let diffText = '—';
+            if (delta !== null && isFinite(delta)) {
+                if (delta < 0) diffText = '-' + formatItemCost(Math.abs(delta));
+                else if (delta > 0) diffText = '+' + formatItemCost(Math.abs(delta));
+                else diffText = formatItemCost(0);
+                if (pct !== null && isFinite(pct)) {
+                    const sign = pct > 0 ? '+' : '';
+                    diffText += '<br><small>' + sign + pct.toLocaleString('es-CL', { maximumFractionDigits: 1 }) + '%</small>';
+                }
+            } else if (pct !== null && isFinite(pct)) {
+                const sign = pct > 0 ? '+' : '';
+                diffText = sign + pct.toLocaleString('es-CL', { maximumFractionDigits: 1 }) + '%';
+            }
+
+            const tasaItem = ivaRatePct(item.costo_neto, item.costo_impuesto, item.tasa_iva);
+            const tasaHtml = tasaItem === null ? '' : ` <span class="item-iva-rate">IVA ${formatIvaRate(tasaItem)}</span>`;
             html += `<tr data-id="${item.id}">
                 <td>${item.linea}</td>
-                <td>${item.codigo_proveedor || '-'}</td>
-                <td>
-                    ${item.descripcion || '-'}
-                    ${item.producto_nombre ? `<br><small class="text-muted">→ ${item.producto_nombre}</small>` : ''}
+                <td>${escapeHtml(item.codigo_proveedor || '-')}</td>
+                <td class="col-desc">
+                    ${escapeHtml(item.descripcion || '-')}
+                    ${item.producto_nombre ? `<br><small class="text-muted">→ ${escapeHtml(item.producto_nombre)}</small>` : ''}
                 </td>
-                <td>${parseFloat(item.cantidad).toLocaleString('es-CL')}</td>
-                <td style="text-align:right">${formatMoney(item.costo_neto)}</td>
-                <td style="text-align:right">${formatMoney(item.costo_total * item.cantidad)}</td>
+                <td style="text-align:right">${parseFloat(item.cantidad).toLocaleString('es-CL')}</td>
+                <td style="text-align:right">${formatItemCost(item.costo_neto)}</td>
+                <td style="text-align:right">${formatItemCost(item.costo_total * item.cantidad)}${tasaHtml}</td>
                 <td><span class="match-badge match-${item.match_status}">${matchLabels[item.match_status] || item.match_status}</span></td>
                 <td><span class="decision-${item.decision_status}">${decisionLabels[item.decision_status] || item.decision_status}</span></td>
-                <td class="${diffClass}">${diffText}</td>
+                <td class="col-delta ${diffClass}" style="text-align:right">${diffText}</td>
                 <td>
                     <button class="button button-small btn-editar-item" title="Editar">
                         <span class="dashicons dashicons-edit"></span>
@@ -1800,6 +2024,7 @@ jQuery(document).ready(function($) {
             </tr>`;
         });
         tbody.html(html);
+        syncPrepararRevisionItemsBtn();
     }
 
     // Eventos de navegación
@@ -1925,6 +2150,9 @@ jQuery(document).ready(function($) {
         $('#form-item')[0].reset();
         $('#item-cantidad').val(1);
         $('#item-match-info').hide();
+        const tasaDefault = itemIvaRateDefault();
+        $('#item-tasa-iva').data('rate', tasaDefault).text(formatIvaRate(tasaDefault));
+        recalcItemIvaFromNeto();
         $('#modal-item').show();
     });
 
@@ -1941,8 +2169,12 @@ jQuery(document).ready(function($) {
         $('#item-descripcion').val(item.descripcion || '');
         $('#item-cantidad').val(item.cantidad);
         $('#item-costo-neto').val(item.costo_neto);
+        const tasaItem = ivaRatePct(item.costo_neto, item.costo_impuesto, item.tasa_iva);
+        const tasaStored = (tasaItem !== null ? tasaItem : itemIvaRateDefault());
+        $('#item-tasa-iva').data('rate', tasaStored).text(formatIvaRate(tasaStored));
         $('#item-costo-impuesto').val(item.costo_impuesto);
         $('#item-costo-total').val(item.costo_total);
+        syncItemIvaRate();
 
         if (item.producto_nombre) {
             $('#item-match-details').html(`<strong>${item.producto_nombre}</strong><br>SKU: ${item.sku_match || '-'}`);
@@ -1954,20 +2186,19 @@ jQuery(document).ready(function($) {
         $('#modal-item').show();
     });
 
-    // Calcular total automáticamente
-    $('#item-costo-neto, #item-costo-impuesto').on('input', function() {
-        const neto = parseFloat($('#item-costo-neto').val()) || 0;
-        const iva = parseFloat($('#item-costo-impuesto').val()) || 0;
-        $('#item-costo-total').val((neto + iva).toFixed(2));
+    // IVA y Total se recalculan desde el neto (no editables).
+    $('#item-costo-neto').on('input', function() {
+        recalcItemIvaFromNeto();
     });
 
     // Guardar ítem
     $('#form-item').on('submit', function(e) {
         e.preventDefault();
-        $.post(ajaxurl, {
+        const itemId = $('#item-id').val();
+        const payload = {
             action: 'riverso_save_quote_item',
             nonce: nonce,
-            item_id: $('#item-id').val(),
+            item_id: itemId,
             cotizacion_id: $('#cotizacion-id').val(),
             codigo_proveedor: $('#item-codigo-proveedor').val(),
             codigo_barras: $('#item-codigo-barras').val(),
@@ -1977,7 +2208,11 @@ jQuery(document).ready(function($) {
             costo_neto: $('#item-costo-neto').val(),
             costo_impuesto: $('#item-costo-impuesto').val(),
             costo_total: $('#item-costo-total').val()
-        }, function(r) {
+        };
+        if (!itemId || itemId === '0') {
+            payload.origen = 'manual';
+        }
+        $.post(ajaxurl, payload, function(r) {
             if (r.success) {
                 $('#modal-item').hide();
                 verCotizacion($('#cotizacion-id').val());
@@ -2064,17 +2299,25 @@ jQuery(document).ready(function($) {
         if (!item) return;
 
         $('#decision-item-id').val(item.id);
-        $('#decision-value').val('');
+        const currentDecision = (item.decision_status === 'accepted_increase')
+            ? 'accepted'
+            : (item.decision_status === 'rejected' ? 'remove' : (item.decision_status || ''));
+        $('#decision-value').val(['accepted','claim','remove','add'].indexOf(currentDecision) >= 0 ? currentDecision : '');
         $('#decision-notas').val(item.decision_notas || '');
         $('.decision-btn').removeClass('selected');
-        
+        if ($('#decision-value').val()) {
+            $('.decision-btn[data-decision="' + $('#decision-value').val() + '"]').addClass('selected');
+            $('#form-decision button[type="submit"]').prop('disabled', false);
+        } else {
+            $('#form-decision button[type="submit"]').prop('disabled', true);
+        }
+
         if (item.match_status === 'not_found' || item.match_status === 'ambiguous') {
             $('#decision-manual-match').show();
         } else {
             $('#decision-manual-match').hide();
         }
 
-        $('#form-decision button[type="submit"]').prop('disabled', true);
         $('#modal-decision').show();
     });
 
@@ -2517,24 +2760,77 @@ jQuery(document).ready(function($) {
         done();
     }
 
-    $(document).on('click', '#btn-draft-reclamo', function() {
-        if (lastQuoteEval) {
-            showReclamoDrafts(buildClaimEmailsFromEval(lastQuoteEval));
+    function openClaimDraftFromServer(requireNoPending) {
+        const id = $('#cotizacion-id').val();
+        if (!id || id === '0') {
+            alert('Guarde la cotización primero');
             return;
+        }
+        if (requireNoPending) {
+            const pending = countPendingDecisions();
+            if (!itemsActuales || !itemsActuales.length) {
+                alert('No hay ítems para revisar.');
+                return;
+            }
+            if (pending > 0) {
+                alert('Hay ' + pending + ' ítem(s) Pendiente(s). Decida todos antes de preparar la revisión.');
+                syncPrepararRevisionItemsBtn();
+                return;
+            }
         }
         $.post(ajaxurl, {
             action: 'riverso_quote_claim_draft',
             nonce: nonce,
-            id: $('#cotizacion-id').val(),
+            id: id,
             compare_base: quoteEvalBaseMode
         }, function(r) {
-            if (!r.success) { alert(r.data.message); return; }
+            if (!r.success) {
+                alert((r.data && r.data.message) ? r.data.message : 'No se pudo preparar la revisión');
+                return;
+            }
             showReclamoDrafts({
                 subject: r.data.subject || 'Revisión de precios',
                 simple: r.data.simple || r.data.draft || '',
                 complex: r.data.complex || r.data.draft || ''
             });
         });
+    }
+
+    $('#btn-auto-decidir').on('click', function() {
+        const id = $('#cotizacion-id').val();
+        if (!id || id === '0') {
+            alert('Guarde la cotización primero');
+            return;
+        }
+        if (necesitaConfirmacionHumana(cotizacionActual)) {
+            alert('Confirme el tipo como cotización antes de auto-decidir.');
+            return;
+        }
+        const $btn = $(this).prop('disabled', true);
+        $.post(ajaxurl, {
+            action: 'riverso_auto_decide_quote_items',
+            nonce: nonce,
+            id: id
+        }, function(r) {
+            $btn.prop('disabled', false);
+            if (!r.success) {
+                alert((r.data && r.data.message) ? r.data.message : 'Error en auto-decisión');
+                return;
+            }
+            alert(r.data.message || 'Auto-decisión aplicada');
+            verCotizacion(id);
+        }).fail(function() {
+            $btn.prop('disabled', false);
+            alert('Error de red al auto-decidir');
+        });
+    });
+
+    $(document).on('click', '#btn-preparar-revision-items', function() {
+        if ($(this).prop('disabled')) return;
+        openClaimDraftFromServer(true);
+    });
+    $(document).on('click', '#btn-draft-reclamo', function() {
+        openClaimDraftFromServer(false);
     });
     $('#reclamo-mode-toggle').on('click', '.rce-view-btn', function() {
         applyReclamoMode($(this).data('reclamo-mode'));

@@ -2106,6 +2106,7 @@ class Riverso_Cost_Lookup_Service {
                 'nombre' => $item['descripcion'],
                 'cantidad' => floatval($item['cantidad']),
                 'unidad' => $item['unidad'],
+                'decision_status' => trim((string) ($item['decision_status'] ?? 'pending')) ?: 'pending',
                 'costo_actual' => $current,
                 'costo_actual_bases' => $bases,
                 'prev_invoice' => $prev_invoice,

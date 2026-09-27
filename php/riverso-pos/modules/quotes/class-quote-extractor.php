@@ -277,7 +277,9 @@ PROMPT;
     }
 
     /**
-     * Correos de reclamo (simple / complejo). Nunca menciona legacy.
+     * Correos de reclamo (simple / complejo) según decisiones de ítem.
+     * Secciones: precios anteriores (claim), por favor quitar (remove), agregar productos (add).
+     * accepted / accepted_increase / pending no entran al mensaje.
      *
      * @param array $analysis
      * @return array{subject:string,simple:string,complex:string,items:int}
@@ -291,41 +293,60 @@ PROMPT;
         $folio = trim((string) ($header['folio'] ?? ($header['numero_documento'] ?? '')));
         $doc_label = $folio !== '' ? ('cotización ' . $folio) : 'cotización';
         $subject = $folio !== ''
-            ? ('Reclamo de precios — Cotización ' . $folio)
-            : 'Reclamo de precios';
+            ? ('Revisión de precios — Cotización ' . $folio)
+            : 'Revisión de precios';
 
-        $items = [];
+        $claims = [];
+        $removes = [];
+        $adds = [];
         foreach ($analysis['rows'] ?? [] as $row) {
-            if (($row['trend'] ?? '') !== 'subio') {
-                continue;
+            $status = trim((string) ($row['decision_status'] ?? 'pending'));
+            $codigo = trim((string) ($row['codigo_proveedor'] ?? ''));
+            $nombre = trim((string) ($row['nombre'] ?? ''));
+            $title = trim($codigo . ' ' . $nombre);
+            if ($title === '') {
+                $title = 'Ítem #' . (int) ($row['numero_linea'] ?? $row['item_id'] ?? 0);
             }
-            $prev = $row['reference_cost'] ?? null;
-            if ($prev === null || !is_numeric($prev)) {
-                continue;
+
+            if ($status === 'claim') {
+                $prev = $row['reference_cost'] ?? null;
+                if ($prev === null || !is_numeric($prev)) {
+                    continue;
+                }
+                $delta = isset($row['delta']) && is_numeric($row['delta'])
+                    ? (float) $row['delta']
+                    : ((isset($row['costo_actual']) && is_numeric($row['costo_actual']))
+                        ? ((float) $row['costo_actual'] - (float) $prev)
+                        : null);
+                // No reclamar alzas menores a +$0,01
+                if ($delta === null || $delta < 0.01) {
+                    continue;
+                }
+                $claims[] = [
+                    'title' => $title,
+                    'precio_anterior' => (float) $prev,
+                    'referencia' => $this->claim_public_reference($row),
+                ];
+            } elseif ($status === 'remove' || $status === 'rejected') {
+                $removes[] = ['title' => $title];
+            } elseif ($status === 'add') {
+                $qty = isset($row['cantidad']) && is_numeric($row['cantidad']) ? (float) $row['cantidad'] : null;
+                $unidad = trim((string) ($row['unidad'] ?? ''));
+                $adds[] = [
+                    'title' => $title,
+                    'cantidad' => $qty,
+                    'unidad' => $unidad !== '' ? $unidad : 'UN',
+                ];
             }
-            // No reclamar alzas menores a +$0,01
-            $delta = isset($row['delta']) && is_numeric($row['delta'])
-                ? (float) $row['delta']
-                : ((isset($row['costo_actual']) && is_numeric($row['costo_actual']))
-                    ? ((float) $row['costo_actual'] - (float) $prev)
-                    : null);
-            if ($delta === null || $delta < 0.01) {
-                continue;
-            }
-            $items[] = [
-                'codigo' => trim((string) ($row['codigo_proveedor'] ?? '')),
-                'nombre' => trim((string) ($row['nombre'] ?? '')),
-                'precio_anterior' => (float) $prev,
-                'referencia' => $this->claim_public_reference($row),
-            ];
         }
 
         $greeting = "Estimados {$proveedor},\n\n";
-        $intro = "Junto con saludar, revisamos la {$doc_label} y les pedimos por favor usar los precios anteriores en:\n\n";
+        $intro = "Junto con saludar, revisamos la {$doc_label}.\n\n";
         $closing = "\nQuedamos atentos a su confirmación.\n\nSaludos cordiales,\nCompras Riverso\n";
 
-        if (!$items) {
-            $empty = $greeting . "Revisamos la {$doc_label} y no encontramos alzas con precio anterior para reclamar.\n" . $closing;
+        $total_items = count($claims) + count($removes) + count($adds);
+        if ($total_items === 0) {
+            $empty = $greeting . "Revisamos la {$doc_label} y no hay ítems pendientes de revisión con el proveedor.\n" . $closing;
             return [
                 'subject' => $subject,
                 'simple' => $empty,
@@ -336,15 +357,49 @@ PROMPT;
 
         $simple_body = $greeting . $intro;
         $complex_body = $greeting . $intro;
-        foreach ($items as $it) {
-            $title = trim($it['codigo'] . ' ' . $it['nombre']);
-            $prev = '$' . number_format($it['precio_anterior'], 0, ',', '.');
-            $block = $title . "\nprecio anterior: " . $prev . "\n";
-            $simple_body .= $block . "\n";
-            $complex_body .= $block;
-            if ($it['referencia'] !== '') {
-                $complex_body .= 'referencia: ' . $it['referencia'] . "\n";
+
+        if ($claims) {
+            $claim_intro = "Les pedimos por favor usar los precios anteriores en:\n\n";
+            $simple_body .= $claim_intro;
+            $complex_body .= $claim_intro;
+            foreach ($claims as $it) {
+                $prev = $this->format_claim_cost($it['precio_anterior']);
+                $block = $it['title'] . "\nprecio anterior: " . $prev . "\n";
+                $simple_body .= $block . "\n";
+                $complex_body .= $block;
+                if ($it['referencia'] !== '') {
+                    $complex_body .= 'referencia: ' . $it['referencia'] . "\n";
+                }
+                $complex_body .= "\n";
             }
+        }
+
+        if ($removes) {
+            $simple_body .= "Por favor quitar:\n";
+            $complex_body .= "Por favor quitar:\n";
+            foreach ($removes as $it) {
+                $simple_body .= $it['title'] . "\n";
+                $complex_body .= $it['title'] . "\n";
+            }
+            $simple_body .= "\n";
+            $complex_body .= "\n";
+        }
+
+        if ($adds) {
+            $simple_body .= "Agregar productos:\n";
+            $complex_body .= "Agregar productos:\n";
+            foreach ($adds as $it) {
+                $line = $it['title'];
+                if ($it['cantidad'] !== null) {
+                    $qty_txt = (fmod($it['cantidad'], 1.0) === 0.0)
+                        ? number_format($it['cantidad'], 0, ',', '.')
+                        : rtrim(rtrim(number_format($it['cantidad'], 4, ',', '.'), '0'), ',');
+                    $line .= ' - ' . $qty_txt . ' ' . $it['unidad'];
+                }
+                $simple_body .= $line . "\n";
+                $complex_body .= $line . "\n";
+            }
+            $simple_body .= "\n";
             $complex_body .= "\n";
         }
 
@@ -352,8 +407,22 @@ PROMPT;
             'subject' => $subject,
             'simple' => $simple_body . $closing,
             'complex' => $complex_body . $closing,
-            'items' => count($items),
+            'items' => $total_items,
         ];
+    }
+
+    /**
+     * Costo con 3 decimales (formato CL: $1.234,560).
+     *
+     * @param float|int|string $value
+     * @return string
+     */
+    private function format_claim_cost($value) {
+        $num = round((float) $value, 3);
+        $negative = $num < 0;
+        $abs = abs($num);
+        $formatted = number_format($abs, 3, ',', '.');
+        return ($negative ? '-$' : '$') . $formatted;
     }
 
     /**

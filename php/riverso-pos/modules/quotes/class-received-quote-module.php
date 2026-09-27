@@ -35,11 +35,18 @@ class Riverso_POS_Received_Quote_Module {
 
     // Estados de decisión de ítems
     const DECISION_STATUS = [
-        'pending'   => 'Pendiente',
-        'accepted'  => 'Aceptado',
-        'modified'  => 'Modificado',
-        'rejected'  => 'Rechazado'
+        'pending'           => 'Pendiente',
+        'accepted'          => 'Aprobado',
+        'accepted_increase' => 'Aprobado aumento',
+        'claim'             => 'Reclamar',
+        'remove'            => 'Quitar',
+        'add'               => 'Agregar',
+        'modified'          => 'Modificado', // legado
+        'rejected'          => 'Rechazado',  // legado → migrado a remove
     ];
+
+    /** Umbral de alza significativa (CLP) para auto-reclamar / aprobado aumento. */
+    const DELTA_SIGNIFICATIVO = 0.01;
 
     // Tipos de fuente
     const SOURCE_TYPES = [
@@ -78,6 +85,7 @@ class Riverso_POS_Received_Quote_Module {
         add_action('wp_ajax_riverso_match_quote_item', [$this, 'ajax_match_item']);
         add_action('wp_ajax_riverso_match_all_items', [$this, 'ajax_match_all_items']);
         add_action('wp_ajax_riverso_set_item_decision', [$this, 'ajax_set_item_decision']);
+        add_action('wp_ajax_riverso_auto_decide_quote_items', [$this, 'ajax_auto_decide_items']);
         add_action('wp_ajax_riverso_approve_received_quote', [$this, 'ajax_approve_quote']);
         add_action('wp_ajax_riverso_reject_received_quote', [$this, 'ajax_reject_quote']);
         add_action('wp_ajax_riverso_set_received_quote_status', [$this, 'ajax_set_status']);
@@ -170,7 +178,7 @@ class Riverso_POS_Received_Quote_Module {
             sku_match VARCHAR(100) NULL,
             match_status ENUM('pending','matched','not_found','ambiguous','manual') DEFAULT 'pending',
             match_confidence INT DEFAULT 0,
-            decision_status ENUM('pending','accepted','modified','rejected') DEFAULT 'pending',
+            decision_status VARCHAR(20) NOT NULL DEFAULT 'pending',
             decision_notas TEXT NULL,
             costo_anterior DECIMAL(15,4) NULL,
             diferencia_costo DECIMAL(15,4) NULL,
@@ -201,6 +209,7 @@ class Riverso_POS_Received_Quote_Module {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
         $this->ensure_version_columns();
+        $this->ensure_decision_column();
 
         $estado = isset($_POST['estado']) ? sanitize_text_field($_POST['estado']) : '';
         $proveedor_id = isset($_POST['proveedor_id']) ? intval($_POST['proveedor_id']) : 0;
@@ -342,6 +351,8 @@ class Riverso_POS_Received_Quote_Module {
             wp_send_json_error(['message' => 'Cotización no encontrada']);
         }
 
+        $this->ensure_decision_column();
+
         // Obtener ítems con info de producto WooCommerce
         $items = $wpdb->get_results($wpdb->prepare("
             SELECT i.*,
@@ -356,15 +367,52 @@ class Riverso_POS_Received_Quote_Module {
             ORDER BY i.linea ASC
         ", $id));
 
-        // Calcular diferencias de costo
-        foreach ($items as &$item) {
-            if ($item->costo_anterior && $item->costo_neto) {
-                $item->diferencia_porcentaje = round(
-                    (($item->costo_neto - $item->costo_anterior) / $item->costo_anterior) * 100, 
-                    2
-                );
+        // Diferencias de costo: mismo criterio que "Evaluar costos" (lookup en vivo).
+        // costo_anterior en BD solo se llena al hacer Match y suele quedar vacío.
+        $by_item = [];
+        if (!class_exists('Riverso_Cost_Lookup_Service')) {
+            $lookup_file = RIVERSO_POS_PLUGIN_DIR . 'modules/costs/class-cost-lookup-service.php';
+            if (file_exists($lookup_file)) {
+                require_once $lookup_file;
             }
         }
+        if (class_exists('Riverso_Cost_Lookup_Service')) {
+            $analysis = Riverso_Cost_Lookup_Service::get_instance()->analyze_quote((int) $id, 'auto');
+            if (!is_wp_error($analysis) && !empty($analysis['rows']) && is_array($analysis['rows'])) {
+                foreach ($analysis['rows'] as $row) {
+                    $iid = (int) ($row['item_id'] ?? 0);
+                    if ($iid > 0) {
+                        $by_item[$iid] = $row;
+                    }
+                }
+            }
+        }
+        foreach ($items as &$item) {
+            $row = $by_item[(int) $item->id] ?? null;
+            if ($row && $row['reference_cost'] !== null && $row['reference_cost'] !== '' && is_numeric($row['reference_cost'])) {
+                $item->costo_anterior = (float) $row['reference_cost'];
+                $item->diferencia_costo = isset($row['delta']) && $row['delta'] !== null
+                    ? (float) $row['delta'] : null;
+                $item->diferencia_porcentaje = isset($row['delta_pct']) && $row['delta_pct'] !== null
+                    ? (float) $row['delta_pct'] : null;
+                $item->costo_trend = $row['trend'] ?? null;
+                $item->costo_referencia_fuente = $row['reference_source'] ?? null;
+                continue;
+            }
+            if ($item->costo_anterior && $item->costo_neto) {
+                $prev = (float) $item->costo_anterior;
+                if ($prev > 0) {
+                    $item->diferencia_porcentaje = round(
+                        (((float) $item->costo_neto - $prev) / $prev) * 100,
+                        2
+                    );
+                    if ($item->diferencia_costo === null || $item->diferencia_costo === '') {
+                        $item->diferencia_costo = (float) $item->costo_neto - $prev;
+                    }
+                }
+            }
+        }
+        unset($item);
 
         $origen = null;
         $origen_mensaje_id = !empty($quote->origen_mensaje_id) ? (int) $quote->origen_mensaje_id : 0;
@@ -1175,6 +1223,7 @@ class Riverso_POS_Received_Quote_Module {
         $this->recalculate_quote_totals($id);
         $this->apply_tipo_after_process($id);
         $this->match_all_internal($id);
+        $this->auto_decide_items($id);
 
         $wpdb->query($wpdb->prepare(
             "UPDATE {$prefix}cotizaciones_recibidas SET estado = 'under_review' WHERE id = %d AND estado = 'parsed'",
@@ -1297,6 +1346,11 @@ class Riverso_POS_Received_Quote_Module {
             $wpdb->update("{$prefix}cotizacion_items", $data, ['id' => $id]);
         } else {
             $data['created_by'] = get_current_user_id();
+            $origen = isset($_POST['origen']) ? sanitize_text_field(wp_unslash($_POST['origen'])) : '';
+            if ($origen === 'manual') {
+                $this->ensure_decision_column();
+                $data['decision_status'] = 'add';
+            }
             $wpdb->insert("{$prefix}cotizacion_items", $data);
             $id = $wpdb->insert_id;
         }
@@ -1673,18 +1727,22 @@ class Riverso_POS_Received_Quote_Module {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
 
+        $this->ensure_decision_column();
+
         $item_id = isset($_POST['item_id']) ? intval($_POST['item_id']) : 0;
         $decision = isset($_POST['decision']) ? sanitize_text_field($_POST['decision']) : '';
         $notas = isset($_POST['notas']) ? sanitize_textarea_field($_POST['notas']) : '';
 
-        if (!$item_id || !array_key_exists($decision, self::DECISION_STATUS)) {
+        $writable = ['accepted', 'accepted_increase', 'claim', 'remove', 'add', 'pending', 'modified'];
+        if (!$item_id || !in_array($decision, $writable, true)) {
             wp_send_json_error(['message' => 'Datos inválidos']);
         }
 
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
-        // Si es vinculación manual
+        $decision = $this->resolve_accept_decision($item_id, $decision);
+
         $update_data = [
             'decision_status' => $decision,
             'decision_notas'  => $notas,
@@ -1698,7 +1756,6 @@ class Riverso_POS_Received_Quote_Module {
             $update_data['match_status'] = 'manual';
             $update_data['match_confidence'] = 100;
 
-            // Buscar costo anterior
             $costo_anterior = $wpdb->get_var($wpdb->prepare(
                 "SELECT meta_value FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key = '_purchase_price'",
                 $producto_id
@@ -1715,7 +1772,40 @@ class Riverso_POS_Received_Quote_Module {
 
         $wpdb->update("{$prefix}cotizacion_items", $update_data, ['id' => $item_id]);
 
-        wp_send_json_success(['message' => 'Decisión guardada']);
+        wp_send_json_success([
+            'message' => 'Decisión guardada',
+            'decision_status' => $decision,
+            'decision_label' => self::DECISION_STATUS[$decision] ?? $decision,
+        ]);
+    }
+
+    /**
+     * AJAX: Auto-decidir ítems pending según alza de costo.
+     */
+    public function ajax_auto_decide_items() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if (!$id) {
+            wp_send_json_error(['message' => 'ID requerido']);
+        }
+        $blocked = $this->block_if_not_confirmed_cotizacion($id);
+        if ($blocked) {
+            wp_send_json_error(['message' => $blocked]);
+        }
+        $stats = $this->auto_decide_items($id);
+        wp_send_json_success([
+            'message' => sprintf(
+                'Auto-decisión: %d actualizados (%d reclamar, %d aprobados, %d sin cambio).',
+                (int) $stats['updated'],
+                (int) $stats['claimed'],
+                (int) $stats['accepted'],
+                (int) $stats['skipped']
+            ),
+            'stats' => $stats,
+        ]);
     }
 
     /**
@@ -1903,7 +1993,8 @@ class Riverso_POS_Received_Quote_Module {
         }
         $orden_id = (int) $wpdb->insert_id;
         $items = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$prefix}cotizacion_items WHERE cotizacion_id = %d AND decision_status != 'rejected'",
+            "SELECT * FROM {$prefix}cotizacion_items
+             WHERE cotizacion_id = %d AND decision_status NOT IN ('rejected','remove')",
             $quote->id
         ));
         foreach ($items as $item) {
@@ -2231,6 +2322,165 @@ class Riverso_POS_Received_Quote_Module {
         if (empty($idx)) {
             $wpdb->query("ALTER TABLE `{$table}` ADD KEY idx_version_group (version_group_id, version_n)");
         }
+    }
+
+    /**
+     * Amplía decision_status a VARCHAR(20) y migra rejected → remove.
+     */
+    private function ensure_decision_column() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'riverso_cotizacion_items';
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) !== $table) {
+            return;
+        }
+        $col = $wpdb->get_row("SHOW COLUMNS FROM `{$table}` LIKE 'decision_status'", ARRAY_A);
+        if (!$col) {
+            return;
+        }
+        $type = strtolower((string) ($col['Type'] ?? ''));
+        if (strpos($type, 'enum') !== false || $type !== 'varchar(20)') {
+            $wpdb->query(
+                "ALTER TABLE `{$table}` MODIFY COLUMN decision_status VARCHAR(20) NOT NULL DEFAULT 'pending'"
+            );
+        }
+        $wpdb->query(
+            "UPDATE `{$table}` SET decision_status = 'remove' WHERE decision_status = 'rejected'"
+        );
+    }
+
+    /**
+     * Auto-decide ítems pending según alza vs precio de referencia.
+     * No toca decisiones manuales ni ítems en estado add.
+     *
+     * @param int $quote_id
+     * @return array{updated:int,claimed:int,accepted:int,skipped:int}
+     */
+    public function auto_decide_items($quote_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $quote_id = (int) $quote_id;
+        $stats = ['updated' => 0, 'claimed' => 0, 'accepted' => 0, 'skipped' => 0];
+        if ($quote_id <= 0) {
+            return $stats;
+        }
+        $this->ensure_decision_column();
+
+        if (!class_exists('Riverso_Cost_Lookup_Service')) {
+            $p = RIVERSO_POS_PLUGIN_DIR . 'modules/costs/class-cost-lookup-service.php';
+            if (file_exists($p)) {
+                require_once $p;
+            }
+        }
+        if (!class_exists('Riverso_Cost_Lookup_Service')) {
+            return $stats;
+        }
+
+        $analysis = Riverso_Cost_Lookup_Service::get_instance()->analyze_quote($quote_id, 'auto');
+        if (is_wp_error($analysis) || empty($analysis['rows'])) {
+            return $stats;
+        }
+
+        $pending_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT id FROM {$prefix}cotizacion_items
+             WHERE cotizacion_id = %d AND decision_status = 'pending'",
+            $quote_id
+        ));
+        $pending_set = [];
+        foreach ($pending_ids ?: [] as $pid) {
+            $pending_set[(int) $pid] = true;
+        }
+        if (!$pending_set) {
+            return $stats;
+        }
+
+        $threshold = self::DELTA_SIGNIFICATIVO;
+        foreach ($analysis['rows'] as $row) {
+            $item_id = (int) ($row['item_id'] ?? 0);
+            if ($item_id <= 0 || empty($pending_set[$item_id])) {
+                $stats['skipped']++;
+                continue;
+            }
+            $ref = $row['reference_cost'] ?? null;
+            if ($ref === null || $ref === '' || !is_numeric($ref)) {
+                $stats['skipped']++;
+                continue;
+            }
+            $delta = isset($row['delta']) && is_numeric($row['delta'])
+                ? (float) $row['delta']
+                : null;
+            if ($delta === null && isset($row['costo_actual']) && is_numeric($row['costo_actual'])) {
+                $delta = (float) $row['costo_actual'] - (float) $ref;
+            }
+            $decision = ($delta !== null && $delta > $threshold) ? 'claim' : 'accepted';
+            $update = [
+                'decision_status' => $decision,
+                'costo_anterior'  => (float) $ref,
+                'updated_by'      => get_current_user_id() ?: null,
+            ];
+            if ($delta !== null) {
+                $update['diferencia_costo'] = $delta;
+            }
+            $wpdb->update("{$prefix}cotizacion_items", $update, ['id' => $item_id]);
+            $stats['updated']++;
+            if ($decision === 'claim') {
+                $stats['claimed']++;
+            } else {
+                $stats['accepted']++;
+            }
+        }
+        return $stats;
+    }
+
+    /**
+     * Si el usuario aprueba y hay alza significativa → accepted_increase.
+     *
+     * @param int    $item_id
+     * @param string $decision
+     * @return string
+     */
+    private function resolve_accept_decision($item_id, $decision) {
+        if ($decision !== 'accepted') {
+            return $decision;
+        }
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $item = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, cotizacion_id, costo_neto, costo_anterior, diferencia_costo
+             FROM {$prefix}cotizacion_items WHERE id = %d",
+            (int) $item_id
+        ), ARRAY_A);
+        if (!$item) {
+            return $decision;
+        }
+        $delta = null;
+        if (isset($item['diferencia_costo']) && $item['diferencia_costo'] !== null && $item['diferencia_costo'] !== '') {
+            $delta = (float) $item['diferencia_costo'];
+        } elseif ($item['costo_anterior'] !== null && $item['costo_anterior'] !== '' && is_numeric($item['costo_neto'])) {
+            $delta = (float) $item['costo_neto'] - (float) $item['costo_anterior'];
+        }
+        if ($delta === null && class_exists('Riverso_Cost_Lookup_Service') === false) {
+            $p = RIVERSO_POS_PLUGIN_DIR . 'modules/costs/class-cost-lookup-service.php';
+            if (file_exists($p)) {
+                require_once $p;
+            }
+        }
+        if ($delta === null && class_exists('Riverso_Cost_Lookup_Service') && !empty($item['cotizacion_id'])) {
+            $analysis = Riverso_Cost_Lookup_Service::get_instance()->analyze_quote((int) $item['cotizacion_id'], 'auto');
+            if (!is_wp_error($analysis)) {
+                foreach ($analysis['rows'] ?? [] as $row) {
+                    if ((int) ($row['item_id'] ?? 0) === (int) $item_id) {
+                        if (isset($row['delta']) && is_numeric($row['delta'])) {
+                            $delta = (float) $row['delta'];
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        if ($delta !== null && $delta > self::DELTA_SIGNIFICATIVO) {
+            return 'accepted_increase';
+        }
+        return 'accepted';
     }
 
     /**

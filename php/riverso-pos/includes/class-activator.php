@@ -4770,10 +4770,24 @@ class Riverso_POS_Activator {
 
         $items = $prefix . 'cotizacion_items';
         if (self::table_exists($items)) {
+            global $wpdb;
             self::add_column_if_missing($items, 'precio_lista', 'precio_lista DECIMAL(15,4) NULL');
             self::add_column_if_missing($items, 'descuento_pct', 'descuento_pct DECIMAL(8,4) NULL');
             self::add_column_if_missing($items, 'descuento_monto', 'descuento_monto DECIMAL(15,4) NULL');
             self::add_column_if_missing($items, 'tasa_iva', 'tasa_iva DECIMAL(5,2) NULL');
+            // Decisiones: Aprobar / Reclamar / Quitar / Agregar / Aprobado aumento.
+            $col = $wpdb->get_row("SHOW COLUMNS FROM `{$items}` LIKE 'decision_status'", ARRAY_A);
+            if ($col) {
+                $type = strtolower((string) ($col['Type'] ?? ''));
+                if (strpos($type, 'enum') !== false || $type !== "varchar(20)") {
+                    $wpdb->query(
+                        "ALTER TABLE `{$items}` MODIFY COLUMN decision_status VARCHAR(20) NOT NULL DEFAULT 'pending'"
+                    );
+                }
+                $wpdb->query(
+                    "UPDATE `{$items}` SET decision_status = 'remove' WHERE decision_status = 'rejected'"
+                );
+            }
         }
 
         $oc = $prefix . 'ordenes_compra';

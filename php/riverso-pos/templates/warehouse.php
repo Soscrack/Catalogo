@@ -288,6 +288,87 @@ $movement_types = Riverso_Warehouse_Module::MOVEMENT_TYPES;
     </div>
 </div>
 
+<div id="modal-loc-detail" class="riverso-modal" style="display: none;">
+    <div class="riverso-modal-content loc-detail-content">
+        <div class="riverso-modal-header">
+            <div>
+                <h2 id="loc-detail-title">Lugar</h2>
+                <p id="loc-detail-meta" style="margin:4px 0 0;color:#666;font-size:13px;"></p>
+            </div>
+            <button type="button" class="riverso-modal-close" aria-label="Cerrar">&times;</button>
+        </div>
+        <div class="riverso-modal-body">
+            <p style="margin:0 0 12px;">
+                <button type="button" class="button loc-detail-sec button-primary" data-sec="inv">Inventario actual</button>
+                <button type="button" class="button loc-detail-sec" data-sec="pref">Productos preferidos</button>
+            </p>
+            <div id="loc-detail-inv">
+                <table class="wp-list-table widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Producto</th>
+                            <th>Cantidad</th>
+                            <th>Último conteo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="loc-detail-inv-body">
+                        <tr><td colspan="4">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="loc-detail-pref" style="display:none;">
+                <?php if (current_user_can('riverso_edit_warehouse') || current_user_can('riverso_edit_stock') || current_user_can('manage_options')): ?>
+                <div class="form-field">
+                    <label for="loc-detail-pref-q">Asignar producto que prefiere este lugar</label>
+                    <input type="text" id="loc-detail-pref-q" placeholder="Buscar SKU o nombre" autocomplete="off">
+                    <div id="loc-detail-pref-sug" class="loc-detail-suggest"></div>
+                </div>
+                <label style="display:flex;gap:6px;align-items:center;margin:0 0 12px;">
+                    <input type="checkbox" id="loc-detail-pref-primary" checked> Marcar como lugar preferido principal
+                </label>
+                <?php endif; ?>
+                <div id="loc-detail-pref-list">Cargando...</div>
+            </div>
+        </div>
+        <div class="riverso-modal-footer">
+            <button type="button" class="button" id="btn-close-loc-detail">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-loc-print" class="riverso-modal" style="display: none;">
+    <div class="riverso-modal-content" style="max-width:560px;">
+        <div class="riverso-modal-header">
+            <div>
+                <h2>Imprimir etiqueta de lugar</h2>
+                <p id="loc-print-meta" style="margin:4px 0 0;color:#666;font-size:13px;"></p>
+            </div>
+            <button type="button" class="riverso-modal-close" aria-label="Cerrar">&times;</button>
+        </div>
+        <div class="riverso-modal-body">
+            <div class="form-field">
+                <label for="loc-print-copias">Copias</label>
+                <input type="number" id="loc-print-copias" min="1" max="9999" value="1" style="width:100px;">
+            </div>
+            <p id="loc-print-choose">
+                <button type="button" class="button button-primary" id="btn-loc-print-now">Imprimir ya</button>
+                <button type="button" class="button" id="btn-loc-print-queue">Agregar a orden de impresión</button>
+            </p>
+            <p id="loc-print-msg" style="color:#b45309;font-weight:600;display:none;"></p>
+            <div id="loc-print-orders" style="display:none;">
+                <p style="margin:0 0 8px;">
+                    <button type="button" class="button button-primary" id="btn-loc-print-new">Crear nueva orden con este lugar</button>
+                </p>
+                <div id="loc-print-orders-list">Cargando...</div>
+            </div>
+        </div>
+        <div class="riverso-modal-footer">
+            <button type="button" class="button" id="btn-close-loc-print">Cerrar</button>
+        </div>
+    </div>
+</div>
+
 <!-- Modal: Nuevo Movimiento -->
 <div id="modal-movement" class="riverso-modal" style="display: none;">
     <div class="riverso-modal-content">
@@ -415,7 +496,39 @@ $movement_types = Riverso_Warehouse_Module::MOVEMENT_TYPES;
     padding-top: 10px;
     border-top: 1px solid #eee;
     display: flex;
+    flex-wrap: wrap;
     gap: 5px;
+}
+
+.loc-detail-content {
+    max-width: 760px;
+}
+
+.loc-detail-suggest {
+    border: 1px solid #ddd;
+    background: #fff;
+    max-height: 180px;
+    overflow: auto;
+    display: none;
+    margin-top: 4px;
+}
+
+.loc-detail-suggest div {
+    padding: 8px 10px;
+    cursor: pointer;
+}
+
+.loc-detail-suggest div:hover {
+    background: #f5f5f5;
+}
+
+.loc-pref-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
 }
 
 .location-card.inactive {
@@ -526,8 +639,13 @@ jQuery(function($) {
     const locationTypes = <?php echo wp_json_encode($location_types); ?>;
     const movementTypes = <?php echo wp_json_encode($movement_types); ?>;
     const canEditStock = <?php echo (current_user_can('riverso_edit_stock') || current_user_can('manage_options')) ? 'true' : 'false'; ?>;
+    const canEditLocations = <?php echo (current_user_can('riverso_edit_warehouse') || current_user_can('riverso_edit_stock') || current_user_can('manage_options')) ? 'true' : 'false'; ?>;
+    const canCreatePrint = <?php echo (current_user_can('riverso_create_print_orders') || current_user_can('manage_options')) ? 'true' : 'false'; ?>;
+    const canPrintLabels = <?php echo (current_user_can('riverso_print_orders') || current_user_can('riverso_print_labels') || current_user_can('manage_options')) ? 'true' : 'false'; ?>;
+    const printOrdersUrl = <?php echo wp_json_encode(admin_url('admin.php?page=riverso-pos-print-orders')); ?>;
     let currentProductId = null;
     let locationsCache = [];
+    let detailLoc = null;
 
     // Tabs - cargar datos al cambiar de tab
     $('.nav-tab').on('click', function(e) {
@@ -551,9 +669,11 @@ jQuery(function($) {
     });
 
     // ========== UBICACIONES ==========
-    function loadLocations() {
+    function loadLocations(silent) {
         const estadoFilter = $('#filter-estado-ubicacion').val();
-        $('#locations-grid').html('<p style="padding: 40px; text-align: center; color: #666;"><span class="spinner is-active" style="float: none;"></span><br>Cargando ubicaciones...</p>');
+        if (silent !== true) {
+            $('#locations-grid').html('<p style="padding: 40px; text-align: center; color: #666;"><span class="spinner is-active" style="float: none;"></span><br>Cargando ubicaciones...</p>');
+        }
         
         const data = {
             action: 'riverso_get_locations',
@@ -596,15 +716,21 @@ jQuery(function($) {
             const statusClass = isUnknown ? 'inactive' : (isActive ? 'active' : 'inactive');
             const statusText = isUnknown ? 'Desconocido' : (isActive ? 'Activa' : 'Desactivada');
             
-            let actions = '';
+            let actions = `
+                <button type="button" class="button button-small btn-loc-inv" data-id="${loc.id}">Inventario actual</button>
+                <button type="button" class="button button-small btn-loc-pref" data-id="${loc.id}">Preferidos</button>
+            `;
+            if (!isUnknown && canCreatePrint) {
+                actions += `<button type="button" class="button button-small btn-loc-print" data-id="${loc.id}"><span class="dashicons dashicons-printer" style="font-size:14px;width:14px;height:14px;vertical-align:middle;"></span> Imprimir</button>`;
+            }
             if (!isUnknown) {
                 if (isActive) {
-                    actions = `
+                    actions += `
                         <button class="button button-small btn-edit-location">Editar</button>
                         <button class="button button-small btn-deactivate-location">Desactivar</button>
                     `;
                 } else {
-                    actions = `
+                    actions += `
                         <button class="button button-small btn-activate-location" style="background: #4caf50; color: white; border-color: #4caf50;">Reactivar</button>
                         <button class="button button-small btn-delete-permanent" style="background: #d32f2f; color: white; border-color: #d32f2f;">Eliminar</button>
                     `;
@@ -736,6 +862,334 @@ jQuery(function($) {
             } else {
                 alert('Error: ' + (response.data?.message || 'No se pudo eliminar'));
             }
+        });
+    });
+
+    function escHtml(value) {
+        return $('<div>').text(value == null ? '' : value).html();
+    }
+
+    function showLocDetailSection(sec) {
+        $('.loc-detail-sec').removeClass('button-primary');
+        $('.loc-detail-sec[data-sec="' + sec + '"]').addClass('button-primary');
+        $('#loc-detail-inv').toggle(sec === 'inv');
+        $('#loc-detail-pref').toggle(sec === 'pref');
+    }
+
+    function renderLocOverview(data) {
+        const inv = data.inventario || [];
+        $('#loc-detail-inv-body').html(inv.length
+            ? inv.map(function(p) {
+                const when = (p.fecha_conteo || '') + (p.conteo_nombre ? ' · ' + p.conteo_nombre : '');
+                return '<tr><td>' + escHtml(p.canonical_sku) + '</td><td>' + escHtml(p.nombre_canonico) + '</td><td>' +
+                    escHtml(p.cantidad_contada) + '</td><td>' + escHtml(when) + '</td></tr>';
+            }).join('')
+            : '<tr><td colspan="4">Aún no hay stock en este lugar.</td></tr>');
+
+        const pref = data.preferidos || [];
+        if (!pref.length) {
+            $('#loc-detail-pref-list').html('<p style="color:#666;margin:0;">Ningún producto prefiere este lugar todavía.</p>');
+            return;
+        }
+        $('#loc-detail-pref-list').html(pref.map(function(p) {
+            const star = parseInt(p.es_preferido, 10) ? '★ Principal' : '☆';
+            let rowActions = '';
+            if (canEditLocations) {
+                if (!parseInt(p.es_preferido, 10)) {
+                    rowActions += ' <button type="button" class="button button-small btn-pref-primary" data-pid="' + p.producto_base_id + '">Hacer principal</button>';
+                }
+                rowActions += ' <button type="button" class="button button-small btn-pref-remove" data-pid="' + p.producto_base_id + '">Quitar</button>';
+            }
+            return '<div class="loc-pref-row"><div><strong>' + escHtml(p.canonical_sku) + '</strong> ' +
+                escHtml(p.nombre_canonico || '') + ' <span style="color:#666;">' + star + '</span></div><div>' +
+                rowActions + '</div></div>';
+        }).join(''));
+    }
+
+    function loadLocOverview() {
+        if (!detailLoc) return;
+        $.post(ajaxurl, {
+            action: 'riverso_inventory_get_location_overview',
+            nonce: nonce,
+            id: detailLoc.id
+        }, function(response) {
+            if (!response.success) {
+                const msg = (response.data && response.data.message) || 'Error';
+                $('#loc-detail-inv-body').html('<tr><td colspan="4">' + escHtml(msg) + '</td></tr>');
+                $('#loc-detail-pref-list').text(msg);
+                return;
+            }
+            renderLocOverview(response.data || {});
+        }).fail(function() {
+            $('#loc-detail-inv-body').html('<tr><td colspan="4">Error de conexión</td></tr>');
+        });
+    }
+
+    function openLocDetail(loc, sec) {
+        detailLoc = loc;
+        $('#loc-detail-title').text(loc.codigo + (loc.nombre ? ' · ' + loc.nombre : ''));
+        const status = String(loc.codigo) === '?' ? 'Desconocido' : (parseInt(loc.activo, 10) === 1 ? 'Activa' : 'Desactivada');
+        $('#loc-detail-meta').text(status + (loc.zona ? ' · ' + loc.zona : '') + (loc.barcode ? ' · BC ' + loc.barcode : ''));
+        showLocDetailSection(sec || 'inv');
+        $('#loc-detail-inv-body').html('<tr><td colspan="4">Cargando...</td></tr>');
+        $('#loc-detail-pref-list').text('Cargando...');
+        $('#loc-detail-pref-q').val('');
+        $('#loc-detail-pref-sug').hide().empty();
+        $('#modal-loc-detail').css('display', 'flex');
+        loadLocOverview();
+    }
+
+    $(document).on('click', '.btn-loc-inv', function(e) {
+        e.preventDefault();
+        const loc = locationsCache.find(l => String(l.id) === String($(this).data('id')));
+        if (loc) openLocDetail(loc, 'inv');
+    });
+    $(document).on('click', '.btn-loc-pref', function(e) {
+        e.preventDefault();
+        const loc = locationsCache.find(l => String(l.id) === String($(this).data('id')));
+        if (loc) openLocDetail(loc, 'pref');
+    });
+    $(document).on('click', '.loc-detail-sec', function() {
+        showLocDetailSection($(this).data('sec'));
+    });
+
+    let prefSearchTimer = null;
+    $(document).on('input', '#loc-detail-pref-q', function() {
+        const q = $(this).val();
+        clearTimeout(prefSearchTimer);
+        if (q.length < 2) {
+            $('#loc-detail-pref-sug').hide().empty();
+            return;
+        }
+        prefSearchTimer = setTimeout(function() {
+            $.post(ajaxurl, {
+                action: 'riverso_inventory_search_products',
+                nonce: nonce,
+                q: q,
+                solo_sku_local: 1
+            }, function(response) {
+                const list = (response.success && response.data.products) || [];
+                if (!list.length) {
+                    $('#loc-detail-pref-sug').hide().empty();
+                    return;
+                }
+                $('#loc-detail-pref-sug').html(list.map(function(p) {
+                    return '<div data-id="' + p.id + '"><strong>' + escHtml(p.canonical_sku) + '</strong> ' + escHtml(p.nombre_canonico) + '</div>';
+                }).join('')).show();
+            });
+        }, 250);
+    });
+
+    $(document).on('click', '#loc-detail-pref-sug div', function() {
+        if (!detailLoc) return;
+        const pid = $(this).data('id');
+        $('#loc-detail-pref-sug').hide().empty();
+        $('#loc-detail-pref-q').val('');
+        $.post(ajaxurl, {
+            action: 'riverso_inventory_save_preferred_location',
+            nonce: nonce,
+            producto_base_id: pid,
+            ubicacion_id: detailLoc.id,
+            es_preferido: $('#loc-detail-pref-primary').is(':checked') ? 1 : 0
+        }, function(response) {
+            if (!response.success) {
+                alert((response.data && response.data.message) || 'No se pudo asignar');
+                return;
+            }
+            loadLocOverview();
+            loadLocations(true);
+        });
+    });
+
+    $(document).on('click', '.btn-pref-remove', function() {
+        if (!detailLoc) return;
+        $.post(ajaxurl, {
+            action: 'riverso_inventory_remove_preferred_location',
+            nonce: nonce,
+            producto_base_id: $(this).data('pid'),
+            ubicacion_id: detailLoc.id
+        }, function(response) {
+            if (!response.success) {
+                alert((response.data && response.data.message) || 'No se pudo quitar');
+                return;
+            }
+            loadLocOverview();
+            loadLocations(true);
+        });
+    });
+
+    $(document).on('click', '.btn-pref-primary', function() {
+        if (!detailLoc) return;
+        $.post(ajaxurl, {
+            action: 'riverso_inventory_set_primary_location',
+            nonce: nonce,
+            producto_base_id: $(this).data('pid'),
+            ubicacion_id: detailLoc.id
+        }, function(response) {
+            if (!response.success) {
+                alert((response.data && response.data.message) || 'No se pudo marcar como principal');
+                return;
+            }
+            loadLocOverview();
+            loadLocations(true);
+        });
+    });
+
+    // ========== IMPRIMIR ETIQUETA DE LUGAR ==========
+    let printLoc = null;
+
+    function locPrintItem() {
+        const codigo = String(printLoc.codigo || '').trim();
+        return {
+            sku: String(printLoc.barcode || '').trim() || codigo,
+            nombre: String(printLoc.nombre || '').trim() || codigo,
+            copias: Math.max(1, parseInt($('#loc-print-copias').val(), 10) || 1),
+            cantidad_ean: 1,
+            modo: 'CodigoLugar',
+            color: 'BN'
+        };
+    }
+
+    function locPrintMsg(text) {
+        $('#loc-print-msg').text(text || '').toggle(!!text);
+    }
+
+    function createLocOrder() {
+        return $.post(ajaxurl, {
+            action: 'riverso_print_orders_create',
+            nonce: nonce,
+            tipo: 'etiqueta_lugar',
+            prioridad: 0,
+            notas: 'Etiqueta de lugar ' + printLoc.codigo,
+            items: JSON.stringify([locPrintItem()])
+        });
+    }
+
+    $(document).on('click', '.btn-loc-print', function() {
+        printLoc = locationsCache.find(l => String(l.id) === String($(this).data('id')));
+        if (!printLoc) return;
+        const item = locPrintItem();
+        $('#loc-print-meta').text('Etiqueta: ' + item.nombre + ' · Código de barras: ' + item.sku);
+        $('#loc-print-copias').val(1);
+        $('#btn-loc-print-now').toggle(canPrintLabels);
+        $('#loc-print-choose').show();
+        $('#loc-print-orders').hide();
+        locPrintMsg('');
+        $('#modal-loc-print').css('display', 'flex');
+    });
+
+    async function labelPrinterReady() {
+        if (typeof RiversoLabelPrint === 'undefined') return false;
+        const healthy = await RiversoLabelPrint.checkAgent();
+        if (!healthy) return false;
+        await RiversoLabelPrint.loadPrinters();
+        return RiversoLabelPrint.getPrinters().some(p => p.isBrother);
+    }
+
+    $('#btn-loc-print-now').on('click', async function() {
+        if (!printLoc) return;
+        const $btn = $(this).prop('disabled', true).text('Revisando impresora...');
+        const reset = () => $btn.prop('disabled', false).text('Imprimir ya');
+        let ready = false;
+        try { ready = await labelPrinterReady(); } catch (e) { ready = false; }
+        if (!ready) {
+            reset();
+            locPrintMsg('No hay impresora de etiquetas disponible en este computador. Agrega el lugar a una orden de impresión.');
+            showLocPrintOrders();
+            return;
+        }
+        $btn.text('Imprimiendo...');
+        try {
+            const res = await createLocOrder();
+            if (!res.success) throw new Error((res.data && res.data.message) || 'No se pudo crear la orden');
+            const order = res.data.order;
+            const item = locPrintItem();
+            const printer = RiversoLabelPrint.getPreferred() || '';
+            await RiversoLabelPrint.print([{
+                nombre: item.nombre,
+                sku: item.sku,
+                cantidad: 1,
+                precio: null,
+                copias: item.copias,
+                modo: 'CodigoLugar',
+                color: 'BN',
+                ean13: null,
+                printerName: printer || null
+            }]);
+            const mark = await $.post(ajaxurl, {
+                action: 'riverso_print_orders_mark_printed',
+                nonce: nonce,
+                id: order.id,
+                impresora_nombre: printer
+            });
+            reset();
+            if (!mark.success) {
+                alert('Se imprimió, pero no se pudo registrar: ' + ((mark.data && mark.data.message) || 'error'));
+            }
+            $('#modal-loc-print').hide();
+        } catch (err) {
+            reset();
+            locPrintMsg(err && err.message ? err.message : 'Error de impresión');
+        }
+    });
+
+    $('#btn-loc-print-queue').on('click', function() {
+        locPrintMsg('');
+        showLocPrintOrders();
+    });
+
+    function showLocPrintOrders() {
+        $('#loc-print-choose').hide();
+        $('#loc-print-orders').show();
+        $('#loc-print-orders-list').text('Cargando...');
+        $.post(ajaxurl, {
+            action: 'riverso_print_orders_list',
+            nonce: nonce,
+            editable: 1,
+            page: 1,
+            per_page: 10
+        }, function(res) {
+            const orders = (res.success && res.data.items) || [];
+            if (!orders.length) {
+                $('#loc-print-orders-list').html('<p style="color:#666;margin:0;">No hay órdenes abiertas. Crea una nueva.</p>');
+                return;
+            }
+            $('#loc-print-orders-list').html(orders.map(function(o, i) {
+                const tag = i === 0 ? ' <span class="wh-badge wh-badge-ok">Última</span>' : '';
+                return '<div class="loc-pref-row"><div><code>' + escHtml(o.numero_orden) + '</code>' + tag +
+                    '<br><span style="color:#666;font-size:12px;">' + escHtml(o.estado_label) + ' · ' + escHtml(o.tipo_label) +
+                    ' · ' + escHtml(o.total_items) + ' ítems · ' + escHtml(o.created_at || '') + '</span></div><div>' +
+                    '<a class="button button-small" target="_blank" href="' + printOrdersUrl + '&order_id=' + o.id + '">Ver</a> ' +
+                    '<button type="button" class="button button-small button-primary btn-loc-print-add" data-id="' + o.id + '">Agregar</button>' +
+                    '</div></div>';
+            }).join(''));
+        }).fail(function() {
+            $('#loc-print-orders-list').text('Error de conexión');
+        });
+    }
+
+    $(document).on('click', '.btn-loc-print-add', function() {
+        if (!printLoc) return;
+        const id = $(this).data('id');
+        const item = locPrintItem();
+        $.post(ajaxurl, { action: 'riverso_print_orders_get', nonce: nonce, id: id }, function(res) {
+            if (!res.success) { alert((res.data && res.data.message) || 'Error'); return; }
+            const dup = (res.data.order.items || []).some(it => it.sku === item.sku && it.modo === 'CodigoLugar');
+            if (dup && !confirm('Este lugar ya está en la orden ' + res.data.order.numero_orden + '. ¿Agregarlo de nuevo?')) return;
+            $.post(ajaxurl, Object.assign({ action: 'riverso_print_orders_add_item', nonce: nonce, orden_id: id }, item), function(r) {
+                if (!r.success) { alert((r.data && r.data.message) || 'No se pudo agregar'); return; }
+                $('#modal-loc-print').hide();
+                alert('Lugar agregado a la orden ' + r.data.order.numero_orden);
+            });
+        });
+    });
+
+    $('#btn-loc-print-new').on('click', function() {
+        if (!printLoc) return;
+        createLocOrder().done(function(res) {
+            if (!res.success) { alert((res.data && res.data.message) || 'No se pudo crear la orden'); return; }
+            $('#modal-loc-print').hide();
+            alert('Orden ' + res.data.order.numero_orden + ' creada con este lugar');
         });
     });
 
@@ -1063,7 +1517,7 @@ jQuery(function($) {
     });
 
     // Cerrar modales
-    $('.riverso-modal-close, #btn-cancel-location, #btn-cancel-movement, #btn-cancel-stock-limits').on('click', function() {
+    $('.riverso-modal-close, #btn-cancel-location, #btn-cancel-movement, #btn-cancel-stock-limits, #btn-close-loc-detail, #btn-close-loc-print').on('click', function() {
         $(this).closest('.riverso-modal').hide();
     });
 

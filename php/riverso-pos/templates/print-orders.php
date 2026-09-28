@@ -249,6 +249,14 @@ jQuery(function($) {
     const modos = <?php echo wp_json_encode(array_values($modos)); ?>;
     const colores = <?php echo wp_json_encode(array_values($colores)); ?>;
     const tipos = <?php echo wp_json_encode($tipos); ?>;
+    const modoCampos = <?php echo wp_json_encode(Riverso_Print_Order_Module::MODO_CAMPOS); ?>;
+
+    function usa(modo, campo) {
+        const campos = modoCampos[modo || 'BolsaCOD'];
+        return !campos || campos.indexOf(campo) !== -1;
+    }
+
+    const NA = '<span class="po-muted" title="No se usa en este modo">—</span>';
 
     let page = 1;
     let currentOrder = null;
@@ -470,16 +478,17 @@ jQuery(function($) {
         $('#po-items-body').html(editorItems.map(function(it, idx) {
             const precioVal = priceInputValue(it.precio);
             const precioLabel = formatPrice2(it.precio);
+            const modo = it.modo || 'BolsaCOD';
             if (isLockedOrder()) {
                 return '<tr data-idx="' + idx + '">' +
                     '<td><code>' + esc(it.sku) + '</code></td>' +
                     '<td>' + esc(it.nombre || '') + '</td>' +
-                    '<td>' + esc(it.cantidad_ean || 100) + '</td>' +
+                    '<td>' + (usa(modo, 'cantidad') ? esc(it.cantidad_ean || 100) : NA) + '</td>' +
                     '<td>' + esc(it.copias || 1) + '</td>' +
-                    '<td>' + esc(it.modo || 'BolsaCOD') + '</td>' +
-                    '<td>' + esc(it.color || 'BN') + '</td>' +
-                    '<td>' + esc(it.ean13 || '—') + '</td>' +
-                    '<td>' + esc(precioLabel) + '</td>' +
+                    '<td>' + esc(modo) + '</td>' +
+                    '<td>' + (usa(modo, 'color') ? esc(it.color || 'BN') : NA) + '</td>' +
+                    '<td>' + (usa(modo, 'ean13') ? esc(it.ean13 || '—') : NA) + '</td>' +
+                    '<td>' + (usa(modo, 'precio') ? esc(precioLabel) : NA) + '</td>' +
                     (canCreate ? '<td></td>' : '') +
                     '</tr>';
             }
@@ -502,12 +511,12 @@ jQuery(function($) {
             return '<tr data-idx="' + idx + '">' +
                 '<td><code title="El SKU no se puede cambiar">' + esc(it.sku) + '</code></td>' +
                 '<td><input type="text" class="po-it-nombre" value="' + esc(it.nombre || '') + '" style="width:100%;min-width:160px;"></td>' +
-                '<td><input type="number" min="1" max="99999" class="po-it-ean" value="' + esc(it.cantidad_ean || 100) + '" style="width:80px;"></td>' +
+                '<td>' + (usa(modo, 'cantidad') ? '<input type="number" min="1" max="99999" class="po-it-ean" value="' + esc(it.cantidad_ean || 100) + '" style="width:80px;">' : NA) + '</td>' +
                 '<td><input type="number" min="1" max="9999" class="po-it-copias" value="' + esc(it.copias || 1) + '" style="width:70px;"></td>' +
-                '<td><select class="po-it-modo">' + modoOptions(it.modo || 'BolsaCOD') + '</select></td>' +
-                '<td><select class="po-it-color">' + colorOptions(it.color || 'BN') + '</select></td>' +
-                '<td><input type="text" class="po-it-ean13" maxlength="13" value="' + esc(it.ean13 || '') + '" style="width:110px;" placeholder="Opcional"></td>' +
-                '<td><div class="po-precio-cell">' + precioHtml + '</div></td>' +
+                '<td><select class="po-it-modo">' + modoOptions(modo) + '</select></td>' +
+                '<td>' + (usa(modo, 'color') ? '<select class="po-it-color">' + colorOptions(it.color || 'BN') + '</select>' : NA) + '</td>' +
+                '<td>' + (usa(modo, 'ean13') ? '<input type="text" class="po-it-ean13" maxlength="13" value="' + esc(it.ean13 || '') + '" style="width:110px;" placeholder="Opcional">' : NA) + '</td>' +
+                '<td>' + (usa(modo, 'precio') ? '<div class="po-precio-cell">' + precioHtml + '</div>' : NA) + '</td>' +
                 (canCreate ? '<td><button type="button" class="button-link-delete po-it-del">Quitar</button></td>' : '') +
                 '</tr>';
         }).join(''));
@@ -534,13 +543,20 @@ jQuery(function($) {
         $('#po-items-body tr').each(function() {
             const idx = parseInt($(this).data('idx'), 10);
             if (isNaN(idx) || !editorItems[idx]) return;
-            editorItems[idx].nombre = $(this).find('.po-it-nombre').val() || editorItems[idx].nombre;
-            editorItems[idx].cantidad_ean = parseInt($(this).find('.po-it-ean').val(), 10) || 100;
-            editorItems[idx].copias = parseInt($(this).find('.po-it-copias').val(), 10) || 1;
-            editorItems[idx].modo = $(this).find('.po-it-modo').val();
-            editorItems[idx].color = $(this).find('.po-it-color').val();
-            editorItems[idx].ean13 = $(this).find('.po-it-ean13').val() || '';
-            if (canEditPrice && editorItems[idx].precioUnlocked) {
+            const $row = $(this);
+            editorItems[idx].nombre = $row.find('.po-it-nombre').val() || editorItems[idx].nombre;
+            if ($row.find('.po-it-ean').length) {
+                editorItems[idx].cantidad_ean = parseInt($row.find('.po-it-ean').val(), 10) || 100;
+            }
+            editorItems[idx].copias = parseInt($row.find('.po-it-copias').val(), 10) || 1;
+            editorItems[idx].modo = $row.find('.po-it-modo').val();
+            if ($row.find('.po-it-color').length) {
+                editorItems[idx].color = $row.find('.po-it-color').val();
+            }
+            if ($row.find('.po-it-ean13').length) {
+                editorItems[idx].ean13 = $row.find('.po-it-ean13').val() || '';
+            }
+            if (canEditPrice && editorItems[idx].precioUnlocked && $row.find('.po-it-precio').length) {
                 const p = $(this).find('.po-it-precio').val();
                 const next = p === '' ? null : toPrice2(p);
                 const cur = toPrice2(editorItems[idx].precio);
@@ -596,6 +612,11 @@ jQuery(function($) {
     });
 
     $(document).on('click', '.po-open', function() { openOrder($(this).data('id')); });
+
+    $(document).on('change', '.po-it-modo', function() {
+        collectItems();
+        renderItems();
+    });
 
     $(document).on('click', '.po-it-del', function() {
         const idx = parseInt($(this).closest('tr').data('idx'), 10);
@@ -686,7 +707,8 @@ jQuery(function($) {
             etiqueta_producto: 'BolsaCOD',
             bolsa: 'Bolsa',
             etiqueta_simple: 'EtiquetaSimple',
-            etiqueta_logo: 'EtiquetaLogo'
+            etiqueta_logo: 'EtiquetaLogo',
+            etiqueta_lugar: 'CodigoLugar'
         };
         return map[$('#po-tipo').val()] || 'BolsaCOD';
     }
@@ -787,15 +809,17 @@ jQuery(function($) {
 
     function jobsFromOrder(order) {
         return (order.items || []).map(function(it) {
+            const modo = it.modo || 'BolsaCOD';
+            const precio = it.precio == null || it.precio === '' ? null : Math.round(Number(it.precio));
             return {
                 nombre: it.nombre,
                 sku: it.sku,
                 cantidad: it.cantidad_ean || 100,
-                precio: it.precio == null || it.precio === '' ? null : Math.round(Number(it.precio)),
+                precio: usa(modo, 'precio') ? precio : null,
                 copias: it.copias || 1,
-                modo: it.modo || 'BolsaCOD',
-                color: it.color || 'BN',
-                ean13: it.ean13 || null,
+                modo: modo,
+                color: usa(modo, 'color') ? (it.color || 'BN') : 'BN',
+                ean13: usa(modo, 'ean13') ? (it.ean13 || null) : null,
                 printerName: (typeof RiversoLabelPrint !== 'undefined' && RiversoLabelPrint.getPreferred) ? RiversoLabelPrint.getPreferred() : null
             };
         });
@@ -943,5 +967,10 @@ jQuery(function($) {
     }
 
     loadList();
+
+    const initialOrderId = new URLSearchParams(window.location.search).get('order_id');
+    if (initialOrderId) {
+        openOrder(initialOrderId);
+    }
 });
 </script>

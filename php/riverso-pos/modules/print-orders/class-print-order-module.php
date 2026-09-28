@@ -31,9 +31,22 @@ class Riverso_Print_Order_Module {
         'bolsa'             => 'Bolsa',
         'etiqueta_simple'   => 'Etiqueta simple',
         'etiqueta_logo'     => 'Etiqueta con logo',
+        'etiqueta_lugar'    => 'Etiqueta de lugar',
     ];
 
-    const MODOS = ['Bolsa', 'BolsaCOD', 'EtiquetaSimple', 'EtiquetaLogo', 'EtiquetaLogoPrecio'];
+    const MODOS = ['Bolsa', 'BolsaCOD', 'EtiquetaSimple', 'EtiquetaLogo', 'EtiquetaLogoPrecio', 'CodigoLugar'];
+
+    /**
+     * Campos opcionales que usa cada modo en su plantilla (nombre y copias se usan siempre).
+     */
+    const MODO_CAMPOS = [
+        'Bolsa'              => ['cantidad', 'ean13', 'color'],
+        'BolsaCOD'           => ['cantidad', 'ean13', 'color'],
+        'EtiquetaSimple'     => ['color'],
+        'EtiquetaLogo'       => ['color'],
+        'EtiquetaLogoPrecio' => ['precio', 'color'],
+        'CodigoLugar'        => [],
+    ];
     const COLORES = ['BN', 'RN'];
 
     const EDITABLE_STATES = ['borrador', 'pendiente', 'aprobada'];
@@ -43,6 +56,7 @@ class Riverso_Print_Order_Module {
         'bolsa'             => 'Bolsa',
         'etiqueta_simple'   => 'EtiquetaSimple',
         'etiqueta_logo'     => 'EtiquetaLogo',
+        'etiqueta_lugar'    => 'CodigoLugar',
     ];
 
     public static function get_instance() {
@@ -183,7 +197,7 @@ class Riverso_Print_Order_Module {
         }
 
         $color = strtoupper(sanitize_text_field($data['color'] ?? 'BN'));
-        if (!in_array($color, self::COLORES, true)) {
+        if (!in_array($color, self::COLORES, true) || $modo === 'CodigoLugar') {
             $color = 'BN';
         }
 
@@ -448,6 +462,8 @@ class Riverso_Print_Order_Module {
         if (!empty($filters['estado']) && isset(self::ESTADOS[$filters['estado']])) {
             $where[] = 'o.estado = %s';
             $params[] = $filters['estado'];
+        } elseif (!empty($filters['editable'])) {
+            $where[] = "o.estado IN ('" . implode("','", self::EDITABLE_STATES) . "')";
         }
 
         if (!empty($filters['tipo']) && isset(self::TIPOS[$filters['tipo']])) {
@@ -567,6 +583,7 @@ class Riverso_Print_Order_Module {
             'date_from'      => sanitize_text_field($_POST['date_from'] ?? ''),
             'date_to'        => sanitize_text_field($_POST['date_to'] ?? ''),
             'mine'           => !empty($_POST['mine']),
+            'editable'       => !empty($_POST['editable']),
             'solicitado_por' => intval($_POST['solicitado_por'] ?? 0),
         ];
 

@@ -956,7 +956,11 @@ class Riverso_Inventory_Count_Module {
 
     public function ajax_get_location_overview() {
         $this->require_nonce();
-        $this->require_cap('riverso_view_warehouse');
+        if (!current_user_can('riverso_view_warehouse')
+            && !current_user_can('riverso_view_stock')
+            && !current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
         global $wpdb;
         $prefix = $this->prefix();
         $id = $this->post_int('id');
@@ -2136,7 +2140,7 @@ class Riverso_Inventory_Count_Module {
 
     public function ajax_search_products() {
         $this->require_nonce();
-        if (!current_user_can('riverso_view_products') && !$this->can_do_inventory()) {
+        if (!current_user_can('riverso_view_products') && !$this->can_do_inventory() && !$this->can_edit_locations()) {
             wp_send_json_error(['message' => 'Sin permisos'], 403);
         }
         global $wpdb;

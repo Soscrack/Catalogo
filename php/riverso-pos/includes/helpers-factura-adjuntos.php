@@ -164,14 +164,22 @@ function riverso_find_factura_by_dte($tipo_dte, $folio, $rut) {
         return null;
     }
 
-    $folios = array_values(array_unique(array_filter([$folio_raw, $folio_norm])));
+    $folios = array_values(array_unique(array_filter([$folio_raw, $folio_norm], static function ($v) {
+        return $v !== null && $v !== '';
+    })));
     $placeholders = implode(',', array_fill(0, count($folios), '%s'));
     $params = array_merge([$tipo_dte], $folios);
+
+    $leading_zero_sql = '';
+    if ($folio_norm !== '' && ctype_digit($folio_norm)) {
+        $leading_zero_sql = ' OR TRIM(LEADING \'0\' FROM folio) = %s';
+        $params[] = $folio_norm;
+    }
 
     // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
     $rows = $wpdb->get_results($wpdb->prepare(
         "SELECT * FROM {$table}
-         WHERE tipo_dte = %d AND folio IN ({$placeholders})
+         WHERE tipo_dte = %d AND (folio IN ({$placeholders}){$leading_zero_sql})
          ORDER BY id DESC
          LIMIT 20",
         ...$params

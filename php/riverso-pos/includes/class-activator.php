@@ -355,6 +355,7 @@ class Riverso_POS_Activator {
         self::create_phase53_family_commercial($prefix, $charset_collate);
         self::create_phase54_emparejamientos($prefix, $charset_collate);
         self::create_phase55_pp_vinculo($prefix);
+        self::create_phase56_folio_zero_norm($prefix);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -5375,6 +5376,88 @@ class Riverso_POS_Activator {
                 'actor_type' => 'computer',
                 'details' => 'Fase 55: columnas vinculo_* + backfill desde audit_log',
                 'filled' => $filled,
+            ]);
+        }
+    }
+
+    /**
+     * Garantiza migración doc_hash (folios con ceros) sin requerir bump de versión.
+     */
+    public static function ensure_folio_zero_norm() {
+        global $wpdb;
+        self::create_phase56_folio_zero_norm($wpdb->prefix . 'riverso_');
+    }
+
+    /**
+     * Fase 56: recalcular doc_hash de escaneos cuyo folio tenía ceros a la izquierda.
+     * No renombra folios de facturas ni toca tablas de precios.
+     */
+    private static function create_phase56_folio_zero_norm($prefix) {
+        if (get_option('riverso_pos_folio_zero_norm_v1') === '1') {
+            return;
+        }
+
+        global $wpdb;
+        $table = "{$prefix}documentos_escaneados";
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) !== $table) {
+            update_option('riverso_pos_folio_zero_norm_v1', '1');
+            return;
+        }
+
+        if (!function_exists('riverso_scan_doc_hash')) {
+            require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-scan.php';
+        }
+
+        $rows = $wpdb->get_results(
+            "SELECT id, tipo_dte, folio, rut_emisor, doc_hash
+             FROM `{$table}`
+             WHERE folio REGEXP '^[0-9]+$'
+               AND folio LIKE '0%'
+               AND estado_revision NOT IN ('descartado')
+             ORDER BY id ASC
+             LIMIT 5000",
+            ARRAY_A
+        ) ?: [];
+
+        $updated = 0;
+        $skipped = 0;
+        foreach ($rows as $row) {
+            $new_hash = riverso_scan_doc_hash(
+                (int) ($row['tipo_dte'] ?? 0),
+                (string) ($row['folio'] ?? ''),
+                (string) ($row['rut_emisor'] ?? '')
+            );
+            if ($new_hash === '' || $new_hash === ($row['doc_hash'] ?? '')) {
+                continue;
+            }
+            $exists = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM `{$table}` WHERE doc_hash = %s AND id <> %d LIMIT 1",
+                $new_hash,
+                (int) $row['id']
+            ));
+            if ($exists) {
+                $skipped++;
+                continue;
+            }
+            $ok = $wpdb->update(
+                $table,
+                ['doc_hash' => $new_hash],
+                ['id' => (int) $row['id']],
+                ['%s'],
+                ['%d']
+            );
+            if ($ok !== false) {
+                $updated++;
+            }
+        }
+
+        update_option('riverso_pos_folio_zero_norm_v1', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase56_folio_zero_norm', 'documentos_escaneados', 0, [
+                'actor_type' => 'computer',
+                'details' => 'Fase 56: doc_hash recalculado con folio sin ceros a la izquierda',
+                'updated' => $updated,
+                'skipped_collision' => $skipped,
             ]);
         }
     }

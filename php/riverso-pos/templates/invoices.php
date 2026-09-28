@@ -19,6 +19,11 @@ $default_intake_mode = 'solo_costos';
             <span class="dashicons dashicons-upload"></span> Subir XML
         </button>
         <?php endif; ?>
+        <?php if (current_user_can('riverso_process_invoices') || current_user_can('riverso_create_invoices')): ?>
+        <button type="button" class="page-title-action" id="btn-invoice-duplicates">
+            <span class="dashicons dashicons-admin-page"></span> Duplicados <span id="dup-count-badge" style="display:none;"></span>
+        </button>
+        <?php endif; ?>
         <?php if (current_user_can('riverso_process_scans') || current_user_can('riverso_process_invoices')): ?>
         <button type="button" class="page-title-action" id="btn-upload-scan-header" style="display:none;">
             <span class="dashicons dashicons-camera"></span> Subir escaneo
@@ -603,6 +608,26 @@ $default_intake_mode = 'solo_costos';
     </div>
 </div>
 
+<div id="modal-invoice-duplicates" class="riverso-modal" style="display:none;">
+    <div class="riverso-modal-content riverso-modal-large" style="max-width:960px;">
+        <div class="riverso-modal-header">
+            <h2>Facturas duplicadas (mismo folio)</h2>
+            <button type="button" class="riverso-modal-close" id="btn-close-duplicates">&times;</button>
+        </div>
+        <div class="riverso-modal-body">
+            <p class="description">
+                Pares con el mismo tipo DTE, RUT emisor y folio (ignorando ceros a la izquierda).
+                Revisá la vista previa antes de unir. Los precios de Procesar folios se conservan en la factura que sobrevive.
+            </p>
+            <div id="duplicates-list"><p>Cargando…</p></div>
+        </div>
+        <div class="riverso-modal-footer">
+            <button type="button" class="button" id="btn-refresh-duplicates">Actualizar</button>
+            <button type="button" class="button" id="btn-close-duplicates-2">Cerrar</button>
+        </div>
+    </div>
+</div>
+
 <style>
 .riverso-invoices .riverso-filters {
     display: flex;
@@ -987,6 +1012,59 @@ $default_intake_mode = 'solo_costos';
 .origen-badge-ambos { background:#dcfce7; color:#166534; }
 .origen-badge-facto { background:#ede9fe; color:#5b21b6; }
 .btn-view-adjunto { max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.dup-pair {
+    border: 1px solid #c3c4c7;
+    border-radius: 6px;
+    padding: 14px;
+    margin-bottom: 14px;
+    background: #fff;
+}
+.dup-pair.is-blocked { border-color: #d63638; background: #fcf0f1; }
+.dup-pair-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.dup-pair-head strong { font-size: 14px; }
+.dup-pair-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+@media (max-width: 782px) {
+    .dup-pair-grid { grid-template-columns: 1fr; }
+}
+.dup-card {
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    padding: 10px 12px;
+    background: #f6f7f7;
+    font-size: 13px;
+}
+.dup-card.is-survivor {
+    border-color: #00a32a;
+    background: #edfaef;
+}
+.dup-card h4 { margin: 0 0 6px; font-size: 13px; }
+.dup-card ul { margin: 0; padding-left: 18px; }
+.dup-card .dup-badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: #00a32a;
+    color: #fff;
+    margin-left: 6px;
+}
+.dup-block-reasons {
+    color: #b32d2e;
+    font-size: 12px;
+    margin: 8px 0 0;
+}
+.dup-pair-actions { margin-top: 10px; }
 
 </style>
 
@@ -2944,5 +3022,147 @@ jQuery(function($) {
             if (response.success) showInvoiceDetail(response.data);
         });
     }
+
+    // --- Duplicados (XML + escaneo mismo folio) ---
+    function fmtMoneyDup(v) {
+        return '$' + Number(v || 0).toLocaleString('es-CL');
+    }
+
+    function renderDupCard(f, isSurvivor) {
+        const badge = isSurvivor ? '<span class="dup-badge">Sobrevive</span>' : '';
+        const pricing = f.has_pricing
+            ? (f.proceso_estado ? ('Precios: ' + f.proceso_estado) : 'Tiene precios')
+            : 'Sin proceso de precios';
+        return `<div class="dup-card ${isSurvivor ? 'is-survivor' : ''}">
+            <h4>#${escHtml(f.id)} · Folio ${escHtml(f.folio)} ${badge}</h4>
+            <ul>
+                <li>Origen: <strong>${escHtml(f.origen_label || f.origen_ingreso)}</strong></li>
+                <li>Estado: ${escHtml(f.estado || '—')}</li>
+                <li>Total: ${fmtMoneyDup(f.monto_total)}</li>
+                <li>Ítems: ${escHtml(f.items_count)}${f.is_stub ? ' (stub SII)' : (f.has_detail ? '' : '')}</li>
+                <li>Recepción: ${Number(f.qty_recibida) > 0 ? escHtml(f.qty_recibida) : 'ninguna'}</li>
+                <li>${escHtml(pricing)}${f.precio_historial ? ' · hist. ' + escHtml(f.precio_historial) : ''}</li>
+                <li>Escaneos: ${escHtml(f.scans)} · Pagos: ${escHtml(f.pagos)} · Flete: ${escHtml(f.flete_vinculos)}</li>
+            </ul>
+        </div>`;
+    }
+
+    function renderDuplicatesList(pairs) {
+        const $list = $('#duplicates-list');
+        if (!pairs || !pairs.length) {
+            $list.html('<p>No hay pares duplicados detectados.</p>');
+            return;
+        }
+        const html = pairs.map(function(p) {
+            const surv = Number(p.suggested_survivor);
+            const a = p.factura_a;
+            const b = p.factura_b;
+            const blockHtml = p.blocked
+                ? `<p class="dup-block-reasons"><strong>Bloqueado:</strong> ${escHtml((p.block_reasons || []).join(' '))}</p>`
+                : '';
+            const actions = p.blocked
+                ? ''
+                : `<div class="dup-pair-actions">
+                    <button type="button" class="button button-primary btn-merge-dup"
+                        data-survivor="${surv}"
+                        data-loser="${Number(p.suggested_loser)}"
+                        data-folio="${escAttr(p.folio_key)}">
+                        Unir (conservar #${surv})
+                    </button>
+                    <span class="description" style="margin-left:8px;">${escHtml(p.suggestion_reason || '')}</span>
+                   </div>`;
+            return `<div class="dup-pair ${p.blocked ? 'is-blocked' : ''}" data-folio="${escAttr(p.folio_key)}">
+                <div class="dup-pair-head">
+                    <strong>Folio ${escHtml(p.folio_key)}</strong>
+                    <span>${escHtml(p.razon_social || '')}</span>
+                    <span>T${escHtml(p.tipo_dte)} · ${escHtml(p.rut_emisor || '')}</span>
+                </div>
+                <div class="dup-pair-grid">
+                    ${renderDupCard(a, Number(a.id) === surv)}
+                    ${renderDupCard(b, Number(b.id) === surv)}
+                </div>
+                ${blockHtml}
+                ${actions}
+            </div>`;
+        }).join('');
+        $list.html(html);
+    }
+
+    function loadDuplicates(openModal) {
+        const $btn = $('#btn-invoice-duplicates');
+        if (!$btn.length) return;
+        $.post(ajaxurl, {
+            action: 'riverso_invoice_duplicates_list',
+            nonce: nonce
+        }, function(r) {
+            if (!r.success) {
+                if (openModal) {
+                    $('#duplicates-list').html('<p>Error: ' + escHtml((r.data && r.data.message) || 'No se pudo cargar') + '</p>');
+                }
+                return;
+            }
+            const count = Number((r.data && r.data.count) || 0);
+            const $badge = $('#dup-count-badge');
+            if (count > 0) {
+                $badge.text('(' + count + ')').show();
+            } else {
+                $badge.hide().text('');
+            }
+            if (openModal) {
+                renderDuplicatesList((r.data && r.data.pairs) || []);
+            }
+        });
+    }
+
+    $('#btn-invoice-duplicates').on('click', function() {
+        $('#duplicates-list').html('<p>Cargando…</p>');
+        showRiversoModal($('#modal-invoice-duplicates'));
+        loadDuplicates(true);
+    });
+    $('#btn-refresh-duplicates').on('click', function() {
+        $('#duplicates-list').html('<p>Cargando…</p>');
+        loadDuplicates(true);
+    });
+    $('#btn-close-duplicates, #btn-close-duplicates-2').on('click', function() {
+        hideRiversoModal($('#modal-invoice-duplicates'));
+    });
+
+    $(document).on('click', '.btn-merge-dup', function() {
+        const $btn = $(this);
+        const survivor = Number($btn.data('survivor'));
+        const loser = Number($btn.data('loser'));
+        const folio = $btn.data('folio');
+        if (!survivor || !loser) return;
+        if (!window.confirm(
+            '¿Unir facturas del folio ' + folio + '?\n\n'
+            + 'Sobrevive #' + survivor + '\n'
+            + 'Se elimina #' + loser + '\n\n'
+            + 'Los precios de Procesar folios se conservan en la que sobrevive.'
+        )) {
+            return;
+        }
+        $btn.prop('disabled', true).text('Uniendo…');
+        $.post(ajaxurl, {
+            action: 'riverso_invoice_duplicates_merge',
+            nonce: nonce,
+            survivor_id: survivor,
+            loser_id: loser
+        }, function(r) {
+            if (!r.success) {
+                alert((r.data && r.data.message) || 'Error al unir');
+                $btn.prop('disabled', false).text('Unir (conservar #' + survivor + ')');
+                return;
+            }
+            alert((r.data && r.data.message) || 'Facturas unidas');
+            loadDuplicates(true);
+            loadInvoices(currentPage || 1);
+        }).fail(function() {
+            alert('Error de red al unir');
+            $btn.prop('disabled', false).text('Unir (conservar #' + survivor + ')');
+        });
+    });
+
+    // Contador en badge al cargar la página
+    loadDuplicates(false);
 });
 </script>

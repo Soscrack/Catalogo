@@ -12,6 +12,7 @@ if (!defined('ABSPATH')) {
 require_once __DIR__ . '/class-invoice-intake-service.php';
 require_once __DIR__ . '/class-credit-note-service.php';
 require_once __DIR__ . '/class-payment-service.php';
+require_once __DIR__ . '/class-invoice-duplicate-service.php';
 
 class Riverso_Invoice_Module {
 
@@ -84,6 +85,17 @@ class Riverso_Invoice_Module {
         add_action('wp_ajax_riverso_invoice_adjuntos', [$this, 'ajax_invoice_adjuntos']);
         add_action('wp_ajax_riverso_mark_free_shipping', [$this, 'ajax_mark_free_shipping']);
         add_action('wp_ajax_riverso_set_manual_shipping', [$this, 'ajax_set_manual_shipping']);
+        add_action('wp_ajax_riverso_invoice_duplicates_list', [$this, 'ajax_invoice_duplicates_list']);
+        add_action('wp_ajax_riverso_invoice_duplicates_merge', [$this, 'ajax_invoice_duplicates_merge']);
+
+        Riverso_Invoice_Duplicate_Service::get_instance()->set_invoices($this);
+    }
+
+    /**
+     * Servicio de detección/fusión de facturas duplicadas.
+     */
+    private function duplicates() {
+        return Riverso_Invoice_Duplicate_Service::get_instance()->set_invoices($this);
     }
 
     /**
@@ -485,7 +497,12 @@ class Riverso_Invoice_Module {
         }
 
         $rut_emisor = sanitize_text_field($factura_data['emisor']['rut'] ?? '');
-        $folio = (string) $factura_data['folio'];
+        $folio = function_exists('riverso_normalize_folio')
+            ? riverso_normalize_folio($factura_data['folio'] ?? '')
+            : (string) ($factura_data['folio'] ?? '');
+        if ($folio === '') {
+            $folio = (string) ($factura_data['folio'] ?? '');
+        }
 
         // Verificar si ya existe esta factura (folio/RUT normalizados)
         $existing = null;
@@ -1880,6 +1897,65 @@ class Riverso_Invoice_Module {
             'message' => 'Factura eliminada correctamente',
             'factura_id' => $factura_id,
         ]);
+    }
+
+    /**
+     * AJAX: listar pares de facturas duplicadas (mismo DTE + RUT + folio sin ceros).
+     */
+    public function ajax_invoice_duplicates_list() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!$this->user_can_intake_invoices()) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/class-activator.php';
+        if (method_exists('Riverso_POS_Activator', 'ensure_folio_zero_norm')) {
+            Riverso_POS_Activator::ensure_folio_zero_norm();
+        }
+
+        $result = $this->duplicates()->list_pairs();
+        wp_send_json_success($result);
+    }
+
+    /**
+     * AJAX: unir un par de facturas duplicadas.
+     */
+    public function ajax_invoice_duplicates_merge() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+
+        if (!$this->user_can_intake_invoices()) {
+            wp_send_json_error(['message' => 'Sin permisos para unir facturas']);
+        }
+
+        $survivor_id = absint($_POST['survivor_id'] ?? 0);
+        $loser_id = absint($_POST['loser_id'] ?? 0);
+        if (!$survivor_id || !$loser_id) {
+            wp_send_json_error(['message' => 'Indicá survivor_id y loser_id']);
+        }
+
+        // Revalidar con preview fresco en servidor
+        $preview = $this->duplicates()->preview_pair($survivor_id, $loser_id);
+        if (!empty($preview['error'])) {
+            wp_send_json_error(['message' => $preview['error']]);
+        }
+        if (!empty($preview['blocked'])) {
+            wp_send_json_error([
+                'message' => 'Par bloqueado: ' . implode(' ', $preview['block_reasons'] ?? []),
+                'block_reasons' => $preview['block_reasons'] ?? [],
+            ]);
+        }
+
+        $result = $this->duplicates()->merge_pair($survivor_id, $loser_id);
+        if (is_wp_error($result)) {
+            wp_send_json_error([
+                'message' => $result->get_error_message(),
+                'code' => $result->get_error_code(),
+                'data' => $result->get_error_data(),
+            ]);
+        }
+
+        wp_send_json_success($result);
     }
 
     /**

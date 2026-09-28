@@ -149,9 +149,11 @@ else
 VERSION=$(sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
   require "{WP_PATH}/wp-load.php";
   echo defined("RIVERSO_POS_VERSION") ? RIVERSO_POS_VERSION : "missing";
-')
+' 2>/dev/null | tr -d "\\r" | tail -1)
 fi
-test "$VERSION" = "1.8.15"
+VERSION=$(echo "$VERSION" | tr -d "[:space:]")
+echo "VERSION_CHECK=$VERSION"
+test "$VERSION" = "1.8.16"
 
 if [ "$SKIP_MIGRATION" = "1" ]; then
   echo "schema-skip competencia tables should be applied via tools/migrate_competencia_remote.py"

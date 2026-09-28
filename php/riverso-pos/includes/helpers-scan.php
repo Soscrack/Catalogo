@@ -174,10 +174,17 @@ function riverso_normalize_rut($rut) {
 }
 
 /**
- * Normaliza folio: quita puntos y espacios.
+ * Normaliza folio: quita puntos/espacios; si es solo dígitos, quita ceros a la izquierda.
  */
 function riverso_normalize_folio($folio) {
-    return preg_replace('/[^0-9A-Za-z]/', '', (string) $folio);
+    $f = preg_replace('/[^0-9A-Za-z]/', '', (string) $folio);
+    if ($f !== '' && ctype_digit($f)) {
+        $f = ltrim($f, '0');
+        if ($f === '') {
+            $f = '0';
+        }
+    }
+    return $f;
 }
 
 /**

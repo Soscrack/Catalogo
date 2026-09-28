@@ -1064,6 +1064,11 @@ $default_intake_mode = 'solo_costos';
     font-size: 12px;
     margin: 8px 0 0;
 }
+.dup-warn-reasons {
+    color: #996800;
+    font-size: 12px;
+    margin: 8px 0 0;
+}
 .dup-pair-actions { margin-top: 10px; }
 
 </style>
@@ -3057,16 +3062,20 @@ jQuery(function($) {
             const surv = Number(p.suggested_survivor);
             const a = p.factura_a;
             const b = p.factura_b;
+            const warnings = p.warnings || [];
             const blockHtml = p.blocked
                 ? `<p class="dup-block-reasons"><strong>Bloqueado:</strong> ${escHtml((p.block_reasons || []).join(' '))}</p>`
-                : '';
+                : (warnings.length
+                    ? `<p class="dup-warn-reasons"><strong>Atención:</strong> ${escHtml(warnings.join(' '))}</p>`
+                    : '');
             const actions = p.blocked
                 ? ''
                 : `<div class="dup-pair-actions">
                     <button type="button" class="button button-primary btn-merge-dup"
                         data-survivor="${surv}"
                         data-loser="${Number(p.suggested_loser)}"
-                        data-folio="${escAttr(p.folio_key)}">
+                        data-folio="${escAttr(p.folio_key)}"
+                        data-warnings="${escAttr(warnings.join(' | '))}">
                         Unir (conservar #${surv})
                     </button>
                     <span class="description" style="margin-left:8px;">${escHtml(p.suggestion_reason || '')}</span>
@@ -3132,13 +3141,16 @@ jQuery(function($) {
         const survivor = Number($btn.data('survivor'));
         const loser = Number($btn.data('loser'));
         const folio = $btn.data('folio');
+        const warnings = String($btn.data('warnings') || '').trim();
         if (!survivor || !loser) return;
-        if (!window.confirm(
-            '¿Unir facturas del folio ' + folio + '?\n\n'
+        let msg = '¿Unir facturas del folio ' + folio + '?\n\n'
             + 'Sobrevive #' + survivor + '\n'
             + 'Se elimina #' + loser + '\n\n'
-            + 'Los precios de Procesar folios se conservan en la que sobrevive.'
-        )) {
+            + 'Los precios de Procesar folios se conservan en la que sobrevive.';
+        if (warnings) {
+            msg += '\n\nAtención: ' + warnings;
+        }
+        if (!window.confirm(msg)) {
             return;
         }
         $btn.prop('disabled', true).text('Uniendo…');

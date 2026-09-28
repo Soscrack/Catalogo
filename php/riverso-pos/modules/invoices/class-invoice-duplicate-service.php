@@ -165,7 +165,8 @@ class Riverso_Invoice_Duplicate_Service {
         }
 
         $choice = $this->choose_survivor($sum_a, $sum_b);
-        $blocked = $this->block_reasons($sum_a, $sum_b);
+        $hard = $this->hard_block_reasons($sum_a, $sum_b);
+        $warn = $this->soft_warnings($sum_a, $sum_b);
 
         return [
             'folio_key'           => $this->folio_key($sum_a['folio']),
@@ -177,8 +178,9 @@ class Riverso_Invoice_Duplicate_Service {
             'suggested_survivor'  => $choice['survivor_id'],
             'suggested_loser'     => $choice['loser_id'],
             'suggestion_reason'   => $choice['reason'],
-            'blocked'             => !empty($blocked),
-            'block_reasons'       => $blocked,
+            'blocked'             => !empty($hard),
+            'block_reasons'       => $hard,
+            'warnings'            => $warn,
         ];
     }
 
@@ -432,19 +434,18 @@ class Riverso_Invoice_Duplicate_Service {
     }
 
     /**
+     * Bloqueos duros: no se muestra Unir.
+     *
      * @return string[]
      */
-    private function block_reasons(array $a, array $b) {
+    private function hard_block_reasons(array $a, array $b) {
         $reasons = [];
 
-        if (!empty($a['has_pricing']) && !empty($b['has_pricing'])) {
-            $reasons[] = 'Ambas facturas tienen datos de precios; uní manualmente con cuidado.';
+        if (!empty($a['pricing_completed']) && !empty($b['pricing_completed'])) {
+            $reasons[] = 'Ambas tienen folio de precios ya ingresado.';
         }
         if (!empty($a['has_reception']) && !empty($b['has_reception'])) {
             $reasons[] = 'Ambas facturas tienen recepción; no se puede unir automáticamente.';
-        }
-        if (!empty($a['pricing_completed']) && !empty($b['pricing_completed'])) {
-            $reasons[] = 'Ambas tienen folio de precios ya ingresado.';
         }
 
         $ta = round((float) $a['monto_total'], 2);
@@ -462,6 +463,31 @@ class Riverso_Invoice_Duplicate_Service {
         }
 
         return $reasons;
+    }
+
+    /**
+     * Advertencias: se muestra Unir, con confirmación reforzada.
+     *
+     * @return string[]
+     */
+    private function soft_warnings(array $a, array $b) {
+        $warnings = [];
+
+        // Proceso no terminado (p.ej. con_error) en ambas: avisar, no bloquear.
+        if (!empty($a['has_pricing']) && !empty($b['has_pricing'])
+            && (empty($a['pricing_completed']) || empty($b['pricing_completed']))) {
+            $warnings[] = 'Ambas tienen sesión de precios (aún no ingresada). Se conserva la de la sobreviviente.';
+        }
+
+        return $warnings;
+    }
+
+    /**
+     * @deprecated Usar hard_block_reasons
+     * @return string[]
+     */
+    private function block_reasons(array $a, array $b) {
+        return $this->hard_block_reasons($a, $b);
     }
 
     /**

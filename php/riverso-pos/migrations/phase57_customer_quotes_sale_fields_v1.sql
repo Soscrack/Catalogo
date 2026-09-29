@@ -14,7 +14,9 @@ ALTER TABLE `{prefix}customer_quotes`
   ADD COLUMN IF NOT EXISTS `validity_terms` TEXT NULL AFTER `validity_days`,
   ADD COLUMN IF NOT EXISTS `net_total` DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER `total`,
   ADD COLUMN IF NOT EXISTS `margin_percent` DECIMAL(8,2) NULL AFTER `discount_total`,
-  ADD COLUMN IF NOT EXISTS `profit_total` DECIMAL(14,2) NULL AFTER `margin_percent`;
+  ADD COLUMN IF NOT EXISTS `profit_total` DECIMAL(14,2) NULL AFTER `margin_percent`,
+  ADD COLUMN IF NOT EXISTS `order_id` BIGINT UNSIGNED NULL DEFAULT NULL,
+  ADD KEY IF NOT EXISTS `idx_cq_order_id` (`order_id`);
 
 ALTER TABLE `{prefix}customer_quote_items`
   ADD COLUMN IF NOT EXISTS `supplier_code` VARCHAR(64) NULL AFTER `sku`,

@@ -1,6 +1,6 @@
 <?php
 /**
- * Portal de cotizaciones de venta (es-CL).
+ * Portal de cotizaciones de venta (es-CL). P0–P5a/P5b.
  *
  * @var array<string, mixed> $riverso_cq
  */
@@ -43,7 +43,7 @@ if (!function_exists('riverso_pos_cq_json')) {
             <header class="cq-top">
                 <div>
                     <h1 id="cq-list-title">Cotizaciones de venta</h1>
-                    <p class="cq-lead">Borrador y lista.</p>
+                    <p class="cq-lead">Borrador, lista y facturada.</p>
                 </div>
                 <button type="button" class="cq-btn cq-btn-primary" id="cq-new">Nueva cotización</button>
             </header>
@@ -53,7 +53,19 @@ if (!function_exists('riverso_pos_cq_json')) {
                     <option value="all">Todas</option>
                     <option value="draft">Borrador</option>
                     <option value="listed">Lista</option>
+                    <option value="invoiced">Facturada</option>
                 </select>
+                <label for="cq-type-filter">Tipo</label>
+                <select id="cq-type-filter">
+                    <option value="all">Todos</option>
+                    <option value="venta">Venta</option>
+                    <option value="referencia">Referencia</option>
+                </select>
+                <label for="cq-date-from">Desde</label>
+                <input type="date" id="cq-date-from" autocomplete="off">
+                <label for="cq-date-to">Hasta</label>
+                <input type="date" id="cq-date-to" autocomplete="off">
+                <button type="button" class="cq-btn" id="cq-apply-filters">Filtrar</button>
             </div>
             <div class="cq-table-wrap">
                 <table class="cq-table">
@@ -65,6 +77,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                             <th scope="col">Tipo</th>
                             <th scope="col">Estado</th>
                             <th scope="col" class="cq-num">Neto</th>
+                            <th scope="col" class="cq-num">Utilidad %</th>
                             <th scope="col">Acciones</th>
                         </tr>
                     </thead>
@@ -82,12 +95,30 @@ if (!function_exists('riverso_pos_cq_json')) {
                 </div>
                 <div class="cq-top-actions">
                     <span id="cq-status" class="cq-badge cq-badge-draft">Borrador</span>
+                    <span id="cq-expired-badge" class="cq-expired-tag" hidden>Vencida</span>
                     <button type="button" class="cq-btn" id="cq-transition" hidden>Pasar a lista</button>
+                    <button type="button" class="cq-btn cq-btn-primary" id="cq-invoice" hidden>Facturar</button>
+                    <a id="cq-order-link" class="cq-link cq-order-link" href="#" target="_blank" rel="noopener" hidden>Ver pedido</a>
+                    <button type="button" class="cq-btn" id="cq-import" hidden title="Importar desde cotización recibida">Importar</button>
+                    <button type="button" class="cq-btn" id="cq-pdf" title="PDF (próximamente)">PDF</button>
+                    <button type="button" class="cq-btn" id="cq-options" title="Opciones (próximamente)">Opciones</button>
                 </div>
             </header>
 
             <div class="cq-card">
                 <div class="cq-header-grid">
+                    <label class="cq-field">
+                        <span>Nº cotización</span>
+                        <input type="text" id="cq-quote-number" readonly tabindex="-1" placeholder="Se asigna al guardar">
+                    </label>
+                    <label class="cq-field">
+                        <span>Fecha emisión</span>
+                        <input type="text" id="cq-issue-date" readonly tabindex="-1" placeholder="—">
+                    </label>
+                    <label class="cq-field">
+                        <span>Vendedor</span>
+                        <input type="text" id="cq-seller" readonly tabindex="-1" placeholder="—">
+                    </label>
                     <label class="cq-field">
                         <span>Cliente <small>(opcional)</small></span>
                         <input type="text" id="cq-customer" maxlength="191" autocomplete="off" placeholder="Nombre del cliente">
@@ -99,6 +130,14 @@ if (!function_exists('riverso_pos_cq_json')) {
                             <option value="referencia">Referencia</option>
                         </select>
                     </label>
+                    <div class="cq-field cq-channel-field">
+                        <span>Canal</span>
+                        <div class="cq-channel-toggle" role="group" aria-label="Canal Local u Online">
+                            <button type="button" class="cq-channel-btn is-active" data-channel="local" id="cq-channel-local">Local</button>
+                            <button type="button" class="cq-channel-btn" data-channel="online" id="cq-channel-online">Online</button>
+                        </div>
+                        <input type="hidden" id="cq-channel" value="local">
+                    </div>
                     <label class="cq-field">
                         <span>Validez (días)</span>
                         <input type="number" id="cq-validity-days" min="0" max="3650" step="1" inputmode="numeric" placeholder="Opcional">
@@ -118,12 +157,44 @@ if (!function_exists('riverso_pos_cq_json')) {
 
             <div class="cq-card">
                 <div class="cq-search">
-                    <label for="cq-search">Buscar producto</label>
+                    <div class="cq-search-head">
+                        <label for="cq-search">Buscar producto</label>
+                        <label class="cq-advanced-toggle" for="cq-advanced">
+                            <input type="checkbox" id="cq-advanced">
+                            <span>Modo avanzado</span>
+                        </label>
+                    </div>
                     <div class="cq-search-row">
-                        <input type="search" id="cq-search" autocomplete="off" placeholder="SKU, código proveedor o código de barras" enterkeyhint="search">
+                        <input type="search" id="cq-search" autocomplete="off" placeholder="SKU, barcode o código proveedor (según canal)" enterkeyhint="search">
                         <button type="button" class="cq-btn" id="cq-search-btn">Buscar</button>
+                        <button type="button" class="cq-btn cq-btn-lupa" id="cq-lupa" title="Búsqueda avanzada" aria-label="Abrir búsqueda avanzada">
+                            <span aria-hidden="true">🔍</span>
+                        </button>
                     </div>
                     <ul id="cq-results" class="cq-results" hidden></ul>
+                </div>
+
+                <div id="cq-advanced-modal" class="cq-modal" hidden aria-hidden="true">
+                    <div class="cq-modal-backdrop" data-cq-modal-close="1"></div>
+                    <div class="cq-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="cq-modal-title">
+                        <header class="cq-modal-head">
+                            <h3 id="cq-modal-title">Búsqueda avanzada</h3>
+                            <button type="button" class="cq-modal-close" id="cq-modal-close" aria-label="Cerrar" data-cq-modal-close="1">×</button>
+                        </header>
+                        <div class="cq-modal-body">
+                            <div class="cq-scope-chips" role="tablist" aria-label="Alcance de búsqueda">
+                                <button type="button" class="cq-chip is-active" data-scope="todo" role="tab" aria-selected="true">Todo</button>
+                                <button type="button" class="cq-chip" data-scope="descripcion" role="tab" aria-selected="false">Descripción</button>
+                                <button type="button" class="cq-chip" data-scope="codigos" role="tab" aria-selected="false">Códigos</button>
+                            </div>
+                            <div class="cq-search-row">
+                                <input type="search" id="cq-modal-q" autocomplete="off" placeholder="Buscar…" enterkeyhint="search">
+                                <button type="button" class="cq-btn cq-btn-primary" id="cq-modal-search-btn">Buscar</button>
+                            </div>
+                            <p id="cq-modal-hint" class="cq-modal-hint" role="status"></p>
+                            <ul id="cq-modal-results" class="cq-results cq-modal-results"></ul>
+                        </div>
+                    </div>
                 </div>
                 <div class="cq-table-wrap">
                     <table class="cq-table">
@@ -132,6 +203,12 @@ if (!function_exists('riverso_pos_cq_json')) {
                                 <th scope="col">Detalle</th>
                                 <th scope="col" class="cq-num">Cantidad</th>
                                 <th scope="col" class="cq-num">Precio</th>
+                                <th scope="col" class="cq-num cq-advanced" title="Porcentaje de descuento sobre el precio de la línea">Dscto precio</th>
+                                <th scope="col" class="cq-num cq-advanced" title="Porcentaje del margen que queda después del descuento de precio">Dscto margen</th>
+                                <th scope="col" class="cq-num cq-advanced">Utilidad</th>
+                                <th scope="col" class="cq-num cq-advanced" title="Stock en bodega (live)">Stock</th>
+                                <th scope="col" class="cq-advanced" title="Confianza del inventario">Confianza</th>
+                                <th scope="col" class="cq-advanced">Inventariar</th>
                                 <th scope="col">Acciones</th>
                             </tr>
                         </thead>
@@ -149,6 +226,45 @@ if (!function_exists('riverso_pos_cq_json')) {
                 </div>
             </footer>
         </section>
+        <div id="cq-import-modal" class="cq-modal" hidden aria-hidden="true">
+            <div class="cq-modal-backdrop" data-cq-import-close="1"></div>
+            <div class="cq-modal-dialog cq-modal-wide" role="dialog" aria-modal="true" aria-labelledby="cq-import-title">
+                <header class="cq-modal-head">
+                    <h3 id="cq-import-title">Importar cotización recibida</h3>
+                    <button type="button" class="cq-modal-close" id="cq-import-close" aria-label="Cerrar" data-cq-import-close="1">×</button>
+                </header>
+                <div class="cq-modal-body">
+                    <div id="cq-import-step-list">
+                        <p class="cq-modal-hint">Cotizaciones recibidas confirmadas (versión final del grupo).</p>
+                        <ul id="cq-import-quote-list" class="cq-results cq-modal-results"></ul>
+                        <p id="cq-import-list-empty" class="cq-empty" hidden>No hay cotizaciones recibidas confirmadas.</p>
+                    </div>
+                    <div id="cq-import-step-preview" hidden>
+                        <p id="cq-import-preview-head" class="cq-modal-hint"></p>
+                        <p id="cq-import-skipped" class="cq-modal-hint"></p>
+                        <div class="cq-table-wrap">
+                            <table class="cq-table">
+                                <thead>
+                                    <tr>
+                                        <th scope="col"><input type="checkbox" id="cq-import-check-all" title="Seleccionar todas"></th>
+                                        <th scope="col">SKU</th>
+                                        <th scope="col">Descripción</th>
+                                        <th scope="col" class="cq-num">Cant.</th>
+                                        <th scope="col" class="cq-num">Costo</th>
+                                        <th scope="col" class="cq-num">P. catálogo</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cq-import-lines"></tbody>
+                            </table>
+                        </div>
+                        <div class="cq-modal-actions">
+                            <button type="button" class="cq-btn" id="cq-import-back">← Volver</button>
+                            <button type="button" class="cq-btn cq-btn-primary" id="cq-import-confirm">Agregar seleccionadas</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         <p id="cq-list-message" class="cq-message" role="status"></p>
     </div>
 </div>

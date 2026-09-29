@@ -2113,6 +2113,31 @@ $location_types = class_exists('Riverso_Warehouse_Module') ? Riverso_Warehouse_M
         movTimer = setTimeout(loadMovements, 300);
     });
 
+
+    // Deep-link desde Cotizaciones P4: /interno/warehouse/?start=producto&producto_base_id=X
+    (function bootstrapInventariarDeepLink() {
+        try {
+            var params = new URLSearchParams(window.location.search || "");
+            var start = params.get("start") || "";
+            var pid = parseInt(params.get("producto_base_id") || "0", 10);
+            if (start !== "producto" || !pid) return;
+            if (!canCount) {
+                alert("Sin permiso para inventariar");
+                return;
+            }
+            showPanel("inventario");
+            state.orderTarget = {
+                location: null,
+                product: {
+                    id: pid,
+                    sku: params.get("sku") || "",
+                    nombre: params.get("nombre") || ("#" + pid)
+                }
+            };
+            showCountSetup("producto");
+        } catch (e) {}
+    })();
+
     loadLocations();
     if (whEmbed) loadOpenCounts();
 });

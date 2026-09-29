@@ -22,12 +22,37 @@ class Riverso_Customer_Quote_Repository {
 
     public function list_quotes(array $filters = array()) {
         global $wpdb;
+        $this->ensure_sale_schema();
+        // Fecha de emisión = DATE(created_at) (no hay columna issue_date propia).
         $sql = "SELECT q.*, (SELECT COUNT(*) FROM {$this->table_items} i WHERE i.quote_id = q.id) AS line_count
                 FROM {$this->table_quotes} q";
+        $where = array();
         $params = array();
         if (!empty($filters['status'])) {
-            $sql .= ' WHERE q.status = %s';
+            $where[] = 'q.status = %s';
             $params[] = Riverso_Quote_Status::normalize_legacy((string) $filters['status']);
+        }
+        if (!empty($filters['quote_type'])) {
+            $type = Riverso_Quote_Type::normalize((string) $filters['quote_type']);
+            if ($type === Riverso_Quote_Type::VENTA) {
+                // Filas legacy sin quote_type se tratan como venta.
+                $where[] = "(q.quote_type = %s OR q.quote_type IS NULL OR q.quote_type = '')";
+                $params[] = $type;
+            } else {
+                $where[] = 'q.quote_type = %s';
+                $params[] = $type;
+            }
+        }
+        if (!empty($filters['date_from'])) {
+            $where[] = 'DATE(q.created_at) >= %s';
+            $params[] = (string) $filters['date_from'];
+        }
+        if (!empty($filters['date_to'])) {
+            $where[] = 'DATE(q.created_at) <= %s';
+            $params[] = (string) $filters['date_to'];
+        }
+        if ($where) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
         }
         $sql .= ' ORDER BY q.updated_at DESC, q.id DESC';
         if ($params) {
@@ -94,6 +119,9 @@ class Riverso_Customer_Quote_Repository {
         if ($notes === null) {
             $notes = '';
         }
+        $channel = $this->normalize_channel(
+            isset($input['channel']) ? $input['channel'] : (isset($existing['channel']) ? $existing['channel'] : 'local')
+        );
 
         $lines = array();
         foreach ($input['lines'] as $line) {
@@ -111,6 +139,7 @@ class Riverso_Customer_Quote_Repository {
                 'customer_id' => $customer_id,
                 'customer_name' => $customer_name !== '' ? $customer_name : '',
                 'quote_type' => $quote_type,
+                'channel' => $channel,
                 'validity_days' => $validity_days,
                 'validity_terms' => $validity_terms,
                 'notes' => $notes,
@@ -209,6 +238,9 @@ class Riverso_Customer_Quote_Repository {
         return $quote;
     }
 
+    /**
+     * Borrador ↔ lista. La utilidad negativa o el margen bajo no impiden pasar a lista.
+     */
     public function transition($id, $to) {
         global $wpdb;
         $quote = $this->find((int) $id);
@@ -217,7 +249,7 @@ class Riverso_Customer_Quote_Repository {
         }
         $to = strtolower(trim((string) $to));
         if (!Riverso_Quote_Status::can_transition((string) $quote['status'], $to)) {
-            throw new Riverso_Quote_Exception('Solo se puede pasar entre Borrador y Lista. Facturada queda para más adelante.');
+            throw new Riverso_Quote_Exception('Solo se puede pasar entre Borrador y Lista. Para facturar use Facturar.');
         }
         if ($quote['status'] !== $to) {
             $wpdb->update(
@@ -234,6 +266,63 @@ class Riverso_Customer_Quote_Repository {
         $updated = $this->find((int) $id);
         if ($updated === null) {
             throw new Riverso_Quote_Exception('Cotización no encontrada.');
+        }
+        return $updated;
+    }
+
+
+    /**
+     * Marca cotización como facturada con order_id (idempotente / race-safe).
+     * Solo aplica si sigue en listed y sin order_id.
+     *
+     * @param int $id
+     * @param int $order_id
+     * @return array Quote presentada
+     */
+    public function mark_invoiced($id, $order_id) {
+        global $wpdb;
+        $id = (int) $id;
+        $order_id = (int) $order_id;
+        if ($id <= 0 || $order_id <= 0) {
+            throw new Riverso_Quote_Exception('Pedido u cotización inválidos al facturar.');
+        }
+
+        $quote = $this->find($id);
+        if ($quote === null) {
+            throw new Riverso_Quote_Exception('Cotización no encontrada.');
+        }
+        if ($quote['status'] === Riverso_Quote_Status::INVOICED && !empty($quote['order_id'])) {
+            return $quote;
+        }
+        if ($quote['status'] !== Riverso_Quote_Status::LISTED) {
+            throw new Riverso_Quote_Exception('Solo una cotización en Lista se puede facturar.');
+        }
+
+        $now = current_time('mysql');
+        $table = str_replace('`', '', $this->table_quotes);
+        $affected = $wpdb->query($wpdb->prepare(
+            "UPDATE `{$table}` SET status = %s, order_id = %d, updated_at = %s
+             WHERE id = %d AND status = %s AND (order_id IS NULL OR order_id = 0)",
+            Riverso_Quote_Status::INVOICED,
+            $order_id,
+            $now,
+            $id,
+            Riverso_Quote_Status::LISTED
+        ));
+        if ($affected === false) {
+            throw new Riverso_Quote_Exception('Error al marcar la cotización como facturada.' . $this->db_error_suffix());
+        }
+        if ((int) $affected === 0) {
+            $again = $this->find($id);
+            if ($again !== null && $again['status'] === Riverso_Quote_Status::INVOICED && !empty($again['order_id'])) {
+                return $again;
+            }
+            throw new Riverso_Quote_Exception('No se pudo facturar: la cotización cambió de estado.');
+        }
+
+        $updated = $this->find($id);
+        if ($updated === null) {
+            throw new Riverso_Quote_Exception('Cotización no encontrada tras facturar.');
         }
         return $updated;
     }
@@ -262,6 +351,7 @@ class Riverso_Customer_Quote_Repository {
             $candidate = array(
                 'quote_id' => $quote_id,
                 'product_id' => $line['product_id'],
+                'producto_base_id' => isset($line['producto_base_id']) ? $line['producto_base_id'] : null,
                 'sku' => $line['sku'],
                 'name' => $desc,
                 'supplier_code' => $line['supplier_code'] !== '' ? $line['supplier_code'] : null,
@@ -270,6 +360,8 @@ class Riverso_Customer_Quote_Repository {
                 'quantity' => $line['quantity'],
                 'unit_price' => $line['unit_price'],
                 'unit_cost' => $line['unit_cost'],
+                'price_discount' => isset($line['price_discount']) ? $line['price_discount'] : 0,
+                'margin_discount' => isset($line['margin_discount']) ? $line['margin_discount'] : 0,
                 'discount_amount' => $discount,
                 'discount_percent' => 0,
                 'subtotal' => $line_net + $discount,
@@ -278,6 +370,9 @@ class Riverso_Customer_Quote_Repository {
                 'total' => $line_net,
                 'line_total' => $line_net,
                 'sort_order' => $line['sort_order'],
+                'family_mode' => isset($line['family_mode']) ? $line['family_mode'] : null,
+                'packaging' => isset($line['packaging']) ? $line['packaging'] : null,
+                'units_per_pack' => isset($line['units_per_pack']) ? $line['units_per_pack'] : null,
             );
 
             // Schema legado: quantity INT. Evitar "1.000" si la columna no es decimal.
@@ -333,8 +428,33 @@ class Riverso_Customer_Quote_Repository {
         if ($unit_cost === '') {
             $unit_cost = null;
         }
+        $pb = isset($line['producto_base_id']) ? $line['producto_base_id'] : null;
+        $pb = ($pb === '' || $pb === null) ? null : (int) $pb;
+        if ($pb !== null && $pb <= 0) {
+            $pb = null;
+        }
+        $family_mode = isset($line['family_mode']) ? strtolower(trim((string) $line['family_mode'])) : '';
+        if ($family_mode === '') {
+            $family_mode = null;
+        } elseif (!in_array($family_mode, array('unitaria', 'pack', 'kit'), true)) {
+            $family_mode = $this->clip($family_mode, 32);
+        }
+        $packaging = isset($line['packaging']) ? $this->clip(trim((string) $line['packaging']), 64) : '';
+        if ($packaging === '') {
+            $packaging = null;
+        }
+        $upp = isset($line['units_per_pack']) ? $line['units_per_pack'] : null;
+        if ($upp === '' || $upp === null) {
+            $upp = null;
+        } else {
+            $upp = round((float) $upp, 4);
+            if ($upp <= 0) {
+                $upp = null;
+            }
+        }
         return array(
             'product_id' => $product_id,
+            'producto_base_id' => $pb,
             'sku' => $sku,
             'supplier_code' => $this->clip(trim((string) (isset($line['supplier_code']) ? $line['supplier_code'] : '')), 64),
             'barcode' => $this->clip(trim((string) (isset($line['barcode']) ? $line['barcode'] : '')), 64),
@@ -342,8 +462,24 @@ class Riverso_Customer_Quote_Repository {
             'quantity' => $quantity,
             'unit_price' => $price,
             'unit_cost' => $unit_cost === null ? null : round((float) $unit_cost, 2),
+            'price_discount' => $this->rate(isset($line['price_discount']) ? $line['price_discount'] : 0),
+            'margin_discount' => $this->rate(isset($line['margin_discount']) ? $line['margin_discount'] : 0),
             'discount_amount' => round((float) (isset($line['discount_amount']) ? $line['discount_amount'] : 0), 2),
+            'family_mode' => $family_mode,
+            'packaging' => $packaging,
+            'units_per_pack' => $upp,
         );
+    }
+
+    private function rate($value) {
+        $rate = round((float) $value, 2);
+        if ($rate < 0) {
+            return 0.0;
+        }
+        if ($rate > 100) {
+            return 100.0;
+        }
+        return $rate;
     }
 
     private function validity_days($value) {
@@ -394,9 +530,22 @@ class Riverso_Customer_Quote_Repository {
     }
 
     private function present_summary(array $row) {
-        $presented = $this->present($row, array());
+        $lines = array();
+        // Si el header no trae margen pero hay líneas con costo, recalcular para la lista.
+        $margin = isset($row['margin_percent']) ? $row['margin_percent'] : null;
+        if (($margin === null || $margin === '') && !empty($row['id'])) {
+            global $wpdb;
+            $lines = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$this->table_items} WHERE quote_id = %d ORDER BY sort_order ASC, id ASC",
+                (int) $row['id']
+            ), ARRAY_A);
+            if (!is_array($lines)) {
+                $lines = array();
+            }
+        }
+        $presented = $this->present($row, $lines);
         unset($presented['lines']);
-        $presented['line_count'] = (int) (isset($row['line_count']) ? $row['line_count'] : 0);
+        $presented['line_count'] = (int) (isset($row['line_count']) ? $row['line_count'] : (is_array($lines) ? count($lines) : 0));
         return $presented;
     }
 
@@ -417,6 +566,42 @@ class Riverso_Customer_Quote_Repository {
                 'label' => Riverso_Quote_Status::transition_label($target),
             );
         }
+        $created_at = (string) (isset($row['created_at']) ? $row['created_at'] : '');
+        $issue_date = $created_at;
+        $seller_name = $this->resolve_seller_name(
+            isset($row['created_by']) ? $row['created_by'] : null,
+            isset($row['seller_name']) ? $row['seller_name'] : null
+        );
+        $is_expired = $this->is_expired($issue_date, $validity, isset($row['valid_until']) ? $row['valid_until'] : null);
+        $margin_percent = $this->nullable_float(isset($row['margin_percent']) ? $row['margin_percent'] : null);
+        $profit_total = $this->nullable_float(isset($row['profit_total']) ? $row['profit_total'] : null);
+        $discount_total = round((float) (isset($row['discount_total']) ? $row['discount_total'] : 0), 2);
+        $presented_lines = array_map(array($this, 'present_line'), $lines);
+        // Recalcular utilidad/margen desde líneas con costo (evita «—» con costos reales
+        // cuando el header quedó null por saves previos o schema tardío).
+        if ($presented_lines) {
+            $recalc_input = array();
+            foreach ($presented_lines as $pl) {
+                $recalc_input[] = array(
+                    'quantity' => isset($pl['quantity']) ? $pl['quantity'] : 0,
+                    'unit_price' => isset($pl['unit_price']) ? $pl['unit_price'] : 0,
+                    'unit_cost' => array_key_exists('unit_cost', $pl) ? $pl['unit_cost'] : null,
+                    'price_discount' => isset($pl['price_discount']) ? $pl['price_discount'] : 0,
+                    'margin_discount' => isset($pl['margin_discount']) ? $pl['margin_discount'] : 0,
+                    'discount_amount' => isset($pl['discount_amount']) ? $pl['discount_amount'] : 0,
+                );
+            }
+            $recalc = Riverso_Quote_Totals::calculate($recalc_input);
+            $net = (float) $recalc['net_total'];
+            $discount_total = (float) $recalc['discount_total'];
+            if ($recalc['margin_percent'] !== null) {
+                $margin_percent = $recalc['margin_percent'];
+            }
+            if ($recalc['profit_total'] !== null) {
+                $profit_total = $recalc['profit_total'];
+            }
+        }
+        $channel = $this->normalize_channel(isset($row['channel']) ? $row['channel'] : 'local');
         return array(
             'id' => (int) $row['id'],
             'quote_number' => (string) $row['quote_number'],
@@ -424,54 +609,160 @@ class Riverso_Customer_Quote_Repository {
             'customer_name' => (string) (isset($row['customer_name']) ? $row['customer_name'] : ''),
             'quote_type' => $type,
             'quote_type_label' => Riverso_Quote_Type::label($type),
+            'channel' => $channel,
             'status' => $status,
             'status_label' => Riverso_Quote_Status::label($status),
             'validity_days' => $validity,
             'validity_terms' => (string) (isset($row['validity_terms']) ? $row['validity_terms'] : ''),
             'net_total' => round($net, 2),
-            'discount_total' => round((float) (isset($row['discount_total']) ? $row['discount_total'] : 0), 2),
-            'margin_percent' => $this->nullable_float(isset($row['margin_percent']) ? $row['margin_percent'] : null),
-            'profit_total' => $this->nullable_float(isset($row['profit_total']) ? $row['profit_total'] : null),
+            'discount_total' => $discount_total,
+            'margin_percent' => $margin_percent,
+            'profit_total' => $profit_total,
             'notes' => (string) (isset($row['notes']) ? $row['notes'] : ''),
-            'created_at' => (string) (isset($row['created_at']) ? $row['created_at'] : ''),
+            'created_at' => $created_at,
+            'issue_date' => $issue_date,
+            'seller_name' => $seller_name,
+            'is_expired' => $is_expired,
             'updated_at' => (string) (isset($row['updated_at']) ? $row['updated_at'] : ''),
             'editable' => $status !== Riverso_Quote_Status::INVOICED,
             'allowed_transitions' => $transitions,
-            'lines' => array_map(array($this, 'present_line'), $lines),
+            'order_id' => $this->nullable_int(isset($row['order_id']) ? $row['order_id'] : null),
+            'order_url' => $this->resolve_order_url(isset($row['order_id']) ? $row['order_id'] : null),
+            'can_invoice' => (
+                $status === Riverso_Quote_Status::LISTED
+                && $type === Riverso_Quote_Type::VENTA
+                && empty($row['order_id'])
+            ),
+            'lines' => $presented_lines,
         );
     }
 
-    private function present_line(array $line) {
-        $line_net = null;
-        if (isset($line['line_total']) && $line['line_total'] !== null && $line['line_total'] !== '') {
-            $line_net = (float) $line['line_total'];
-        } elseif (isset($line['total']) && $line['total'] !== null && $line['total'] !== '') {
-            $line_net = (float) $line['total'];
-        } else {
-            $qty = (float) (isset($line['quantity']) ? $line['quantity'] : 0);
-            $price = (float) (isset($line['unit_price']) ? $line['unit_price'] : 0);
-            $discount = (float) (isset($line['discount_amount']) ? $line['discount_amount'] : 0);
-            $line_net = max(0, round($qty * $price, 2) - max(0, $discount));
+    /**
+     * Vendedor: display_name del created_by; si no hay usuario, cadena vacía.
+     */
+
+    /**
+     * URL de edición del pedido WC (HPOS-aware si existe).
+     *
+     * @param mixed $order_id
+     * @return string
+     */
+    private function resolve_order_url($order_id) {
+        $oid = $order_id === null || $order_id === '' ? 0 : (int) $order_id;
+        if ($oid <= 0) {
+            return '';
         }
+        if (function_exists('wc_get_order')) {
+            $order = wc_get_order($oid);
+            if ($order && is_object($order) && method_exists($order, 'get_edit_order_url')) {
+                $url = $order->get_edit_order_url();
+                if (is_string($url) && $url !== '') {
+                    return $url;
+                }
+            }
+        }
+        if (function_exists('admin_url')) {
+            return admin_url('post.php?post=' . $oid . '&action=edit');
+        }
+        return '';
+    }
+
+    private function resolve_seller_name($created_by, $fallback = null) {
+        if (is_string($fallback) && trim($fallback) !== '') {
+            return trim($fallback);
+        }
+        $uid = $created_by === null || $created_by === '' ? 0 : (int) $created_by;
+        if ($uid > 0 && function_exists('get_userdata')) {
+            $user = get_userdata($uid);
+            if ($user && !empty($user->display_name)) {
+                return (string) $user->display_name;
+            }
+            if ($user && !empty($user->user_login)) {
+                return (string) $user->user_login;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Vencida si fecha emisión + validity_days < hoy (zona WP).
+     */
+    private function is_expired($issue_date, $validity_days, $valid_until = null) {
+        if ($validity_days === null || $validity_days === '') {
+            return false;
+        }
+        $days = (int) $validity_days;
+        if ($days < 0) {
+            return false;
+        }
+        // Validez 0 días = vencida de inmediato (sin ventana útil).
+        if ($days === 0) {
+            return true;
+        }
+        $today = function_exists('current_time') ? current_time('Y-m-d') : date('Y-m-d');
+        $issue = '';
+        if (is_string($issue_date) && preg_match('/^(\d{4}-\d{2}-\d{2})/', $issue_date, $m)) {
+            $issue = $m[1];
+        }
+        if ($issue === '') {
+            if (is_string($valid_until) && preg_match('/^(\d{4}-\d{2}-\d{2})/', $valid_until, $m2)) {
+                return $m2[1] < $today;
+            }
+            return false;
+        }
+        $until_ts = strtotime($issue . ' +' . $days . ' days');
+        if ($until_ts === false) {
+            return false;
+        }
+        return date('Y-m-d', $until_ts) < $today;
+    }
+
+    private function present_line(array $line) {
         $desc = '';
         if (!empty($line['description'])) {
             $desc = (string) $line['description'];
         } elseif (!empty($line['name'])) {
             $desc = (string) $line['name'];
         }
+        $for_calc = array(
+            'quantity' => isset($line['quantity']) ? $line['quantity'] : 0,
+            'unit_price' => isset($line['unit_price']) ? $line['unit_price'] : 0,
+            'unit_cost' => isset($line['unit_cost']) ? $line['unit_cost'] : null,
+            'price_discount' => isset($line['price_discount']) ? $line['price_discount'] : 0,
+            'margin_discount' => isset($line['margin_discount']) ? $line['margin_discount'] : 0,
+            'discount_amount' => isset($line['discount_amount']) ? $line['discount_amount'] : 0,
+        );
+        $calculated = Riverso_Quote_Totals::calculate(array($for_calc));
+        $normalized = $calculated['lines'][0];
         return array(
             'id' => (int) (isset($line['id']) ? $line['id'] : 0),
             'product_id' => $this->nullable_int(isset($line['product_id']) ? $line['product_id'] : null),
+            'producto_base_id' => $this->nullable_int(isset($line['producto_base_id']) ? $line['producto_base_id'] : null),
             'sku' => (string) (isset($line['sku']) ? $line['sku'] : ''),
             'supplier_code' => (string) (isset($line['supplier_code']) ? $line['supplier_code'] : ''),
             'barcode' => (string) (isset($line['barcode']) ? $line['barcode'] : ''),
             'description' => $desc,
-            'quantity' => round((float) (isset($line['quantity']) ? $line['quantity'] : 0), 3),
-            'unit_price' => round((float) (isset($line['unit_price']) ? $line['unit_price'] : 0), 2),
-            'unit_cost' => $this->nullable_float(isset($line['unit_cost']) ? $line['unit_cost'] : null),
-            'discount_amount' => round((float) (isset($line['discount_amount']) ? $line['discount_amount'] : 0), 2),
-            'line_net' => round((float) $line_net, 2),
+            'quantity' => (float) $normalized['quantity'],
+            'unit_price' => (float) $normalized['unit_price'],
+            'unit_cost' => $normalized['unit_cost'],
+            'price_discount' => (float) $normalized['price_discount'],
+            'margin_discount' => (float) $normalized['margin_discount'],
+            'discount_amount' => (float) $normalized['discount_amount'],
+            'line_net' => (float) $normalized['line_net'],
+            'line_profit' => $normalized['line_profit'],
+            'line_margin_percent' => $normalized['line_margin_percent'],
+            'family_mode' => isset($line['family_mode']) && $line['family_mode'] !== '' && $line['family_mode'] !== null
+                ? (string) $line['family_mode'] : null,
+            'packaging' => isset($line['packaging']) && $line['packaging'] !== '' && $line['packaging'] !== null
+                ? (string) $line['packaging'] : null,
+            'units_per_pack' => $this->nullable_float(isset($line['units_per_pack']) ? $line['units_per_pack'] : null),
+            'local_only' => empty($line['product_id']),
         );
+    }
+
+    private function normalize_channel($value) {
+        $value = strtolower(trim((string) $value));
+        return $value === 'online' ? 'online' : 'local';
     }
 
     private function nullable_int($value) {
@@ -496,7 +787,13 @@ class Riverso_Customer_Quote_Repository {
         if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_sale_fields')) {
             Riverso_POS_Activator::ensure_customer_quotes_sale_fields();
         }
-        // Invalidar caché de columnas: phase57 pudo agregar campos.
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_advanced_discounts')) {
+            Riverso_POS_Activator::ensure_customer_quotes_advanced_discounts();
+        }
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_channel')) {
+            Riverso_POS_Activator::ensure_customer_quotes_channel();
+        }
+        // Invalidar cache de columnas: phase57/58/59 pudieron agregar campos.
         $this->item_columns = null;
         $this->quote_columns = null;
     }

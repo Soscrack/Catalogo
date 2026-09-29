@@ -1,0 +1,637 @@
+From b93be9277e07925bb053931373a7e0e8dd56eccb Mon Sep 17 00:00:00 2001
+From: Sossabandija <163923181+Sossabandija@users.noreply.github.com>
+Date: Tue, 29 Sep 2026 03:13:14 -0300
+Subject: [PATCH] feat(cotizaciones): P1b cabecera, steppers, filtros y
+ utilidad
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Cabecera editor: número readonly, fecha emisión, vendedor
+- Steppers −/+ en cantidad de líneas
+- Lista: columna utilidad %, filtros tipo/fecha, marca vencida
+- Stub PDF/Opciones (sin motor de impresión aún)
+- Bump plugin 1.8.19 + assert deploy_plugin
+- Sin P2/Local-Online/P3–P5
+---
+ deploy_plugin.py                              |   2 +-
+ .../assets/css/customer-quotes.css            |  81 +++++++++-
+ php/riverso-pos/assets/js/customer-quotes.js  | 146 ++++++++++++++++--
+ php/riverso-pos/riverso-pos.php               |   4 +-
+ .../class-customer-quote-module.php           |  30 +++-
+ .../class-customer-quote-repository.php       |  79 +++++++++-
+ .../templates/customer-quotes/app.php         |  30 +++-
+ 7 files changed, 353 insertions(+), 19 deletions(-)
+
+diff --git a/deploy_plugin.py b/deploy_plugin.py
+index ccb9847..2105824 100644
+--- a/deploy_plugin.py
++++ b/deploy_plugin.py
+@@ -153,7 +153,7 @@ VERSION=$(sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
+ fi
+ VERSION=$(echo "$VERSION" | tr -d "[:space:]")
+ echo "VERSION_CHECK=$VERSION"
+-test "$VERSION" = "1.8.18"
++test "$VERSION" = "1.8.19"
+ 
+ if [ "$SKIP_MIGRATION" = "1" ]; then
+   echo "schema-skip competencia tables should be applied via tools/migrate_competencia_remote.py"
+diff --git a/php/riverso-pos/assets/css/customer-quotes.css b/php/riverso-pos/assets/css/customer-quotes.css
+index dbf5d93..d0bb7a2 100644
+--- a/php/riverso-pos/assets/css/customer-quotes.css
++++ b/php/riverso-pos/assets/css/customer-quotes.css
+@@ -52,7 +52,7 @@
+ 
+ .cq-header-grid {
+     display: grid;
+-    grid-template-columns: 1.4fr 0.8fr 0.7fr;
++    grid-template-columns: repeat(3, minmax(0, 1fr));
+     gap: 12px;
+ }
+ 
+@@ -312,3 +312,82 @@
+         justify-content: flex-start;
+     }
+ }
++
++
++.cq-toolbar {
++    flex-wrap: wrap;
++}
++
++.cq-toolbar label {
++    font-size: 0.85rem;
++    color: #5c5348;
++}
++
++.cq-toolbar input[type="date"] {
++    border: 1px solid #d9cbb8;
++    background: #fff;
++    border-radius: 8px;
++    padding: 6px 8px;
++    font: inherit;
++}
++
++.cq-field input[readonly] {
++    background: #f7f1e7;
++    color: #3f3a34;
++    cursor: default;
++}
++
++.cq-qty-stepper {
++    display: inline-flex;
++    align-items: center;
++    gap: 4px;
++    justify-content: flex-end;
++}
++
++.cq-qty-stepper input {
++    width: 4.5rem;
++    text-align: right;
++}
++
++.cq-stepper-btn {
++    width: 1.85rem;
++    height: 1.85rem;
++    border: 1px solid #c8b8a4;
++    background: #fff;
++    border-radius: 6px;
++    font: inherit;
++    font-weight: 700;
++    line-height: 1;
++    cursor: pointer;
++    padding: 0;
++}
++
++.cq-stepper-btn:disabled {
++    opacity: 0.55;
++    cursor: not-allowed;
++}
++
++.cq-row-expired {
++    background: #fff1f2;
++}
++
++.cq-expired-tag {
++    display: inline-flex;
++    align-items: center;
++    margin-left: 4px;
++    border-radius: 999px;
++    padding: 1px 7px;
++    font-size: 0.72rem;
++    font-weight: 700;
++    background: #ffe4e6;
++    color: #9f1239;
++    vertical-align: middle;
++}
++
++@media (max-width: 800px) {
++    .cq-toolbar {
++        display: flex;
++        flex-direction: column;
++        align-items: stretch;
++    }
++}
+diff --git a/php/riverso-pos/assets/js/customer-quotes.js b/php/riverso-pos/assets/js/customer-quotes.js
+index ff84932..faa548f 100644
+--- a/php/riverso-pos/assets/js/customer-quotes.js
++++ b/php/riverso-pos/assets/js/customer-quotes.js
+@@ -14,9 +14,16 @@
+         listBody: document.getElementById("cq-list-body"),
+         empty: document.getElementById("cq-empty"),
+         filter: document.getElementById("cq-status-filter"),
++        typeFilter: document.getElementById("cq-type-filter"),
++        dateFrom: document.getElementById("cq-date-from"),
++        dateTo: document.getElementById("cq-date-to"),
++        applyFilters: document.getElementById("cq-apply-filters"),
+         listMessage: document.getElementById("cq-list-message"),
+         title: document.getElementById("cq-editor-title"),
+         status: document.getElementById("cq-status"),
++        quoteNumber: document.getElementById("cq-quote-number"),
++        issueDate: document.getElementById("cq-issue-date"),
++        seller: document.getElementById("cq-seller"),
+         customer: document.getElementById("cq-customer"),
+         type: document.getElementById("cq-type"),
+         validityDays: document.getElementById("cq-validity-days"),
+@@ -31,6 +38,8 @@
+         linesEmpty: document.getElementById("cq-lines-empty"),
+         message: document.getElementById("cq-message"),
+         transition: document.getElementById("cq-transition"),
++        pdf: document.getElementById("cq-pdf"),
++        options: document.getElementById("cq-options"),
+         save: document.getElementById("cq-save"),
+         clear: document.getElementById("cq-clear")
+     };
+@@ -46,10 +55,32 @@
+             searchProducts();
+         }
+     });
+-    els.filter.addEventListener("change", renderList);
++    els.filter.addEventListener("change", loadList);
++    if (els.typeFilter) {
++        els.typeFilter.addEventListener("change", loadList);
++    }
++    if (els.applyFilters) {
++        els.applyFilters.addEventListener("click", loadList);
++    }
++    if (els.dateFrom) {
++        els.dateFrom.addEventListener("change", loadList);
++    }
++    if (els.dateTo) {
++        els.dateTo.addEventListener("change", loadList);
++    }
+     els.save.addEventListener("click", saveQuote);
+     els.clear.addEventListener("click", clearQuote);
+     els.transition.addEventListener("click", transitionQuote);
++    if (els.pdf) {
++        els.pdf.addEventListener("click", function () {
++            setMessage("PDF de cotización: próximamente (stub P1b).", false);
++        });
++    }
++    if (els.options) {
++        els.options.addEventListener("click", function () {
++            setMessage("Opciones de cotización: próximamente (stub P1b).", false);
++        });
++    }
+     ["input", "change"].forEach(function (eventName) {
+         els.customer.addEventListener(eventName, syncHeader);
+         els.type.addEventListener(eventName, syncHeader);
+@@ -74,6 +105,10 @@
+             discount_total: 0,
+             margin_percent: null,
+             profit_total: null,
++            created_at: "",
++            issue_date: "",
++            seller_name: cfg.currentUserName || "",
++            is_expired: false,
+             editable: true,
+             allowed_transitions: [],
+             lines: []
+@@ -108,7 +143,20 @@
+     }
+ 
+     function loadList() {
+-        post(cfg.actions.list, {}).then(function (data) {
++        var fields = {};
++        if (els.filter && els.filter.value && els.filter.value !== "all") {
++            fields.status = els.filter.value;
++        }
++        if (els.typeFilter && els.typeFilter.value && els.typeFilter.value !== "all") {
++            fields.quote_type = els.typeFilter.value;
++        }
++        if (els.dateFrom && els.dateFrom.value) {
++            fields.date_from = els.dateFrom.value;
++        }
++        if (els.dateTo && els.dateTo.value) {
++            fields.date_to = els.dateTo.value;
++        }
++        post(cfg.actions.list, fields).then(function (data) {
+             state.quotes = data.quotes || [];
+             renderList();
+         }).catch(function (error) {
+@@ -117,22 +165,34 @@
+     }
+ 
+     function renderList() {
+-        var filter = els.filter.value;
+-        var rows = state.quotes.filter(function (quote) {
+-            return filter === "all" || quote.status === filter;
+-        });
++        var rows = state.quotes || [];
+         els.listBody.innerHTML = "";
+         els.empty.hidden = rows.length !== 0;
+         rows.forEach(function (quote) {
+             var tr = document.createElement("tr");
+-            tr.appendChild(cell(quote.quote_number));
+-            tr.appendChild(cell(formatDate(quote.updated_at)));
++            if (quote.is_expired) {
++                tr.className = "cq-row-expired";
++            }
++            var numCell = cell(quote.quote_number);
++            if (quote.is_expired) {
++                var warn = document.createElement("span");
++                warn.className = "cq-expired-tag";
++                warn.textContent = "Vencida";
++                warn.title = "Validez vencida";
++                numCell.appendChild(document.createTextNode(" "));
++                numCell.appendChild(warn);
++            }
++            tr.appendChild(numCell);
++            tr.appendChild(cell(formatDate(quote.issue_date || quote.created_at || quote.updated_at)));
+             tr.appendChild(cell(quote.customer_name || "Sin cliente"));
+             tr.appendChild(cell(quote.quote_type_label || "Venta"));
+             tr.appendChild(badgeCell(quote.status, quote.status_label));
+             var net = cell(formatMoney(quote.net_total));
+             net.className = "cq-num";
+             tr.appendChild(net);
++            var util = cell(formatPercent(quote.margin_percent));
++            util.className = "cq-num";
++            tr.appendChild(util);
+             var actions = document.createElement("td");
+             var open = document.createElement("button");
+             open.type = "button";
+@@ -160,6 +220,15 @@
+         els.title.textContent = quote.quote_number || "Nueva cotización";
+         els.status.textContent = quote.status_label || "Borrador";
+         els.status.className = "cq-badge cq-badge-" + (quote.status || "draft");
++        if (els.quoteNumber) {
++            els.quoteNumber.value = quote.quote_number || "";
++        }
++        if (els.issueDate) {
++            els.issueDate.value = formatDate(quote.issue_date || quote.created_at) || (quote.id ? "" : "Al guardar");
++        }
++        if (els.seller) {
++            els.seller.value = quote.seller_name || cfg.currentUserName || "";
++        }
+         els.customer.value = quote.customer_name || "";
+         els.type.value = quote.quote_type || "venta";
+         els.validityDays.value = quote.validity_days === null || quote.validity_days === undefined ? "" : String(quote.validity_days);
+@@ -204,7 +273,7 @@
+             detail.appendChild(sku);
+             detail.appendChild(desc);
+             tr.appendChild(detail);
+-            tr.appendChild(inputCell(line, index, "quantity", editable));
++            tr.appendChild(qtyStepperCell(line, index, editable));
+             tr.appendChild(inputCell(line, index, "unit_price", editable));
+             var actions = document.createElement("td");
+             actions.className = "cq-actions";
+@@ -241,6 +310,65 @@
+         });
+     }
+ 
++    function qtyStepperCell(line, index, editable) {
++        var td = document.createElement("td");
++        td.className = "cq-num cq-qty-cell";
++        var wrap = document.createElement("div");
++        wrap.className = "cq-qty-stepper";
++        var minus = document.createElement("button");
++        minus.type = "button";
++        minus.className = "cq-stepper-btn";
++        minus.textContent = "\u2212";
++        minus.setAttribute("aria-label", "Disminuir cantidad de " + line.sku);
++        minus.disabled = !editable;
++        var input = document.createElement("input");
++        input.type = "text";
++        input.inputMode = "decimal";
++        input.dataset.field = "quantity";
++        input.dataset.index = String(index);
++        input.value = formatQty(line.quantity);
++        input.setAttribute("aria-label", "Cantidad de " + line.sku);
++        input.disabled = !editable;
++        var plus = document.createElement("button");
++        plus.type = "button";
++        plus.className = "cq-stepper-btn";
++        plus.textContent = "+";
++        plus.setAttribute("aria-label", "Aumentar cantidad de " + line.sku);
++        plus.disabled = !editable;
++        function applyQty(next) {
++            if (next < 0) next = 0;
++            next = round3(next);
++            state.quote.lines[index].quantity = next;
++            input.value = formatQty(next);
++            renderTotals();
++        }
++        minus.addEventListener("click", function () {
++            applyQty(Number(state.quote.lines[index].quantity || 0) - 1);
++        });
++        plus.addEventListener("click", function () {
++            applyQty(Number(state.quote.lines[index].quantity || 0) + 1);
++        });
++        input.addEventListener("focus", function () {
++            input.value = String(state.quote.lines[index].quantity).replace(".", ",");
++            input.select();
++        });
++        input.addEventListener("input", function () {
++            state.quote.lines[index].quantity = parseClNumber(input.value);
++            renderTotals();
++        });
++        input.addEventListener("blur", function () {
++            var parsed = parseClNumber(input.value);
++            state.quote.lines[index].quantity = parsed;
++            input.value = formatQty(parsed);
++            renderTotals();
++        });
++        wrap.appendChild(minus);
++        wrap.appendChild(input);
++        wrap.appendChild(plus);
++        td.appendChild(wrap);
++        return td;
++    }
++
+     function inputCell(line, index, field, editable) {
+         var td = document.createElement("td");
+         td.className = "cq-num";
+diff --git a/php/riverso-pos/riverso-pos.php b/php/riverso-pos/riverso-pos.php
+index 95be782..75581bf 100644
+--- a/php/riverso-pos/riverso-pos.php
++++ b/php/riverso-pos/riverso-pos.php
+@@ -3,7 +3,7 @@
+  * Plugin Name: Riverso POS
+  * Plugin URI: https://riverso.cl
+  * Description: Sistema POS/mini-ERP integrado con WooCommerce para gestión de productos, facturas, inventario y tareas operativas.
+- * Version: 1.8.18
++ * Version: 1.8.19
+  * Author: Riverso
+  * Author URI: https://riverso.cl
+  * License: GPL v2 or later
+@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
+ }
+ 
+ // Constantes del plugin
+-define('RIVERSO_POS_VERSION', '1.8.18');
++define('RIVERSO_POS_VERSION', '1.8.19');
+ define('RIVERSO_POS_PLUGIN_FILE', __FILE__);
+ define('RIVERSO_POS_PLUGIN_DIR', plugin_dir_path(__FILE__));
+ define('RIVERSO_POS_PLUGIN_URL', plugin_dir_url(__FILE__));
+diff --git a/php/riverso-pos/sales/customer_quotes/class-customer-quote-module.php b/php/riverso-pos/sales/customer_quotes/class-customer-quote-module.php
+index e710604..38c354f 100644
+--- a/php/riverso-pos/sales/customer_quotes/class-customer-quote-module.php
++++ b/php/riverso-pos/sales/customer_quotes/class-customer-quote-module.php
+@@ -1,6 +1,6 @@
+ <?php
+ /**
+- * Módulo Cotizaciones de venta (P0+P1).
++ * Módulo Cotizaciones de venta (P0+P1+P1b).
+  * Estados: borrador ↔ lista; facturada reservada.
+  * Bootstrap compatible: get_instance() + init() + ABSPATH.
+  */
+@@ -103,11 +103,21 @@ class Riverso_Customer_Quote_Module {
+      * @return array
+      */
+     public function app_config() {
++        $user_name = '';
++        if (function_exists('wp_get_current_user')) {
++            $user = wp_get_current_user();
++            if ($user && !empty($user->display_name)) {
++                $user_name = (string) $user->display_name;
++            } elseif ($user && !empty($user->user_login)) {
++                $user_name = (string) $user->user_login;
++            }
++        }
+         return array(
+             'ajaxUrl' => admin_url('admin-ajax.php'),
+             'nonce' => wp_create_nonce('riverso_customer_quotes'),
+             'assetBase' => rtrim(RIVERSO_POS_PLUGIN_URL, '/') . '/assets',
+             'standalone' => false,
++            'currentUserName' => $user_name,
+             'actions' => array(
+                 'list' => 'riverso_cq_list',
+                 'get' => 'riverso_cq_get',
+@@ -126,11 +136,27 @@ class Riverso_Customer_Quote_Module {
+     public function ajax_list() {
+         $this->authorize();
+         $status = $this->post_string('status');
++        $quote_type = $this->post_string('quote_type');
++        $date_from = $this->post_string('date_from');
++        $date_to = $this->post_string('date_to');
+         $filters = array();
+         if ($status !== '' && $status !== 'all') {
+             $filters['status'] = $status;
+         }
+-        $this->ok(array('quotes' => $this->quotes->list_quotes($filters)));
++        if ($quote_type !== '' && $quote_type !== 'all') {
++            $filters['quote_type'] = $quote_type;
++        }
++        if ($date_from !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_from)) {
++            $filters['date_from'] = $date_from;
++        }
++        if ($date_to !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_to)) {
++            $filters['date_to'] = $date_to;
++        }
++        try {
++            $this->ok(array('quotes' => $this->quotes->list_quotes($filters)));
++        } catch (Riverso_Quote_Exception $error) {
++            $this->fail($error->getMessage());
++        }
+     }
+ 
+     public function ajax_get() {
+diff --git a/php/riverso-pos/sales/customer_quotes/class-customer-quote-repository.php b/php/riverso-pos/sales/customer_quotes/class-customer-quote-repository.php
+index ff86687..e97ebca 100644
+--- a/php/riverso-pos/sales/customer_quotes/class-customer-quote-repository.php
++++ b/php/riverso-pos/sales/customer_quotes/class-customer-quote-repository.php
+@@ -24,11 +24,27 @@ class Riverso_Customer_Quote_Repository {
+         global $wpdb;
+         $sql = "SELECT q.*, (SELECT COUNT(*) FROM {$this->table_items} i WHERE i.quote_id = q.id) AS line_count
+                 FROM {$this->table_quotes} q";
++        $where = array();
+         $params = array();
+         if (!empty($filters['status'])) {
+-            $sql .= ' WHERE q.status = %s';
++            $where[] = 'q.status = %s';
+             $params[] = Riverso_Quote_Status::normalize_legacy((string) $filters['status']);
+         }
++        if (!empty($filters['quote_type'])) {
++            $where[] = 'q.quote_type = %s';
++            $params[] = Riverso_Quote_Type::normalize((string) $filters['quote_type']);
++        }
++        if (!empty($filters['date_from'])) {
++            $where[] = 'DATE(q.created_at) >= %s';
++            $params[] = (string) $filters['date_from'];
++        }
++        if (!empty($filters['date_to'])) {
++            $where[] = 'DATE(q.created_at) <= %s';
++            $params[] = (string) $filters['date_to'];
++        }
++        if ($where) {
++            $sql .= ' WHERE ' . implode(' AND ', $where);
++        }
+         $sql .= ' ORDER BY q.updated_at DESC, q.id DESC';
+         if ($params) {
+             $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
+@@ -417,6 +433,13 @@ class Riverso_Customer_Quote_Repository {
+                 'label' => Riverso_Quote_Status::transition_label($target),
+             );
+         }
++        $created_at = (string) (isset($row['created_at']) ? $row['created_at'] : '');
++        $issue_date = $created_at;
++        $seller_name = $this->resolve_seller_name(
++            isset($row['created_by']) ? $row['created_by'] : null,
++            isset($row['seller_name']) ? $row['seller_name'] : null
++        );
++        $is_expired = $this->is_expired($issue_date, $validity, isset($row['valid_until']) ? $row['valid_until'] : null);
+         return array(
+             'id' => (int) $row['id'],
+             'quote_number' => (string) $row['quote_number'],
+@@ -433,7 +456,10 @@ class Riverso_Customer_Quote_Repository {
+             'margin_percent' => $this->nullable_float(isset($row['margin_percent']) ? $row['margin_percent'] : null),
+             'profit_total' => $this->nullable_float(isset($row['profit_total']) ? $row['profit_total'] : null),
+             'notes' => (string) (isset($row['notes']) ? $row['notes'] : ''),
+-            'created_at' => (string) (isset($row['created_at']) ? $row['created_at'] : ''),
++            'created_at' => $created_at,
++            'issue_date' => $issue_date,
++            'seller_name' => $seller_name,
++            'is_expired' => $is_expired,
+             'updated_at' => (string) (isset($row['updated_at']) ? $row['updated_at'] : ''),
+             'editable' => $status !== Riverso_Quote_Status::INVOICED,
+             'allowed_transitions' => $transitions,
+@@ -441,6 +467,55 @@ class Riverso_Customer_Quote_Repository {
+         );
+     }
+ 
++    /**
++     * Vendedor: display_name del created_by; si no hay usuario, cadena vacía.
++     */
++    private function resolve_seller_name($created_by, $fallback = null) {
++        if (is_string($fallback) && trim($fallback) !== '') {
++            return trim($fallback);
++        }
++        $uid = $created_by === null || $created_by === '' ? 0 : (int) $created_by;
++        if ($uid > 0 && function_exists('get_userdata')) {
++            $user = get_userdata($uid);
++            if ($user && !empty($user->display_name)) {
++                return (string) $user->display_name;
++            }
++            if ($user && !empty($user->user_login)) {
++                return (string) $user->user_login;
++            }
++        }
++        return '';
++    }
++
++    /**
++     * Vencida si fecha emisión + validity_days < hoy (zona WP).
++     */
++    private function is_expired($issue_date, $validity_days, $valid_until = null) {
++        if ($validity_days === null || $validity_days === '') {
++            return false;
++        }
++        $days = (int) $validity_days;
++        if ($days < 0) {
++            return false;
++        }
++        $today = function_exists('current_time') ? current_time('Y-m-d') : date('Y-m-d');
++        $issue = '';
++        if (is_string($issue_date) && preg_match('/^(\d{4}-\d{2}-\d{2})/', $issue_date, $m)) {
++            $issue = $m[1];
++        }
++        if ($issue === '') {
++            if (is_string($valid_until) && preg_match('/^(\d{4}-\d{2}-\d{2})/', $valid_until, $m2)) {
++                return $m2[1] < $today;
++            }
++            return false;
++        }
++        $until_ts = strtotime($issue . ' +' . $days . ' days');
++        if ($until_ts === false) {
++            return false;
++        }
++        return date('Y-m-d', $until_ts) < $today;
++    }
++
+     private function present_line(array $line) {
+         $line_net = null;
+         if (isset($line['line_total']) && $line['line_total'] !== null && $line['line_total'] !== '') {
+diff --git a/php/riverso-pos/templates/customer-quotes/app.php b/php/riverso-pos/templates/customer-quotes/app.php
+index 79f8400..3dfd2be 100644
+--- a/php/riverso-pos/templates/customer-quotes/app.php
++++ b/php/riverso-pos/templates/customer-quotes/app.php
+@@ -1,6 +1,6 @@
+ <?php
+ /**
+- * Portal de cotizaciones de venta (es-CL).
++ * Portal de cotizaciones de venta (es-CL). P0+P1+P1b.
+  *
+  * @var array<string, mixed> $riverso_cq
+  */
+@@ -54,6 +54,17 @@ if (!function_exists('riverso_pos_cq_json')) {
+                     <option value="draft">Borrador</option>
+                     <option value="listed">Lista</option>
+                 </select>
++                <label for="cq-type-filter">Tipo</label>
++                <select id="cq-type-filter">
++                    <option value="all">Todos</option>
++                    <option value="venta">Venta</option>
++                    <option value="referencia">Referencia</option>
++                </select>
++                <label for="cq-date-from">Desde</label>
++                <input type="date" id="cq-date-from" autocomplete="off">
++                <label for="cq-date-to">Hasta</label>
++                <input type="date" id="cq-date-to" autocomplete="off">
++                <button type="button" class="cq-btn" id="cq-apply-filters">Filtrar</button>
+             </div>
+             <div class="cq-table-wrap">
+                 <table class="cq-table">
+@@ -65,6 +76,7 @@ if (!function_exists('riverso_pos_cq_json')) {
+                             <th scope="col">Tipo</th>
+                             <th scope="col">Estado</th>
+                             <th scope="col" class="cq-num">Neto</th>
++                            <th scope="col" class="cq-num">Utilidad %</th>
+                             <th scope="col">Acciones</th>
+                         </tr>
+                     </thead>
+@@ -83,11 +95,25 @@ if (!function_exists('riverso_pos_cq_json')) {
+                 <div class="cq-top-actions">
+                     <span id="cq-status" class="cq-badge cq-badge-draft">Borrador</span>
+                     <button type="button" class="cq-btn" id="cq-transition" hidden>Pasar a lista</button>
++                    <button type="button" class="cq-btn" id="cq-pdf" title="PDF (próximamente)">PDF</button>
++                    <button type="button" class="cq-btn" id="cq-options" title="Opciones (próximamente)">Opciones</button>
+                 </div>
+             </header>
+ 
+             <div class="cq-card">
+                 <div class="cq-header-grid">
++                    <label class="cq-field">
++                        <span>Nº cotización</span>
++                        <input type="text" id="cq-quote-number" readonly tabindex="-1" placeholder="Se asigna al guardar">
++                    </label>
++                    <label class="cq-field">
++                        <span>Fecha emisión</span>
++                        <input type="text" id="cq-issue-date" readonly tabindex="-1" placeholder="—">
++                    </label>
++                    <label class="cq-field">
++                        <span>Vendedor</span>
++                        <input type="text" id="cq-seller" readonly tabindex="-1" placeholder="—">
++                    </label>
+                     <label class="cq-field">
+                         <span>Cliente <small>(opcional)</small></span>
+                         <input type="text" id="cq-customer" maxlength="191" autocomplete="off" placeholder="Nombre del cliente">
+@@ -157,4 +183,4 @@ if (!function_exists('riverso_pos_cq_json')) {
+ <?php if ($standalone): ?>
+ </body>
+ </html>
+-<?php endif; ?>
+\ No newline at end of file
++<?php endif; ?>
+-- 
+2.45.1.windows.1
+

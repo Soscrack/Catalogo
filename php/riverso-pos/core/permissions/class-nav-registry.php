@@ -70,8 +70,8 @@ class Riverso_POS_Nav_Registry {
             [
                 'id' => 'customer-quotes',
                 'group' => 'ventas',
-                'label' => 'Cotizaciones Clientes',
-                'menu_label' => 'Cotizaciones a Clientes',
+                'label' => 'Cotizaciones de venta',
+                'menu_label' => 'Cotizaciones de venta',
                 'icon' => 'media-document',
                 'surfaces' => ['portal', 'admin'],
                 'portal_slug' => 'customer-quotes',

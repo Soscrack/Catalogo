@@ -330,7 +330,14 @@ final class Riverso_POS {
                 ],
             ],
             'import'    => ['file' => 'class-mamut-import-module.php', 'class' => 'Riverso_Mamut_Import_Module'],
-            'customer-quotes' => ['file' => 'class-customer-quote-module.php', 'class' => 'Riverso_Customer_Quote_Module'],
+            'customer-quotes' => [
+                'file' => 'class-customer-quote-module.php',
+                'class' => 'Riverso_Customer_Quote_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'sales/customer_quotes/class-customer-quote-module.php',
+                    RIVERSO_POS_PLUGIN_DIR . 'modules/customer-quotes/class-customer-quote-module.php',
+                ],
+            ],
             'pos'             => [
                 'file' => 'class-pos-module.php',
                 'class' => 'Riverso_POS_Module',

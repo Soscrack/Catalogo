@@ -356,6 +356,7 @@ class Riverso_POS_Activator {
         self::create_phase54_emparejamientos($prefix, $charset_collate);
         self::create_phase55_pp_vinculo($prefix);
         self::create_phase56_folio_zero_norm($prefix);
+        self::create_phase57_customer_quotes_sale_fields($prefix);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -504,7 +505,7 @@ class Riverso_POS_Activator {
             ['path' => 'modules/costs/class-cost-history-module.php', 'class' => 'Riverso_Cost_History_Module'],
             ['path' => 'modules/pos/class-pos-module.php', 'class' => 'Riverso_POS_Module'],
             ['path' => 'modules/quotes/class-received-quote-module.php', 'class' => 'Riverso_POS_Received_Quote_Module'],
-            ['path' => 'modules/customer-quotes/class-customer-quote-module.php', 'class' => 'Riverso_Customer_Quote_Module'],
+            ['path' => 'sales/customer_quotes/class-customer-quote-module.php', 'class' => 'Riverso_Customer_Quote_Module'],
             ['path' => 'modules/pricing/class-pricing-module.php', 'class' => 'Riverso_Pricing_Module'],
             ['path' => 'modules/pricing/class-price-history-module.php', 'class' => 'Riverso_Price_History_Module'],
             ['path' => 'modules/publish/class-woo-publisher-module.php', 'class' => 'Riverso_Woo_Publisher_Module'],
@@ -5410,6 +5411,14 @@ class Riverso_POS_Activator {
     }
 
     /**
+     * Garantiza columnas P0+P1 de cotizaciones de venta (deploy sin bump).
+     */
+    public static function ensure_customer_quotes_sale_fields() {
+        global $wpdb;
+        self::create_phase57_customer_quotes_sale_fields($wpdb->prefix . 'riverso_');
+    }
+
+    /**
      * Fase 56: recalcular doc_hash de escaneos cuyo folio tenía ceros a la izquierda.
      * No renombra folios de facturas ni toca tablas de precios.
      */
@@ -5480,6 +5489,63 @@ class Riverso_POS_Activator {
                 'updated' => $updated,
                 'skipped_collision' => $skipped,
             ]);
+        }
+    }
+
+    /**
+     * Fase 57: campos de cotización de venta (tipo, validez, totales, códigos línea)
+     * + remapeo de estados legado → draft|listed|invoiced.
+     */
+    private static function create_phase57_customer_quotes_sale_fields($prefix) {
+        $quotes = "{$prefix}customer_quotes";
+        $items = "{$prefix}customer_quote_items";
+
+        self::add_column_if_missing($quotes, 'quote_type', "quote_type VARCHAR(20) NOT NULL DEFAULT 'venta'");
+        self::add_column_if_missing($quotes, 'validity_days', 'validity_days INT UNSIGNED NULL DEFAULT NULL');
+        self::add_column_if_missing($quotes, 'validity_terms', 'validity_terms TEXT NULL');
+        self::add_column_if_missing($quotes, 'net_total', 'net_total DECIMAL(14,2) NOT NULL DEFAULT 0');
+        self::add_column_if_missing($quotes, 'margin_percent', 'margin_percent DECIMAL(8,2) NULL DEFAULT NULL');
+        self::add_column_if_missing($quotes, 'profit_total', 'profit_total DECIMAL(14,2) NULL DEFAULT NULL');
+
+        self::add_column_if_missing($items, 'supplier_code', 'supplier_code VARCHAR(64) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'barcode', 'barcode VARCHAR(64) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'unit_cost', 'unit_cost DECIMAL(14,2) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'line_total', 'line_total DECIMAL(14,2) NOT NULL DEFAULT 0');
+
+        self::add_index_if_missing($quotes, 'idx_quote_type', 'KEY idx_quote_type (quote_type)');
+
+        if (get_option('riverso_pos_phase57_customer_quotes_sale') === '1') {
+            return;
+        }
+
+        global $wpdb;
+        $wpdb->query(
+            "UPDATE `{$quotes}` SET status = CASE
+                WHEN LOWER(status) IN ('invoiced','billed','facturada') THEN 'invoiced'
+                WHEN LOWER(status) IN ('sent','viewed','accepted','approved','listed','lista','converted') THEN 'listed'
+                WHEN LOWER(status) IN ('draft','listed','invoiced') THEN status
+                ELSE 'draft'
+             END"
+        );
+        $wpdb->query(
+            "UPDATE `{$quotes}` SET net_total = total
+             WHERE (net_total IS NULL OR net_total = 0) AND total <> 0"
+        );
+        $wpdb->query(
+            "UPDATE `{$quotes}` SET validity_days = valid_days
+             WHERE validity_days IS NULL AND valid_days IS NOT NULL"
+        );
+        $wpdb->query(
+            "UPDATE `{$items}` SET line_total = total
+             WHERE (line_total IS NULL OR line_total = 0) AND total <> 0"
+        );
+
+        update_option('riverso_pos_phase57_customer_quotes_sale', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase57_customer_quotes_sale', 'customer_quotes', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 57: campos P0+P1 cotizaciones venta + estados draft/listed/invoiced',
+            ));
         }
     }
 }

@@ -2594,26 +2594,26 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                 <?php endif; ?>
             </div>
         </div>
-        
         <?php elseif ($current_page === 'customer-quotes'): ?>
-        <!-- Cotizaciones a Clientes -->
+        <!-- Cotizaciones de venta (P0+P1) -->
         <div class="content-section">
-            <div class="section-header">
-                <h2 class="section-title">Cotizaciones a Clientes</h2>
-                <?php if (current_user_can('riverso_create_quotes')): ?>
-                <button class="btn btn-primary" onclick="nuevaCotizacion()">
-                    <span class="dashicons dashicons-plus-alt"></span> Nueva Cotización
-                </button>
-                <?php endif; ?>
-            </div>
             <div class="section-body">
-                <p style="color: var(--text-secondary);">Gestiona las cotizaciones enviadas a clientes.</p>
-                <a href="<?php echo admin_url('admin.php?page=riverso-customer-quotes'); ?>" class="btn btn-secondary" style="margin-top: 15px;">
-                    Ver en WP Admin
-                </a>
+                <?php
+                if (!class_exists('Riverso_Customer_Quote_Module')) {
+                    $cq = RIVERSO_POS_PLUGIN_DIR . 'sales/customer_quotes/class-customer-quote-module.php';
+                    if (file_exists($cq)) {
+                        require_once $cq;
+                    }
+                }
+                if (class_exists('Riverso_Customer_Quote_Module')) {
+                    Riverso_Customer_Quote_Module::get_instance()->render_app();
+                } else {
+                    echo '<p>No se pudo cargar cotizaciones de venta.</p>';
+                }
+                ?>
             </div>
         </div>
-        
+
         <?php elseif ($current_page === 'inbox'): ?>
         <div class="content-section">
             <div class="section-body">

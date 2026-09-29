@@ -5503,7 +5503,8 @@ class Riverso_POS_Activator {
 
     /**
      * Fase 57: campos de cotización de venta (tipo, validez, totales, códigos línea)
-     * + remapeo de estados legado → draft|listed|invoiced.
+     * + remapeo de estados legado → draft|listed|invoiced
+     * + order_id (P5a Facturar) para tablas ya existentes sin la columna.
      */
     private static function create_phase57_customer_quotes_sale_fields($prefix) {
         $quotes = "{$prefix}customer_quotes";
@@ -5515,6 +5516,9 @@ class Riverso_POS_Activator {
         self::add_column_if_missing($quotes, 'net_total', 'net_total DECIMAL(14,2) NOT NULL DEFAULT 0');
         self::add_column_if_missing($quotes, 'margin_percent', 'margin_percent DECIMAL(8,2) NULL DEFAULT NULL');
         self::add_column_if_missing($quotes, 'profit_total', 'profit_total DECIMAL(14,2) NULL DEFAULT NULL');
+        // P5a Facturar: order_id must exist on live tables created before CREATE IF NOT EXISTS had it.
+        self::add_column_if_missing($quotes, 'order_id', 'order_id BIGINT UNSIGNED NULL DEFAULT NULL');
+        self::add_index_if_missing($quotes, 'idx_cq_order_id', 'KEY idx_cq_order_id (order_id)');
 
         self::add_column_if_missing($items, 'supplier_code', 'supplier_code VARCHAR(64) NULL DEFAULT NULL');
         self::add_column_if_missing($items, 'barcode', 'barcode VARCHAR(64) NULL DEFAULT NULL');

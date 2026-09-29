@@ -379,6 +379,8 @@ class Riverso_Customer_Quote_Module {
 
     /**
      * P5a: Facturar cotización listed+venta → pedido WC pending (idempotente).
+     * Antes de crear: reutiliza pedido WC con meta _riverso_customer_quote_id.
+     * Si create OK y mark falla: elimina el pedido huérfano y reporta error claro.
      */
     public function ajax_invoice() {
         $this->authorize_invoice();
@@ -386,6 +388,12 @@ class Riverso_Customer_Quote_Module {
         if ($id <= 0) {
             $this->fail('Cotización no encontrada.', 404);
         }
+
+        $lock_key = 'riverso_cq_invoice_lock_' . $id;
+        if (get_transient($lock_key)) {
+            $this->fail('Facturación en curso. Espere un momento e intente de nuevo.');
+        }
+        set_transient($lock_key, 1, 30);
 
         try {
             $quote = $this->quotes->find($id);
@@ -413,6 +421,19 @@ class Riverso_Customer_Quote_Module {
             if (!empty($quote['order_id'])) {
                 // Ya tiene pedido pero status raro: re-presentar.
                 $fixed = $this->quotes->mark_invoiced($id, (int) $quote['order_id']);
+                $this->ok(array(
+                    'quote' => $fixed,
+                    'order_id' => (int) $fixed['order_id'],
+                    'order_url' => isset($fixed['order_url']) ? $fixed['order_url'] : '',
+                    'message' => 'Cotización ya facturada. Pedido #' . (int) $fixed['order_id'] . '.',
+                    'idempotent' => true,
+                ));
+            }
+
+            // Recuperación / anti-duplicado: pedido WC ya creado (p.ej. mark falló tras create).
+            $existing_order_id = $this->find_wc_order_id_for_quote($id);
+            if ($existing_order_id > 0) {
+                $fixed = $this->quotes->mark_invoiced($id, $existing_order_id);
                 $this->ok(array(
                     'quote' => $fixed,
                     'order_id' => (int) $fixed['order_id'],
@@ -473,13 +494,20 @@ class Riverso_Customer_Quote_Module {
 
             $order_id = (int) $order->get_id();
 
+            // Persist order_id ASAP; si mark falla no dejar listed + huérfano silencioso.
+            try {
+                $marked = $this->quotes->mark_invoiced($id, $order_id);
+            } catch (Riverso_Quote_Exception $mark_error) {
+                $this->discard_orphan_wc_order($order);
+                $this->fail(
+                    'Pedido creado pero no se pudo vincular a la cotización; el pedido huérfano fue eliminado. '
+                    . $mark_error->getMessage()
+                );
+            }
+
             // Race: otro request pudo facturar primero.
-            $marked = $this->quotes->mark_invoiced($id, $order_id);
             if ((int) $marked['order_id'] !== $order_id) {
-                // Perdimos la carrera: borrar el pedido duplicado si es posible.
-                if (method_exists($order, 'delete')) {
-                    $order->delete(true);
-                }
+                $this->discard_orphan_wc_order($order);
                 $this->ok(array(
                     'quote' => $marked,
                     'order_id' => (int) $marked['order_id'],
@@ -512,6 +540,68 @@ class Riverso_Customer_Quote_Module {
             ));
         } catch (Riverso_Quote_Exception $error) {
             $this->fail($error->getMessage());
+        } finally {
+            delete_transient($lock_key);
+        }
+    }
+
+    /**
+     * Busca pedido WC existente ligado a la cotización (meta _riverso_customer_quote_id).
+     * Preferir el más antiguo para recuperar huérfanos de un Facturar previo fallido.
+     *
+     * @param int $quote_id
+     * @return int order id o 0
+     */
+    private function find_wc_order_id_for_quote($quote_id) {
+        $quote_id = (int) $quote_id;
+        if ($quote_id <= 0) {
+            return 0;
+        }
+
+        if (function_exists('wc_get_orders')) {
+            $query = array(
+                'limit' => 1,
+                'return' => 'ids',
+                'orderby' => 'ID',
+                'order' => 'ASC',
+                'status' => 'any',
+                'meta_key' => '_riverso_customer_quote_id',
+                'meta_value' => (string) $quote_id,
+                'meta_compare' => '=',
+            );
+            $ids = wc_get_orders($query);
+            if (is_array($ids) && !empty($ids)) {
+                return (int) $ids[0];
+            }
+        }
+
+        // Fallback CPT postmeta (tiendas sin HPOS / wc_get_orders incompleto).
+        global $wpdb;
+        $found = $wpdb->get_var($wpdb->prepare(
+            "SELECT post_id FROM {$wpdb->postmeta}
+             WHERE meta_key = %s AND meta_value = %s
+             ORDER BY post_id ASC LIMIT 1",
+            '_riverso_customer_quote_id',
+            (string) $quote_id
+        ));
+        return $found ? (int) $found : 0;
+    }
+
+    /**
+     * Elimina un pedido WC huérfano tras fallo de mark_invoiced / carrera.
+     *
+     * @param mixed $order WC_Order|null
+     */
+    private function discard_orphan_wc_order($order) {
+        if (!$order || !is_object($order)) {
+            return;
+        }
+        if (method_exists($order, 'delete')) {
+            $order->delete(true);
+            return;
+        }
+        if (method_exists($order, 'get_id') && function_exists('wp_delete_post')) {
+            wp_delete_post((int) $order->get_id(), true);
         }
     }
 
@@ -855,6 +945,7 @@ class Riverso_Customer_Quote_Module {
             KEY idx_customer (customer_id),
             KEY idx_status (status),
             KEY idx_quote_type (quote_type),
+            KEY idx_cq_order_id (order_id),
             KEY idx_created_by (created_by),
             KEY idx_valid_until (valid_until)
         ) $charset_collate;";

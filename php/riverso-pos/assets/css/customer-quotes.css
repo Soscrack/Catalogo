@@ -631,3 +631,27 @@
     font-size: 0.8rem;
     padding: 4px 8px;
 }
+
+
+.cq-order-link {
+    margin-left: 0.5rem;
+    font-weight: 600;
+}
+
+.cq-btn-primary#cq-invoice {
+    background: #0f766e;
+    border-color: #0f766e;
+}
+
+.cq-modal-wide {
+    max-width: 720px;
+    width: calc(100% - 2rem);
+}
+
+.cq-modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    margin-top: 1rem;
+}
+

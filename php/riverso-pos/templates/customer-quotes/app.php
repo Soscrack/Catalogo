@@ -1,6 +1,6 @@
 <?php
 /**
- * Portal de cotizaciones de venta (es-CL). P0+P1+P1b+P2+P3.
+ * Portal de cotizaciones de venta (es-CL). P0–P5a/P5b.
  *
  * @var array<string, mixed> $riverso_cq
  */
@@ -43,7 +43,7 @@ if (!function_exists('riverso_pos_cq_json')) {
             <header class="cq-top">
                 <div>
                     <h1 id="cq-list-title">Cotizaciones de venta</h1>
-                    <p class="cq-lead">Borrador y lista.</p>
+                    <p class="cq-lead">Borrador, lista y facturada.</p>
                 </div>
                 <button type="button" class="cq-btn cq-btn-primary" id="cq-new">Nueva cotización</button>
             </header>
@@ -53,6 +53,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                     <option value="all">Todas</option>
                     <option value="draft">Borrador</option>
                     <option value="listed">Lista</option>
+                    <option value="invoiced">Facturada</option>
                 </select>
                 <label for="cq-type-filter">Tipo</label>
                 <select id="cq-type-filter">
@@ -96,6 +97,9 @@ if (!function_exists('riverso_pos_cq_json')) {
                     <span id="cq-status" class="cq-badge cq-badge-draft">Borrador</span>
                     <span id="cq-expired-badge" class="cq-expired-tag" hidden>Vencida</span>
                     <button type="button" class="cq-btn" id="cq-transition" hidden>Pasar a lista</button>
+                    <button type="button" class="cq-btn cq-btn-primary" id="cq-invoice" hidden>Facturar</button>
+                    <a id="cq-order-link" class="cq-link cq-order-link" href="#" target="_blank" rel="noopener" hidden>Ver pedido</a>
+                    <button type="button" class="cq-btn" id="cq-import" hidden title="Importar desde cotización recibida">Importar</button>
                     <button type="button" class="cq-btn" id="cq-pdf" title="PDF (próximamente)">PDF</button>
                     <button type="button" class="cq-btn" id="cq-options" title="Opciones (próximamente)">Opciones</button>
                 </div>
@@ -214,6 +218,45 @@ if (!function_exists('riverso_pos_cq_json')) {
                 </div>
             </footer>
         </section>
+        <div id="cq-import-modal" class="cq-modal" hidden aria-hidden="true">
+            <div class="cq-modal-backdrop" data-cq-import-close="1"></div>
+            <div class="cq-modal-dialog cq-modal-wide" role="dialog" aria-modal="true" aria-labelledby="cq-import-title">
+                <header class="cq-modal-head">
+                    <h3 id="cq-import-title">Importar cotización recibida</h3>
+                    <button type="button" class="cq-modal-close" id="cq-import-close" aria-label="Cerrar" data-cq-import-close="1">×</button>
+                </header>
+                <div class="cq-modal-body">
+                    <div id="cq-import-step-list">
+                        <p class="cq-modal-hint">Cotizaciones recibidas confirmadas (versión final del grupo).</p>
+                        <ul id="cq-import-quote-list" class="cq-results cq-modal-results"></ul>
+                        <p id="cq-import-list-empty" class="cq-empty" hidden>No hay cotizaciones recibidas confirmadas.</p>
+                    </div>
+                    <div id="cq-import-step-preview" hidden>
+                        <p id="cq-import-preview-head" class="cq-modal-hint"></p>
+                        <p id="cq-import-skipped" class="cq-modal-hint"></p>
+                        <div class="cq-table-wrap">
+                            <table class="cq-table">
+                                <thead>
+                                    <tr>
+                                        <th scope="col"><input type="checkbox" id="cq-import-check-all" title="Seleccionar todas"></th>
+                                        <th scope="col">SKU</th>
+                                        <th scope="col">Descripción</th>
+                                        <th scope="col" class="cq-num">Cant.</th>
+                                        <th scope="col" class="cq-num">Costo</th>
+                                        <th scope="col" class="cq-num">P. catálogo</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cq-import-lines"></tbody>
+                            </table>
+                        </div>
+                        <div class="cq-modal-actions">
+                            <button type="button" class="cq-btn" id="cq-import-back">← Volver</button>
+                            <button type="button" class="cq-btn cq-btn-primary" id="cq-import-confirm">Agregar seleccionadas</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         <p id="cq-list-message" class="cq-message" role="status"></p>
     </div>
 </div>

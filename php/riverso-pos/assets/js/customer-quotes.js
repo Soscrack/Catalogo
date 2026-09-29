@@ -8,7 +8,9 @@
         results: [],
         advanced: false,
         modalScope: "todo",
-        modalResults: []
+        modalResults: [],
+        importReceivedId: 0,
+        invoicing: false
     };
 
     var els = {
@@ -49,6 +51,20 @@
         linesEmpty: document.getElementById("cq-lines-empty"),
         message: document.getElementById("cq-message"),
         transition: document.getElementById("cq-transition"),
+        invoice: document.getElementById("cq-invoice"),
+        orderLink: document.getElementById("cq-order-link"),
+        importBtn: document.getElementById("cq-import"),
+        importModal: document.getElementById("cq-import-modal"),
+        importQuoteList: document.getElementById("cq-import-quote-list"),
+        importListEmpty: document.getElementById("cq-import-list-empty"),
+        importStepList: document.getElementById("cq-import-step-list"),
+        importStepPreview: document.getElementById("cq-import-step-preview"),
+        importPreviewHead: document.getElementById("cq-import-preview-head"),
+        importSkipped: document.getElementById("cq-import-skipped"),
+        importLines: document.getElementById("cq-import-lines"),
+        importCheckAll: document.getElementById("cq-import-check-all"),
+        importBack: document.getElementById("cq-import-back"),
+        importConfirm: document.getElementById("cq-import-confirm"),
         pdf: document.getElementById("cq-pdf"),
         options: document.getElementById("cq-options"),
         expiredBadge: document.getElementById("cq-expired-badge"),
@@ -127,6 +143,32 @@
     els.save.addEventListener("click", saveQuote);
     els.clear.addEventListener("click", clearQuote);
     els.transition.addEventListener("click", transitionQuote);
+    if (els.invoice) {
+        els.invoice.addEventListener("click", invoiceQuote);
+    }
+    if (els.importBtn) {
+        els.importBtn.addEventListener("click", openImportModal);
+    }
+    if (els.importModal) {
+        els.importModal.addEventListener("click", function (event) {
+            if (event.target && event.target.getAttribute("data-cq-import-close") === "1") {
+                closeImportModal();
+            }
+        });
+    }
+    if (els.importBack) {
+        els.importBack.addEventListener("click", showImportListStep);
+    }
+    if (els.importConfirm) {
+        els.importConfirm.addEventListener("click", confirmImportLines);
+    }
+    if (els.importCheckAll) {
+        els.importCheckAll.addEventListener("change", function () {
+            var on = !!els.importCheckAll.checked;
+            var boxes = els.importLines ? els.importLines.querySelectorAll("input[type=checkbox][data-item-id]") : [];
+            Array.prototype.forEach.call(boxes, function (box) { box.checked = on; });
+        });
+    }
     if (els.pdf) {
         els.pdf.addEventListener("click", function () {
             setMessage("PDF de cotización: próximamente (stub P1b).", false);
@@ -167,6 +209,9 @@
             is_expired: false,
             editable: true,
             allowed_transitions: [],
+            can_invoice: false,
+            order_id: null,
+            order_url: "",
             lines: []
         };
     }
@@ -317,10 +362,28 @@
         } else {
             els.transition.hidden = true;
         }
+        if (els.invoice) {
+            var canInvoice = !!quote.can_invoice || (quote.status === "listed" && quote.quote_type === "venta" && !quote.order_id);
+            els.invoice.hidden = !(quote.id && canInvoice);
+            els.invoice.disabled = false;
+        }
+        if (els.orderLink) {
+            if (quote.order_id && quote.order_url) {
+                els.orderLink.hidden = false;
+                els.orderLink.href = quote.order_url;
+                els.orderLink.textContent = "Ver pedido #" + quote.order_id;
+            } else {
+                els.orderLink.hidden = true;
+                els.orderLink.removeAttribute("href");
+            }
+        }
+        if (els.importBtn) {
+            els.importBtn.hidden = !editable;
+        }
         renderLines();
         renderTotals();
         if (quote.status === "invoiced") {
-            setMessage("Esta cotización está facturada y no se edita en este corte.", true);
+            setMessage("Esta cotización está facturada y no se edita en este corte.", false);
         }
     }
 
@@ -780,11 +843,20 @@
     function addProduct(product) {
         var lines = state.quote.lines;
         var sku = String(product.sku || "").toLowerCase();
+        var addQty = product.quantity !== undefined && product.quantity !== null && product.quantity !== ""
+            ? Number(product.quantity)
+            : 1;
+        if (!(addQty > 0)) {
+            addQty = 1;
+        }
         var existing = lines.find(function (line) {
-            return String(line.sku || "").toLowerCase() === sku;
+            return String(line.sku || "").toLowerCase() === sku && sku !== "";
         });
         if (existing) {
-            existing.quantity = round3(Number(existing.quantity || 0) + 1);
+            existing.quantity = round3(Number(existing.quantity || 0) + addQty);
+            if (product.unit_cost !== null && product.unit_cost !== undefined && product.unit_cost !== "") {
+                existing.unit_cost = Number(product.unit_cost);
+            }
         } else {
             lines.push({
                 product_id: product.product_id,
@@ -792,7 +864,7 @@
                 supplier_code: product.supplier_code || "",
                 barcode: product.barcode || "",
                 description: product.description || product.sku,
-                quantity: 1,
+                quantity: round3(addQty),
                 unit_price: Number(product.unit_price || 0),
                 unit_cost: product.unit_cost === null || product.unit_cost === undefined || product.unit_cost === "" ? null : Number(product.unit_cost),
                 price_discount: 0,
@@ -879,6 +951,219 @@
             validity_days: quote.validity_days,
             validity_terms: quote.validity_terms || "",
             lines: quote.lines || []
+        });
+    }
+
+
+    function invoiceQuote() {
+        if (!state.quote.id || state.invoicing) {
+            return;
+        }
+        if (state.quote.status !== "listed" || state.quote.quote_type !== "venta") {
+            setMessage("Solo se facturan cotizaciones Lista de tipo Venta.", true);
+            return;
+        }
+        var lines = state.quote.lines || [];
+        var cliente = state.quote.customer_name || "Sin cliente";
+        var neto = formatMoney(state.quote.net_total);
+        var n = lines.length;
+        var msg = "¿Facturar cotización " + (state.quote.quote_number || "") + "?\n"
+            + "Cliente: " + cliente + "\n"
+            + "Neto: " + neto + "\n"
+            + "Líneas: " + n + "\n\n"
+            + "Se creará un pedido WooCommerce pendiente.";
+        if (!window.confirm(msg)) {
+            return;
+        }
+        state.invoicing = true;
+        if (els.invoice) {
+            els.invoice.disabled = true;
+        }
+        setMessage("Facturando…", false);
+        post(cfg.actions.invoice, { id: String(state.quote.id) }).then(function (data) {
+            state.quote = data.quote;
+            paintEditor();
+            state.snapshot = serialize(state.quote);
+            setMessage(data.message || "Cotización facturada.", false);
+        }).catch(function (error) {
+            setMessage(error.message, true);
+            if (els.invoice) {
+                els.invoice.disabled = false;
+            }
+        }).finally(function () {
+            state.invoicing = false;
+        });
+    }
+
+    function openImportModal() {
+        if (state.quote.editable === false) {
+            return;
+        }
+        if (!els.importModal) {
+            return;
+        }
+        els.importModal.hidden = false;
+        els.importModal.setAttribute("aria-hidden", "false");
+        showImportListStep();
+        loadReceivedQuotes();
+    }
+
+    function closeImportModal() {
+        if (!els.importModal) {
+            return;
+        }
+        els.importModal.hidden = true;
+        els.importModal.setAttribute("aria-hidden", "true");
+        state.importReceivedId = 0;
+    }
+
+    function showImportListStep() {
+        state.importReceivedId = 0;
+        if (els.importStepList) {
+            els.importStepList.hidden = false;
+        }
+        if (els.importStepPreview) {
+            els.importStepPreview.hidden = true;
+        }
+    }
+
+    function loadReceivedQuotes() {
+        if (!cfg.actions || !cfg.actions.receivedList) {
+            return;
+        }
+        if (els.importQuoteList) {
+            els.importQuoteList.innerHTML = "";
+        }
+        post(cfg.actions.receivedList, {}).then(function (data) {
+            var quotes = data.quotes || [];
+            if (els.importListEmpty) {
+                els.importListEmpty.hidden = quotes.length !== 0;
+            }
+            if (!els.importQuoteList) {
+                return;
+            }
+            els.importQuoteList.innerHTML = "";
+            quotes.forEach(function (q) {
+                var li = document.createElement("li");
+                li.className = "cq-result";
+                var btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "cq-result-btn";
+                var label = (q.numero_documento || ("#" + q.id))
+                    + (q.proveedor_nombre ? " — " + q.proveedor_nombre : "")
+                    + (q.fecha_documento ? " (" + q.fecha_documento + ")" : "");
+                btn.textContent = label;
+                btn.addEventListener("click", function () {
+                    previewReceivedQuote(q.id, label);
+                });
+                li.appendChild(btn);
+                els.importQuoteList.appendChild(li);
+            });
+        }).catch(function (error) {
+            setMessage(error.message, true);
+        });
+    }
+
+    function previewReceivedQuote(id, label) {
+        state.importReceivedId = id;
+        post(cfg.actions.receivedPreview, { id: String(id) }).then(function (data) {
+            if (els.importStepList) {
+                els.importStepList.hidden = true;
+            }
+            if (els.importStepPreview) {
+                els.importStepPreview.hidden = false;
+            }
+            if (els.importPreviewHead) {
+                els.importPreviewHead.textContent = "Vista previa: " + (label || ("#" + id));
+            }
+            var skipped = data.skipped || {};
+            if (els.importSkipped) {
+                var parts = [];
+                if (skipped.ambiguous) {
+                    parts.push(skipped.ambiguous + " ambiguas");
+                }
+                if (skipped.not_found) {
+                    parts.push(skipped.not_found + " sin match");
+                }
+                if (skipped.no_wc) {
+                    parts.push(skipped.no_wc + " sin WC");
+                }
+                els.importSkipped.textContent = parts.length
+                    ? ("Omitidas automáticamente: " + parts.join(", ") + ".")
+                    : "Todas las líneas con producto WC están disponibles.";
+            }
+            renderImportLines(data.lines || []);
+        }).catch(function (error) {
+            setMessage(error.message, true);
+        });
+    }
+
+    function renderImportLines(lines) {
+        if (!els.importLines) {
+            return;
+        }
+        els.importLines.innerHTML = "";
+        if (els.importCheckAll) {
+            els.importCheckAll.checked = lines.length > 0;
+        }
+        lines.forEach(function (line) {
+            var tr = document.createElement("tr");
+            var tdCheck = document.createElement("td");
+            var box = document.createElement("input");
+            box.type = "checkbox";
+            box.checked = true;
+            box.setAttribute("data-item-id", String(line.item_id));
+            tdCheck.appendChild(box);
+            tr.appendChild(tdCheck);
+            tr.appendChild(cell(line.sku || ""));
+            tr.appendChild(cell(line.description || ""));
+            var q = cell(String(line.quantity));
+            q.className = "cq-num";
+            tr.appendChild(q);
+            var c = cell(formatMoney(line.unit_cost));
+            c.className = "cq-num";
+            tr.appendChild(c);
+            var p = cell(formatMoney(line.unit_price));
+            p.className = "cq-num";
+            tr.appendChild(p);
+            els.importLines.appendChild(tr);
+        });
+    }
+
+    function confirmImportLines() {
+        if (!state.importReceivedId) {
+            return;
+        }
+        var boxes = els.importLines ? els.importLines.querySelectorAll("input[type=checkbox][data-item-id]") : [];
+        var ids = [];
+        Array.prototype.forEach.call(boxes, function (box) {
+            if (box.checked) {
+                ids.push(parseInt(box.getAttribute("data-item-id"), 10));
+            }
+        });
+        if (!ids.length) {
+            setMessage("Selecciona al menos una línea.", true);
+            return;
+        }
+        if (els.importConfirm) {
+            els.importConfirm.disabled = true;
+        }
+        post(cfg.actions.receivedImport, {
+            received_quote_id: String(state.importReceivedId),
+            item_ids: JSON.stringify(ids)
+        }).then(function (data) {
+            var products = data.products || [];
+            products.forEach(function (product) {
+                addProduct(product);
+            });
+            closeImportModal();
+            setMessage(data.message || (products.length + " línea(s) importadas."), false);
+        }).catch(function (error) {
+            setMessage(error.message, true);
+        }).finally(function () {
+            if (els.importConfirm) {
+                els.importConfirm.disabled = false;
+            }
         });
     }
 

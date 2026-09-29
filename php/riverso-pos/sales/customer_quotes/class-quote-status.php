@@ -2,8 +2,8 @@
 /**
  * Estados de cotización de venta (P0+P1).
  *
- * Flujo de este corte: borrador (draft) ↔ lista (listed).
- * Facturada (invoiced) queda reservada sin transición.
+ * Flujo: borrador (draft) ↔ lista (listed).
+ * Facturada (invoiced) vía AJAX riverso_cq_invoice (no transición ciega).
  *
  * Mapeo legado → plan:
  * - draft, borrador, rejected, expired, cancelled, canceled → draft

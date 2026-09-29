@@ -245,7 +245,7 @@ class Riverso_Customer_Quote_Repository {
         }
         $to = strtolower(trim((string) $to));
         if (!Riverso_Quote_Status::can_transition((string) $quote['status'], $to)) {
-            throw new Riverso_Quote_Exception('Solo se puede pasar entre Borrador y Lista. Facturada queda para más adelante.');
+            throw new Riverso_Quote_Exception('Solo se puede pasar entre Borrador y Lista. Para facturar use Facturar.');
         }
         if ($quote['status'] !== $to) {
             $wpdb->update(
@@ -262,6 +262,63 @@ class Riverso_Customer_Quote_Repository {
         $updated = $this->find((int) $id);
         if ($updated === null) {
             throw new Riverso_Quote_Exception('Cotización no encontrada.');
+        }
+        return $updated;
+    }
+
+
+    /**
+     * Marca cotización como facturada con order_id (idempotente / race-safe).
+     * Solo aplica si sigue en listed y sin order_id.
+     *
+     * @param int $id
+     * @param int $order_id
+     * @return array Quote presentada
+     */
+    public function mark_invoiced($id, $order_id) {
+        global $wpdb;
+        $id = (int) $id;
+        $order_id = (int) $order_id;
+        if ($id <= 0 || $order_id <= 0) {
+            throw new Riverso_Quote_Exception('Pedido u cotización inválidos al facturar.');
+        }
+
+        $quote = $this->find($id);
+        if ($quote === null) {
+            throw new Riverso_Quote_Exception('Cotización no encontrada.');
+        }
+        if ($quote['status'] === Riverso_Quote_Status::INVOICED && !empty($quote['order_id'])) {
+            return $quote;
+        }
+        if ($quote['status'] !== Riverso_Quote_Status::LISTED) {
+            throw new Riverso_Quote_Exception('Solo una cotización en Lista se puede facturar.');
+        }
+
+        $now = current_time('mysql');
+        $table = str_replace('`', '', $this->table_quotes);
+        $affected = $wpdb->query($wpdb->prepare(
+            "UPDATE `{$table}` SET status = %s, order_id = %d, updated_at = %s
+             WHERE id = %d AND status = %s AND (order_id IS NULL OR order_id = 0)",
+            Riverso_Quote_Status::INVOICED,
+            $order_id,
+            $now,
+            $id,
+            Riverso_Quote_Status::LISTED
+        ));
+        if ($affected === false) {
+            throw new Riverso_Quote_Exception('Error al marcar la cotización como facturada.' . $this->db_error_suffix());
+        }
+        if ((int) $affected === 0) {
+            $again = $this->find($id);
+            if ($again !== null && $again['status'] === Riverso_Quote_Status::INVOICED && !empty($again['order_id'])) {
+                return $again;
+            }
+            throw new Riverso_Quote_Exception('No se pudo facturar: la cotización cambió de estado.');
+        }
+
+        $updated = $this->find($id);
+        if ($updated === null) {
+            throw new Riverso_Quote_Exception('Cotización no encontrada tras facturar.');
         }
         return $updated;
     }
@@ -531,6 +588,13 @@ class Riverso_Customer_Quote_Repository {
             'updated_at' => (string) (isset($row['updated_at']) ? $row['updated_at'] : ''),
             'editable' => $status !== Riverso_Quote_Status::INVOICED,
             'allowed_transitions' => $transitions,
+            'order_id' => $this->nullable_int(isset($row['order_id']) ? $row['order_id'] : null),
+            'order_url' => $this->resolve_order_url(isset($row['order_id']) ? $row['order_id'] : null),
+            'can_invoice' => (
+                $status === Riverso_Quote_Status::LISTED
+                && $type === Riverso_Quote_Type::VENTA
+                && empty($row['order_id'])
+            ),
             'lines' => $presented_lines,
         );
     }
@@ -538,6 +602,33 @@ class Riverso_Customer_Quote_Repository {
     /**
      * Vendedor: display_name del created_by; si no hay usuario, cadena vacía.
      */
+
+    /**
+     * URL de edición del pedido WC (HPOS-aware si existe).
+     *
+     * @param mixed $order_id
+     * @return string
+     */
+    private function resolve_order_url($order_id) {
+        $oid = $order_id === null || $order_id === '' ? 0 : (int) $order_id;
+        if ($oid <= 0) {
+            return '';
+        }
+        if (function_exists('wc_get_order')) {
+            $order = wc_get_order($oid);
+            if ($order && is_object($order) && method_exists($order, 'get_edit_order_url')) {
+                $url = $order->get_edit_order_url();
+                if (is_string($url) && $url !== '') {
+                    return $url;
+                }
+            }
+        }
+        if (function_exists('admin_url')) {
+            return admin_url('post.php?post=' . $oid . '&action=edit');
+        }
+        return '';
+    }
+
     private function resolve_seller_name($created_by, $fallback = null) {
         if (is_string($fallback) && trim($fallback) !== '') {
             return trim($fallback);

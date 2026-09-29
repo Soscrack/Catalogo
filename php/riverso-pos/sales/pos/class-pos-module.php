@@ -1058,6 +1058,123 @@ class Riverso_POS_Module {
     /**
      * Crear orden WooCommerce
      */
+
+    /**
+     * Crea un pedido WooCommerce en estado pending (sin caja, sin pago, sin completed).
+     * Extraído de la lógica de ajax_create_order para cotizaciones de venta (P5a).
+     * No registrar sesión POS ni riverso_pos_payments.
+     *
+     * @param array $args {
+     *   @type array  $items         [{product_id, quantity, price, name?}, ...]
+     *   @type int    $customer_id
+     *   @type string $customer_name
+     *   @type string $customer_email
+     *   @type string $customer_phone
+     *   @type string $notes
+     *   @type string $created_via
+     *   @type array  $meta          [meta_key => meta_value]
+     * }
+     * @return \WC_Order|\WP_Error
+     */
+    public static function create_pending_wc_order(array $args) {
+        if (!function_exists('wc_create_order') || !function_exists('wc_get_product')) {
+            return new WP_Error('wc_missing', 'WooCommerce no está disponible.');
+        }
+
+        $items = isset($args['items']) && is_array($args['items']) ? $args['items'] : array();
+        if (!$items) {
+            return new WP_Error('empty_cart', 'No hay líneas para el pedido.');
+        }
+
+        $customer_id = isset($args['customer_id']) ? (int) $args['customer_id'] : 0;
+        $customer_name = isset($args['customer_name']) ? sanitize_text_field((string) $args['customer_name']) : '';
+        $customer_email = isset($args['customer_email']) ? sanitize_email((string) $args['customer_email']) : '';
+        $customer_phone = isset($args['customer_phone']) ? sanitize_text_field((string) $args['customer_phone']) : '';
+        $notes = isset($args['notes']) ? sanitize_textarea_field((string) $args['notes']) : '';
+        $created_via = isset($args['created_via']) ? sanitize_key((string) $args['created_via']) : 'riverso_customer_quote';
+        $meta = isset($args['meta']) && is_array($args['meta']) ? $args['meta'] : array();
+
+        $order = wc_create_order(array(
+            'customer_id' => $customer_id > 0 ? $customer_id : 0,
+            'created_via' => $created_via !== '' ? $created_via : 'riverso_customer_quote',
+        ));
+        if (is_wp_error($order)) {
+            return $order;
+        }
+
+        $added = 0;
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $product_id = isset($item['product_id']) ? (int) $item['product_id'] : 0;
+            $quantity = isset($item['quantity']) ? (float) $item['quantity'] : 0.0;
+            $price = isset($item['price']) ? (float) $item['price'] : 0.0;
+            if ($product_id <= 0 || $quantity <= 0) {
+                continue;
+            }
+            $product = wc_get_product($product_id);
+            if (!$product) {
+                return new WP_Error(
+                    'invalid_product',
+                    'Producto WooCommerce #' . $product_id . ' no encontrado.'
+                );
+            }
+            $line_total = round($price * $quantity, 2);
+            $item_id = $order->add_product($product, $quantity, array(
+                'subtotal' => $line_total,
+                'total' => $line_total,
+            ));
+            if (!$item_id) {
+                return new WP_Error('add_product_failed', 'No se pudo agregar el producto #' . $product_id . '.');
+            }
+            $added++;
+        }
+        if ($added <= 0) {
+            $order->delete(true);
+            return new WP_Error('empty_cart', 'No hay líneas válidas para el pedido.');
+        }
+
+        if ($customer_id > 0) {
+            $customer = get_user_by('id', $customer_id);
+            if ($customer) {
+                $order->set_billing_first_name(get_user_meta($customer_id, 'billing_first_name', true) ?: $customer->display_name);
+                $order->set_billing_last_name(get_user_meta($customer_id, 'billing_last_name', true));
+                $order->set_billing_email($customer->user_email);
+                $order->set_billing_phone(get_user_meta($customer_id, 'billing_phone', true));
+                $order->set_billing_company(get_user_meta($customer_id, 'billing_company', true));
+            }
+        } else {
+            if ($customer_name !== '') {
+                $order->set_billing_first_name($customer_name);
+            }
+            if ($customer_email !== '') {
+                $order->set_billing_email($customer_email);
+            }
+            if ($customer_phone !== '') {
+                $order->set_billing_phone($customer_phone);
+            }
+        }
+
+        if ($notes !== '') {
+            $order->add_order_note($notes, false);
+        }
+
+        foreach ($meta as $key => $value) {
+            $key = (string) $key;
+            if ($key === '') {
+                continue;
+            }
+            $order->update_meta_data($key, $value);
+        }
+
+        $order->calculate_totals();
+        $order->set_status('pending', 'Pedido pendiente desde cotización de venta');
+        $order->save();
+
+        return $order;
+    }
+
     public function ajax_create_order() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         

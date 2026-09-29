@@ -153,7 +153,7 @@ VERSION=$(sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
 fi
 VERSION=$(echo "$VERSION" | tr -d "[:space:]")
 echo "VERSION_CHECK=$VERSION"
-test "$VERSION" = "1.8.18"
+test "$VERSION" = "1.8.19"
 
 if [ "$SKIP_MIGRATION" = "1" ]; then
   echo "schema-skip competencia tables should be applied via tools/migrate_competencia_remote.py"

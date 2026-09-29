@@ -14,9 +14,16 @@
         listBody: document.getElementById("cq-list-body"),
         empty: document.getElementById("cq-empty"),
         filter: document.getElementById("cq-status-filter"),
+        typeFilter: document.getElementById("cq-type-filter"),
+        dateFrom: document.getElementById("cq-date-from"),
+        dateTo: document.getElementById("cq-date-to"),
+        applyFilters: document.getElementById("cq-apply-filters"),
         listMessage: document.getElementById("cq-list-message"),
         title: document.getElementById("cq-editor-title"),
         status: document.getElementById("cq-status"),
+        quoteNumber: document.getElementById("cq-quote-number"),
+        issueDate: document.getElementById("cq-issue-date"),
+        seller: document.getElementById("cq-seller"),
         customer: document.getElementById("cq-customer"),
         type: document.getElementById("cq-type"),
         validityDays: document.getElementById("cq-validity-days"),
@@ -31,6 +38,8 @@
         linesEmpty: document.getElementById("cq-lines-empty"),
         message: document.getElementById("cq-message"),
         transition: document.getElementById("cq-transition"),
+        pdf: document.getElementById("cq-pdf"),
+        options: document.getElementById("cq-options"),
         save: document.getElementById("cq-save"),
         clear: document.getElementById("cq-clear")
     };
@@ -46,10 +55,32 @@
             searchProducts();
         }
     });
-    els.filter.addEventListener("change", renderList);
+    els.filter.addEventListener("change", loadList);
+    if (els.typeFilter) {
+        els.typeFilter.addEventListener("change", loadList);
+    }
+    if (els.applyFilters) {
+        els.applyFilters.addEventListener("click", loadList);
+    }
+    if (els.dateFrom) {
+        els.dateFrom.addEventListener("change", loadList);
+    }
+    if (els.dateTo) {
+        els.dateTo.addEventListener("change", loadList);
+    }
     els.save.addEventListener("click", saveQuote);
     els.clear.addEventListener("click", clearQuote);
     els.transition.addEventListener("click", transitionQuote);
+    if (els.pdf) {
+        els.pdf.addEventListener("click", function () {
+            setMessage("PDF de cotización: próximamente (stub P1b).", false);
+        });
+    }
+    if (els.options) {
+        els.options.addEventListener("click", function () {
+            setMessage("Opciones de cotización: próximamente (stub P1b).", false);
+        });
+    }
     ["input", "change"].forEach(function (eventName) {
         els.customer.addEventListener(eventName, syncHeader);
         els.type.addEventListener(eventName, syncHeader);
@@ -74,6 +105,10 @@
             discount_total: 0,
             margin_percent: null,
             profit_total: null,
+            created_at: "",
+            issue_date: "",
+            seller_name: cfg.currentUserName || "",
+            is_expired: false,
             editable: true,
             allowed_transitions: [],
             lines: []
@@ -108,7 +143,20 @@
     }
 
     function loadList() {
-        post(cfg.actions.list, {}).then(function (data) {
+        var fields = {};
+        if (els.filter && els.filter.value && els.filter.value !== "all") {
+            fields.status = els.filter.value;
+        }
+        if (els.typeFilter && els.typeFilter.value && els.typeFilter.value !== "all") {
+            fields.quote_type = els.typeFilter.value;
+        }
+        if (els.dateFrom && els.dateFrom.value) {
+            fields.date_from = els.dateFrom.value;
+        }
+        if (els.dateTo && els.dateTo.value) {
+            fields.date_to = els.dateTo.value;
+        }
+        post(cfg.actions.list, fields).then(function (data) {
             state.quotes = data.quotes || [];
             renderList();
         }).catch(function (error) {
@@ -117,22 +165,34 @@
     }
 
     function renderList() {
-        var filter = els.filter.value;
-        var rows = state.quotes.filter(function (quote) {
-            return filter === "all" || quote.status === filter;
-        });
+        var rows = state.quotes || [];
         els.listBody.innerHTML = "";
         els.empty.hidden = rows.length !== 0;
         rows.forEach(function (quote) {
             var tr = document.createElement("tr");
-            tr.appendChild(cell(quote.quote_number));
-            tr.appendChild(cell(formatDate(quote.updated_at)));
+            if (quote.is_expired) {
+                tr.className = "cq-row-expired";
+            }
+            var numCell = cell(quote.quote_number);
+            if (quote.is_expired) {
+                var warn = document.createElement("span");
+                warn.className = "cq-expired-tag";
+                warn.textContent = "Vencida";
+                warn.title = "Validez vencida";
+                numCell.appendChild(document.createTextNode(" "));
+                numCell.appendChild(warn);
+            }
+            tr.appendChild(numCell);
+            tr.appendChild(cell(formatDate(quote.issue_date || quote.created_at || quote.updated_at)));
             tr.appendChild(cell(quote.customer_name || "Sin cliente"));
             tr.appendChild(cell(quote.quote_type_label || "Venta"));
             tr.appendChild(badgeCell(quote.status, quote.status_label));
             var net = cell(formatMoney(quote.net_total));
             net.className = "cq-num";
             tr.appendChild(net);
+            var util = cell(formatPercent(quote.margin_percent));
+            util.className = "cq-num";
+            tr.appendChild(util);
             var actions = document.createElement("td");
             var open = document.createElement("button");
             open.type = "button";
@@ -160,6 +220,15 @@
         els.title.textContent = quote.quote_number || "Nueva cotización";
         els.status.textContent = quote.status_label || "Borrador";
         els.status.className = "cq-badge cq-badge-" + (quote.status || "draft");
+        if (els.quoteNumber) {
+            els.quoteNumber.value = quote.quote_number || "";
+        }
+        if (els.issueDate) {
+            els.issueDate.value = formatDate(quote.issue_date || quote.created_at) || (quote.id ? "" : "Al guardar");
+        }
+        if (els.seller) {
+            els.seller.value = quote.seller_name || cfg.currentUserName || "";
+        }
         els.customer.value = quote.customer_name || "";
         els.type.value = quote.quote_type || "venta";
         els.validityDays.value = quote.validity_days === null || quote.validity_days === undefined ? "" : String(quote.validity_days);
@@ -204,7 +273,7 @@
             detail.appendChild(sku);
             detail.appendChild(desc);
             tr.appendChild(detail);
-            tr.appendChild(inputCell(line, index, "quantity", editable));
+            tr.appendChild(qtyStepperCell(line, index, editable));
             tr.appendChild(inputCell(line, index, "unit_price", editable));
             var actions = document.createElement("td");
             actions.className = "cq-actions";
@@ -239,6 +308,65 @@
             tr.appendChild(actions);
             els.lines.appendChild(tr);
         });
+    }
+
+    function qtyStepperCell(line, index, editable) {
+        var td = document.createElement("td");
+        td.className = "cq-num cq-qty-cell";
+        var wrap = document.createElement("div");
+        wrap.className = "cq-qty-stepper";
+        var minus = document.createElement("button");
+        minus.type = "button";
+        minus.className = "cq-stepper-btn";
+        minus.textContent = "\u2212";
+        minus.setAttribute("aria-label", "Disminuir cantidad de " + line.sku);
+        minus.disabled = !editable;
+        var input = document.createElement("input");
+        input.type = "text";
+        input.inputMode = "decimal";
+        input.dataset.field = "quantity";
+        input.dataset.index = String(index);
+        input.value = formatQty(line.quantity);
+        input.setAttribute("aria-label", "Cantidad de " + line.sku);
+        input.disabled = !editable;
+        var plus = document.createElement("button");
+        plus.type = "button";
+        plus.className = "cq-stepper-btn";
+        plus.textContent = "+";
+        plus.setAttribute("aria-label", "Aumentar cantidad de " + line.sku);
+        plus.disabled = !editable;
+        function applyQty(next) {
+            if (next < 0) next = 0;
+            next = round3(next);
+            state.quote.lines[index].quantity = next;
+            input.value = formatQty(next);
+            renderTotals();
+        }
+        minus.addEventListener("click", function () {
+            applyQty(Number(state.quote.lines[index].quantity || 0) - 1);
+        });
+        plus.addEventListener("click", function () {
+            applyQty(Number(state.quote.lines[index].quantity || 0) + 1);
+        });
+        input.addEventListener("focus", function () {
+            input.value = String(state.quote.lines[index].quantity).replace(".", ",");
+            input.select();
+        });
+        input.addEventListener("input", function () {
+            state.quote.lines[index].quantity = parseClNumber(input.value);
+            renderTotals();
+        });
+        input.addEventListener("blur", function () {
+            var parsed = parseClNumber(input.value);
+            state.quote.lines[index].quantity = parsed;
+            input.value = formatQty(parsed);
+            renderTotals();
+        });
+        wrap.appendChild(minus);
+        wrap.appendChild(input);
+        wrap.appendChild(plus);
+        td.appendChild(wrap);
+        return td;
     }
 
     function inputCell(line, index, field, editable) {

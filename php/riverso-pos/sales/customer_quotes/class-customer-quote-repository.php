@@ -24,10 +24,26 @@ class Riverso_Customer_Quote_Repository {
         global $wpdb;
         $sql = "SELECT q.*, (SELECT COUNT(*) FROM {$this->table_items} i WHERE i.quote_id = q.id) AS line_count
                 FROM {$this->table_quotes} q";
+        $where = array();
         $params = array();
         if (!empty($filters['status'])) {
-            $sql .= ' WHERE q.status = %s';
+            $where[] = 'q.status = %s';
             $params[] = Riverso_Quote_Status::normalize_legacy((string) $filters['status']);
+        }
+        if (!empty($filters['quote_type'])) {
+            $where[] = 'q.quote_type = %s';
+            $params[] = Riverso_Quote_Type::normalize((string) $filters['quote_type']);
+        }
+        if (!empty($filters['date_from'])) {
+            $where[] = 'DATE(q.created_at) >= %s';
+            $params[] = (string) $filters['date_from'];
+        }
+        if (!empty($filters['date_to'])) {
+            $where[] = 'DATE(q.created_at) <= %s';
+            $params[] = (string) $filters['date_to'];
+        }
+        if ($where) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
         }
         $sql .= ' ORDER BY q.updated_at DESC, q.id DESC';
         if ($params) {
@@ -417,6 +433,13 @@ class Riverso_Customer_Quote_Repository {
                 'label' => Riverso_Quote_Status::transition_label($target),
             );
         }
+        $created_at = (string) (isset($row['created_at']) ? $row['created_at'] : '');
+        $issue_date = $created_at;
+        $seller_name = $this->resolve_seller_name(
+            isset($row['created_by']) ? $row['created_by'] : null,
+            isset($row['seller_name']) ? $row['seller_name'] : null
+        );
+        $is_expired = $this->is_expired($issue_date, $validity, isset($row['valid_until']) ? $row['valid_until'] : null);
         return array(
             'id' => (int) $row['id'],
             'quote_number' => (string) $row['quote_number'],
@@ -433,12 +456,64 @@ class Riverso_Customer_Quote_Repository {
             'margin_percent' => $this->nullable_float(isset($row['margin_percent']) ? $row['margin_percent'] : null),
             'profit_total' => $this->nullable_float(isset($row['profit_total']) ? $row['profit_total'] : null),
             'notes' => (string) (isset($row['notes']) ? $row['notes'] : ''),
-            'created_at' => (string) (isset($row['created_at']) ? $row['created_at'] : ''),
+            'created_at' => $created_at,
+            'issue_date' => $issue_date,
+            'seller_name' => $seller_name,
+            'is_expired' => $is_expired,
             'updated_at' => (string) (isset($row['updated_at']) ? $row['updated_at'] : ''),
             'editable' => $status !== Riverso_Quote_Status::INVOICED,
             'allowed_transitions' => $transitions,
             'lines' => array_map(array($this, 'present_line'), $lines),
         );
+    }
+
+    /**
+     * Vendedor: display_name del created_by; si no hay usuario, cadena vacía.
+     */
+    private function resolve_seller_name($created_by, $fallback = null) {
+        if (is_string($fallback) && trim($fallback) !== '') {
+            return trim($fallback);
+        }
+        $uid = $created_by === null || $created_by === '' ? 0 : (int) $created_by;
+        if ($uid > 0 && function_exists('get_userdata')) {
+            $user = get_userdata($uid);
+            if ($user && !empty($user->display_name)) {
+                return (string) $user->display_name;
+            }
+            if ($user && !empty($user->user_login)) {
+                return (string) $user->user_login;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Vencida si fecha emisión + validity_days < hoy (zona WP).
+     */
+    private function is_expired($issue_date, $validity_days, $valid_until = null) {
+        if ($validity_days === null || $validity_days === '') {
+            return false;
+        }
+        $days = (int) $validity_days;
+        if ($days < 0) {
+            return false;
+        }
+        $today = function_exists('current_time') ? current_time('Y-m-d') : date('Y-m-d');
+        $issue = '';
+        if (is_string($issue_date) && preg_match('/^(\d{4}-\d{2}-\d{2})/', $issue_date, $m)) {
+            $issue = $m[1];
+        }
+        if ($issue === '') {
+            if (is_string($valid_until) && preg_match('/^(\d{4}-\d{2}-\d{2})/', $valid_until, $m2)) {
+                return $m2[1] < $today;
+            }
+            return false;
+        }
+        $until_ts = strtotime($issue . ' +' . $days . ' days');
+        if ($until_ts === false) {
+            return false;
+        }
+        return date('Y-m-d', $until_ts) < $today;
     }
 
     private function present_line(array $line) {

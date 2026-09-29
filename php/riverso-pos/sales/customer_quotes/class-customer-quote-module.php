@@ -1,6 +1,6 @@
 <?php
 /**
- * Módulo Cotizaciones de venta (P0+P1).
+ * Módulo Cotizaciones de venta (P0+P1+P1b).
  * Estados: borrador ↔ lista; facturada reservada.
  * Bootstrap compatible: get_instance() + init() + ABSPATH.
  */
@@ -103,11 +103,21 @@ class Riverso_Customer_Quote_Module {
      * @return array
      */
     public function app_config() {
+        $user_name = '';
+        if (function_exists('wp_get_current_user')) {
+            $user = wp_get_current_user();
+            if ($user && !empty($user->display_name)) {
+                $user_name = (string) $user->display_name;
+            } elseif ($user && !empty($user->user_login)) {
+                $user_name = (string) $user->user_login;
+            }
+        }
         return array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('riverso_customer_quotes'),
             'assetBase' => rtrim(RIVERSO_POS_PLUGIN_URL, '/') . '/assets',
             'standalone' => false,
+            'currentUserName' => $user_name,
             'actions' => array(
                 'list' => 'riverso_cq_list',
                 'get' => 'riverso_cq_get',
@@ -126,11 +136,27 @@ class Riverso_Customer_Quote_Module {
     public function ajax_list() {
         $this->authorize();
         $status = $this->post_string('status');
+        $quote_type = $this->post_string('quote_type');
+        $date_from = $this->post_string('date_from');
+        $date_to = $this->post_string('date_to');
         $filters = array();
         if ($status !== '' && $status !== 'all') {
             $filters['status'] = $status;
         }
-        $this->ok(array('quotes' => $this->quotes->list_quotes($filters)));
+        if ($quote_type !== '' && $quote_type !== 'all') {
+            $filters['quote_type'] = $quote_type;
+        }
+        if ($date_from !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_from)) {
+            $filters['date_from'] = $date_from;
+        }
+        if ($date_to !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_to)) {
+            $filters['date_to'] = $date_to;
+        }
+        try {
+            $this->ok(array('quotes' => $this->quotes->list_quotes($filters)));
+        } catch (Riverso_Quote_Exception $error) {
+            $this->fail($error->getMessage());
+        }
     }
 
     public function ajax_get() {

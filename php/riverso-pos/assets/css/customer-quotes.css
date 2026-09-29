@@ -52,7 +52,7 @@
 
 .cq-header-grid {
     display: grid;
-    grid-template-columns: 1.4fr 0.8fr 0.7fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
 }
 
@@ -310,5 +310,84 @@
     .cq-top-actions,
     .cq-footer-actions {
         justify-content: flex-start;
+    }
+}
+
+
+.cq-toolbar {
+    flex-wrap: wrap;
+}
+
+.cq-toolbar label {
+    font-size: 0.85rem;
+    color: #5c5348;
+}
+
+.cq-toolbar input[type="date"] {
+    border: 1px solid #d9cbb8;
+    background: #fff;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font: inherit;
+}
+
+.cq-field input[readonly] {
+    background: #f7f1e7;
+    color: #3f3a34;
+    cursor: default;
+}
+
+.cq-qty-stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    justify-content: flex-end;
+}
+
+.cq-qty-stepper input {
+    width: 4.5rem;
+    text-align: right;
+}
+
+.cq-stepper-btn {
+    width: 1.85rem;
+    height: 1.85rem;
+    border: 1px solid #c8b8a4;
+    background: #fff;
+    border-radius: 6px;
+    font: inherit;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+
+.cq-stepper-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.cq-row-expired {
+    background: #fff1f2;
+}
+
+.cq-expired-tag {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 4px;
+    border-radius: 999px;
+    padding: 1px 7px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    background: #ffe4e6;
+    color: #9f1239;
+    vertical-align: middle;
+}
+
+@media (max-width: 800px) {
+    .cq-toolbar {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
     }
 }

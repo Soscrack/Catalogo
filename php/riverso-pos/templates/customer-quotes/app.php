@@ -1,6 +1,6 @@
 <?php
 /**
- * Portal de cotizaciones de venta (es-CL).
+ * Portal de cotizaciones de venta (es-CL). P0+P1+P1b.
  *
  * @var array<string, mixed> $riverso_cq
  */
@@ -54,6 +54,17 @@ if (!function_exists('riverso_pos_cq_json')) {
                     <option value="draft">Borrador</option>
                     <option value="listed">Lista</option>
                 </select>
+                <label for="cq-type-filter">Tipo</label>
+                <select id="cq-type-filter">
+                    <option value="all">Todos</option>
+                    <option value="venta">Venta</option>
+                    <option value="referencia">Referencia</option>
+                </select>
+                <label for="cq-date-from">Desde</label>
+                <input type="date" id="cq-date-from" autocomplete="off">
+                <label for="cq-date-to">Hasta</label>
+                <input type="date" id="cq-date-to" autocomplete="off">
+                <button type="button" class="cq-btn" id="cq-apply-filters">Filtrar</button>
             </div>
             <div class="cq-table-wrap">
                 <table class="cq-table">
@@ -65,6 +76,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                             <th scope="col">Tipo</th>
                             <th scope="col">Estado</th>
                             <th scope="col" class="cq-num">Neto</th>
+                            <th scope="col" class="cq-num">Utilidad %</th>
                             <th scope="col">Acciones</th>
                         </tr>
                     </thead>
@@ -83,11 +95,25 @@ if (!function_exists('riverso_pos_cq_json')) {
                 <div class="cq-top-actions">
                     <span id="cq-status" class="cq-badge cq-badge-draft">Borrador</span>
                     <button type="button" class="cq-btn" id="cq-transition" hidden>Pasar a lista</button>
+                    <button type="button" class="cq-btn" id="cq-pdf" title="PDF (próximamente)">PDF</button>
+                    <button type="button" class="cq-btn" id="cq-options" title="Opciones (próximamente)">Opciones</button>
                 </div>
             </header>
 
             <div class="cq-card">
                 <div class="cq-header-grid">
+                    <label class="cq-field">
+                        <span>Nº cotización</span>
+                        <input type="text" id="cq-quote-number" readonly tabindex="-1" placeholder="Se asigna al guardar">
+                    </label>
+                    <label class="cq-field">
+                        <span>Fecha emisión</span>
+                        <input type="text" id="cq-issue-date" readonly tabindex="-1" placeholder="—">
+                    </label>
+                    <label class="cq-field">
+                        <span>Vendedor</span>
+                        <input type="text" id="cq-seller" readonly tabindex="-1" placeholder="—">
+                    </label>
                     <label class="cq-field">
                         <span>Cliente <small>(opcional)</small></span>
                         <input type="text" id="cq-customer" maxlength="191" autocomplete="off" placeholder="Nombre del cliente">

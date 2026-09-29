@@ -574,3 +574,60 @@
     max-height: 50vh;
     overflow: auto;
 }
+
+.cq-totals div.cq-alarm-neg,
+.cq-totals dd.cq-alarm-neg {
+    color: #9f1239;
+    background: #ffe4e6;
+    box-shadow: inset 0 0 0 1px #fecdd3;
+}
+
+.cq-totals div.cq-alarm-low,
+.cq-totals dd.cq-alarm-low {
+    color: #92400e;
+    background: #fef3c7;
+    box-shadow: inset 0 0 0 1px #fde68a;
+}
+
+.cq-line.cq-stock-critico {
+    box-shadow: inset 3px 0 0 #e11d48;
+}
+
+.cq-line.cq-stock-alerta {
+    box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+.cq-stock-cell,
+.cq-conf-cell {
+    white-space: nowrap;
+}
+
+.cq-conf-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.cq-conf-badge.is-confiable {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.cq-conf-badge.is-poco_confiable {
+    background: #ffedd5;
+    color: #9a3412;
+}
+
+.cq-conf-badge.is-dudoso,
+.cq-conf-badge.is-desconocido {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.cq-btn-inventariar {
+    font-size: 0.8rem;
+    padding: 4px 8px;
+}

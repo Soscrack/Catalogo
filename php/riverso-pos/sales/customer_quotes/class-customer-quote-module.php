@@ -43,6 +43,9 @@ class Riverso_Customer_Quote_Module {
         if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_sale_fields')) {
             Riverso_POS_Activator::ensure_customer_quotes_sale_fields();
         }
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_advanced_discounts')) {
+            Riverso_POS_Activator::ensure_customer_quotes_advanced_discounts();
+        }
     }
 
     public function init() {
@@ -72,6 +75,7 @@ class Riverso_Customer_Quote_Module {
         add_action('wp_ajax_riverso_cq_save', array($this, 'ajax_save'));
         add_action('wp_ajax_riverso_cq_transition', array($this, 'ajax_transition'));
         add_action('wp_ajax_riverso_cq_search', array($this, 'ajax_search'));
+        add_action('wp_ajax_riverso_cq_line_stock', array($this, 'ajax_line_stock'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_assets'));
     }
 
@@ -112,18 +116,31 @@ class Riverso_Customer_Quote_Module {
                 $user_name = (string) $user->user_login;
             }
         }
+        $can_view_stock = current_user_can('riverso_view_stock')
+            || current_user_can('riverso_view_warehouse')
+            || current_user_can('manage_options');
+        $can_inventory = current_user_can('riverso_do_inventory')
+            || current_user_can('riverso_edit_stock')
+            || current_user_can('manage_options');
+        $warehouse_url = home_url('/interno/warehouse/');
         return array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('riverso_customer_quotes'),
             'assetBase' => rtrim(RIVERSO_POS_PLUGIN_URL, '/') . '/assets',
             'standalone' => false,
             'currentUserName' => $user_name,
+            'caps' => array(
+                'viewStock' => (bool) $can_view_stock,
+                'doInventory' => (bool) $can_inventory,
+            ),
+            'warehouseUrl' => $warehouse_url,
             'actions' => array(
                 'list' => 'riverso_cq_list',
                 'get' => 'riverso_cq_get',
                 'save' => 'riverso_cq_save',
                 'transition' => 'riverso_cq_transition',
                 'search' => 'riverso_cq_search',
+                'lineStock' => 'riverso_cq_line_stock',
             ),
         );
     }
@@ -226,6 +243,129 @@ class Riverso_Customer_Quote_Module {
             'mode' => $mode,
             'scope' => $scope,
         ));
+    }
+
+
+    /**
+     * P4: stock live por product_id WC (no se persiste en líneas).
+     * Proxy bajo nonce de cotizaciones → Riverso_Inventory_Count_Module::get_stock_status_for_product.
+     */
+    public function ajax_line_stock() {
+        $this->authorize();
+        $can_view = current_user_can('riverso_view_stock')
+            || current_user_can('riverso_view_warehouse')
+            || current_user_can('manage_options');
+        if (!$can_view) {
+            $this->fail('Sin permiso para ver stock.', 403);
+        }
+        $raw = isset($_POST['product_ids']) ? wp_unslash($_POST['product_ids']) : '';
+        $ids = array();
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $ids = $decoded;
+            } else {
+                $ids = preg_split('/\s*,\s*/', $raw);
+            }
+        } elseif (isset($_POST['product_ids']) && is_array($_POST['product_ids'])) {
+            $ids = wp_unslash($_POST['product_ids']);
+        }
+        $wc_ids = array();
+        foreach ($ids as $id) {
+            $n = (int) $id;
+            if ($n > 0) {
+                $wc_ids[$n] = true;
+            }
+        }
+        $wc_ids = array_keys($wc_ids);
+        if (count($wc_ids) > 200) {
+            $wc_ids = array_slice($wc_ids, 0, 200);
+        }
+        $map = $this->resolve_stock_for_wc_products($wc_ids);
+        $this->ok(array('stock' => $map));
+    }
+
+    /**
+     * @param int[] $wc_product_ids
+     * @return array<string, array>
+     */
+    private function resolve_stock_for_wc_products(array $wc_product_ids) {
+        $out = array();
+        foreach ($wc_product_ids as $wc_id) {
+            $out[(string) $wc_id] = array(
+                'product_id' => (int) $wc_id,
+                'producto_base_id' => null,
+                'stock_total' => null,
+                'estado_confianza' => null,
+                'estado_inventariado' => null,
+                'alerta' => 0,
+                'critico' => 0,
+                'has_local_sku' => false,
+                'canonical_sku' => '',
+                'nombre' => '',
+                'can_inventory' => false,
+            );
+        }
+        if (!$wc_product_ids) {
+            return $out;
+        }
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $table = $prefix . 'producto_base';
+        $placeholders = implode(',', array_fill(0, count($wc_product_ids), '%d'));
+        $params = array_merge($wc_product_ids, $wc_product_ids);
+        $sql = "SELECT id, canonical_sku, nombre_canonico, woocommerce_product_id, woocommerce_variation_id
+                FROM `{$table}`
+                WHERE deleted_at IS NULL
+                  AND (woocommerce_product_id IN ($placeholders) OR woocommerce_variation_id IN ($placeholders))";
+        $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
+        if (!is_array($rows)) {
+            $rows = array();
+        }
+        $by_wc = array();
+        foreach ($rows as $row) {
+            $pid = (int) (isset($row['woocommerce_product_id']) ? $row['woocommerce_product_id'] : 0);
+            $vid = (int) (isset($row['woocommerce_variation_id']) ? $row['woocommerce_variation_id'] : 0);
+            foreach (array($vid, $pid) as $key) {
+                if ($key > 0 && !isset($by_wc[$key])) {
+                    $by_wc[$key] = $row;
+                }
+            }
+        }
+        $inv = null;
+        if (class_exists('Riverso_Inventory_Count_Module')) {
+            $inv = Riverso_Inventory_Count_Module::get_instance();
+        }
+        $can_inventory = current_user_can('riverso_do_inventory')
+            || current_user_can('riverso_edit_stock')
+            || current_user_can('manage_options');
+        foreach ($wc_product_ids as $wc_id) {
+            if (!isset($by_wc[$wc_id])) {
+                continue;
+            }
+            $row = $by_wc[$wc_id];
+            $base_id = (int) $row['id'];
+            $sku = trim((string) (isset($row['canonical_sku']) ? $row['canonical_sku'] : ''));
+            $has_local = $sku !== '';
+            $stock = null;
+            if ($inv && method_exists($inv, 'get_stock_status_for_product')) {
+                $stock = $inv->get_stock_status_for_product($base_id);
+            }
+            $out[(string) $wc_id] = array(
+                'product_id' => (int) $wc_id,
+                'producto_base_id' => $base_id,
+                'stock_total' => $stock !== null ? (float) $stock['stock_total'] : null,
+                'estado_confianza' => $stock !== null ? (string) $stock['estado_confianza'] : null,
+                'estado_inventariado' => $stock !== null ? (string) $stock['estado_inventariado'] : null,
+                'alerta' => $stock !== null ? (int) $stock['alerta'] : 0,
+                'critico' => $stock !== null ? (int) $stock['critico'] : 0,
+                'has_local_sku' => $has_local,
+                'canonical_sku' => $sku,
+                'nombre' => (string) (isset($row['nombre_canonico']) ? $row['nombre_canonico'] : ''),
+                'can_inventory' => (bool) ($can_inventory && $has_local && $base_id > 0),
+            );
+        }
+        return $out;
     }
 
     /**

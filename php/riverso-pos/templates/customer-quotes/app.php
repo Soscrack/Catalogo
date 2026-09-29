@@ -94,6 +94,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                 </div>
                 <div class="cq-top-actions">
                     <span id="cq-status" class="cq-badge cq-badge-draft">Borrador</span>
+                    <span id="cq-expired-badge" class="cq-expired-tag" hidden>Vencida</span>
                     <button type="button" class="cq-btn" id="cq-transition" hidden>Pasar a lista</button>
                     <button type="button" class="cq-btn" id="cq-pdf" title="PDF (próximamente)">PDF</button>
                     <button type="button" class="cq-btn" id="cq-options" title="Opciones (próximamente)">Opciones</button>
@@ -193,6 +194,9 @@ if (!function_exists('riverso_pos_cq_json')) {
                                 <th scope="col" class="cq-num cq-advanced" title="Porcentaje de descuento sobre el precio de la línea">Dscto precio</th>
                                 <th scope="col" class="cq-num cq-advanced" title="Porcentaje del margen que queda después del descuento de precio">Dscto margen</th>
                                 <th scope="col" class="cq-num cq-advanced">Utilidad</th>
+                                <th scope="col" class="cq-num cq-advanced" title="Stock en bodega (live)">Stock</th>
+                                <th scope="col" class="cq-advanced" title="Confianza del inventario">Confianza</th>
+                                <th scope="col" class="cq-advanced">Inventariar</th>
                                 <th scope="col">Acciones</th>
                             </tr>
                         </thead>

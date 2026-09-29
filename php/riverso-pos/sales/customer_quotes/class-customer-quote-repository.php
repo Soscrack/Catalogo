@@ -22,6 +22,8 @@ class Riverso_Customer_Quote_Repository {
 
     public function list_quotes(array $filters = array()) {
         global $wpdb;
+        $this->ensure_sale_schema();
+        // Fecha de emisión = DATE(created_at) (no hay columna issue_date propia).
         $sql = "SELECT q.*, (SELECT COUNT(*) FROM {$this->table_items} i WHERE i.quote_id = q.id) AS line_count
                 FROM {$this->table_quotes} q";
         $where = array();
@@ -31,8 +33,15 @@ class Riverso_Customer_Quote_Repository {
             $params[] = Riverso_Quote_Status::normalize_legacy((string) $filters['status']);
         }
         if (!empty($filters['quote_type'])) {
-            $where[] = 'q.quote_type = %s';
-            $params[] = Riverso_Quote_Type::normalize((string) $filters['quote_type']);
+            $type = Riverso_Quote_Type::normalize((string) $filters['quote_type']);
+            if ($type === Riverso_Quote_Type::VENTA) {
+                // Filas legacy sin quote_type se tratan como venta.
+                $where[] = "(q.quote_type = %s OR q.quote_type IS NULL OR q.quote_type = '')";
+                $params[] = $type;
+            } else {
+                $where[] = 'q.quote_type = %s';
+                $params[] = $type;
+            }
         }
         if (!empty($filters['date_from'])) {
             $where[] = 'DATE(q.created_at) >= %s';
@@ -428,9 +437,22 @@ class Riverso_Customer_Quote_Repository {
     }
 
     private function present_summary(array $row) {
-        $presented = $this->present($row, array());
+        $lines = array();
+        // Si el header no trae margen pero hay líneas con costo, recalcular para la lista.
+        $margin = isset($row['margin_percent']) ? $row['margin_percent'] : null;
+        if (($margin === null || $margin === '') && !empty($row['id'])) {
+            global $wpdb;
+            $lines = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$this->table_items} WHERE quote_id = %d ORDER BY sort_order ASC, id ASC",
+                (int) $row['id']
+            ), ARRAY_A);
+            if (!is_array($lines)) {
+                $lines = array();
+            }
+        }
+        $presented = $this->present($row, $lines);
         unset($presented['lines']);
-        $presented['line_count'] = (int) (isset($row['line_count']) ? $row['line_count'] : 0);
+        $presented['line_count'] = (int) (isset($row['line_count']) ? $row['line_count'] : (is_array($lines) ? count($lines) : 0));
         return $presented;
     }
 
@@ -458,6 +480,34 @@ class Riverso_Customer_Quote_Repository {
             isset($row['seller_name']) ? $row['seller_name'] : null
         );
         $is_expired = $this->is_expired($issue_date, $validity, isset($row['valid_until']) ? $row['valid_until'] : null);
+        $margin_percent = $this->nullable_float(isset($row['margin_percent']) ? $row['margin_percent'] : null);
+        $profit_total = $this->nullable_float(isset($row['profit_total']) ? $row['profit_total'] : null);
+        $discount_total = round((float) (isset($row['discount_total']) ? $row['discount_total'] : 0), 2);
+        $presented_lines = array_map(array($this, 'present_line'), $lines);
+        // Recalcular utilidad/margen desde líneas con costo (evita «—» con costos reales
+        // cuando el header quedó null por saves previos o schema tardío).
+        if ($presented_lines) {
+            $recalc_input = array();
+            foreach ($presented_lines as $pl) {
+                $recalc_input[] = array(
+                    'quantity' => isset($pl['quantity']) ? $pl['quantity'] : 0,
+                    'unit_price' => isset($pl['unit_price']) ? $pl['unit_price'] : 0,
+                    'unit_cost' => array_key_exists('unit_cost', $pl) ? $pl['unit_cost'] : null,
+                    'price_discount' => isset($pl['price_discount']) ? $pl['price_discount'] : 0,
+                    'margin_discount' => isset($pl['margin_discount']) ? $pl['margin_discount'] : 0,
+                    'discount_amount' => isset($pl['discount_amount']) ? $pl['discount_amount'] : 0,
+                );
+            }
+            $recalc = Riverso_Quote_Totals::calculate($recalc_input);
+            $net = (float) $recalc['net_total'];
+            $discount_total = (float) $recalc['discount_total'];
+            if ($recalc['margin_percent'] !== null) {
+                $margin_percent = $recalc['margin_percent'];
+            }
+            if ($recalc['profit_total'] !== null) {
+                $profit_total = $recalc['profit_total'];
+            }
+        }
         return array(
             'id' => (int) $row['id'],
             'quote_number' => (string) $row['quote_number'],
@@ -470,9 +520,9 @@ class Riverso_Customer_Quote_Repository {
             'validity_days' => $validity,
             'validity_terms' => (string) (isset($row['validity_terms']) ? $row['validity_terms'] : ''),
             'net_total' => round($net, 2),
-            'discount_total' => round((float) (isset($row['discount_total']) ? $row['discount_total'] : 0), 2),
-            'margin_percent' => $this->nullable_float(isset($row['margin_percent']) ? $row['margin_percent'] : null),
-            'profit_total' => $this->nullable_float(isset($row['profit_total']) ? $row['profit_total'] : null),
+            'discount_total' => $discount_total,
+            'margin_percent' => $margin_percent,
+            'profit_total' => $profit_total,
             'notes' => (string) (isset($row['notes']) ? $row['notes'] : ''),
             'created_at' => $created_at,
             'issue_date' => $issue_date,
@@ -481,7 +531,7 @@ class Riverso_Customer_Quote_Repository {
             'updated_at' => (string) (isset($row['updated_at']) ? $row['updated_at'] : ''),
             'editable' => $status !== Riverso_Quote_Status::INVOICED,
             'allowed_transitions' => $transitions,
-            'lines' => array_map(array($this, 'present_line'), $lines),
+            'lines' => $presented_lines,
         );
     }
 
@@ -515,6 +565,10 @@ class Riverso_Customer_Quote_Repository {
         $days = (int) $validity_days;
         if ($days < 0) {
             return false;
+        }
+        // Validez 0 días = vencida de inmediato (sin ventana útil).
+        if ($days === 0) {
+            return true;
         }
         $today = function_exists('current_time') ? current_time('Y-m-d') : date('Y-m-d');
         $issue = '';

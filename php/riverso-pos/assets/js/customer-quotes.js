@@ -51,6 +51,7 @@
         transition: document.getElementById("cq-transition"),
         pdf: document.getElementById("cq-pdf"),
         options: document.getElementById("cq-options"),
+        expiredBadge: document.getElementById("cq-expired-badge"),
         save: document.getElementById("cq-save"),
         clear: document.getElementById("cq-clear")
     };
@@ -116,7 +117,11 @@
         els.advanced.addEventListener("change", function () {
             state.advanced = els.advanced.checked;
             document.getElementById("riverso-cq").classList.toggle("is-advanced", state.advanced);
+            renderLines();
             renderTotals();
+            if (state.advanced) {
+                refreshLineStock();
+            }
         });
     }
     els.save.addEventListener("click", saveQuote);
@@ -191,26 +196,32 @@
         setMessage("");
         paintEditor();
         state.snapshot = serialize(state.quote);
+        if (state.advanced) {
+            refreshLineStock();
+        }
     }
 
     function loadList() {
         var fields = {};
         if (els.filter && els.filter.value && els.filter.value !== "all") {
-            fields.status = els.filter.value;
+            fields.status = String(els.filter.value);
         }
         if (els.typeFilter && els.typeFilter.value && els.typeFilter.value !== "all") {
-            fields.quote_type = els.typeFilter.value;
+            fields.quote_type = String(els.typeFilter.value);
         }
         if (els.dateFrom && els.dateFrom.value) {
-            fields.date_from = els.dateFrom.value;
+            fields.date_from = String(els.dateFrom.value);
         }
         if (els.dateTo && els.dateTo.value) {
-            fields.date_to = els.dateTo.value;
+            fields.date_to = String(els.dateTo.value);
         }
+        setListMessage("");
         post(cfg.actions.list, fields).then(function (data) {
             state.quotes = data.quotes || [];
             renderList();
         }).catch(function (error) {
+            state.quotes = [];
+            renderList();
             setListMessage(error.message, true);
         });
     }
@@ -271,6 +282,10 @@
         els.title.textContent = quote.quote_number || "Nueva cotización";
         els.status.textContent = quote.status_label || "Borrador";
         els.status.className = "cq-badge cq-badge-" + (quote.status || "draft");
+        if (els.expiredBadge) {
+            var expired = !!quote.is_expired;
+            els.expiredBadge.hidden = !expired;
+        }
         if (els.quoteNumber) {
             els.quoteNumber.value = quote.quote_number || "";
         }
@@ -334,6 +349,10 @@
             var utility = document.createElement("td");
             utility.className = "cq-num cq-advanced cq-line-profit";
             tr.appendChild(utility);
+            tr.appendChild(stockCell(line));
+            tr.appendChild(confianzaCell(line));
+            tr.appendChild(inventariarCell(line));
+            applyStockRowAlarm(tr, line);
             var actions = document.createElement("td");
             actions.className = "cq-actions";
             if (editable) {
@@ -567,8 +586,16 @@
     function setAlarm(el, level) {
         if (!el) return;
         el.classList.remove("cq-alarm-neg", "cq-alarm-low");
+        var parent = el.parentElement;
+        if (parent && parent.closest && parent.closest(".cq-totals")) {
+            parent.classList.remove("cq-alarm-neg", "cq-alarm-low");
+        }
         if (level === "neg" || level === "low") {
-            el.classList.add(level === "neg" ? "cq-alarm-neg" : "cq-alarm-low");
+            var cls = level === "neg" ? "cq-alarm-neg" : "cq-alarm-low";
+            el.classList.add(cls);
+            if (parent && parent.closest && parent.closest(".cq-totals")) {
+                parent.classList.add(cls);
+            }
         }
         el.dataset.alarm = level || "";
     }
@@ -978,6 +1005,142 @@
         }
         var number = Number(text);
         return Number.isFinite(number) ? number : 0;
+    }
+
+
+    function stockCell(line) {
+        var td = document.createElement("td");
+        td.className = "cq-num cq-advanced cq-stock-cell";
+        var info = line && line._stock ? line._stock : null;
+        if (!info || info.producto_base_id === null || info.producto_base_id === undefined) {
+            td.textContent = "—";
+            td.title = "Sin producto base mapeado";
+            return td;
+        }
+        if (info.stock_total === null || info.stock_total === undefined) {
+            td.textContent = "—";
+            return td;
+        }
+        td.textContent = formatPlain(info.stock_total);
+        if (info.critico) {
+            td.title = "Stock crítico";
+        } else if (info.alerta) {
+            td.title = "Stock en alerta";
+        }
+        return td;
+    }
+
+    function confianzaCell(line) {
+        var td = document.createElement("td");
+        td.className = "cq-advanced cq-conf-cell";
+        var info = line && line._stock ? line._stock : null;
+        var conf = info && info.estado_confianza ? String(info.estado_confianza) : "";
+        if (!conf) {
+            td.textContent = "—";
+            return td;
+        }
+        var span = document.createElement("span");
+        span.className = "cq-conf-badge is-" + conf;
+        if (conf === "confiable") span.textContent = "Confiable";
+        else if (conf === "poco_confiable") span.textContent = "Poco confiable";
+        else if (conf === "dudoso") span.textContent = "Dudoso";
+        else span.textContent = conf;
+        td.appendChild(span);
+        return td;
+    }
+
+    function inventariarCell(line) {
+        var td = document.createElement("td");
+        td.className = "cq-advanced cq-inv-cell";
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "cq-btn cq-btn-inventariar";
+        btn.textContent = "Inventariar";
+        var info = line && line._stock ? line._stock : null;
+        var caps = cfg.caps || {};
+        var canCap = !!caps.doInventory;
+        var can = !!(info && info.can_inventory && canCap);
+        btn.disabled = !can;
+        if (!info || !info.producto_base_id) {
+            btn.title = "Sin producto base mapeado";
+        } else if (!info.has_local_sku) {
+            btn.title = "Requiere SKU local para inventariar";
+        } else if (!canCap) {
+            btn.title = "Sin permiso para inventariar";
+        } else {
+            btn.title = "Abrir conteo de producto en Bodega";
+        }
+        btn.addEventListener("click", function () {
+            if (!can || !info) return;
+            openInventariar(info);
+        });
+        td.appendChild(btn);
+        return td;
+    }
+
+    function applyStockRowAlarm(tr, line) {
+        tr.classList.remove("cq-stock-critico", "cq-stock-alerta");
+        var info = line && line._stock ? line._stock : null;
+        if (!info) return;
+        if (info.critico) tr.classList.add("cq-stock-critico");
+        else if (info.alerta) tr.classList.add("cq-stock-alerta");
+    }
+
+    function openInventariar(info) {
+        var base = (cfg.warehouseUrl || "/interno/warehouse/").replace(/\/?$/, "/");
+        var url = base + "?start=producto&producto_base_id=" + encodeURIComponent(String(info.producto_base_id));
+        if (info.canonical_sku) {
+            url += "&sku=" + encodeURIComponent(String(info.canonical_sku));
+        }
+        if (info.nombre) {
+            url += "&nombre=" + encodeURIComponent(String(info.nombre));
+        }
+        window.open(url, "_blank", "noopener");
+    }
+
+    function refreshLineStock() {
+        if (!state.advanced) return;
+        var caps = cfg.caps || {};
+        if (!caps.viewStock) return;
+        if (!cfg.actions || !cfg.actions.lineStock) return;
+        var lines = state.quote.lines || [];
+        var ids = [];
+        lines.forEach(function (line) {
+            var pid = line.product_id;
+            if (pid !== null && pid !== undefined && pid !== "" && Number(pid) > 0) {
+                ids.push(Number(pid));
+            }
+        });
+        // unique
+        var seen = {};
+        var uniq = [];
+        ids.forEach(function (id) {
+            if (!seen[id]) {
+                seen[id] = true;
+                uniq.push(id);
+            }
+        });
+        if (!uniq.length) {
+            lines.forEach(function (line) { line._stock = null; });
+            if (state.view === "editor") {
+                renderLines();
+                renderTotals();
+            }
+            return;
+        }
+        post(cfg.actions.lineStock, { product_ids: JSON.stringify(uniq) }).then(function (data) {
+            var map = (data && data.stock) || {};
+            (state.quote.lines || []).forEach(function (line) {
+                var key = line.product_id !== null && line.product_id !== undefined ? String(line.product_id) : "";
+                line._stock = key && map[key] ? map[key] : null;
+            });
+            if (state.view === "editor") {
+                renderLines();
+                renderTotals();
+            }
+        }).catch(function () {
+            // Silencioso: stock es live informativo.
+        });
     }
 
     function formatMoney(value) {

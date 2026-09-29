@@ -77,14 +77,66 @@ class Riverso_Quote_Catalog_Lookup {
     private function ids_by_description($query, $limit) {
         global $wpdb;
         $like = '%' . $wpdb->esc_like($query) . '%';
+        // Nombre (post_title) + extracto + contenido. Descripción/Todo deben
+        // encontrar «Tornillo» aunque viva en el título del producto.
         $sql = "SELECT DISTINCT p.ID
             FROM {$wpdb->posts} p
             WHERE p.post_type IN ('product', 'product_variation')
               AND p.post_status IN ('publish', 'private')
-              AND p.post_title LIKE %s
+              AND (
+                    p.post_title LIKE %s
+                 OR p.post_excerpt LIKE %s
+                 OR p.post_content LIKE %s
+              )
             LIMIT %d";
-        $ids = $wpdb->get_col($wpdb->prepare($sql, $like, max($limit * 4, $limit)));
-        return is_array($ids) ? $ids : array();
+        $cap = max($limit * 4, $limit);
+        $ids = $wpdb->get_col($wpdb->prepare($sql, $like, $like, $like, $cap));
+        if (!is_array($ids)) {
+            $ids = array();
+        }
+        // Padres variables: el título está en el padre y el SKU en la variación.
+        // Expandir a variaciones publicadas para que hydrate (exige _sku) no las descarte.
+        $ids = $this->expand_variable_parents_to_variations($ids, $cap);
+        return $ids;
+    }
+
+    /**
+     * Si un ID es producto variable (o padre sin _sku), incluye sus variaciones.
+     * @param array $ids
+     * @param int   $cap
+     * @return array
+     */
+    private function expand_variable_parents_to_variations(array $ids, $cap) {
+        global $wpdb;
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if ($ids === array()) {
+            return array();
+        }
+        $out = $ids;
+        $id_list = implode(',', array_map('intval', $ids));
+        // Padres cuyo post_type es product y tienen hijos variation.
+        $children = $wpdb->get_col(
+            "SELECT c.ID
+             FROM {$wpdb->posts} c
+             INNER JOIN {$wpdb->posts} parent ON parent.ID = c.post_parent
+             WHERE c.post_parent IN ($id_list)
+               AND c.post_type = 'product_variation'
+               AND c.post_status IN ('publish', 'private')
+               AND parent.post_type = 'product'
+             LIMIT " . (int) max($cap * 2, $cap)
+        );
+        if (is_array($children)) {
+            foreach ($children as $cid) {
+                $out[] = (int) $cid;
+            }
+        }
+        // También: si matcheó una variation, incluirla (ya está); si el padre
+        // matcheó por título pero la variation no está en $ids, ya la agregamos.
+        $out = array_values(array_unique(array_map('intval', $out)));
+        if (count($out) > $cap * 2) {
+            $out = array_slice($out, 0, $cap * 2);
+        }
+        return $out;
     }
 
     private function hydrate(array $ids, $query, $limit, $mode, $scope) {
@@ -94,7 +146,7 @@ class Riverso_Quote_Catalog_Lookup {
             return array();
         }
         $id_list = implode(',', $ids);
-        $posts = $wpdb->get_results("SELECT ID, post_title FROM {$wpdb->posts} WHERE ID IN ($id_list)", ARRAY_A);
+        $posts = $wpdb->get_results("SELECT ID, post_title, post_parent, post_type FROM {$wpdb->posts} WHERE ID IN ($id_list)", ARRAY_A);
         $meta_keys = array('_sku','_barcode','_global_unique_id','_riverso_supplier_code','_supplier_sku','_price','_regular_price','_riverso_unit_cost','_wc_cog_cost','_alg_wc_cog_cost');
         $key_list = "'" . implode("','", $meta_keys) . "'";
         $meta_rows = $wpdb->get_results(
@@ -102,8 +154,32 @@ class Riverso_Quote_Catalog_Lookup {
             ARRAY_A
         );
         $titles = array();
+        $parents = array();
         foreach (is_array($posts) ? $posts : array() as $post) {
-            $titles[(int) $post['ID']] = (string) $post['post_title'];
+            $pid = (int) $post['ID'];
+            $titles[$pid] = (string) $post['post_title'];
+            $parents[$pid] = (int) (isset($post['post_parent']) ? $post['post_parent'] : 0);
+        }
+        // Variaciones suelen tener título vacío: heredar nombre del padre.
+        $need_parent = array();
+        foreach ($parents as $pid => $parent_id) {
+            if ($parent_id > 0 && trim($titles[$pid]) === '') {
+                $need_parent[] = $parent_id;
+            }
+        }
+        if ($need_parent) {
+            $need_parent = array_values(array_unique($need_parent));
+            $plist = implode(',', array_map('intval', $need_parent));
+            $prows = $wpdb->get_results("SELECT ID, post_title FROM {$wpdb->posts} WHERE ID IN ($plist)", ARRAY_A);
+            $ptitles = array();
+            foreach (is_array($prows) ? $prows : array() as $prow) {
+                $ptitles[(int) $prow['ID']] = (string) $prow['post_title'];
+            }
+            foreach ($parents as $pid => $parent_id) {
+                if ($parent_id > 0 && trim($titles[$pid]) === '' && isset($ptitles[$parent_id])) {
+                    $titles[$pid] = $ptitles[$parent_id];
+                }
+            }
         }
         $meta = array();
         foreach (is_array($meta_rows) ? $meta_rows : array() as $row) {

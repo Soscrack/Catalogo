@@ -5511,6 +5511,8 @@ class Riverso_POS_Activator {
         self::add_column_if_missing($items, 'barcode', 'barcode VARCHAR(64) NULL DEFAULT NULL');
         self::add_column_if_missing($items, 'unit_cost', 'unit_cost DECIMAL(14,2) NULL DEFAULT NULL');
         self::add_column_if_missing($items, 'line_total', 'line_total DECIMAL(14,2) NOT NULL DEFAULT 0');
+        self::add_column_if_missing($items, 'description', 'description TEXT NULL');
+        self::add_column_if_missing($items, 'name', "name VARCHAR(500) NOT NULL DEFAULT ''");
 
         self::add_index_if_missing($quotes, 'idx_quote_type', 'KEY idx_quote_type (quote_type)');
 

@@ -30,9 +30,19 @@ class Riverso_Customer_Quote_Module {
 
     private function __construct() {
         $this->load_helpers();
+        $this->ensure_sale_schema();
         $this->quotes = new Riverso_Customer_Quote_Repository();
         $this->catalog = new Riverso_Quote_Catalog_Lookup();
         $this->init_hooks();
+    }
+
+    /**
+     * Asegura columnas P0+P1 (phase57) aunque el deploy no haya bump-eado db_version.
+     */
+    private function ensure_sale_schema() {
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_sale_fields')) {
+            Riverso_POS_Activator::ensure_customer_quotes_sale_fields();
+        }
     }
 
     public function init() {

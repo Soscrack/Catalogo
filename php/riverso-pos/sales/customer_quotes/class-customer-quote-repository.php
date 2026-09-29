@@ -9,6 +9,10 @@ if (!defined('ABSPATH')) {
 class Riverso_Customer_Quote_Repository {
     private $table_quotes;
     private $table_items;
+    /** @var array<string, bool>|null */
+    private $item_columns = null;
+    /** @var array<string, bool>|null */
+    private $quote_columns = null;
 
     public function __construct() {
         global $wpdb;
@@ -62,6 +66,8 @@ class Riverso_Customer_Quote_Repository {
         if (count($input['lines']) > 200) {
             throw new Riverso_Quote_Exception('La cotización admite hasta 200 líneas.');
         }
+
+        $this->ensure_sale_schema();
 
         $id = isset($input['id']) && $input['id'] !== '' && $input['id'] !== null ? (int) $input['id'] : 0;
         $existing = $id > 0 ? $this->find($id) : null;
@@ -120,46 +126,67 @@ class Riverso_Customer_Quote_Repository {
                 $header['valid_days'] = $validity_days;
                 $header['valid_until'] = date('Y-m-d', strtotime('+' . $validity_days . ' days'));
             }
+            $header = $this->filter_row_for_table($header, $this->quote_column_map());
 
             if ($existing === null) {
                 $header['quote_number'] = $this->next_number();
                 $header['status'] = Riverso_Quote_Status::DRAFT;
                 $header['created_at'] = $now;
                 $header['created_by'] = function_exists('get_current_user_id') ? get_current_user_id() : 0;
+                $header = $this->filter_row_for_table($header, $this->quote_column_map());
                 $ok = $wpdb->insert($this->table_quotes, $header);
                 if (!$ok) {
-                    throw new Riverso_Quote_Exception('Error guardando la cotización.');
+                    throw new Riverso_Quote_Exception(
+                        'Error guardando la cotización.' . $this->db_error_suffix()
+                    );
                 }
                 $quote_id = (int) $wpdb->insert_id;
+                if ($quote_id <= 0) {
+                    throw new Riverso_Quote_Exception('Error guardando la cotización: id inválido.');
+                }
             } else {
                 $quote_id = (int) $existing['id'];
-                $wpdb->update($this->table_quotes, $header, array('id' => $quote_id));
-                $wpdb->delete($this->table_items, array('quote_id' => $quote_id), array('%d'));
+                // Separar NULL: update de wpdb con null omitido dejaría valores viejos;
+                // con null→'' rompería DECIMAL/INT en strict mode.
+                $null_cols = array();
+                if ($customer_id === null && isset($this->quote_column_map()['customer_id'])) {
+                    $null_cols[] = 'customer_id';
+                }
+                if ($validity_days === null && isset($this->quote_column_map()['validity_days'])) {
+                    $null_cols[] = 'validity_days';
+                }
+                if ($validity_terms === null && isset($this->quote_column_map()['validity_terms'])) {
+                    $null_cols[] = 'validity_terms';
+                }
+                if ($totals['margin_percent'] === null && isset($this->quote_column_map()['margin_percent'])) {
+                    $null_cols[] = 'margin_percent';
+                }
+                if ($totals['profit_total'] === null && isset($this->quote_column_map()['profit_total'])) {
+                    $null_cols[] = 'profit_total';
+                }
+                $updated = $wpdb->update($this->table_quotes, $header, array('id' => $quote_id));
+                if ($updated === false) {
+                    throw new Riverso_Quote_Exception(
+                        'Error actualizando la cotización.' . $this->db_error_suffix()
+                    );
+                }
+                if ($null_cols) {
+                    $sets = array();
+                    foreach (array_unique($null_cols) as $col) {
+                        $sets[] = '`' . str_replace('`', '', $col) . '` = NULL';
+                    }
+                    $wpdb->query(
+                        'UPDATE `' . str_replace('`', '', $this->table_quotes) . '` SET ' .
+                        implode(', ', $sets) .
+                        ' WHERE id = ' . $quote_id
+                    );
+                }
             }
 
-            foreach ($totals['lines'] as $line) {
-                $desc = $line['description'];
-                $wpdb->insert($this->table_items, array(
-                    'quote_id' => $quote_id,
-                    'product_id' => $line['product_id'],
-                    'sku' => $line['sku'],
-                    'name' => $desc,
-                    'supplier_code' => $line['supplier_code'] !== '' ? $line['supplier_code'] : null,
-                    'barcode' => $line['barcode'] !== '' ? $line['barcode'] : null,
-                    'description' => $desc,
-                    'quantity' => $line['quantity'],
-                    'unit_price' => $line['unit_price'],
-                    'unit_cost' => $line['unit_cost'],
-                    'discount_amount' => $line['discount_amount'],
-                    'discount_percent' => 0,
-                    'subtotal' => $line['line_net'] + $line['discount_amount'],
-                    'tax_percent' => 0,
-                    'tax_amount' => 0,
-                    'total' => $line['line_net'],
-                    'line_total' => $line['line_net'],
-                    'sort_order' => $line['sort_order'],
-                ));
-            }
+            // Siempre reemplazar ítems (nuevo o update). Así no quedan huérfanos
+            // ni se da por bueno un save de cabecera sin líneas.
+            $this->replace_items($quote_id, $totals['lines']);
+
             $wpdb->query('COMMIT');
         } catch (Exception $e) {
             $wpdb->query('ROLLBACK');
@@ -172,6 +199,12 @@ class Riverso_Customer_Quote_Repository {
         $quote = $this->find($quote_id);
         if ($quote === null) {
             throw new Riverso_Quote_Exception('No se pudo leer la cotización guardada.');
+        }
+        if (count($quote['lines']) !== count($totals['lines'])) {
+            throw new Riverso_Quote_Exception(
+                'La cotización se guardó sin todas las líneas (' .
+                count($quote['lines']) . '/' . count($totals['lines']) . ').'
+            );
         }
         return $quote;
     }
@@ -203,6 +236,75 @@ class Riverso_Customer_Quote_Repository {
             throw new Riverso_Quote_Exception('Cotización no encontrada.');
         }
         return $updated;
+    }
+
+    /**
+     * Borra ítems previos e inserta el set actual. Falla ruidoso si un insert no escribe.
+     *
+     * @param int   $quote_id
+     * @param array $lines Líneas ya normalizadas por Riverso_Quote_Totals::calculate().
+     */
+    private function replace_items($quote_id, array $lines) {
+        global $wpdb;
+        $quote_id = (int) $quote_id;
+        $deleted = $wpdb->delete($this->table_items, array('quote_id' => $quote_id), array('%d'));
+        if ($deleted === false) {
+            throw new Riverso_Quote_Exception(
+                'Error limpiando líneas de la cotización.' . $this->db_error_suffix()
+            );
+        }
+
+        $columns = $this->item_column_map();
+        foreach ($lines as $line) {
+            $desc = (string) $line['description'];
+            $line_net = (float) $line['line_net'];
+            $discount = (float) $line['discount_amount'];
+            $candidate = array(
+                'quote_id' => $quote_id,
+                'product_id' => $line['product_id'],
+                'sku' => $line['sku'],
+                'name' => $desc,
+                'supplier_code' => $line['supplier_code'] !== '' ? $line['supplier_code'] : null,
+                'barcode' => $line['barcode'] !== '' ? $line['barcode'] : null,
+                'description' => $desc,
+                'quantity' => $line['quantity'],
+                'unit_price' => $line['unit_price'],
+                'unit_cost' => $line['unit_cost'],
+                'discount_amount' => $discount,
+                'discount_percent' => 0,
+                'subtotal' => $line_net + $discount,
+                'tax_percent' => 0,
+                'tax_amount' => 0,
+                'total' => $line_net,
+                'line_total' => $line_net,
+                'sort_order' => $line['sort_order'],
+            );
+
+            // Schema legado: quantity INT. Evitar "1.000" si la columna no es decimal.
+            if (isset($columns['quantity']) && !$this->column_is_decimal($columns['quantity'])) {
+                $candidate['quantity'] = (int) round((float) $line['quantity']);
+                if ($candidate['quantity'] <= 0) {
+                    $candidate['quantity'] = 1;
+                }
+            }
+
+            $row = $this->filter_row_for_table($candidate, $columns);
+
+            // name NOT NULL en schema legado: garantizar valor si la columna existe.
+            if (isset($columns['name']) && (!isset($row['name']) || $row['name'] === '')) {
+                $row['name'] = $desc !== '' ? $desc : (string) $line['sku'];
+            }
+            if (isset($columns['sku']) && (!isset($row['sku']) || $row['sku'] === '')) {
+                throw new Riverso_Quote_Exception('Cada línea necesita un SKU.');
+            }
+
+            $ok = $wpdb->insert($this->table_items, $row);
+            if (!$ok) {
+                throw new Riverso_Quote_Exception(
+                    'Error guardando una línea de la cotización.' . $this->db_error_suffix()
+                );
+            }
+        }
     }
 
     private function normalize_line(array $line) {
@@ -340,9 +442,17 @@ class Riverso_Customer_Quote_Repository {
     }
 
     private function present_line(array $line) {
-        $line_net = isset($line['line_total']) && $line['line_total'] !== null && $line['line_total'] !== ''
-            ? (float) $line['line_total']
-            : (float) (isset($line['total']) ? $line['total'] : 0);
+        $line_net = null;
+        if (isset($line['line_total']) && $line['line_total'] !== null && $line['line_total'] !== '') {
+            $line_net = (float) $line['line_total'];
+        } elseif (isset($line['total']) && $line['total'] !== null && $line['total'] !== '') {
+            $line_net = (float) $line['total'];
+        } else {
+            $qty = (float) (isset($line['quantity']) ? $line['quantity'] : 0);
+            $price = (float) (isset($line['unit_price']) ? $line['unit_price'] : 0);
+            $discount = (float) (isset($line['discount_amount']) ? $line['discount_amount'] : 0);
+            $line_net = max(0, round($qty * $price, 2) - max(0, $discount));
+        }
         $desc = '';
         if (!empty($line['description'])) {
             $desc = (string) $line['description'];
@@ -360,7 +470,7 @@ class Riverso_Customer_Quote_Repository {
             'unit_price' => round((float) (isset($line['unit_price']) ? $line['unit_price'] : 0), 2),
             'unit_cost' => $this->nullable_float(isset($line['unit_cost']) ? $line['unit_cost'] : null),
             'discount_amount' => round((float) (isset($line['discount_amount']) ? $line['discount_amount'] : 0), 2),
-            'line_net' => round($line_net, 2),
+            'line_net' => round((float) $line_net, 2),
         );
     }
 
@@ -376,5 +486,93 @@ class Riverso_Customer_Quote_Repository {
             return null;
         }
         return round((float) $value, 2);
+    }
+
+    /**
+     * Garantiza columnas P0+P1 (phase57) antes de escribir.
+     * Idempotente; no toca prod remota desde aquí, solo el schema local del WP actual.
+     */
+    private function ensure_sale_schema() {
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_sale_fields')) {
+            Riverso_POS_Activator::ensure_customer_quotes_sale_fields();
+        }
+        // Invalidar caché de columnas: phase57 pudo agregar campos.
+        $this->item_columns = null;
+        $this->quote_columns = null;
+    }
+
+    /**
+     * @return array<string, string> column => Type
+     */
+    private function item_column_map() {
+        if ($this->item_columns === null) {
+            $this->item_columns = $this->load_column_map($this->table_items);
+        }
+        return $this->item_columns;
+    }
+
+    /**
+     * @return array<string, string> column => Type
+     */
+    private function quote_column_map() {
+        if ($this->quote_columns === null) {
+            $this->quote_columns = $this->load_column_map($this->table_quotes);
+        }
+        return $this->quote_columns;
+    }
+
+    /**
+     * @param string $table
+     * @return array<string, string>
+     */
+    private function load_column_map($table) {
+        global $wpdb;
+        $rows = $wpdb->get_results("SHOW COLUMNS FROM `{$table}`", ARRAY_A);
+        $map = array();
+        if (is_array($rows)) {
+            foreach ($rows as $row) {
+                if (!empty($row['Field'])) {
+                    $map[(string) $row['Field']] = isset($row['Type']) ? (string) $row['Type'] : '';
+                }
+            }
+        }
+        return $map;
+    }
+
+    /**
+     * Filtra el row a columnas existentes y omite NULL.
+     * Omitir NULL evita que WP antiguos conviertan null → '' y rompan
+     * DECIMAL/BIGINT en modo strict (síntoma: cabecera OK, ítems 0).
+     *
+     * @param array               $row
+     * @param array<string,string> $columns
+     * @return array
+     */
+    private function filter_row_for_table(array $row, array $columns) {
+        $out = array();
+        foreach ($row as $key => $value) {
+            if (!isset($columns[$key])) {
+                continue;
+            }
+            if ($value === null) {
+                continue;
+            }
+            $out[$key] = $value;
+        }
+        return $out;
+    }
+
+    private function column_is_decimal($type) {
+        $type = strtolower((string) $type);
+        return strpos($type, 'decimal') !== false
+            || strpos($type, 'float') !== false
+            || strpos($type, 'double') !== false
+            || strpos($type, 'numeric') !== false;
+    }
+
+    private function db_error_suffix() {
+        global $wpdb;
+        $err = isset($wpdb->last_error) ? trim((string) $wpdb->last_error) : '';
+        return $err !== '' ? (' ' . $err) : '';
     }
 }

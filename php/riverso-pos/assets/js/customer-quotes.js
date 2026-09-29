@@ -88,6 +88,13 @@
     }
 
     function openEditor(quote) {
+        // Defensa: algunos payloads legados usan items en vez de lines.
+        if ((!quote.lines || !quote.lines.length) && quote.items && quote.items.length) {
+            quote.lines = quote.items;
+        }
+        if (!quote.lines) {
+            quote.lines = [];
+        }
         state.quote = quote;
         state.view = "editor";
         els.listView.hidden = true;

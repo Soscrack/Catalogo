@@ -20,7 +20,9 @@ ALTER TABLE `{prefix}customer_quote_items`
   ADD COLUMN IF NOT EXISTS `supplier_code` VARCHAR(64) NULL AFTER `sku`,
   ADD COLUMN IF NOT EXISTS `barcode` VARCHAR(64) NULL AFTER `supplier_code`,
   ADD COLUMN IF NOT EXISTS `unit_cost` DECIMAL(14,2) NULL AFTER `unit_price`,
-  ADD COLUMN IF NOT EXISTS `line_total` DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER `total`;
+  ADD COLUMN IF NOT EXISTS `line_total` DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER `total`,
+  ADD COLUMN IF NOT EXISTS `name` VARCHAR(500) NOT NULL DEFAULT '' AFTER `sku`,
+  ADD COLUMN IF NOT EXISTS `description` TEXT NULL AFTER `name`;
 
 -- Remapeo de estados (también lo hace el activador)
 UPDATE `{prefix}customer_quotes`

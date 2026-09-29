@@ -76,6 +76,10 @@ class Riverso_Customer_Quote_Module {
         add_action('wp_ajax_riverso_cq_transition', array($this, 'ajax_transition'));
         add_action('wp_ajax_riverso_cq_search', array($this, 'ajax_search'));
         add_action('wp_ajax_riverso_cq_line_stock', array($this, 'ajax_line_stock'));
+        add_action('wp_ajax_riverso_cq_invoice', array($this, 'ajax_invoice'));
+        add_action('wp_ajax_riverso_cq_received_list', array($this, 'ajax_received_list'));
+        add_action('wp_ajax_riverso_cq_received_preview', array($this, 'ajax_received_preview'));
+        add_action('wp_ajax_riverso_cq_received_import', array($this, 'ajax_received_import'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_assets'));
     }
 

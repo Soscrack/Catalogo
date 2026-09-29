@@ -1,6 +1,6 @@
 <?php
 /**
- * Portal de cotizaciones de venta (es-CL). P0+P1+P1b+P2.
+ * Portal de cotizaciones de venta (es-CL). P0+P1+P1b+P2+P3.
  *
  * @var array<string, mixed> $riverso_cq
  */
@@ -154,8 +154,34 @@ if (!function_exists('riverso_pos_cq_json')) {
                     <div class="cq-search-row">
                         <input type="search" id="cq-search" autocomplete="off" placeholder="SKU, código proveedor o código de barras" enterkeyhint="search">
                         <button type="button" class="cq-btn" id="cq-search-btn">Buscar</button>
+                        <button type="button" class="cq-btn cq-btn-lupa" id="cq-lupa" title="Búsqueda avanzada" aria-label="Abrir búsqueda avanzada">
+                            <span aria-hidden="true">🔍</span>
+                        </button>
                     </div>
                     <ul id="cq-results" class="cq-results" hidden></ul>
+                </div>
+
+                <div id="cq-advanced-modal" class="cq-modal" hidden aria-hidden="true">
+                    <div class="cq-modal-backdrop" data-cq-modal-close="1"></div>
+                    <div class="cq-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="cq-modal-title">
+                        <header class="cq-modal-head">
+                            <h3 id="cq-modal-title">Búsqueda avanzada</h3>
+                            <button type="button" class="cq-modal-close" id="cq-modal-close" aria-label="Cerrar" data-cq-modal-close="1">×</button>
+                        </header>
+                        <div class="cq-modal-body">
+                            <div class="cq-scope-chips" role="tablist" aria-label="Alcance de búsqueda">
+                                <button type="button" class="cq-chip is-active" data-scope="todo" role="tab" aria-selected="true">Todo</button>
+                                <button type="button" class="cq-chip" data-scope="descripcion" role="tab" aria-selected="false">Descripción</button>
+                                <button type="button" class="cq-chip" data-scope="codigos" role="tab" aria-selected="false">Códigos</button>
+                            </div>
+                            <div class="cq-search-row">
+                                <input type="search" id="cq-modal-q" autocomplete="off" placeholder="Buscar…" enterkeyhint="search">
+                                <button type="button" class="cq-btn cq-btn-primary" id="cq-modal-search-btn">Buscar</button>
+                            </div>
+                            <p id="cq-modal-hint" class="cq-modal-hint" role="status"></p>
+                            <ul id="cq-modal-results" class="cq-results cq-modal-results"></ul>
+                        </div>
+                    </div>
                 </div>
                 <div class="cq-table-wrap">
                     <table class="cq-table">

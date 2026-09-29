@@ -6,7 +6,9 @@
         quote: emptyQuote(),
         snapshot: "",
         results: [],
-        advanced: false
+        advanced: false,
+        modalScope: "todo",
+        modalResults: []
     };
 
     var els = {
@@ -34,8 +36,15 @@
         margin: document.getElementById("cq-total-margin"),
         profit: document.getElementById("cq-total-profit"),
         search: document.getElementById("cq-search"),
+        lupa: document.getElementById("cq-lupa"),
         advanced: document.getElementById("cq-advanced"),
         results: document.getElementById("cq-results"),
+        modal: document.getElementById("cq-advanced-modal"),
+        modalQ: document.getElementById("cq-modal-q"),
+        modalSearchBtn: document.getElementById("cq-modal-search-btn"),
+        modalResults: document.getElementById("cq-modal-results"),
+        modalHint: document.getElementById("cq-modal-hint"),
+        modalClose: document.getElementById("cq-modal-close"),
         lines: document.getElementById("cq-lines"),
         linesEmpty: document.getElementById("cq-lines-empty"),
         message: document.getElementById("cq-message"),
@@ -55,6 +64,39 @@
         if (event.key === "Enter") {
             event.preventDefault();
             searchProducts();
+        }
+    });
+    if (els.lupa) {
+        els.lupa.addEventListener("click", openAdvancedSearch);
+    }
+    if (els.modalSearchBtn) {
+        els.modalSearchBtn.addEventListener("click", searchAdvanced);
+    }
+    if (els.modalQ) {
+        els.modalQ.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                searchAdvanced();
+            }
+        });
+    }
+    if (els.modal) {
+        els.modal.addEventListener("click", function (event) {
+            if (event.target && event.target.getAttribute("data-cq-modal-close") === "1") {
+                closeAdvancedSearch();
+            }
+        });
+        var chips = els.modal.querySelectorAll(".cq-chip[data-scope]");
+        Array.prototype.forEach.call(chips, function (chip) {
+            chip.addEventListener("click", function () {
+                setModalScope(chip.getAttribute("data-scope") || "todo");
+            });
+        });
+    }
+    document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape" && els.modal && !els.modal.hidden) {
+            event.preventDefault();
+            closeAdvancedSearch();
         }
     });
     els.filter.addEventListener("change", loadList);
@@ -247,6 +289,9 @@
             input.disabled = !editable;
         });
         document.getElementById("cq-search-btn").disabled = !editable;
+        if (els.lupa) {
+            els.lupa.disabled = !editable;
+        }
         els.save.hidden = !editable;
         els.clear.hidden = !editable;
         var transition = (quote.allowed_transitions || [])[0];
@@ -528,6 +573,131 @@
         el.dataset.alarm = level || "";
     }
 
+
+    function openAdvancedSearch() {
+        if (!els.modal) return;
+        if (state.quote.editable === false) return;
+        var prefill = (els.search && els.search.value ? els.search.value : "").trim();
+        if (els.modalQ) {
+            els.modalQ.value = prefill;
+        }
+        setModalScope(state.modalScope || "todo");
+        state.modalResults = [];
+        renderModalResults();
+        setModalHint("");
+        els.modal.hidden = false;
+        els.modal.setAttribute("aria-hidden", "false");
+        if (els.modalQ) {
+            els.modalQ.focus();
+            els.modalQ.select();
+        }
+        // Prefill no bloqueante: si hay texto, busca; si falla o vacío, el modal queda usable.
+        if (prefill) {
+            searchAdvanced();
+        }
+    }
+
+    function closeAdvancedSearch() {
+        if (!els.modal) return;
+        els.modal.hidden = true;
+        els.modal.setAttribute("aria-hidden", "true");
+        setModalHint("");
+    }
+
+    function setModalScope(scope) {
+        if (scope !== "descripcion" && scope !== "codigos") {
+            scope = "todo";
+        }
+        state.modalScope = scope;
+        if (!els.modal) return;
+        var chips = els.modal.querySelectorAll(".cq-chip[data-scope]");
+        Array.prototype.forEach.call(chips, function (chip) {
+            var active = chip.getAttribute("data-scope") === scope;
+            chip.classList.toggle("is-active", active);
+            chip.setAttribute("aria-selected", active ? "true" : "false");
+        });
+        if (els.modalQ) {
+            if (scope === "descripcion") {
+                els.modalQ.placeholder = "Descripción (mín. 2 caracteres)";
+            } else if (scope === "codigos") {
+                els.modalQ.placeholder = "SKU, proveedor o código de barras";
+            } else {
+                els.modalQ.placeholder = "Todo: descripción o códigos";
+            }
+        }
+    }
+
+    function setModalHint(text, isError) {
+        if (!els.modalHint) return;
+        els.modalHint.textContent = text || "";
+        els.modalHint.classList.toggle("is-error", !!isError && !!text);
+    }
+
+    function searchAdvanced() {
+        if (!els.modalQ) return;
+        var query = els.modalQ.value.trim();
+        var scope = state.modalScope || "todo";
+        if (!query) {
+            setModalHint("Ingresa un término de búsqueda.", true);
+            state.modalResults = [];
+            renderModalResults();
+            return;
+        }
+        if ((scope === "descripcion" || scope === "todo") && scope === "descripcion" && query.length < 2) {
+            setModalHint("Escribe al menos 2 caracteres para buscar por descripción.", true);
+            state.modalResults = [];
+            renderModalResults();
+            return;
+        }
+        if (scope === "todo" && query.length < 2) {
+            // Con <2 chars en Todo, solo códigos (el servidor igual puede devolver por códigos).
+        }
+        setModalHint("Buscando…");
+        post(cfg.actions.search, {
+            q: query,
+            mode: "advanced",
+            scope: scope
+        }).then(function (data) {
+            state.modalResults = data.products || [];
+            renderModalResults();
+            if (state.modalResults.length === 0) {
+                setModalHint(data.hint || ("Sin resultados para «" + query + "»."), true);
+            } else {
+                setModalHint(state.modalResults.length + " resultado(s). Elige Agregar — el modal no agrega solo.");
+            }
+        }).catch(function (error) {
+            setModalHint(error.message, true);
+        });
+    }
+
+    function renderModalResults() {
+        if (!els.modalResults) return;
+        els.modalResults.innerHTML = "";
+        (state.modalResults || []).forEach(function (product) {
+            var li = document.createElement("li");
+            var info = document.createElement("div");
+            var sku = document.createElement("div");
+            sku.className = "cq-result-sku";
+            sku.textContent = product.sku + " · " + (product.description || "");
+            var meta = document.createElement("div");
+            meta.className = "cq-result-meta";
+            meta.textContent = "Proveedor " + (product.supplier_code || "—") + " · Barras " + (product.barcode || "—");
+            info.appendChild(sku);
+            info.appendChild(meta);
+            var add = document.createElement("button");
+            add.type = "button";
+            add.className = "cq-btn";
+            add.textContent = "Agregar";
+            add.addEventListener("click", function () {
+                addProduct(product);
+                setModalHint("Agregado «" + product.sku + "». Puedes seguir buscando.", false);
+            });
+            li.appendChild(info);
+            li.appendChild(add);
+            els.modalResults.appendChild(li);
+        });
+    }
+
     function searchProducts() {
         var query = els.search.value.trim();
         if (!query) {
@@ -535,8 +705,9 @@
             return;
         }
         setMessage("");
-        post(cfg.actions.search, { q: query }).then(function (data) {
+        post(cfg.actions.search, { q: query, mode: "quick" }).then(function (data) {
             state.results = data.products || [];
+            // Rápida: un solo resultado (p.ej. SKU exacto) se auto-agrega. El modal nunca hace esto.
             if (state.results.length === 1) {
                 addProduct(state.results[0]);
                 els.search.value = "";

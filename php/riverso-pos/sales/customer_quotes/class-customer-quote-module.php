@@ -206,7 +206,26 @@ class Riverso_Customer_Quote_Module {
     public function ajax_search() {
         $this->authorize();
         $query = $this->post_string('q');
-        $this->ok(array('products' => $this->catalog->search($query, 20)));
+        $mode = strtolower($this->post_string('mode'));
+        if ($mode !== 'advanced') {
+            $mode = 'quick';
+        }
+        $scope = strtolower($this->post_string('scope'));
+        if (!in_array($scope, array('todo', 'descripcion', 'codigos'), true)) {
+            $scope = 'todo';
+        }
+        if ($mode === 'advanced' && ($scope === 'descripcion' || $scope === 'todo')) {
+            $len = function_exists('mb_strlen') ? mb_strlen($query, 'UTF-8') : strlen($query);
+            if ($scope === 'descripcion' && $len < 2) {
+                $this->ok(array('products' => array(), 'hint' => 'Escribe al menos 2 caracteres para buscar por descripción.'));
+                return;
+            }
+        }
+        $this->ok(array(
+            'products' => $this->catalog->search($query, 20, $mode, $scope),
+            'mode' => $mode,
+            'scope' => $scope,
+        ));
     }
 
     /**

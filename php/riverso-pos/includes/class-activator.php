@@ -2211,9 +2211,26 @@ class Riverso_POS_Activator {
      * Fase 19: El código de catálogo/proveedor no es SKU Local.
      * Vacía canonical_sku cuando coincide con codigo_proveedor (import Mamut histórico)
      * y genera tareas crear_contraparte_local.
+     * Una sola vez: re-ejecutarla vacía SKUs asignados después y deja líneas de folio «Sin SKU».
      */
     private static function create_phase19_clear_catalog_as_local_sku($prefix) {
+        if (get_option('riverso_pos_phase19_clear_catalog_sku') === '1') {
+            return;
+        }
+
         global $wpdb;
+
+        $audit_table = "{$prefix}audit_log";
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $audit_table)) === $audit_table) {
+            $already_ran = (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM `{$audit_table}`
+                 WHERE action = 'schema.phase19_clear_catalog_as_local_sku'"
+            );
+            if ($already_ran > 0) {
+                update_option('riverso_pos_phase19_clear_catalog_sku', '1');
+                return;
+            }
+        }
 
         $cleared = (int) $wpdb->query(
             "UPDATE {$prefix}producto_base pb
@@ -2274,13 +2291,17 @@ class Riverso_POS_Activator {
             }
         }
 
+        update_option('riverso_pos_phase19_clear_catalog_sku', '1');
+
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log(
                 'schema.phase19_clear_catalog_as_local_sku',
                 'producto_base',
                 0,
-                'info',
-                "Fase 19: cleared≈{$cleared} candidates=" . count($candidates ?: []) . " tasks={$tasks_created}"
+                [
+                    'actor_type' => 'migration',
+                    'details' => "Fase 19: cleared≈{$cleared} candidates=" . count($candidates ?: []) . " tasks={$tasks_created}",
+                ]
             );
         }
     }

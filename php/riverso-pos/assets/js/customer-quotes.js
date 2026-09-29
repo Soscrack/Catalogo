@@ -5,7 +5,8 @@
         quotes: [],
         quote: emptyQuote(),
         snapshot: "",
-        results: []
+        results: [],
+        advanced: false
     };
 
     var els = {
@@ -33,6 +34,7 @@
         margin: document.getElementById("cq-total-margin"),
         profit: document.getElementById("cq-total-profit"),
         search: document.getElementById("cq-search"),
+        advanced: document.getElementById("cq-advanced"),
         results: document.getElementById("cq-results"),
         lines: document.getElementById("cq-lines"),
         linesEmpty: document.getElementById("cq-lines-empty"),
@@ -67,6 +69,13 @@
     }
     if (els.dateTo) {
         els.dateTo.addEventListener("change", loadList);
+    }
+    if (els.advanced) {
+        els.advanced.addEventListener("change", function () {
+            state.advanced = els.advanced.checked;
+            document.getElementById("riverso-cq").classList.toggle("is-advanced", state.advanced);
+            renderTotals();
+        });
     }
     els.save.addEventListener("click", saveQuote);
     els.clear.addEventListener("click", clearQuote);
@@ -275,6 +284,11 @@
             tr.appendChild(detail);
             tr.appendChild(qtyStepperCell(line, index, editable));
             tr.appendChild(inputCell(line, index, "unit_price", editable));
+            tr.appendChild(inputCell(line, index, "price_discount", editable));
+            tr.appendChild(inputCell(line, index, "margin_discount", editable));
+            var utility = document.createElement("td");
+            utility.className = "cq-num cq-advanced cq-line-profit";
+            tr.appendChild(utility);
             var actions = document.createElement("td");
             actions.className = "cq-actions";
             if (editable) {
@@ -370,42 +384,86 @@
     }
 
     function inputCell(line, index, field, editable) {
+        var isRate = field === "price_discount" || field === "margin_discount";
         var td = document.createElement("td");
-        td.className = "cq-num";
+        td.className = "cq-num" + (isRate ? " cq-advanced cq-rate" : "");
         var input = document.createElement("input");
         input.type = "text";
         input.inputMode = "decimal";
         input.dataset.field = field;
         input.dataset.index = String(index);
-        input.value = field === "quantity" ? formatQty(line.quantity) : formatPlain(line.unit_price);
-        input.setAttribute("aria-label", (field === "quantity" ? "Cantidad de " : "Precio de ") + line.sku);
+        input.value = displayField(field, line);
+        input.setAttribute("aria-label", fieldLabel(field) + line.sku);
         input.disabled = !editable;
         input.addEventListener("focus", function () {
-            input.value = field === "quantity" ? String(line.quantity).replace(".", ",") : String(line.unit_price).replace(".", ",");
+            input.value = editField(field, state.quote.lines[index]);
             input.select();
         });
         input.addEventListener("input", function () {
-            var parsed = parseClNumber(input.value);
-            if (field === "quantity") {
-                state.quote.lines[index].quantity = parsed;
-            } else {
-                state.quote.lines[index].unit_price = parsed;
-            }
+            assignField(state.quote.lines[index], field, parseClNumber(input.value));
             renderTotals();
         });
         input.addEventListener("blur", function () {
             var parsed = parseClNumber(input.value);
-            if (field === "quantity") {
-                state.quote.lines[index].quantity = parsed;
-                input.value = formatQty(parsed);
-            } else {
-                state.quote.lines[index].unit_price = parsed;
-                input.value = formatPlain(parsed);
+            if (isRate) {
+                parsed = clampRate(parsed);
             }
+            assignField(state.quote.lines[index], field, parsed);
+            input.value = displayField(field, state.quote.lines[index]);
             renderTotals();
         });
         td.appendChild(input);
+        if (isRate) {
+            var suffix = document.createElement("span");
+            suffix.className = "cq-suffix";
+            suffix.textContent = "%";
+            suffix.setAttribute("aria-hidden", "true");
+            td.appendChild(suffix);
+        }
         return td;
+    }
+
+    function fieldLabel(field) {
+        if (field === "quantity") return "Cantidad de ";
+        if (field === "unit_price") return "Precio de ";
+        if (field === "price_discount") return "Descuento de precio de ";
+        return "Descuento de margen de ";
+    }
+
+    function displayField(field, line) {
+        if (field === "quantity") return formatQty(line.quantity);
+        if (field === "unit_price") return formatPlain(line.unit_price);
+        if (field === "price_discount") return formatPlain(line.price_discount || 0);
+        return formatPlain(line.margin_discount || 0);
+    }
+
+    function editField(field, line) {
+        var value = line.quantity;
+        if (field === "unit_price") value = line.unit_price;
+        if (field === "price_discount") value = line.price_discount || 0;
+        if (field === "margin_discount") value = line.margin_discount || 0;
+        return String(value).replace(".", ",");
+    }
+
+    function assignField(line, field, parsed) {
+        if (!line) return;
+        if (field === "quantity") line.quantity = parsed;
+        else if (field === "unit_price") line.unit_price = parsed;
+        else if (field === "price_discount") line.price_discount = parsed;
+        else if (field === "margin_discount") line.margin_discount = parsed;
+        syncDiscountAmount(line, field);
+    }
+
+    function syncDiscountAmount(line, field) {
+        var priceRate = clampRate(line.price_discount);
+        var marginRate = clampRate(line.margin_discount);
+        if (priceRate > 0 || marginRate > 0) {
+            line.discount_amount = lineFigures(line).discount;
+            return;
+        }
+        if (field === "price_discount" || field === "margin_discount") {
+            line.discount_amount = 0;
+        }
     }
 
     function syncHeader() {
@@ -425,6 +483,49 @@
         els.discount.textContent = formatMoney(totals.discount_total);
         els.margin.textContent = formatPercent(totals.margin_percent);
         els.profit.textContent = totals.profit_total === null ? "—" : formatMoney(totals.profit_total);
+        var level = state.advanced ? alarmLevel(totals.profit_total, totals.margin_percent) : "";
+        setAlarm(els.margin, level);
+        setAlarm(els.profit, level);
+        refreshLineFigures();
+    }
+
+    function refreshLineFigures() {
+        var rows = els.lines.querySelectorAll("tr.cq-line");
+        Array.prototype.forEach.call(rows, function (tr, index) {
+            var line = (state.quote.lines || [])[index];
+            var cell = tr.querySelector(".cq-line-profit");
+            if (!line || !cell) return;
+            paintUtility(cell, lineFigures(line));
+        });
+    }
+
+    function paintUtility(cell, figures) {
+        var level = state.advanced ? alarmLevel(figures.lineProfit, figures.lineMargin) : "";
+        cell.textContent = "";
+        if (figures.lineProfit === null) {
+            cell.textContent = "—";
+            cell.title = "Sin costo no se calcula la utilidad";
+        } else {
+            var money = document.createElement("span");
+            money.className = "cq-profit-money";
+            money.textContent = formatMoney(figures.lineProfit);
+            var rate = document.createElement("span");
+            rate.className = "cq-profit-rate";
+            rate.textContent = formatPercent(figures.lineMargin);
+            cell.appendChild(money);
+            cell.appendChild(rate);
+            cell.title = level === "neg" ? "Utilidad negativa" : (level === "low" ? "Margen menor a 5 %" : "");
+        }
+        setAlarm(cell, level);
+    }
+
+    function setAlarm(el, level) {
+        if (!el) return;
+        el.classList.remove("cq-alarm-neg", "cq-alarm-low");
+        if (level === "neg" || level === "low") {
+            el.classList.add(level === "neg" ? "cq-alarm-neg" : "cq-alarm-low");
+        }
+        el.dataset.alarm = level || "";
     }
 
     function searchProducts() {
@@ -496,6 +597,8 @@
                 quantity: 1,
                 unit_price: Number(product.unit_price || 0),
                 unit_cost: product.unit_cost === null || product.unit_cost === undefined || product.unit_cost === "" ? null : Number(product.unit_cost),
+                price_discount: 0,
+                margin_discount: 0,
                 discount_amount: 0
             });
         }
@@ -613,21 +716,14 @@
         var profit = 0;
         var profitKnown = lines.length > 0;
         lines.forEach(function (line) {
-            var qty = round3(Number(line.quantity) || 0);
-            var price = round2(Number(line.unit_price) || 0);
-            var discount = round2(Number(line.discount_amount) || 0);
-            if (discount < 0) discount = 0;
-            var gross = round2(qty * price);
-            if (discount > gross) discount = gross;
-            var lineNet = round2(gross - discount);
-            var hasCost = line.unit_cost !== null && line.unit_cost !== undefined && line.unit_cost !== "";
-            if (!hasCost) {
+            var figures = lineFigures(line);
+            if (figures.lineProfit === null) {
                 profitKnown = false;
             } else {
-                profit += round2(lineNet - round2(qty * round2(Number(line.unit_cost))));
+                profit += figures.lineProfit;
             }
-            net += lineNet;
-            discounts += discount;
+            net += figures.lineNet;
+            discounts += figures.discount;
         });
         net = round2(net);
         discounts = round2(discounts);
@@ -642,6 +738,62 @@
             profit_total: profitTotal,
             margin_percent: margin
         };
+    }
+
+    function lineFigures(line) {
+        var qty = round3(Number(line.quantity) || 0);
+        var price = round2(Number(line.unit_price) || 0);
+        var priceRate = clampRate(line.price_discount);
+        var marginRate = clampRate(line.margin_discount);
+        var gross = round2(qty * price);
+        var hasCost = line.unit_cost !== null && line.unit_cost !== undefined && line.unit_cost !== "";
+        var unitCost = hasCost ? round2(Number(line.unit_cost)) : null;
+        var discount;
+        if (priceRate > 0 || marginRate > 0) {
+            var priceOff = round2(gross * priceRate / 100);
+            var after = round2(gross - priceOff);
+            var marginOff = 0;
+            if (unitCost !== null && marginRate > 0) {
+                var marginBase = round2(after - round2(qty * unitCost));
+                if (marginBase > 0) {
+                    marginOff = round2(marginBase * marginRate / 100);
+                }
+            }
+            discount = round2(priceOff + marginOff);
+            if (discount < 0) discount = 0;
+            if (discount > gross) discount = gross;
+        } else {
+            discount = round2(Number(line.discount_amount) || 0);
+            if (discount < 0) discount = 0;
+            if (discount > gross) discount = gross;
+        }
+        var lineNet = round2(gross - discount);
+        var lineProfit = null;
+        var lineMargin = null;
+        if (unitCost !== null) {
+            lineProfit = round2(lineNet - round2(qty * unitCost));
+            lineMargin = lineNet > 0 ? round2((lineProfit / lineNet) * 100) : 0;
+        }
+        return {
+            discount: discount,
+            lineNet: lineNet,
+            lineProfit: lineProfit,
+            lineMargin: lineMargin
+        };
+    }
+
+    function alarmLevel(profit, margin) {
+        if (profit === null || profit === undefined || profit === "") return "";
+        if (Number(profit) < 0) return "neg";
+        if (margin !== null && margin !== undefined && margin !== "" && Number(margin) < 5) return "low";
+        return "";
+    }
+
+    function clampRate(value) {
+        var rate = round2(Number(value) || 0);
+        if (rate < 0) return 0;
+        if (rate > 100) return 100;
+        return rate;
     }
 
     function parseClNumber(value) {

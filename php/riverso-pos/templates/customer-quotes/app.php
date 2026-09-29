@@ -1,6 +1,6 @@
 <?php
 /**
- * Portal de cotizaciones de venta (es-CL). P0+P1+P1b.
+ * Portal de cotizaciones de venta (es-CL). P0+P1+P1b+P2.
  *
  * @var array<string, mixed> $riverso_cq
  */
@@ -144,7 +144,13 @@ if (!function_exists('riverso_pos_cq_json')) {
 
             <div class="cq-card">
                 <div class="cq-search">
-                    <label for="cq-search">Buscar producto</label>
+                    <div class="cq-search-head">
+                        <label for="cq-search">Buscar producto</label>
+                        <label class="cq-advanced-toggle" for="cq-advanced">
+                            <input type="checkbox" id="cq-advanced">
+                            <span>Modo avanzado</span>
+                        </label>
+                    </div>
                     <div class="cq-search-row">
                         <input type="search" id="cq-search" autocomplete="off" placeholder="SKU, código proveedor o código de barras" enterkeyhint="search">
                         <button type="button" class="cq-btn" id="cq-search-btn">Buscar</button>
@@ -158,6 +164,9 @@ if (!function_exists('riverso_pos_cq_json')) {
                                 <th scope="col">Detalle</th>
                                 <th scope="col" class="cq-num">Cantidad</th>
                                 <th scope="col" class="cq-num">Precio</th>
+                                <th scope="col" class="cq-num cq-advanced" title="Porcentaje de descuento sobre el precio de la línea">Dscto precio</th>
+                                <th scope="col" class="cq-num cq-advanced" title="Porcentaje del margen que queda después del descuento de precio">Dscto margen</th>
+                                <th scope="col" class="cq-num cq-advanced">Utilidad</th>
                                 <th scope="col">Acciones</th>
                             </tr>
                         </thead>

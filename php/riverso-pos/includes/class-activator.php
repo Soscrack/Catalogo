@@ -357,6 +357,7 @@ class Riverso_POS_Activator {
         self::create_phase55_pp_vinculo($prefix);
         self::create_phase56_folio_zero_norm($prefix);
         self::create_phase57_customer_quotes_sale_fields($prefix);
+        self::create_phase58_customer_quotes_advanced_discounts($prefix);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -5419,6 +5420,14 @@ class Riverso_POS_Activator {
     }
 
     /**
+     * Garantiza columnas P2 de dsctos avanzados (deploy sin bump).
+     */
+    public static function ensure_customer_quotes_advanced_discounts() {
+        global $wpdb;
+        self::create_phase58_customer_quotes_advanced_discounts($wpdb->prefix . 'riverso_');
+    }
+
+    /**
      * Fase 56: recalcular doc_hash de escaneos cuyo folio tenía ceros a la izquierda.
      * No renombra folios de facturas ni toca tablas de precios.
      */
@@ -5550,4 +5559,26 @@ class Riverso_POS_Activator {
             ));
         }
     }
+
+    /**
+     * Fase 58: price_discount / margin_discount en lineas (modo avanzado P2).
+     * Idempotente: add_column_if_missing.
+     */
+    private static function create_phase58_customer_quotes_advanced_discounts($prefix) {
+        $items = "{$prefix}customer_quote_items";
+        self::add_column_if_missing($items, 'price_discount', 'price_discount DECIMAL(8,2) NOT NULL DEFAULT 0');
+        self::add_column_if_missing($items, 'margin_discount', 'margin_discount DECIMAL(8,2) NOT NULL DEFAULT 0');
+
+        if (get_option('riverso_pos_phase58_customer_quotes_advanced') === '1') {
+            return;
+        }
+        update_option('riverso_pos_phase58_customer_quotes_advanced', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase58_customer_quotes_advanced', 'customer_quote_items', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 58: price_discount/margin_discount modo avanzado cotizaciones',
+            ));
+        }
+    }
 }
+

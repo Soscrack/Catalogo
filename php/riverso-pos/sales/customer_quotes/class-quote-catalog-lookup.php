@@ -65,7 +65,7 @@ class Riverso_Quote_Catalog_Lookup {
             FROM {$wpdb->posts} p
             INNER JOIN {$wpdb->postmeta} m ON m.post_id = p.ID
             WHERE p.post_type IN ('product', 'product_variation')
-              AND p.post_status IN ('publish', 'private')
+              AND p.post_status IN ('publish', 'private') /* Lupa cotizaciones: solo publish|private; draft excluido por diseño (producto en elaboración no se cotiza). */
               AND m.meta_key IN ($placeholders)
               AND (m.meta_value = %s OR m.meta_value LIKE %s)
             LIMIT %d";
@@ -82,7 +82,7 @@ class Riverso_Quote_Catalog_Lookup {
         $sql = "SELECT DISTINCT p.ID
             FROM {$wpdb->posts} p
             WHERE p.post_type IN ('product', 'product_variation')
-              AND p.post_status IN ('publish', 'private')
+              AND p.post_status IN ('publish', 'private') /* Lupa cotizaciones: solo publish|private; draft excluido por diseño (producto en elaboración no se cotiza). */
               AND (
                     p.post_title LIKE %s
                  OR p.post_excerpt LIKE %s
@@ -121,7 +121,7 @@ class Riverso_Quote_Catalog_Lookup {
              INNER JOIN {$wpdb->posts} parent ON parent.ID = c.post_parent
              WHERE c.post_parent IN ($id_list)
                AND c.post_type = 'product_variation'
-               AND c.post_status IN ('publish', 'private')
+               AND c.post_status IN ('publish', 'private') /* Lupa cotizaciones: solo publish|private; draft excluido por diseño (producto en elaboración no se cotiza). */
                AND parent.post_type = 'product'
              LIMIT " . (int) max($cap * 2, $cap)
         );

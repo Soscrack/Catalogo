@@ -130,6 +130,14 @@ if (!function_exists('riverso_pos_cq_json')) {
                             <option value="referencia">Referencia</option>
                         </select>
                     </label>
+                    <div class="cq-field cq-channel-field">
+                        <span>Canal</span>
+                        <div class="cq-channel-toggle" role="group" aria-label="Canal Local u Online">
+                            <button type="button" class="cq-channel-btn is-active" data-channel="local" id="cq-channel-local">Local</button>
+                            <button type="button" class="cq-channel-btn" data-channel="online" id="cq-channel-online">Online</button>
+                        </div>
+                        <input type="hidden" id="cq-channel" value="local">
+                    </div>
                     <label class="cq-field">
                         <span>Validez (días)</span>
                         <input type="number" id="cq-validity-days" min="0" max="3650" step="1" inputmode="numeric" placeholder="Opcional">
@@ -157,7 +165,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                         </label>
                     </div>
                     <div class="cq-search-row">
-                        <input type="search" id="cq-search" autocomplete="off" placeholder="SKU, código proveedor o código de barras" enterkeyhint="search">
+                        <input type="search" id="cq-search" autocomplete="off" placeholder="SKU, barcode o código proveedor (según canal)" enterkeyhint="search">
                         <button type="button" class="cq-btn" id="cq-search-btn">Buscar</button>
                         <button type="button" class="cq-btn cq-btn-lupa" id="cq-lupa" title="Búsqueda avanzada" aria-label="Abrir búsqueda avanzada">
                             <span aria-hidden="true">🔍</span>

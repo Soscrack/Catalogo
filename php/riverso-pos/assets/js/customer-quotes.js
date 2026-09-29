@@ -31,6 +31,9 @@
         seller: document.getElementById("cq-seller"),
         customer: document.getElementById("cq-customer"),
         type: document.getElementById("cq-type"),
+        channel: document.getElementById("cq-channel"),
+        channelLocal: document.getElementById("cq-channel-local"),
+        channelOnline: document.getElementById("cq-channel-online"),
         validityDays: document.getElementById("cq-validity-days"),
         validityTerms: document.getElementById("cq-validity-terms"),
         net: document.getElementById("cq-total-net"),
@@ -77,6 +80,8 @@
     });
     document.getElementById("cq-back").addEventListener("click", showList);
     document.getElementById("cq-search-btn").addEventListener("click", searchProducts);
+    if (els.channelLocal) els.channelLocal.addEventListener("click", function () { setChannel("local", true); });
+    if (els.channelOnline) els.channelOnline.addEventListener("click", function () { setChannel("online", true); });
     els.search.addEventListener("keydown", function (event) {
         if (event.key === "Enter") {
             event.preventDefault();
@@ -195,6 +200,7 @@
             customer_id: null,
             customer_name: "",
             quote_type: "venta",
+            channel: "local",
             status: "draft",
             status_label: "Borrador",
             validity_days: null,
@@ -342,12 +348,15 @@
         }
         els.customer.value = quote.customer_name || "";
         els.type.value = quote.quote_type || "venta";
+        setChannel(quote.channel || "local", false);
         els.validityDays.value = quote.validity_days === null || quote.validity_days === undefined ? "" : String(quote.validity_days);
         els.validityTerms.value = quote.validity_terms || "";
         var editable = quote.editable !== false;
         [els.customer, els.type, els.validityDays, els.validityTerms, els.search].forEach(function (input) {
             input.disabled = !editable;
         });
+        if (els.channelLocal) els.channelLocal.disabled = !editable;
+        if (els.channelOnline) els.channelOnline.disabled = !editable;
         document.getElementById("cq-search-btn").disabled = !editable;
         if (els.lupa) {
             els.lupa.disabled = !editable;
@@ -404,6 +413,16 @@
             desc.textContent = line.description || "";
             detail.appendChild(sku);
             detail.appendChild(desc);
+            if (line.local_only || !line.product_id) {
+                var tag = document.createElement("span");
+                tag.className = "cq-local-only-tag";
+                tag.textContent = "Solo local";
+                tag.title = "Sin product_id WC — Facturar no aplica (P5a-6)";
+                detail.appendChild(tag);
+            }
+            if ((state.quote.channel || currentChannel()) === "local" || line.producto_base_id) {
+                detail.appendChild(familyControls(line, index, editable));
+            }
             tr.appendChild(detail);
             tr.appendChild(qtyStepperCell(line, index, editable));
             tr.appendChild(inputCell(line, index, "unit_price", editable));
@@ -480,6 +499,11 @@
             if (next < 0) next = 0;
             next = round3(next);
             state.quote.lines[index].quantity = next;
+            if (state.quote.lines[index].producto_base_id) {
+                input.value = formatQty(next);
+                recalcLocalLinePrice(state.quote.lines[index], index);
+                return;
+            }
             input.value = formatQty(next);
             renderTotals();
         }
@@ -596,6 +620,7 @@
     function syncHeader() {
         state.quote.customer_name = els.customer.value.trim();
         state.quote.quote_type = els.type.value;
+        state.quote.channel = currentChannel();
         state.quote.validity_days = els.validityDays.value === "" ? null : Number(els.validityDays.value);
         state.quote.validity_terms = els.validityTerms.value.trim();
     }
@@ -746,7 +771,8 @@
         post(cfg.actions.search, {
             q: query,
             mode: "advanced",
-            scope: scope
+            scope: scope,
+            channel: currentChannel()
         }).then(function (data) {
             state.modalResults = data.products || [];
             renderModalResults();
@@ -795,7 +821,7 @@
             return;
         }
         setMessage("");
-        post(cfg.actions.search, { q: query, mode: "quick" }).then(function (data) {
+        post(cfg.actions.search, { q: query, mode: "quick", channel: currentChannel() }).then(function (data) {
             state.results = data.products || [];
             // Rápida: un solo resultado (p.ej. SKU exacto) se auto-agrega. El modal nunca hace esto.
             if (state.results.length === 1) {
@@ -858,8 +884,13 @@
                 existing.unit_cost = Number(product.unit_cost);
             }
         } else {
+            var fam = product.family || {};
+            var mode = product.family_mode || fam.default_mode || "unitaria";
+            var upp = product.units_per_pack != null ? Number(product.units_per_pack) : (fam.units_per_pack != null ? Number(fam.units_per_pack) : 1);
+            if (!(upp > 0)) { upp = 1; }
             lines.push({
-                product_id: product.product_id,
+                product_id: product.product_id != null ? product.product_id : null,
+                producto_base_id: product.producto_base_id != null ? product.producto_base_id : null,
                 sku: product.sku,
                 supplier_code: product.supplier_code || "",
                 barcode: product.barcode || "",
@@ -869,7 +900,12 @@
                 unit_cost: product.unit_cost === null || product.unit_cost === undefined || product.unit_cost === "" ? null : Number(product.unit_cost),
                 price_discount: 0,
                 margin_discount: 0,
-                discount_amount: 0
+                discount_amount: 0,
+                family_mode: mode,
+                packaging: product.packaging || fam.packaging || mode,
+                units_per_pack: upp,
+                local_only: !!product.local_only || !product.product_id,
+                _family: fam
             });
         }
         els.results.hidden = true;
@@ -885,11 +921,13 @@
             customer_id: state.quote.customer_id,
             customer_name: state.quote.customer_name,
             quote_type: state.quote.quote_type,
+            channel: state.quote.channel || currentChannel(),
             validity_days: state.quote.validity_days,
             validity_terms: state.quote.validity_terms,
             lines: (state.quote.lines || []).map(function (line) {
                 return {
                     product_id: line.product_id,
+                    producto_base_id: line.producto_base_id != null ? line.producto_base_id : null,
                     sku: line.sku,
                     supplier_code: line.supplier_code || "",
                     barcode: line.barcode || "",
@@ -897,7 +935,12 @@
                     quantity: line.quantity,
                     unit_price: line.unit_price,
                     unit_cost: line.unit_cost,
-                    discount_amount: line.discount_amount || 0
+                    discount_amount: line.discount_amount || 0,
+                    price_discount: line.price_discount || 0,
+                    margin_discount: line.margin_discount || 0,
+                    family_mode: line.family_mode || null,
+                    packaging: line.packaging || null,
+                    units_per_pack: line.units_per_pack != null ? line.units_per_pack : null
                 };
             })
         };
@@ -948,6 +991,7 @@
             id: quote.id,
             customer_name: quote.customer_name || "",
             quote_type: quote.quote_type,
+            channel: quote.channel || "local",
             validity_days: quote.validity_days,
             validity_terms: quote.validity_terms || "",
             lines: quote.lines || []
@@ -1427,6 +1471,116 @@
             // Silencioso: stock es live informativo.
         });
     }
+
+
+    function currentChannel() {
+        if (els.channel && els.channel.value) {
+            return els.channel.value === "online" ? "online" : "local";
+        }
+        return (state.quote && state.quote.channel === "online") ? "online" : "local";
+    }
+
+    function setChannel(channel, interactive) {
+        channel = channel === "online" ? "online" : "local";
+        if (interactive && state.quote && (state.quote.lines || []).length && state.quote.channel && state.quote.channel !== channel) {
+            var ok = window.confirm(
+                "Cambiar a " + (channel === "online" ? "Online" : "Local") +
+                ".\nLas líneas ya cargadas se conservan; la búsqueda usará el nuevo canal.\n¿Continuar?"
+            );
+            if (!ok) { return; }
+        }
+        if (state.quote) { state.quote.channel = channel; }
+        if (els.channel) { els.channel.value = channel; }
+        if (els.channelLocal) { els.channelLocal.classList.toggle("is-active", channel === "local"); }
+        if (els.channelOnline) { els.channelOnline.classList.toggle("is-active", channel === "online"); }
+        if (els.search) {
+            els.search.placeholder = channel === "local"
+                ? "Local: SKU / barcode / proveedor (producto_base)"
+                : "Online: SKU / barcode / proveedor (Woo)";
+        }
+    }
+
+    function familyControls(line, index, editable) {
+        var wrap = document.createElement("div");
+        wrap.className = "cq-line-family";
+        var fam = line._family || {};
+        var modes = (fam.modes && fam.modes.length) ? fam.modes.slice() : ["unitaria"];
+        if (fam.pack && fam.pack.available && modes.indexOf("pack") < 0) { modes.push("pack"); }
+        if (fam.kit && fam.kit.available && modes.indexOf("kit") < 0) { modes.push("kit"); }
+        if (modes.indexOf("unitaria") < 0) { modes.unshift("unitaria"); }
+
+        var sel = document.createElement("select");
+        sel.title = "Presentación";
+        sel.disabled = !editable;
+        modes.forEach(function (m) {
+            var opt = document.createElement("option");
+            opt.value = m;
+            opt.textContent = m === "unitaria" ? "Unitaria" : (m === "pack" ? "Pack" : (m === "kit" ? "Kit" : m));
+            sel.appendChild(opt);
+        });
+        sel.value = line.family_mode || "unitaria";
+        if (modes.indexOf(sel.value) < 0) { sel.value = modes[0]; }
+        sel.addEventListener("change", function () {
+            line.family_mode = sel.value;
+            line.packaging = sel.value;
+            recalcLocalLinePrice(line, index);
+        });
+        wrap.appendChild(sel);
+
+        var envases = (fam.envases && fam.envases.length) ? fam.envases : [{ cantidad_unidades: line.units_per_pack || 1, label: "x" + (line.units_per_pack || 1) }];
+        var env = document.createElement("select");
+        env.title = "Envase / uds por pack";
+        env.disabled = !editable;
+        envases.forEach(function (e) {
+            var opt = document.createElement("option");
+            var qty = Number(e.cantidad_unidades || 1);
+            opt.value = String(qty);
+            opt.textContent = e.label || ("x" + qty);
+            env.appendChild(opt);
+        });
+        env.value = String(line.units_per_pack || envases[0].cantidad_unidades || 1);
+        env.addEventListener("change", function () {
+            line.units_per_pack = Number(env.value) || 1;
+            recalcLocalLinePrice(line, index);
+        });
+        wrap.appendChild(env);
+
+        if ((!fam.pack || !fam.pack.available) && (!fam.kit || !fam.kit.available)) {
+            var na = document.createElement("span");
+            na.style.fontSize = "0.7rem";
+            na.style.color = "#94a3b8";
+            na.textContent = "Pack/Kit N/A";
+            na.title = fam.n_a_reason || "Familia sin Pack/Kit comercial en POS";
+            wrap.appendChild(na);
+        }
+        return wrap;
+    }
+
+    function recalcLocalLinePrice(line, index) {
+        var pb = line.producto_base_id;
+        if (!pb || !cfg.actions || !cfg.actions.familyPrice) {
+            renderLines();
+            renderTotals();
+            return;
+        }
+        var packs = Number(line.quantity || 1);
+        var upp = Number(line.units_per_pack || 1);
+        if (!(upp > 0)) { upp = 1; }
+        post(cfg.actions.familyPrice, {
+            producto_base_id: String(pb),
+            family_qty: String(packs * upp)
+        }).then(function (data) {
+            if (data.unit_price != null) { line.unit_price = Number(data.unit_price); }
+            if (data.pricing && data.pricing.unit_cost != null) { line.unit_cost = Number(data.pricing.unit_cost); }
+            if (data.family) { line._family = data.family; }
+            renderLines();
+            renderTotals();
+        }).catch(function () {
+            renderLines();
+            renderTotals();
+        });
+    }
+
 
     function formatMoney(value) {
         var number = Number(value) || 0;

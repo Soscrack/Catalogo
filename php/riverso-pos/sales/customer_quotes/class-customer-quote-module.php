@@ -46,6 +46,9 @@ class Riverso_Customer_Quote_Module {
         if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_advanced_discounts')) {
             Riverso_POS_Activator::ensure_customer_quotes_advanced_discounts();
         }
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_channel')) {
+            Riverso_POS_Activator::ensure_customer_quotes_channel();
+        }
     }
 
     public function init() {
@@ -80,6 +83,15 @@ class Riverso_Customer_Quote_Module {
         add_action('wp_ajax_riverso_cq_received_list', array($this, 'ajax_received_list'));
         add_action('wp_ajax_riverso_cq_received_preview', array($this, 'ajax_received_preview'));
         add_action('wp_ajax_riverso_cq_received_import', array($this, 'ajax_received_import'));
+        // P1.5 proxies (nonce cotizaciones) → quick-view / pricing / families / unit / tienda-local
+        add_action('wp_ajax_riverso_cq_products_quick_lookup', array($this, 'ajax_products_quick_lookup'));
+        add_action('wp_ajax_riverso_cq_products_quick_search', array($this, 'ajax_products_quick_search'));
+        add_action('wp_ajax_riverso_cq_products_quick_summary', array($this, 'ajax_products_quick_summary'));
+        add_action('wp_ajax_riverso_cq_pricing', array($this, 'ajax_pricing'));
+        add_action('wp_ajax_riverso_cq_families', array($this, 'ajax_families'));
+        add_action('wp_ajax_riverso_cq_unit_product', array($this, 'ajax_unit_product'));
+        add_action('wp_ajax_riverso_cq_tienda_local', array($this, 'ajax_tienda_local'));
+        add_action('wp_ajax_riverso_cq_family_price', array($this, 'ajax_family_price'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_assets'));
     }
 
@@ -149,7 +161,16 @@ class Riverso_Customer_Quote_Module {
                 'receivedList' => 'riverso_cq_received_list',
                 'receivedPreview' => 'riverso_cq_received_preview',
                 'receivedImport' => 'riverso_cq_received_import',
+                'productsQuickLookup' => 'riverso_cq_products_quick_lookup',
+                'productsQuickSearch' => 'riverso_cq_products_quick_search',
+                'productsQuickSummary' => 'riverso_cq_products_quick_summary',
+                'pricing' => 'riverso_cq_pricing',
+                'families' => 'riverso_cq_families',
+                'unitProduct' => 'riverso_cq_unit_product',
+                'tiendaLocal' => 'riverso_cq_tienda_local',
+                'familyPrice' => 'riverso_cq_family_price',
             ),
+            'defaultChannel' => 'local',
         );
     }
 
@@ -239,17 +260,23 @@ class Riverso_Customer_Quote_Module {
         if (!in_array($scope, array('todo', 'descripcion', 'codigos'), true)) {
             $scope = 'todo';
         }
+        $channel = $this->catalog->normalize_channel($this->post_string('channel'));
         if ($mode === 'advanced' && ($scope === 'descripcion' || $scope === 'todo')) {
             $len = function_exists('mb_strlen') ? mb_strlen($query, 'UTF-8') : strlen($query);
             if ($scope === 'descripcion' && $len < 2) {
-                $this->ok(array('products' => array(), 'hint' => 'Escribe al menos 2 caracteres para buscar por descripción.'));
+                $this->ok(array(
+                    'products' => array(),
+                    'hint' => 'Escribe al menos 2 caracteres para buscar por descripción.',
+                    'channel' => $channel,
+                ));
                 return;
             }
         }
         $this->ok(array(
-            'products' => $this->catalog->search($query, 20, $mode, $scope),
+            'products' => $this->catalog->search($query, 20, $mode, $scope, $channel),
             'mode' => $mode,
             'scope' => $scope,
+            'channel' => $channel,
         ));
     }
 
@@ -453,7 +480,7 @@ class Riverso_Customer_Quote_Module {
                 $pid = isset($line['product_id']) ? (int) $line['product_id'] : 0;
                 $qty = isset($line['quantity']) ? (float) $line['quantity'] : 0.0;
                 if ($pid <= 0) {
-                    $this->fail('Hay líneas sin producto WooCommerce. No se puede facturar.');
+                    $this->fail('Hay líneas locales sin producto WooCommerce (product_id). No se puede facturar (P5a-6).');
                 }
                 if ($qty <= 0) {
                     $this->fail('Hay líneas con cantidad inválida. No se puede facturar.');
@@ -896,6 +923,267 @@ class Riverso_Customer_Quote_Module {
         ));
     }
 
+
+    /**
+     * Proxy: quick-view lookup (Local canónico).
+     */
+    public function ajax_products_quick_lookup() {
+        $this->authorize();
+        $this->ensure_quick_view_loaded();
+        if (!class_exists('Riverso_Product_Quick_View_Service')) {
+            $this->fail('Servicio quick-view no disponible.');
+        }
+        $code = $this->post_string('code');
+        if ($code === '') {
+            $code = $this->post_string('q');
+        }
+        $items = Riverso_Product_Quick_View_Service::get_instance()->lookup_for_quotes($code, 20);
+        $products = array();
+        foreach (is_array($items) ? $items : array() as $hit) {
+            $mapped = $this->catalog_map_local_hit($hit);
+            if ($mapped !== null) {
+                $products[] = $mapped;
+            }
+        }
+        $this->ok(array('products' => $products, 'items' => $items, 'channel' => 'local'));
+    }
+
+    public function ajax_products_quick_search() {
+        $this->authorize();
+        $this->ensure_quick_view_loaded();
+        if (!class_exists('Riverso_Product_Quick_View_Service')) {
+            $this->fail('Servicio quick-view no disponible.');
+        }
+        $term = $this->post_string('term');
+        if ($term === '') {
+            $term = $this->post_string('q');
+        }
+        $field = $this->post_string('field');
+        if ($field === '') {
+            $field = 'todos';
+        }
+        $items = Riverso_Product_Quick_View_Service::get_instance()->search_for_quotes($term, $field, 20);
+        $products = array();
+        foreach (is_array($items) ? $items : array() as $hit) {
+            $mapped = $this->catalog_map_local_hit($hit);
+            if ($mapped !== null) {
+                $products[] = $mapped;
+            }
+        }
+        $this->ok(array('products' => $products, 'items' => $items, 'channel' => 'local', 'field' => $field));
+    }
+
+    public function ajax_products_quick_summary() {
+        $this->authorize();
+        $this->ensure_quick_view_loaded();
+        if (!class_exists('Riverso_Product_Quick_View_Service')) {
+            $this->fail('Servicio quick-view no disponible.');
+        }
+        $id = (int) $this->post_string('producto_base_id');
+        if ($id <= 0) {
+            $id = (int) $this->post_string('id');
+        }
+        $summary = Riverso_Product_Quick_View_Service::get_instance()->build_summary($id);
+        if (is_wp_error($summary)) {
+            $this->fail($summary->get_error_message());
+        }
+        $this->ok(array('summary' => $summary));
+    }
+
+    /**
+     * Proxy pricing: op=local_price|online_price|family_offers
+     */
+    public function ajax_pricing() {
+        $this->authorize();
+        $op = strtolower($this->post_string('op'));
+        $pb = (int) $this->post_string('producto_base_id');
+        $qty = (float) $this->post_string('family_qty');
+        if ($qty <= 0) {
+            $qty = 1.0;
+        }
+        if ($op === '' || $op === 'local_price') {
+            if ($pb <= 0) {
+                $this->fail('producto_base_id requerido');
+            }
+            $this->ok(array('pricing' => $this->catalog->local_price_pack($pb, $qty)));
+        }
+        if ($op === 'online_price') {
+            if ($pb <= 0 || !class_exists('Riverso_Pricing_Module')) {
+                $this->fail('producto_base_id / pricing no disponible');
+            }
+            $var = (int) $this->post_string('woocommerce_variation_id');
+            $row = Riverso_Pricing_Module::get_instance()->get_online_price($pb, $var);
+            $this->ok(array('pricing' => $row));
+        }
+        if ($op === 'family_offers') {
+            if ($pb <= 0) {
+                $this->fail('producto_base_id requerido');
+            }
+            $this->ok(array('family' => $this->catalog->family_offers_for_base($pb)));
+        }
+        $this->fail('op inválido (local_price|online_price|family_offers)');
+    }
+
+    /**
+     * Proxy families (solo lectura): op=exacta|commercial
+     * No create_product comercial desde cotización.
+     */
+    public function ajax_families() {
+        $this->authorize();
+        $op = strtolower($this->post_string('op'));
+        if ($op === '' || $op === 'exacta') {
+            $pb = (int) $this->post_string('producto_base_id');
+            if ($pb <= 0 || !class_exists('Riverso_Family_Module')) {
+                $this->fail('producto_base_id / families no disponible');
+            }
+            $fam = Riverso_Family_Module::get_instance()->get_exacta_family_of_product($pb);
+            $this->ok(array('family' => $fam, 'offers' => $this->catalog->family_offers_for_base($pb)));
+        }
+        if ($op === 'commercial') {
+            $grupo = (int) $this->post_string('grupo_id');
+            if ($grupo <= 0 || !class_exists('Riverso_Family_Commercial_Service')) {
+                $this->fail('grupo_id / commercial no disponible');
+            }
+            $snap = Riverso_Family_Commercial_Service::get_instance()->get_snapshot($grupo);
+            if (is_wp_error($snap)) {
+                $this->fail($snap->get_error_message());
+            }
+            $this->ok(array('commercial' => $snap));
+        }
+        $this->fail('op inválido (exacta|commercial). create_product fuera de alcance.');
+    }
+
+    /**
+     * Proxy unit-product (lectura): op=snapshot|resolve|pack_members|envase
+     */
+    public function ajax_unit_product() {
+        $this->authorize();
+        if (!class_exists('Riverso_Unit_Product_Service')) {
+            $this->fail('Unit product service no disponible');
+        }
+        $svc = Riverso_Unit_Product_Service::get_instance();
+        $op = strtolower($this->post_string('op'));
+        if ($op === '' || $op === 'resolve') {
+            $pb = (int) $this->post_string('producto_base_id');
+            $ctx = $svc->resolve_family_unit_for_base($pb);
+            $this->ok(array('unit' => $ctx, 'offers' => $this->catalog->family_offers_for_base($pb)));
+        }
+        if ($op === 'snapshot') {
+            $grupo = (int) $this->post_string('grupo_id');
+            $snap = $svc->get_unit_snapshot($grupo);
+            if (is_wp_error($snap)) {
+                $this->fail($snap->get_error_message());
+            }
+            $this->ok(array('snapshot' => $snap));
+        }
+        if ($op === 'pack_members') {
+            $grupo = (int) $this->post_string('grupo_id');
+            $this->ok(array('members' => $svc->get_pack_members_by_qty($grupo)));
+        }
+        if ($op === 'envase') {
+            $pb = (int) $this->post_string('producto_base_id');
+            $this->ok(array('envase' => $svc->get_canonical_envase($pb)));
+        }
+        $this->fail('op inválido (resolve|snapshot|pack_members|envase)');
+    }
+
+    /**
+     * Proxy tienda-local search (legacy help).
+     */
+    public function ajax_tienda_local() {
+        $this->authorize();
+        if (!class_exists('Riverso_Tienda_Local_Module')) {
+            $this->fail('Tienda local no disponible');
+        }
+        $q = $this->post_string('q');
+        if ($q === '') {
+            $q = $this->post_string('query');
+        }
+        $result = Riverso_Tienda_Local_Module::get_instance()->search($q);
+        $this->ok(array('result' => $result, 'channel' => 'local'));
+    }
+
+    /**
+     * Recalc precio familia (Local) como POS rule_price / recalc_family_price.
+     */
+    public function ajax_family_price() {
+        $this->authorize();
+        $pb = (int) $this->post_string('producto_base_id');
+        $qty = (float) $this->post_string('family_qty');
+        if ($qty <= 0) {
+            $qty = (float) $this->post_string('qty');
+        }
+        if ($qty <= 0) {
+            $qty = 1.0;
+        }
+        if ($pb <= 0) {
+            $pid = (int) $this->post_string('product_id');
+            if ($pid > 0 && class_exists('Riverso_Pricing_Module')) {
+                $pb = (int) Riverso_Pricing_Module::get_instance()->get_base_id_by_wc($pid, 0);
+            }
+        }
+        if ($pb <= 0) {
+            $this->fail('producto_base_id requerido');
+        }
+        $pack = $this->catalog->local_price_pack($pb, $qty);
+        $offers = $this->catalog->family_offers_for_base($pb);
+        $this->ok(array(
+            'pricing' => $pack,
+            'family' => $offers,
+            'unit_price' => $pack['unit_price'],
+            'producto_base_id' => $pb,
+            'family_qty' => $qty,
+        ));
+    }
+
+    private function ensure_quick_view_loaded() {
+        if (class_exists('Riverso_Product_Quick_View_Service')) {
+            return;
+        }
+        $path = RIVERSO_POS_PLUGIN_DIR . 'modules/products/class-product-quick-view-service.php';
+        if (file_exists($path)) {
+            require_once $path;
+        }
+    }
+
+    /**
+     * @param array $hit
+     * @return array|null
+     */
+    private function catalog_map_local_hit(array $hit) {
+        // Reusa map vía search_local interno: construir producto mínimo.
+        $pb = isset($hit['id']) ? (int) $hit['id'] : 0;
+        if ($pb <= 0) {
+            return null;
+        }
+        $rows = $this->catalog->search(
+            isset($hit['canonical_sku']) ? (string) $hit['canonical_sku'] : (string) $pb,
+            1,
+            'quick',
+            'codigos',
+            'local'
+        );
+        if ($rows) {
+            return $rows[0];
+        }
+        $price = $this->catalog->local_price_pack($pb, 1.0);
+        $wc = $this->catalog->resolve_wc_product_id($pb);
+        return array(
+            'product_id' => $wc > 0 ? $wc : null,
+            'producto_base_id' => $pb,
+            'sku' => isset($hit['canonical_sku']) ? (string) $hit['canonical_sku'] : ('PB-' . $pb),
+            'barcode' => isset($hit['barcode']) ? (string) $hit['barcode'] : '',
+            'supplier_code' => isset($hit['codigo_proveedor']) ? (string) $hit['codigo_proveedor'] : '',
+            'description' => isset($hit['nombre']) ? (string) $hit['nombre'] : '',
+            'unit_price' => $price['unit_price'],
+            'unit_cost' => $price['unit_cost'],
+            'channel' => 'local',
+            'local_only' => $wc <= 0,
+            'family' => $this->catalog->family_offers_for_base($pb),
+            'facturar_ok' => $wc > 0,
+        );
+    }
+
     /**
      * Crea tablas base (idempotente). Campos P0+P1 los agrega phase57.
      */
@@ -937,6 +1225,7 @@ class Riverso_Customer_Quote_Module {
             rejected_at DATETIME DEFAULT NULL,
             rejection_reason TEXT,
             order_id BIGINT(20) UNSIGNED DEFAULT NULL,
+            channel VARCHAR(16) NOT NULL DEFAULT 'local',
             created_by BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
@@ -946,6 +1235,7 @@ class Riverso_Customer_Quote_Module {
             KEY idx_status (status),
             KEY idx_quote_type (quote_type),
             KEY idx_cq_order_id (order_id),
+            KEY idx_cq_channel (channel),
             KEY idx_created_by (created_by),
             KEY idx_valid_until (valid_until)
         ) $charset_collate;";
@@ -972,6 +1262,10 @@ class Riverso_Customer_Quote_Module {
             total DECIMAL(12,2) NOT NULL DEFAULT 0,
             line_total DECIMAL(14,2) NOT NULL DEFAULT 0,
             sort_order INT DEFAULT 0,
+            producto_base_id BIGINT(20) UNSIGNED DEFAULT NULL,
+            family_mode VARCHAR(32) DEFAULT NULL,
+            packaging VARCHAR(64) DEFAULT NULL,
+            units_per_pack DECIMAL(14,4) DEFAULT NULL,
             PRIMARY KEY (id),
             KEY idx_quote (quote_id),
             KEY idx_product (product_id)

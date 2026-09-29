@@ -358,6 +358,7 @@ class Riverso_POS_Activator {
         self::create_phase56_folio_zero_norm($prefix);
         self::create_phase57_customer_quotes_sale_fields($prefix);
         self::create_phase58_customer_quotes_advanced_discounts($prefix);
+        self::create_phase59_customer_quotes_channel($prefix);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -5428,6 +5429,14 @@ class Riverso_POS_Activator {
     }
 
     /**
+     * Garantiza channel + meta de presentacion en cotizaciones (P1.5).
+     */
+    public static function ensure_customer_quotes_channel() {
+        global $wpdb;
+        self::create_phase59_customer_quotes_channel($wpdb->prefix . 'riverso_');
+    }
+
+    /**
      * Fase 56: recalcular doc_hash de escaneos cuyo folio tenía ceros a la izquierda.
      * No renombra folios de facturas ni toca tablas de precios.
      */
@@ -5584,5 +5593,34 @@ class Riverso_POS_Activator {
             ));
         }
     }
+
+    /**
+     * Fase 59 (P1.5): channel Local|Online en cabecera + meta presentacion en lineas.
+     * Idempotente: add_column_if_missing.
+     */
+    private static function create_phase59_customer_quotes_channel($prefix) {
+        $quotes = "{$prefix}customer_quotes";
+        $items = "{$prefix}customer_quote_items";
+
+        self::add_column_if_missing($quotes, 'channel', "channel VARCHAR(16) NOT NULL DEFAULT 'local'");
+        self::add_index_if_missing($quotes, 'idx_cq_channel', 'KEY idx_cq_channel (channel)');
+
+        self::add_column_if_missing($items, 'producto_base_id', 'producto_base_id BIGINT UNSIGNED NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'family_mode', 'family_mode VARCHAR(32) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'packaging', 'packaging VARCHAR(64) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'units_per_pack', 'units_per_pack DECIMAL(14,4) NULL DEFAULT NULL');
+
+        if (get_option('riverso_pos_phase59_customer_quotes_channel') === '1') {
+            return;
+        }
+        update_option('riverso_pos_phase59_customer_quotes_channel', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase59_customer_quotes_channel', 'customer_quotes', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 59: channel local|online + family_mode/packaging en lineas',
+            ));
+        }
+    }
+
 }
 

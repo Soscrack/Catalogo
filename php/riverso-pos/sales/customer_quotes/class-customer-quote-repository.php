@@ -119,6 +119,9 @@ class Riverso_Customer_Quote_Repository {
         if ($notes === null) {
             $notes = '';
         }
+        $channel = $this->normalize_channel(
+            isset($input['channel']) ? $input['channel'] : (isset($existing['channel']) ? $existing['channel'] : 'local')
+        );
 
         $lines = array();
         foreach ($input['lines'] as $line) {
@@ -136,6 +139,7 @@ class Riverso_Customer_Quote_Repository {
                 'customer_id' => $customer_id,
                 'customer_name' => $customer_name !== '' ? $customer_name : '',
                 'quote_type' => $quote_type,
+                'channel' => $channel,
                 'validity_days' => $validity_days,
                 'validity_terms' => $validity_terms,
                 'notes' => $notes,
@@ -347,6 +351,7 @@ class Riverso_Customer_Quote_Repository {
             $candidate = array(
                 'quote_id' => $quote_id,
                 'product_id' => $line['product_id'],
+                'producto_base_id' => isset($line['producto_base_id']) ? $line['producto_base_id'] : null,
                 'sku' => $line['sku'],
                 'name' => $desc,
                 'supplier_code' => $line['supplier_code'] !== '' ? $line['supplier_code'] : null,
@@ -365,6 +370,9 @@ class Riverso_Customer_Quote_Repository {
                 'total' => $line_net,
                 'line_total' => $line_net,
                 'sort_order' => $line['sort_order'],
+                'family_mode' => isset($line['family_mode']) ? $line['family_mode'] : null,
+                'packaging' => isset($line['packaging']) ? $line['packaging'] : null,
+                'units_per_pack' => isset($line['units_per_pack']) ? $line['units_per_pack'] : null,
             );
 
             // Schema legado: quantity INT. Evitar "1.000" si la columna no es decimal.
@@ -420,8 +428,33 @@ class Riverso_Customer_Quote_Repository {
         if ($unit_cost === '') {
             $unit_cost = null;
         }
+        $pb = isset($line['producto_base_id']) ? $line['producto_base_id'] : null;
+        $pb = ($pb === '' || $pb === null) ? null : (int) $pb;
+        if ($pb !== null && $pb <= 0) {
+            $pb = null;
+        }
+        $family_mode = isset($line['family_mode']) ? strtolower(trim((string) $line['family_mode'])) : '';
+        if ($family_mode === '') {
+            $family_mode = null;
+        } elseif (!in_array($family_mode, array('unitaria', 'pack', 'kit'), true)) {
+            $family_mode = $this->clip($family_mode, 32);
+        }
+        $packaging = isset($line['packaging']) ? $this->clip(trim((string) $line['packaging']), 64) : '';
+        if ($packaging === '') {
+            $packaging = null;
+        }
+        $upp = isset($line['units_per_pack']) ? $line['units_per_pack'] : null;
+        if ($upp === '' || $upp === null) {
+            $upp = null;
+        } else {
+            $upp = round((float) $upp, 4);
+            if ($upp <= 0) {
+                $upp = null;
+            }
+        }
         return array(
             'product_id' => $product_id,
+            'producto_base_id' => $pb,
             'sku' => $sku,
             'supplier_code' => $this->clip(trim((string) (isset($line['supplier_code']) ? $line['supplier_code'] : '')), 64),
             'barcode' => $this->clip(trim((string) (isset($line['barcode']) ? $line['barcode'] : '')), 64),
@@ -432,6 +465,9 @@ class Riverso_Customer_Quote_Repository {
             'price_discount' => $this->rate(isset($line['price_discount']) ? $line['price_discount'] : 0),
             'margin_discount' => $this->rate(isset($line['margin_discount']) ? $line['margin_discount'] : 0),
             'discount_amount' => round((float) (isset($line['discount_amount']) ? $line['discount_amount'] : 0), 2),
+            'family_mode' => $family_mode,
+            'packaging' => $packaging,
+            'units_per_pack' => $upp,
         );
     }
 
@@ -565,6 +601,7 @@ class Riverso_Customer_Quote_Repository {
                 $profit_total = $recalc['profit_total'];
             }
         }
+        $channel = $this->normalize_channel(isset($row['channel']) ? $row['channel'] : 'local');
         return array(
             'id' => (int) $row['id'],
             'quote_number' => (string) $row['quote_number'],
@@ -572,6 +609,7 @@ class Riverso_Customer_Quote_Repository {
             'customer_name' => (string) (isset($row['customer_name']) ? $row['customer_name'] : ''),
             'quote_type' => $type,
             'quote_type_label' => Riverso_Quote_Type::label($type),
+            'channel' => $channel,
             'status' => $status,
             'status_label' => Riverso_Quote_Status::label($status),
             'validity_days' => $validity,
@@ -699,6 +737,7 @@ class Riverso_Customer_Quote_Repository {
         return array(
             'id' => (int) (isset($line['id']) ? $line['id'] : 0),
             'product_id' => $this->nullable_int(isset($line['product_id']) ? $line['product_id'] : null),
+            'producto_base_id' => $this->nullable_int(isset($line['producto_base_id']) ? $line['producto_base_id'] : null),
             'sku' => (string) (isset($line['sku']) ? $line['sku'] : ''),
             'supplier_code' => (string) (isset($line['supplier_code']) ? $line['supplier_code'] : ''),
             'barcode' => (string) (isset($line['barcode']) ? $line['barcode'] : ''),
@@ -712,7 +751,18 @@ class Riverso_Customer_Quote_Repository {
             'line_net' => (float) $normalized['line_net'],
             'line_profit' => $normalized['line_profit'],
             'line_margin_percent' => $normalized['line_margin_percent'],
+            'family_mode' => isset($line['family_mode']) && $line['family_mode'] !== '' && $line['family_mode'] !== null
+                ? (string) $line['family_mode'] : null,
+            'packaging' => isset($line['packaging']) && $line['packaging'] !== '' && $line['packaging'] !== null
+                ? (string) $line['packaging'] : null,
+            'units_per_pack' => $this->nullable_float(isset($line['units_per_pack']) ? $line['units_per_pack'] : null),
+            'local_only' => empty($line['product_id']),
         );
+    }
+
+    private function normalize_channel($value) {
+        $value = strtolower(trim((string) $value));
+        return $value === 'online' ? 'online' : 'local';
     }
 
     private function nullable_int($value) {
@@ -740,7 +790,10 @@ class Riverso_Customer_Quote_Repository {
         if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_advanced_discounts')) {
             Riverso_POS_Activator::ensure_customer_quotes_advanced_discounts();
         }
-        // Invalidar caché de columnas: phase57/58 pudieron agregar campos.
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_channel')) {
+            Riverso_POS_Activator::ensure_customer_quotes_channel();
+        }
+        // Invalidar cache de columnas: phase57/58/59 pudieron agregar campos.
         $this->item_columns = null;
         $this->quote_columns = null;
     }

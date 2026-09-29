@@ -572,6 +572,53 @@ class Riverso_Product_Quick_View_Service {
      * @param int $producto_base_id
      * @return array|WP_Error
      */
+
+    /**
+     * Lookup exacto para cotizaciones (reuso público de resolve/hydrate).
+     *
+     * @param string $code
+     * @param int    $limit
+     * @return array
+     */
+    public function lookup_for_quotes($code, $limit = 20) {
+        $code = trim((string) $code);
+        $limit = max(1, (int) $limit);
+        if ($code === '') {
+            return [];
+        }
+        $ids = $this->resolve_exact_product_ids($code);
+        if (!$ids && strlen($code) >= 2) {
+            $ids = $this->search_product_ids($code, 'codigos', $limit);
+        }
+        $ids = array_slice(array_values(array_unique(array_map('intval', $ids))), 0, $limit);
+        return $this->hydrate_grid_rows($ids, $code);
+    }
+
+    /**
+     * Búsqueda parcial para cotizaciones (reuso público).
+     *
+     * @param string $term
+     * @param string $field todos|nombre|proveedor|codigo_proveedor|sku|barcode|codigos
+     * @param int    $limit
+     * @return array
+     */
+    public function search_for_quotes($term, $field = 'todos', $limit = 20) {
+        $term = trim((string) $term);
+        $limit = max(1, (int) $limit);
+        $allowed = ['todos', 'nombre', 'proveedor', 'codigo_proveedor', 'sku', 'barcode', 'codigos'];
+        $field = sanitize_key((string) $field);
+        if (!in_array($field, $allowed, true)) {
+            $field = 'todos';
+        }
+        if ($term === '' || (strlen($term) < 2 && $field !== 'sku' && $field !== 'barcode' && $field !== 'codigos')) {
+            if (strlen($term) < 1) {
+                return [];
+            }
+        }
+        $ids = $this->search_product_ids($term, $field, $limit);
+        return $this->hydrate_grid_rows($ids, $term);
+    }
+
     public function build_summary($producto_base_id) {
         global $wpdb;
         $prefix = $this->prefix();

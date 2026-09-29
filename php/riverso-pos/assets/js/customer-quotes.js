@@ -798,20 +798,58 @@
             var meta = document.createElement("div");
             meta.className = "cq-result-meta";
             meta.textContent = "Proveedor " + (product.supplier_code || "—") + " · Barras " + (product.barcode || "—");
+            appendPriceHint(meta, product);
             info.appendChild(sku);
             info.appendChild(meta);
             var add = document.createElement("button");
             add.type = "button";
             add.className = "cq-btn";
-            add.textContent = "Agregar";
+            add.textContent = lacksLocalPrice(product) ? "Agregar ($0)" : "Agregar";
             add.addEventListener("click", function () {
-                addProduct(product);
+                if (!addProduct(product)) {
+                    setModalHint("No se agregó «" + (product.sku || "?") + "»: sin precio Local (cancelado).", true);
+                    return;
+                }
                 setModalHint("Agregado «" + product.sku + "». Puedes seguir buscando.", false);
             });
             li.appendChild(info);
             li.appendChild(add);
             els.modalResults.appendChild(li);
         });
+    }
+
+    function isLocalProduct(product) {
+        if (!product) return false;
+        if (product.channel === "local") return true;
+        if (product.producto_base_id) return true;
+        return currentChannel() === "local";
+    }
+
+    /** Local sin p_asignado/regla usable: unit_price 0 es dato, no path distinto por código. */
+    function lacksLocalPrice(product) {
+        if (!isLocalProduct(product)) return false;
+        if (product.sin_precio_local === true) return true;
+        if (product.has_local_price === false) return true;
+        var price = Number(product.unit_price);
+        return !(price > 0);
+    }
+
+    function confirmAddWithoutLocalPrice(product) {
+        var sku = (product && product.sku) ? product.sku : "?";
+        return window.confirm(
+            "«" + sku + "» no tiene precio Local asignado (sin precio Local / $0).\n" +
+            "No se inventará un precio. ¿Agregar la línea a $0 de todos modos?"
+        );
+    }
+
+    function appendPriceHint(metaEl, product) {
+        if (!metaEl || !lacksLocalPrice(product)) return;
+        var badge = document.createElement("span");
+        badge.className = "cq-badge cq-badge-no-price";
+        badge.textContent = "sin precio Local";
+        badge.title = "get_local_price / familia no devolvió p_asignado usable; unit_price=0 es dato, no inventado.";
+        metaEl.appendChild(document.createTextNode(" · "));
+        metaEl.appendChild(badge);
     }
 
     function searchProducts() {
@@ -823,9 +861,15 @@
         setMessage("");
         post(cfg.actions.search, { q: query, mode: "quick", channel: currentChannel() }).then(function (data) {
             state.results = data.products || [];
-            // Rápida: un solo resultado (p.ej. SKU exacto) se auto-agrega. El modal nunca hace esto.
+            // Rápida: un solo resultado con precio Local se auto-agrega. Nunca auto-agregar a $0.
             if (state.results.length === 1) {
-                addProduct(state.results[0]);
+                var only = state.results[0];
+                if (lacksLocalPrice(only)) {
+                    renderResults();
+                    setMessage("«" + (only.sku || "?") + "» sin precio Local. Confirma Agregar si quieres la línea a $0.", true);
+                    return;
+                }
+                addProduct(only, { auto: true });
                 els.search.value = "";
                 els.results.hidden = true;
                 return;
@@ -851,12 +895,13 @@
             var meta = document.createElement("div");
             meta.className = "cq-result-meta";
             meta.textContent = "Proveedor " + (product.supplier_code || "—") + " · Barras " + (product.barcode || "—");
+            appendPriceHint(meta, product);
             info.appendChild(sku);
             info.appendChild(meta);
             var add = document.createElement("button");
             add.type = "button";
             add.className = "cq-btn";
-            add.textContent = "Agregar";
+            add.textContent = lacksLocalPrice(product) ? "Agregar ($0)" : "Agregar";
             add.addEventListener("click", function () {
                 addProduct(product);
             });
@@ -866,7 +911,18 @@
         });
     }
 
-    function addProduct(product) {
+    function addProduct(product, opts) {
+        opts = opts || {};
+        if (lacksLocalPrice(product)) {
+            // Nunca auto-agregar / agregar en silencio a $0 (HF 1.8.26).
+            if (opts.auto) {
+                return false;
+            }
+            if (!confirmAddWithoutLocalPrice(product)) {
+                setMessage("No se agregó «" + (product.sku || "?") + "»: sin precio Local.", true);
+                return false;
+            }
+        }
         var lines = state.quote.lines;
         var sku = String(product.sku || "").toLowerCase();
         var addQty = product.quantity !== undefined && product.quantity !== null && product.quantity !== ""
@@ -911,7 +967,10 @@
         els.results.hidden = true;
         renderLines();
         renderTotals();
-        setMessage("Producto agregado.", false);
+        setMessage(lacksLocalPrice(product)
+            ? ("Producto agregado a $0 (sin precio Local): «" + (product.sku || "?") + "».")
+            : "Producto agregado.", false);
+        return true;
     }
 
     function saveQuote() {

@@ -149,6 +149,7 @@ class Riverso_Quote_Catalog_Lookup {
         $price_pack = $this->local_price_pack($pb_id, 1.0);
         $family = $this->family_offers_for_base($pb_id);
 
+        $has_local_price = ((float) $price_pack['unit_price']) > 0;
         return array(
             'product_id' => $wc_id > 0 ? $wc_id : null,
             'producto_base_id' => $pb_id,
@@ -158,6 +159,10 @@ class Riverso_Quote_Catalog_Lookup {
             'description' => isset($hit['nombre']) ? (string) $hit['nombre'] : (isset($hit['description']) ? (string) $hit['description'] : $sku),
             'unit_price' => $price_pack['unit_price'],
             'unit_cost' => $price_pack['unit_cost'],
+            'has_local_price' => $has_local_price,
+            'sin_precio_local' => !$has_local_price,
+            'p_asignado' => $price_pack['p_asignado'],
+            'local_price' => $price_pack['local_price'],
             'channel' => 'local',
             'local_only' => $wc_id <= 0,
             'family_mode' => isset($family['default_mode']) ? $family['default_mode'] : 'unitaria',
@@ -252,13 +257,16 @@ class Riverso_Quote_Catalog_Lookup {
             }
         }
 
+        $unit_price_r = round((float) $unit_price, 2);
         return array(
-            'unit_price' => round((float) $unit_price, 2),
+            'unit_price' => $unit_price_r,
             'unit_cost' => $unit_cost === null ? null : round((float) $unit_cost, 2),
             'local_price' => $local_price,
             'rule_price' => $rule_price,
             'p_asignado' => $p_asignado,
             'c_ref' => $c_ref,
+            'has_local_price' => $unit_price_r > 0,
+            'sin_precio_local' => $unit_price_r <= 0,
             'family_qty' => $family_qty,
             'producto_base_id' => $producto_base_id,
         );

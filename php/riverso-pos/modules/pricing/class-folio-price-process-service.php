@@ -131,6 +131,38 @@ class Riverso_Folio_Price_Process_Service {
     }
 
     /**
+     * IDs de producto_base presentes en el folio (línea y target de precio).
+     * Solo lectura: no evalúa gates ni crea tareas.
+     *
+     * @param int $factura_id
+     * @return array<int, true>
+     */
+    public function price_product_ids($factura_id) {
+        $loaded = $this->load_factura_product_items($factura_id);
+        if (is_wp_error($loaded)) {
+            return [];
+        }
+        $proveedor_id = (int) ($loaded['factura']['proveedor_id'] ?? 0);
+        $ids = [];
+        foreach ($loaded['items'] as $item) {
+            $resolved = $this->resolve_item_product($item, $proveedor_id);
+            if (!$resolved) {
+                continue;
+            }
+            $pb = (int) $resolved['producto_base_id'];
+            if ($pb > 0) {
+                $ids[$pb] = true;
+            }
+            $target = $this->resolve_price_target($pb);
+            $target_id = (int) ($target['target_id'] ?? 0);
+            if ($target_id > 0) {
+                $ids[$target_id] = true;
+            }
+        }
+        return $ids;
+    }
+
+    /**
      * Todas las líneas del folio (producto, flete, gasto) para el panel Ver Info.
      *
      * @return array<int,array<string,mixed>>
@@ -3642,6 +3674,16 @@ class Riverso_Folio_Price_Process_Service {
             $result = $pricing->upsert_assigned_price($target_id, 'local', $p_asignado, 0, $meta);
             if (is_wp_error($result)) {
                 return $result;
+            }
+            // Confirmar en folio = precio usable en cotizaciones / TPV (aprobado).
+            // upsert deja pendiente; approve_price también propaga a emparejados del mismo folio.
+            $precio_id = is_array($result) ? (int) ($result['id'] ?? 0) : 0;
+            if ($precio_id > 0 && method_exists($pricing, 'approve_price')) {
+                $approved = $pricing->approve_price($precio_id);
+                if (is_wp_error($approved)) {
+                    return $approved;
+                }
+                $result = $pricing->get_local_price($target_id) ?: $result;
             }
             $applied = true;
         }

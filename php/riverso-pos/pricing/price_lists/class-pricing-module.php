@@ -693,6 +693,29 @@ class Riverso_Pricing_Module {
             return new WP_Error('no_assigned', 'Debe asignar un precio antes de aprobar');
         }
 
+        $this->mark_price_approved($row, 'Aprobación de precio');
+        $this->approve_paired_on_same_folio($row);
+
+        return true;
+    }
+
+    /**
+     * Deja la fila de precio en aprobado y deja constancia en historial.
+     *
+     * @param array  $row  Fila de riverso_precios
+     * @param string $notas
+     */
+    private function mark_price_approved(array $row, $notas) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $precio_id = (int) $row['id'];
+        if ($precio_id <= 0 || $row['p_asignado'] === null || $row['p_asignado'] === '') {
+            return;
+        }
+        if (($row['estado_aprobacion'] ?? '') === 'aprobado') {
+            return;
+        }
+
         $wpdb->update(
             "{$prefix}precios",
             [
@@ -709,6 +732,7 @@ class Riverso_Pricing_Module {
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('price_approved', 'precio', $precio_id, [
                 'new_value' => ['p_asignado' => $row['p_asignado']],
+                'details' => $notas,
             ]);
         }
 
@@ -722,10 +746,100 @@ class Riverso_Pricing_Module {
             'p_asignado_anterior' => $row['p_asignado'],
             'p_asignado_nuevo' => $row['p_asignado'],
             'source_type' => 'system',
-            'notas' => 'Aprobación de precio',
+            'notas' => $notas,
         ]);
+    }
 
-        return true;
+    /**
+     * Al aprobar un precio local, aprueba también a los emparejados de precio
+     * que están en el mismo folio del que salió ese precio.
+     *
+     * El guardado del folio ya copia p_asignado a todos los miembros y los deja
+     * en pendiente. Esta aprobación solo replica el estado, no el monto.
+     *
+     * @param array $row Fila de riverso_precios recién aprobada
+     */
+    private function approve_paired_on_same_folio(array $row) {
+        if (($row['canal'] ?? '') !== self::CANAL_LOCAL) {
+            return;
+        }
+        $producto_base_id = (int) ($row['producto_base_id'] ?? 0);
+        if ($producto_base_id <= 0 || !class_exists('Riverso_Emparejamiento_Module')) {
+            return;
+        }
+
+        $emp_mod = Riverso_Emparejamiento_Module::get_instance();
+        $emp = $emp_mod->get_of_product($producto_base_id);
+        if (!$emp || empty($emp['emparejar_precios'])) {
+            return;
+        }
+
+        $factura_id = $this->latest_folio_id_for_product($producto_base_id);
+        if ($factura_id <= 0) {
+            return;
+        }
+
+        $on_folio = $this->product_ids_on_folio($factura_id);
+        if (!$on_folio) {
+            return;
+        }
+
+        $notas = 'Aprobación por emparejamiento en el mismo folio';
+        foreach ($emp_mod->get_members((int) $emp['id']) as $member) {
+            $pid = (int) ($member['producto_base_id'] ?? 0);
+            if ($pid <= 0 || $pid === $producto_base_id || empty($on_folio[$pid])) {
+                continue;
+            }
+            $local = $this->get_local_price($pid);
+            if (!$local || $local['p_asignado'] === null || $local['p_asignado'] === '') {
+                continue;
+            }
+            $this->mark_price_approved($local, $notas);
+        }
+    }
+
+    /**
+     * Último folio que escribió el precio local de este producto.
+     *
+     * @param int $producto_base_id
+     * @return int
+     */
+    private function latest_folio_id_for_product($producto_base_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT source_document_id
+             FROM {$prefix}precio_historial
+             WHERE producto_base_id = %d
+               AND canal = %s
+               AND source_type = 'folio'
+               AND source_document_id IS NOT NULL
+               AND source_document_id > 0
+             ORDER BY id DESC
+             LIMIT 1",
+            (int) $producto_base_id,
+            self::CANAL_LOCAL
+        ));
+    }
+
+    /**
+     * Productos (línea y target de precio) presentes en un folio.
+     *
+     * @param int $factura_id
+     * @return array<int, true>
+     */
+    private function product_ids_on_folio($factura_id) {
+        if (!class_exists('Riverso_Folio_Price_Process_Service')) {
+            $path = dirname(__FILE__, 3) . '/modules/pricing/class-folio-price-process-service.php';
+            if (is_readable($path)) {
+                require_once $path;
+            }
+        }
+        if (!class_exists('Riverso_Folio_Price_Process_Service')) {
+            return [];
+        }
+
+        return Riverso_Folio_Price_Process_Service::get_instance()->price_product_ids((int) $factura_id);
     }
 
     /**

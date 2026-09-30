@@ -212,7 +212,7 @@ class Riverso_Customer_Quote_Module {
         if ($quote === null) {
             $this->fail('Cotización no encontrada.', 404);
         }
-        $this->ok(array('quote' => $quote));
+        $this->ok(array('quote' => $this->catalog->hydrate_quote_families($quote)));
     }
 
     public function ajax_save() {
@@ -230,6 +230,7 @@ class Riverso_Customer_Quote_Module {
         } catch (Riverso_Quote_Exception $error) {
             $this->fail($error->getMessage());
         }
+        $quote = $this->catalog->hydrate_quote_families($quote);
         $this->ok(array(
             'quote' => $quote,
             'message' => 'Cotización ' . $quote['quote_number'] . ' guardada.',
@@ -244,7 +245,7 @@ class Riverso_Customer_Quote_Module {
             $this->fail($error->getMessage());
         }
         $this->ok(array(
-            'quote' => $quote,
+            'quote' => $this->catalog->hydrate_quote_families($quote),
             'message' => 'Estado actualizado a ' . $quote['status_label'] . '.',
         ));
     }

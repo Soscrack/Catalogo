@@ -291,6 +291,7 @@ class Riverso_Quote_Catalog_Lookup {
             'packaging' => 'unitaria',
             'envases' => array(),
             'pack_tiers' => array(),
+            'members' => array(),
             'n_a_pack_kit' => true,
             'n_a_reason' => 'Sin familia comercial Pack/Kit para este producto.',
         );
@@ -339,6 +340,11 @@ class Riverso_Quote_Catalog_Lookup {
                         $offers['pack_members'] = $packs;
                     }
                 }
+                $offers['members'] = $this->family_members_for_group(
+                    $grupo_id,
+                    isset($offers['unitaria']['unit_producto_base_id']) ? (int) $offers['unitaria']['unit_producto_base_id'] : 0,
+                    $unit_svc
+                );
             }
         }
 
@@ -384,8 +390,147 @@ class Riverso_Quote_Catalog_Lookup {
             }
         }
 
+        if ($grupo_id > 0 && empty($offers['members'])) {
+            $unit_id = isset($offers['unitaria']['unit_producto_base_id'])
+                ? (int) $offers['unitaria']['unit_producto_base_id']
+                : 0;
+            $offers['members'] = $this->family_members_for_group($grupo_id, $unit_id, null);
+        }
+
         $offers['modes'] = array_values(array_unique($offers['modes']));
         return $offers;
+    }
+
+    /**
+     * Miembros activos de una familia exacta para el selector de cotización.
+     *
+     * @param int                              $grupo_id
+     * @param int                              $unit_producto_base_id
+     * @param Riverso_Unit_Product_Service|null $unit_svc
+     * @return array<int, array{producto_base_id:int,product_id:?int,sku:string,description:string,cantidad_unidades:float,es_unitario:bool,label:string}>
+     */
+    public function family_members_for_group($grupo_id, $unit_producto_base_id = 0, $unit_svc = null) {
+        global $wpdb;
+        $grupo_id = (int) $grupo_id;
+        $unit_producto_base_id = (int) $unit_producto_base_id;
+        if ($grupo_id <= 0) {
+            return array();
+        }
+        if ($unit_svc === null && class_exists('Riverso_Unit_Product_Service')) {
+            $unit_svc = Riverso_Unit_Product_Service::get_instance();
+        }
+        $prefix = $wpdb->prefix . 'riverso_';
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT em.producto_base_id, pb.canonical_sku, pb.nombre_canonico,
+                    pb.woocommerce_product_id, pb.woocommerce_variation_id, pb.es_unidad_minima
+             FROM {$prefix}equivalence_members em
+             INNER JOIN {$prefix}producto_base pb ON pb.id = em.producto_base_id AND pb.deleted_at IS NULL
+             WHERE em.grupo_id = %d AND em.activo = 1
+             ORDER BY pb.nombre_canonico ASC",
+            $grupo_id
+        ), ARRAY_A);
+        if (!is_array($rows) || !$rows) {
+            return array();
+        }
+
+        if ($unit_producto_base_id <= 0) {
+            $unit_producto_base_id = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT unit_producto_base_id FROM {$prefix}equivalence_groups WHERE id = %d",
+                $grupo_id
+            ));
+        }
+
+        $members = array();
+        foreach ($rows as $row) {
+            $base_id = (int) $row['producto_base_id'];
+            $qty = 1.0;
+            if ($unit_svc) {
+                $envase = $unit_svc->get_canonical_envase($base_id);
+                if (is_array($envase) && isset($envase['cantidad_unidades'])) {
+                    $qty = (float) $envase['cantidad_unidades'];
+                }
+            }
+            if ($qty <= 0) {
+                $qty = 1.0;
+            }
+            $is_unit = $unit_producto_base_id > 0
+                ? ($base_id === $unit_producto_base_id)
+                : ((int) ($row['es_unidad_minima'] ?? 0) === 1 || $qty <= 1.0001);
+            if ($is_unit) {
+                $qty = 1.0;
+            }
+            $wc = $this->resolve_wc_product_id($base_id);
+            if ($wc <= 0) {
+                $var = (int) ($row['woocommerce_variation_id'] ?? 0);
+                $prod = (int) ($row['woocommerce_product_id'] ?? 0);
+                $wc = $var > 0 ? $var : $prod;
+            }
+            $qty_label = rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.');
+            $sku_local = trim((string) ($row['canonical_sku'] ?? ''));
+            $members[] = array(
+                'producto_base_id' => $base_id,
+                'product_id' => $wc > 0 ? $wc : null,
+                'sku' => $sku_local,
+                'sku_local' => $sku_local,
+                'has_local_sku' => $sku_local !== '',
+                'es_local' => $sku_local !== '',
+                'description' => (string) ($row['nombre_canonico'] ?? ''),
+                'cantidad_unidades' => $qty,
+                'es_unitario' => (bool) $is_unit,
+                'label' => $is_unit ? 'embolsado' : ('×' . $qty_label),
+            );
+        }
+
+        usort($members, static function ($a, $b) {
+            if (!empty($a['es_unitario']) && empty($b['es_unitario'])) {
+                return -1;
+            }
+            if (empty($a['es_unitario']) && !empty($b['es_unitario'])) {
+                return 1;
+            }
+            $qa = (float) ($a['cantidad_unidades'] ?? 1);
+            $qb = (float) ($b['cantidad_unidades'] ?? 1);
+            if ($qa === $qb) {
+                return strcmp((string) ($a['sku'] ?? ''), (string) ($b['sku'] ?? ''));
+            }
+            return $qb <=> $qa;
+        });
+
+        return $members;
+    }
+
+    /**
+     * Adjunta ofertas de familia (_family) a cada línea con producto_base_id.
+     *
+     * @param array $quote
+     * @return array
+     */
+    public function hydrate_quote_families(array $quote) {
+        if (empty($quote['lines']) || !is_array($quote['lines'])) {
+            return $quote;
+        }
+        $cache = array();
+        foreach ($quote['lines'] as &$line) {
+            if (!is_array($line)) {
+                continue;
+            }
+            $pb = isset($line['producto_base_id']) ? (int) $line['producto_base_id'] : 0;
+            if ($pb <= 0) {
+                continue;
+            }
+            if (!isset($cache[$pb])) {
+                $cache[$pb] = $this->family_offers_for_base($pb);
+            }
+            $fam = $cache[$pb];
+            $line['_family'] = $fam;
+            if ((!isset($line['units_per_pack']) || $line['units_per_pack'] === null || (float) $line['units_per_pack'] <= 0)
+                && isset($fam['units_per_pack'])
+            ) {
+                $line['units_per_pack'] = (float) $fam['units_per_pack'];
+            }
+        }
+        unset($line);
+        return $quote;
     }
 
     /**

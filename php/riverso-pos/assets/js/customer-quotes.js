@@ -9,6 +9,8 @@
         advanced: false,
         modalScope: "todo",
         modalResults: [],
+        familyLineIndex: -1,
+        familyPriceSeq: 0,
         importReceivedId: 0,
         invoicing: false
     };
@@ -68,6 +70,11 @@
         importCheckAll: document.getElementById("cq-import-check-all"),
         importBack: document.getElementById("cq-import-back"),
         importConfirm: document.getElementById("cq-import-confirm"),
+        familyModal: document.getElementById("cq-family-modal"),
+        familyTitle: document.getElementById("cq-family-title"),
+        familyHint: document.getElementById("cq-family-hint"),
+        familyMembers: document.getElementById("cq-family-members"),
+        familyClose: document.getElementById("cq-family-close"),
         pdf: document.getElementById("cq-pdf"),
         options: document.getElementById("cq-options"),
         expiredBadge: document.getElementById("cq-expired-badge"),
@@ -116,7 +123,13 @@
         });
     }
     document.addEventListener("keydown", function (event) {
-        if (event.key === "Escape" && els.modal && !els.modal.hidden) {
+        if (event.key !== "Escape") return;
+        if (els.familyModal && !els.familyModal.hidden) {
+            event.preventDefault();
+            closeFamilyModal();
+            return;
+        }
+        if (els.modal && !els.modal.hidden) {
             event.preventDefault();
             closeAdvancedSearch();
         }
@@ -166,6 +179,16 @@
     }
     if (els.importConfirm) {
         els.importConfirm.addEventListener("click", confirmImportLines);
+    }
+    if (els.familyModal) {
+        els.familyModal.addEventListener("click", function (event) {
+            if (event.target && event.target.getAttribute("data-cq-family-close") === "1") {
+                closeFamilyModal();
+            }
+        });
+    }
+    if (els.familyClose) {
+        els.familyClose.addEventListener("click", closeFamilyModal);
     }
     if (els.importCheckAll) {
         els.importCheckAll.addEventListener("change", function () {
@@ -401,73 +424,274 @@
         var lines = state.quote.lines || [];
         els.linesEmpty.hidden = lines.length !== 0;
         var editable = state.quote.editable !== false;
-        lines.forEach(function (line, index) {
-            var tr = document.createElement("tr");
-            tr.className = "cq-line";
-            var detail = document.createElement("td");
-            var sku = document.createElement("span");
-            sku.className = "cq-sku";
-            sku.textContent = line.sku;
-            var desc = document.createElement("span");
-            desc.className = "cq-desc";
-            desc.textContent = line.description || "";
-            detail.appendChild(sku);
-            detail.appendChild(desc);
-            if (line.local_only || !line.product_id) {
-                var tag = document.createElement("span");
-                tag.className = "cq-local-only-tag";
-                tag.textContent = "Solo local";
-                tag.title = "Sin product_id WC — Facturar no aplica (P5a-6)";
-                detail.appendChild(tag);
+        var plan = buildLineRenderPlan(lines);
+        plan.forEach(function (item) {
+            if (item.type === "header") {
+                els.lines.appendChild(familyHeaderRow(item));
+                return;
             }
-            if ((state.quote.channel || currentChannel()) === "local" || line.producto_base_id) {
-                detail.appendChild(familyControls(line, index, editable));
+            els.lines.appendChild(buildLineRow(item.line, item.index, editable));
+        });
+    }
+
+    function lineGrupoId(line) {
+        var fam = line && line._family ? line._family : null;
+        var gid = fam && fam.grupo_id != null ? Number(fam.grupo_id) : 0;
+        return gid > 0 ? gid : 0;
+    }
+
+    function lineUnitsPerPack(line) {
+        var upp = line && line.units_per_pack != null ? Number(line.units_per_pack) : 0;
+        if (!(upp > 0) && line && line._family && line._family.units_per_pack != null) {
+            upp = Number(line._family.units_per_pack);
+        }
+        if (!(upp > 0)) {
+            var member = currentFamilyMember(line);
+            if (member && member.cantidad_unidades != null) {
+                upp = Number(member.cantidad_unidades);
             }
-            tr.appendChild(detail);
-            tr.appendChild(qtyStepperCell(line, index, editable));
-            tr.appendChild(inputCell(line, index, "unit_price", editable));
-            tr.appendChild(inputCell(line, index, "price_discount", editable));
-            tr.appendChild(inputCell(line, index, "margin_discount", editable));
-            var utility = document.createElement("td");
-            utility.className = "cq-num cq-advanced cq-line-profit";
-            tr.appendChild(utility);
-            tr.appendChild(stockCell(line));
-            tr.appendChild(confianzaCell(line));
-            tr.appendChild(inventariarCell(line));
-            applyStockRowAlarm(tr, line);
-            var actions = document.createElement("td");
-            actions.className = "cq-actions";
-            if (editable) {
-                var edit = document.createElement("button");
-                edit.type = "button";
-                edit.className = "cq-text-btn";
-                edit.textContent = "Editar";
-                edit.addEventListener("click", function () {
-                    tr.classList.add("is-editing");
-                    var price = tr.querySelector('input[data-field="unit_price"]');
-                    if (price) {
-                        price.focus();
-                        price.select();
-                    }
-                });
-                var remove = document.createElement("button");
-                remove.type = "button";
-                remove.className = "cq-text-btn";
-                remove.textContent = "Eliminar";
-                remove.addEventListener("click", function () {
-                    if (!window.confirm("¿Eliminar esta línea?")) {
-                        return;
-                    }
-                    state.quote.lines.splice(index, 1);
+        }
+        return upp > 0 ? upp : 1;
+    }
+
+    function currentFamilyMember(line) {
+        var fam = line && line._family ? line._family : null;
+        var members = fam && Array.isArray(fam.members) ? fam.members : [];
+        if (!members.length) return null;
+        var pb = line.producto_base_id != null ? Number(line.producto_base_id) : 0;
+        var sku = String(line.sku || "").toLowerCase();
+        var found = null;
+        members.forEach(function (m) {
+            if (found) return;
+            if (pb > 0 && Number(m.producto_base_id) === pb) {
+                found = m;
+                return;
+            }
+            if (sku && String(m.sku || "").toLowerCase() === sku) {
+                found = m;
+            }
+        });
+        return found;
+    }
+
+    function lineIsUnitario(line) {
+        var member = currentFamilyMember(line);
+        if (member) {
+            return !!member.es_unitario;
+        }
+        return lineUnitsPerPack(line) <= 1.0001;
+    }
+
+    function familyUnitsQuoted(line) {
+        return round3(Number(line.quantity || 0) * lineUnitsPerPack(line));
+    }
+
+    function totalFamilyUnitsQuoted(grupoId, lines) {
+        lines = lines || state.quote.lines || [];
+        var total = 0;
+        lines.forEach(function (line) {
+            if (lineGrupoId(line) === grupoId) {
+                total += familyUnitsQuoted(line);
+            }
+        });
+        return round3(total);
+    }
+
+    function familyLineIndexes(grupoId, lines) {
+        lines = lines || state.quote.lines || [];
+        var indexes = [];
+        lines.forEach(function (line, i) {
+            if (lineGrupoId(line) === grupoId && line.producto_base_id) {
+                indexes.push(i);
+            }
+        });
+        return indexes;
+    }
+
+    function buildLineRenderPlan(lines) {
+        var plan = [];
+        var used = {};
+        var i;
+        for (i = 0; i < lines.length; i++) {
+            if (used[i]) continue;
+            var line = lines[i];
+            var gid = lineGrupoId(line);
+            if (!gid) {
+                plan.push({ type: "line", line: line, index: i });
+                used[i] = true;
+                continue;
+            }
+            var groupIndexes = [];
+            var j;
+            for (j = i; j < lines.length; j++) {
+                if (used[j]) continue;
+                if (lineGrupoId(lines[j]) === gid) {
+                    groupIndexes.push(j);
+                    used[j] = true;
+                }
+            }
+            groupIndexes.sort(function (a, b) {
+                var la = lines[a];
+                var lb = lines[b];
+                var ua = lineIsUnitario(la) ? 0 : 1;
+                var ub = lineIsUnitario(lb) ? 0 : 1;
+                if (ua !== ub) return ua - ub;
+                var qa = lineUnitsPerPack(la);
+                var qb = lineUnitsPerPack(lb);
+                if (qa !== qb) return qb - qa;
+                return a - b;
+            });
+            var totalUnits = 0;
+            groupIndexes.forEach(function (idx) {
+                totalUnits += familyUnitsQuoted(lines[idx]);
+            });
+            var fam = line._family || {};
+            plan.push({
+                type: "header",
+                grupoId: gid,
+                familyName: fam.family_name || fam.family_code || ("Familia #" + gid),
+                totalUnits: round3(totalUnits),
+                indexes: groupIndexes.slice()
+            });
+            groupIndexes.forEach(function (idx) {
+                plan.push({ type: "line", line: lines[idx], index: idx, grouped: true });
+            });
+        }
+        return plan;
+    }
+
+    function familyHeaderRow(item) {
+        var tr = document.createElement("tr");
+        tr.className = "cq-family-header";
+        var td = document.createElement("td");
+        td.colSpan = 10;
+        var name = document.createElement("strong");
+        name.textContent = item.familyName || "Familia";
+        var meta = document.createElement("span");
+        meta.className = "cq-family-header-meta";
+        meta.textContent = "Lleva " + formatPlain(item.totalUnits) + " uds";
+        td.appendChild(name);
+        td.appendChild(meta);
+        tr.appendChild(td);
+        return tr;
+    }
+
+    function buildLineRow(line, index, editable) {
+        var tr = document.createElement("tr");
+        tr.className = "cq-line" + (lineGrupoId(line) ? " cq-line-in-family" : "");
+        tr.dataset.index = String(index);
+        var detail = document.createElement("td");
+        var skuRow = document.createElement("div");
+        skuRow.className = "cq-sku-row";
+        var sku = document.createElement("span");
+        sku.className = "cq-sku";
+        sku.textContent = line.sku;
+        skuRow.appendChild(sku);
+        if (lineGrupoId(line) && Array.isArray((line._family || {}).members) && (line._family.members || []).length > 1) {
+            var change = document.createElement("button");
+            change.type = "button";
+            change.className = "cq-text-btn cq-family-change";
+            change.textContent = "Cambiar";
+            change.disabled = !editable;
+            change.title = "Elegir otro miembro de la familia";
+            change.addEventListener("click", function () {
+                openFamilyModal(index);
+            });
+            skuRow.appendChild(change);
+        }
+        detail.appendChild(skuRow);
+        var desc = document.createElement("span");
+        desc.className = "cq-desc";
+        desc.textContent = line.description || "";
+        detail.appendChild(desc);
+        if (line.local_only || !line.product_id) {
+            var tag = document.createElement("span");
+            tag.className = "cq-local-only-tag";
+            tag.textContent = "Solo local";
+            tag.title = "Sin product_id WC — Facturar no aplica (P5a-6)";
+            detail.appendChild(tag);
+        }
+        var packHint = presentationLabel(line);
+        if (packHint) {
+            var pack = document.createElement("span");
+            pack.className = "cq-pack-label";
+            pack.textContent = packHint;
+            detail.appendChild(pack);
+        }
+        tr.appendChild(detail);
+        tr.appendChild(qtyStepperCell(line, index, editable));
+        tr.appendChild(inputCell(line, index, "unit_price", editable));
+        tr.appendChild(inputCell(line, index, "price_discount", editable));
+        tr.appendChild(inputCell(line, index, "margin_discount", editable));
+        var utility = document.createElement("td");
+        utility.className = "cq-num cq-advanced cq-line-profit";
+        tr.appendChild(utility);
+        tr.appendChild(stockCell(line));
+        tr.appendChild(confianzaCell(line));
+        tr.appendChild(inventariarCell(line));
+        applyStockRowAlarm(tr, line);
+        var actions = document.createElement("td");
+        actions.className = "cq-actions";
+        if (editable) {
+            var edit = document.createElement("button");
+            edit.type = "button";
+            edit.className = "cq-text-btn";
+            edit.textContent = "Editar";
+            edit.addEventListener("click", function () {
+                tr.classList.add("is-editing");
+                var price = tr.querySelector('input[data-field="unit_price"]');
+                if (price) {
+                    price.focus();
+                    price.select();
+                }
+            });
+            var remove = document.createElement("button");
+            remove.type = "button";
+            remove.className = "cq-text-btn";
+            remove.textContent = "Eliminar";
+            remove.addEventListener("click", function () {
+                if (!window.confirm("¿Eliminar esta línea?")) {
+                    return;
+                }
+                var gid = lineGrupoId(state.quote.lines[index] || line);
+                state.quote.lines.splice(index, 1);
+                if (gid) {
+                    recalcFamilyPrices(gid);
+                } else {
                     renderLines();
                     renderTotals();
-                });
-                actions.appendChild(edit);
-                actions.appendChild(remove);
-            }
-            tr.appendChild(actions);
-            els.lines.appendChild(tr);
-        });
+                }
+            });
+            actions.appendChild(edit);
+            actions.appendChild(remove);
+        }
+        tr.appendChild(actions);
+        return tr;
+    }
+
+    function presentationLabel(line) {
+        if (!lineGrupoId(line)) return "";
+        if (lineIsUnitario(line)) return "embolsado";
+        var upp = lineUnitsPerPack(line);
+        var qtyLabel = formatPlain(upp);
+        return "envase ×" + qtyLabel;
+    }
+
+    function qtyDisplay(line) {
+        var qty = Number(line.quantity || 0);
+        if (!lineGrupoId(line)) {
+            return formatQty(qty);
+        }
+        if (lineIsUnitario(line)) {
+            return formatQty(qty);
+        }
+        return formatQty(qty) + "×" + formatPlain(lineUnitsPerPack(line));
+    }
+
+    function qtySuffix(line) {
+        if (!lineGrupoId(line)) return "";
+        if (lineIsUnitario(line)) return "embolsado";
+        return "";
     }
 
     function qtyStepperCell(line, index, editable) {
@@ -501,10 +725,12 @@
             state.quote.lines[index].quantity = next;
             if (state.quote.lines[index].producto_base_id) {
                 input.value = formatQty(next);
+                updateQtyMeta(wrap, state.quote.lines[index]);
                 recalcLocalLinePrice(state.quote.lines[index], index);
                 return;
             }
             input.value = formatQty(next);
+            updateQtyMeta(wrap, state.quote.lines[index]);
             renderTotals();
         }
         minus.addEventListener("click", function () {
@@ -519,19 +745,41 @@
         });
         input.addEventListener("input", function () {
             state.quote.lines[index].quantity = parseClNumber(input.value);
+            updateQtyMeta(wrap, state.quote.lines[index]);
             renderTotals();
         });
         input.addEventListener("blur", function () {
             var parsed = parseClNumber(input.value);
             state.quote.lines[index].quantity = parsed;
             input.value = formatQty(parsed);
+            updateQtyMeta(wrap, state.quote.lines[index]);
             renderTotals();
         });
         wrap.appendChild(minus);
         wrap.appendChild(input);
         wrap.appendChild(plus);
+        updateQtyMeta(wrap, line);
         td.appendChild(wrap);
         return td;
+    }
+
+    function updateQtyMeta(wrap, line) {
+        if (!wrap) return;
+        var existing = wrap.querySelector(".cq-qty-meta");
+        if (existing) {
+            existing.remove();
+        }
+        if (!lineGrupoId(line)) return;
+        var meta = document.createElement("span");
+        meta.className = "cq-qty-meta";
+        if (lineIsUnitario(line)) {
+            meta.textContent = "embolsado";
+            meta.title = formatQty(line.quantity) + " embolsado";
+        } else {
+            meta.textContent = qtyDisplay(line);
+            meta.title = "Envases × unidades por envase";
+        }
+        wrap.appendChild(meta);
     }
 
     function inputCell(line, index, field, editable) {
@@ -643,11 +891,28 @@
 
     function refreshLineFigures() {
         var rows = els.lines.querySelectorAll("tr.cq-line");
-        Array.prototype.forEach.call(rows, function (tr, index) {
+        Array.prototype.forEach.call(rows, function (tr) {
+            var index = Number(tr.dataset.index);
             var line = (state.quote.lines || [])[index];
             var cell = tr.querySelector(".cq-line-profit");
             if (!line || !cell) return;
             paintUtility(cell, lineFigures(line));
+        });
+        refreshFamilyHeaders();
+    }
+
+    function refreshFamilyHeaders() {
+        var headers = els.lines.querySelectorAll("tr.cq-family-header");
+        if (!headers.length) return;
+        var plan = buildLineRenderPlan(state.quote.lines || []);
+        var headerItems = plan.filter(function (item) { return item.type === "header"; });
+        Array.prototype.forEach.call(headers, function (tr, i) {
+            var item = headerItems[i];
+            if (!item) return;
+            var meta = tr.querySelector(".cq-family-header-meta");
+            if (meta) {
+                meta.textContent = "Lleva " + formatPlain(item.totalUnits) + " uds";
+            }
         });
     }
 
@@ -964,9 +1229,15 @@
                 _family: fam
             });
         }
+        var target = existing || lines[lines.length - 1];
         els.results.hidden = true;
-        renderLines();
-        renderTotals();
+        if (target && target.producto_base_id) {
+            var idx = lines.indexOf(target);
+            recalcLocalLinePrice(target, idx >= 0 ? idx : 0);
+        } else {
+            renderLines();
+            renderTotals();
+        }
         setMessage(lacksLocalPrice(product)
             ? ("Producto agregado a $0 (sin precio Local): «" + (product.sku || "?") + "».")
             : "Producto agregado.", false);
@@ -1559,82 +1830,290 @@
         }
     }
 
-    function familyControls(line, index, editable) {
-        var wrap = document.createElement("div");
-        wrap.className = "cq-line-family";
+    function openFamilyModal(index) {
+        if (!els.familyModal) return;
+        var line = (state.quote.lines || [])[index];
+        if (!line || state.quote.editable === false) return;
         var fam = line._family || {};
-        var modes = (fam.modes && fam.modes.length) ? fam.modes.slice() : ["unitaria"];
-        if (fam.pack && fam.pack.available && modes.indexOf("pack") < 0) { modes.push("pack"); }
-        if (fam.kit && fam.kit.available && modes.indexOf("kit") < 0) { modes.push("kit"); }
-        if (modes.indexOf("unitaria") < 0) { modes.unshift("unitaria"); }
-
-        var sel = document.createElement("select");
-        sel.title = "Presentación";
-        sel.disabled = !editable;
-        modes.forEach(function (m) {
-            var opt = document.createElement("option");
-            opt.value = m;
-            opt.textContent = m === "unitaria" ? "Unitaria" : (m === "pack" ? "Pack" : (m === "kit" ? "Kit" : m));
-            sel.appendChild(opt);
-        });
-        sel.value = line.family_mode || "unitaria";
-        if (modes.indexOf(sel.value) < 0) { sel.value = modes[0]; }
-        sel.addEventListener("change", function () {
-            line.family_mode = sel.value;
-            line.packaging = sel.value;
-            recalcLocalLinePrice(line, index);
-        });
-        wrap.appendChild(sel);
-
-        var envases = (fam.envases && fam.envases.length) ? fam.envases : [{ cantidad_unidades: line.units_per_pack || 1, label: "x" + (line.units_per_pack || 1) }];
-        var env = document.createElement("select");
-        env.title = "Envase / uds por pack";
-        env.disabled = !editable;
-        envases.forEach(function (e) {
-            var opt = document.createElement("option");
-            var qty = Number(e.cantidad_unidades || 1);
-            opt.value = String(qty);
-            opt.textContent = e.label || ("x" + qty);
-            env.appendChild(opt);
-        });
-        env.value = String(line.units_per_pack || envases[0].cantidad_unidades || 1);
-        env.addEventListener("change", function () {
-            line.units_per_pack = Number(env.value) || 1;
-            recalcLocalLinePrice(line, index);
-        });
-        wrap.appendChild(env);
-
-        if ((!fam.pack || !fam.pack.available) && (!fam.kit || !fam.kit.available)) {
-            var na = document.createElement("span");
-            na.style.fontSize = "0.7rem";
-            na.style.color = "#94a3b8";
-            na.textContent = "Pack/Kit N/A";
-            na.title = fam.n_a_reason || "Familia sin Pack/Kit comercial en POS";
-            wrap.appendChild(na);
+        var members = Array.isArray(fam.members) ? fam.members : [];
+        if (!members.length) {
+            setMessage("Esta línea no tiene miembros de familia para cambiar.", true);
+            return;
         }
-        return wrap;
+        state.familyLineIndex = index;
+        if (els.familyTitle) {
+            els.familyTitle.textContent = fam.family_name
+                ? ("Cambiar: " + fam.family_name)
+                : "Cambiar presentación";
+        }
+        if (els.familyHint) {
+            els.familyHint.textContent = "SKU actual: " + (line.sku || "—")
+                + ". Elegir reemplaza esta línea; Agregar suma otra presentación (requiere SKU Local).";
+        }
+        renderFamilyMembers(line, members);
+        els.familyModal.hidden = false;
+        els.familyModal.setAttribute("aria-hidden", "false");
+    }
+
+    function closeFamilyModal() {
+        if (!els.familyModal) return;
+        els.familyModal.hidden = true;
+        els.familyModal.setAttribute("aria-hidden", "true");
+        state.familyLineIndex = -1;
+        if (els.familyMembers) {
+            els.familyMembers.innerHTML = "";
+        }
+    }
+
+    function memberHasLocalSku(member) {
+        if (!member) return false;
+        if (member.has_local_sku === false || member.es_local === false) return false;
+        if (member.has_local_sku === true || member.es_local === true) return true;
+        return String(member.sku_local || member.sku || "").trim() !== "";
+    }
+
+    function renderFamilyMembers(line, members) {
+        if (!els.familyMembers) return;
+        els.familyMembers.innerHTML = "";
+        var currentPb = line.producto_base_id != null ? Number(line.producto_base_id) : 0;
+        var currentSku = String(line.sku || "").toLowerCase();
+        members.forEach(function (member) {
+            var li = document.createElement("li");
+            li.className = "cq-result";
+            var isCurrent = (currentPb > 0 && Number(member.producto_base_id) === currentPb)
+                || (currentSku && String(member.sku || "").toLowerCase() === currentSku);
+            if (isCurrent) {
+                li.classList.add("is-current");
+            }
+            var info = document.createElement("div");
+            var sku = document.createElement("div");
+            sku.className = "cq-result-sku";
+            sku.textContent = (member.sku || "?") + " · " + (member.description || "");
+            var meta = document.createElement("div");
+            meta.className = "cq-result-meta";
+            meta.textContent = member.es_unitario
+                ? "Presentación: embolsado"
+                : ("Presentación: " + (member.label || ("×" + formatPlain(member.cantidad_unidades || 1))));
+            if (!memberHasLocalSku(member)) {
+                var warn = document.createElement("div");
+                warn.className = "cq-result-meta cq-family-no-local";
+                warn.textContent = "Sin SKU Local — no se puede agregar por ahora";
+                info.appendChild(sku);
+                info.appendChild(meta);
+                info.appendChild(warn);
+            } else {
+                info.appendChild(sku);
+                info.appendChild(meta);
+            }
+            li.appendChild(info);
+            var actions = document.createElement("div");
+            actions.className = "cq-family-actions";
+            if (isCurrent) {
+                var badge = document.createElement("span");
+                badge.className = "cq-family-current";
+                badge.textContent = "Actual";
+                actions.appendChild(badge);
+            } else {
+                var pick = document.createElement("button");
+                pick.type = "button";
+                pick.className = "cq-btn cq-btn-primary";
+                pick.textContent = "Elegir";
+                pick.addEventListener("click", function () {
+                    swapFamilyMember(state.familyLineIndex, member);
+                });
+                actions.appendChild(pick);
+            }
+            var addBtn = document.createElement("button");
+            addBtn.type = "button";
+            addBtn.className = "cq-btn";
+            addBtn.textContent = "Agregar";
+            var canAdd = memberHasLocalSku(member);
+            addBtn.disabled = !canAdd;
+            addBtn.title = canAdd
+                ? "Agregar esta presentación como línea nueva (cantidad 1)"
+                : "Sin SKU Local: no se puede agregar por ahora";
+            addBtn.addEventListener("click", function () {
+                addFamilyMemberLine(member);
+            });
+            actions.appendChild(addBtn);
+            li.appendChild(actions);
+            els.familyMembers.appendChild(li);
+        });
+    }
+
+    function addFamilyMemberLine(member) {
+        if (!memberHasLocalSku(member)) {
+            setMessage("No se puede agregar «" + (member.sku || "?") + "»: sin SKU Local.", true);
+            return;
+        }
+        var source = (state.quote.lines || [])[state.familyLineIndex] || {};
+        var fam = source._family || {};
+        var upp = Number(member.cantidad_unidades || 1);
+        if (!(upp > 0)) upp = 1;
+        var mode = member.es_unitario ? "unitaria" : "pack";
+        var pb = member.producto_base_id != null ? Number(member.producto_base_id) : 0;
+        closeFamilyModal();
+        addProduct({
+            product_id: member.product_id != null ? member.product_id : null,
+            producto_base_id: pb > 0 ? pb : null,
+            sku: member.sku || "",
+            description: member.description || member.sku || "",
+            unit_price: 0,
+            unit_cost: null,
+            quantity: 1,
+            units_per_pack: upp,
+            family_mode: mode,
+            packaging: mode,
+            local_only: !member.product_id,
+            family: fam
+        });
+    }
+
+    function swapFamilyMember(index, member) {
+        var lines = state.quote.lines || [];
+        var line = lines[index];
+        if (!line || !member) return;
+        var newSku = String(member.sku || "").toLowerCase();
+        var newPb = member.producto_base_id != null ? Number(member.producto_base_id) : 0;
+        var dupIndex = -1;
+        lines.forEach(function (other, i) {
+            if (i === index || dupIndex >= 0) return;
+            var sameSku = newSku && String(other.sku || "").toLowerCase() === newSku;
+            var samePb = newPb > 0 && Number(other.producto_base_id) === newPb;
+            if (sameSku || samePb) {
+                dupIndex = i;
+            }
+        });
+        var keepQty = Number(line.quantity || 0);
+        var priceDiscount = Number(line.price_discount || 0);
+        var marginDiscount = Number(line.margin_discount || 0);
+        var discountAmount = Number(line.discount_amount || 0);
+        var fam = line._family || {};
+        if (dupIndex >= 0) {
+            lines[dupIndex].quantity = round3(Number(lines[dupIndex].quantity || 0) + keepQty);
+            lines.splice(index, 1);
+            closeFamilyModal();
+            var target = lines[dupIndex > index ? dupIndex - 1 : dupIndex];
+            if (target && target.producto_base_id) {
+                recalcLocalLinePrice(target, dupIndex > index ? dupIndex - 1 : dupIndex);
+            } else {
+                renderLines();
+                renderTotals();
+            }
+            setMessage("Se sumó la cantidad al SKU ya presente en la cotización.", false);
+            return;
+        }
+        line.producto_base_id = newPb > 0 ? newPb : null;
+        line.product_id = member.product_id != null ? member.product_id : null;
+        line.sku = member.sku || line.sku;
+        line.description = member.description || line.description || line.sku;
+        line.units_per_pack = Number(member.cantidad_unidades || 1) > 0 ? Number(member.cantidad_unidades) : 1;
+        line.family_mode = member.es_unitario ? "unitaria" : "pack";
+        line.packaging = line.family_mode;
+        line.local_only = !line.product_id;
+        line.price_discount = priceDiscount;
+        line.margin_discount = marginDiscount;
+        line.discount_amount = discountAmount;
+        line._family = fam;
+        closeFamilyModal();
+        if (line.producto_base_id) {
+            recalcLocalLinePrice(line, index);
+        } else {
+            renderLines();
+            renderTotals();
+        }
+        setMessage("Presentación cambiada a «" + (line.sku || "?") + "».", false);
+    }
+
+    function applyFamilyPriceResult(line, data) {
+        if (!line || !data) return;
+        if (data.unit_price != null) {
+            line.unit_price = Number(data.unit_price);
+        }
+        if (data.pricing && data.pricing.unit_cost != null) {
+            line.unit_cost = Number(data.pricing.unit_cost);
+        }
+        if (data.family) {
+            line._family = data.family;
+            if (data.family.units_per_pack != null && !(Number(line.units_per_pack) > 0)) {
+                line.units_per_pack = Number(data.family.units_per_pack);
+            }
+            var member = currentFamilyMember(line);
+            if (member && member.cantidad_unidades != null) {
+                line.units_per_pack = Number(member.cantidad_unidades) > 0 ? Number(member.cantidad_unidades) : 1;
+            }
+        }
+    }
+
+    function recalcFamilyPrices(grupoId) {
+        if (!grupoId || !cfg.actions || !cfg.actions.familyPrice) {
+            renderLines();
+            renderTotals();
+            return;
+        }
+        var lines = state.quote.lines || [];
+        var indexes = familyLineIndexes(grupoId, lines);
+        if (!indexes.length) {
+            renderLines();
+            renderTotals();
+            return;
+        }
+        var familyQty = totalFamilyUnitsQuoted(grupoId, lines);
+        if (!(familyQty > 0)) {
+            familyQty = 1;
+        }
+        var seq = ++state.familyPriceSeq;
+        var jobs = indexes.map(function (idx) {
+            var line = lines[idx];
+            var pb = line.producto_base_id;
+            if (!pb) {
+                return Promise.resolve();
+            }
+            return post(cfg.actions.familyPrice, {
+                producto_base_id: String(pb),
+                family_qty: String(familyQty)
+            }).then(function (data) {
+                if (seq !== state.familyPriceSeq) return;
+                applyFamilyPriceResult(line, data);
+            });
+        });
+        Promise.all(jobs).then(function () {
+            if (seq !== state.familyPriceSeq) return;
+            renderLines();
+            renderTotals();
+        }).catch(function () {
+            if (seq !== state.familyPriceSeq) return;
+            renderLines();
+            renderTotals();
+        });
     }
 
     function recalcLocalLinePrice(line, index) {
-        var pb = line.producto_base_id;
+        var pb = line && line.producto_base_id;
         if (!pb || !cfg.actions || !cfg.actions.familyPrice) {
             renderLines();
             renderTotals();
             return;
         }
+        var gid = lineGrupoId(line);
+        if (gid) {
+            recalcFamilyPrices(gid);
+            return;
+        }
         var packs = Number(line.quantity || 1);
-        var upp = Number(line.units_per_pack || 1);
+        var upp = lineUnitsPerPack(line);
         if (!(upp > 0)) { upp = 1; }
+        var seq = ++state.familyPriceSeq;
         post(cfg.actions.familyPrice, {
             producto_base_id: String(pb),
             family_qty: String(packs * upp)
         }).then(function (data) {
-            if (data.unit_price != null) { line.unit_price = Number(data.unit_price); }
-            if (data.pricing && data.pricing.unit_cost != null) { line.unit_cost = Number(data.pricing.unit_cost); }
-            if (data.family) { line._family = data.family; }
+            if (seq !== state.familyPriceSeq) return;
+            applyFamilyPriceResult(line, data);
             renderLines();
             renderTotals();
         }).catch(function () {
+            if (seq !== state.familyPriceSeq) return;
             renderLines();
             renderTotals();
         });

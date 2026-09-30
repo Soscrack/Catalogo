@@ -420,6 +420,7 @@
 
 .cq-qty-stepper {
     display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 4px;
     justify-content: flex-end;
@@ -428,6 +429,15 @@
 .cq-qty-stepper input {
     width: 4.5rem;
     text-align: right;
+}
+
+.cq-qty-meta {
+    display: block;
+    width: 100%;
+    text-align: right;
+    font-size: 0.72rem;
+    font-weight: 650;
+    color: #0f766e;
 }
 
 .cq-stepper-btn {
@@ -711,6 +721,65 @@
 .cq-line-family .cq-mini-btn {
     font-size: 0.78rem;
     padding: 2px 6px;
+}
+.cq-sku-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+}
+.cq-family-change {
+    font-size: 0.78rem;
+}
+.cq-pack-label {
+    display: inline-block;
+    margin-top: 0.2rem;
+    margin-right: 0.35rem;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: #ecfeff;
+    color: #0e7490;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+.cq-family-header td {
+    background: #f1f5f9;
+    border-bottom: 1px solid #cbd5e1;
+    padding: 8px 10px;
+    font-size: 0.86rem;
+    color: #334155;
+}
+.cq-family-header-meta {
+    margin-left: 0.75rem;
+    color: #0f766e;
+    font-weight: 700;
+}
+.cq-line-in-family td:first-child {
+    box-shadow: inset 3px 0 0 #94a3b8;
+}
+.cq-result.is-current {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+}
+.cq-family-current {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 0.78rem;
+    font-weight: 650;
+}
+.cq-family-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+}
+.cq-family-no-local {
+    color: #b45309;
+    font-weight: 600;
 }
 .cq-local-only-tag {
     display: inline-block;

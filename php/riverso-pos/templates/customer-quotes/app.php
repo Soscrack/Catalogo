@@ -265,6 +265,19 @@ if (!function_exists('riverso_pos_cq_json')) {
                 </div>
             </div>
         </div>
+        <div id="cq-family-modal" class="cq-modal" hidden aria-hidden="true">
+            <div class="cq-modal-backdrop" data-cq-family-close="1"></div>
+            <div class="cq-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="cq-family-title">
+                <header class="cq-modal-head">
+                    <h3 id="cq-family-title">Cambiar presentación</h3>
+                    <button type="button" class="cq-modal-close" id="cq-family-close" aria-label="Cerrar" data-cq-family-close="1">×</button>
+                </header>
+                <div class="cq-modal-body">
+                    <p id="cq-family-hint" class="cq-modal-hint" role="status"></p>
+                    <ul id="cq-family-members" class="cq-results cq-modal-results"></ul>
+                </div>
+            </div>
+        </div>
         <p id="cq-list-message" class="cq-message" role="status"></p>
     </div>
 </div>

@@ -11,6 +11,11 @@ if (!defined('ABSPATH') && empty($riverso_cq['standalone'])) {
 $standalone = !empty($riverso_cq['standalone']);
 $asset_base = rtrim((string) (isset($riverso_cq['assetBase']) ? $riverso_cq['assetBase'] : ''), '/');
 $version = defined('RIVERSO_POS_VERSION') ? RIVERSO_POS_VERSION : '0.1.0';
+// Bustear caché del navegador cuando cambian JS/CSS sin depender solo del número de plugin.
+$js_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/customer-quotes.js';
+$css_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/css/customer-quotes.css';
+$js_ver = (is_string($js_path) && is_file($js_path)) ? (string) filemtime($js_path) : $version;
+$css_ver = (is_string($css_path) && is_file($css_path)) ? (string) filemtime($css_path) : $version;
 
 if (!function_exists('riverso_pos_cq_json')) {
     function riverso_pos_cq_json($data) {
@@ -31,11 +36,11 @@ if (!function_exists('riverso_pos_cq_json')) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Cotizaciones de venta</title>
-    <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes.css?ver=<?php echo htmlspecialchars($version, ENT_QUOTES, 'UTF-8'); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes.css?ver=<?php echo htmlspecialchars($css_ver, ENT_QUOTES, 'UTF-8'); ?>">
 </head>
 <body class="riverso-cq-body">
 <?php else: ?>
-<link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes.css?ver=<?php echo htmlspecialchars($version, ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes.css?ver=<?php echo htmlspecialchars($css_ver, ENT_QUOTES, 'UTF-8'); ?>">
 <?php endif; ?>
 <div class="wrap riverso-cq-wrap">
     <div id="riverso-cq" class="riverso-cq" data-ready="0">
@@ -202,7 +207,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                             <tr>
                                 <th scope="col">Detalle</th>
                                 <th scope="col" class="cq-num">Cantidad</th>
-                                <th scope="col" class="cq-num">Precio</th>
+                                <th scope="col" class="cq-num">Total bruto</th>
                                 <th scope="col" class="cq-num cq-advanced" title="Porcentaje de descuento sobre el precio de la línea">Dscto precio</th>
                                 <th scope="col" class="cq-num cq-advanced" title="Porcentaje del margen que queda después del descuento de precio">Dscto margen</th>
                                 <th scope="col" class="cq-num cq-advanced">Utilidad</th>
@@ -282,7 +287,7 @@ if (!function_exists('riverso_pos_cq_json')) {
     </div>
 </div>
 <script>window.RIVERSO_CQ = <?php echo riverso_pos_cq_json($riverso_cq); ?>;</script>
-<script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/customer-quotes.js?ver=<?php echo htmlspecialchars($version, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/customer-quotes.js?ver=<?php echo htmlspecialchars($js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <?php if ($standalone): ?>
 </body>
 </html>

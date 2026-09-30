@@ -411,7 +411,9 @@ class Riverso_Customer_Quote_Repository {
         if ($quantity <= 0) {
             throw new Riverso_Quote_Exception('La cantidad debe ser mayor a cero.');
         }
-        $price = round((float) (isset($line['unit_price']) ? $line['unit_price'] : 0), 2);
+        $rule_adjusted = !empty($line['rule_adjusted']);
+        $price_raw = (float) (isset($line['unit_price']) ? $line['unit_price'] : 0);
+        $price = $rule_adjusted ? round($price_raw, 4) : round($price_raw, 2);
         if ($price < 0) {
             throw new Riverso_Quote_Exception('El precio no puede ser negativo.');
         }
@@ -452,6 +454,18 @@ class Riverso_Customer_Quote_Repository {
                 $upp = null;
             }
         }
+        $grupo_id = 0;
+        if (isset($line['grupo_id']) && $line['grupo_id'] !== null && $line['grupo_id'] !== '') {
+            $grupo_id = (int) $line['grupo_id'];
+        } elseif (isset($line['_family']) && is_array($line['_family']) && !empty($line['_family']['grupo_id'])) {
+            $grupo_id = (int) $line['_family']['grupo_id'];
+        }
+        $rule_total = null;
+        if ($rule_adjusted && isset($line['rule_total']) && $line['rule_total'] !== null && $line['rule_total'] !== '') {
+            $rule_total = round((float) $line['rule_total'], 2);
+        } else {
+            $rule_adjusted = false;
+        }
         return array(
             'product_id' => $product_id,
             'producto_base_id' => $pb,
@@ -468,6 +482,9 @@ class Riverso_Customer_Quote_Repository {
             'family_mode' => $family_mode,
             'packaging' => $packaging,
             'units_per_pack' => $upp,
+            'grupo_id' => $grupo_id > 0 ? $grupo_id : null,
+            'rule_total' => $rule_total,
+            'rule_adjusted' => $rule_adjusted,
         );
     }
 
@@ -589,16 +606,20 @@ class Riverso_Customer_Quote_Repository {
                     'price_discount' => isset($pl['price_discount']) ? $pl['price_discount'] : 0,
                     'margin_discount' => isset($pl['margin_discount']) ? $pl['margin_discount'] : 0,
                     'discount_amount' => isset($pl['discount_amount']) ? $pl['discount_amount'] : 0,
+                    'units_per_pack' => isset($pl['units_per_pack']) ? $pl['units_per_pack'] : null,
                 );
             }
             $recalc = Riverso_Quote_Totals::calculate($recalc_input);
-            $net = (float) $recalc['net_total'];
-            $discount_total = (float) $recalc['discount_total'];
+            // Conservar net_total del header (incluye T_final prorrateado al guardar).
+            // Solo refrescar utilidad/margen cuando el recalc los conoce.
             if ($recalc['margin_percent'] !== null) {
                 $margin_percent = $recalc['margin_percent'];
             }
             if ($recalc['profit_total'] !== null) {
                 $profit_total = $recalc['profit_total'];
+            }
+            if ($recalc['discount_total'] !== null) {
+                $discount_total = (float) $recalc['discount_total'];
             }
         }
         $channel = $this->normalize_channel(isset($row['channel']) ? $row['channel'] : 'local');
@@ -731,9 +752,17 @@ class Riverso_Customer_Quote_Repository {
             'price_discount' => isset($line['price_discount']) ? $line['price_discount'] : 0,
             'margin_discount' => isset($line['margin_discount']) ? $line['margin_discount'] : 0,
             'discount_amount' => isset($line['discount_amount']) ? $line['discount_amount'] : 0,
+            'units_per_pack' => isset($line['units_per_pack']) ? $line['units_per_pack'] : null,
         );
         $calculated = Riverso_Quote_Totals::calculate(array($for_calc));
         $normalized = $calculated['lines'][0];
+        $stored_total = null;
+        if (isset($line['line_total']) && $line['line_total'] !== null && $line['line_total'] !== '') {
+            $stored_total = (float) $line['line_total'];
+        } elseif (isset($line['total']) && $line['total'] !== null && $line['total'] !== '') {
+            $stored_total = (float) $line['total'];
+        }
+        $line_net = $stored_total !== null ? round($stored_total, 2) : (float) $normalized['line_net'];
         return array(
             'id' => (int) (isset($line['id']) ? $line['id'] : 0),
             'product_id' => $this->nullable_int(isset($line['product_id']) ? $line['product_id'] : null),
@@ -748,7 +777,7 @@ class Riverso_Customer_Quote_Repository {
             'price_discount' => (float) $normalized['price_discount'],
             'margin_discount' => (float) $normalized['margin_discount'],
             'discount_amount' => (float) $normalized['discount_amount'],
-            'line_net' => (float) $normalized['line_net'],
+            'line_net' => $line_net,
             'line_profit' => $normalized['line_profit'],
             'line_margin_percent' => $normalized['line_margin_percent'],
             'family_mode' => isset($line['family_mode']) && $line['family_mode'] !== '' && $line['family_mode'] !== null

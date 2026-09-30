@@ -1048,6 +1048,19 @@ class Riverso_Price_Rules_Module {
      * @return float|null             Precio unitario, o null si no hay regla/precio
      */
     public function apply_for_base($producto_base_id, $qty, $p_asignado = null) {
+        $detail = $this->apply_for_base_detail($producto_base_id, $qty, $p_asignado);
+        return $detail !== null ? $detail['price'] : null;
+    }
+
+    /**
+     * Evalúa regla con desglose (unitario + T_final) como el simulador.
+     *
+     * @param int        $producto_base_id
+     * @param float      $qty
+     * @param float|null $p_asignado
+     * @return array{price:float,total:float,breakdown:array,adjusted:bool}|null
+     */
+    public function apply_for_base_detail($producto_base_id, $qty, $p_asignado = null) {
         $rule_id = $this->resolve_rule_for_base($producto_base_id);
         if (!$rule_id) {
             return null;
@@ -1061,7 +1074,17 @@ class Riverso_Price_Rules_Module {
         }
 
         $tiers = $this->get_tiers($rule_id);
-        return Riverso_Price_Rule_Engine::evaluate($tiers, $p_asignado, $qty);
+        $eval = Riverso_Price_Rule_Engine::evaluate_with_total($tiers, $p_asignado, $qty);
+        if ($eval['price'] === null) {
+            return null;
+        }
+        $breakdown = is_array($eval['breakdown']) ? $eval['breakdown'] : array();
+        return array(
+            'price' => (float) $eval['price'],
+            'total' => (float) $eval['total'],
+            'breakdown' => $breakdown,
+            'adjusted' => !empty($breakdown['adjusted']),
+        );
     }
 
     /**

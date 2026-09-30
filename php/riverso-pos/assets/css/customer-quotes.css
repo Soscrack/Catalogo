@@ -273,6 +273,27 @@
     background: #fff7ed;
 }
 
+.cq-price-cell .cq-line-gross {
+    font-weight: 700;
+}
+
+.cq-price-cell .cq-line-unit-hint {
+    font-size: 0.72rem;
+    color: #6b6258;
+    margin-top: 2px;
+}
+
+.cq-price-cell .cq-unit-price-input {
+    display: none !important;
+    width: 7.5rem;
+    margin-top: 6px;
+    text-align: right;
+}
+
+.cq-line.is-editing .cq-price-cell .cq-unit-price-input {
+    display: inline-block !important;
+}
+
 .cq-actions {
     display: flex;
     gap: 8px;

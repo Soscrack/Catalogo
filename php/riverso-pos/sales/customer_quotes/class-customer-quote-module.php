@@ -1132,6 +1132,9 @@ class Riverso_Customer_Quote_Module {
             'pricing' => $pack,
             'family' => $offers,
             'unit_price' => $pack['unit_price'],
+            'rule_total' => isset($pack['rule_total']) ? $pack['rule_total'] : null,
+            'rule_adjusted' => !empty($pack['rule_adjusted']),
+            'unitario0' => isset($pack['unitario0']) ? $pack['unitario0'] : null,
             'producto_base_id' => $pb,
             'family_qty' => $qty,
         ));

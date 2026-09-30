@@ -217,7 +217,7 @@ class Riverso_Quote_Catalog_Lookup {
      *
      * @param int   $producto_base_id
      * @param float $family_qty
-     * @return array{unit_price:float,unit_cost:?float,local_price:?float,rule_price:?float,p_asignado:?float,c_ref:?float}
+     * @return array{unit_price:float,unit_cost:?float,local_price:?float,rule_price:?float,rule_total:?float,rule_adjusted:bool,unitario0:?float,p_asignado:?float,c_ref:?float}
      */
     public function local_price_pack($producto_base_id, $family_qty = 1.0) {
         $producto_base_id = (int) $producto_base_id;
@@ -229,6 +229,9 @@ class Riverso_Quote_Catalog_Lookup {
         $unit_cost = null;
         $local_price = null;
         $rule_price = null;
+        $rule_total = null;
+        $rule_adjusted = false;
+        $unitario0 = null;
         $p_asignado = null;
         $c_ref = null;
 
@@ -249,20 +252,36 @@ class Riverso_Quote_Catalog_Lookup {
                 }
             }
             if (class_exists('Riverso_Price_Rules_Module')) {
-                $rp = Riverso_Price_Rules_Module::get_instance()->apply_for_base($producto_base_id, $family_qty, $local_price);
-                if ($rp !== null) {
-                    $rule_price = (float) $rp;
+                $detail = Riverso_Price_Rules_Module::get_instance()->apply_for_base_detail(
+                    $producto_base_id,
+                    $family_qty,
+                    $local_price
+                );
+                if (is_array($detail) && isset($detail['price'])) {
+                    $rule_price = (float) $detail['price'];
                     $unit_price = $rule_price;
+                    $rule_total = isset($detail['total']) ? (float) $detail['total'] : null;
+                    $rule_adjusted = !empty($detail['adjusted']);
+                    if (isset($detail['breakdown']['unitario0'])) {
+                        $unitario0 = (float) $detail['breakdown']['unitario0'];
+                    }
                 }
             }
         }
 
-        $unit_price_r = round((float) $unit_price, 2);
+        // Si la regla ajustó el total (formula_total / piso), conservar hasta 4 decimales
+        // del motor; si no, redondear a 2 como precio de lista habitual.
+        $unit_price_r = $rule_adjusted
+            ? round((float) $unit_price, 4)
+            : round((float) $unit_price, 2);
         return array(
             'unit_price' => $unit_price_r,
             'unit_cost' => $unit_cost === null ? null : round((float) $unit_cost, 2),
             'local_price' => $local_price,
             'rule_price' => $rule_price,
+            'rule_total' => $rule_total,
+            'rule_adjusted' => $rule_adjusted,
+            'unitario0' => $unitario0,
             'p_asignado' => $p_asignado,
             'c_ref' => $c_ref,
             'has_local_price' => $unit_price_r > 0,

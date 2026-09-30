@@ -380,6 +380,7 @@ class Riverso_Pricing_Module {
             'copy_local' => 'Copia local',
             'system'     => 'Sistema',
             'tpv'        => 'TPV',
+            'regla'      => 'Regla de precios',
         ];
         $label = $map[$key] ?? ($key !== '' ? $key : '—');
         return $label;

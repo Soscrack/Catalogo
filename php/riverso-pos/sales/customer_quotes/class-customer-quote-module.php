@@ -49,6 +49,9 @@ class Riverso_Customer_Quote_Module {
         if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_channel')) {
             Riverso_POS_Activator::ensure_customer_quotes_channel();
         }
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_price_mode')) {
+            Riverso_POS_Activator::ensure_customer_quotes_price_mode();
+        }
     }
 
     public function init() {
@@ -63,6 +66,7 @@ class Riverso_Customer_Quote_Module {
             'class-quote-totals.php',
             'class-customer-quote-repository.php',
             'class-quote-catalog-lookup.php',
+            'class-quote-pdf.php',
         );
         foreach ($files as $file) {
             $path = $dir . $file;
@@ -83,6 +87,7 @@ class Riverso_Customer_Quote_Module {
         add_action('wp_ajax_riverso_cq_received_list', array($this, 'ajax_received_list'));
         add_action('wp_ajax_riverso_cq_received_preview', array($this, 'ajax_received_preview'));
         add_action('wp_ajax_riverso_cq_received_import', array($this, 'ajax_received_import'));
+        add_action('wp_ajax_riverso_cq_pdf', array($this, 'ajax_pdf'));
         // P1.5 proxies (nonce cotizaciones) → quick-view / pricing / families / unit / tienda-local
         add_action('wp_ajax_riverso_cq_products_quick_lookup', array($this, 'ajax_products_quick_lookup'));
         add_action('wp_ajax_riverso_cq_products_quick_search', array($this, 'ajax_products_quick_search'));
@@ -141,6 +146,8 @@ class Riverso_Customer_Quote_Module {
         $warehouse_url = home_url('/interno/warehouse/');
         return array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
+            'adminUrl' => admin_url('admin.php'),
+            'productsUrl' => admin_url('admin.php?page=riverso-pos-products'),
             'nonce' => wp_create_nonce('riverso_customer_quotes'),
             'assetBase' => rtrim(RIVERSO_POS_PLUGIN_URL, '/') . '/assets',
             'standalone' => false,
@@ -169,9 +176,85 @@ class Riverso_Customer_Quote_Module {
                 'unitProduct' => 'riverso_cq_unit_product',
                 'tiendaLocal' => 'riverso_cq_tienda_local',
                 'familyPrice' => 'riverso_cq_family_price',
+                'pdf' => 'riverso_cq_pdf',
             ),
             'defaultChannel' => 'local',
         );
+    }
+
+    /**
+     * HTML imprimible de cotización (Abrir → Guardar como PDF).
+     * Acepta GET (pestaña nueva) o POST.
+     */
+    public function ajax_pdf() {
+        $this->authorize_request();
+        $id = (int) $this->request_string('id');
+        if ($id <= 0) {
+            $this->fail_html('Cotización no encontrada.', 404);
+        }
+        $template = $this->request_string('template');
+        $quote = $this->quotes->find($id);
+        if ($quote === null) {
+            $this->fail_html('Cotización no encontrada.', 404);
+        }
+        $quote = $this->catalog->hydrate_quote_families($quote);
+        $quote = $this->enrich_quote_seller($quote, $id);
+        if (!class_exists('Riverso_Quote_Pdf')) {
+            $this->fail_html('Generador PDF no disponible.', 500);
+        }
+        $doc = Riverso_Quote_Pdf::build($quote, $template);
+        $css_path = RIVERSO_POS_PLUGIN_DIR . 'assets/css/customer-quote-pdf.css';
+        $css_url = rtrim(RIVERSO_POS_PLUGIN_URL, '/') . '/assets/css/customer-quote-pdf.css';
+        if (is_file($css_path)) {
+            $css_url .= '?ver=' . rawurlencode((string) filemtime($css_path));
+        }
+        $logo_path = RIVERSO_POS_PLUGIN_DIR . 'assets/img/logo-rs.png';
+        $logo_url = '';
+        if (is_file($logo_path)) {
+            $logo_url = rtrim(RIVERSO_POS_PLUGIN_URL, '/') . '/assets/img/logo-rs.png?ver='
+                . rawurlencode((string) filemtime($logo_path));
+        }
+        nocache_headers();
+        status_header(200);
+        header('Content-Type: text/html; charset=UTF-8');
+        include RIVERSO_POS_PLUGIN_DIR . 'templates/customer-quotes/pdf.php';
+        exit;
+    }
+
+    /**
+     * Completa email del vendedor desde created_by (no viaja en present()).
+     *
+     * @param array $quote
+     * @param int   $id
+     * @return array
+     */
+    private function enrich_quote_seller(array $quote, $id) {
+        global $wpdb;
+        $id = (int) $id;
+        if ($id <= 0 || !isset($wpdb)) {
+            return $quote;
+        }
+        $table = $wpdb->prefix . 'riverso_customer_quotes';
+        $created_by = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT created_by FROM {$table} WHERE id = %d",
+            $id
+        ));
+        if ($created_by <= 0) {
+            return $quote;
+        }
+        $quote['created_by'] = $created_by;
+        if (function_exists('get_userdata')) {
+            $user = get_userdata($created_by);
+            if ($user) {
+                if (empty($quote['seller_name']) && !empty($user->display_name)) {
+                    $quote['seller_name'] = (string) $user->display_name;
+                }
+                if (!empty($user->user_email)) {
+                    $quote['seller_email'] = (string) $user->user_email;
+                }
+            }
+        }
+        return $quote;
     }
 
     public function render_app() {
@@ -262,9 +345,13 @@ class Riverso_Customer_Quote_Module {
             $scope = 'todo';
         }
         $channel = $this->catalog->normalize_channel($this->post_string('channel'));
+        $contains = $this->post_contains_words();
+        if ($query === '' && $contains) {
+            $query = $contains[0];
+        }
         if ($mode === 'advanced' && ($scope === 'descripcion' || $scope === 'todo')) {
             $len = function_exists('mb_strlen') ? mb_strlen($query, 'UTF-8') : strlen($query);
-            if ($scope === 'descripcion' && $len < 2) {
+            if ($scope === 'descripcion' && $len < 2 && !$contains) {
                 $this->ok(array(
                     'products' => array(),
                     'hint' => 'Escribe al menos 2 caracteres para buscar por descripción.',
@@ -273,12 +360,62 @@ class Riverso_Customer_Quote_Module {
                 return;
             }
         }
+        $limit = $contains ? 60 : 20;
+        $products = $this->catalog->search($query, $limit, $mode, $scope, $channel);
+        if ($contains) {
+            $products = $this->catalog->filter_contains_words($products, $contains, $scope);
+            $products = array_slice(array_values($products), 0, 20);
+        }
         $this->ok(array(
-            'products' => $this->catalog->search($query, 20, $mode, $scope, $channel),
+            'products' => $products,
             'mode' => $mode,
             'scope' => $scope,
             'channel' => $channel,
+            'contains' => $contains,
         ));
+    }
+
+    /**
+     * Palabras del filtro "Contiene palabra" (JSON array o CSV).
+     *
+     * @return string[]
+     */
+    private function post_contains_words() {
+        $raw = isset($_POST['contains']) ? wp_unslash($_POST['contains']) : '';
+        $words = array();
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $words = $decoded;
+            } else {
+                $words = preg_split('/\s*,\s*/', $raw) ?: array();
+            }
+        }
+        $out = array();
+        $seen = array();
+        foreach ($words as $word) {
+            if (!is_string($word) && !is_numeric($word)) {
+                continue;
+            }
+            $word = trim(preg_replace('/\s+/u', ' ', (string) $word));
+            if ($word === '') {
+                continue;
+            }
+            $len = function_exists('mb_strlen') ? mb_strlen($word, 'UTF-8') : strlen($word);
+            if ($len < 2) {
+                continue;
+            }
+            $key = function_exists('mb_strtolower') ? mb_strtolower($word, 'UTF-8') : strtolower($word);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $out[] = $word;
+            if (count($out) >= 12) {
+                break;
+            }
+        }
+        return $out;
     }
 
 
@@ -1126,7 +1263,15 @@ class Riverso_Customer_Quote_Module {
         if ($pb <= 0) {
             $this->fail('producto_base_id requerido');
         }
-        $pack = $this->catalog->local_price_pack($pb, $qty);
+        $p_ref_raw = $this->post_string('p_ref');
+        $p_override = null;
+        if ($p_ref_raw !== '' && is_numeric($p_ref_raw)) {
+            $p_override = (float) $p_ref_raw;
+            if ($p_override <= 0) {
+                $p_override = null;
+            }
+        }
+        $pack = $this->catalog->local_price_pack($pb, $qty, $p_override);
         $offers = $this->catalog->family_offers_for_base($pb);
         $this->ok(array(
             'pricing' => $pack,
@@ -1135,8 +1280,11 @@ class Riverso_Customer_Quote_Module {
             'rule_total' => isset($pack['rule_total']) ? $pack['rule_total'] : null,
             'rule_adjusted' => !empty($pack['rule_adjusted']),
             'unitario0' => isset($pack['unitario0']) ? $pack['unitario0'] : null,
+            'has_rule' => !empty($pack['has_rule']),
+            'p_asignado' => isset($pack['p_asignado']) ? $pack['p_asignado'] : null,
             'producto_base_id' => $pb,
             'family_qty' => $qty,
+            'p_ref' => $p_override,
         ));
     }
 
@@ -1306,6 +1454,16 @@ class Riverso_Customer_Quote_Module {
         }
     }
 
+    /**
+     * Autorización GET/POST para el documento PDF.
+     */
+    private function authorize_request() {
+        $nonce = $this->request_string('nonce');
+        if (!$this->user_can() || !wp_verify_nonce($nonce, 'riverso_customer_quotes')) {
+            $this->fail_html('No tienes permiso para cotizar.', 403);
+        }
+    }
+
     private function user_can() {
         return current_user_can('riverso_view_quotes')
             || current_user_can('riverso_create_quotes')
@@ -1325,6 +1483,20 @@ class Riverso_Customer_Quote_Module {
         return sanitize_text_field($value);
     }
 
+    private function request_string($key) {
+        if (isset($_POST[$key])) {
+            return $this->post_string($key);
+        }
+        if (!isset($_GET[$key])) {
+            return '';
+        }
+        $value = wp_unslash($_GET[$key]);
+        if (!is_string($value)) {
+            return '';
+        }
+        return sanitize_text_field($value);
+    }
+
     private function ok(array $data) {
         wp_send_json_success($data);
     }
@@ -1332,5 +1504,15 @@ class Riverso_Customer_Quote_Module {
     private function fail($message, $status = 400) {
         status_header($status);
         wp_send_json_error(array('message' => $message), $status);
+    }
+
+    private function fail_html($message, $status = 400) {
+        status_header($status);
+        nocache_headers();
+        header('Content-Type: text/html; charset=UTF-8');
+        $safe = htmlspecialchars((string) $message, ENT_QUOTES, 'UTF-8');
+        echo '<!DOCTYPE html><html lang="es-CL"><head><meta charset="utf-8"><title>Error</title></head>';
+        echo '<body><p>' . $safe . '</p></body></html>';
+        exit;
     }
 }

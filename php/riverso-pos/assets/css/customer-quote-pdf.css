@@ -1,0 +1,299 @@
+/* Cotización imprimible (estilo Facto) */
+.cq-pdf-body {
+    margin: 0;
+    background: #e8e8e8;
+    color: #111;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.cq-pdf-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    padding: 10px 16px;
+    background: #222;
+}
+
+.cq-pdf-print-btn,
+.cq-pdf-close-btn {
+    border: 0;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font: inherit;
+    cursor: pointer;
+}
+
+.cq-pdf-print-btn {
+    background: #1d6fb8;
+    color: #fff;
+}
+
+.cq-pdf-close-btn {
+    background: #555;
+    color: #fff;
+}
+
+.cq-pdf {
+    width: 210mm;
+    max-width: 100%;
+    margin: 16px auto 32px;
+    padding: 18mm 14mm;
+    background: #fff;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+    box-sizing: border-box;
+}
+
+.cq-pdf-company {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 14px;
+    text-align: left;
+}
+
+.cq-pdf-logo {
+    display: block;
+    width: 78px;
+    height: 74px;
+    object-fit: contain;
+    flex: 0 0 auto;
+}
+
+.cq-pdf-company-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.cq-pdf-razon {
+    margin: 0;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.cq-pdf-giro {
+    margin: 4px 0 0;
+    font-size: 11px;
+    text-transform: uppercase;
+}
+
+.cq-pdf-meta {
+    margin: 2px 0 0;
+    font-size: 11px;
+}
+
+.cq-pdf-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 2px solid #222;
+    border-bottom: 2px solid #222;
+    padding: 8px 0;
+    margin-bottom: 12px;
+}
+
+.cq-pdf-title-row h2 {
+    margin: 0;
+    font-size: 20px;
+    letter-spacing: 0.06em;
+}
+
+.cq-pdf-number {
+    text-align: right;
+    font-size: 14px;
+}
+
+.cq-pdf-number-label {
+    margin-right: 6px;
+}
+
+.cq-pdf-header-grid {
+    margin-bottom: 12px;
+}
+
+.cq-pdf-kv {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.cq-pdf-kv th,
+.cq-pdf-kv td {
+    padding: 3px 6px;
+    vertical-align: top;
+    text-align: left;
+}
+
+.cq-pdf-kv th {
+    width: 90px;
+    color: #444;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.cq-pdf-payment {
+    border: 1px solid #bbb;
+    background: #f7f7f7;
+    padding: 8px 10px;
+    margin-bottom: 14px;
+}
+
+.cq-pdf-payment-block strong {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.cq-pdf-payment-block p {
+    margin: 0 0 2px;
+    line-height: 1.45;
+}
+
+.cq-pdf-items {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+}
+
+.cq-pdf-items th,
+.cq-pdf-items td {
+    border: 1px solid #333;
+    padding: 5px 6px;
+    vertical-align: top;
+}
+
+.cq-pdf-items thead th {
+    background: #f0f0f0;
+    font-size: 11px;
+    text-align: center;
+}
+
+.cq-pdf-col-desc {
+    text-align: left;
+}
+
+.cq-pdf-col-qty,
+.cq-pdf-col-iva,
+.cq-pdf-col-dsc {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.cq-pdf-col-num {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.cq-pdf-empty {
+    text-align: center;
+    color: #666;
+}
+
+.cq-pdf-bottom {
+    display: grid;
+    grid-template-columns: 1fr 200px;
+    gap: 16px;
+    align-items: stretch;
+    margin-top: 4px;
+}
+
+.cq-pdf-notes-box {
+    border: 1px solid #333;
+    padding: 8px 10px;
+    min-height: 110px;
+    box-sizing: border-box;
+}
+
+.cq-pdf-notes-box h3 {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.cq-pdf-notes-body {
+    font-size: 11px;
+    min-height: 72px;
+}
+
+.cq-pdf-notes-body p {
+    margin: 0 0 6px;
+}
+
+.cq-pdf-notes-body p:last-child {
+    margin-bottom: 0;
+}
+
+.cq-pdf-totals-box {
+    border: 1px solid #333;
+    padding: 8px 10px;
+    align-self: end;
+    justify-self: end;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.cq-pdf-totals-box table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.cq-pdf-totals-box th,
+.cq-pdf-totals-box td {
+    padding: 2px 0;
+    font-size: 12px;
+}
+
+.cq-pdf-totals-box th {
+    text-align: left;
+    font-weight: 600;
+}
+
+.cq-pdf-totals-box td {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.cq-pdf-total-row th,
+.cq-pdf-total-row td {
+    border-top: 1px solid #333;
+    padding-top: 4px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.cq-pdf-footer {
+    margin-top: 24px;
+    border-top: 1px solid #ccc;
+    padding-top: 8px;
+    color: #666;
+    font-size: 10px;
+    text-align: center;
+}
+
+@media print {
+    .cq-pdf-body {
+        background: #fff;
+    }
+
+    .no-print {
+        display: none !important;
+    }
+
+    .cq-pdf {
+        width: auto;
+        margin: 0;
+        padding: 0;
+        box-shadow: none;
+    }
+
+    @page {
+        size: letter;
+        margin: 12mm;
+    }
+}

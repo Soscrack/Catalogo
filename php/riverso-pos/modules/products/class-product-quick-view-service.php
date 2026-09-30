@@ -659,6 +659,7 @@ class Riverso_Product_Quick_View_Service {
         if (class_exists('Riverso_Price_Lookup_Service')) {
             $pricing = Riverso_Price_Lookup_Service::get_instance()->get_local_price_pack($id);
         }
+        $pricing = $this->enrich_pricing_with_presentacion($pricing, $id, $product);
 
         $stock = null;
         $locations = ['preferidas' => [], 'actuales' => [], 'historial' => []];
@@ -965,6 +966,21 @@ class Riverso_Product_Quick_View_Service {
 
         $precio = is_array($pricing) ? ($pricing['p_asignado'] ?? null) : null;
         $costo = is_array($pricing) ? ($pricing['c_ref_bruto'] ?? $pricing['c_ref'] ?? null) : null;
+        $presentacion = is_array($pricing) ? ($pricing['presentacion'] ?? null) : null;
+        if (($precio === null || (float) $precio <= 0)
+            && is_array($presentacion)
+            && isset($presentacion['envase']['p_bruto'])
+            && (float) $presentacion['envase']['p_bruto'] > 0
+        ) {
+            $precio = (float) $presentacion['envase']['p_bruto'];
+        }
+        if (($costo === null || (float) $costo <= 0)
+            && is_array($presentacion)
+            && isset($presentacion['envase']['c_ref_bruto'])
+            && (float) $presentacion['envase']['c_ref_bruto'] > 0
+        ) {
+            $costo = (float) $presentacion['envase']['c_ref_bruto'];
+        }
         if ($precio === null || (float) $precio <= 0) {
             $alerts[] = [
                 'level' => 'warning',
@@ -1066,5 +1082,237 @@ class Riverso_Product_Quick_View_Service {
         }
 
         return $alerts;
+    }
+
+    /**
+     * Para envases de familia unitaria con regla: precio unitario + total del envase.
+     * No persiste ni pisa p_asignado del SKU.
+     *
+     * @param array|null $pricing
+     * @param int        $producto_base_id
+     * @param array      $product
+     * @return array|null
+     */
+    private function enrich_pricing_with_presentacion($pricing, $producto_base_id, array $product) {
+        $producto_base_id = absint($producto_base_id);
+        if ($producto_base_id <= 0) {
+            return $pricing;
+        }
+        if (!is_array($pricing)) {
+            $pricing = [];
+        }
+
+        if (!class_exists('Riverso_Unit_Product_Service')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'modules/families/class-unit-product-service.php';
+            if (file_exists($path)) {
+                require_once $path;
+            }
+        }
+        if (!class_exists('Riverso_Unit_Product_Service') || !class_exists('Riverso_Price_Rules_Module')) {
+            return $pricing ?: null;
+        }
+
+        $unit_svc = Riverso_Unit_Product_Service::get_instance();
+        $ctx = $unit_svc->resolve_family_unit_for_base($producto_base_id);
+        if (!$ctx || empty($ctx['es_producto_unitario'])) {
+            return $pricing ?: null;
+        }
+
+        // El producto unitario (qty 1) sigue mostrando su p_asignado propio.
+        if ((int) ($ctx['unit_producto_base_id'] ?? 0) === $producto_base_id) {
+            return $pricing ?: null;
+        }
+        if (!empty($product['es_unidad_minima'])) {
+            return $pricing ?: null;
+        }
+
+        $envase = $unit_svc->get_canonical_envase($producto_base_id);
+        $qty = $envase ? (float) ($envase['cantidad_unidades'] ?? 0) : 0.0;
+        if ($qty <= 1.0001) {
+            return $pricing ?: null;
+        }
+
+        $rules = Riverso_Price_Rules_Module::get_instance();
+        $detail = $rules->apply_for_base_detail($producto_base_id, $qty, null);
+        if (!is_array($detail) || !isset($detail['price']) || $detail['price'] === null) {
+            return $pricing ?: null;
+        }
+
+        $iva_tipo = class_exists('Riverso_Pricing_Module')
+            ? Riverso_Pricing_Module::normalize_iva_tipo($product['facto_iva_tipo'] ?? 'afecto')
+            : 'afecto';
+
+        $unit_bruto = (float) $detail['price'];
+        $total_bruto = isset($detail['total']) ? (float) $detail['total'] : round($unit_bruto * $qty, 4);
+        $adjusted = !empty($detail['adjusted']);
+        $round_p = $adjusted ? 4 : 2;
+        $unit_bruto = round($unit_bruto, $round_p);
+        $total_bruto = round($total_bruto, $round_p);
+
+        $unit_neto = class_exists('Riverso_Pricing_Module')
+            ? Riverso_Pricing_Module::net_from_gross($unit_bruto, $iva_tipo)
+            : $unit_bruto;
+        $total_neto = class_exists('Riverso_Pricing_Module')
+            ? Riverso_Pricing_Module::net_from_gross($total_bruto, $iva_tipo)
+            : $total_bruto;
+
+        // Folio / c_ref del SKU envase: coste UNITARIO (no del envase completo).
+        $unitario_bases = $pricing['c_ref_bases'] ?? null;
+        $unitario_bruto = isset($pricing['c_ref_bruto']) && $pricing['c_ref_bruto'] !== null
+            ? (float) $pricing['c_ref_bruto']
+            : (isset($pricing['c_ref']) && $pricing['c_ref'] !== null ? (float) $pricing['c_ref'] : null);
+        $unitario_neto = isset($pricing['c_ref_neto']) && $pricing['c_ref_neto'] !== null
+            ? (float) $pricing['c_ref_neto']
+            : null;
+
+        $envase_bases = null;
+        $envase_bruto = null;
+        $envase_neto = null;
+
+        // Fallback: desglose de familia — coste_unitario es unitario; costo_presentacion es el envase.
+        if (($unitario_bases === null || $unitario_bruto === null) && !empty($ctx['grupo_id'])) {
+            $coste = $unit_svc->calculate_coste_unitario((int) $ctx['grupo_id']);
+            foreach ((array) ($coste['breakdown'] ?? []) as $bd) {
+                if ((int) ($bd['producto_base_id'] ?? 0) !== $producto_base_id) {
+                    continue;
+                }
+                $coste_u_neto = isset($bd['coste_unitario']) ? (float) $bd['coste_unitario'] : null;
+                $costo_pres_neto = isset($bd['costo_presentacion']) ? (float) $bd['costo_presentacion'] : null;
+                if ($coste_u_neto === null && $costo_pres_neto !== null && $qty > 0) {
+                    $coste_u_neto = round($costo_pres_neto / $qty, 4);
+                }
+                if ($costo_pres_neto === null && $coste_u_neto !== null) {
+                    $costo_pres_neto = round($coste_u_neto * $qty, 4);
+                }
+                if ($coste_u_neto === null) {
+                    break;
+                }
+                $unitario_neto = $coste_u_neto;
+                $unitario_bruto = class_exists('Riverso_Pricing_Module')
+                    ? Riverso_Pricing_Module::gross_from_net($unitario_neto, $iva_tipo)
+                    : $unitario_neto;
+                if (class_exists('Riverso_Cost_Lookup_Service')) {
+                    $unitario_bases = Riverso_Cost_Lookup_Service::bases_from_c_ref($unitario_neto, $unitario_bruto);
+                }
+                $envase_neto = $costo_pres_neto;
+                $envase_bruto = class_exists('Riverso_Pricing_Module')
+                    ? Riverso_Pricing_Module::gross_from_net($envase_neto, $iva_tipo)
+                    : $envase_neto;
+                if (class_exists('Riverso_Cost_Lookup_Service')) {
+                    $envase_bases = Riverso_Cost_Lookup_Service::bases_from_c_ref($envase_neto, $envase_bruto);
+                }
+                break;
+            }
+        }
+
+        if ($unitario_neto === null && $unitario_bruto !== null && class_exists('Riverso_Pricing_Module')) {
+            $unitario_neto = Riverso_Pricing_Module::net_from_gross($unitario_bruto, $iva_tipo);
+        }
+        if ($unitario_bases === null && ($unitario_neto !== null || $unitario_bruto !== null)
+            && class_exists('Riverso_Cost_Lookup_Service')
+        ) {
+            $unitario_bases = Riverso_Cost_Lookup_Service::bases_from_c_ref($unitario_neto, $unitario_bruto);
+        }
+
+        // Coste del envase = unitario × N (salvo que el fallback de lote ya lo haya fijado).
+        if ($envase_bruto === null && $unitario_bruto !== null) {
+            $envase_bruto = round($unitario_bruto * $qty, 4);
+        }
+        if ($envase_neto === null && $unitario_neto !== null) {
+            $envase_neto = round($unitario_neto * $qty, 4);
+        }
+        if ($envase_bases === null && $unitario_bases !== null) {
+            $envase_bases = $this->scale_cost_bases($unitario_bases, $qty);
+        }
+        if ($envase_bases === null && ($envase_neto !== null || $envase_bruto !== null)
+            && class_exists('Riverso_Cost_Lookup_Service')
+        ) {
+            $envase_bases = Riverso_Cost_Lookup_Service::bases_from_c_ref($envase_neto, $envase_bruto);
+        }
+
+        $rule_id = $rules->resolve_rule_for_base($producto_base_id);
+        $rule = $rule_id ? $rules->get_rule_with_tiers($rule_id) : null;
+        $rule_nombre = is_array($rule) ? (string) ($rule['nombre'] ?? '') : '';
+        $rule_codigo = is_array($rule) ? (string) ($rule['codigo'] ?? '') : '';
+        $detalle_parts = [];
+        if ($rule_codigo !== '') {
+            $detalle_parts[] = $rule_codigo;
+        }
+        if ($rule_nombre !== '') {
+            $detalle_parts[] = $rule_nombre;
+        }
+        $detalle_parts[] = 'Cantidad envase: ' . rtrim(rtrim(number_format($qty, 4, '.', ''), '0'), '.');
+        $origen = [
+            'key' => 'regla',
+            'label' => 'Regla de precios',
+            'fecha' => '',
+            'folio' => '',
+            'detalle' => implode(' · ', $detalle_parts),
+            'factura_id' => 0,
+            'fecha_emision' => '',
+            'emparejamiento_id' => 0,
+            'folio_url' => '',
+            'regla_id' => $rule_id ? (int) $rule_id : 0,
+            'regla_nombre' => $rule_nombre,
+            'regla_codigo' => $rule_codigo,
+        ];
+
+        $pricing['presentacion'] = [
+            'cantidad_unidades' => $qty,
+            'unitario' => [
+                'p_bruto' => $unit_bruto,
+                'p_neto' => $unit_neto,
+                'c_ref_bruto' => $unitario_bruto,
+                'c_ref_neto' => $unitario_neto,
+                'c_ref_bases' => $unitario_bases,
+            ],
+            'envase' => [
+                'p_bruto' => $total_bruto,
+                'p_neto' => $total_neto,
+                'c_ref_bruto' => $envase_bruto,
+                'c_ref_neto' => $envase_neto,
+                'c_ref_bases' => $envase_bases,
+            ],
+            'origen_precio' => $origen,
+            'regla' => $rule_id ? [
+                'id' => (int) $rule_id,
+                'codigo' => $rule_codigo,
+                'nombre' => $rule_nombre,
+            ] : null,
+            'adjusted' => $adjusted,
+        ];
+
+        return $pricing;
+    }
+
+    /**
+     * Escala cada par neto/bruto de las bases de coste por un factor (p. ej. × N del envase).
+     *
+     * @param array|null $bases
+     * @param float      $factor
+     * @return array|null
+     */
+    private function scale_cost_bases($bases, $factor) {
+        if (!is_array($bases) || $factor <= 0) {
+            return null;
+        }
+        $out = [];
+        foreach ($bases as $key => $pair) {
+            if (!is_array($pair)) {
+                $out[$key] = null;
+                continue;
+            }
+            $neto = isset($pair['neto']) && $pair['neto'] !== null && $pair['neto'] !== ''
+                ? round((float) $pair['neto'] * $factor, 4)
+                : null;
+            $bruto = isset($pair['bruto']) && $pair['bruto'] !== null && $pair['bruto'] !== ''
+                ? round((float) $pair['bruto'] * $factor, 4)
+                : null;
+            $out[$key] = ($neto === null && $bruto === null) ? null : [
+                'neto' => $neto,
+                'bruto' => $bruto,
+            ];
+        }
+        return $out;
     }
 }

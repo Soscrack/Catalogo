@@ -5,9 +5,9 @@
  * esté apagado y la vista base no muestre esas columnas.
  *
  * Dscto precio: porcentaje sobre el bruto (cantidad × precio).
- * Dscto margen: porcentaje del margen que queda después de ese descuento
- * (precio ya descontado menos costo). Sin costo, el dscto margen se guarda
- * pero no descuenta dinero.
+ * Dscto margen: vista equivalente del mismo descuento sobre el margen
+ * (bruto − costo). Si hay dscto precio, el monto en dinero es solo ese %;
+ * el margen guardado no se suma. Sin costo, el dscto margen no equivalé.
  * Si ambos porcentajes quedan en 0, se respeta discount_amount (líneas anteriores).
  *
  * Si una familia tiene rule_total ajustado (T_final del motor de reglas),
@@ -146,6 +146,7 @@ class Riverso_Quote_Totals {
             $rule_total = isset($line['rule_total']) && $line['rule_total'] !== null && $line['rule_total'] !== ''
                 ? round((float) $line['rule_total'], 2)
                 : null;
+            $manual_total = self::manual_price_total($line);
 
             if ($gid > 0) {
                 $indexes = array();
@@ -164,9 +165,15 @@ class Riverso_Quote_Totals {
                             $rule_adjusted = true;
                             $rule_total = round((float) $lines[$j]['rule_total'], 2);
                         }
+                        $mt = self::manual_price_total($lines[$j]);
+                        if ($mt !== null) {
+                            $manual_total = $mt;
+                        }
                     }
                 }
-                if ($rule_adjusted && $rule_total !== null) {
+                if ($manual_total !== null) {
+                    self::prorate_into($grosses, $lines, $indexes, $manual_total);
+                } elseif ($rule_adjusted && $rule_total !== null) {
                     self::prorate_into($grosses, $lines, $indexes, $rule_total);
                 } else {
                     foreach ($indexes as $idx) {
@@ -181,7 +188,9 @@ class Riverso_Quote_Totals {
             $used[$i] = true;
             $qty = round((float) (isset($line['quantity']) ? $line['quantity'] : 0), 3);
             $billable = self::billable_units($line, $qty);
-            if ($rule_adjusted && $rule_total !== null) {
+            if ($manual_total !== null) {
+                $grosses[$i] = $manual_total;
+            } elseif ($rule_adjusted && $rule_total !== null) {
                 $grosses[$i] = $rule_total;
             } else {
                 $price = round((float) (isset($line['unit_price']) ? $line['unit_price'] : 0), 2);
@@ -190,6 +199,23 @@ class Riverso_Quote_Totals {
         }
 
         return $grosses;
+    }
+
+    /**
+     * Total fijo cuando price_mode=manual y hay price_total.
+     *
+     * @param array $line
+     * @return float|null
+     */
+    private static function manual_price_total(array $line) {
+        $mode = isset($line['price_mode']) ? strtolower(trim((string) $line['price_mode'])) : '';
+        if ($mode !== 'manual') {
+            return null;
+        }
+        if (!isset($line['price_total']) || $line['price_total'] === null || $line['price_total'] === '') {
+            return null;
+        }
+        return round((float) $line['price_total'], 2);
     }
 
     /**
@@ -275,16 +301,20 @@ class Riverso_Quote_Totals {
     }
 
     private static function discount_from_rates($gross, $qty, $unit_cost, $price_rate, $margin_rate) {
-        $price_off = round($gross * $price_rate / 100, 2);
-        $after = round($gross - $price_off, 2);
-        $margin_off = 0.0;
-        if ($unit_cost !== null && $margin_rate > 0) {
-            $margin_base = round($after - round($qty * $unit_cost, 2), 2);
+        $gross = round((float) $gross, 2);
+        $price_rate = self::rate($price_rate);
+        $margin_rate = self::rate($margin_rate);
+        $discount = 0.0;
+        if ($price_rate > 0) {
+            // Canónico: un solo descuento = % sobre el bruto (margen es vista equivalente).
+            $discount = round($gross * $price_rate / 100, 2);
+        } elseif ($margin_rate > 0 && $unit_cost !== null) {
+            // Legado: solo dscto margen (sin precio).
+            $margin_base = round($gross - round($qty * $unit_cost, 2), 2);
             if ($margin_base > 0) {
-                $margin_off = round($margin_base * $margin_rate / 100, 2);
+                $discount = round($margin_base * $margin_rate / 100, 2);
             }
         }
-        $discount = round($price_off + $margin_off, 2);
         if ($discount < 0) {
             return 0.0;
         }

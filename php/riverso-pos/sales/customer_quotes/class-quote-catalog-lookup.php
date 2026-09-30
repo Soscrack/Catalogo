@@ -128,7 +128,75 @@ class Riverso_Quote_Catalog_Lookup {
                 break;
             }
         }
-        return $out;
+        return $this->apply_internal_ean_quantity($out, $query);
+    }
+
+    /**
+     * Si la consulta es un EAN13 interno 2SSSSSSQQQQQX, adjunta la cantidad
+     * embebida (p. ej. 2000148002001 → SKU 148 × 200 uds).
+     *
+     * @param array  $rows
+     * @param string $query
+     * @return array
+     */
+    private function apply_internal_ean_quantity(array $rows, $query) {
+        $query = preg_replace('/\D+/', '', trim((string) $query));
+        if ($query === '' || !class_exists('Riverso_EAN13_Generator')) {
+            $gen = RIVERSO_POS_PLUGIN_DIR . 'modules/barcodes/class-ean13-generator.php';
+            if (!class_exists('Riverso_EAN13_Generator') && file_exists($gen)) {
+                require_once $gen;
+            }
+        }
+        if (!class_exists('Riverso_EAN13_Generator')) {
+            return $rows;
+        }
+        $parsed = Riverso_EAN13_Generator::parse($query);
+        if (!is_array($parsed) || empty($parsed['cantidad'])) {
+            return $rows;
+        }
+        $qty = max(1, (int) $parsed['cantidad']);
+        $payload = isset($parsed['sku']) ? (string) $parsed['sku'] : '';
+        $payload_norm = ltrim($payload, '0');
+        if ($payload_norm === '') {
+            $payload_norm = '0';
+        }
+
+        $single = count($rows) === 1;
+        foreach ($rows as &$row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $sku = isset($row['sku']) ? (string) $row['sku'] : '';
+            $sku_norm = ltrim($sku, '0');
+            if ($sku_norm === '') {
+                $sku_norm = '0';
+            }
+            $matches_sku = ($sku === $payload || $sku_norm === $payload_norm);
+            if (!$single && !$matches_sku) {
+                continue;
+            }
+            $row['quantity'] = $qty;
+            $row['scan_quantity'] = $qty;
+            $row['barcode'] = $query;
+            $row['matched_barcode'] = $query;
+            // Precio de regla con la qty del escaneo (luego el recalc de familia lo afina).
+            $pb = isset($row['producto_base_id']) ? (int) $row['producto_base_id'] : 0;
+            if ($pb > 0) {
+                $price_pack = $this->local_price_pack($pb, (float) $qty);
+                $row['unit_price'] = $price_pack['unit_price'];
+                $row['unit_cost'] = $price_pack['unit_cost'];
+                $row['has_local_price'] = !empty($price_pack['has_local_price']);
+                $row['sin_precio_local'] = !empty($price_pack['sin_precio_local']);
+                $row['p_asignado'] = $price_pack['p_asignado'];
+                $row['local_price'] = $price_pack['local_price'];
+                if (isset($price_pack['rule_total'])) {
+                    $row['rule_total'] = $price_pack['rule_total'];
+                    $row['rule_adjusted'] = !empty($price_pack['rule_adjusted']);
+                }
+            }
+        }
+        unset($row);
+        return $rows;
     }
 
     /**
@@ -209,7 +277,7 @@ class Riverso_Quote_Catalog_Lookup {
                 break;
             }
         }
-        return $out;
+        return $this->apply_internal_ean_quantity($out, $query);
     }
 
     /**
@@ -219,7 +287,7 @@ class Riverso_Quote_Catalog_Lookup {
      * @param float $family_qty
      * @return array{unit_price:float,unit_cost:?float,local_price:?float,rule_price:?float,rule_total:?float,rule_adjusted:bool,unitario0:?float,p_asignado:?float,c_ref:?float}
      */
-    public function local_price_pack($producto_base_id, $family_qty = 1.0) {
+    public function local_price_pack($producto_base_id, $family_qty = 1.0, $p_override = null) {
         $producto_base_id = (int) $producto_base_id;
         $family_qty = (float) $family_qty;
         if ($family_qty <= 0) {
@@ -234,6 +302,11 @@ class Riverso_Quote_Catalog_Lookup {
         $unitario0 = null;
         $p_asignado = null;
         $c_ref = null;
+        $has_rule = false;
+        $p_override = ($p_override === null || $p_override === '') ? null : (float) $p_override;
+        if ($p_override !== null && $p_override <= 0) {
+            $p_override = null;
+        }
 
         if ($producto_base_id > 0 && class_exists('Riverso_Pricing_Module')) {
             $pricing = Riverso_Pricing_Module::get_instance();
@@ -251,6 +324,10 @@ class Riverso_Quote_Catalog_Lookup {
                     $unit_cost = $c_ref;
                 }
             }
+            if ($p_override !== null) {
+                $local_price = $p_override;
+                $unit_price = $p_override;
+            }
             if (class_exists('Riverso_Price_Rules_Module')) {
                 $detail = Riverso_Price_Rules_Module::get_instance()->apply_for_base_detail(
                     $producto_base_id,
@@ -262,9 +339,22 @@ class Riverso_Quote_Catalog_Lookup {
                     $unit_price = $rule_price;
                     $rule_total = isset($detail['total']) ? (float) $detail['total'] : null;
                     $rule_adjusted = !empty($detail['adjusted']);
+                    $has_rule = true;
                     if (isset($detail['breakdown']['unitario0'])) {
                         $unitario0 = (float) $detail['breakdown']['unitario0'];
                     }
+                }
+            }
+        }
+
+        // Misma resolución de coste que Productos (Price_Lookup + familia/lotes).
+        // Cotizaciones usan coste unitario bruto × billable (qty × units_per_pack).
+        if ($unit_cost === null || $unit_cost <= 0) {
+            $resolved = $this->resolve_unit_cost_bruto($producto_base_id);
+            if ($resolved !== null && $resolved > 0) {
+                $unit_cost = $resolved;
+                if ($c_ref === null) {
+                    $c_ref = $resolved;
                 }
             }
         }
@@ -284,11 +374,109 @@ class Riverso_Quote_Catalog_Lookup {
             'unitario0' => $unitario0,
             'p_asignado' => $p_asignado,
             'c_ref' => $c_ref,
+            'has_rule' => $has_rule,
             'has_local_price' => $unit_price_r > 0,
             'sin_precio_local' => $unit_price_r <= 0,
             'family_qty' => $family_qty,
             'producto_base_id' => $producto_base_id,
+            'p_override' => $p_override,
         );
+    }
+
+    /**
+     * Coste unitario bruto para margen de cotización.
+     * Alinea con Productos: Price_Lookup (legacy) y desglose familia (lote/qty).
+     *
+     * @param int $producto_base_id
+     * @return float|null
+     */
+    private function resolve_unit_cost_bruto($producto_base_id) {
+        $producto_base_id = (int) $producto_base_id;
+        if ($producto_base_id <= 0) {
+            return null;
+        }
+
+        if (!class_exists('Riverso_Price_Lookup_Service')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'modules/pricing/class-price-lookup-service.php';
+            if (file_exists($path)) {
+                require_once $path;
+            }
+        }
+        if (class_exists('Riverso_Price_Lookup_Service')) {
+            $pack = Riverso_Price_Lookup_Service::get_instance()->get_local_price_pack($producto_base_id);
+            if (is_array($pack)) {
+                $bruto = null;
+                if (isset($pack['c_ref_bruto']) && $pack['c_ref_bruto'] !== null && $pack['c_ref_bruto'] !== '') {
+                    $bruto = (float) $pack['c_ref_bruto'];
+                } elseif (isset($pack['c_ref']) && $pack['c_ref'] !== null && $pack['c_ref'] !== '') {
+                    $bruto = (float) $pack['c_ref'];
+                }
+                if ($bruto !== null && $bruto > 0) {
+                    return $bruto;
+                }
+            }
+        }
+
+        if (!class_exists('Riverso_Unit_Product_Service')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'modules/families/class-unit-product-service.php';
+            if (file_exists($path)) {
+                require_once $path;
+            }
+        }
+        if (!class_exists('Riverso_Unit_Product_Service')) {
+            return null;
+        }
+
+        $unit_svc = Riverso_Unit_Product_Service::get_instance();
+        $ctx = $unit_svc->resolve_family_unit_for_base($producto_base_id);
+        if (!$ctx || empty($ctx['grupo_id'])) {
+            return null;
+        }
+
+        $iva_tipo = 'afecto';
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $iva_row = $wpdb->get_var($wpdb->prepare(
+            "SELECT facto_iva_tipo FROM {$prefix}producto_base WHERE id = %d",
+            $producto_base_id
+        ));
+        if (class_exists('Riverso_Pricing_Module')) {
+            $iva_tipo = Riverso_Pricing_Module::normalize_iva_tipo($iva_row ?: 'afecto');
+        }
+
+        $coste = $unit_svc->calculate_coste_unitario((int) $ctx['grupo_id']);
+        $coste_u_neto = null;
+        foreach ((array) ($coste['breakdown'] ?? array()) as $bd) {
+            if ((int) ($bd['producto_base_id'] ?? 0) !== $producto_base_id) {
+                continue;
+            }
+            if (isset($bd['coste_unitario']) && $bd['coste_unitario'] !== null && $bd['coste_unitario'] !== '') {
+                $coste_u_neto = (float) $bd['coste_unitario'];
+            } elseif (isset($bd['costo_presentacion']) && $bd['costo_presentacion'] !== null) {
+                $qty = isset($bd['cantidad_unidades']) ? (float) $bd['cantidad_unidades'] : 0.0;
+                if ($qty > 0) {
+                    $coste_u_neto = (float) $bd['costo_presentacion'] / $qty;
+                }
+            }
+            break;
+        }
+
+        // Producto unitario de la familia: usar el MAX coste_unitario del grupo.
+        if ($coste_u_neto === null
+            && (int) ($ctx['unit_producto_base_id'] ?? 0) === $producto_base_id
+            && isset($coste['coste']) && $coste['coste'] !== null
+        ) {
+            $coste_u_neto = (float) $coste['coste'];
+        }
+
+        if ($coste_u_neto === null || $coste_u_neto <= 0) {
+            return null;
+        }
+
+        if (class_exists('Riverso_Pricing_Module')) {
+            return (float) Riverso_Pricing_Module::gross_from_net($coste_u_neto, $iva_tipo);
+        }
+        return $coste_u_neto;
     }
 
     /**
@@ -628,6 +816,82 @@ class Riverso_Quote_Catalog_Lookup {
             return $scope;
         }
         return 'todo';
+    }
+
+    /**
+     * Filtra productos: cada palabra debe aparecer (AND) en el texto según scope.
+     *
+     * @param array    $products
+     * @param string[] $words
+     * @param string   $scope
+     * @return array
+     */
+    public function filter_contains_words(array $products, array $words, $scope = 'todo') {
+        $words = array_values(array_filter(array_map(function ($w) {
+            $w = trim(preg_replace('/\s+/u', ' ', (string) $w));
+            return $w;
+        }, $words)));
+        if (!$words) {
+            return $products;
+        }
+        $scope = $this->normalize_scope($scope);
+        $out = array();
+        foreach ($products as $product) {
+            if (!is_array($product)) {
+                continue;
+            }
+            $hay = $this->contains_haystack($product, $scope);
+            $ok = true;
+            foreach ($words as $word) {
+                if (!$this->mb_contains($hay, $word)) {
+                    $ok = false;
+                    break;
+                }
+            }
+            if ($ok) {
+                $out[] = $product;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * @param array  $product
+     * @param string $scope
+     * @return string
+     */
+    private function contains_haystack(array $product, $scope) {
+        $parts = array();
+        if ($scope === 'codigos') {
+            $parts[] = isset($product['sku']) ? (string) $product['sku'] : '';
+            $parts[] = isset($product['barcode']) ? (string) $product['barcode'] : '';
+            $parts[] = isset($product['supplier_code']) ? (string) $product['supplier_code'] : '';
+        } elseif ($scope === 'descripcion') {
+            $parts[] = isset($product['description']) ? (string) $product['description'] : '';
+        } else {
+            $parts[] = isset($product['description']) ? (string) $product['description'] : '';
+            $parts[] = isset($product['sku']) ? (string) $product['sku'] : '';
+            $parts[] = isset($product['barcode']) ? (string) $product['barcode'] : '';
+            $parts[] = isset($product['supplier_code']) ? (string) $product['supplier_code'] : '';
+        }
+        return implode(' ', $parts);
+    }
+
+    /**
+     * @param string $haystack
+     * @param string $needle
+     * @return bool
+     */
+    private function mb_contains($haystack, $needle) {
+        $haystack = (string) $haystack;
+        $needle = (string) $needle;
+        if ($needle === '') {
+            return true;
+        }
+        if (function_exists('mb_stripos')) {
+            return mb_stripos($haystack, $needle, 0, 'UTF-8') !== false;
+        }
+        return stripos($haystack, $needle) !== false;
     }
 
     private function mb_len($text) {

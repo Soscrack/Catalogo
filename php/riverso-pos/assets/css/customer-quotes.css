@@ -33,6 +33,28 @@
     gap: 12px;
 }
 
+.cq-top-actions {
+    flex-wrap: wrap;
+}
+
+.cq-pdf-template {
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+}
+
+.cq-pdf-template select {
+    max-width: 148px;
+    height: 32px;
+    padding: 2px 6px;
+    border: 1px solid #d9cbb8;
+    border-radius: 8px;
+    background: #fffdf8;
+    color: #1c1915;
+    font: inherit;
+    font-size: 0.85rem;
+}
+
 .cq-top,
 .cq-footer {
     justify-content: space-between;
@@ -115,6 +137,13 @@
     margin: 2px 0 0;
     font-weight: 650;
     font-size: 1.05rem;
+}
+
+.cq-totals dd.cq-total-neto-hint {
+    margin-top: 4px;
+    font-weight: 500;
+    font-size: 0.8rem;
+    color: #6b6258;
 }
 
 .cq-search {
@@ -219,6 +248,55 @@
     font-weight: 700;
 }
 
+.cq-sku-link {
+    color: #9a3412;
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(154, 52, 18, 0.45);
+    cursor: pointer;
+}
+
+.cq-margin-unavailable {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #8a7f72;
+}
+
+.cq-margin-na,
+.cq-margin-na-text {
+    font-style: normal;
+    color: #8a7f72;
+}
+
+.cq-help-tip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1em;
+    height: 1.1em;
+    border-radius: 999px;
+    border: 1px solid #c8b8a4;
+    background: #faf6f0;
+    color: #6b6258;
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-style: normal;
+    text-decoration: none;
+    cursor: help;
+    line-height: 1;
+    vertical-align: middle;
+    margin-left: 4px;
+}
+
+.cq-help-tip[hidden] {
+    display: none !important;
+}
+
+.cq-margin-na-text[hidden],
+#cq-line-margin-discount[hidden] {
+    display: none !important;
+}
+
 .cq-desc {
     display: block;
     color: #5c5348;
@@ -269,10 +347,6 @@
     padding: 6px 8px;
 }
 
-.cq-line.is-editing {
-    background: #fff7ed;
-}
-
 .cq-price-cell .cq-line-gross {
     font-weight: 700;
 }
@@ -283,15 +357,16 @@
     margin-top: 2px;
 }
 
-.cq-price-cell .cq-unit-price-input {
-    display: none !important;
-    width: 7.5rem;
-    margin-top: 6px;
-    text-align: right;
-}
-
-.cq-line.is-editing .cq-price-cell .cq-unit-price-input {
-    display: inline-block !important;
+.cq-price-cell .cq-price-mode-tag {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #8a5a2b;
+    background: #fff1e0;
+    border: 1px solid #efd3b0;
+    border-radius: 999px;
+    padding: 1px 7px;
 }
 
 .cq-actions {
@@ -564,6 +639,157 @@
     font-size: 1.05rem;
 }
 
+.cq-family-modal-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 12px 16px 14px;
+    border-top: 1px solid #efe6da;
+    background: #faf6f0;
+}
+
+.cq-line-modal-dialog {
+    max-width: 520px;
+}
+
+.cq-line-modal-sub {
+    margin: 4px 0 0;
+    font-size: 0.82rem;
+    color: #6b6258;
+}
+
+.cq-line-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cq-line-tax-toggle {
+    display: inline-flex;
+    align-self: flex-end;
+    border: 1px solid #d7c7b4;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+}
+
+.cq-tax-btn {
+    border: 0;
+    background: transparent;
+    font: inherit;
+    padding: 6px 14px;
+    cursor: pointer;
+    color: #5c5348;
+}
+
+.cq-tax-btn.is-active {
+    background: #2f6fed;
+    color: #fff;
+    font-weight: 600;
+}
+
+.cq-line-price-modes {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cq-line-mode-check,
+.cq-line-mode-radios label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: #3f3a34;
+}
+
+.cq-line-mode-radios {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border: 1px solid #efe6da;
+    border-radius: 10px;
+    background: #faf6f0;
+}
+
+.cq-line-rule-info,
+.cq-line-preview {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #6b6258;
+}
+
+.cq-line-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.cq-float-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+}
+
+.cq-float-field > span {
+    font-size: 0.78rem;
+    color: #6b6258;
+}
+
+.cq-float-field input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #d7c7b4;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font: inherit;
+    background: #fff;
+}
+
+.cq-float-field input:disabled {
+    background: #f4efe8;
+    color: #6b6258;
+}
+
+.cq-float-hint {
+    font-style: normal;
+    font-size: 0.72rem;
+    color: #8a7f72;
+    min-height: 1em;
+}
+
+.cq-line-modal-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 12px 16px 14px;
+    border-top: 1px solid #efe6da;
+    background: #faf6f0;
+}
+
+.cq-btn-save-line {
+    border: 0;
+    background: #1fa463;
+    color: #fff;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cq-btn-save-line:hover {
+    background: #188a53;
+}
+
+@media (max-width: 640px) {
+    .cq-line-fields {
+        grid-template-columns: 1fr;
+    }
+}
+
 .cq-modal-close {
     border: 0;
     background: transparent;
@@ -600,6 +826,68 @@
     border-color: #9a3412;
     color: #fff;
     font-weight: 650;
+}
+
+.cq-contains-filter {
+    margin-bottom: 12px;
+}
+
+.cq-contains-label {
+    display: block;
+    font-size: 0.82rem;
+    color: #6b6258;
+    margin-bottom: 6px;
+}
+
+.cq-contains-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.cq-contains-row input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid #d7c7b4;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font: inherit;
+}
+
+.cq-contains-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+    min-height: 0;
+}
+
+.cq-contains-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid #d9cbb8;
+    background: #faf6f0;
+    border-radius: 999px;
+    padding: 3px 4px 3px 10px;
+    font-size: 0.82rem;
+    color: #3f3a34;
+}
+
+.cq-contains-tag-remove {
+    border: 0;
+    background: transparent;
+    color: #8a7f72;
+    cursor: pointer;
+    font: inherit;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 999px;
+}
+
+.cq-contains-tag-remove:hover {
+    background: #efe6da;
+    color: #5c5348;
 }
 
 .cq-modal-hint {

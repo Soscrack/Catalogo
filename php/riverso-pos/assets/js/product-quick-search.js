@@ -152,6 +152,9 @@
             return 'Sin origen registrado';
         }
         var parts = [origin.label || origin.key];
+        if (origin.detalle) {
+            parts.push(String(origin.detalle));
+        }
         if (origin.fecha) {
             parts.push('Fecha: ' + origin.fecha);
         }
@@ -203,6 +206,53 @@
             : pricing.p_asignado;
     }
 
+    function pickPresentacionPrice(block, viewMode) {
+        if (!block) {
+            return null;
+        }
+        return viewMode === 'neto'
+            ? (block.p_neto != null ? block.p_neto : block.p_bruto)
+            : block.p_bruto;
+    }
+
+    function pickPresentacionCost(block, costMode, viewMode) {
+        if (!block) {
+            return null;
+        }
+        var bases = block.c_ref_bases || null;
+        var base = bases && bases[costMode] ? bases[costMode] : null;
+        if (base) {
+            return viewMode === 'neto' ? base.neto : base.bruto;
+        }
+        return viewMode === 'neto'
+            ? (block.c_ref_neto != null ? block.c_ref_neto : null)
+            : (block.c_ref_bruto != null ? block.c_ref_bruto : null);
+    }
+
+    function formatMarginHtml(m) {
+        if (!m || m.factor == null) {
+            return '—';
+        }
+        return esc(m.factor.toFixed(2)) + '× · ' +
+            fmtMoney(m.unitario) + ' · ' +
+            esc(String(m.pct)) + '%';
+    }
+
+    function setOriginBadge($el, origin) {
+        if (!$el || !$el.length) {
+            return;
+        }
+        var label = origin && origin.label ? String(origin.label) : '';
+        var key = origin && origin.key ? String(origin.key) : '';
+        if (!label || !key) {
+            $el.attr('hidden', true).text('').attr('title', '');
+            return;
+        }
+        $el.removeAttr('hidden')
+            .text(label)
+            .attr('title', originTitle(origin));
+    }
+
     function calcMargin(price, cost) {
         if (price == null || cost == null || !(Number(cost) > 0)) {
             return { factor: null, unitario: null, pct: null };
@@ -234,39 +284,52 @@
 
     function updatePricingUi() {
         var pricing = state.summary && state.summary.pricing;
+        var presentacion = pricing && pricing.presentacion ? pricing.presentacion : null;
         $('.pqs-view-mode').removeClass('is-active');
         $('.pqs-view-mode[data-mode="' + state.viewMode + '"]').addClass('is-active');
         $('.pqs-cost-mode').removeClass('is-active');
         $('.pqs-cost-mode[data-cost="' + state.costMode + '"]').addClass('is-active');
 
-        var price = pickPrice(pricing, state.viewMode);
-        var cost = pickCost(pricing, state.costMode, state.viewMode);
+        var priceOrigin = presentacion && presentacion.origen_precio
+            ? presentacion.origen_precio
+            : (pricing && pricing.origen_precio);
+
+        var price;
+        var cost;
+        var bruto;
+        if (presentacion && presentacion.unitario) {
+            price = pickPresentacionPrice(presentacion.unitario, state.viewMode);
+            cost = pickPresentacionCost(presentacion.unitario, state.costMode, state.viewMode);
+            bruto = presentacion.envase && presentacion.envase.p_bruto != null
+                ? presentacion.envase.p_bruto
+                : null;
+        } else {
+            price = pickPrice(pricing, state.viewMode);
+            cost = pickCost(pricing, state.costMode, state.viewMode);
+            bruto = pricing ? pricing.p_asignado : null;
+        }
         var m = calcMargin(price, cost);
 
-        var bruto = pricing ? pricing.p_asignado : null;
         $('#pqs-v-precio-bruto .pqs-hero-price-value').text(
             bruto != null ? '$' + fmtMoney(bruto) : 'Sin precio'
         );
         $('#pqs-v-precio-bruto').toggleClass('is-empty', !(Number(bruto) > 0));
+        setOriginBadge($('#pqs-hero-origen'), priceOrigin);
 
         $('#pqs-v-precio').text(fmtMoney(price));
         if (state.editing) {
-            $('#pqs-edit-precio').val(price != null ? price : '');
+            // Editor manual: precio propio del SKU, no el total de regla.
+            var editPrice = pickPrice(pricing, state.viewMode);
+            $('#pqs-edit-precio').val(editPrice != null ? editPrice : '');
             $('#pqs-edit-precio-mode').text(state.viewMode === 'bruto' ? 'bruto' : 'neto');
         }
         $('#pqs-v-costo').text(fmtMoney(cost));
-        if (m.factor != null) {
-            $('#pqs-v-margen').html(
-                esc(m.factor.toFixed(2)) + '× · ' +
-                fmtMoney(m.unitario) + ' · ' +
-                esc(String(m.pct)) + '%'
-            );
-        } else {
-            $('#pqs-v-margen').text('—');
-        }
+        $('#pqs-v-margen').html(formatMarginHtml(m));
 
-        $('#pqs-help-precio').attr('title', originTitle(pricing && pricing.origen_precio));
-        setFolioLink($('#pqs-folio-precio'), pricing && pricing.origen_precio);
+        $('#pqs-help-precio').attr('title', originTitle(priceOrigin));
+        setFolioLink($('#pqs-folio-precio'), presentacion ? null : (pricing && pricing.origen_precio));
+        setOriginBadge($('#pqs-origen-precio-badge'), priceOrigin);
+
         var costOrigin = originTitle(
             pricing && pricing.origen_costo,
             pricing && pricing.costo_bases_meta
@@ -276,6 +339,29 @@
         }
         $('#pqs-help-costo').attr('title', costOrigin);
         setFolioLink($('#pqs-folio-costo'), pricing && pricing.origen_costo);
+
+        var $envaseBlock = $('#pqs-pricing-envase');
+        if (presentacion && presentacion.envase) {
+            var qty = Number(presentacion.cantidad_unidades) || 0;
+            var qtyLabel = qty > 0
+                ? String(qty).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1')
+                : '';
+            $('#pqs-pricing-envase-label').text(
+                qtyLabel ? ('Venta envase de ' + qtyLabel + ' u') : 'Venta envase'
+            );
+            var priceE = pickPresentacionPrice(presentacion.envase, state.viewMode);
+            var costE = pickPresentacionCost(presentacion.envase, state.costMode, state.viewMode);
+            var mE = calcMargin(priceE, costE);
+            $('#pqs-v-precio-envase').text(fmtMoney(priceE));
+            $('#pqs-v-costo-envase').text(fmtMoney(costE));
+            $('#pqs-v-margen-envase').html(formatMarginHtml(mE));
+            $('#pqs-help-precio-envase').attr('title', originTitle(priceOrigin));
+            setOriginBadge($('#pqs-origen-precio-envase-badge'), priceOrigin);
+            $envaseBlock.removeAttr('hidden');
+        } else {
+            $envaseBlock.attr('hidden', true);
+            setOriginBadge($('#pqs-origen-precio-envase-badge'), null);
+        }
     }
 
     function stockHelpText(stock) {

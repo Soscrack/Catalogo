@@ -359,6 +359,7 @@ class Riverso_POS_Activator {
         self::create_phase57_customer_quotes_sale_fields($prefix);
         self::create_phase58_customer_quotes_advanced_discounts($prefix);
         self::create_phase59_customer_quotes_channel($prefix);
+        self::create_phase60_customer_quotes_price_mode($prefix);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -5437,6 +5438,14 @@ class Riverso_POS_Activator {
     }
 
     /**
+     * Garantiza price_mode / price_ref / price_total en líneas de cotización.
+     */
+    public static function ensure_customer_quotes_price_mode() {
+        global $wpdb;
+        self::create_phase60_customer_quotes_price_mode($wpdb->prefix . 'riverso_');
+    }
+
+    /**
      * Fase 56: recalcular doc_hash de escaneos cuyo folio tenía ceros a la izquierda.
      * No renombra folios de facturas ni toca tablas de precios.
      */
@@ -5618,6 +5627,28 @@ class Riverso_POS_Activator {
             Riverso_POS_Audit::log('schema.phase59_customer_quotes_channel', 'customer_quotes', 0, array(
                 'actor_type' => 'computer',
                 'details' => 'Fase 59: channel local|online + family_mode/packaging en lineas',
+            ));
+        }
+    }
+
+    /**
+     * Fase 60: modos de precio por línea (auto / manual / ref) en cotizaciones.
+     * Idempotente: add_column_if_missing.
+     */
+    private static function create_phase60_customer_quotes_price_mode($prefix) {
+        $items = "{$prefix}customer_quote_items";
+        self::add_column_if_missing($items, 'price_mode', 'price_mode VARCHAR(16) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'price_ref', 'price_ref DECIMAL(14,4) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'price_total', 'price_total DECIMAL(14,2) NULL DEFAULT NULL');
+
+        if (get_option('riverso_pos_phase60_customer_quotes_price_mode') === '1') {
+            return;
+        }
+        update_option('riverso_pos_phase60_customer_quotes_price_mode', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase60_customer_quotes_price_mode', 'customer_quote_items', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 60: price_mode/price_ref/price_total en lineas de cotizacion',
             ));
         }
     }

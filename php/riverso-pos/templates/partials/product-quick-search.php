@@ -51,6 +51,7 @@ $can_manage_pqs = !empty($can_manage);
                 <div id="pqs-v-precio-bruto" class="pqs-hero-price">
                     <span class="pqs-hero-price-value">—</span>
                     <span class="pqs-hero-price-label">bruto</span>
+                    <span id="pqs-hero-origen" class="pqs-origen-badge" hidden></span>
                 </div>
             </div>
             <div class="pqs-viewer-actions">
@@ -114,7 +115,7 @@ $can_manage_pqs = !empty($can_manage);
                 </div>
                 <div class="pqs-pricing-grid">
                     <div class="pqs-field">
-                        <span class="pqs-label">Precio <span class="pqs-help" id="pqs-help-precio" title="">?</span> <a class="pqs-folio-link" id="pqs-folio-precio" href="#" hidden></a></span>
+                        <span class="pqs-label">Precio <span class="pqs-help" id="pqs-help-precio" title="">?</span> <a class="pqs-folio-link" id="pqs-folio-precio" href="#" hidden></a> <span id="pqs-origen-precio-badge" class="pqs-origen-badge" hidden></span></span>
                         <div id="pqs-v-precio" class="pqs-value pqs-num pqs-view-only"></div>
                         <div class="pqs-edit-only" id="pqs-edit-precio-wrap" style="display:none;">
                             <label class="pqs-edit-precio-label" for="pqs-edit-precio">
@@ -134,6 +135,26 @@ $can_manage_pqs = !empty($can_manage);
                     <div class="pqs-field">
                         <span class="pqs-label">Margen</span>
                         <div id="pqs-v-margen" class="pqs-value pqs-num"></div>
+                    </div>
+                </div>
+                <div id="pqs-pricing-envase" class="pqs-pricing-envase" hidden>
+                    <h4 class="pqs-pricing-envase-title">
+                        Precio / Coste / Margen
+                        <span id="pqs-pricing-envase-label" class="pqs-pricing-envase-label">Venta envase</span>
+                    </h4>
+                    <div class="pqs-pricing-grid">
+                        <div class="pqs-field">
+                            <span class="pqs-label">Precio <span class="pqs-help" id="pqs-help-precio-envase" title="">?</span> <span id="pqs-origen-precio-envase-badge" class="pqs-origen-badge" hidden></span></span>
+                            <div id="pqs-v-precio-envase" class="pqs-value pqs-num"></div>
+                        </div>
+                        <div class="pqs-field">
+                            <span class="pqs-label">Coste</span>
+                            <div id="pqs-v-costo-envase" class="pqs-value pqs-num"></div>
+                        </div>
+                        <div class="pqs-field">
+                            <span class="pqs-label">Margen</span>
+                            <div id="pqs-v-margen-envase" class="pqs-value pqs-num"></div>
+                        </div>
                     </div>
                 </div>
             </div>

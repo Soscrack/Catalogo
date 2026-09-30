@@ -360,6 +360,7 @@ class Riverso_POS_Activator {
         self::create_phase58_customer_quotes_advanced_discounts($prefix);
         self::create_phase59_customer_quotes_channel($prefix);
         self::create_phase60_customer_quotes_price_mode($prefix);
+        self::create_phase61_approve_folio_confirmed_pending();
 
         // Inicializar servicios core
         self::init_core_services();
@@ -5649,6 +5650,45 @@ class Riverso_POS_Activator {
             Riverso_POS_Audit::log('schema.phase60_customer_quotes_price_mode', 'customer_quote_items', 0, array(
                 'actor_type' => 'computer',
                 'details' => 'Fase 60: price_mode/price_ref/price_total en lineas de cotizacion',
+            ));
+        }
+    }
+
+    /**
+     * Fase 61: aprueba precios locales pendientes confirmados por folio
+     * (antes del cambio que aprueba al confirmar la línea).
+     * Pase único vía opción; no vuelve a correr.
+     */
+    private static function create_phase61_approve_folio_confirmed_pending() {
+        if (get_option('riverso_pos_phase61_approve_folio_confirmed') === '1') {
+            return;
+        }
+
+        if (!class_exists('Riverso_Pricing_Module')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'modules/pricing/class-pricing-module.php';
+            if (defined('RIVERSO_POS_PLUGIN_DIR') && is_readable($path)) {
+                require_once $path;
+            }
+            if (!class_exists('Riverso_Pricing_Module')) {
+                $alt = RIVERSO_POS_PLUGIN_DIR . 'pricing/price_lists/class-pricing-module.php';
+                if (is_readable($alt)) {
+                    require_once $alt;
+                }
+            }
+        }
+        if (!class_exists('Riverso_Pricing_Module')) {
+            return;
+        }
+
+        $result = Riverso_Pricing_Module::get_instance()->backfill_approve_folio_confirmed_pending();
+        update_option('riverso_pos_phase61_approve_folio_confirmed', '1');
+        update_option('riverso_pos_phase61_approve_folio_confirmed_report', $result);
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('migration.phase61_approve_folio_confirmed', 'precios', 0, array(
+                'actor_type' => 'migration',
+                'details' => 'Fase 61: aprobación retroactiva de precios confirmados en folio',
+                'new_value' => $result,
             ));
         }
     }

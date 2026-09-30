@@ -843,6 +843,63 @@ class Riverso_Pricing_Module {
     }
 
     /**
+     * Pase único: aprueba precios locales pendientes cuyo monto vigente
+     * salió de una confirmación de folio (no «no aplicado»).
+     *
+     * @return array{approved:int,skipped:int}
+     */
+    public function backfill_approve_folio_confirmed_pending() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+
+        $rows = $wpdb->get_results(
+            "SELECT pr.*
+             FROM {$prefix}precios pr
+             INNER JOIN (
+                 SELECT h1.producto_base_id, h1.source_type, h1.notas, h1.p_asignado_nuevo
+                 FROM {$prefix}precio_historial h1
+                 INNER JOIN (
+                     SELECT producto_base_id, MAX(id) AS mid
+                     FROM {$prefix}precio_historial
+                     WHERE canal = 'local'
+                       AND source_type NOT IN ('recalc', 'system')
+                     GROUP BY producto_base_id
+                 ) last ON last.mid = h1.id
+             ) ultimo ON ultimo.producto_base_id = pr.producto_base_id
+             WHERE pr.canal = 'local'
+               AND pr.woocommerce_variation_id = 0
+               AND pr.estado_aprobacion = 'pendiente'
+               AND pr.p_asignado IS NOT NULL
+               AND pr.p_asignado > 0
+               AND ultimo.source_type = 'folio'
+               AND (ultimo.notas IS NULL OR ultimo.notas NOT LIKE '%no aplicado%')
+               AND ABS(ultimo.p_asignado_nuevo - pr.p_asignado) < 0.01",
+            ARRAY_A
+        ) ?: [];
+
+        $approved = 0;
+        $skipped = 0;
+        $notas = 'Aprobación retroactiva de folio confirmado';
+        foreach ($rows as $row) {
+            if (!is_array($row) || empty($row['id'])) {
+                $skipped++;
+                continue;
+            }
+            if (($row['estado_aprobacion'] ?? '') === 'aprobado') {
+                $skipped++;
+                continue;
+            }
+            $this->mark_price_approved($row, $notas);
+            $approved++;
+        }
+
+        return [
+            'approved' => $approved,
+            'skipped' => $skipped,
+        ];
+    }
+
+    /**
      * Resuelve el producto_base_id a partir de un producto/variación WooCommerce.
      *
      * @param int $product_id

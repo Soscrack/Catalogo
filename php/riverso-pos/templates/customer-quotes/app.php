@@ -9,13 +9,16 @@ if (!defined('ABSPATH') && empty($riverso_cq['standalone'])) {
 }
 
 $standalone = !empty($riverso_cq['standalone']);
+$surface = (isset($riverso_cq['surface']) && $riverso_cq['surface'] === 'portal') ? 'portal' : 'admin';
 $asset_base = rtrim((string) (isset($riverso_cq['assetBase']) ? $riverso_cq['assetBase'] : ''), '/');
 $version = defined('RIVERSO_POS_VERSION') ? RIVERSO_POS_VERSION : '0.1.0';
 // Bustear caché del navegador cuando cambian JS/CSS sin depender solo del número de plugin.
 $js_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/customer-quotes.js';
 $css_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/css/customer-quotes.css';
+$css_portal_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/css/customer-quotes-portal.css';
 $js_ver = (is_string($js_path) && is_file($js_path)) ? (string) filemtime($js_path) : $version;
 $css_ver = (is_string($css_path) && is_file($css_path)) ? (string) filemtime($css_path) : $version;
+$css_portal_ver = (is_string($css_portal_path) && is_file($css_portal_path)) ? (string) filemtime($css_portal_path) : $version;
 
 if (!function_exists('riverso_pos_cq_json')) {
     function riverso_pos_cq_json($data) {
@@ -41,55 +44,163 @@ if (!function_exists('riverso_pos_cq_json')) {
 <body class="riverso-cq-body">
 <?php else: ?>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes.css?ver=<?php echo htmlspecialchars($css_ver, ENT_QUOTES, 'UTF-8'); ?>">
+<?php if ($surface === 'portal'): ?>
+<link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes-portal.css?ver=<?php echo htmlspecialchars($css_portal_ver, ENT_QUOTES, 'UTF-8'); ?>">
 <?php endif; ?>
-<div class="wrap riverso-cq-wrap">
-    <div id="riverso-cq" class="riverso-cq" data-ready="0">
+<?php endif; ?>
+<div class="wrap riverso-cq-wrap<?php echo $surface === 'portal' ? ' riverso-cq-wrap--portal' : ''; ?>">
+    <div id="riverso-cq" class="riverso-cq<?php echo $surface === 'portal' ? ' riverso-cq--portal' : ''; ?>" data-ready="0" data-surface="<?php echo htmlspecialchars($surface, ENT_QUOTES, 'UTF-8'); ?>">
         <section id="cq-list-view" class="cq-view" aria-labelledby="cq-list-title">
             <header class="cq-top">
                 <div>
-                    <h1 id="cq-list-title">Cotizaciones de venta</h1>
-                    <p class="cq-lead">Borrador, lista y facturada.</p>
+                    <h1 id="cq-list-title">Buscar Cotizaciones</h1>
+                    <p class="cq-lead">Filtra cotizaciones de venta y ábrelas en esta ventana o en una nueva.</p>
                 </div>
                 <button type="button" class="cq-btn cq-btn-primary" id="cq-new">Nueva cotización</button>
             </header>
-            <div class="cq-toolbar">
-                <label for="cq-status-filter">Estado</label>
-                <select id="cq-status-filter">
-                    <option value="all">Todas</option>
-                    <option value="draft">Borrador</option>
-                    <option value="listed">Lista</option>
-                    <option value="invoiced">Facturada</option>
-                </select>
-                <label for="cq-type-filter">Tipo</label>
-                <select id="cq-type-filter">
-                    <option value="all">Todos</option>
-                    <option value="venta">Venta</option>
-                    <option value="referencia">Referencia</option>
-                </select>
-                <label for="cq-date-from">Desde</label>
-                <input type="date" id="cq-date-from" autocomplete="off">
-                <label for="cq-date-to">Hasta</label>
-                <input type="date" id="cq-date-to" autocomplete="off">
-                <button type="button" class="cq-btn" id="cq-apply-filters">Filtrar</button>
+
+            <div class="cq-search-card" id="cq-search-form">
+                <h2 class="cq-search-card-title">BUSCAR COTIZACIONES</h2>
+                <div class="cq-search-grid">
+                    <label class="cq-field">
+                        <span>Número Cotización</span>
+                        <input type="text" id="cq-filter-number" autocomplete="off">
+                    </label>
+                    <label class="cq-field">
+                        <span>Nombre Cliente</span>
+                        <input type="text" id="cq-filter-customer" autocomplete="off">
+                    </label>
+                    <label class="cq-field cq-field-disabled" title="Aún no se captura email en cotizaciones">
+                        <span>Email Cliente</span>
+                        <input type="email" id="cq-filter-email" disabled placeholder="Próximamente">
+                    </label>
+                    <label class="cq-field cq-field-disabled" title="Aún no se captura teléfono en cotizaciones">
+                        <span>Fono Cliente</span>
+                        <input type="text" id="cq-filter-phone" disabled placeholder="Próximamente">
+                    </label>
+
+                    <label class="cq-field">
+                        <span>Estado Cotización</span>
+                        <select id="cq-status-filter">
+                            <option value="all">** Todas **</option>
+                            <option value="draft">Borrador</option>
+                            <option value="listed">Lista</option>
+                            <option value="invoiced">Facturada</option>
+                        </select>
+                    </label>
+                    <label class="cq-field cq-field-disabled" title="Estado de venta aún no modelado">
+                        <span>Estado de Venta</span>
+                        <select id="cq-sale-status-filter" disabled>
+                            <option value="all">** Todas **</option>
+                        </select>
+                    </label>
+                    <label class="cq-field cq-field-wide">
+                        <span>Responsable</span>
+                        <select id="cq-filter-responsable">
+                            <option value="0">** Cualquier Responsable **</option>
+                        </select>
+                    </label>
+
+                    <label class="cq-field">
+                        <span>Fecha desde</span>
+                        <input type="date" id="cq-date-from" autocomplete="off">
+                    </label>
+                    <label class="cq-field">
+                        <span>Fecha hasta</span>
+                        <input type="date" id="cq-date-to" autocomplete="off">
+                    </label>
+                    <label class="cq-field cq-field-disabled" title="Fecha de cierre aún no modelada">
+                        <span>Cierre desde</span>
+                        <input type="date" id="cq-close-from" disabled>
+                    </label>
+                    <label class="cq-field cq-field-disabled" title="Fecha de cierre aún no modelada">
+                        <span>Cierre hasta</span>
+                        <input type="date" id="cq-close-to" disabled>
+                    </label>
+                </div>
+                <div class="cq-search-footer">
+                    <div class="cq-search-checks">
+                        <label class="cq-check">
+                            <input type="checkbox" id="cq-include-quotes" checked>
+                            <span>Cotizaciones</span>
+                        </label>
+                        <label class="cq-check cq-field-disabled" title="Pedidos POS no se listan en este buscador">
+                            <input type="checkbox" id="cq-include-pos" disabled>
+                            <span>Pedidos POS</span>
+                        </label>
+                    </div>
+                    <button type="button" class="cq-btn cq-btn-search" id="cq-apply-filters">Buscar</button>
+                </div>
             </div>
-            <div class="cq-table-wrap">
-                <table class="cq-table">
-                    <thead>
-                        <tr>
-                            <th scope="col">Número</th>
-                            <th scope="col">Fecha</th>
-                            <th scope="col">Cliente</th>
-                            <th scope="col">Tipo</th>
-                            <th scope="col">Estado</th>
-                            <th scope="col" class="cq-num">Bruto</th>
-                            <th scope="col" class="cq-num">Utilidad %</th>
-                            <th scope="col">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody id="cq-list-body"></tbody>
-                </table>
+
+            <div class="cq-results-panel" id="cq-results-panel" hidden>
+                <div class="cq-results-head">
+                    <h2 class="cq-results-title">RESULTADO DE LA BÚSQUEDA</h2>
+                    <div class="cq-results-meta">
+                        <span id="cq-results-count" class="cq-results-count">Cotizaciones mostradas: 0</span>
+                        <div class="cq-order-wrap">
+                            <button type="button" class="cq-btn cq-btn-order" id="cq-order-btn" aria-haspopup="true" aria-expanded="false">
+                                Ordenar: Fecha ↓
+                            </button>
+                            <div class="cq-order-menu" id="cq-order-menu" hidden role="menu">
+                                <button type="button" role="menuitem" data-order-by="date" data-order-dir="DESC">Fecha descendente</button>
+                                <button type="button" role="menuitem" data-order-by="date" data-order-dir="ASC">Fecha ascendente</button>
+                                <button type="button" role="menuitem" data-order-by="number" data-order-dir="ASC">Número</button>
+                                <button type="button" role="menuitem" data-order-by="customer" data-order-dir="ASC">Cliente</button>
+                                <button type="button" role="menuitem" data-order-by="amount" data-order-dir="DESC">Monto</button>
+                                <button type="button" role="menuitem" data-order-by="status" data-order-dir="ASC">Estado</button>
+                            </div>
+                        </div>
+                        <button type="button" class="cq-btn cq-btn-export" id="cq-export-excel" title="Descargar CSV (abre en Excel)">
+                            Exportar excel
+                        </button>
+                    </div>
+                </div>
+                <div class="cq-results-toolbar">
+                    <label class="cq-page-size">
+                        Mostrar
+                        <select id="cq-page-size">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                        </select>
+                        registros
+                    </label>
+                    <label class="cq-table-search">
+                        Buscar:
+                        <input type="search" id="cq-table-search" autocomplete="off">
+                    </label>
+                </div>
+                <div class="cq-table-wrap">
+                    <table class="cq-table cq-results-table">
+                        <thead>
+                            <tr>
+                                <th scope="col" class="cq-col-expand"></th>
+                                <th scope="col">Número cotización</th>
+                                <th scope="col">Fecha creación</th>
+                                <th scope="col">Cliente Nombre</th>
+                                <th scope="col">Responsable</th>
+                                <th scope="col">Estado Cotización</th>
+                                <th scope="col">Estado de Venta</th>
+                                <th scope="col">DTE's Folios Asociados</th>
+                                <th scope="col" class="cq-num">Monto</th>
+                                <th scope="col">Ver cotización</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cq-list-body"></tbody>
+                    </table>
+                </div>
+                <div class="cq-pager" id="cq-pager">
+                    <button type="button" class="cq-btn" id="cq-page-prev">Anterior</button>
+                    <span id="cq-page-numbers" class="cq-page-numbers"></span>
+                    <button type="button" class="cq-btn" id="cq-page-next">Siguiente</button>
+                </div>
             </div>
-            <p id="cq-empty" class="cq-empty" hidden>No hay cotizaciones. Crea la primera.</p>
+            <p id="cq-empty" class="cq-empty" hidden>No hay cotizaciones con esos filtros.</p>
+            <!-- Compat: filtros legacy ocultos -->
+            <select id="cq-type-filter" hidden aria-hidden="true">
+                <option value="all" selected>Todos</option>
+            </select>
         </section>
 
         <section id="cq-editor-view" class="cq-view" hidden aria-labelledby="cq-editor-title">
@@ -124,7 +235,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                     </label>
                     <label class="cq-field">
                         <span>Fecha emisión</span>
-                        <input type="text" id="cq-issue-date" readonly tabindex="-1" placeholder="—">
+                        <input type="date" id="cq-issue-date" autocomplete="off">
                     </label>
                     <label class="cq-field">
                         <span>Vendedor</span>
@@ -189,6 +300,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                         <button type="button" class="cq-btn cq-btn-lupa" id="cq-lupa" title="Búsqueda avanzada" aria-label="Abrir búsqueda avanzada">
                             <span aria-hidden="true">🔍</span>
                         </button>
+                        <button type="button" class="cq-btn cq-btn-manual" id="cq-manual" title="Agregar producto sin SKU">Manual</button>
                     </div>
                     <ul id="cq-results" class="cq-results" hidden></ul>
                 </div>
@@ -223,6 +335,98 @@ if (!function_exists('riverso_pos_cq_json')) {
                         </div>
                     </div>
                 </div>
+
+                <div id="cq-manual-modal" class="cq-modal" hidden aria-hidden="true">
+                    <div class="cq-modal-backdrop" data-cq-manual-close="1"></div>
+                    <div class="cq-modal-dialog cq-manual-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="cq-manual-title">
+                        <header class="cq-modal-head">
+                            <h3 id="cq-manual-title">Agregar detalle</h3>
+                            <button type="button" class="cq-modal-close" id="cq-manual-close" aria-label="Cerrar" data-cq-manual-close="1">×</button>
+                        </header>
+                        <div class="cq-modal-body cq-manual-modal-body">
+                            <label class="cq-float-field cq-manual-full">
+                                <span>Afecto a IVA (*)</span>
+                                <select id="cq-manual-iva" disabled>
+                                    <option value="si" selected>SI</option>
+                                </select>
+                            </label>
+                            <label class="cq-float-field cq-manual-full">
+                                <span>Impuesto adicional</span>
+                                <select id="cq-manual-extra-tax" disabled>
+                                    <option value="" selected>** Ninguno **</option>
+                                </select>
+                            </label>
+                            <div class="cq-manual-row">
+                                <label class="cq-float-field">
+                                    <span>Cantidad (*)</span>
+                                    <input type="text" id="cq-manual-qty" inputmode="decimal" autocomplete="off" value="1">
+                                </label>
+                                <label class="cq-float-field">
+                                    <span>Unidad</span>
+                                    <select id="cq-manual-unit">
+                                        <option value="">** Unidad (opcional) **</option>
+                                        <option value="Unidad">Unidad</option>
+                                        <option value="Kg">Kg</option>
+                                        <option value="Metro">Metro</option>
+                                        <option value="Hora">Hora</option>
+                                        <option value="Servicio">Servicio</option>
+                                        <option value="Caja">Caja</option>
+                                        <option value="Pack">Pack</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="cq-manual-row cq-manual-concepto-row">
+                                <label class="cq-float-field cq-manual-concepto-field">
+                                    <span>Concepto (*)</span>
+                                    <input type="text" id="cq-manual-concepto" autocomplete="off" maxlength="500">
+                                </label>
+                                <button type="button" class="cq-btn cq-btn-desc-larga" id="cq-manual-desc-toggle" title="Descripción larga" aria-expanded="false" aria-controls="cq-manual-desc-wrap">Desc. Larga</button>
+                            </div>
+                            <div id="cq-manual-desc-wrap" class="cq-manual-desc-wrap" hidden>
+                                <label class="cq-float-field cq-manual-full">
+                                    <span>Descripción larga</span>
+                                    <textarea id="cq-manual-desc-larga" rows="3" maxlength="500"></textarea>
+                                </label>
+                            </div>
+                            <label class="cq-float-field cq-manual-full">
+                                <span>Precio unitario</span>
+                                <input type="text" id="cq-manual-unit-neto" inputmode="decimal" autocomplete="off" value="0">
+                            </label>
+                            <label class="cq-float-field cq-manual-full">
+                                <span>Precio unitario con impuestos</span>
+                                <input type="text" id="cq-manual-unit-bruto" inputmode="decimal" autocomplete="off" value="0">
+                            </label>
+                            <div class="cq-manual-row">
+                                <label class="cq-float-field">
+                                    <span>Descuento/Recargo</span>
+                                    <select id="cq-manual-adj-type">
+                                        <option value="descuento" selected>Descuento</option>
+                                        <option value="recargo">Recargo</option>
+                                    </select>
+                                </label>
+                                <label class="cq-float-field cq-manual-pct-field">
+                                    <span>Porcentaje</span>
+                                    <div class="cq-manual-pct-wrap">
+                                        <input type="text" id="cq-manual-pct" inputmode="decimal" autocomplete="off" value="0">
+                                        <span class="cq-manual-pct-suffix" aria-hidden="true">%</span>
+                                    </div>
+                                </label>
+                            </div>
+                            <label class="cq-float-field cq-manual-full">
+                                <span>Precio total</span>
+                                <input type="text" id="cq-manual-total-neto" inputmode="decimal" autocomplete="off" value="0" readonly>
+                            </label>
+                            <label class="cq-float-field cq-manual-full">
+                                <span>Precio total con impuestos</span>
+                                <input type="text" id="cq-manual-total-bruto" inputmode="decimal" autocomplete="off" value="0" readonly>
+                            </label>
+                            <p id="cq-manual-hint" class="cq-modal-hint" role="status"></p>
+                        </div>
+                        <footer class="cq-modal-foot cq-manual-modal-foot">
+                            <button type="button" class="cq-btn cq-btn-manual-add" id="cq-manual-add">Agregar</button>
+                        </footer>
+                    </div>
+                </div>
                 <div class="cq-table-wrap">
                     <table class="cq-table">
                         <thead>
@@ -242,12 +446,13 @@ if (!function_exists('riverso_pos_cq_json')) {
                         <tbody id="cq-lines"></tbody>
                     </table>
                 </div>
-                <p id="cq-lines-empty" class="cq-empty">Agrega productos con la búsqueda por SKU, código de proveedor o código de barras.</p>
+                <p id="cq-lines-empty" class="cq-empty">Agrega productos con la búsqueda por SKU, código de proveedor o código de barras, o con el botón Manual.</p>
             </div>
 
             <footer class="cq-footer">
                 <p id="cq-message" class="cq-message" role="status"></p>
                 <div class="cq-footer-actions">
+                    <span id="cq-save-status" class="cq-save-status" aria-live="polite"></span>
                     <button type="button" class="cq-btn" id="cq-clear">Limpiar</button>
                     <button type="button" class="cq-btn cq-btn-primary" id="cq-save">Guardar</button>
                 </div>

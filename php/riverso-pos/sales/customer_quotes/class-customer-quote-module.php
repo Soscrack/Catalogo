@@ -52,6 +52,9 @@ class Riverso_Customer_Quote_Module {
         if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_price_mode')) {
             Riverso_POS_Activator::ensure_customer_quotes_price_mode();
         }
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_issue_date')) {
+            Riverso_POS_Activator::ensure_customer_quotes_issue_date();
+        }
     }
 
     public function init() {
@@ -151,6 +154,8 @@ class Riverso_Customer_Quote_Module {
             'nonce' => wp_create_nonce('riverso_customer_quotes'),
             'assetBase' => rtrim(RIVERSO_POS_PLUGIN_URL, '/') . '/assets',
             'standalone' => false,
+            'surface' => 'admin',
+            'portalUrl' => home_url('/interno/customer-quotes/'),
             'currentUserName' => $user_name,
             'caps' => array(
                 'viewStock' => (bool) $can_view_stock,
@@ -179,6 +184,7 @@ class Riverso_Customer_Quote_Module {
                 'pdf' => 'riverso_cq_pdf',
             ),
             'defaultChannel' => 'local',
+            'todayDate' => current_time('Y-m-d'),
         );
     }
 
@@ -257,8 +263,12 @@ class Riverso_Customer_Quote_Module {
         return $quote;
     }
 
-    public function render_app() {
+    public function render_app($surface = null) {
+        if ($surface !== 'portal' && $surface !== 'admin') {
+            $surface = (function_exists('is_admin') && is_admin()) ? 'admin' : 'portal';
+        }
         $riverso_cq = $this->app_config();
+        $riverso_cq['surface'] = $surface;
         include RIVERSO_POS_PLUGIN_DIR . 'templates/customer-quotes/app.php';
     }
 
@@ -268,6 +278,11 @@ class Riverso_Customer_Quote_Module {
         $quote_type = $this->post_string('quote_type');
         $date_from = $this->post_string('date_from');
         $date_to = $this->post_string('date_to');
+        $quote_number = $this->post_string('quote_number');
+        $customer_name = $this->post_string('customer_name');
+        $created_by = $this->post_string('created_by');
+        $order_by = strtolower($this->post_string('order_by'));
+        $order_dir = strtoupper($this->post_string('order_dir'));
         $filters = array();
         if ($status !== '' && $status !== 'all') {
             $filters['status'] = $status;
@@ -275,14 +290,37 @@ class Riverso_Customer_Quote_Module {
         if ($quote_type !== '' && $quote_type !== 'all') {
             $filters['quote_type'] = $quote_type;
         }
+        if ($quote_number !== '') {
+            $filters['quote_number'] = $quote_number;
+        }
+        if ($customer_name !== '') {
+            $filters['customer_name'] = $customer_name;
+        }
+        if ($created_by !== '' && $created_by !== '0' && ctype_digit($created_by)) {
+            $filters['created_by'] = (int) $created_by;
+        }
         if ($date_from !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_from)) {
             $filters['date_from'] = $date_from;
         }
         if ($date_to !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_to)) {
             $filters['date_to'] = $date_to;
         }
+        $allowed_order = array('date', 'number', 'customer', 'amount', 'status');
+        if (!in_array($order_by, $allowed_order, true)) {
+            $order_by = 'date';
+        }
+        if ($order_dir !== 'ASC' && $order_dir !== 'DESC') {
+            $order_dir = 'DESC';
+        }
+        $filters['order_by'] = $order_by;
+        $filters['order_dir'] = $order_dir;
         try {
-            $this->ok(array('quotes' => $this->quotes->list_quotes($filters)));
+            $this->ok(array(
+                'quotes' => $this->quotes->list_quotes($filters),
+                'responsables' => $this->quotes->list_responsables(),
+                'order_by' => $order_by,
+                'order_dir' => $order_dir,
+            ));
         } catch (Riverso_Quote_Exception $error) {
             $this->fail($error->getMessage());
         }
@@ -1378,6 +1416,7 @@ class Riverso_Customer_Quote_Module {
             rejection_reason TEXT,
             order_id BIGINT(20) UNSIGNED DEFAULT NULL,
             channel VARCHAR(16) NOT NULL DEFAULT 'local',
+            issue_date DATE DEFAULT NULL,
             created_by BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
@@ -1388,6 +1427,7 @@ class Riverso_Customer_Quote_Module {
             KEY idx_quote_type (quote_type),
             KEY idx_cq_order_id (order_id),
             KEY idx_cq_channel (channel),
+            KEY idx_cq_issue_date (issue_date),
             KEY idx_created_by (created_by),
             KEY idx_valid_until (valid_until)
         ) $charset_collate;";

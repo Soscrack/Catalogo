@@ -23,7 +23,7 @@ class Riverso_Customer_Quote_Repository {
     public function list_quotes(array $filters = array()) {
         global $wpdb;
         $this->ensure_sale_schema();
-        // Fecha de emisión = DATE(created_at) (no hay columna issue_date propia).
+        // Filtro por fecha de emisión (issue_date; respaldo DATE(created_at)).
         $sql = "SELECT q.*, (SELECT COUNT(*) FROM {$this->table_items} i WHERE i.quote_id = q.id) AS line_count
                 FROM {$this->table_quotes} q";
         $where = array();
@@ -43,18 +43,46 @@ class Riverso_Customer_Quote_Repository {
                 $params[] = $type;
             }
         }
+        if (!empty($filters['quote_number'])) {
+            $where[] = 'q.quote_number LIKE %s';
+            $params[] = '%' . $wpdb->esc_like((string) $filters['quote_number']) . '%';
+        }
+        if (!empty($filters['customer_name'])) {
+            $where[] = 'q.customer_name LIKE %s';
+            $params[] = '%' . $wpdb->esc_like((string) $filters['customer_name']) . '%';
+        }
+        if (!empty($filters['created_by'])) {
+            $where[] = 'q.created_by = %d';
+            $params[] = (int) $filters['created_by'];
+        }
+        $issue_expr = 'COALESCE(q.issue_date, DATE(q.created_at))';
         if (!empty($filters['date_from'])) {
-            $where[] = 'DATE(q.created_at) >= %s';
+            $where[] = "{$issue_expr} >= %s";
             $params[] = (string) $filters['date_from'];
         }
         if (!empty($filters['date_to'])) {
-            $where[] = 'DATE(q.created_at) <= %s';
+            $where[] = "{$issue_expr} <= %s";
             $params[] = (string) $filters['date_to'];
         }
         if ($where) {
             $sql .= ' WHERE ' . implode(' AND ', $where);
         }
-        $sql .= ' ORDER BY q.updated_at DESC, q.id DESC';
+        $order_by = isset($filters['order_by']) ? (string) $filters['order_by'] : 'date';
+        $order_dir = isset($filters['order_dir']) ? strtoupper((string) $filters['order_dir']) : 'DESC';
+        if ($order_dir !== 'ASC' && $order_dir !== 'DESC') {
+            $order_dir = 'DESC';
+        }
+        $order_map = array(
+            'date' => $issue_expr,
+            'number' => 'q.quote_number',
+            'customer' => 'q.customer_name',
+            'amount' => 'COALESCE(q.net_total, q.total, 0)',
+            'status' => 'q.status',
+        );
+        if (!isset($order_map[$order_by])) {
+            $order_by = 'date';
+        }
+        $sql .= ' ORDER BY ' . $order_map[$order_by] . ' ' . $order_dir . ', q.id DESC';
         if ($params) {
             $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
         } else {
@@ -64,6 +92,43 @@ class Riverso_Customer_Quote_Repository {
             return array();
         }
         return array_map(array($this, 'present_summary'), $rows);
+    }
+
+    /**
+     * Usuarios que han creado al menos una cotización (para filtro Responsable).
+     *
+     * @return array<int, array{id:int,name:string}>
+     */
+    public function list_responsables() {
+        global $wpdb;
+        $this->ensure_sale_schema();
+        $ids = $wpdb->get_col(
+            "SELECT DISTINCT created_by FROM {$this->table_quotes}
+             WHERE created_by IS NOT NULL AND created_by > 0
+             ORDER BY created_by ASC"
+        );
+        if (!is_array($ids) || !$ids) {
+            return array();
+        }
+        $out = array();
+        foreach ($ids as $raw_id) {
+            $uid = (int) $raw_id;
+            if ($uid <= 0) {
+                continue;
+            }
+            $name = $this->resolve_seller_name($uid, null);
+            if ($name === '') {
+                $name = 'Usuario #' . $uid;
+            }
+            $out[] = array(
+                'id' => $uid,
+                'name' => $name,
+            );
+        }
+        usort($out, static function ($a, $b) {
+            return strcasecmp((string) $a['name'], (string) $b['name']);
+        });
+        return $out;
     }
 
     public function find($id) {
@@ -122,6 +187,10 @@ class Riverso_Customer_Quote_Repository {
         $channel = $this->normalize_channel(
             isset($input['channel']) ? $input['channel'] : (isset($existing['channel']) ? $existing['channel'] : 'local')
         );
+        $issue_date = $this->normalize_issue_date(
+            isset($input['issue_date']) ? $input['issue_date'] : null,
+            $existing
+        );
 
         $lines = array();
         foreach ($input['lines'] as $line) {
@@ -140,6 +209,7 @@ class Riverso_Customer_Quote_Repository {
                 'customer_name' => $customer_name !== '' ? $customer_name : '',
                 'quote_type' => $quote_type,
                 'channel' => $channel,
+                'issue_date' => $issue_date,
                 'validity_days' => $validity_days,
                 'validity_terms' => $validity_terms,
                 'notes' => $notes,
@@ -153,7 +223,7 @@ class Riverso_Customer_Quote_Repository {
             );
             if ($validity_days !== null) {
                 $header['valid_days'] = $validity_days;
-                $header['valid_until'] = date('Y-m-d', strtotime('+' . $validity_days . ' days'));
+                $header['valid_until'] = date('Y-m-d', strtotime($issue_date . ' +' . $validity_days . ' days'));
             }
             $header = $this->filter_row_for_table($header, $this->quote_column_map());
 
@@ -393,7 +463,10 @@ class Riverso_Customer_Quote_Repository {
                 $row['name'] = $desc !== '' ? $desc : (string) $line['sku'];
             }
             if (isset($columns['sku']) && (!isset($row['sku']) || $row['sku'] === '')) {
-                throw new Riverso_Quote_Exception('Cada línea necesita un SKU.');
+                if ($desc === '') {
+                    throw new Riverso_Quote_Exception('Cada línea necesita un SKU o una descripción.');
+                }
+                $row['sku'] = '';
             }
 
             $ok = $wpdb->insert($this->table_items, $row);
@@ -407,8 +480,9 @@ class Riverso_Customer_Quote_Repository {
 
     private function normalize_line(array $line) {
         $sku = $this->clip(trim((string) (isset($line['sku']) ? $line['sku'] : '')), 64);
-        if ($sku === '') {
-            throw new Riverso_Quote_Exception('Cada línea necesita un SKU.');
+        $description = $this->clip(trim((string) (isset($line['description']) ? $line['description'] : '')), 500);
+        if ($sku === '' && $description === '') {
+            throw new Riverso_Quote_Exception('Cada línea necesita un SKU o una descripción.');
         }
         $quantity = round((float) (isset($line['quantity']) ? $line['quantity'] : 0), 3);
         if ($quantity <= 0) {
@@ -425,7 +499,6 @@ class Riverso_Customer_Quote_Repository {
         if ($product_id !== null && $product_id <= 0) {
             $product_id = null;
         }
-        $description = $this->clip(trim((string) (isset($line['description']) ? $line['description'] : '')), 500);
         if ($description === '') {
             $description = $sku;
         }
@@ -549,6 +622,29 @@ class Riverso_Customer_Quote_Repository {
         return $days;
     }
 
+    /**
+     * Normaliza issue_date YYYY-MM-DD.
+     * Si el input no trae fecha válida: conserva la existente; en alta usa hoy (zona WP).
+     *
+     * @param mixed      $value
+     * @param array|null $existing
+     * @return string
+     */
+    private function normalize_issue_date($value, $existing = null) {
+        if (is_string($value) && preg_match('/^(\d{4}-\d{2}-\d{2})/', trim($value), $m)) {
+            return $m[1];
+        }
+        if (is_array($existing)) {
+            if (!empty($existing['issue_date']) && preg_match('/^(\d{4}-\d{2}-\d{2})/', (string) $existing['issue_date'], $m2)) {
+                return $m2[1];
+            }
+            if (!empty($existing['created_at']) && preg_match('/^(\d{4}-\d{2}-\d{2})/', (string) $existing['created_at'], $m3)) {
+                return $m3[1];
+            }
+        }
+        return function_exists('current_time') ? current_time('Y-m-d') : date('Y-m-d');
+    }
+
     private function nullable_text($value, $max) {
         $text = trim((string) ($value === null ? '' : $value));
         if ($text === '') {
@@ -617,7 +713,12 @@ class Riverso_Customer_Quote_Repository {
             );
         }
         $created_at = (string) (isset($row['created_at']) ? $row['created_at'] : '');
-        $issue_date = $created_at;
+        $issue_date = '';
+        if (!empty($row['issue_date']) && preg_match('/^(\d{4}-\d{2}-\d{2})/', (string) $row['issue_date'], $m_issue)) {
+            $issue_date = $m_issue[1];
+        } elseif ($created_at !== '' && preg_match('/^(\d{4}-\d{2}-\d{2})/', $created_at, $m_created)) {
+            $issue_date = $m_created[1];
+        }
         $seller_name = $this->resolve_seller_name(
             isset($row['created_by']) ? $row['created_by'] : null,
             isset($row['seller_name']) ? $row['seller_name'] : null
@@ -878,7 +979,10 @@ class Riverso_Customer_Quote_Repository {
         if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_price_mode')) {
             Riverso_POS_Activator::ensure_customer_quotes_price_mode();
         }
-        // Invalidar cache de columnas: phase57/58/59/60 pudieron agregar campos.
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_issue_date')) {
+            Riverso_POS_Activator::ensure_customer_quotes_issue_date();
+        }
+        // Invalidar cache de columnas: phase57/58/59/60/62 pudieron agregar campos.
         $this->item_columns = null;
         $this->quote_columns = null;
     }

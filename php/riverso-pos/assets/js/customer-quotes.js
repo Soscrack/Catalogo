@@ -3,6 +3,7 @@
     var state = {
         view: "list",
         quotes: [],
+        filteredQuotes: [],
         quote: emptyQuote(),
         snapshot: "",
         results: [],
@@ -12,8 +13,21 @@
         modalContains: [],
         familyLineIndex: -1,
         familyPriceSeq: 0,
+        priceRecalcChain: Promise.resolve(),
         importReceivedId: 0,
         invoicing: false,
+        listPage: 1,
+        listPageSize: 10,
+        listQuery: "",
+        orderBy: "date",
+        orderDir: "DESC",
+        expandedIds: {},
+        openViewMenuId: null,
+        autosave: {
+            timer: null,
+            saving: false,
+            pending: false
+        },
         lineModal: {
             index: -1,
             taxView: "bruto",
@@ -41,6 +55,20 @@
         typeFilter: document.getElementById("cq-type-filter"),
         dateFrom: document.getElementById("cq-date-from"),
         dateTo: document.getElementById("cq-date-to"),
+        filterNumber: document.getElementById("cq-filter-number"),
+        filterCustomer: document.getElementById("cq-filter-customer"),
+        filterResponsable: document.getElementById("cq-filter-responsable"),
+        includeQuotes: document.getElementById("cq-include-quotes"),
+        resultsPanel: document.getElementById("cq-results-panel"),
+        resultsCount: document.getElementById("cq-results-count"),
+        exportExcel: document.getElementById("cq-export-excel"),
+        orderBtn: document.getElementById("cq-order-btn"),
+        orderMenu: document.getElementById("cq-order-menu"),
+        pageSize: document.getElementById("cq-page-size"),
+        tableSearch: document.getElementById("cq-table-search"),
+        pagePrev: document.getElementById("cq-page-prev"),
+        pageNext: document.getElementById("cq-page-next"),
+        pageNumbers: document.getElementById("cq-page-numbers"),
         applyFilters: document.getElementById("cq-apply-filters"),
         listMessage: document.getElementById("cq-list-message"),
         title: document.getElementById("cq-editor-title"),
@@ -63,6 +91,7 @@
         profitHint: document.getElementById("cq-total-profit-neto-hint"),
         search: document.getElementById("cq-search"),
         lupa: document.getElementById("cq-lupa"),
+        manualBtn: document.getElementById("cq-manual"),
         advanced: document.getElementById("cq-advanced"),
         results: document.getElementById("cq-results"),
         modal: document.getElementById("cq-advanced-modal"),
@@ -74,6 +103,22 @@
         modalContains: document.getElementById("cq-modal-contains"),
         modalContainsAdd: document.getElementById("cq-modal-contains-add"),
         modalContainsTags: document.getElementById("cq-modal-contains-tags"),
+        manualModal: document.getElementById("cq-manual-modal"),
+        manualClose: document.getElementById("cq-manual-close"),
+        manualQty: document.getElementById("cq-manual-qty"),
+        manualUnit: document.getElementById("cq-manual-unit"),
+        manualConcepto: document.getElementById("cq-manual-concepto"),
+        manualDescToggle: document.getElementById("cq-manual-desc-toggle"),
+        manualDescWrap: document.getElementById("cq-manual-desc-wrap"),
+        manualDescLarga: document.getElementById("cq-manual-desc-larga"),
+        manualUnitNeto: document.getElementById("cq-manual-unit-neto"),
+        manualUnitBruto: document.getElementById("cq-manual-unit-bruto"),
+        manualAdjType: document.getElementById("cq-manual-adj-type"),
+        manualPct: document.getElementById("cq-manual-pct"),
+        manualTotalNeto: document.getElementById("cq-manual-total-neto"),
+        manualTotalBruto: document.getElementById("cq-manual-total-bruto"),
+        manualHint: document.getElementById("cq-manual-hint"),
+        manualAdd: document.getElementById("cq-manual-add"),
         lines: document.getElementById("cq-lines"),
         linesEmpty: document.getElementById("cq-lines-empty"),
         message: document.getElementById("cq-message"),
@@ -133,13 +178,27 @@
         options: document.getElementById("cq-options"),
         expiredBadge: document.getElementById("cq-expired-badge"),
         save: document.getElementById("cq-save"),
+        saveStatus: document.getElementById("cq-save-status"),
         clear: document.getElementById("cq-clear")
     };
 
     document.getElementById("cq-new").addEventListener("click", function () {
         openEditor(emptyQuote());
     });
-    document.getElementById("cq-back").addEventListener("click", showList);
+    document.getElementById("cq-back").addEventListener("click", function () {
+        if (state.autosave.timer) {
+            clearTimeout(state.autosave.timer);
+            state.autosave.timer = null;
+        }
+        if (state.view === "editor" && state.quote.editable !== false
+            && (state.quote.id || (state.quote.lines || []).length)) {
+            saveQuote(true).finally(function () {
+                showList();
+            });
+            return;
+        }
+        showList();
+    });
     document.getElementById("cq-search-btn").addEventListener("click", searchProducts);
     if (els.channelLocal) els.channelLocal.addEventListener("click", function () { setChannel("local", true); });
     if (els.channelOnline) els.channelOnline.addEventListener("click", function () { setChannel("online", true); });
@@ -151,6 +210,44 @@
     });
     if (els.lupa) {
         els.lupa.addEventListener("click", openAdvancedSearch);
+    }
+    if (els.manualBtn) {
+        els.manualBtn.addEventListener("click", openManualModal);
+    }
+    if (els.manualModal) {
+        els.manualModal.addEventListener("click", function (event) {
+            if (event.target && event.target.getAttribute("data-cq-manual-close") === "1") {
+                closeManualModal();
+            }
+        });
+    }
+    if (els.manualDescToggle) {
+        els.manualDescToggle.addEventListener("click", toggleManualDescLarga);
+    }
+    if (els.manualAdd) {
+        els.manualAdd.addEventListener("click", submitManualLine);
+    }
+    ["manualQty", "manualUnitNeto", "manualUnitBruto", "manualPct"].forEach(function (key) {
+        if (!els[key]) return;
+        els[key].addEventListener("input", function () {
+            onManualPriceInput(key);
+        });
+        els[key].addEventListener("change", function () {
+            onManualPriceInput(key);
+        });
+    });
+    if (els.manualAdjType) {
+        els.manualAdjType.addEventListener("change", function () {
+            syncManualTotals();
+        });
+    }
+    if (els.manualConcepto) {
+        els.manualConcepto.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                submitManualLine();
+            }
+        });
     }
     if (els.modalSearchBtn) {
         els.modalSearchBtn.addEventListener("click", searchAdvanced);
@@ -194,6 +291,11 @@
             closeLineModal();
             return;
         }
+        if (els.manualModal && !els.manualModal.hidden) {
+            event.preventDefault();
+            closeManualModal();
+            return;
+        }
         if (els.familyModal && !els.familyModal.hidden) {
             event.preventDefault();
             closeFamilyModal();
@@ -204,19 +306,94 @@
             closeAdvancedSearch();
         }
     });
-    els.filter.addEventListener("change", loadList);
-    if (els.typeFilter) {
-        els.typeFilter.addEventListener("change", loadList);
-    }
     if (els.applyFilters) {
-        els.applyFilters.addEventListener("click", loadList);
+        els.applyFilters.addEventListener("click", function () {
+            state.listPage = 1;
+            loadList();
+        });
     }
-    if (els.dateFrom) {
-        els.dateFrom.addEventListener("change", loadList);
+    if (els.filterNumber) {
+        els.filterNumber.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                state.listPage = 1;
+                loadList();
+            }
+        });
     }
-    if (els.dateTo) {
-        els.dateTo.addEventListener("change", loadList);
+    if (els.filterCustomer) {
+        els.filterCustomer.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                state.listPage = 1;
+                loadList();
+            }
+        });
     }
+    if (els.pageSize) {
+        els.pageSize.addEventListener("change", function () {
+            state.listPageSize = parseInt(els.pageSize.value, 10) || 10;
+            state.listPage = 1;
+            renderList();
+        });
+    }
+    if (els.tableSearch) {
+        els.tableSearch.addEventListener("input", function () {
+            state.listQuery = String(els.tableSearch.value || "");
+            state.listPage = 1;
+            renderList();
+        });
+    }
+    if (els.pagePrev) {
+        els.pagePrev.addEventListener("click", function () {
+            if (state.listPage > 1) {
+                state.listPage -= 1;
+                renderList();
+            }
+        });
+    }
+    if (els.pageNext) {
+        els.pageNext.addEventListener("click", function () {
+            var totalPages = Math.max(1, Math.ceil((state.filteredQuotes || []).length / state.listPageSize));
+            if (state.listPage < totalPages) {
+                state.listPage += 1;
+                renderList();
+            }
+        });
+    }
+    if (els.exportExcel) {
+        els.exportExcel.addEventListener("click", exportQuotesCsv);
+    }
+    if (els.orderBtn && els.orderMenu) {
+        els.orderBtn.addEventListener("click", function (event) {
+            event.stopPropagation();
+            var open = els.orderMenu.hidden;
+            closeViewMenus();
+            closeOrderMenu();
+            if (open) {
+                els.orderMenu.hidden = false;
+                els.orderBtn.setAttribute("aria-expanded", "true");
+            }
+        });
+        Array.prototype.forEach.call(els.orderMenu.querySelectorAll("[data-order-by]"), function (btn) {
+            btn.addEventListener("click", function (event) {
+                event.stopPropagation();
+                state.orderBy = String(btn.getAttribute("data-order-by") || "date");
+                state.orderDir = String(btn.getAttribute("data-order-dir") || "DESC").toUpperCase();
+                if (state.orderDir !== "ASC" && state.orderDir !== "DESC") {
+                    state.orderDir = "DESC";
+                }
+                updateOrderButtonLabel();
+                closeOrderMenu();
+                state.listPage = 1;
+                loadList();
+            });
+        });
+    }
+    document.addEventListener("click", function () {
+        closeViewMenus();
+        closeOrderMenu();
+    });
     if (els.advanced) {
         els.advanced.addEventListener("change", function () {
             state.advanced = els.advanced.checked;
@@ -228,7 +405,7 @@
             }
         });
     }
-    els.save.addEventListener("click", saveQuote);
+    els.save.addEventListener("click", function () { saveQuote(false); });
     els.clear.addEventListener("click", clearQuote);
     els.transition.addEventListener("click", transitionQuote);
     if (els.invoice) {
@@ -343,13 +520,46 @@
         });
     }
     ["input", "change"].forEach(function (eventName) {
-        els.customer.addEventListener(eventName, syncHeader);
-        els.type.addEventListener(eventName, syncHeader);
-        els.validityDays.addEventListener(eventName, syncHeader);
-        els.validityTerms.addEventListener(eventName, syncHeader);
+        els.customer.addEventListener(eventName, function () {
+            syncHeader();
+            if (eventName === "change") scheduleAutosave(300);
+            else scheduleAutosave(600);
+        });
+        els.type.addEventListener(eventName, function () {
+            syncHeader();
+            scheduleAutosave(300);
+        });
+        els.validityDays.addEventListener(eventName, function () {
+            syncHeader();
+            if (eventName === "change") scheduleAutosave(300);
+            else scheduleAutosave(600);
+        });
+        els.validityTerms.addEventListener(eventName, function () {
+            syncHeader();
+            if (eventName === "change") scheduleAutosave(300);
+            else scheduleAutosave(600);
+        });
+    });
+    if (els.issueDate) {
+        els.issueDate.addEventListener("change", function () {
+            syncHeader();
+            scheduleAutosave(0);
+        });
+    }
+
+    window.addEventListener("beforeunload", function (event) {
+        if (state.autosave.saving || state.autosave.pending || (state.autosave.timer && isDirty())) {
+            event.preventDefault();
+            event.returnValue = "";
+        }
     });
 
-    showList();
+    if (!bootFromDeepLink()) {
+        updateOrderButtonLabel();
+        showList();
+    } else {
+        updateOrderButtonLabel();
+    }
 
     function emptyQuote() {
         return {
@@ -368,7 +578,7 @@
             margin_percent: null,
             profit_total: null,
             created_at: "",
-            issue_date: "",
+            issue_date: todayIsoDate(),
             seller_name: cfg.currentUserName || "",
             is_expired: false,
             editable: true,
@@ -380,10 +590,35 @@
         };
     }
 
+    function bootFromDeepLink() {
+        var params;
+        try {
+            params = new URLSearchParams(window.location.search || "");
+        } catch (err) {
+            return false;
+        }
+        var quoteId = parseInt(params.get("quote") || "0", 10);
+        var isNew = params.get("nueva") === "1";
+        if (quoteId > 0) {
+            openQuote(quoteId);
+            return true;
+        }
+        if (isNew) {
+            openEditor(emptyQuote());
+            return true;
+        }
+        return false;
+    }
+
     function showList() {
         state.view = "list";
         els.listView.hidden = false;
         els.editorView.hidden = true;
+        try {
+            if (window.history && window.history.replaceState && cfg.portalUrl) {
+                window.history.replaceState({}, "", cfg.portalUrl);
+            }
+        } catch (err) { /* ignore */ }
         loadList();
     }
 
@@ -395,6 +630,12 @@
         if (!quote.lines) {
             quote.lines = [];
         }
+        if (state.autosave.timer) {
+            clearTimeout(state.autosave.timer);
+            state.autosave.timer = null;
+        }
+        state.autosave.pending = false;
+        setSaveStatus("");
         state.quote = quote;
         state.view = "editor";
         els.listView.hidden = true;
@@ -411,6 +652,14 @@
     }
 
     function loadList() {
+        if (els.includeQuotes && !els.includeQuotes.checked) {
+            state.quotes = [];
+            state.filteredQuotes = [];
+            if (els.resultsPanel) els.resultsPanel.hidden = false;
+            renderList();
+            setListMessage("Marca «Cotizaciones» para buscar en el listado.", true);
+            return;
+        }
         var fields = {};
         if (els.filter && els.filter.value && els.filter.value !== "all") {
             fields.status = String(els.filter.value);
@@ -418,32 +667,112 @@
         if (els.typeFilter && els.typeFilter.value && els.typeFilter.value !== "all") {
             fields.quote_type = String(els.typeFilter.value);
         }
+        if (els.filterNumber && els.filterNumber.value) {
+            fields.quote_number = String(els.filterNumber.value).trim();
+        }
+        if (els.filterCustomer && els.filterCustomer.value) {
+            fields.customer_name = String(els.filterCustomer.value).trim();
+        }
+        if (els.filterResponsable && els.filterResponsable.value && els.filterResponsable.value !== "0") {
+            fields.created_by = String(els.filterResponsable.value);
+        }
         if (els.dateFrom && els.dateFrom.value) {
             fields.date_from = String(els.dateFrom.value);
         }
         if (els.dateTo && els.dateTo.value) {
             fields.date_to = String(els.dateTo.value);
         }
+        fields.order_by = state.orderBy || "date";
+        fields.order_dir = state.orderDir || "DESC";
         setListMessage("");
         post(cfg.actions.list, fields).then(function (data) {
             state.quotes = data.quotes || [];
+            if (data.order_by) state.orderBy = String(data.order_by);
+            if (data.order_dir) state.orderDir = String(data.order_dir);
+            updateOrderButtonLabel();
+            fillResponsables(data.responsables || []);
+            if (els.resultsPanel) els.resultsPanel.hidden = false;
             renderList();
         }).catch(function (error) {
             state.quotes = [];
+            if (els.resultsPanel) els.resultsPanel.hidden = false;
             renderList();
             setListMessage(error.message, true);
         });
     }
 
-    function renderList() {
+    function fillResponsables(list) {
+        if (!els.filterResponsable) return;
+        var current = String(els.filterResponsable.value || "0");
+        var html = '<option value="0">** Cualquier Responsable **</option>';
+        (list || []).forEach(function (row) {
+            var id = String(row.id || "");
+            var name = String(row.name || ("Usuario #" + id));
+            html += '<option value="' + escapeHtml(id) + '">' + escapeHtml(name) + "</option>";
+        });
+        els.filterResponsable.innerHTML = html;
+        if (current && current !== "0") {
+            els.filterResponsable.value = current;
+        }
+    }
+
+    function applyClientFilters() {
+        var q = String(state.listQuery || "").trim().toLowerCase();
         var rows = state.quotes || [];
+        if (!q) {
+            state.filteredQuotes = rows.slice();
+            return;
+        }
+        state.filteredQuotes = rows.filter(function (quote) {
+            var hay = [
+                quote.quote_number,
+                quote.customer_name,
+                quote.seller_name,
+                quote.status_label,
+                formatMoney(quote.net_total)
+            ].join(" ").toLowerCase();
+            return hay.indexOf(q) >= 0;
+        });
+    }
+
+    function renderList() {
+        applyClientFilters();
+        var rows = state.filteredQuotes || [];
+        var pageSize = state.listPageSize || 10;
+        var totalPages = Math.max(1, Math.ceil(rows.length / pageSize) || 1);
+        if (state.listPage > totalPages) state.listPage = totalPages;
+        if (state.listPage < 1) state.listPage = 1;
+        var start = (state.listPage - 1) * pageSize;
+        var pageRows = rows.slice(start, start + pageSize);
+
+        if (els.resultsCount) {
+            els.resultsCount.textContent = "Cotizaciones mostradas: " + pageRows.length
+                + (rows.length !== pageRows.length ? " de " + rows.length : "");
+        }
         els.listBody.innerHTML = "";
-        els.empty.hidden = rows.length !== 0;
-        rows.forEach(function (quote) {
+        if (els.empty) {
+            els.empty.hidden = rows.length !== 0;
+        }
+        pageRows.forEach(function (quote) {
             var tr = document.createElement("tr");
             if (quote.is_expired) {
                 tr.className = "cq-row-expired";
             }
+            var expandTd = document.createElement("td");
+            expandTd.className = "cq-col-expand";
+            var expandBtn = document.createElement("button");
+            expandBtn.type = "button";
+            expandBtn.className = "cq-expand-btn";
+            expandBtn.setAttribute("aria-label", "Ver detalle");
+            expandBtn.textContent = state.expandedIds[quote.id] ? "−" : "+";
+            expandBtn.addEventListener("click", function (event) {
+                event.stopPropagation();
+                state.expandedIds[quote.id] = !state.expandedIds[quote.id];
+                renderList();
+            });
+            expandTd.appendChild(expandBtn);
+            tr.appendChild(expandTd);
+
             var numCell = cell(quote.quote_number);
             if (quote.is_expired) {
                 var warn = document.createElement("span");
@@ -456,26 +785,211 @@
             tr.appendChild(numCell);
             tr.appendChild(cell(formatDate(quote.issue_date || quote.created_at || quote.updated_at)));
             tr.appendChild(cell(quote.customer_name || "Sin cliente"));
-            tr.appendChild(cell(quote.quote_type_label || "Venta"));
+            tr.appendChild(cell(quote.seller_name || "—"));
             tr.appendChild(badgeCell(quote.status, quote.status_label));
+            tr.appendChild(cell("—"));
+            tr.appendChild(cell("—"));
             var net = cell(formatMoney(quote.net_total));
             net.className = "cq-num";
             tr.appendChild(net);
-            var util = cell(formatPercent(quote.margin_percent));
-            util.className = "cq-num";
-            tr.appendChild(util);
+
             var actions = document.createElement("td");
-            var open = document.createElement("button");
-            open.type = "button";
-            open.className = "cq-text-btn";
-            open.textContent = "Abrir";
-            open.addEventListener("click", function () {
-                openQuote(quote.id);
-            });
-            actions.appendChild(open);
+            actions.appendChild(buildViewSplit(quote));
             tr.appendChild(actions);
             els.listBody.appendChild(tr);
+
+            if (state.expandedIds[quote.id]) {
+                var detail = document.createElement("tr");
+                detail.className = "cq-expand-detail";
+                var td = document.createElement("td");
+                td.colSpan = 10;
+                var bits = [];
+                bits.push("Tipo: " + (quote.quote_type_label || "Venta"));
+                if (quote.order_id) {
+                    bits.push("Pedido WC #" + quote.order_id);
+                }
+                if (quote.channel) {
+                    bits.push("Canal: " + quote.channel);
+                }
+                bits.push("Líneas: " + (quote.line_count != null ? quote.line_count : "—"));
+                td.textContent = bits.join(" · ");
+                detail.appendChild(td);
+                els.listBody.appendChild(detail);
+            }
         });
+        renderPager(totalPages);
+    }
+
+    function buildViewSplit(quote) {
+        var wrap = document.createElement("div");
+        wrap.className = "cq-view-split";
+        var main = document.createElement("button");
+        main.type = "button";
+        main.className = "cq-view-main";
+        main.title = "Ver cotización en esta ventana";
+        main.innerHTML = '<span aria-hidden="true">👁</span>';
+        main.addEventListener("click", function (event) {
+            event.stopPropagation();
+            closeViewMenus();
+            openQuote(quote.id);
+        });
+        var toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "cq-view-toggle";
+        toggle.setAttribute("aria-label", "Más opciones de apertura");
+        toggle.textContent = "▾";
+        var menu = document.createElement("div");
+        menu.className = "cq-view-menu";
+        menu.hidden = true;
+        var opt = document.createElement("button");
+        opt.type = "button";
+        opt.textContent = "Nueva Ventana";
+        opt.addEventListener("click", function (event) {
+            event.stopPropagation();
+            closeViewMenus();
+            openQuoteInNewWindow(quote.id);
+        });
+        menu.appendChild(opt);
+        toggle.addEventListener("click", function (event) {
+            event.stopPropagation();
+            var willOpen = menu.hidden;
+            closeViewMenus();
+            if (willOpen) {
+                menu.hidden = false;
+                state.openViewMenuId = quote.id;
+            }
+        });
+        wrap.appendChild(main);
+        wrap.appendChild(toggle);
+        wrap.appendChild(menu);
+        return wrap;
+    }
+
+    function closeViewMenus() {
+        state.openViewMenuId = null;
+        var menus = document.querySelectorAll(".cq-view-menu");
+        Array.prototype.forEach.call(menus, function (menu) {
+            menu.hidden = true;
+        });
+    }
+
+    function closeOrderMenu() {
+        if (els.orderMenu) els.orderMenu.hidden = true;
+        if (els.orderBtn) els.orderBtn.setAttribute("aria-expanded", "false");
+    }
+
+    function updateOrderButtonLabel() {
+        if (!els.orderBtn) return;
+        var by = state.orderBy || "date";
+        var dir = (state.orderDir || "DESC").toUpperCase();
+        var labels = {
+            date: "Fecha",
+            number: "Número",
+            customer: "Cliente",
+            amount: "Monto",
+            status: "Estado"
+        };
+        var name = labels[by] || "Fecha";
+        var arrow = dir === "ASC" ? "↑" : "↓";
+        els.orderBtn.textContent = "Ordenar: " + name + " " + arrow;
+        if (els.orderMenu) {
+            Array.prototype.forEach.call(els.orderMenu.querySelectorAll("[data-order-by]"), function (btn) {
+                var active = btn.getAttribute("data-order-by") === by
+                    && String(btn.getAttribute("data-order-dir") || "").toUpperCase() === dir;
+                btn.classList.toggle("is-active", active);
+            });
+        }
+    }
+
+    function quotePortalUrl(id) {
+        var base = String(cfg.portalUrl || (window.location.origin + window.location.pathname));
+        var sep = base.indexOf("?") >= 0 ? "&" : "?";
+        return base + sep + "quote=" + encodeURIComponent(String(id));
+    }
+
+    function openQuoteInNewWindow(id) {
+        var url = quotePortalUrl(id);
+        var win = window.open(url, "_blank", "noopener");
+        if (!win) {
+            setListMessage("El navegador bloqueó la nueva ventana. Permite ventanas emergentes.", true);
+        }
+    }
+
+    function renderPager(totalPages) {
+        if (!els.pageNumbers) return;
+        els.pageNumbers.innerHTML = "";
+        for (var i = 1; i <= totalPages; i += 1) {
+            (function (page) {
+                var btn = document.createElement("button");
+                btn.type = "button";
+                btn.textContent = String(page);
+                if (page === state.listPage) btn.className = "is-active";
+                btn.addEventListener("click", function () {
+                    state.listPage = page;
+                    renderList();
+                });
+                els.pageNumbers.appendChild(btn);
+            })(i);
+        }
+        if (els.pagePrev) els.pagePrev.disabled = state.listPage <= 1;
+        if (els.pageNext) els.pageNext.disabled = state.listPage >= totalPages;
+    }
+
+    function exportQuotesCsv() {
+        var rows = state.filteredQuotes || [];
+        if (!rows.length) {
+            setListMessage("No hay filas para exportar.", true);
+            return;
+        }
+        var header = [
+            "Número cotización",
+            "Fecha creación",
+            "Cliente Nombre",
+            "Responsable",
+            "Estado Cotización",
+            "Estado de Venta",
+            "DTE's Folios Asociados",
+            "Monto"
+        ];
+        var lines = [header.map(csvEscape).join(";")];
+        rows.forEach(function (quote) {
+            lines.push([
+                quote.quote_number || "",
+                formatDate(quote.issue_date || quote.created_at || quote.updated_at),
+                quote.customer_name || "",
+                quote.seller_name || "",
+                quote.status_label || "",
+                "",
+                "",
+                String(quote.net_total != null ? quote.net_total : "")
+            ].map(csvEscape).join(";"));
+        });
+        var blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = "cotizaciones.csv";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setListMessage("Exportación lista (" + rows.length + " filas).", false);
+    }
+
+    function csvEscape(value) {
+        var text = String(value == null ? "" : value);
+        if (/[";\n\r]/.test(text)) {
+            return '"' + text.replace(/"/g, '""') + '"';
+        }
+        return text;
+    }
+
+    function escapeHtml(value) {
+        return String(value == null ? "" : value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
     }
 
     function openQuote(id) {
@@ -498,8 +1012,10 @@
         if (els.quoteNumber) {
             els.quoteNumber.value = quote.quote_number || "";
         }
+        var editable = quote.editable !== false;
         if (els.issueDate) {
-            els.issueDate.value = formatDate(quote.issue_date || quote.created_at) || (quote.id ? "" : "Al guardar");
+            els.issueDate.value = toDateInputValue(quote.issue_date || quote.created_at) || (quote.id ? "" : todayIsoDate());
+            els.issueDate.disabled = !editable;
         }
         if (els.seller) {
             els.seller.value = quote.seller_name || cfg.currentUserName || "";
@@ -509,7 +1025,6 @@
         setChannel(quote.channel || "local", false);
         els.validityDays.value = quote.validity_days === null || quote.validity_days === undefined ? "" : String(quote.validity_days);
         els.validityTerms.value = quote.validity_terms || "";
-        var editable = quote.editable !== false;
         [els.customer, els.type, els.validityDays, els.validityTerms, els.search].forEach(function (input) {
             input.disabled = !editable;
         });
@@ -518,6 +1033,9 @@
         document.getElementById("cq-search-btn").disabled = !editable;
         if (els.lupa) {
             els.lupa.disabled = !editable;
+        }
+        if (els.manualBtn) {
+            els.manualBtn.disabled = !editable;
         }
         els.save.hidden = !editable;
         els.clear.hidden = !editable;
@@ -744,18 +1262,27 @@
         var detail = document.createElement("td");
         var skuRow = document.createElement("div");
         skuRow.className = "cq-sku-row";
-        var sku = document.createElement("a");
-        sku.className = "cq-sku cq-sku-link";
-        sku.textContent = line.sku || "";
-        sku.href = productsQuickSearchUrl(line);
-        sku.target = "_blank";
-        sku.rel = "noopener noreferrer";
-        sku.title = "Abrir en búsqueda rápida de Productos";
-        sku.addEventListener("click", function (event) {
-            // Evitar que otros handlers de la fila interfieran.
-            event.stopPropagation();
-        });
-        skuRow.appendChild(sku);
+        var skuText = String(line.sku || "").trim();
+        if (skuText) {
+            var sku = document.createElement("a");
+            sku.className = "cq-sku cq-sku-link";
+            sku.textContent = skuText;
+            sku.href = productsQuickSearchUrl(line);
+            sku.target = "_blank";
+            sku.rel = "noopener noreferrer";
+            sku.title = "Abrir en búsqueda rápida de Productos";
+            sku.addEventListener("click", function (event) {
+                // Evitar que otros handlers de la fila interfieran.
+                event.stopPropagation();
+            });
+            skuRow.appendChild(sku);
+        } else {
+            var manualTag = document.createElement("span");
+            manualTag.className = "cq-sku cq-sku-manual";
+            manualTag.textContent = "Manual";
+            manualTag.title = "Línea ingresada sin SKU";
+            skuRow.appendChild(manualTag);
+        }
         if (lineGrupoId(line) && Array.isArray((line._family || {}).members) && (line._family.members || []).length > 1) {
             var change = document.createElement("button");
             change.type = "button";
@@ -820,10 +1347,13 @@
                 var gid = lineGrupoId(state.quote.lines[index] || line);
                 state.quote.lines.splice(index, 1);
                 if (gid) {
-                    recalcFamilyPrices(gid);
+                    trackPriceRecalc(recalcFamilyPrices(gid)).then(function () {
+                        scheduleAutosave(0);
+                    });
                 } else {
                     renderLines();
                     renderTotals();
+                    scheduleAutosave(0);
                 }
             });
             actions.appendChild(edit);
@@ -867,7 +1397,7 @@
         minus.type = "button";
         minus.className = "cq-stepper-btn";
         minus.textContent = "\u2212";
-        minus.setAttribute("aria-label", "Disminuir cantidad de " + line.sku);
+        minus.setAttribute("aria-label", "Disminuir cantidad de " + (line.sku || line.description || "línea"));
         minus.disabled = !editable;
         var input = document.createElement("input");
         input.type = "text";
@@ -875,13 +1405,13 @@
         input.dataset.field = "quantity";
         input.dataset.index = String(index);
         input.value = formatQty(line.quantity);
-        input.setAttribute("aria-label", "Cantidad de " + line.sku);
+        input.setAttribute("aria-label", "Cantidad de " + (line.sku || line.description || "línea"));
         input.disabled = !editable;
         var plus = document.createElement("button");
         plus.type = "button";
         plus.className = "cq-stepper-btn";
         plus.textContent = "+";
-        plus.setAttribute("aria-label", "Aumentar cantidad de " + line.sku);
+        plus.setAttribute("aria-label", "Aumentar cantidad de " + (line.sku || line.description || "línea"));
         plus.disabled = !editable;
         function applyQty(next) {
             if (next < 0) next = 0;
@@ -890,10 +1420,13 @@
             input.value = formatQty(next);
             updateQtyMeta(wrap, state.quote.lines[index]);
             if (state.quote.lines[index].producto_base_id) {
-                recalcLocalLinePrice(state.quote.lines[index], index);
+                trackPriceRecalc(recalcLocalLinePrice(state.quote.lines[index], index)).then(function () {
+                    scheduleAutosave(0);
+                });
                 return;
             }
             renderTotals();
+            scheduleAutosave(0);
         }
         function commitQty() {
             var parsed = parseClNumber(input.value);
@@ -906,14 +1439,19 @@
             updateQtyMeta(wrap, line);
             var gid = lineGrupoId(line);
             if (gid) {
-                recalcFamilyPrices(gid);
+                trackPriceRecalc(recalcFamilyPrices(gid)).then(function () {
+                    scheduleAutosave(0);
+                });
                 return;
             }
             if (line.producto_base_id) {
-                recalcLocalLinePrice(line, index);
+                trackPriceRecalc(recalcLocalLinePrice(line, index)).then(function () {
+                    scheduleAutosave(0);
+                });
                 return;
             }
             renderTotals();
+            scheduleAutosave(0);
         }
         minus.addEventListener("click", function () {
             applyQty(Number(state.quote.lines[index].quantity || 0) - 1);
@@ -1003,7 +1541,7 @@
         input.dataset.field = field;
         input.dataset.index = String(index);
         input.value = displayField(field, line);
-        input.setAttribute("aria-label", fieldLabel(field) + line.sku);
+        input.setAttribute("aria-label", fieldLabel(field) + (line.sku || line.description || "línea"));
         input.disabled = !editable;
         input.addEventListener("focus", function () {
             input.value = editField(field, state.quote.lines[index]);
@@ -1015,6 +1553,7 @@
             assignField(current, field, parseClNumber(input.value));
             refreshSiblingDiscountInput(trFromInput(input), current, field);
             renderTotals();
+            scheduleAutosave(400);
         });
         input.addEventListener("blur", function () {
             var current = state.quote.lines[index];
@@ -1027,6 +1566,7 @@
             input.value = displayField(field, current);
             refreshSiblingDiscountInput(trFromInput(input), current, field);
             renderTotals();
+            scheduleAutosave(0);
         });
         td.appendChild(input);
         if (isRate) {
@@ -1216,6 +1756,12 @@
         state.quote.channel = currentChannel();
         state.quote.validity_days = els.validityDays.value === "" ? null : Number(els.validityDays.value);
         state.quote.validity_terms = els.validityTerms.value.trim();
+        if (els.issueDate) {
+            var issue = toDateInputValue(els.issueDate.value);
+            if (issue) {
+                state.quote.issue_date = issue;
+            }
+        }
     }
 
     function renderTotals() {
@@ -1402,6 +1948,177 @@
         els.modal.hidden = true;
         els.modal.setAttribute("aria-hidden", "true");
         setModalHint("");
+    }
+
+    function setManualHint(text, isError) {
+        if (!els.manualHint) return;
+        els.manualHint.textContent = text || "";
+        els.manualHint.classList.toggle("is-error", !!isError && !!text);
+    }
+
+    function openManualModal() {
+        if (!els.manualModal) return;
+        if (state.quote.editable === false) return;
+        resetManualForm();
+        setManualHint("");
+        els.manualModal.hidden = false;
+        els.manualModal.setAttribute("aria-hidden", "false");
+        if (els.manualConcepto) {
+            els.manualConcepto.focus();
+        } else if (els.manualQty) {
+            els.manualQty.focus();
+        }
+    }
+
+    function closeManualModal() {
+        if (!els.manualModal) return;
+        els.manualModal.hidden = true;
+        els.manualModal.setAttribute("aria-hidden", "true");
+        setManualHint("");
+    }
+
+    function resetManualForm() {
+        if (els.manualQty) els.manualQty.value = "1";
+        if (els.manualUnit) els.manualUnit.value = "";
+        if (els.manualConcepto) els.manualConcepto.value = "";
+        if (els.manualDescLarga) els.manualDescLarga.value = "";
+        if (els.manualDescWrap) els.manualDescWrap.hidden = true;
+        if (els.manualDescToggle) els.manualDescToggle.setAttribute("aria-expanded", "false");
+        if (els.manualUnitNeto) els.manualUnitNeto.value = "0";
+        if (els.manualUnitBruto) els.manualUnitBruto.value = "0";
+        if (els.manualAdjType) els.manualAdjType.value = "descuento";
+        if (els.manualPct) els.manualPct.value = "0";
+        if (els.manualTotalNeto) els.manualTotalNeto.value = "0";
+        if (els.manualTotalBruto) els.manualTotalBruto.value = "0";
+    }
+
+    function toggleManualDescLarga() {
+        if (!els.manualDescWrap || !els.manualDescToggle) return;
+        var open = els.manualDescWrap.hidden;
+        els.manualDescWrap.hidden = !open;
+        els.manualDescToggle.setAttribute("aria-expanded", open ? "true" : "false");
+        if (open && els.manualDescLarga) {
+            els.manualDescLarga.focus();
+        }
+    }
+
+    function onManualPriceInput(sourceKey) {
+        if (sourceKey === "manualUnitNeto" && els.manualUnitNeto && els.manualUnitBruto) {
+            var neto = parseClNumber(els.manualUnitNeto.value);
+            if (neto < 0) neto = 0;
+            els.manualUnitBruto.value = formatModalNumber(round2(neto * IVA_FACTOR), 2);
+        } else if (sourceKey === "manualUnitBruto" && els.manualUnitBruto && els.manualUnitNeto) {
+            var bruto = parseClNumber(els.manualUnitBruto.value);
+            if (bruto < 0) bruto = 0;
+            els.manualUnitNeto.value = formatModalNumber(round2(bruto / IVA_FACTOR), 2);
+        }
+        syncManualTotals();
+    }
+
+    function syncManualTotals() {
+        var qty = parseClNumber(els.manualQty ? els.manualQty.value : 0);
+        if (!(qty > 0)) qty = 0;
+        var unitBruto = parseClNumber(els.manualUnitBruto ? els.manualUnitBruto.value : 0);
+        if (unitBruto < 0) unitBruto = 0;
+        var pct = clampRate(parseClNumber(els.manualPct ? els.manualPct.value : 0));
+        var adj = els.manualAdjType ? els.manualAdjType.value : "descuento";
+        var effectiveBruto = unitBruto;
+        if (adj === "recargo" && pct > 0) {
+            effectiveBruto = round2(unitBruto * (1 + pct / 100));
+        }
+        var totalBruto = round2(qty * effectiveBruto);
+        if (adj === "descuento" && pct > 0) {
+            totalBruto = round2(totalBruto * (1 - pct / 100));
+        }
+        if (totalBruto < 0) totalBruto = 0;
+        var totalNeto = round2(totalBruto / IVA_FACTOR);
+        if (els.manualTotalNeto) {
+            els.manualTotalNeto.value = formatModalNumber(totalNeto, 2);
+        }
+        if (els.manualTotalBruto) {
+            els.manualTotalBruto.value = formatModalNumber(totalBruto, 2);
+        }
+    }
+
+    function buildManualDescription() {
+        var concepto = String(els.manualConcepto ? els.manualConcepto.value : "").trim().replace(/\s+/g, " ");
+        var unit = String(els.manualUnit ? els.manualUnit.value : "").trim();
+        var larga = String(els.manualDescLarga ? els.manualDescLarga.value : "").trim().replace(/\s+/g, " ");
+        var parts = [];
+        if (concepto) {
+            parts.push(unit ? (concepto + " (" + unit + ")") : concepto);
+        }
+        if (larga) {
+            parts.push(larga);
+        }
+        var desc = parts.join(" — ");
+        if (desc.length > 500) {
+            desc = desc.slice(0, 500);
+        }
+        return desc;
+    }
+
+    function submitManualLine() {
+        if (state.quote.editable === false) return;
+        var qty = parseClNumber(els.manualQty ? els.manualQty.value : 0);
+        if (!(qty > 0)) {
+            setManualHint("La cantidad debe ser mayor a cero.", true);
+            if (els.manualQty) els.manualQty.focus();
+            return;
+        }
+        var concepto = String(els.manualConcepto ? els.manualConcepto.value : "").trim();
+        if (!concepto) {
+            setManualHint("El concepto es obligatorio.", true);
+            if (els.manualConcepto) els.manualConcepto.focus();
+            return;
+        }
+        var description = buildManualDescription();
+        if (!description) {
+            setManualHint("El concepto es obligatorio.", true);
+            if (els.manualConcepto) els.manualConcepto.focus();
+            return;
+        }
+        var unitBruto = parseClNumber(els.manualUnitBruto ? els.manualUnitBruto.value : 0);
+        if (unitBruto < 0) unitBruto = 0;
+        var pct = clampRate(parseClNumber(els.manualPct ? els.manualPct.value : 0));
+        var adj = els.manualAdjType ? els.manualAdjType.value : "descuento";
+        var priceDiscount = 0;
+        if (adj === "recargo" && pct > 0) {
+            unitBruto = round2(unitBruto * (1 + pct / 100));
+        } else if (adj === "descuento" && pct > 0) {
+            priceDiscount = pct;
+        }
+        state.quote.lines.push({
+            product_id: null,
+            producto_base_id: null,
+            sku: "",
+            supplier_code: "",
+            barcode: "",
+            description: description,
+            quantity: round3(qty),
+            unit_price: round2(unitBruto),
+            unit_cost: null,
+            price_discount: priceDiscount,
+            margin_discount: 0,
+            discount_amount: 0,
+            family_mode: "unitaria",
+            packaging: "unitaria",
+            units_per_pack: 1,
+            local_only: true,
+            _family: {},
+            price_mode: "manual",
+            price_ref: null,
+            price_total: null
+        });
+        var line = state.quote.lines[state.quote.lines.length - 1];
+        if (priceDiscount > 0) {
+            syncEquivalentDiscounts(line, "price_discount");
+        }
+        closeManualModal();
+        renderLines();
+        renderTotals();
+        scheduleAutosave(0);
+        setMessage("Detalle manual agregado.", false);
     }
 
     function normalizeContainsWord(raw) {
@@ -1729,10 +2446,13 @@
         els.results.hidden = true;
         if (target && target.producto_base_id) {
             var idx = lines.indexOf(target);
-            recalcLocalLinePrice(target, idx >= 0 ? idx : 0);
+            trackPriceRecalc(recalcLocalLinePrice(target, idx >= 0 ? idx : 0)).then(function () {
+                scheduleAutosave(0);
+            });
         } else {
             renderLines();
             renderTotals();
+            scheduleAutosave(0);
         }
         setMessage(lacksLocalPrice(product)
             ? ("Producto agregado a $0 (sin precio Local): «" + (product.sku || "?") + "».")
@@ -1742,14 +2462,15 @@
         return true;
     }
 
-    function saveQuote() {
+    function buildSavePayload() {
         syncHeader();
-        var payload = {
+        return {
             id: state.quote.id,
             customer_id: state.quote.customer_id,
             customer_name: state.quote.customer_name,
             quote_type: state.quote.quote_type,
             channel: state.quote.channel || currentChannel(),
+            issue_date: state.quote.issue_date || todayIsoDate(),
             validity_days: state.quote.validity_days,
             validity_terms: state.quote.validity_terms,
             lines: (state.quote.lines || []).map(function (line) {
@@ -1785,16 +2506,188 @@
                 };
             })
         };
-        els.save.disabled = true;
-        post(cfg.actions.save, { payload: JSON.stringify(payload) }).then(function (data) {
-            state.quote = data.quote;
-            paintEditor();
-            state.snapshot = serialize(state.quote);
-            setMessage(data.message || "Cotización guardada.", false);
+    }
+
+    function setSaveStatus(text, kind) {
+        if (!els.saveStatus) return;
+        els.saveStatus.textContent = text || "";
+        els.saveStatus.className = "cq-save-status" + (kind ? " is-" + kind : "");
+    }
+
+    function scheduleAutosave(delayMs) {
+        if (state.quote.editable === false) {
+            return;
+        }
+        if (state.autosave.timer) {
+            clearTimeout(state.autosave.timer);
+            state.autosave.timer = null;
+        }
+        var wait = delayMs == null ? 400 : delayMs;
+        state.autosave.timer = setTimeout(function () {
+            state.autosave.timer = null;
+            flushAutosave();
+        }, wait);
+    }
+
+    function flushAutosave() {
+        if (state.quote.editable === false) {
+            return;
+        }
+        syncHeader();
+        var hasId = !!state.quote.id;
+        var lineCount = (state.quote.lines || []).length;
+        if (!hasId && lineCount === 0) {
+            return;
+        }
+        if (state.autosave.saving) {
+            state.autosave.pending = true;
+            return;
+        }
+        var chain = state.priceRecalcChain || Promise.resolve();
+        chain.then(function () {
+            return performSave({ silent: true });
+        }).catch(function () {
+            // Error ya informado en performSave.
+        });
+    }
+
+    function trackPriceRecalc(promise) {
+        var tracked = Promise.resolve(promise).catch(function () { return null; });
+        state.priceRecalcChain = (state.priceRecalcChain || Promise.resolve())
+            .then(function () { return tracked; })
+            .catch(function () { return null; });
+        return tracked;
+    }
+
+    function applySavedMeta(quote) {
+        if (!quote) return;
+        state.quote.id = quote.id;
+        state.quote.quote_number = quote.quote_number;
+        state.quote.status = quote.status;
+        state.quote.status_label = quote.status_label;
+        state.quote.created_at = quote.created_at;
+        if (quote.issue_date) {
+            state.quote.issue_date = toDateInputValue(quote.issue_date) || state.quote.issue_date;
+        }
+        state.quote.seller_name = quote.seller_name;
+        state.quote.updated_at = quote.updated_at;
+        state.quote.allowed_transitions = quote.allowed_transitions || [];
+        state.quote.editable = quote.editable !== false;
+        state.quote.can_invoice = !!quote.can_invoice;
+        state.quote.order_id = quote.order_id;
+        state.quote.order_url = quote.order_url || "";
+        state.quote.is_expired = !!quote.is_expired;
+        state.quote.net_total = quote.net_total;
+        state.quote.discount_total = quote.discount_total;
+        state.quote.margin_percent = quote.margin_percent;
+        state.quote.profit_total = quote.profit_total;
+
+        if (els.quoteNumber) {
+            els.quoteNumber.value = quote.quote_number || "";
+        }
+        if (els.title) {
+            els.title.textContent = quote.quote_number || "Nueva cotización";
+        }
+        if (els.status) {
+            els.status.textContent = quote.status_label || "Borrador";
+            els.status.className = "cq-badge cq-badge-" + (quote.status || "draft");
+        }
+        if (els.issueDate && state.quote.issue_date) {
+            els.issueDate.value = toDateInputValue(state.quote.issue_date);
+        }
+        if (els.expiredBadge) {
+            els.expiredBadge.hidden = !state.quote.is_expired;
+        }
+        var transition = (state.quote.allowed_transitions || [])[0];
+        if (state.quote.id && transition) {
+            els.transition.hidden = false;
+            els.transition.textContent = transition.label;
+            els.transition.dataset.status = transition.status;
+        } else {
+            els.transition.hidden = true;
+        }
+        if (els.invoice) {
+            var canInvoice = !!state.quote.can_invoice
+                || (state.quote.status === "listed" && state.quote.quote_type === "venta" && !state.quote.order_id);
+            els.invoice.hidden = !(state.quote.id && canInvoice);
+        }
+        if (els.orderLink) {
+            if (state.quote.order_id && state.quote.order_url) {
+                els.orderLink.hidden = false;
+                els.orderLink.href = state.quote.order_url;
+                els.orderLink.textContent = "Ver pedido #" + state.quote.order_id;
+            } else {
+                els.orderLink.hidden = true;
+                els.orderLink.removeAttribute("href");
+            }
+        }
+        state.snapshot = serialize(state.quote);
+    }
+
+    function performSave(opts) {
+        opts = opts || {};
+        var silent = !!opts.silent;
+        syncHeader();
+        var hasId = !!state.quote.id;
+        var lineCount = (state.quote.lines || []).length;
+        if (!hasId && lineCount === 0) {
+            if (!silent) {
+                setMessage("Agrega al menos un producto para guardar.", true);
+            }
+            return Promise.resolve(null);
+        }
+        if (state.quote.editable === false) {
+            if (!silent) {
+                setMessage("Esta cotización no se puede editar.", true);
+            }
+            return Promise.resolve(null);
+        }
+        if (state.autosave.saving) {
+            state.autosave.pending = true;
+            return Promise.resolve(null);
+        }
+        state.autosave.saving = true;
+        setSaveStatus("Guardando…", "saving");
+        if (!silent) {
+            els.save.disabled = true;
+        }
+        return post(cfg.actions.save, { payload: JSON.stringify(buildSavePayload()) }).then(function (data) {
+            if (silent) {
+                applySavedMeta(data.quote);
+            } else {
+                state.quote = data.quote;
+                paintEditor();
+                state.snapshot = serialize(state.quote);
+                setMessage(data.message || "Cotización guardada.", false);
+            }
+            setSaveStatus("Guardado", "saved");
+            return data.quote;
         }).catch(function (error) {
+            setSaveStatus("Error al guardar", "error");
             setMessage(error.message, true);
+            throw error;
         }).finally(function () {
-            els.save.disabled = false;
+            state.autosave.saving = false;
+            if (!silent) {
+                els.save.disabled = false;
+            }
+            if (state.autosave.pending) {
+                state.autosave.pending = false;
+                scheduleAutosave(150);
+            }
+        });
+    }
+
+    function saveQuote(silent) {
+        if (state.autosave.timer) {
+            clearTimeout(state.autosave.timer);
+            state.autosave.timer = null;
+        }
+        var chain = state.priceRecalcChain || Promise.resolve();
+        return chain.then(function () {
+            return performSave({ silent: !!silent });
+        }).catch(function () {
+            return null;
         });
     }
 
@@ -1833,6 +2726,7 @@
             customer_name: quote.customer_name || "",
             quote_type: quote.quote_type,
             channel: quote.channel || "local",
+            issue_date: toDateInputValue(quote.issue_date) || "",
             validity_days: quote.validity_days,
             validity_terms: quote.validity_terms || "",
             lines: quote.lines || []
@@ -2414,6 +3308,9 @@
             els.search.placeholder = channel === "local"
                 ? "Local: SKU / barcode / proveedor (producto_base)"
                 : "Online: SKU / barcode / proveedor (Woo)";
+        }
+        if (interactive) {
+            scheduleAutosave(0);
         }
     }
 
@@ -3041,7 +3938,9 @@
                 applyPriceModeToGroup(gid, "auto", {});
             }
             closeLineModal();
-            recalcFamilyPrices(gid);
+            trackPriceRecalc(recalcFamilyPrices(gid)).then(function () {
+                scheduleAutosave(0);
+            });
             setMessage("Línea actualizada (aplica a la familia).", false);
             return;
         }
@@ -3062,10 +3961,13 @@
         }
         closeLineModal();
         if (line.producto_base_id && mode !== "manual") {
-            recalcLocalLinePrice(line, index);
+            trackPriceRecalc(recalcLocalLinePrice(line, index)).then(function () {
+                scheduleAutosave(0);
+            });
         } else {
             renderLines();
             renderTotals();
+            scheduleAutosave(0);
         }
         setMessage("Línea actualizada.", false);
     }
@@ -3283,10 +4185,13 @@
             existing.quantity = round3(Number(existing.quantity || 0) + 1);
             if (existing.producto_base_id) {
                 var idx = lines.indexOf(existing);
-                recalcLocalLinePrice(existing, idx >= 0 ? idx : 0);
+                trackPriceRecalc(recalcLocalLinePrice(existing, idx >= 0 ? idx : 0)).then(function () {
+                    scheduleAutosave(0);
+                });
             } else {
                 renderLines();
                 renderTotals();
+                scheduleAutosave(0);
             }
             setMessage("Se sumó 1 a «" + (existing.sku || memberDisplayName(member)) + "».", false);
             return;
@@ -3345,10 +4250,13 @@
             closeFamilyModal();
             var target = lines[dupIndex > index ? dupIndex - 1 : dupIndex];
             if (target && target.producto_base_id) {
-                recalcLocalLinePrice(target, dupIndex > index ? dupIndex - 1 : dupIndex);
+                trackPriceRecalc(recalcLocalLinePrice(target, dupIndex > index ? dupIndex - 1 : dupIndex)).then(function () {
+                    scheduleAutosave(0);
+                });
             } else {
                 renderLines();
                 renderTotals();
+                scheduleAutosave(0);
             }
             setMessage("Se sumó la cantidad al SKU ya presente en la cotización.", false);
             return;
@@ -3369,10 +4277,13 @@
         // Conservar modo de precio del grupo (ya está en la línea).
         closeFamilyModal();
         if (line.producto_base_id) {
-            recalcLocalLinePrice(line, index);
+            trackPriceRecalc(recalcLocalLinePrice(line, index)).then(function () {
+                scheduleAutosave(0);
+            });
         } else {
             renderLines();
             renderTotals();
+            scheduleAutosave(0);
         }
         setMessage("Presentación cambiada a «" + newSkuRaw + "».", false);
     }
@@ -3588,12 +4499,11 @@
         if (!pb || !cfg.actions || !cfg.actions.familyPrice) {
             renderLines();
             renderTotals();
-            return;
+            return Promise.resolve();
         }
         var gid = lineGrupoId(line);
         if (gid) {
-            recalcFamilyPrices(gid);
-            return;
+            return recalcFamilyPrices(gid);
         }
         if (linePriceMode(line) === "manual") {
             var packs = Number(line.quantity || 1);
@@ -3605,7 +4515,7 @@
             line._rule_total = null;
             renderLines();
             renderTotals();
-            return;
+            return Promise.resolve();
         }
         var packs2 = Number(line.quantity || 1);
         var upp2 = lineUnitsPerPack(line);
@@ -3618,7 +4528,7 @@
         if (linePriceMode(line) === "ref" && line.price_ref != null && Number(line.price_ref) > 0) {
             payload.p_ref = String(line.price_ref);
         }
-        post(cfg.actions.familyPrice, payload).then(function (data) {
+        return post(cfg.actions.familyPrice, payload).then(function (data) {
             if (seq !== state.familyPriceSeq) return;
             applyFamilyPriceResult(line, data);
             renderLines();
@@ -3684,6 +4594,22 @@
         var match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value || "");
         if (!match) return "";
         return match[3] + "-" + match[2] + "-" + match[1];
+    }
+
+    function toDateInputValue(value) {
+        var match = /^(\d{4}-\d{2}-\d{2})/.exec(value || "");
+        return match ? match[1] : "";
+    }
+
+    function todayIsoDate() {
+        if (cfg.todayDate && /^\d{4}-\d{2}-\d{2}$/.test(cfg.todayDate)) {
+            return cfg.todayDate;
+        }
+        var d = new Date();
+        var y = d.getFullYear();
+        var m = d.getMonth() + 1;
+        var day = d.getDate();
+        return y + "-" + (m < 10 ? "0" : "") + m + "-" + (day < 10 ? "0" : "") + day;
     }
 
     function round2(number) {

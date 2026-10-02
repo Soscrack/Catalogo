@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constantes del plugin
-define('RIVERSO_POS_VERSION', '1.8.38');
+define('RIVERSO_POS_VERSION', '1.8.39');
 define('RIVERSO_POS_PLUGIN_FILE', __FILE__);
 define('RIVERSO_POS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RIVERSO_POS_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -336,6 +336,13 @@ final class Riverso_POS {
                 'paths' => [
                     RIVERSO_POS_PLUGIN_DIR . 'sales/customer_quotes/class-customer-quote-module.php',
                     RIVERSO_POS_PLUGIN_DIR . 'modules/customer-quotes/class-customer-quote-module.php',
+                ],
+            ],
+            'customers' => [
+                'file' => 'class-customer-module.php',
+                'class' => 'Riverso_Customer_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'sales/customers/class-customer-module.php',
                 ],
             ],
             'pos'             => [

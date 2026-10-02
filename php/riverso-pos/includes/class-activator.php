@@ -361,6 +361,8 @@ class Riverso_POS_Activator {
         self::create_phase59_customer_quotes_channel($prefix);
         self::create_phase60_customer_quotes_price_mode($prefix);
         self::create_phase61_approve_folio_confirmed_pending();
+        self::create_phase62_customer_quotes_issue_date($prefix);
+        self::create_phase63_clientes($prefix, $charset_collate);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -510,6 +512,7 @@ class Riverso_POS_Activator {
             ['path' => 'modules/pos/class-pos-module.php', 'class' => 'Riverso_POS_Module'],
             ['path' => 'modules/quotes/class-received-quote-module.php', 'class' => 'Riverso_POS_Received_Quote_Module'],
             ['path' => 'sales/customer_quotes/class-customer-quote-module.php', 'class' => 'Riverso_Customer_Quote_Module'],
+            ['path' => 'sales/customers/class-customer-module.php', 'class' => 'Riverso_Customer_Module'],
             ['path' => 'modules/pricing/class-pricing-module.php', 'class' => 'Riverso_Pricing_Module'],
             ['path' => 'modules/pricing/class-price-history-module.php', 'class' => 'Riverso_Price_History_Module'],
             ['path' => 'modules/publish/class-woo-publisher-module.php', 'class' => 'Riverso_Woo_Publisher_Module'],
@@ -5447,6 +5450,24 @@ class Riverso_POS_Activator {
     }
 
     /**
+     * Garantiza issue_date editable en cotizaciones de venta.
+     */
+    public static function ensure_customer_quotes_issue_date() {
+        global $wpdb;
+        self::create_phase62_customer_quotes_issue_date($wpdb->prefix . 'riverso_');
+    }
+
+    /**
+     * Garantiza tabla de clientes comerciales (deploy sin bump de versión).
+     */
+    public static function ensure_clientes_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::create_phase63_clientes($prefix, $charset_collate);
+    }
+
+    /**
      * Fase 56: recalcular doc_hash de escaneos cuyo folio tenía ceros a la izquierda.
      * No renombra folios de facturas ni toca tablas de precios.
      */
@@ -5651,6 +5672,84 @@ class Riverso_POS_Activator {
                 'actor_type' => 'computer',
                 'details' => 'Fase 60: price_mode/price_ref/price_total en lineas de cotizacion',
             ));
+        }
+    }
+
+    /**
+     * Fase 62: fecha de emisión editable (independiente de created_at).
+     * Idempotente: add_column_if_missing + backfill DATE(created_at).
+     */
+    private static function create_phase62_customer_quotes_issue_date($prefix) {
+        $quotes = "{$prefix}customer_quotes";
+        self::add_column_if_missing($quotes, 'issue_date', 'issue_date DATE NULL DEFAULT NULL');
+        self::add_index_if_missing($quotes, 'idx_cq_issue_date', 'KEY idx_cq_issue_date (issue_date)');
+
+        // Rellenar filas existentes una sola vez (created_at no se modifica).
+        if (get_option('riverso_pos_phase62_customer_quotes_issue_date') !== '1') {
+            global $wpdb;
+            if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $quotes)) === $quotes) {
+                $wpdb->query(
+                    "UPDATE `{$quotes}`
+                     SET issue_date = DATE(created_at)
+                     WHERE issue_date IS NULL AND created_at IS NOT NULL"
+                );
+            }
+            update_option('riverso_pos_phase62_customer_quotes_issue_date', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase62_customer_quotes_issue_date', 'customer_quotes', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 62: issue_date editable + backfill DATE(created_at)',
+                ));
+            }
+        }
+    }
+
+    /**
+     * Fase 63: clientes comerciales (solo clientes, no proveedores).
+     */
+    private static function create_phase63_clientes($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE {$prefix}clientes (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            nombre_fantasia VARCHAR(255) NOT NULL,
+            has_contacto TINYINT(1) NOT NULL DEFAULT 1,
+            primer_nombre VARCHAR(100) DEFAULT NULL,
+            apellido_paterno VARCHAR(100) DEFAULT NULL,
+            contacto_telefono VARCHAR(50) DEFAULT NULL,
+            contacto_email VARCHAR(191) DEFAULT NULL,
+            has_facturacion TINYINT(1) NOT NULL DEFAULT 1,
+            pais VARCHAR(50) NOT NULL DEFAULT 'CHILE',
+            tipo_identificacion VARCHAR(50) NOT NULL DEFAULT 'RUT_CLIENTE',
+            rut VARCHAR(20) DEFAULT NULL,
+            razon_social VARCHAR(255) DEFAULT NULL,
+            direccion VARCHAR(255) DEFAULT NULL,
+            comuna VARCHAR(100) DEFAULT NULL,
+            ciudad VARCHAR(100) DEFAULT NULL,
+            giro VARCHAR(255) DEFAULT NULL,
+            facturacion_telefono VARCHAR(50) DEFAULT NULL,
+            codigo_postal VARCHAR(20) DEFAULT '0',
+            has_datos_extra TINYINT(1) NOT NULL DEFAULT 1,
+            datos_extra LONGTEXT DEFAULT NULL,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_clientes_fantasia (nombre_fantasia),
+            KEY idx_clientes_rut (rut),
+            KEY idx_clientes_email (contacto_email),
+            KEY idx_clientes_activo (activo)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        if (get_option('riverso_pos_phase63_clientes') !== '1') {
+            update_option('riverso_pos_phase63_clientes', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase63_clientes', 'clientes', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 63: tabla riverso_clientes',
+                ));
+            }
         }
     }
 

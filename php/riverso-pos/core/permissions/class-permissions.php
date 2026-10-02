@@ -50,6 +50,10 @@ class Riverso_POS_Permissions {
         'riverso_view_quotes'        => 'Ver cotizaciones clientes',
         'riverso_create_quotes'      => 'Crear cotizaciones clientes',
         'riverso_approve_quotes'     => 'Aprobar cotizaciones clientes',
+
+        // === CLIENTES COMERCIALES ===
+        'riverso_view_customers'     => 'Ver clientes',
+        'riverso_edit_customers'     => 'Crear y editar clientes',
         
         // === VENTAS / POS ===
         'riverso_use_pos'            => 'Usar POS interno',
@@ -173,6 +177,10 @@ class Riverso_POS_Permissions {
             'riverso_create_quotes',
             'riverso_approve_quotes',
         ],
+        'Clientes' => [
+            'riverso_view_customers',
+            'riverso_edit_customers',
+        ],
         'Ventas / POS' => [
             'riverso_use_pos',
             'riverso_create_sales',
@@ -287,6 +295,8 @@ class Riverso_POS_Permissions {
                 'riverso_view_prices',
                 'riverso_view_quotes',
                 'riverso_create_quotes',
+                'riverso_view_customers',
+                'riverso_edit_customers',
                 'riverso_view_tasks',
                 'riverso_complete_tasks',
                 'riverso_scan_barcodes',
@@ -444,6 +454,8 @@ class Riverso_POS_Permissions {
                 'riverso_view_stock',
                 'riverso_view_quotes',
                 'riverso_create_quotes',
+                'riverso_view_customers',
+                'riverso_edit_customers',
             ]
         ],
     ];

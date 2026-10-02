@@ -184,6 +184,34 @@
             width: 20px;
             height: 20px;
         }
+
+        .nav-block {
+            margin: 2px 0 8px;
+        }
+
+        .nav-block-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 20px 10px 28px;
+            color: rgba(255,255,255,0.95);
+            font-weight: 600;
+            background: rgba(255,255,255,0.06);
+        }
+
+        .nav-block-header .dashicons {
+            font-size: 20px;
+            width: 20px;
+            height: 20px;
+        }
+
+        .nav-block-items .nav-item {
+            padding-left: 40px;
+        }
+
+        .nav-block-items .nav-item.active {
+            background: rgba(0, 0, 0, 0.28);
+        }
         
         .sidebar-footer {
             position: relative;
@@ -917,13 +945,48 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                     <?php foreach ($group['items'] as $item):
                         $slug = $item['portal_slug'] ?? $item['id'];
                         $icon = $item['icon'] ?? 'admin-generic';
+                        $children = (!empty($item['children']) && is_array($item['children'])) ? $item['children'] : [];
+                        if ($children):
+                            $query_nueva = isset($_GET['nueva']) && (string) $_GET['nueva'] === '1';
                     ?>
+                    <div class="nav-block">
+                        <div class="nav-block-header">
+                            <span class="dashicons dashicons-<?php echo esc_attr($icon); ?>"></span>
+                            <?php echo esc_html($item['label']); ?>
+                        </div>
+                        <div class="nav-block-items">
+                            <?php foreach ($children as $child):
+                                $child_slug = $child['portal_slug'] ?? $slug;
+                                $child_icon = $child['icon'] ?? 'admin-generic';
+                                $child_query = isset($child['portal_query']) ? (string) $child['portal_query'] : '';
+                                $child_url = home_url('/interno/' . $child_slug . '/');
+                                if ($child_query !== '') {
+                                    $child_url .= (strpos($child_url, '?') === false ? '?' : '&') . $child_query;
+                                }
+                                $child_active = false;
+                                if ($current_page === $child_slug) {
+                                    if ($child_query === 'nueva=1') {
+                                        $child_active = $query_nueva;
+                                    } elseif ($child_query === '') {
+                                        $child_active = !$query_nueva;
+                                    }
+                                }
+                            ?>
+                            <a href="<?php echo esc_url($child_url); ?>"
+                               class="nav-item <?php echo $child_active ? 'active' : ''; ?>">
+                                <span class="dashicons dashicons-<?php echo esc_attr($child_icon); ?>"></span>
+                                <?php echo esc_html($child['label']); ?>
+                            </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <?php else: ?>
                     <a href="<?php echo esc_url(home_url('/interno/' . $slug . '/')); ?>"
                        class="nav-item <?php echo $current_page === $slug ? 'active' : ''; ?>">
                         <span class="dashicons dashicons-<?php echo esc_attr($icon); ?>"></span>
                         <?php echo esc_html($item['label']); ?>
                     </a>
-                    <?php endforeach; ?>
+                    <?php endif; endforeach; ?>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -2595,24 +2658,36 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
             </div>
         </div>
         <?php elseif ($current_page === 'customer-quotes'): ?>
-        <!-- Cotizaciones de venta (P0+P1) -->
-        <div class="content-section">
-            <div class="section-body">
-                <?php
-                if (!class_exists('Riverso_Customer_Quote_Module')) {
-                    $cq = RIVERSO_POS_PLUGIN_DIR . 'sales/customer_quotes/class-customer-quote-module.php';
-                    if (file_exists($cq)) {
-                        require_once $cq;
-                    }
-                }
-                if (class_exists('Riverso_Customer_Quote_Module')) {
-                    Riverso_Customer_Quote_Module::get_instance()->render_app();
-                } else {
-                    echo '<p>No se pudo cargar cotizaciones de venta.</p>';
-                }
-                ?>
-            </div>
-        </div>
+        <!-- Cotizaciones de venta — layout propio (sin content-section) -->
+        <?php
+        if (!class_exists('Riverso_Customer_Quote_Module')) {
+            $cq = RIVERSO_POS_PLUGIN_DIR . 'sales/customer_quotes/class-customer-quote-module.php';
+            if (file_exists($cq)) {
+                require_once $cq;
+            }
+        }
+        if (class_exists('Riverso_Customer_Quote_Module')) {
+            Riverso_Customer_Quote_Module::get_instance()->render_app('portal');
+        } else {
+            echo '<p>No se pudo cargar cotizaciones de venta.</p>';
+        }
+        ?>
+
+        <?php elseif ($current_page === 'customers'): ?>
+        <!-- Clientes comerciales -->
+        <?php
+        if (!class_exists('Riverso_Customer_Module')) {
+            $cm = RIVERSO_POS_PLUGIN_DIR . 'sales/customers/class-customer-module.php';
+            if (file_exists($cm)) {
+                require_once $cm;
+            }
+        }
+        if (class_exists('Riverso_Customer_Module')) {
+            Riverso_Customer_Module::get_instance()->render_app('portal');
+        } else {
+            echo '<p>No se pudo cargar clientes.</p>';
+        }
+        ?>
 
         <?php elseif ($current_page === 'inbox'): ?>
         <div class="content-section">

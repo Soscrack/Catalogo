@@ -369,6 +369,19 @@ class Riverso_POS_Admin_Menu {
     public function render_customer_quotes() {
         $this->render_page('customer-quotes');
     }
+
+    /**
+     * Renderiza la página de clientes comerciales
+     */
+    public function render_customers() {
+        if (!class_exists('Riverso_Customer_Module')) {
+            $file = RIVERSO_POS_PLUGIN_DIR . 'sales/customers/class-customer-module.php';
+            if (file_exists($file)) {
+                require_once $file;
+            }
+        }
+        $this->render_page('customers');
+    }
     
     /**
      * Renderiza la página de POS

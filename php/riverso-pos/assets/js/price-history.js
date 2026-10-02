@@ -388,13 +388,17 @@
                     amount_mode: 'bruto',
                     confirm_emparejamiento: 1
                 }).done(function (res) {
-                    if (!res || !res.success) {
-                        done((res && res.data && res.data.message) || 'No se pudo guardar');
+                    if (!rpfIsAjaxPayload(res)) {
+                        done(rpfNetworkSaveFailMessage('guardar el precio'));
+                        return;
+                    }
+                    if (!res.success) {
+                        done((res.data && res.data.message) || 'No se pudo guardar');
                         return;
                     }
                     done(null, res.data || {});
                 }).fail(function () {
-                    done('Error de red');
+                    done(rpfNetworkSaveFailMessage('guardar el precio'));
                 });
             },
             onDone: function (ok, data) {
@@ -710,6 +714,58 @@
         data.action = action;
         data.nonce = nonce;
         return $.post(ajaxUrl, data);
+    }
+
+    /** Respuesta AJAX parseada como objeto WordPress (success true/false). */
+    function rpfIsAjaxPayload(res) {
+        return !!(res && typeof res === 'object' && typeof res.success === 'boolean');
+    }
+
+    /**
+     * Mensaje cuando el pedido no llega o la respuesta no es JSON usable.
+     * @param {string} actionLabel p.ej. "guardar el precio"
+     */
+    function rpfNetworkSaveFailMessage(actionLabel) {
+        return 'No se pudo ' + actionLabel +
+            ': error de red o el servidor no respondió. Los valores siguen en pantalla; reintentá o recargá la página.';
+    }
+
+    /**
+     * True si hay precios locales editados en la sesión abierta y aún no confirmados
+     * (valor distinto al data-restore-p con el que se renderizó la fila).
+     */
+    function rpfHasUnsavedFolioPrices() {
+        if (!rpfFacturaId || !$('#rpf-session-panel').is(':visible')) {
+            return false;
+        }
+        var dirty = false;
+        $('#rpf-lines .rpf-p-local').each(function () {
+            var $input = $(this);
+            if ($input.prop('disabled') || $input.attr('readonly')) {
+                return;
+            }
+            var restore = $input.attr('data-restore-p');
+            if (restore == null) {
+                return;
+            }
+            var cur = String($input.val() == null ? '' : $input.val()).trim();
+            var base = String(restore).trim();
+            if (cur === base) {
+                return;
+            }
+            var nCur = parseFloat(cur);
+            var nBase = parseFloat(base);
+            if (cur !== '' && base !== '' && !isNaN(nCur) && !isNaN(nBase)) {
+                if (Math.abs(nCur - nBase) > 0.00005) {
+                    dirty = true;
+                    return false;
+                }
+                return;
+            }
+            dirty = true;
+            return false;
+        });
+        return dirty;
     }
 
     function switchTab(tab) {
@@ -4664,6 +4720,15 @@
             }
         });
 
+        $(window).on('beforeunload', function (e) {
+            if (!rpfHasUnsavedFolioPrices()) {
+                return;
+            }
+            e.preventDefault();
+            e.returnValue = '';
+            return '';
+        });
+
         updateViewHints();
 
         $('.rpe-view-btn').on('click', function () {
@@ -5262,13 +5327,17 @@
                 p_online: pOnline || '',
                 amount_mode: rpfViewMode
             }).done(function (res) {
-                if (!res || !res.success) {
-                    if (res && res.data && (res.data.code === 'emparejamiento_confirm'
+                if (!rpfIsAjaxPayload(res)) {
+                    window.alert(rpfNetworkSaveFailMessage('guardar el precio'));
+                    return;
+                }
+                if (!res.success) {
+                    if (res.data && (res.data.code === 'emparejamiento_confirm'
                         || (res.data.emparejamiento && res.data.emparejamiento.id))) {
                         $btn.prop('disabled', false);
-                        var emp = (res.data && res.data.emparejamiento) || {};
+                        var emp = res.data.emparejamiento || {};
                         var empId = parseInt(emp.id, 10) || 0;
-                        var suggested = (res.data && res.data.p_asignado != null)
+                        var suggested = (res.data.p_asignado != null)
                             ? res.data.p_asignado
                             : null;
                         openFolioEmpPricePanel({
@@ -5282,7 +5351,7 @@
                         });
                         return;
                     }
-                    window.alert((res && res.data && res.data.message) || 'No se pudo guardar');
+                    window.alert((res.data && res.data.message) || 'No se pudo guardar');
                     return;
                 }
                 if (res.data.session) {
@@ -5295,6 +5364,8 @@
                 } else if (res.data.historial_only || res.data.applied === false) {
                     window.alert('Constancia en historial guardada. El precio vigente no cambió (hay un folio más reciente).');
                 }
+            }).fail(function () {
+                window.alert(rpfNetworkSaveFailMessage('guardar el precio'));
             }).always(function () {
                 $btn.prop('disabled', false);
             });
@@ -5585,9 +5656,14 @@
                     return;
                 }
             }
+            var $btn = $(this).prop('disabled', true);
             post('riverso_price_folio_process_complete', { factura_id: rpfFacturaId }).done(function (res) {
-                if (!res || !res.success) {
-                    window.alert((res && res.data && res.data.message) || 'Aún incompleto');
+                if (!rpfIsAjaxPayload(res)) {
+                    window.alert(rpfNetworkSaveFailMessage('marcar el folio'));
+                    return;
+                }
+                if (!res.success) {
+                    window.alert((res.data && res.data.message) || 'Aún incompleto');
                     return;
                 }
                 if (res.data && res.data.session) {
@@ -5600,6 +5676,10 @@
                     backToList();
                     loadProcessList();
                 }
+            }).fail(function () {
+                window.alert(rpfNetworkSaveFailMessage('marcar el folio'));
+            }).always(function () {
+                $btn.prop('disabled', false);
             });
         });
         $('#rpf-archive-session').on('click', function () {

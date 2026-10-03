@@ -1,0 +1,6 @@
+-- Fase 66: borradores de boleta electrónica
+-- Tablas vía dbDelta en Riverso_POS_Activator::create_phase66_billing_drafts()
+-- {prefix}riverso_billing_drafts
+-- {prefix}riverso_billing_draft_lines
+-- {prefix}riverso_billing_draft_refs
+-- {prefix}riverso_billing_draft_payments

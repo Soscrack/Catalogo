@@ -1,0 +1,6 @@
+-- Fase 67: contexto de familia / regla / descuento en líneas de borrador boleta
+-- Columnas vía dbDelta en Riverso_POS_Activator::create_phase67_billing_draft_line_context()
+-- {prefix}riverso_billing_draft_lines:
+--   producto_base_id, units_per_pack, family_mode, packaging, grupo_id, unit_cost,
+--   price_mode, price_ref, price_total, price_discount, margin_discount, discount_amount,
+--   rule_total, rule_adjusted

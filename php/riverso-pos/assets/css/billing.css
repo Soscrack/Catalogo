@@ -1,0 +1,945 @@
+.riverso-bill-wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 8px 40px;
+  font-family: inherit;
+  color: #1f2937;
+}
+
+.riverso-bill .bill-alerts {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.riverso-bill .bill-banner {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.riverso-bill .bill-banner-warn {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+}
+
+.riverso-bill .bill-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 18px 20px 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+
+.riverso-bill .bill-card h2 {
+  margin: 0 0 14px;
+  font-size: 15px;
+  letter-spacing: .04em;
+  color: #4b5563;
+  font-weight: 700;
+}
+
+.riverso-bill .bill-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.riverso-bill .bill-folio-card {
+  min-width: 220px;
+  border: 2px solid #111827;
+  border-radius: 4px;
+  padding: 10px 12px;
+  text-align: center;
+  background: #fafafa;
+}
+
+.riverso-bill .bill-folio-rut {
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.riverso-bill .bill-folio-type {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
+.riverso-bill .bill-folio-num {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 4px 0;
+}
+
+.riverso-bill .bill-folio-note {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.riverso-bill .bill-grid {
+  display: grid;
+  gap: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.riverso-bill .bill-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.riverso-bill .bill-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.riverso-bill .bill-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.riverso-bill .bill-field > span {
+  color: #4b5563;
+  font-weight: 600;
+}
+
+.riverso-bill .bill-field input,
+.riverso-bill .bill-field select {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+  background: #fff;
+}
+
+.riverso-bill .bill-field input:focus,
+.riverso-bill .bill-field select:focus {
+  outline: 2px solid #86efac;
+  border-color: #22c55e;
+}
+
+.riverso-bill .bill-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-weight: 600;
+}
+
+.riverso-bill .bill-note-red {
+  color: #dc2626;
+  font-size: 13px;
+  margin: 8px 0 4px;
+}
+
+.riverso-bill .bill-hint {
+  color: #6b7280;
+  font-size: 13px;
+  margin: 0 0 10px;
+}
+
+.riverso-bill .bill-search-row {
+  display: grid;
+  grid-template-columns: 180px 1fr auto;
+  gap: 12px;
+  margin-bottom: 14px;
+  align-items: end;
+}
+
+.riverso-bill .bill-search-row-name {
+  grid-template-columns: 1fr auto;
+}
+
+@media (max-width: 800px) {
+  .riverso-bill .bill-search-row-name {
+    grid-template-columns: 1fr;
+  }
+}
+
+.riverso-bill .bill-field-grow {
+  grid-column: 1;
+}
+
+.riverso-bill .bill-locked,
+.riverso-bill input.bill-locked,
+.riverso-bill select.bill-locked:disabled {
+  background: #eef0f3 !important;
+  color: #374151;
+  cursor: default;
+  border-color: #d1d5db;
+}
+
+.riverso-bill .bill-field-comuna {
+  position: relative;
+}
+
+.riverso-bill .bill-comuna-combo {
+  position: relative;
+  width: 100%;
+}
+
+.riverso-bill .bill-comuna-trigger {
+  width: 100%;
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  text-align: left;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  padding: 6px 12px 8px;
+  cursor: pointer;
+  color: #111827;
+}
+
+.riverso-bill .bill-comuna-trigger:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.25);
+}
+
+.riverso-bill .bill-comuna-label {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: 11px;
+  line-height: 1.2;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.riverso-bill .bill-comuna-value {
+  grid-column: 1;
+  grid-row: 2;
+  font-size: 14px;
+  line-height: 1.3;
+  color: #111827;
+  min-height: 1.2em;
+}
+
+.riverso-bill .bill-comuna-value:empty::before {
+  content: "Seleccione…";
+  color: #9ca3af;
+}
+
+.riverso-bill .bill-comuna-chevron {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  transition: transform .15s ease;
+}
+
+.riverso-bill .bill-comuna-combo.is-open .bill-comuna-chevron {
+  transform: rotate(180deg);
+}
+
+.riverso-bill .bill-comuna-combo.bill-locked .bill-comuna-trigger,
+.riverso-bill .bill-comuna-combo[data-locked="1"] .bill-comuna-trigger {
+  background: #eef0f3 !important;
+  color: #374151;
+  cursor: default;
+  border-color: #d1d5db;
+}
+
+.riverso-bill .bill-comuna-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 40;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+
+.riverso-bill .bill-comuna-search {
+  width: 100%;
+  border: 0 !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  border-radius: 0 !important;
+  padding: 10px 12px !important;
+  font-size: 14px;
+  outline: none;
+  box-shadow: none !important;
+  background: #fff !important;
+}
+
+.riverso-bill .bill-comuna-search:focus {
+  border-color: #93c5fd !important;
+  box-shadow: inset 0 0 0 1px #93c5fd !important;
+}
+
+.riverso-bill .bill-comuna-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.riverso-bill .bill-comuna-list li {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: #111827;
+  cursor: pointer;
+}
+
+.riverso-bill .bill-comuna-list li:hover,
+.riverso-bill .bill-comuna-list li.is-active {
+  background: #f3f4f6;
+}
+
+.riverso-bill .bill-comuna-list li.is-selected {
+  background: #2563eb;
+  color: #fff;
+}
+
+.riverso-bill .bill-comuna-list li.is-empty {
+  color: #9ca3af;
+  cursor: default;
+}
+
+.riverso-bill .bill-comuna-list li.is-empty:hover {
+  background: transparent;
+}
+
+.riverso-bill input:not(.bill-locked):not([readonly]),
+.riverso-bill select:not(.bill-locked):not([disabled]) {
+  background: #fff;
+}
+
+.riverso-bill .bill-customer-results {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.riverso-bill .bill-customer-results button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fff;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.riverso-bill .bill-customer-results button:hover {
+  background: #f0fdf4;
+}
+
+.riverso-bill .bill-btn {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #111827;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.riverso-bill .bill-btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.riverso-bill .bill-btn-primary {
+  background: #84cc16;
+  border-color: #65a30d;
+  color: #14532d;
+}
+
+.riverso-bill .bill-btn-primary:hover:not(:disabled) {
+  background: #a3e635;
+}
+
+.riverso-bill .bill-btn-secondary {
+  background: #f9fafb;
+}
+
+.riverso-bill .bill-btn-lg {
+  min-width: 260px;
+  padding: 12px 18px;
+  font-size: 15px;
+}
+
+.riverso-bill .bill-step-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 24px;
+}
+
+.riverso-bill .bill-step-footer-split {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.riverso-bill .bill-step-label {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.riverso-bill .bill-step-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.riverso-bill .bill-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.riverso-bill .bill-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.riverso-bill .bill-table th,
+.riverso-bill .bill-table td {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 8px 6px;
+  text-align: left;
+}
+
+.riverso-bill .bill-table input[type="text"],
+.riverso-bill .bill-table input[type="number"] {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.riverso-bill .bill-totals {
+  display: flex;
+  justify-content: flex-end;
+  gap: 24px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+.riverso-bill .bill-totals > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.riverso-bill .bill-tot-grand strong {
+  font-size: 18px;
+}
+
+.riverso-bill .bill-card-success {
+  text-align: center;
+  padding: 32px 20px;
+}
+
+.riverso-bill .bill-done-folio {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 12px 0 20px;
+}
+
+.riverso-bill .bill-quote-meta {
+  font-size: 13px;
+  color: #374151;
+  background: #f3f4f6;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.riverso-bill .bill-sii-panel {
+  margin: 12px 0 16px;
+  padding: 12px 14px;
+  border: 1px solid #dbeafe;
+  background: #f8fbff;
+  border-radius: 8px;
+}
+
+.riverso-bill .bill-sii-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #1e3a5f;
+}
+
+.riverso-bill .bill-sii-status {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.riverso-bill .bill-sii-activities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.riverso-bill .bill-sii-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: 100%;
+  text-align: left;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.25;
+  color: #1f2937;
+}
+
+.riverso-bill .bill-sii-chip:hover {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.riverso-bill .bill-sii-chip.is-selected {
+  border-color: #2563eb;
+  background: #dbeafe;
+  box-shadow: 0 0 0 1px #2563eb;
+}
+
+.riverso-bill .bill-sii-chip-code {
+  font-weight: 700;
+  color: #334155;
+  font-size: 11px;
+}
+
+.riverso-bill .bill-sii-chip-glosa {
+  font-weight: 600;
+}
+
+.riverso-bill .bill-sii-chip-meta {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.riverso-bill .bill-sii-badge {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+.riverso-bill .bill-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.riverso-bill .bill-modal-overlay[hidden] {
+  display: none !important;
+}
+
+.riverso-bill .bill-modal {
+  width: min(440px, 100%);
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.riverso-bill .bill-modal-header {
+  padding: 16px 18px 8px;
+}
+
+.riverso-bill .bill-modal-header h3 {
+  margin: 0;
+  font-size: 17px;
+  color: #111827;
+}
+
+.riverso-bill .bill-modal-body {
+  padding: 4px 18px 12px;
+  color: #374151;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.riverso-bill .bill-modal-body p {
+  margin: 0 0 8px;
+}
+
+.riverso-bill .bill-missing-list {
+  margin: 0;
+  padding-left: 1.2em;
+  color: #991b1b;
+}
+
+.riverso-bill .bill-missing-list li {
+  margin: 4px 0;
+}
+
+.riverso-bill .bill-modal-footer {
+  padding: 12px 18px 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+}
+
+.riverso-bill .bill-btn-danger {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.riverso-bill .bill-btn-wip {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  color: #6b7280;
+  cursor: not-allowed;
+  opacity: .85;
+}
+
+.riverso-bill .bill-grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.riverso-bill .bill-issuer-layout {
+  display: grid;
+  grid-template-columns: 1fr minmax(220px, 280px);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.riverso-bill .bill-issuer-name {
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.riverso-bill .bill-issuer-line {
+  font-size: 13px;
+  color: #4b5563;
+  margin: 2px 0;
+}
+
+.riverso-bill .bill-draft-badge-card {
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  padding: 10px 12px;
+  text-align: center;
+  background: #fff;
+}
+
+.riverso-bill .bill-draft-type {
+  font-weight: 800;
+  font-size: 13px;
+  margin: 4px 0;
+}
+
+.riverso-bill .bill-draft-banner {
+  background: #f59e0b;
+  color: #111;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 6px 8px;
+  margin: 8px 0;
+  border-radius: 2px;
+  letter-spacing: .02em;
+}
+
+.riverso-bill .bill-draft-folio {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.riverso-bill .bill-issuer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.riverso-bill .bill-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border-bottom: 1px solid #d1d5db;
+  margin: 0 0 14px;
+  background: #f3f4f6;
+  padding: 0 4px;
+  border-radius: 8px 8px 0 0;
+}
+
+.riverso-bill .bill-tab {
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  border-radius: 8px 8px 0 0;
+  margin-bottom: -1px;
+}
+
+.riverso-bill .bill-tab.is-active {
+  background: #fff;
+  border-color: #d1d5db;
+  color: #111827;
+  font-weight: 600;
+}
+
+.riverso-bill .bill-tabs-card {
+  padding-top: 10px;
+}
+
+.riverso-bill .bill-product-search-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.riverso-bill .bill-product-search-row input[type="search"] {
+  flex: 1 1 280px;
+  min-width: 200px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.riverso-bill .bill-product-results,
+.riverso-bill .bill-refs-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.riverso-bill .bill-product-results li,
+.riverso-bill .bill-refs-list li {
+  padding: 8px 12px;
+  border-bottom: 1px solid #f3f4f6;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.riverso-bill .bill-product-results li:hover {
+  background: #eff6ff;
+}
+
+.riverso-bill .bill-refs-list li {
+  cursor: default;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.riverso-bill .bill-qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.riverso-bill .bill-qty input {
+  width: 64px;
+  text-align: center;
+}
+
+.riverso-bill .bill-qty button {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 1px solid #c4b5fd;
+  background: #ede9fe;
+  cursor: pointer;
+}
+
+.riverso-bill .bill-boleta-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.riverso-bill .bill-totals-boleta {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 16px;
+}
+
+.riverso-bill .bill-refs-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.riverso-bill .bill-refs-head h3 {
+  margin: 0;
+}
+
+.riverso-bill .bill-pagos-warn {
+  color: #dc2626;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 8px 0 16px;
+}
+
+.riverso-bill .bill-pagos-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.riverso-bill .bill-pagos-totals {
+  margin-top: 10px;
+  background: #1f2937;
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  font-size: 14px;
+}
+
+.riverso-bill .bill-boleta-footer {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.riverso-bill .bill-boleta-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.riverso-bill .bill-boleta-actions .bill-btn-lg {
+  min-width: 260px;
+}
+
+.riverso-bill .bill-modal-lg {
+  width: min(560px, 100%);
+}
+
+.riverso-bill .bill-modal-x {
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.riverso-bill .bill-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.riverso-bill textarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: inherit;
+}
+
+/* Editor de líneas estilo cotizaciones dentro de boleta */
+.riverso-bill .bill-product-search-block {
+  margin-bottom: 8px;
+}
+.riverso-bill .bill-product-search-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.riverso-bill .bill-product-search-head label[for="bill-product-search"] {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.riverso-bill .bill-cq-table-wrap {
+  margin-top: 12px;
+  overflow-x: auto;
+}
+.riverso-bill:not(.is-advanced) .cq-advanced {
+  display: none;
+}
+.riverso-bill #bill-lines-empty {
+  margin: 8px 0 0;
+}
+.riverso-bill .bill-totals-boleta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px 16px;
+}
+.riverso-bill .cq-modal {
+  z-index: 100050;
+}
+
+@media (max-width: 800px) {
+  .riverso-bill .bill-grid-3,
+  .riverso-bill .bill-grid-2,
+  .riverso-bill .bill-grid-4,
+  .riverso-bill .bill-search-row,
+  .riverso-bill .bill-issuer-layout {
+    grid-template-columns: 1fr;
+  }
+  .riverso-bill .bill-card-head {
+    flex-direction: column;
+  }
+  .riverso-bill .bill-step-footer-split {
+    flex-direction: column;
+  }
+}

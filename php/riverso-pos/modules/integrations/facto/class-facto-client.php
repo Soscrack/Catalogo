@@ -181,6 +181,116 @@ class Riverso_Facto_Client {
     }
 
     /**
+     * @param array $query document_type_id, order_by, page, per_page, …
+     * @return array|WP_Error
+     */
+    public function list_documents($query = []) {
+        return $this->request('GET', 'documents', null, $query);
+    }
+
+    /**
+     * @param int $document_id
+     * @return array|WP_Error
+     */
+    public function get_document($document_id) {
+        return $this->request('GET', 'documents/' . absint($document_id));
+    }
+
+    /**
+     * @param array $payload
+     * @return array|WP_Error
+     */
+    public function create_document(array $payload) {
+        return $this->request('POST', 'documents', $payload);
+    }
+
+    /**
+     * Solo borradores sin XML / sin envío al SII.
+     *
+     * @param int $document_id
+     * @return array|WP_Error
+     */
+    public function delete_document($document_id) {
+        return $this->request('DELETE', 'documents/' . absint($document_id));
+    }
+
+    /**
+     * Timbrajes CAF. Filtrar con document_type_id.
+     *
+     * @param array $query
+     * @return array|WP_Error
+     */
+    public function list_document_authorizations($query = []) {
+        return $this->request('GET', 'document_authorizations', null, $query);
+    }
+
+    /**
+     * Estima el próximo folio: max(document_number) del tipo + 1.
+     * Es una estimación; el folio real lo asigna POST /documents.
+     *
+     * @param int $document_type_id
+     * @return array{estimated_folio:int|null,last_folio:int|null,unused:int|null}|WP_Error
+     */
+    public function estimate_next_folio($document_type_id) {
+        $document_type_id = absint($document_type_id);
+        if ($document_type_id <= 0) {
+            return new WP_Error('facto_bad_type', 'Tipo de documento inválido.');
+        }
+
+        $resp = $this->list_documents([
+            'document_type_id' => $document_type_id,
+            'order_by' => 'desc',
+            'page' => 1,
+            'per_page' => 20,
+        ]);
+        if (is_wp_error($resp)) {
+            return $resp;
+        }
+
+        $docs = self::embed_collection($resp, 'documents');
+        $last = null;
+        foreach ($docs as $doc) {
+            if (!is_array($doc)) {
+                continue;
+            }
+            $num = isset($doc['document_number']) ? (int) $doc['document_number'] : 0;
+            if ($num > 0 && ($last === null || $num > $last)) {
+                $last = $num;
+            }
+        }
+
+        $unused = null;
+        $auth = $this->list_document_authorizations(['document_type_id' => $document_type_id]);
+        if (!is_wp_error($auth)) {
+            // Algunas cuentas exponen unused vía POST de disponibilidad; el GET solo da rangos.
+            $rows = self::embed_collection($auth, 'document_authorizations');
+            if (isset($auth['document_authorization_unused'])) {
+                $unused = (int) $auth['document_authorization_unused'];
+            } elseif ($rows) {
+                $range_to = 0;
+                foreach ($rows as $row) {
+                    if (!is_array($row)) {
+                        continue;
+                    }
+                    $to = isset($row['range_to']) ? (int) $row['range_to'] : 0;
+                    if ($to > $range_to) {
+                        $range_to = $to;
+                    }
+                }
+                if ($range_to > 0 && $last !== null) {
+                    $unused = max(0, $range_to - $last);
+                }
+            }
+        }
+
+        return [
+            'estimated_folio' => $last !== null ? $last + 1 : 1,
+            'last_folio' => $last,
+            'unused' => $unused,
+        ];
+    }
+
+    /**
      * Extrae colección HAL `_embedded.$key` o array plano.
      */
     public static function embed_collection($response, $key) {

@@ -50,6 +50,7 @@ class Riverso_POS_Permissions {
         'riverso_view_quotes'        => 'Ver cotizaciones clientes',
         'riverso_create_quotes'      => 'Crear cotizaciones clientes',
         'riverso_approve_quotes'     => 'Aprobar cotizaciones clientes',
+        'riverso_emit_dte'           => 'Emitir DTE (factura/boleta FACTO)',
 
         // === CLIENTES COMERCIALES ===
         'riverso_view_customers'     => 'Ver clientes',
@@ -176,6 +177,7 @@ class Riverso_POS_Permissions {
             'riverso_view_quotes',
             'riverso_create_quotes',
             'riverso_approve_quotes',
+            'riverso_emit_dte',
         ],
         'Clientes' => [
             'riverso_view_customers',
@@ -295,6 +297,7 @@ class Riverso_POS_Permissions {
                 'riverso_view_prices',
                 'riverso_view_quotes',
                 'riverso_create_quotes',
+                'riverso_emit_dte',
                 'riverso_view_customers',
                 'riverso_edit_customers',
                 'riverso_view_tasks',
@@ -454,6 +457,7 @@ class Riverso_POS_Permissions {
                 'riverso_view_stock',
                 'riverso_view_quotes',
                 'riverso_create_quotes',
+                'riverso_emit_dte',
                 'riverso_view_customers',
                 'riverso_edit_customers',
             ]

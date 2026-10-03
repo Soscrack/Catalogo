@@ -363,6 +363,10 @@ class Riverso_POS_Activator {
         self::create_phase61_approve_folio_confirmed_pending();
         self::create_phase62_customer_quotes_issue_date($prefix);
         self::create_phase63_clientes($prefix, $charset_collate);
+        self::create_phase64_dte_issued($prefix, $charset_collate);
+        self::create_phase65_receiver_designs($prefix, $charset_collate);
+        self::create_phase66_billing_drafts($prefix, $charset_collate);
+        self::create_phase67_billing_draft_line_context($prefix, $charset_collate);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -513,6 +517,7 @@ class Riverso_POS_Activator {
             ['path' => 'modules/quotes/class-received-quote-module.php', 'class' => 'Riverso_POS_Received_Quote_Module'],
             ['path' => 'sales/customer_quotes/class-customer-quote-module.php', 'class' => 'Riverso_Customer_Quote_Module'],
             ['path' => 'sales/customers/class-customer-module.php', 'class' => 'Riverso_Customer_Module'],
+            ['path' => 'sales/billing/class-billing-module.php', 'class' => 'Riverso_Billing_Module'],
             ['path' => 'modules/pricing/class-pricing-module.php', 'class' => 'Riverso_Pricing_Module'],
             ['path' => 'modules/pricing/class-price-history-module.php', 'class' => 'Riverso_Price_History_Module'],
             ['path' => 'modules/publish/class-woo-publisher-module.php', 'class' => 'Riverso_Woo_Publisher_Module'],
@@ -5468,6 +5473,37 @@ class Riverso_POS_Activator {
     }
 
     /**
+     * Garantiza tabla de DTE emitidos (deploy sin bump de versión).
+     */
+    public static function ensure_dte_issued_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::create_phase64_dte_issued($prefix, $charset_collate);
+    }
+
+    /**
+     * Garantiza tablas de diseños receptor + caché SII (deploy sin bump).
+     */
+    public static function ensure_receiver_designs_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::create_phase65_receiver_designs($prefix, $charset_collate);
+    }
+
+    /**
+     * Garantiza tablas de borradores de boleta (deploy sin bump).
+     */
+    public static function ensure_billing_drafts_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::create_phase66_billing_drafts($prefix, $charset_collate);
+        self::create_phase67_billing_draft_line_context($prefix, $charset_collate);
+    }
+
+    /**
      * Fase 56: recalcular doc_hash de escaneos cuyo folio tenía ceros a la izquierda.
      * No renombra folios de facturas ni toca tablas de precios.
      */
@@ -5748,6 +5784,249 @@ class Riverso_POS_Activator {
                 Riverso_POS_Audit::log('schema.phase63_clientes', 'clientes', 0, array(
                     'actor_type' => 'computer',
                     'details' => 'Fase 63: tabla riverso_clientes',
+                ));
+            }
+        }
+    }
+
+    /**
+     * Fase 64: DTE emitidos vía FACTO (factura/boleta desde Riverso).
+     */
+    private static function create_phase64_dte_issued($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE {$prefix}dte_issued (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            quote_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            customer_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            document_type_id INT UNSIGNED NOT NULL,
+            document_type_label VARCHAR(64) NOT NULL DEFAULT '',
+            facto_document_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            folio VARCHAR(32) NULL DEFAULT NULL,
+            issue_date DATE NULL DEFAULT NULL,
+            payment_conditions VARCHAR(32) NOT NULL DEFAULT '0',
+            receiver_rut VARCHAR(20) NULL DEFAULT NULL,
+            receiver_legal_name VARCHAR(255) NULL DEFAULT NULL,
+            net_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            taxes_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            total_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            facto_status TINYINT NULL DEFAULT NULL,
+            facto_error TEXT NULL,
+            response_json LONGTEXT NULL,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_dte_quote (quote_id),
+            KEY idx_dte_customer (customer_id),
+            KEY idx_dte_facto_doc (facto_document_id),
+            KEY idx_dte_folio (document_type_id, folio),
+            KEY idx_dte_issue_date (issue_date)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        if (get_option('riverso_pos_phase64_dte_issued') !== '1') {
+            update_option('riverso_pos_phase64_dte_issued', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase64_dte_issued', 'dte_issued', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 64: tabla riverso_dte_issued',
+                ));
+            }
+        }
+    }
+
+    /**
+     * Fase 65: diseños de autollenado receptor + caché consulta SII stc.
+     */
+    private static function create_phase65_receiver_designs($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql_designs = "CREATE TABLE {$prefix}billing_receiver_designs (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            rut VARCHAR(20) NOT NULL,
+            activity_code VARCHAR(32) NOT NULL,
+            activity_glosa VARCHAR(255) NOT NULL DEFAULT '',
+            razon_social VARCHAR(255) NOT NULL DEFAULT '',
+            direccion VARCHAR(255) NOT NULL DEFAULT '',
+            comuna VARCHAR(100) NOT NULL DEFAULT '',
+            ciudad VARCHAR(100) NOT NULL DEFAULT '',
+            telefono VARCHAR(50) NOT NULL DEFAULT '',
+            codigo_postal VARCHAR(20) NOT NULL DEFAULT '0',
+            updated_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_recv_design_rut_act (rut, activity_code),
+            KEY idx_recv_design_rut (rut)
+        ) $charset_collate;";
+        dbDelta($sql_designs);
+
+        $sql_cache = "CREATE TABLE {$prefix}billing_sii_cache (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            rut VARCHAR(20) NOT NULL,
+            payload_json LONGTEXT NOT NULL,
+            fetched_at DATETIME NOT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_sii_cache_rut (rut)
+        ) $charset_collate;";
+        dbDelta($sql_cache);
+
+        if (get_option('riverso_pos_phase65_receiver_designs') !== '1') {
+            update_option('riverso_pos_phase65_receiver_designs', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase65_receiver_designs', 'billing_receiver_designs', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 65: diseños receptor + caché SII stc',
+                ));
+            }
+        }
+    }
+
+    /**
+     * Fase 66: borradores de boleta electrónica (cabecera, líneas, referencias, pagos).
+     */
+    private static function create_phase66_billing_drafts($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql_drafts = "CREATE TABLE {$prefix}billing_drafts (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            document_type_id INT UNSIGNED NOT NULL DEFAULT 37,
+            status VARCHAR(16) NOT NULL DEFAULT 'draft',
+            issue_date DATE NULL DEFAULT NULL,
+            due_date DATE NULL DEFAULT NULL,
+            payment_conditions VARCHAR(32) NOT NULL DEFAULT '0',
+            sale_state VARCHAR(64) NOT NULL DEFAULT 'VENTA: Concretada',
+            quote_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            net_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            exempt_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            tax_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            total_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            updated_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_status (status),
+            KEY idx_bill_draft_quote (quote_id)
+        ) $charset_collate;";
+        dbDelta($sql_drafts);
+
+        $sql_lines = "CREATE TABLE {$prefix}billing_draft_lines (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            draft_id BIGINT UNSIGNED NOT NULL,
+            position INT UNSIGNED NOT NULL DEFAULT 1,
+            sku VARCHAR(64) NOT NULL DEFAULT '',
+            description VARCHAR(255) NOT NULL DEFAULT '',
+            quantity DECIMAL(14,3) NOT NULL DEFAULT 1,
+            unit_price_bruto DECIMAL(14,6) NOT NULL DEFAULT 0,
+            afecto TINYINT(1) NOT NULL DEFAULT 1,
+            line_total_bruto DECIMAL(14,2) NOT NULL DEFAULT 0,
+            product_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            producto_base_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            units_per_pack DECIMAL(14,4) NOT NULL DEFAULT 1,
+            family_mode VARCHAR(32) NOT NULL DEFAULT '',
+            packaging VARCHAR(64) NOT NULL DEFAULT '',
+            grupo_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            unit_cost DECIMAL(14,4) NULL DEFAULT NULL,
+            price_mode VARCHAR(16) NOT NULL DEFAULT 'auto',
+            price_ref DECIMAL(14,6) NULL DEFAULT NULL,
+            price_total DECIMAL(14,2) NULL DEFAULT NULL,
+            price_discount DECIMAL(8,4) NOT NULL DEFAULT 0,
+            margin_discount DECIMAL(8,4) NOT NULL DEFAULT 0,
+            discount_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            rule_total DECIMAL(14,2) NULL DEFAULT NULL,
+            rule_adjusted TINYINT(1) NOT NULL DEFAULT 0,
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_line_draft (draft_id)
+        ) $charset_collate;";
+        dbDelta($sql_lines);
+
+        $sql_refs = "CREATE TABLE {$prefix}billing_draft_refs (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            draft_id BIGINT UNSIGNED NOT NULL,
+            ref_type VARCHAR(32) NOT NULL DEFAULT 'other',
+            quote_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            ref_doc_type VARCHAR(64) NOT NULL DEFAULT '',
+            ref_folio VARCHAR(64) NOT NULL DEFAULT '',
+            ref_label VARCHAR(255) NOT NULL DEFAULT '',
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_ref_draft (draft_id)
+        ) $charset_collate;";
+        dbDelta($sql_refs);
+
+        $sql_payments = "CREATE TABLE {$prefix}billing_draft_payments (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            draft_id BIGINT UNSIGNED NOT NULL,
+            pay_date DATE NULL DEFAULT NULL,
+            caja VARCHAR(64) NOT NULL DEFAULT '',
+            method VARCHAR(64) NOT NULL DEFAULT '',
+            amount_due DECIMAL(14,2) NOT NULL DEFAULT 0,
+            amount_paid DECIMAL(14,2) NOT NULL DEFAULT 0,
+            change_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            notes VARCHAR(500) NOT NULL DEFAULT '',
+            charge_code VARCHAR(32) NOT NULL DEFAULT '',
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_pay_draft (draft_id)
+        ) $charset_collate;";
+        dbDelta($sql_payments);
+
+        if (get_option('riverso_pos_phase66_billing_drafts') !== '1') {
+            update_option('riverso_pos_phase66_billing_drafts', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase66_billing_drafts', 'billing_drafts', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 66: borradores de boleta electrónica',
+                ));
+            }
+        }
+    }
+
+    /**
+     * Fase 67: contexto de familia / regla / descuento en líneas de borrador boleta.
+     * dbDelta agrega columnas a instalaciones que ya tienen fase 66.
+     */
+    private static function create_phase67_billing_draft_line_context($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql_lines = "CREATE TABLE {$prefix}billing_draft_lines (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            draft_id BIGINT UNSIGNED NOT NULL,
+            position INT UNSIGNED NOT NULL DEFAULT 1,
+            sku VARCHAR(64) NOT NULL DEFAULT '',
+            description VARCHAR(255) NOT NULL DEFAULT '',
+            quantity DECIMAL(14,3) NOT NULL DEFAULT 1,
+            unit_price_bruto DECIMAL(14,6) NOT NULL DEFAULT 0,
+            afecto TINYINT(1) NOT NULL DEFAULT 1,
+            line_total_bruto DECIMAL(14,2) NOT NULL DEFAULT 0,
+            product_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            producto_base_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            units_per_pack DECIMAL(14,4) NOT NULL DEFAULT 1,
+            family_mode VARCHAR(32) NOT NULL DEFAULT '',
+            packaging VARCHAR(64) NOT NULL DEFAULT '',
+            grupo_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            unit_cost DECIMAL(14,4) NULL DEFAULT NULL,
+            price_mode VARCHAR(16) NOT NULL DEFAULT 'auto',
+            price_ref DECIMAL(14,6) NULL DEFAULT NULL,
+            price_total DECIMAL(14,2) NULL DEFAULT NULL,
+            price_discount DECIMAL(8,4) NOT NULL DEFAULT 0,
+            margin_discount DECIMAL(8,4) NOT NULL DEFAULT 0,
+            discount_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            rule_total DECIMAL(14,2) NULL DEFAULT NULL,
+            rule_adjusted TINYINT(1) NOT NULL DEFAULT 0,
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_line_draft (draft_id)
+        ) $charset_collate;";
+        dbDelta($sql_lines);
+
+        if (get_option('riverso_pos_phase67_billing_draft_line_context') !== '1') {
+            update_option('riverso_pos_phase67_billing_draft_line_context', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase67_billing_draft_line_context', 'billing_drafts', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 67: contexto familia/regla en líneas de borrador boleta',
                 ));
             }
         }

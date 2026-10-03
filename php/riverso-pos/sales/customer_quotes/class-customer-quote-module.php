@@ -156,6 +156,10 @@ class Riverso_Customer_Quote_Module {
             'standalone' => false,
             'surface' => 'admin',
             'portalUrl' => home_url('/interno/customer-quotes/'),
+            'billingEmitUrl' => home_url('/interno/facturacion/'),
+            'canEmitDte' => current_user_can('riverso_emit_dte')
+                || current_user_can('manage_options')
+                || current_user_can('manage_woocommerce'),
             'currentUserName' => $user_name,
             'caps' => array(
                 'viewStock' => (bool) $can_view_stock,
@@ -494,6 +498,16 @@ class Riverso_Customer_Quote_Module {
         }
         $map = $this->resolve_stock_for_wc_products($wc_ids);
         $this->ok(array('stock' => $map));
+    }
+
+    /**
+     * Mapa de stock por product_id WC (uso interno y módulos hermanos).
+     *
+     * @param int[] $wc_product_ids
+     * @return array<string, array>
+     */
+    public function stock_map_for_wc_products(array $wc_product_ids) {
+        return $this->resolve_stock_for_wc_products($wc_product_ids);
     }
 
     /**

@@ -124,6 +124,7 @@
         message: document.getElementById("cq-message"),
         transition: document.getElementById("cq-transition"),
         invoice: document.getElementById("cq-invoice"),
+        emitDte: document.getElementById("cq-emit-dte"),
         orderLink: document.getElementById("cq-order-link"),
         importBtn: document.getElementById("cq-import"),
         importModal: document.getElementById("cq-import-modal"),
@@ -169,6 +170,8 @@
         lineTotalHint: document.getElementById("cq-line-total-hint"),
         linePriceDiscount: document.getElementById("cq-line-price-discount"),
         lineMarginDiscount: document.getElementById("cq-line-margin-discount"),
+        lineDiscountAmount: document.getElementById("cq-line-discount-amount"),
+        lineFinalAmount: document.getElementById("cq-line-final-amount"),
         lineMarginHelp: document.getElementById("cq-line-margin-help"),
         lineMarginNa: document.getElementById("cq-line-margin-na"),
         lineDiscountHint: document.getElementById("cq-line-discount-hint"),
@@ -497,6 +500,10 @@
     if (els.lineMarginDiscount) {
         els.lineMarginDiscount.addEventListener("input", function () { onLineModalDiscountInput("margin_discount"); });
         els.lineMarginDiscount.addEventListener("blur", function () { onLineModalDiscountInput("margin_discount", true); });
+    }
+    if (els.lineDiscountAmount) {
+        els.lineDiscountAmount.addEventListener("input", function () { onLineModalDiscountInput("discount_amount"); });
+        els.lineDiscountAmount.addEventListener("blur", function () { onLineModalDiscountInput("discount_amount", true); });
     }
     if (els.importCheckAll) {
         els.importCheckAll.addEventListener("change", function () {
@@ -1052,6 +1059,15 @@
             els.invoice.hidden = !(quote.id && canInvoice);
             els.invoice.disabled = false;
         }
+        if (els.emitDte) {
+            var canEmit = !!(cfg.canEmitDte) && quote.id && quote.status === "listed" && quote.quote_type === "venta";
+            els.emitDte.hidden = !canEmit;
+            if (canEmit && cfg.billingEmitUrl) {
+                els.emitDte.href = cfg.billingEmitUrl + (cfg.billingEmitUrl.indexOf("?") >= 0 ? "&" : "?") + "quote_id=" + encodeURIComponent(String(quote.id));
+            } else {
+                els.emitDte.removeAttribute("href");
+            }
+        }
         if (els.orderLink) {
             if (quote.order_id && quote.order_url) {
                 els.orderLink.hidden = false;
@@ -1199,6 +1215,7 @@
             });
             var totalUnits = 0;
             var totalGross = 0;
+            var totalFinal = 0;
             var ruleTotal = null;
             var ruleAdjusted = false;
             groupIndexes.forEach(function (idx) {
@@ -1217,6 +1234,10 @@
                 });
                 totalGross = round2(totalGross);
             }
+            groupIndexes.forEach(function (idx) {
+                totalFinal += lineFigures(lines[idx]).lineNet;
+            });
+            totalFinal = round2(totalFinal);
             var fam = line._family || {};
             plan.push({
                 type: "header",
@@ -1224,6 +1245,7 @@
                 familyName: fam.family_name || fam.family_code || ("Familia #" + gid),
                 totalUnits: totalUnits,
                 totalGross: totalGross,
+                totalFinal: totalFinal,
                 indexes: groupIndexes.slice()
             });
             groupIndexes.forEach(function (idx) {
@@ -1252,7 +1274,8 @@
     function familyHeaderMetaText(item) {
         var units = "Lleva " + formatPlain(item.totalUnits) + " uds";
         var money = formatMoney(item.totalGross != null ? item.totalGross : 0);
-        return units + " · Total " + money;
+        var finalMoney = formatMoney(item.totalFinal != null ? item.totalFinal : 0);
+        return units + " · Total " + money + " · Monto final " + finalMoney;
     }
 
     function buildLineRow(line, index, editable) {
@@ -1690,7 +1713,7 @@
 
     /**
      * Un solo descuento en pesos; p y m son vistas equivalentes.
-     * source: 'price_discount' | 'margin_discount'
+     * source: 'price_discount' | 'margin_discount' | 'discount_amount'
      */
     function syncEquivalentDiscounts(line, source) {
         if (!line) return;
@@ -1698,6 +1721,23 @@
         var gross = bases.gross;
         var marginMoney = bases.marginMoney;
         var money = 0;
+        if (source === "discount_amount") {
+            money = round2(Number(line.discount_amount) || 0);
+            if (money < 0) money = 0;
+            if (gross > 0 && money > gross) money = gross;
+            line.discount_amount = money;
+            line.price_discount = gross > 0 && money > 0
+                ? clampRate(round2(money / gross * 100))
+                : 0;
+            if (!lineHasUnitCost(line) || !(marginMoney != null && marginMoney > 0)) {
+                line.margin_discount = 0;
+            } else {
+                line.margin_discount = money > 0
+                    ? clampRate(round2(money / marginMoney * 100))
+                    : 0;
+            }
+            return;
+        }
         if (source === "margin_discount") {
             var m = clampRate(line.margin_discount);
             if (!(marginMoney != null && marginMoney > 0)) {
@@ -2611,6 +2651,15 @@
                 || (state.quote.status === "listed" && state.quote.quote_type === "venta" && !state.quote.order_id);
             els.invoice.hidden = !(state.quote.id && canInvoice);
         }
+        if (els.emitDte) {
+            var canEmitSave = !!(cfg.canEmitDte) && state.quote.id && state.quote.status === "listed" && state.quote.quote_type === "venta";
+            els.emitDte.hidden = !canEmitSave;
+            if (canEmitSave && cfg.billingEmitUrl) {
+                els.emitDte.href = cfg.billingEmitUrl + (cfg.billingEmitUrl.indexOf("?") >= 0 ? "&" : "?") + "quote_id=" + encodeURIComponent(String(state.quote.id));
+            } else {
+                els.emitDte.removeAttribute("href");
+            }
+        }
         if (els.orderLink) {
             if (state.quote.order_id && state.quote.order_url) {
                 els.orderLink.hidden = false;
@@ -3499,7 +3548,18 @@
             }
         }
         updateLineModalRuleInfo();
+        updateLineModalFinalAmount();
         lm.syncing = false;
+    }
+
+    function updateLineModalFinalAmount() {
+        if (!els.lineFinalAmount) return;
+        var draft = lineModalDraftForDiscount();
+        if (!draft) {
+            els.lineFinalAmount.value = formatMoney(0);
+            return;
+        }
+        els.lineFinalAmount.value = formatMoney(lineFigures(draft).lineNet);
     }
 
     function updateLineModalRuleInfo() {
@@ -3628,7 +3688,10 @@
     function syncLineModalDiscountFields(source, format) {
         var draft = lineModalDraftForDiscount();
         if (!draft) return;
-        if (source === "margin_discount") {
+        if (source === "discount_amount") {
+            draft.discount_amount = round2(parseClNumber(els.lineDiscountAmount ? els.lineDiscountAmount.value : "0"));
+            syncEquivalentDiscounts(draft, "discount_amount");
+        } else if (source === "margin_discount") {
             draft.margin_discount = clampRate(parseClNumber(els.lineMarginDiscount ? els.lineMarginDiscount.value : "0"));
             syncEquivalentDiscounts(draft, "margin_discount");
         } else {
@@ -3636,18 +3699,22 @@
             syncEquivalentDiscounts(draft, "price_discount");
         }
         state.lineModal.syncing = true;
-        if (els.linePriceDiscount && (format || source === "margin_discount" || document.activeElement !== els.linePriceDiscount)) {
+        if (els.linePriceDiscount && (format || source !== "price_discount" || document.activeElement !== els.linePriceDiscount)) {
             els.linePriceDiscount.value = formatPlain(draft.price_discount || 0);
         }
-        if (els.lineMarginDiscount && (format || source === "price_discount" || document.activeElement !== els.lineMarginDiscount)) {
+        if (els.lineMarginDiscount && (format || source !== "margin_discount" || document.activeElement !== els.lineMarginDiscount)) {
             if (lineHasUnitCost(draft)) {
                 els.lineMarginDiscount.value = formatPlain(draft.margin_discount || 0);
             } else {
                 els.lineMarginDiscount.value = "";
             }
         }
+        if (els.lineDiscountAmount && (format || source !== "discount_amount" || document.activeElement !== els.lineDiscountAmount)) {
+            els.lineDiscountAmount.value = formatPlain(draft.discount_amount || 0);
+        }
         state.lineModal.syncing = false;
         updateLineModalDiscountHint(draft);
+        updateLineModalFinalAmount();
     }
 
     function onLineModalDiscountInput(source, format) {
@@ -3684,7 +3751,7 @@
             els.lineDiscountHint.textContent = "Sin margen para equivaler.";
             return;
         }
-        els.lineDiscountHint.textContent = "Dscto precio y dscto margen son el mismo descuento (equivalentes).";
+        els.lineDiscountHint.textContent = "Dscto precio, margen y monto son el mismo descuento (equivalentes).";
     }
 
     function scheduleLineModalPreview() {
@@ -3864,7 +3931,11 @@
                 ? formatPlain(line.margin_discount || 0)
                 : "";
         }
+        if (els.lineDiscountAmount) {
+            els.lineDiscountAmount.value = formatPlain(line.discount_amount || 0);
+        }
         updateLineModalDiscountHint(line);
+        updateLineModalFinalAmount();
         setLineTaxView("bruto");
         configureLineModalModes(false, lm.isFamily);
         setLineModalMode(lm.mode);
@@ -3904,9 +3975,16 @@
         if (draft) {
             var priceSrc = clampRate(parseClNumber(els.linePriceDiscount ? els.linePriceDiscount.value : "0"));
             var marginSrc = clampRate(parseClNumber(els.lineMarginDiscount ? els.lineMarginDiscount.value : "0"));
-            if (document.activeElement === els.lineMarginDiscount || (priceSrc <= 0 && marginSrc > 0)) {
+            var amountSrc = round2(parseClNumber(els.lineDiscountAmount ? els.lineDiscountAmount.value : "0"));
+            if (document.activeElement === els.lineDiscountAmount) {
+                draft.discount_amount = amountSrc;
+                syncEquivalentDiscounts(draft, "discount_amount");
+            } else if (document.activeElement === els.lineMarginDiscount || (priceSrc <= 0 && marginSrc > 0 && !(amountSrc > 0))) {
                 draft.margin_discount = marginSrc;
                 syncEquivalentDiscounts(draft, "margin_discount");
+            } else if (priceSrc <= 0 && marginSrc <= 0 && amountSrc > 0) {
+                draft.discount_amount = amountSrc;
+                syncEquivalentDiscounts(draft, "discount_amount");
             } else {
                 draft.price_discount = priceSrc;
                 syncEquivalentDiscounts(draft, "price_discount");

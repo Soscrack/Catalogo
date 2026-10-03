@@ -214,6 +214,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                     <span id="cq-expired-badge" class="cq-expired-tag" hidden>Vencida</span>
                     <button type="button" class="cq-btn" id="cq-transition" hidden>Pasar a lista</button>
                     <button type="button" class="cq-btn cq-btn-primary" id="cq-invoice" hidden>Facturar</button>
+                    <a id="cq-emit-dte" class="cq-btn" href="#" hidden>Emitir DTE</a>
                     <a id="cq-order-link" class="cq-link cq-order-link" href="#" target="_blank" rel="noopener" hidden>Ver pedido</a>
                     <button type="button" class="cq-btn" id="cq-import" hidden title="Importar desde cotización recibida">Importar</button>
                     <label class="cq-pdf-template" title="Plantilla del PDF">
@@ -575,6 +576,14 @@ if (!function_exists('riverso_pos_cq_json')) {
                             </span>
                             <input type="text" id="cq-line-margin-discount" inputmode="decimal" autocomplete="off">
                             <em id="cq-line-margin-na" class="cq-margin-na-text" hidden>—</em>
+                        </label>
+                        <label class="cq-float-field">
+                            <span>Monto de descuento</span>
+                            <input type="text" id="cq-line-discount-amount" inputmode="decimal" autocomplete="off">
+                        </label>
+                        <label class="cq-float-field cq-manual-full">
+                            <span>Monto final</span>
+                            <input type="text" id="cq-line-final-amount" readonly tabindex="-1" autocomplete="off">
                         </label>
                     </div>
                     <p id="cq-line-discount-hint" class="cq-line-preview" role="status"></p>

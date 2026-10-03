@@ -414,6 +414,9 @@ class Riverso_Facto_Module {
             'facto_client_id', 'facto_client_secret', 'facto_username', 'facto_password',
             'facto_account_id', 'facto_price_list_id', 'facto_location_id',
             'facto_currency_id', 'facto_tax_type_id',
+            'facto_issuer_rut', 'facto_issuer_legal_name', 'facto_issuer_address',
+            'facto_issuer_district', 'facto_issuer_city', 'facto_issuer_phone',
+            'facto_issuer_activity',
         ];
 
         foreach ($keys as $key) {

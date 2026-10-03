@@ -34,6 +34,13 @@ $facto_price_list_id = riverso_get_facto_config('price_list_id', 1);
 $facto_location_id = riverso_get_facto_config('location_id', 1);
 $facto_currency_id = riverso_get_facto_config('currency_id', 39);
 $facto_tax_type_id = riverso_get_facto_config('tax_type_id', 387);
+$facto_issuer_rut = riverso_get_facto_config('issuer_rut', '');
+$facto_issuer_legal_name = riverso_get_facto_config('issuer_legal_name', '');
+$facto_issuer_address = riverso_get_facto_config('issuer_address', '');
+$facto_issuer_district = riverso_get_facto_config('issuer_district', '');
+$facto_issuer_city = riverso_get_facto_config('issuer_city', '');
+$facto_issuer_phone = riverso_get_facto_config('issuer_phone', '');
+$facto_issuer_activity = riverso_get_facto_config('issuer_activity', '');
 ?>
 
 <div class="wrap riverso-settings">
@@ -258,6 +265,45 @@ $facto_tax_type_id = riverso_get_facto_config('tax_type_id', 387);
                 </td>
             </tr>
             <tr>
+                <th scope="row">Emisor (DTE)</th>
+                <td>
+                    <p class="description">Datos del emisor para Facturación → Emitir. Obligatorios al emitir factura/boleta.</p>
+                    <p>
+                        <label>RUT<br>
+                        <input type="text" name="facto_issuer_rut" class="regular-text"
+                               value="<?php echo esc_attr($facto_issuer_rut); ?>" placeholder="76443852-3"></label>
+                    </p>
+                    <p>
+                        <label>Razón social<br>
+                        <input type="text" name="facto_issuer_legal_name" class="regular-text"
+                               value="<?php echo esc_attr($facto_issuer_legal_name); ?>"></label>
+                    </p>
+                    <p>
+                        <label>Dirección<br>
+                        <input type="text" name="facto_issuer_address" class="regular-text"
+                               value="<?php echo esc_attr($facto_issuer_address); ?>"></label>
+                    </p>
+                    <p>
+                        <label>Comuna<br>
+                        <input type="text" name="facto_issuer_district" class="regular-text"
+                               value="<?php echo esc_attr($facto_issuer_district); ?>"></label>
+                        <label style="margin-left:12px;">Ciudad<br>
+                        <input type="text" name="facto_issuer_city" class="regular-text"
+                               value="<?php echo esc_attr($facto_issuer_city); ?>"></label>
+                    </p>
+                    <p>
+                        <label>Teléfono<br>
+                        <input type="text" name="facto_issuer_phone" class="regular-text"
+                               value="<?php echo esc_attr($facto_issuer_phone); ?>"></label>
+                    </p>
+                    <p>
+                        <label>Giro / actividad<br>
+                        <input type="text" name="facto_issuer_activity" class="large-text"
+                               value="<?php echo esc_attr($facto_issuer_activity); ?>"></label>
+                    </p>
+                </td>
+            </tr>
+            <tr>
                 <th scope="row">Acciones</th>
                 <td>
                     <button type="button" class="button" id="btn-facto-test">Probar conexión</button>
@@ -326,7 +372,14 @@ jQuery(function($) {
             facto_price_list_id: $('input[name="facto_price_list_id"]').val(),
             facto_location_id: $('input[name="facto_location_id"]').val(),
             facto_currency_id: $('input[name="facto_currency_id"]').val(),
-            facto_tax_type_id: $('input[name="facto_tax_type_id"]').val()
+            facto_tax_type_id: $('input[name="facto_tax_type_id"]').val(),
+            facto_issuer_rut: $('input[name="facto_issuer_rut"]').val(),
+            facto_issuer_legal_name: $('input[name="facto_issuer_legal_name"]').val(),
+            facto_issuer_address: $('input[name="facto_issuer_address"]').val(),
+            facto_issuer_district: $('input[name="facto_issuer_district"]').val(),
+            facto_issuer_city: $('input[name="facto_issuer_city"]').val(),
+            facto_issuer_phone: $('input[name="facto_issuer_phone"]').val(),
+            facto_issuer_activity: $('input[name="facto_issuer_activity"]').val()
         };
 
         $.when(

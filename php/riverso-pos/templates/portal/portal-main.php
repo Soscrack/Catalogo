@@ -212,6 +212,25 @@
         .nav-block-items .nav-item.active {
             background: rgba(0, 0, 0, 0.28);
         }
+
+        .nav-item.nav-item-wip {
+            cursor: default;
+            opacity: 0.55;
+            color: rgba(255,255,255,0.55);
+        }
+
+        .nav-item.nav-item-wip:hover {
+            background: transparent;
+            color: rgba(255,255,255,0.55);
+        }
+
+        .nav-item-wip-badge {
+            margin-left: auto;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            opacity: 0.9;
+        }
         
         .sidebar-footer {
             position: relative;
@@ -959,6 +978,17 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                                 $child_slug = $child['portal_slug'] ?? $slug;
                                 $child_icon = $child['icon'] ?? 'admin-generic';
                                 $child_query = isset($child['portal_query']) ? (string) $child['portal_query'] : '';
+                                $is_wip = !empty($child['wip']);
+                                if ($is_wip):
+                            ?>
+                            <span class="nav-item nav-item-wip" title="En desarrollo" aria-disabled="true">
+                                <span class="dashicons dashicons-<?php echo esc_attr($child_icon); ?>"></span>
+                                <?php echo esc_html($child['label']); ?>
+                                <span class="nav-item-wip-badge">[WIP]</span>
+                            </span>
+                            <?php
+                                    continue;
+                                endif;
                                 $child_url = home_url('/interno/' . $child_slug . '/');
                                 if ($child_query !== '') {
                                     $child_url .= (strpos($child_url, '?') === false ? '?' : '&') . $child_query;
@@ -968,7 +998,12 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                                     if ($child_query === 'nueva=1') {
                                         $child_active = $query_nueva;
                                     } elseif ($child_query === '') {
-                                        $child_active = !$query_nueva;
+                                        // En facturación no hay query "nueva"; marcar activo por slug.
+                                        if ($child_slug === 'customer-quotes') {
+                                            $child_active = !$query_nueva;
+                                        } else {
+                                            $child_active = true;
+                                        }
                                     }
                                 }
                             ?>
@@ -2686,6 +2721,22 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
             Riverso_Customer_Module::get_instance()->render_app('portal');
         } else {
             echo '<p>No se pudo cargar clientes.</p>';
+        }
+        ?>
+
+        <?php elseif ($current_page === 'facturacion'): ?>
+        <!-- Facturación · Emitir DTE -->
+        <?php
+        if (!class_exists('Riverso_Billing_Module')) {
+            $bm = RIVERSO_POS_PLUGIN_DIR . 'sales/billing/class-billing-module.php';
+            if (file_exists($bm)) {
+                require_once $bm;
+            }
+        }
+        if (class_exists('Riverso_Billing_Module')) {
+            Riverso_Billing_Module::get_instance()->render_app('portal');
+        } else {
+            echo '<p>No se pudo cargar Facturación.</p>';
         }
         ?>
 

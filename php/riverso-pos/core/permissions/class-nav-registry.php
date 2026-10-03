@@ -13,12 +13,13 @@ class Riverso_POS_Nav_Registry {
      * Grupos de menú (orden de aparición).
      */
     const GROUPS = [
-        'inicio'   => ['label' => 'Inicio', 'order' => 10],
-        'ventas'   => ['label' => 'Ventas', 'order' => 20],
-        'catalogo' => ['label' => 'Catálogo', 'order' => 30],
-        'bodega'   => ['label' => 'Bodega', 'order' => 40],
-        'compras'  => ['label' => 'Compras', 'order' => 50],
-        'gestion'  => ['label' => 'Gestión', 'order' => 60],
+        'inicio'      => ['label' => 'Inicio', 'order' => 10],
+        'ventas'      => ['label' => 'Ventas', 'order' => 20],
+        'facturacion' => ['label' => 'Facturación', 'order' => 25],
+        'catalogo'    => ['label' => 'Catálogo', 'order' => 30],
+        'bodega'      => ['label' => 'Bodega', 'order' => 40],
+        'compras'     => ['label' => 'Compras', 'order' => 50],
+        'gestion'     => ['label' => 'Gestión', 'order' => 60],
     ];
 
     /**
@@ -117,6 +118,56 @@ class Riverso_POS_Nav_Registry {
                 'admin_page' => 'riverso-pos-reports',
                 'admin_callback' => 'render_reports',
                 'capability' => 'riverso_view_reports',
+            ],
+
+            // === Facturación ===
+            [
+                'id' => 'facturacion',
+                'group' => 'facturacion',
+                'label' => 'Facturación',
+                'icon' => 'media-document',
+                'surfaces' => ['portal'],
+                'portal_slug' => 'facturacion',
+                'capability' => 'riverso_emit_dte',
+                'children' => [
+                    [
+                        'id' => 'facturacion-emitir',
+                        'label' => 'Emitir',
+                        'icon' => 'migrate',
+                        'portal_slug' => 'facturacion',
+                        'portal_query' => '',
+                    ],
+                    [
+                        'id' => 'facturacion-buscar',
+                        'label' => 'Buscar documentos tributarios',
+                        'icon' => 'search',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'facturacion-cotizaciones-aprobadas',
+                        'label' => 'Cotizaciones Aprobadas',
+                        'icon' => 'portfolio',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'facturacion-recibir',
+                        'label' => 'Recibir',
+                        'icon' => 'randomize',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'facturacion-guias',
+                        'label' => 'Centralizacion Guias de Despacho',
+                        'icon' => 'media-document',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'facturacion-libros',
+                        'label' => 'Libros contables',
+                        'icon' => 'book',
+                        'wip' => true,
+                    ],
+                ],
             ],
 
             // === Catálogo ===

@@ -102,6 +102,42 @@ class Riverso_Customer_Repository {
     }
 
     /**
+     * Busca cliente activo por RUT (formato NNNNNNNN-X).
+     *
+     * @param string $rut
+     * @return array<string, mixed>|null
+     */
+    public function find_by_rut($rut) {
+        global $wpdb;
+        $clean = $this->clean_rut($rut);
+        if ($clean === '') {
+            return null;
+        }
+        $row = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT * FROM {$this->table} WHERE rut = %s AND activo = 1 ORDER BY id ASC LIMIT 1",
+                $clean
+            ),
+            ARRAY_A
+        );
+        if (!$row) {
+            // Tolerar RUT guardado sin guión o con puntos.
+            $digits = preg_replace('/[^0-9kK]/', '', $clean);
+            $row = $wpdb->get_row(
+                $wpdb->prepare(
+                    "SELECT * FROM {$this->table}
+                     WHERE REPLACE(REPLACE(UPPER(rut), '.', ''), '-', '') = %s
+                       AND activo = 1
+                     ORDER BY id ASC LIMIT 1",
+                    strtoupper($digits)
+                ),
+                ARRAY_A
+            );
+        }
+        return $row ? $this->normalize_row($row) : null;
+    }
+
+    /**
      * @param array<string, mixed> $input
      * @return array{ok: bool, id?: int, message?: string, customer?: array<string, mixed>}
      */

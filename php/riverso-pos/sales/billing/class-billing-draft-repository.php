@@ -125,7 +125,8 @@ class Riverso_Billing_Draft_Repository {
                 continue;
             }
             $qty = (float) ($line['quantity'] ?? 0);
-            $price = (float) ($line['unit_price_bruto'] ?? $line['unit_price'] ?? 0);
+            // Preferir unit_price del cliente (por unidad); unit_price_bruto puede ser bruto/envase.
+            $price = (float) ($line['unit_price'] ?? $line['unit_price_bruto'] ?? 0);
             if ($qty <= 0 && trim((string) ($line['description'] ?? '')) === '' && trim((string) ($line['sku'] ?? '')) === '') {
                 continue;
             }

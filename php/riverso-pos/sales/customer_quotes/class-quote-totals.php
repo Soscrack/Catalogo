@@ -4,11 +4,9 @@
  * El descuento, el margen y la utilidad se calculan aunque el modo avanzado
  * esté apagado y la vista base no muestre esas columnas.
  *
- * Dscto precio: porcentaje sobre el bruto (cantidad × precio).
- * Dscto margen: vista equivalente del mismo descuento sobre el margen
- * (bruto − costo). Si hay dscto precio, el monto en dinero es solo ese %;
- * el margen guardado no se suma. Sin costo, el dscto margen no equivalé.
- * Si ambos porcentajes quedan en 0, se respeta discount_amount (líneas anteriores).
+ * Descuento canónico: discount_amount en pesos. Los % de precio y margen
+ * son vistas equivalentes. Si hay discount_amount > 0, se resta ese monto.
+ * Sin monto, se deriva desde price_discount (o margen legado).
  *
  * Si una familia tiene rule_total ajustado (T_final del motor de reglas),
  * el bruto de cada línea se prorratea para que la suma coincida con ese total.
@@ -48,16 +46,17 @@ class Riverso_Quote_Totals {
             $has_cost = array_key_exists('unit_cost', $line) && $line['unit_cost'] !== null && $line['unit_cost'] !== '';
             $unit_cost = $has_cost ? round((float) $line['unit_cost'], 2) : null;
 
-            if ($price_rate > 0 || $margin_rate > 0) {
-                $discount = self::discount_from_rates($gross, $billable, $unit_cost, $price_rate, $margin_rate);
-            } else {
-                $discount = round((float) (isset($line['discount_amount']) ? $line['discount_amount'] : 0), 2);
-                if ($discount < 0) {
-                    $discount = 0.0;
-                }
+            $amount_money = round((float) (isset($line['discount_amount']) ? $line['discount_amount'] : 0), 2);
+            if ($amount_money > 0) {
+                // Canónico: monto en pesos; % son vistas.
+                $discount = $amount_money;
                 if ($discount > $gross) {
                     $discount = $gross;
                 }
+            } elseif ($price_rate > 0 || $margin_rate > 0) {
+                $discount = self::discount_from_rates($gross, $billable, $unit_cost, $price_rate, $margin_rate);
+            } else {
+                $discount = 0.0;
             }
 
             $line_net = round($gross - $discount, 2);
@@ -306,7 +305,7 @@ class Riverso_Quote_Totals {
         $margin_rate = self::rate($margin_rate);
         $discount = 0.0;
         if ($price_rate > 0) {
-            // Canónico: un solo descuento = % sobre el bruto (margen es vista equivalente).
+            // Sin monto en pesos: derivar desde % sobre el bruto.
             $discount = round($gross * $price_rate / 100, 2);
         } elseif ($margin_rate > 0 && $unit_cost !== null) {
             // Legado: solo dscto margen (sin precio).

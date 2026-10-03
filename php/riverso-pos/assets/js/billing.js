@@ -779,6 +779,122 @@
     }, r);
   }
 
+  /** Payload de previsualización: en boleta usa fecha/pago del paso 2. */
+  function previewPayload() {
+    var type = currentTypeId();
+    var base = payloadBase();
+    if (type === 37) {
+      base.issue_date = ($("bill-boleta-issue-date") || {}).value
+        || ($("bill-issue-date") || {}).value
+        || cfg.todayDate;
+      base.payment_conditions = ($("bill-boleta-payment") || {}).value
+        || ($("bill-payment") || {}).value
+        || "0";
+    }
+    if (state.estimatedFolio != null) {
+      base.estimated_folio = String(state.estimatedFolio);
+    }
+    return base;
+  }
+
+  function hasPreviewLines() {
+    return (state.lines || []).some(function (line) {
+      return line && (Number(line.quantity) || 0) > 0;
+    });
+  }
+
+  function closeAllPreviewMenus() {
+    document.querySelectorAll(".bill-preview-menu").forEach(function (menu) {
+      menu.hidden = true;
+    });
+    document.querySelectorAll(".bill-preview-toggle").forEach(function (btn) {
+      btn.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  function togglePreviewMenu(toggleBtn) {
+    if (!toggleBtn) return;
+    var menuId = toggleBtn.getAttribute("aria-controls");
+    var menu = menuId ? $(menuId) : null;
+    if (!menu) return;
+    var willOpen = !!menu.hidden;
+    closeAllPreviewMenus();
+    if (willOpen) {
+      menu.hidden = false;
+      toggleBtn.setAttribute("aria-expanded", "true");
+    }
+  }
+
+  function openPdfPreview(data) {
+    if (!data || !data.preview_pdf_base64) {
+      showAlert(
+        data && data.error_message
+          ? String(data.error_message)
+          : "Vista previa OK, pero FACTO no devolvió PDF.",
+        true
+      );
+      return;
+    }
+    if (data.error_message) {
+      showAlert(String(data.error_message), true);
+      return;
+    }
+    showAlert("Vista previa OK (no se guardó ni envió al SII).");
+    try {
+      var w = window.open("", "_blank");
+      if (w) {
+        w.document.write(
+          '<iframe src="data:application/pdf;base64,' +
+            data.preview_pdf_base64 +
+            '" style="width:100%;height:100%;border:0"></iframe>'
+        );
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function openHtmlPreview(html) {
+    try {
+      var w = window.open("", "_blank");
+      if (w) {
+        w.document.open();
+        w.document.write(html);
+        w.document.close();
+      }
+    } catch (e) {
+      showAlert("No se pudo abrir la carta en una nueva pestaña.", true);
+    }
+  }
+
+  function runPreview(kind) {
+    if (!hasPreviewLines()) {
+      showMissingPopup("Previsualizar", "Agrega al menos una línea con cantidad.", ["Líneas del documento"]);
+      return;
+    }
+    var payload = previewPayload();
+    if (kind === "pdf" || kind === "thermal50") {
+      // FACTO asigna folio real con draft_preview; no llamar a la API.
+      showAlert(
+        "Vista previa PDF oficial / térmica detenida: FACTO asigna folio aunque se pida borrador. Usa Carta por familia o Carta por producto. La emisión solo con el botón Emitir.",
+        true
+      );
+      return;
+    }
+    var template = kind === "product" ? "product" : "family";
+    var action = (cfg.actions && cfg.actions.previewHtml) || "riverso_billing_preview_html";
+    showAlert("Generando carta…");
+    post(action, Object.assign({}, payload, { template: template }))
+      .then(function (data) {
+        if (!data || !data.html) {
+          throw new Error("La carta llegó vacía.");
+        }
+        showAlert("Carta lista (borrador, no se envió al SII).");
+        openHtmlPreview(data.html);
+      })
+      .catch(function (err) {
+        showAlert(err.message || "Error al generar la carta", true);
+      });
+  }
+
   function goStep(n) {
     state.step = n;
     if ($("bill-step-1")) $("bill-step-1").hidden = n !== 1;
@@ -975,11 +1091,34 @@
     };
     return post(cfg.actions.draftSave, data).then(function (res) {
       if (res.draft) {
-        applyDraft(res.draft);
+        if (opts.silent) {
+          applyDraftMeta(res.draft);
+        } else {
+          applyDraft(res.draft);
+        }
       }
       if (!opts.silent) showAlert("Borrador guardado.");
       return res;
     });
+  }
+
+  /** Autoguardado: solo id/metadatos; no pisa precios ni vuelve a pedir la regla. */
+  function applyDraftMeta(draft) {
+    if (!draft) return;
+    state.draftId = draft.id || 0;
+    state.draftStatus = draft.status || "draft";
+    if ($("bill-draft-id")) $("bill-draft-id").value = String(state.draftId);
+    if (draft.issue_date && $("bill-boleta-issue-date")) $("bill-boleta-issue-date").value = draft.issue_date;
+    if ($("bill-boleta-due-date") && draft.due_date !== undefined) {
+      $("bill-boleta-due-date").value = draft.due_date || "";
+    }
+    if (draft.payment_conditions && $("bill-boleta-payment")) {
+      $("bill-boleta-payment").value = draft.payment_conditions;
+    }
+    if (draft.quote_id) state.quoteId = draft.quote_id;
+    if ($("bill-draft-banner-text")) {
+      $("bill-draft-banner-text").textContent = state.draftStatus === "emitted" ? "DOC EMITIDO" : "DOC EN BORRADOR";
+    }
   }
 
   function applyDraft(draft) {
@@ -2084,30 +2223,30 @@
       });
     }
 
-    if ($("bill-preview")) {
-      $("bill-preview").addEventListener("click", function () {
-        showAlert("Generando vista previa…");
-        $("bill-preview").disabled = true;
-        post(cfg.actions.preview, payloadBase())
-          .then(function (data) {
-            showAlert("Vista previa OK" + (data.error_message ? ": " + data.error_message : " (no se guardó ni envió al SII)."));
-            if (data.preview_pdf_base64) {
-              try {
-                var w = window.open("", "_blank");
-                if (w) {
-                  w.document.write('<iframe src="data:application/pdf;base64,' + data.preview_pdf_base64 + '" style="width:100%;height:100%"></iframe>');
-                }
-              } catch (e) { /* ignore */ }
-            }
-          })
-          .catch(function (err) {
-            showAlert(err.message || "Error en vista previa", true);
-          })
-          .finally(function () {
-            $("bill-preview").disabled = false;
-          });
+    document.querySelectorAll(".bill-preview-toggle").forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        togglePreviewMenu(btn);
       });
-    }
+    });
+    document.querySelectorAll(".bill-preview-item").forEach(function (item) {
+      item.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var kind = item.getAttribute("data-preview") || "pdf";
+        closeAllPreviewMenus();
+        runPreview(kind);
+      });
+    });
+    document.addEventListener("click", function (e) {
+      var t = e.target;
+      if (t && t.closest && t.closest(".bill-preview-wrap")) return;
+      closeAllPreviewMenus();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") closeAllPreviewMenus();
+    });
     if ($("bill-emit")) {
       $("bill-emit").addEventListener("click", function () {
         if (!state.lines.length) {

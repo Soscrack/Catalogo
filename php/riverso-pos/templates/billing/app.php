@@ -277,7 +277,19 @@ if (!function_exists('riverso_pos_billing_json')) {
                     <button type="button" class="bill-btn bill-btn-secondary bill-back-step-1">Volver</button>
                     <span class="bill-step-label">Paso 2 de 2</span>
                     <div class="bill-step-actions">
-                        <button type="button" class="bill-btn bill-btn-secondary" id="bill-preview">Vista previa</button>
+                        <div class="bill-preview-wrap">
+                            <div class="bill-preview-menu" id="bill-preview-menu-invoice" hidden role="menu">
+                                <button type="button" class="bill-preview-item" role="menuitem" data-preview="pdf">Previsualizar: PDF oficial</button>
+                                <button type="button" class="bill-preview-item" role="menuitem" data-preview="thermal50">Previsualizar: Formato térmico 50mm</button>
+                                <button type="button" class="bill-preview-item" role="menuitem" data-preview="family">Previsualizar: Carta por familia</button>
+                                <button type="button" class="bill-preview-item" role="menuitem" data-preview="product">Previsualizar: Carta por producto</button>
+                            </div>
+                            <button type="button" class="bill-btn bill-btn-primary bill-preview-toggle" id="bill-preview" aria-haspopup="menu" aria-expanded="false" aria-controls="bill-preview-menu-invoice">
+                                <svg class="bill-preview-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+                                <span>Previsualizar</span>
+                                <span class="bill-preview-caret" aria-hidden="true">▾</span>
+                            </button>
+                        </div>
                         <button type="button" class="bill-btn bill-btn-primary bill-btn-lg" id="bill-emit">Emitir</button>
                     </div>
                 </div>
@@ -501,7 +513,19 @@ if (!function_exists('riverso_pos_billing_json')) {
                     <span class="bill-step-label">Paso 2 de 2</span>
                     <div class="bill-step-actions bill-boleta-actions">
                         <button type="button" class="bill-btn bill-btn-primary bill-btn-lg" id="bill-boleta-emit" disabled>Emitir documento [WIP]</button>
-                        <button type="button" class="bill-btn bill-btn-secondary" id="bill-boleta-preview" disabled>Previsualizar [WIP]</button>
+                        <div class="bill-preview-wrap">
+                            <div class="bill-preview-menu" id="bill-preview-menu-boleta" hidden role="menu">
+                                <button type="button" class="bill-preview-item" role="menuitem" data-preview="pdf">Previsualizar: PDF oficial</button>
+                                <button type="button" class="bill-preview-item" role="menuitem" data-preview="thermal50">Previsualizar: Formato térmico 50mm</button>
+                                <button type="button" class="bill-preview-item" role="menuitem" data-preview="family">Previsualizar: Carta por familia</button>
+                                <button type="button" class="bill-preview-item" role="menuitem" data-preview="product">Previsualizar: Carta por producto</button>
+                            </div>
+                            <button type="button" class="bill-btn bill-btn-primary bill-preview-toggle" id="bill-boleta-preview" aria-haspopup="menu" aria-expanded="false" aria-controls="bill-preview-menu-boleta">
+                                <svg class="bill-preview-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+                                <span>Previsualizar</span>
+                                <span class="bill-preview-caret" aria-hidden="true">▾</span>
+                            </button>
+                        </div>
                         <button type="button" class="bill-btn bill-btn-secondary" id="bill-draft-save">Guardar borrador</button>
                     </div>
                 </div>

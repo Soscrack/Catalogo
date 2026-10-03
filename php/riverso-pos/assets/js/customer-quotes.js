@@ -1746,16 +1746,11 @@
                 line.discount_amount = 0;
                 return;
             }
+            // Monto derivado una vez del % margen; no rearmar desde el % precio redondeado.
             money = m > 0 ? round2(marginMoney * m / 100) : 0;
+            line.margin_discount = m;
             line.price_discount = gross > 0 && money > 0
                 ? clampRate(round2(money / gross * 100))
-                : 0;
-            // Canónico precio: re-derivar margen para redondeo estable.
-            money = clampRate(line.price_discount) > 0
-                ? round2(gross * clampRate(line.price_discount) / 100)
-                : 0;
-            line.margin_discount = money > 0
-                ? clampRate(round2(money / marginMoney * 100))
                 : 0;
         } else {
             var p = clampRate(line.price_discount);
@@ -1775,6 +1770,11 @@
     }
 
     function syncDiscountAmount(line, field) {
+        var amount = round2(Number(line.discount_amount) || 0);
+        if (amount > 0) {
+            syncEquivalentDiscounts(line, "discount_amount");
+            return;
+        }
         var priceRate = clampRate(line.price_discount);
         var marginRate = clampRate(line.margin_discount);
         if (priceRate > 0) {
@@ -1807,9 +1807,13 @@
     function renderTotals() {
         (state.quote.lines || []).forEach(function (line) {
             if (!line) return;
+            var amount = round2(Number(line.discount_amount) || 0);
             var p = clampRate(line.price_discount);
             var m = clampRate(line.margin_discount);
-            if (p > 0) {
+            // Preferir monto en pesos; no rearmar desde el % de 2 decimales.
+            if (amount > 0) {
+                syncEquivalentDiscounts(line, "discount_amount");
+            } else if (p > 0) {
                 syncEquivalentDiscounts(line, "price_discount");
             } else if (m > 0) {
                 syncEquivalentDiscounts(line, "margin_discount");
@@ -3139,15 +3143,17 @@
         var hasCost = line.unit_cost !== null && line.unit_cost !== undefined && line.unit_cost !== "";
         var unitCost = hasCost ? round2(Number(line.unit_cost)) : null;
         var discount;
-        if (priceRate > 0) {
-            // Canónico: un solo descuento = % sobre el bruto (margen es vista equivalente).
+        var amountMoney = round2(Number(line.discount_amount) || 0);
+        if (amountMoney > 0) {
+            // Canónico: monto en pesos; % son vistas.
+            discount = amountMoney;
+        } else if (priceRate > 0) {
             discount = round2(gross * priceRate / 100);
         } else if (marginRate > 0 && unitCost !== null) {
-            // Legado: solo dscto margen (sin precio).
             var marginBase = round2(gross - round2(billable * unitCost));
             discount = marginBase > 0 ? round2(marginBase * marginRate / 100) : 0;
         } else {
-            discount = round2(Number(line.discount_amount) || 0);
+            discount = 0;
         }
         if (discount < 0) discount = 0;
         if (discount > gross) discount = gross;
@@ -3682,6 +3688,11 @@
         }
         draft.price_discount = clampRate(parseClNumber(els.linePriceDiscount ? els.linePriceDiscount.value : "0"));
         draft.margin_discount = clampRate(parseClNumber(els.lineMarginDiscount ? els.lineMarginDiscount.value : "0"));
+        if (els.lineDiscountAmount) {
+            draft.discount_amount = round2(parseClNumber(els.lineDiscountAmount.value));
+        } else {
+            draft.discount_amount = round2(Number(line.discount_amount) || 0);
+        }
         return draft;
     }
 
@@ -3976,18 +3987,25 @@
             var priceSrc = clampRate(parseClNumber(els.linePriceDiscount ? els.linePriceDiscount.value : "0"));
             var marginSrc = clampRate(parseClNumber(els.lineMarginDiscount ? els.lineMarginDiscount.value : "0"));
             var amountSrc = round2(parseClNumber(els.lineDiscountAmount ? els.lineDiscountAmount.value : "0"));
-            if (document.activeElement === els.lineDiscountAmount) {
-                draft.discount_amount = amountSrc;
-                syncEquivalentDiscounts(draft, "discount_amount");
-            } else if (document.activeElement === els.lineMarginDiscount || (priceSrc <= 0 && marginSrc > 0 && !(amountSrc > 0))) {
-                draft.margin_discount = marginSrc;
-                syncEquivalentDiscounts(draft, "margin_discount");
-            } else if (priceSrc <= 0 && marginSrc <= 0 && amountSrc > 0) {
-                draft.discount_amount = amountSrc;
-                syncEquivalentDiscounts(draft, "discount_amount");
-            } else {
+            if (document.activeElement === els.linePriceDiscount) {
                 draft.price_discount = priceSrc;
                 syncEquivalentDiscounts(draft, "price_discount");
+            } else if (document.activeElement === els.lineMarginDiscount) {
+                draft.margin_discount = marginSrc;
+                syncEquivalentDiscounts(draft, "margin_discount");
+            } else if (amountSrc > 0) {
+                draft.discount_amount = amountSrc;
+                syncEquivalentDiscounts(draft, "discount_amount");
+            } else if (priceSrc > 0) {
+                draft.price_discount = priceSrc;
+                syncEquivalentDiscounts(draft, "price_discount");
+            } else if (marginSrc > 0) {
+                draft.margin_discount = marginSrc;
+                syncEquivalentDiscounts(draft, "margin_discount");
+            } else {
+                draft.price_discount = 0;
+                draft.margin_discount = 0;
+                draft.discount_amount = 0;
             }
             line.price_discount = clampRate(draft.price_discount);
             line.margin_discount = lineHasUnitCost(draft) ? clampRate(draft.margin_discount) : 0;

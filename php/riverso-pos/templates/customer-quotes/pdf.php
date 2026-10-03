@@ -45,7 +45,12 @@ if (!function_exists('riverso_cq_pdf_esc')) {
     }
 }
 
-$title = 'Cotización ' . (string) ($doc['quote_number'] ?? '');
+$doc_heading = trim((string) ($doc['document_heading'] ?? ''));
+if ($doc_heading === '') {
+    $doc_heading = 'COTIZACIÓN';
+}
+$doc_number = (string) ($doc['document_number'] ?? ($doc['quote_number'] ?? ''));
+$title = trim($doc_heading . ' ' . $doc_number);
 ?>
 <!DOCTYPE html>
 <html lang="es-CL">
@@ -83,10 +88,10 @@ $title = 'Cotización ' . (string) ($doc['quote_number'] ?? '');
         </header>
 
         <div class="cq-pdf-title-row">
-            <h2>COTIZACIÓN</h2>
+            <h2><?php echo riverso_cq_pdf_esc($doc_heading); ?></h2>
             <div class="cq-pdf-number">
                 <span class="cq-pdf-number-label">N º</span>
-                <strong><?php echo riverso_cq_pdf_esc($doc['quote_number'] ?? ''); ?></strong>
+                <strong><?php echo riverso_cq_pdf_esc($doc_number); ?></strong>
             </div>
         </div>
 

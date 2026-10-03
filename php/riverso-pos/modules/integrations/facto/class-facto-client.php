@@ -197,10 +197,30 @@ class Riverso_Facto_Client {
     }
 
     /**
+     * Emite un DTE en FACTO. Solo con emisión confirmada.
+     * draft_preview / draft_only están bloqueados: en esta cuenta asignan folio real.
+     *
      * @param array $payload
+     * @param bool  $emit_confirmed Debe ser true desde el flujo de Emitir (confirmación del usuario).
      * @return array|WP_Error
      */
-    public function create_document(array $payload) {
+    public function create_document(array $payload, $emit_confirmed = false) {
+        if (!$emit_confirmed) {
+            return new WP_Error(
+                'facto_emit_blocked',
+                'Emisión FACTO bloqueada: falta confirmación explícita. La vista previa no puede crear documentos.'
+            );
+        }
+        $options = isset($payload['options']) && is_array($payload['options']) ? $payload['options'] : [];
+        if (!empty($options['draft_preview']) || !empty($options['draft_only'])) {
+            return new WP_Error(
+                'facto_draft_blocked',
+                'Emisión FACTO bloqueada: draft_preview/draft_only asignan folio real en esta cuenta.'
+            );
+        }
+        // No enviar marcas internas al API.
+        unset($payload['_riverso_emit_confirmed']);
+
         return $this->request('POST', 'documents', $payload);
     }
 

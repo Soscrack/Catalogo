@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * @param string $key enabled|base_url|client_id|client_secret|username|password|account_id|price_list_id|location_id|currency_id|tax_type_id|sync_enabled|issuer_*
+ * @param string $key enabled|base_url|client_id|client_secret|username|password|account_id|price_list_id|location_id|currency_id|tax_type_id|template_thermal_50mm|sync_enabled|issuer_*
  * @param mixed  $default
  * @return mixed
  */
@@ -42,6 +42,8 @@ function riverso_get_facto_config($key, $default = '') {
         'price_list_id' => 1,
         'location_id'   => 1,
         'account_id'    => '',
+        // Plantilla FACTO «Boleta formato térmico 50mm» (MediaBox ~50mm).
+        'template_thermal_50mm' => 1,
         'issuer_rut'    => '',
         'issuer_legal_name' => '',
         'issuer_address' => '',
@@ -90,6 +92,7 @@ function riverso_facto_sync_enabled() {
 
 /**
  * Datos del emisor para POST /documents (Chile).
+ * Completa campos vacíos de Ajustes con el encabezado del último DTE emitido en FACTO.
  *
  * @return array{ok:bool,missing:string[],issuer:array<string,string>}
  */
@@ -114,6 +117,29 @@ function riverso_facto_issuer_profile() {
         'activity' => trim((string) riverso_get_facto_config('issuer_activity', '')),
         'country_id' => (string) riverso_get_facto_config('issuer_country_id', '253'),
     ];
+
+    $fill_keys = ['tax_id_code', 'legal_name', 'address', 'district', 'city', 'phone', 'activity'];
+    $needs_fill = false;
+    foreach ($fill_keys as $fk) {
+        if ($issuer[$fk] === '') {
+            $needs_fill = true;
+            break;
+        }
+    }
+    if ($needs_fill) {
+        $from_doc = riverso_facto_issuer_from_issued_document();
+        if (is_array($from_doc)) {
+            foreach ($fill_keys as $fk) {
+                if ($issuer[$fk] === '' && !empty($from_doc[$fk])) {
+                    $issuer[$fk] = trim((string) $from_doc[$fk]);
+                }
+            }
+            if ($issuer['country_id'] === '' && !empty($from_doc['country_id'])) {
+                $issuer['country_id'] = (string) $from_doc['country_id'];
+            }
+        }
+    }
+
     $missing = [];
     $map = [
         'issuer_rut' => $issuer['tax_id_code'],
@@ -137,4 +163,88 @@ function riverso_facto_issuer_profile() {
         'missing' => $missing,
         'issuer' => $issuer,
     ];
+}
+
+/**
+ * Emisor desde el último documento emitido (boleta 37 o factura 2).
+ * Resultado cacheado 1 hora. No escribe opciones de Ajustes.
+ *
+ * @return array<string,string>|null
+ */
+function riverso_facto_issuer_from_issued_document() {
+    $cache_key = 'riverso_facto_issuer_from_docs';
+    $cached = get_transient($cache_key);
+    if (is_array($cached) && !empty($cached['tax_id_code'])) {
+        return $cached;
+    }
+    // Cache negativo breve: evita martillar FACTO si falla.
+    if ($cached === 'none') {
+        return null;
+    }
+    if (!riverso_facto_is_configured()) {
+        return null;
+    }
+
+    $client_path = RIVERSO_POS_PLUGIN_DIR . 'modules/integrations/facto/class-facto-client.php';
+    if (!class_exists('Riverso_Facto_Client') && file_exists($client_path)) {
+        require_once $client_path;
+    }
+    if (!class_exists('Riverso_Facto_Client')) {
+        return null;
+    }
+
+    $client = new Riverso_Facto_Client();
+    $header = null;
+    foreach ([37, 2] as $type_id) {
+        $resp = $client->list_documents([
+            'document_type_id' => $type_id,
+            'order_by' => 'desc',
+            'page' => 1,
+            'per_page' => 5,
+        ]);
+        if (is_wp_error($resp)) {
+            continue;
+        }
+        $docs = Riverso_Facto_Client::embed_collection($resp, 'documents');
+        foreach ($docs as $doc) {
+            if (!is_array($doc) || empty($doc['document_id'])) {
+                continue;
+            }
+            $full = $client->get_document($doc['document_id']);
+            if (is_wp_error($full) || empty($full['header']) || !is_array($full['header'])) {
+                continue;
+            }
+            $h = $full['header'];
+            if (trim((string) ($h['issuer_tax_id_code'] ?? '')) === ''
+                || trim((string) ($h['issuer_legal_name'] ?? '')) === ''
+            ) {
+                continue;
+            }
+            $header = $h;
+            break 2;
+        }
+    }
+
+    if ($header === null) {
+        set_transient($cache_key, 'none', 5 * MINUTE_IN_SECONDS);
+        return null;
+    }
+
+    $profile = [
+        'tax_id_code' => trim((string) ($header['issuer_tax_id_code'] ?? '')),
+        'legal_name' => trim((string) ($header['issuer_legal_name'] ?? '')),
+        'address' => trim((string) ($header['issuer_address'] ?? '')),
+        'district' => trim((string) ($header['issuer_district'] ?? '')),
+        'city' => trim((string) ($header['issuer_city'] ?? '')),
+        'phone' => trim((string) ($header['issuer_phone'] ?? '')),
+        'activity' => trim((string) ($header['issuer_activity'] ?? '')),
+        'country_id' => trim((string) ($header['issuer_country_id'] ?? '253')),
+    ];
+    if ($profile['tax_id_code'] === '' || $profile['legal_name'] === '') {
+        set_transient($cache_key, 'none', 5 * MINUTE_IN_SECONDS);
+        return null;
+    }
+
+    set_transient($cache_key, $profile, HOUR_IN_SECONDS);
+    return $profile;
 }

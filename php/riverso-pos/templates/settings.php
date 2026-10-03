@@ -34,6 +34,7 @@ $facto_price_list_id = riverso_get_facto_config('price_list_id', 1);
 $facto_location_id = riverso_get_facto_config('location_id', 1);
 $facto_currency_id = riverso_get_facto_config('currency_id', 39);
 $facto_tax_type_id = riverso_get_facto_config('tax_type_id', 387);
+$facto_template_thermal_50mm = (int) riverso_get_facto_config('template_thermal_50mm', 1);
 $facto_issuer_rut = riverso_get_facto_config('issuer_rut', '');
 $facto_issuer_legal_name = riverso_get_facto_config('issuer_legal_name', '');
 $facto_issuer_address = riverso_get_facto_config('issuer_address', '');
@@ -265,6 +266,15 @@ $facto_issuer_activity = riverso_get_facto_config('issuer_activity', '');
                 </td>
             </tr>
             <tr>
+                <th scope="row">Plantilla térmica 50mm</th>
+                <td>
+                    <input type="number" name="facto_template_thermal_50mm" class="small-text" min="1"
+                           value="<?php echo esc_attr($facto_template_thermal_50mm); ?>"
+                           title="options.template_id FACTO">
+                    <p class="description">ID de plantilla FACTO para previsualizar boleta/factura en formato térmico 50mm (<code>options.template_id</code>). Por defecto 1.</p>
+                </td>
+            </tr>
+            <tr>
                 <th scope="row">Emisor (DTE)</th>
                 <td>
                     <p class="description">Datos del emisor para Facturación → Emitir. Obligatorios al emitir factura/boleta.</p>
@@ -373,6 +383,7 @@ jQuery(function($) {
             facto_location_id: $('input[name="facto_location_id"]').val(),
             facto_currency_id: $('input[name="facto_currency_id"]').val(),
             facto_tax_type_id: $('input[name="facto_tax_type_id"]').val(),
+            facto_template_thermal_50mm: $('input[name="facto_template_thermal_50mm"]').val(),
             facto_issuer_rut: $('input[name="facto_issuer_rut"]').val(),
             facto_issuer_legal_name: $('input[name="facto_issuer_legal_name"]').val(),
             facto_issuer_address: $('input[name="facto_issuer_address"]').val(),

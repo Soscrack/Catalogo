@@ -102,6 +102,7 @@ class Riverso_Billing_Module {
         add_action('wp_ajax_riverso_billing_ensure_customer', [$this, 'ajax_ensure_customer']);
         add_action('wp_ajax_riverso_billing_load_quote', [$this, 'ajax_load_quote']);
         add_action('wp_ajax_riverso_billing_preview', [$this, 'ajax_preview']);
+        add_action('wp_ajax_riverso_billing_preview_html', [$this, 'ajax_preview_html']);
         add_action('wp_ajax_riverso_billing_emit', [$this, 'ajax_emit']);
         add_action('wp_ajax_riverso_billing_draft_save', [$this, 'ajax_draft_save']);
         add_action('wp_ajax_riverso_billing_draft_get', [$this, 'ajax_draft_get']);
@@ -156,6 +157,9 @@ class Riverso_Billing_Module {
             'accountId' => (string) riverso_get_facto_config('account_id', ''),
             'taxTypeId' => (string) riverso_get_facto_config('tax_type_id', 387),
             'currencyId' => (int) riverso_get_facto_config('currency_id', 39),
+            'previewTemplates' => [
+                'thermal50mm' => (int) riverso_get_facto_config('template_thermal_50mm', 1),
+            ],
             'documentTypes' => [
                 ['id' => 2, 'label' => 'Factura electrónica', 'enabled' => true],
                 ['id' => 37, 'label' => 'Boleta electrónica', 'enabled' => true],
@@ -173,6 +177,7 @@ class Riverso_Billing_Module {
                 'ensureCustomer' => 'riverso_billing_ensure_customer',
                 'loadQuote' => 'riverso_billing_load_quote',
                 'preview' => 'riverso_billing_preview',
+                'previewHtml' => 'riverso_billing_preview_html',
                 'emit' => 'riverso_billing_emit',
                 'draftSave' => 'riverso_billing_draft_save',
                 'draftGet' => 'riverso_billing_draft_get',
@@ -458,30 +463,145 @@ class Riverso_Billing_Module {
 
     public function ajax_preview() {
         $this->authorize();
-        $built = $this->build_facto_payload_from_request(true);
-        if (is_wp_error($built)) {
-            wp_send_json_error(['message' => $built->get_error_message()]);
+        // No llamar a FACTO: draft_preview asigna folio y puede enviar al SII.
+        wp_send_json_error([
+            'message' => 'Vista previa PDF oficial / térmica detenida: FACTO asigna folio aunque se pida borrador. Usa Carta por familia o Carta por producto. La emisión solo con el botón Emitir.',
+            'code' => 'preview_facto_disabled',
+        ]);
+    }
+
+    /**
+     * Vista previa HTML imprimible (carta por familia / por producto).
+     * No crea documento en FACTO ni envía al SII.
+     */
+    public function ajax_preview_html() {
+        $this->authorize();
+
+        $template = isset($_POST['template']) ? sanitize_text_field(wp_unslash($_POST['template'])) : 'family';
+        $preferred = isset($_POST['document_type_id']) ? absint($_POST['document_type_id']) : 37;
+        if (!in_array($preferred, [2, 37], true)) {
+            $preferred = 37;
         }
-        $client = $this->facto_client();
-        $resp = $client->create_document($built['payload']);
-        if (is_wp_error($resp)) {
-            wp_send_json_error([
-                'message' => $resp->get_error_message(),
-                'detail' => $resp->get_error_data(),
-            ]);
+
+        $lines_raw = isset($_POST['lines']) ? wp_unslash($_POST['lines']) : '[]';
+        if (is_string($lines_raw)) {
+            $lines = json_decode($lines_raw, true);
+        } else {
+            $lines = $lines_raw;
         }
-        $preview = '';
-        if (!empty($resp['electronic_document']['document_pdf'])) {
-            $preview = (string) $resp['electronic_document']['document_pdf'];
-        } elseif (!empty($resp['result']['document_pdf'])) {
-            $preview = (string) $resp['result']['document_pdf'];
+        if (!is_array($lines) || !$lines) {
+            wp_send_json_error(['message' => 'Agrega al menos una línea.']);
         }
+
+        $quote_pdf = RIVERSO_POS_PLUGIN_DIR . 'sales/customer_quotes/class-quote-pdf.php';
+        if (!class_exists('Riverso_Quote_Pdf') && file_exists($quote_pdf)) {
+            require_once $quote_pdf;
+        }
+        if (!class_exists('Riverso_Quote_Pdf')) {
+            wp_send_json_error(['message' => 'Generador de carta no disponible.']);
+        }
+
+        $issue_date = isset($_POST['issue_date']) ? sanitize_text_field(wp_unslash($_POST['issue_date'])) : '';
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $issue_date)) {
+            $issue_date = current_time('Y-m-d');
+        }
+
+        $normalized = [];
+        foreach ($lines as $line) {
+            if (!is_array($line)) {
+                continue;
+            }
+            $qty = round((float) ($line['quantity'] ?? 0), 3);
+            if ($qty <= 0) {
+                continue;
+            }
+            $unit = round((float) ($line['unit_price_bruto'] ?? $line['unit_price'] ?? 0), 4);
+            $afecto = true;
+            if (isset($line['afecto']) && ($line['afecto'] === false || $line['afecto'] === 0 || $line['afecto'] === '0')) {
+                $afecto = false;
+            }
+            $normalized[] = [
+                'sku' => substr(trim((string) ($line['sku'] ?? '')), 0, 64),
+                'description' => trim((string) ($line['description'] ?? $line['line_description'] ?? 'Ítem')),
+                'quantity' => $qty,
+                'unit_price' => $unit,
+                'unit_price_bruto' => $unit,
+                'line_total_bruto' => isset($line['line_total_bruto']) ? (float) $line['line_total_bruto'] : null,
+                'line_net' => isset($line['line_total_bruto']) ? (float) $line['line_total_bruto'] : null,
+                'afecto' => $afecto,
+                'producto_base_id' => isset($line['producto_base_id']) ? absint($line['producto_base_id']) : 0,
+                'grupo_id' => isset($line['grupo_id']) ? absint($line['grupo_id']) : 0,
+                'units_per_pack' => isset($line['units_per_pack']) ? (float) $line['units_per_pack'] : 1,
+                'price_mode' => isset($line['price_mode']) ? (string) $line['price_mode'] : 'auto',
+                'price_total' => isset($line['price_total']) ? $line['price_total'] : null,
+                'price_discount' => isset($line['price_discount']) ? (float) $line['price_discount'] : 0,
+                'margin_discount' => isset($line['margin_discount']) ? (float) $line['margin_discount'] : 0,
+                'discount_amount' => isset($line['discount_amount']) ? (float) $line['discount_amount'] : 0,
+                'unit_cost' => isset($line['unit_cost']) ? $line['unit_cost'] : null,
+                'rule_total' => isset($line['rule_total']) ? $line['rule_total'] : (isset($line['_rule_total']) ? $line['_rule_total'] : null),
+                'rule_adjusted' => !empty($line['rule_adjusted']) || !empty($line['_rule_adjusted']),
+                '_family' => isset($line['_family']) && is_array($line['_family']) ? $line['_family'] : [],
+            ];
+        }
+        if (!$normalized) {
+            wp_send_json_error(['message' => 'No hay líneas válidas.']);
+        }
+
+        $heading = $preferred === 2 ? 'FACTURA ELECTRÓNICA' : 'BOLETA ELECTRÓNICA';
+        $folio = isset($_POST['estimated_folio']) ? sanitize_text_field(wp_unslash($_POST['estimated_folio'])) : '';
+        $doc_number = $folio !== '' ? $folio : 'BORRADOR';
+
+        $customer_name = isset($_POST['receiver_legal_name'])
+            ? sanitize_text_field(wp_unslash($_POST['receiver_legal_name']))
+            : '';
+        $customer_rut = isset($_POST['receiver_rut'])
+            ? sanitize_text_field(wp_unslash($_POST['receiver_rut']))
+            : '';
+        $customer_phone = isset($_POST['receiver_phone'])
+            ? sanitize_text_field(wp_unslash($_POST['receiver_phone']))
+            : '';
+
+        $quote_like = [
+            'id' => 0,
+            'quote_number' => $doc_number,
+            'issue_date' => $issue_date,
+            'customer_name' => $customer_name,
+            'notes' => '',
+            'validity_days' => null,
+            'validity_terms' => '',
+            'lines' => $normalized,
+        ];
+
+        $doc = Riverso_Quote_Pdf::build($quote_like, $template);
+        $doc['document_heading'] = $heading;
+        $doc['document_number'] = $doc_number;
+        $doc['quote_number'] = $doc_number;
+        $doc['customer_rut'] = $customer_rut;
+        $doc['customer_phone'] = $customer_phone;
+
+        $css_path = RIVERSO_POS_PLUGIN_DIR . 'assets/css/customer-quote-pdf.css';
+        $css_url = rtrim(RIVERSO_POS_PLUGIN_URL, '/') . '/assets/css/customer-quote-pdf.css';
+        if (is_file($css_path)) {
+            $css_url .= '?ver=' . rawurlencode((string) filemtime($css_path));
+        }
+        $logo_path = RIVERSO_POS_PLUGIN_DIR . 'assets/img/logo-rs.png';
+        $logo_url = '';
+        if (is_file($logo_path)) {
+            $logo_url = rtrim(RIVERSO_POS_PLUGIN_URL, '/') . '/assets/img/logo-rs.png?ver='
+                . rawurlencode((string) filemtime($logo_path));
+        }
+
+        ob_start();
+        include RIVERSO_POS_PLUGIN_DIR . 'templates/customer-quotes/pdf.php';
+        $html = ob_get_clean();
+        if (!is_string($html) || $html === '') {
+            wp_send_json_error(['message' => 'No se pudo generar la carta.']);
+        }
+
         wp_send_json_success([
-            'totals' => $built['totals'],
-            'document_type_id' => $built['document_type_id'],
-            'preview_pdf_base64' => $preview,
-            'raw_status' => isset($resp['result']['status']) ? $resp['result']['status'] : null,
-            'error_message' => isset($resp['result']['error_message']) ? $resp['result']['error_message'] : '',
+            'html' => $html,
+            'template' => Riverso_Quote_Pdf::normalize_template($template),
+            'document_type_id' => $preferred,
         ]);
     }
 
@@ -514,7 +634,7 @@ class Riverso_Billing_Module {
             }
 
             $client = $this->facto_client();
-            $resp = $client->create_document($built['payload']);
+            $resp = $client->create_document($built['payload'], true);
             if (is_wp_error($resp)) {
                 wp_send_json_error([
                     'message' => $resp->get_error_message(),
@@ -720,11 +840,12 @@ class Riverso_Billing_Module {
                 $gid = (int) $line['_family']['grupo_id'];
             }
             $rule_adjusted = !empty($line['rule_adjusted']) || !empty($line['_rule_adjusted']);
+            // Preferir _rule_total (resultado fresco del cliente) sobre rule_total persistido.
             $rule_total = null;
-            if (isset($line['rule_total']) && $line['rule_total'] !== null && $line['rule_total'] !== '') {
-                $rule_total = (float) $line['rule_total'];
-            } elseif (isset($line['_rule_total']) && $line['_rule_total'] !== null && $line['_rule_total'] !== '') {
+            if (isset($line['_rule_total']) && $line['_rule_total'] !== null && $line['_rule_total'] !== '') {
                 $rule_total = (float) $line['_rule_total'];
+            } elseif (isset($line['rule_total']) && $line['rule_total'] !== null && $line['rule_total'] !== '') {
+                $rule_total = (float) $line['rule_total'];
             }
             $row = [
                 'sku' => (string) ($line['sku'] ?? ''),
@@ -769,14 +890,24 @@ class Riverso_Billing_Module {
             $line_net = isset($line['line_net'])
                 ? (float) $line['line_net']
                 : round($qty * (float) ($line['unit_price'] ?? 0), 2);
-            $unit_bruto = round($line_net / $qty, 6);
+            // Unitario por envase solo para totales DTE de cabecera; no pisa el unitario del cliente.
+            $pack_unit_bruto = round($line_net / $qty, 6);
             $src = $normalized_input[$idx] ?? $line;
+            $client_unit = (float) ($src['unit_price'] ?? $line['unit_price'] ?? $pack_unit_bruto);
+            $rule_total_persist = null;
+            if (isset($line['rule_total']) && $line['rule_total'] !== null && $line['rule_total'] !== '') {
+                $rule_total_persist = $line['rule_total'];
+            } elseif (isset($src['rule_total']) && $src['rule_total'] !== null && $src['rule_total'] !== '') {
+                $rule_total_persist = $src['rule_total'];
+            }
+            $rule_adjusted_persist = !empty($line['rule_adjusted']) || !empty($src['rule_adjusted']);
             $persist_line = [
                 'sku' => (string) ($src['sku'] ?? ''),
                 'description' => (string) ($src['description'] ?? ''),
                 'quantity' => $qty,
-                'unit_price' => (float) ($line['unit_price'] ?? $unit_bruto),
-                'unit_price_bruto' => $unit_bruto,
+                'unit_price' => $client_unit,
+                // Persistir precio por unidad del cliente (no bruto/envases).
+                'unit_price_bruto' => $client_unit,
                 'line_total_bruto' => round($line_net, 2),
                 'afecto' => !empty($src['afecto']),
                 'product_id' => $src['product_id'] ?? null,
@@ -792,15 +923,15 @@ class Riverso_Billing_Module {
                 'price_discount' => (float) ($line['price_discount'] ?? 0),
                 'margin_discount' => (float) ($line['margin_discount'] ?? 0),
                 'discount_amount' => (float) ($line['discount_amount'] ?? 0),
-                'rule_total' => isset($line['rule_total']) ? $line['rule_total'] : ($src['rule_total'] ?? null),
-                'rule_adjusted' => !empty($line['rule_adjusted']) || !empty($src['rule_adjusted']),
+                'rule_total' => $rule_total_persist,
+                'rule_adjusted' => $rule_adjusted_persist,
             ];
             $persist[] = $persist_line;
             $emit_lines[] = [
                 'sku' => $persist_line['sku'],
                 'description' => $persist_line['description'],
                 'quantity' => $qty,
-                'unit_price_bruto' => $unit_bruto,
+                'unit_price_bruto' => $pack_unit_bruto,
                 'afecto' => $persist_line['afecto'],
             ];
         }
@@ -1117,16 +1248,17 @@ class Riverso_Billing_Module {
         }
         // Boleta electrónica: no usar datos de receptor (anónima).
 
-        $options = [];
+        $options = [
+            // FACTO rechaza gross_values en boleta 37 (error de descuentos globales).
+            // PDF oficial y térmico usan el mismo protocolo neto.
+            'rounding_type' => 'net',
+        ];
         if ($draft_preview) {
             $options['draft_preview'] = 1;
         }
-        // Boleta: valores brutos alineados con cotización.
-        if (in_array((int) $built['document_type_id'], [37, 41], true)) {
-            $options['gross_values'] = 1;
-            $options['rounding_type'] = 'gross';
-        } else {
-            $options['rounding_type'] = 'net';
+        $template_id = isset($_POST['template_id']) ? absint($_POST['template_id']) : 0;
+        if ($template_id > 0) {
+            $options['template_id'] = $template_id;
         }
 
         $payload = [

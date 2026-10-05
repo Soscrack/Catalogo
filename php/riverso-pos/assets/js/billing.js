@@ -2410,8 +2410,18 @@
     return payload;
   }
 
+  function documentViewUrl(dteId) {
+    var base = cfg.documentUrl || ((cfg.portalUrl || "/interno/facturacion/").replace(/\?.*$/, "") + "?vista=documento");
+    return base + (base.indexOf("?") === -1 ? "?" : "&") + "dte_id=" + encodeURIComponent(String(dteId));
+  }
+
   function showEmitResult(data) {
     var dte = data.dte || {};
+    if (dte.id) {
+      showAlert((data.message || "Documento emitido") + " Abriendo documento…");
+      window.location.assign(documentViewUrl(dte.id));
+      return;
+    }
     state.dteId = dte.id || state.dteId;
     state.dteTotal = dte.totals && dte.totals.total_amount ? dte.totals.total_amount : state.dteTotal;
     if (data.draft) applyDraft(data.draft);

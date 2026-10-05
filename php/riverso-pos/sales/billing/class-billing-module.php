@@ -727,6 +727,7 @@ class Riverso_Billing_Module {
         if ($quote_id > 0) {
             $existing = $this->issued->find_success_by_quote($quote_id);
             if ($existing) {
+                $this->mark_linked_quote_listed($quote_id);
                 wp_send_json_success([
                     'idempotent' => true,
                     'message' => 'Ya existe un DTE para esta cotización (folio ' . $existing['folio'] . ').',
@@ -973,6 +974,7 @@ class Riverso_Billing_Module {
 
             $payments = $this->drafts->list_document_payments($draft_id, (int) $insert_id);
             $draft = $draft_id > 0 ? $this->present_draft($this->drafts->get($draft_id)) : null;
+            $this->mark_linked_quote_listed($quote_id);
 
             wp_send_json_success([
                 'idempotent' => false,
@@ -1485,9 +1487,8 @@ class Riverso_Billing_Module {
         // Boleta electrónica: no usar datos de receptor (anónima).
 
         $options = [
-            // FACTO rechaza gross_values en boleta 37 (error de descuentos globales).
-            // PDF oficial y térmico usan el mismo protocolo neto.
-            'rounding_type' => 'net',
+            // Unit price neto (6 dec.) + total bruto exacto. No usar gross_values: FACTO lo rechaza en boleta 37.
+            'rounding_type' => 'gross',
         ];
         if ($draft_preview) {
             $options['draft_preview'] = 1;
@@ -1599,6 +1600,9 @@ class Riverso_Billing_Module {
             wp_send_json_error(['message' => $result['message'] ?? 'No se pudo guardar el borrador.']);
         }
         $draft = $this->present_draft($this->drafts->get((int) $result['id']));
+        if (!empty($draft['quote_id'])) {
+            $this->mark_linked_quote_listed((int) $draft['quote_id']);
+        }
         wp_send_json_success(['draft' => $draft]);
     }
 
@@ -1719,6 +1723,9 @@ class Riverso_Billing_Module {
         }
         $this->drafts->mark_closed_local((int) $saved['id']);
         $draft = $this->present_draft($this->drafts->get((int) $saved['id']));
+        if (!empty($draft['quote_id'])) {
+            $this->mark_linked_quote_listed((int) $draft['quote_id']);
+        }
         if (class_exists('Riverso_Audit_Module')) {
             Riverso_Audit_Module::get_instance()->log(
                 'billing.draft_closed_local',
@@ -2470,6 +2477,34 @@ class Riverso_Billing_Module {
             ];
         }
         wp_send_json_success(['quotes' => $out]);
+    }
+
+    /**
+     * Cotización facturada con documento asociado queda en Lista.
+     *
+     * @param int $quote_id
+     */
+    private function mark_linked_quote_listed($quote_id) {
+        $quote_id = absint($quote_id);
+        if ($quote_id <= 0) {
+            return;
+        }
+        $status_path = RIVERSO_POS_PLUGIN_DIR . 'sales/customer_quotes/class-quote-status.php';
+        $repo_path = RIVERSO_POS_PLUGIN_DIR . 'sales/customer_quotes/class-customer-quote-repository.php';
+        if (!class_exists('Riverso_Quote_Status') && file_exists($status_path)) {
+            require_once $status_path;
+        }
+        if (!class_exists('Riverso_Customer_Quote_Repository') && file_exists($repo_path)) {
+            require_once $repo_path;
+        }
+        if (!class_exists('Riverso_Customer_Quote_Repository') || !method_exists('Riverso_Customer_Quote_Repository', 'mark_listed')) {
+            return;
+        }
+        try {
+            (new Riverso_Customer_Quote_Repository())->mark_listed($quote_id);
+        } catch (Exception $error) {
+            // La emisión ya quedó guardada; el listado vuelve a promover al abrir cotizaciones.
+        }
     }
 
     /**

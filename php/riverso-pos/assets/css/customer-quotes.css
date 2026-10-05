@@ -394,6 +394,16 @@
     color: #fff;
 }
 
+.cq-btn-danger {
+    background: #fff;
+    border-color: #b91c1c;
+    color: #b91c1c;
+}
+
+.cq-btn-danger:hover {
+    background: #fef2f2;
+}
+
 .cq-btn:disabled {
     opacity: 0.55;
     cursor: not-allowed;
@@ -831,6 +841,14 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+}
+
+.cq-line-desc-field {
+    width: 100%;
+}
+
+.cq-line-fields .cq-manual-full {
+    grid-column: 1 / -1;
 }
 
 .cq-line-tax-toggle {

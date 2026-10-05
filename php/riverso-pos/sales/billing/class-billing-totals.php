@@ -63,13 +63,14 @@ class Riverso_Billing_Totals {
             $line_bruto = round($bruto * $qty, 2);
             if ($afecto) {
                 $has_afecto = true;
-                // FACTO CLP: neto e IVA por redondeo de montos netos (pesos enteros).
-                $line_net = (float) self::net_pesos_from_gross($line_bruto);
-                $unit_net = self::unit_price_for_integer_net($qty, $line_net);
-                $tax = (float) (int) round($line_net * 0.19);
+                // FACTO rounding_type=gross: neto = round(qty × unit neto), IVA = bruto entero − neto.
+                $unit_net = round($line_bruto / self::IVA_FACTOR / $qty, 6);
+                $line_net = (float) (int) round($qty * $unit_net);
+                $line_gross = (float) (int) round($line_bruto);
+                $tax = max(0.0, $line_gross - $line_net);
                 $line_total_facto = $line_net + $tax;
                 $net_afecto += $line_net;
-                $gross_afecto += $line_bruto;
+                $gross_afecto += $line_total_facto;
                 $details[] = [
                     'quantity' => $qty,
                     'sku' => $sku !== '' ? $sku : 'ITEM',
@@ -120,35 +121,11 @@ class Riverso_Billing_Totals {
         }
 
         $net_afecto = (float) (int) round($net_afecto);
-        if ($has_afecto) {
-            $net_afecto = (float) self::close_net_to_gross($details, $lines_ui, (int) $net_afecto, (int) round($gross_afecto));
-        }
+        $gross_afecto = (float) (int) round($gross_afecto);
         $net_exento = (float) (int) round($net_exento);
         $net_total = (float) (int) round($net_afecto + $net_exento);
-        // FACTO: IVA = 19% del neto afecto redondeado (no bruto − neto comercial).
-        $taxes = (float) (int) round($net_afecto * 0.19);
-        // Ajustar residual de IVA en la última línea afecto para que la suma de detalles cierre.
-        $tax_sum = 0.0;
-        $last_afecto_idx = null;
-        foreach ($details as $i => $d) {
-            if (!empty($d['taxes'])) {
-                $tax_sum += (float) ($d['total_taxes'] ?? 0);
-                $last_afecto_idx = $i;
-            }
-        }
-        $tax_delta = (int) round($taxes - $tax_sum);
-        if ($tax_delta !== 0 && $last_afecto_idx !== null) {
-            $new_tax = (int) $details[$last_afecto_idx]['total_taxes'] + $tax_delta;
-            if ($new_tax < 0) {
-                $new_tax = 0;
-            }
-            $details[$last_afecto_idx]['total_taxes'] = (float) $new_tax;
-            $details[$last_afecto_idx]['taxes'][0]['tax_amount'] = (float) $new_tax;
-            $line_net_adj = (int) round(
-                (float) $details[$last_afecto_idx]['quantity'] * (float) $details[$last_afecto_idx]['unit_price']
-            );
-            $details[$last_afecto_idx]['total_amount_line'] = (float) ($line_net_adj + $new_tax);
-        }
+        // IVA = bruto afecto − neto afecto; puede diferir en ±1 de round(neto × 19 %) (reparo SII, no rechazo).
+        $taxes = $has_afecto ? max(0.0, $gross_afecto - $net_afecto) : 0.0;
         $total = (float) (int) round($net_total + $taxes);
 
         $type = $preferred_type;
@@ -173,77 +150,6 @@ class Riverso_Billing_Totals {
             ],
             'lines_ui' => $lines_ui,
         ];
-    }
-
-    /**
-     * Neto afecto N tal que N + round(N × 19 %) = bruto comercial; si no existe, el más cercano.
-     *
-     * @param int $gross
-     * @return int
-     */
-    public static function net_closing_gross($gross) {
-        $gross = (int) $gross;
-        $base = (int) round($gross / self::IVA_FACTOR);
-        $best = $base;
-        $best_diff = null;
-        foreach ([0, -1, 1, -2, 2, -3, 3] as $step) {
-            $net = $base + $step;
-            if ($net < 0) {
-                continue;
-            }
-            $diff = abs($net + (int) round($net * 0.19) - $gross);
-            if ($best_diff === null || $diff < $best_diff) {
-                $best = $net;
-                $best_diff = $diff;
-            }
-            if ($diff === 0) {
-                break;
-            }
-        }
-        return $best;
-    }
-
-    /**
-     * Reparte en la línea afecta de mayor neto la diferencia para que neto + IVA cierre al bruto.
-     *
-     * @param array $details
-     * @param array $lines_ui
-     * @param int   $net_afecto
-     * @param int   $gross_afecto
-     * @return int neto afecto final
-     */
-    private static function close_net_to_gross(array &$details, array &$lines_ui, $net_afecto, $gross_afecto) {
-        $target = self::net_closing_gross($gross_afecto);
-        $delta = $target - (int) $net_afecto;
-        if ($delta === 0) {
-            return (int) $net_afecto;
-        }
-        $idx = null;
-        $max_net = 0;
-        foreach ($details as $i => $d) {
-            if (empty($d['taxes'])) {
-                continue;
-            }
-            $line_net = (int) round((float) $d['quantity'] * (float) $d['unit_price']);
-            if ($idx === null || $line_net > $max_net) {
-                $idx = $i;
-                $max_net = $line_net;
-            }
-        }
-        if ($idx === null || $max_net + $delta <= 0) {
-            return (int) $net_afecto;
-        }
-        $new_net = $max_net + $delta;
-        $qty = (float) $details[$idx]['quantity'];
-        $details[$idx]['unit_price'] = self::unit_price_for_integer_net($qty, $new_net);
-        $tax = (float) (int) round($new_net * 0.19);
-        $details[$idx]['total_taxes'] = $tax;
-        $details[$idx]['taxes'][0]['tax_amount'] = $tax;
-        $details[$idx]['total_amount_line'] = (float) ($new_net + $tax);
-        if (isset($lines_ui[$idx])) {
-            $lines_ui[$idx]['line_net'] = (float) $new_net;
-        }
-        return $target;
     }
 
     /**

@@ -1630,6 +1630,9 @@
         if (billEls.lineSubtitle) {
             billEls.lineSubtitle.textContent = (line.sku || "") + (line.description ? (" — " + line.description) : "");
         }
+        if (billEls.lineDesc) {
+            billEls.lineDesc.value = line.description || "";
+        }
         if (billEls.lineQty) {
             billEls.lineQty.value = formatQty(line.quantity);
         }
@@ -1685,6 +1688,10 @@
         if (!(qty > 0)) {
             billSetMessage("La cantidad debe ser mayor a cero.", true);
             return;
+        }
+        var descEdited = billEls.lineDesc ? String(billEls.lineDesc.value || "").trim() : "";
+        if (descEdited) {
+            line.description = descEdited;
         }
         var mode = state.lineModal.mode;
         var draft = lineModalDraftForDiscount();
@@ -2551,6 +2558,7 @@
       familyHint: g("bill-family-hint"),
       familyOpenAdmin: g("bill-family-open-admin"),
       lineSubtitle: g("bill-line-subtitle"),
+      lineDesc: g("bill-line-desc"),
       lineQty: g("bill-line-qty"),
       lineQtyHint: g("bill-line-qty-hint"),
       linePref: g("bill-line-pref"),

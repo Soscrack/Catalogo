@@ -848,6 +848,11 @@ if (!function_exists('riverso_pos_billing_json')) {
             </div>
             <p id="bill-line-rule-info" class="cq-line-rule-info" hidden></p>
             <div class="cq-line-fields">
+                <label class="cq-float-field cq-manual-full" id="bill-line-desc-field">
+                    <span>Nombre en documento</span>
+                    <input type="text" id="bill-line-desc" maxlength="255" autocomplete="off">
+                    <em class="cq-float-hint">Así aparecerá en el PDF y en el documento emitido</em>
+                </label>
                 <label class="cq-float-field" id="bill-line-qty-field">
                     <span>Cantidad</span>
                     <input type="text" id="bill-line-qty" inputmode="decimal" autocomplete="off">

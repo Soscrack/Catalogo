@@ -13,6 +13,8 @@ class Riverso_Customer_Quote_Repository {
     private $item_columns = null;
     /** @var array<string, bool>|null */
     private $quote_columns = null;
+    /** @var array<string, bool> */
+    private $known_tables = array();
 
     public function __construct() {
         global $wpdb;
@@ -23,6 +25,7 @@ class Riverso_Customer_Quote_Repository {
     public function list_quotes(array $filters = array()) {
         global $wpdb;
         $this->ensure_sale_schema();
+        $this->promote_documented_quotes();
         // Filtro por fecha de emisión (issue_date; respaldo DATE(created_at)).
         $sql = "SELECT q.*, (SELECT COUNT(*) FROM {$this->table_items} i WHERE i.quote_id = q.id) AS line_count
                 FROM {$this->table_quotes} q";
@@ -395,6 +398,141 @@ class Riverso_Customer_Quote_Repository {
             throw new Riverso_Quote_Exception('Cotización no encontrada tras facturar.');
         }
         return $updated;
+    }
+
+    /**
+     * Pasa a Lista una cotización que ya tiene documento de facturación.
+     * Idempotente: si ya está en Lista, no escribe.
+     *
+     * @param int $id
+     */
+    public function mark_listed($id) {
+        global $wpdb;
+        $id = (int) $id;
+        if ($id <= 0) {
+            return;
+        }
+        $quote = $this->find($id);
+        if ($quote === null || $quote['status'] === Riverso_Quote_Status::LISTED) {
+            return;
+        }
+        $wpdb->update(
+            $this->table_quotes,
+            array(
+                'status' => Riverso_Quote_Status::LISTED,
+                'updated_at' => current_time('mysql'),
+            ),
+            array('id' => $id),
+            array('%s', '%s'),
+            array('%d')
+        );
+    }
+
+    /**
+     * Cotizaciones con borrador o DTE asociado quedan en Lista.
+     */
+    public function promote_documented_quotes() {
+        global $wpdb;
+        $clauses = array();
+        $drafts = $wpdb->prefix . 'riverso_billing_drafts';
+        $issued = $wpdb->prefix . 'riverso_dte_issued';
+        if ($this->table_exists($drafts)) {
+            $clauses[] = "EXISTS (SELECT 1 FROM {$drafts} d WHERE d.quote_id = q.id)";
+        }
+        if ($this->table_exists($issued)) {
+            $clauses[] = "EXISTS (SELECT 1 FROM {$issued} i WHERE i.quote_id = q.id)";
+        }
+        if (!$clauses) {
+            return;
+        }
+        $table = str_replace('`', '', $this->table_quotes);
+        $wpdb->query($wpdb->prepare(
+            "UPDATE `{$table}` q
+             SET q.status = %s, q.updated_at = %s
+             WHERE q.status <> %s AND (" . implode(' OR ', $clauses) . ')',
+            Riverso_Quote_Status::LISTED,
+            current_time('mysql'),
+            Riverso_Quote_Status::LISTED
+        ));
+    }
+
+    /**
+     * @param int $id
+     * @return bool
+     */
+    public function has_associated_document($id) {
+        global $wpdb;
+        $id = (int) $id;
+        if ($id <= 0) {
+            return false;
+        }
+        $drafts = $wpdb->prefix . 'riverso_billing_drafts';
+        $issued = $wpdb->prefix . 'riverso_dte_issued';
+        if ($this->table_exists($drafts)) {
+            $found = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$drafts} WHERE quote_id = %d LIMIT 1",
+                $id
+            ));
+            if ($found > 0) {
+                return true;
+            }
+        }
+        if ($this->table_exists($issued)) {
+            $found = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$issued} WHERE quote_id = %d LIMIT 1",
+                $id
+            ));
+            if ($found > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Borra la cotización y sus líneas. Rechaza si hay documento asociado.
+     *
+     * @param int $id
+     */
+    public function delete_quote($id) {
+        global $wpdb;
+        $id = (int) $id;
+        $quote = $this->find($id);
+        if ($quote === null) {
+            throw new Riverso_Quote_Exception('Cotización no encontrada.');
+        }
+        if ($this->has_associated_document($id)) {
+            throw new Riverso_Quote_Exception('No se puede borrar: la cotización tiene un documento asociado.');
+        }
+        $deleted_items = $wpdb->delete($this->table_items, array('quote_id' => $id), array('%d'));
+        if ($deleted_items === false) {
+            throw new Riverso_Quote_Exception('No se pudieron borrar las líneas de la cotización.' . $this->db_error_suffix());
+        }
+        $deleted = $wpdb->delete($this->table_quotes, array('id' => $id), array('%d'));
+        if (!$deleted) {
+            throw new Riverso_Quote_Exception('No se pudo borrar la cotización.' . $this->db_error_suffix());
+        }
+    }
+
+    /**
+     * @param string $table
+     * @return bool
+     */
+    private function table_exists($table) {
+        global $wpdb;
+        $table = (string) $table;
+        if ($table === '') {
+            return false;
+        }
+        if (!isset($this->known_tables)) {
+            $this->known_tables = array();
+        }
+        if (array_key_exists($table, $this->known_tables)) {
+            return $this->known_tables[$table];
+        }
+        $found = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table)));
+        $this->known_tables[$table] = is_string($found) && $found === $table;
+        return $this->known_tables[$table];
     }
 
     /**

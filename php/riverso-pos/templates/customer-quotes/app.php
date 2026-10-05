@@ -218,6 +218,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                     <span id="cq-status" class="cq-badge cq-badge-draft">Borrador</span>
                     <span id="cq-expired-badge" class="cq-expired-tag" hidden>Vencida</span>
                     <button type="button" class="cq-btn" id="cq-transition" hidden>Pasar a lista</button>
+                    <button type="button" class="cq-btn cq-btn-danger" id="cq-delete" hidden>Borrar</button>
                     <button type="button" class="cq-btn cq-btn-primary" id="cq-invoice" hidden>Facturar</button>
                     <a id="cq-order-link" class="cq-link cq-order-link" href="#" target="_blank" rel="noopener" hidden>Ver pedido</a>
                     <button type="button" class="cq-btn" id="cq-import" hidden title="Importar desde cotización recibida">Importar</button>
@@ -550,6 +551,11 @@ if (!function_exists('riverso_pos_cq_json')) {
                     <button type="button" class="cq-modal-close" id="cq-line-close" aria-label="Cerrar" data-cq-line-close="1">×</button>
                 </header>
                 <div class="cq-modal-body cq-line-modal-body">
+                    <label class="cq-float-field cq-line-desc-field" id="cq-line-desc-field">
+                        <span>Nombre en documento</span>
+                        <input type="text" id="cq-line-desc" maxlength="255" autocomplete="off">
+                        <em class="cq-float-hint">Así aparecerá en el PDF y en el documento emitido</em>
+                    </label>
                     <div class="cq-line-tax-toggle" role="group" aria-label="Visualización Neto o Bruto">
                         <button type="button" class="cq-tax-btn" id="cq-line-tax-neto" data-tax-view="neto">Neto</button>
                         <button type="button" class="cq-tax-btn is-active" id="cq-line-tax-bruto" data-tax-view="bruto">Bruto</button>

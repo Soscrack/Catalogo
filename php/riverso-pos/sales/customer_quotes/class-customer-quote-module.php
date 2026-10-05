@@ -84,6 +84,7 @@ class Riverso_Customer_Quote_Module {
         add_action('wp_ajax_riverso_cq_get', array($this, 'ajax_get'));
         add_action('wp_ajax_riverso_cq_save', array($this, 'ajax_save'));
         add_action('wp_ajax_riverso_cq_transition', array($this, 'ajax_transition'));
+        add_action('wp_ajax_riverso_cq_delete', array($this, 'ajax_delete'));
         add_action('wp_ajax_riverso_cq_search', array($this, 'ajax_search'));
         add_action('wp_ajax_riverso_cq_line_stock', array($this, 'ajax_line_stock'));
         add_action('wp_ajax_riverso_cq_invoice', array($this, 'ajax_invoice'));
@@ -162,6 +163,10 @@ class Riverso_Customer_Quote_Module {
             'canEmitDte' => current_user_can('riverso_emit_dte')
                 || current_user_can('manage_options')
                 || current_user_can('manage_woocommerce'),
+            'canDelete' => current_user_can('riverso_edit_quotes')
+                || current_user_can('riverso_create_quotes')
+                || current_user_can('manage_woocommerce')
+                || current_user_can('manage_options'),
             'currentUserName' => $user_name,
             'caps' => array(
                 'viewStock' => (bool) $can_view_stock,
@@ -188,6 +193,7 @@ class Riverso_Customer_Quote_Module {
                 'get' => 'riverso_cq_get',
                 'save' => 'riverso_cq_save',
                 'transition' => 'riverso_cq_transition',
+                'delete' => 'riverso_cq_delete',
                 'search' => 'riverso_cq_search',
                 'lineStock' => 'riverso_cq_line_stock',
                 'receivedList' => 'riverso_cq_received_list',
@@ -382,14 +388,40 @@ class Riverso_Customer_Quote_Module {
 
     public function ajax_transition() {
         $this->authorize();
+        $id = (int) $this->post_string('id');
+        $to = $this->post_string('status');
+        if ($this->quotes->has_associated_document($id) && Riverso_Quote_Status::normalize_legacy($to) !== Riverso_Quote_Status::LISTED) {
+            $this->fail('Esta cotización tiene un documento asociado y permanece en Lista.');
+        }
         try {
-            $quote = $this->quotes->transition((int) $this->post_string('id'), $this->post_string('status'));
+            $quote = $this->quotes->transition($id, $to);
         } catch (Riverso_Quote_Exception $error) {
             $this->fail($error->getMessage());
         }
         $this->ok(array(
             'quote' => $this->present_quote_with_docs($quote),
             'message' => 'Estado actualizado a ' . $quote['status_label'] . '.',
+        ));
+    }
+
+    public function ajax_delete() {
+        $this->authorize();
+        $can_delete = current_user_can('riverso_edit_quotes')
+            || current_user_can('riverso_create_quotes')
+            || current_user_can('manage_woocommerce')
+            || current_user_can('manage_options');
+        if (!$can_delete) {
+            $this->fail('No tienes permiso para borrar cotizaciones.', 403);
+        }
+        $id = (int) $this->post_string('id');
+        try {
+            $this->quotes->delete_quote($id);
+        } catch (Riverso_Quote_Exception $error) {
+            $this->fail($error->getMessage());
+        }
+        $this->ok(array(
+            'deleted_id' => $id,
+            'message' => 'Cotización borrada.',
         ));
     }
 
@@ -1774,8 +1806,20 @@ class Riverso_Customer_Quote_Module {
      * @return array<string, mixed>
      */
     private function present_quote_with_docs(array $quote) {
+        $id = (int) ($quote['id'] ?? 0);
+        $docs = $this->list_associated_documents($id);
+        if ($docs && ($quote['status'] ?? '') !== Riverso_Quote_Status::LISTED) {
+            $this->quotes->mark_listed($id);
+            $fresh = $this->quotes->find($id);
+            if (is_array($fresh)) {
+                $quote = $fresh;
+            }
+        }
+        if ($docs) {
+            $quote['allowed_transitions'] = array();
+        }
         $quote = $this->catalog->hydrate_quote_families($quote);
-        $quote['associated_documents'] = $this->list_associated_documents((int) ($quote['id'] ?? 0));
+        $quote['associated_documents'] = $docs;
         return $quote;
     }
 

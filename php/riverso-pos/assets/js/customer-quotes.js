@@ -152,6 +152,7 @@
         linesEmpty: document.getElementById("cq-lines-empty"),
         message: document.getElementById("cq-message"),
         transition: document.getElementById("cq-transition"),
+        deleteBtn: document.getElementById("cq-delete"),
         invoice: document.getElementById("cq-invoice"),
         associatedCard: document.getElementById("cq-associated-card"),
         associatedList: document.getElementById("cq-associated-list"),
@@ -190,6 +191,7 @@
         lineModeStdWrap: document.getElementById("cq-line-mode-std-wrap"),
         lineModeStdLabel: document.getElementById("cq-line-mode-std-label"),
         lineRuleInfo: document.getElementById("cq-line-rule-info"),
+        lineDesc: document.getElementById("cq-line-desc"),
         lineQty: document.getElementById("cq-line-qty"),
         lineQtyHint: document.getElementById("cq-line-qty-hint"),
         linePrefField: document.getElementById("cq-line-pref-field"),
@@ -462,6 +464,9 @@
     els.save.addEventListener("click", function () { saveQuote(false); });
     els.clear.addEventListener("click", clearQuote);
     els.transition.addEventListener("click", transitionQuote);
+    if (els.deleteBtn) {
+        els.deleteBtn.addEventListener("click", deleteQuote);
+    }
     if (els.invoice) {
         els.invoice.addEventListener("click", invoiceQuote);
     }
@@ -1207,6 +1212,7 @@
         if (els.invoice) {
             syncInvoiceButton(quote);
         }
+        syncDeleteButton(quote);
         renderAssociatedDocs(quote.associated_documents || []);
         if (els.orderLink) {
             if (quote.order_id && quote.order_url) {
@@ -2873,6 +2879,7 @@
             state.quote.associated_documents = quote.associated_documents;
             renderAssociatedDocs(quote.associated_documents);
         }
+        syncDeleteButton(state.quote);
         if (els.orderLink) {
             if (state.quote.order_id && state.quote.order_url) {
                 els.orderLink.hidden = false;
@@ -2959,6 +2966,46 @@
         }
         openEditor(emptyQuote());
         setMessage("Cotización limpia.", false);
+    }
+
+    function syncDeleteButton(quote) {
+        if (!els.deleteBtn) {
+            return;
+        }
+        var docs = quote && Array.isArray(quote.associated_documents) ? quote.associated_documents : [];
+        var canDelete = cfg.canDelete !== false;
+        els.deleteBtn.hidden = !canDelete || !(quote && quote.id) || docs.length > 0;
+    }
+
+    function deleteQuote() {
+        if (!state.quote.id) {
+            setMessage("Guarda la cotización antes de borrarla.", true);
+            return;
+        }
+        var docs = state.quote.associated_documents || [];
+        if (docs.length) {
+            setMessage("No se puede borrar: la cotización tiene un documento asociado.", true);
+            syncDeleteButton(state.quote);
+            return;
+        }
+        var label = state.quote.quote_number || ("#" + state.quote.id);
+        if (!window.confirm("¿Está seguro de borrar la cotización " + label + "? Esta acción no se puede deshacer.")) {
+            return;
+        }
+        if (els.deleteBtn) {
+            els.deleteBtn.disabled = true;
+        }
+        post(cfg.actions.delete, { id: String(state.quote.id) }).then(function (data) {
+            setMessage("");
+            showList();
+            setListMessage(data.message || "Cotización borrada.", false);
+        }).catch(function (error) {
+            setMessage(error.message, true);
+        }).finally(function () {
+            if (els.deleteBtn) {
+                els.deleteBtn.disabled = false;
+            }
+        });
     }
 
     function transitionQuote() {
@@ -4341,6 +4388,12 @@
         if (els.lineSubtitle) {
             els.lineSubtitle.textContent = (line.sku || "") + (line.description ? (" — " + line.description) : "");
         }
+        if (!els.lineDesc) {
+            els.lineDesc = document.getElementById("cq-line-desc");
+        }
+        if (els.lineDesc) {
+            els.lineDesc.value = line.description || "";
+        }
         if (els.lineQty) {
             els.lineQty.value = formatQty(line.quantity);
         }
@@ -4369,7 +4422,12 @@
         els.lineModal.hidden = false;
         els.lineModal.setAttribute("aria-hidden", "false");
         scheduleLineModalPreview();
-        if (els.lineQty) els.lineQty.focus();
+        if (els.lineDesc) {
+            els.lineDesc.focus();
+            els.lineDesc.select();
+        } else if (els.lineQty) {
+            els.lineQty.focus();
+        }
     }
 
     function closeLineModal() {
@@ -4396,6 +4454,16 @@
         if (!(qty > 0)) {
             setMessage("La cantidad debe ser mayor a cero.", true);
             return;
+        }
+        var descEdited = "";
+        if (!els.lineDesc) {
+            els.lineDesc = document.getElementById("cq-line-desc");
+        }
+        if (els.lineDesc) {
+            descEdited = String(els.lineDesc.value || "").trim();
+        }
+        if (descEdited) {
+            line.description = descEdited;
         }
         var mode = state.lineModal.mode;
         var draft = lineModalDraftForDiscount();

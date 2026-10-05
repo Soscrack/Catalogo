@@ -1133,10 +1133,117 @@
 #bill-emit-modal .bill-emit-pay-fields.is-disabled,
 #bill-emit-modal .bill-emit-pay-fields.is-disabled input,
 #bill-emit-modal .bill-emit-pay-fields.is-disabled select,
-#bill-emit-modal .bill-emit-pay-fields.is-disabled textarea {
+#bill-emit-modal .bill-emit-pay-fields.is-disabled textarea,
+#bill-emit-modal .bill-emit-atajo-fields.is-disabled,
+#bill-emit-modal .bill-emit-atajo-fields.is-disabled input,
+#bill-emit-modal .bill-emit-atajo-fields.is-disabled button {
   opacity: 0.55;
   pointer-events: none;
   background: #f3f4f6;
+}
+
+#bill-emit-modal .bill-emit-shortcuts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 8px 0 10px;
+}
+
+#bill-emit-modal .bill-shortcut-btn {
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+
+#bill-emit-modal .bill-shortcut-btn:hover:not(:disabled) {
+  border-color: #9ca3af;
+  background: #f9fafb;
+}
+
+#bill-emit-modal .bill-shortcut-btn.is-active {
+  border-color: #15803d;
+  background: #ecfdf5;
+  color: #166534;
+}
+
+#bill-emit-modal .bill-shortcut-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+
+#bill-emit-modal .bill-emit-cobros {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#bill-emit-modal .bill-emit-cobro-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f9fafb;
+  font-size: 12px;
+}
+
+#bill-emit-modal .bill-emit-cobro-item strong {
+  font-weight: 600;
+}
+
+#bill-emit-modal .bill-emit-cobro-remove {
+  border: none;
+  background: transparent;
+  color: #b91c1c;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+#bill-emit-modal .bill-emit-monto-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+#bill-emit-modal .bill-emit-monto-field {
+  flex: 1;
+  margin: 0;
+}
+
+#bill-emit-modal #bill-emit-add-cobro {
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+
+#bill-emit-modal .bill-emit-atajo-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #4b5563;
+  min-height: 1.2em;
+}
+
+#bill-emit-modal .bill-emit-atajo-hint.is-vuelto {
+  color: #166534;
+  font-weight: 600;
+}
+
+#bill-emit-modal .bill-emit-atajo-hint.is-error {
+  color: #b91c1c;
 }
 
 #bill-emit-modal .bill-field input:disabled,

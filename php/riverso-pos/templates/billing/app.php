@@ -718,7 +718,29 @@ if (!function_exists('riverso_pos_billing_json')) {
                     <input type="checkbox" id="bill-emit-mark-paid">
                     <span>Marcar como pagado inmediatamente</span>
                 </label>
-                <div id="bill-emit-pay-fields" class="bill-emit-pay-fields">
+                <label class="bill-check">
+                    <input type="checkbox" id="bill-emit-atajo" checked>
+                    <span>Atajo</span>
+                </label>
+                <div id="bill-emit-atajo-fields" class="bill-emit-atajo-fields">
+                    <div class="bill-emit-shortcuts" role="group" aria-label="Métodos de cobro rápido">
+                        <button type="button" class="bill-btn bill-shortcut-btn is-active" data-shortcut="efectivo">Efectivo</button>
+                        <button type="button" class="bill-btn bill-shortcut-btn" data-shortcut="mercado_pago">Mercado Pago</button>
+                        <button type="button" class="bill-btn bill-shortcut-btn" data-shortcut="debito">Tarjeta Débito</button>
+                        <button type="button" class="bill-btn bill-shortcut-btn" data-shortcut="credito">Tarjeta Crédito</button>
+                        <button type="button" class="bill-btn bill-shortcut-btn" data-shortcut="transferencia">Transferencia Bancaria</button>
+                    </div>
+                    <ul id="bill-emit-cobros" class="bill-emit-cobros" hidden></ul>
+                    <div class="bill-emit-monto-row">
+                        <label class="bill-field bill-emit-monto-field">
+                            <span>Monto</span>
+                            <input type="number" id="bill-emit-atajo-monto" min="0" step="1" value="">
+                        </label>
+                        <button type="button" class="bill-btn bill-btn-primary" id="bill-emit-add-cobro" hidden>Agregar cobro</button>
+                    </div>
+                    <p id="bill-emit-atajo-hint" class="bill-emit-atajo-hint" role="status"></p>
+                </div>
+                <div id="bill-emit-pay-fields" class="bill-emit-pay-fields" hidden>
                     <label class="bill-field">
                         <span>Caja (*)</span>
                         <select id="bill-emit-caja"></select>

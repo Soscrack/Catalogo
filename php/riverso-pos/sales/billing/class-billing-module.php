@@ -711,7 +711,10 @@ class Riverso_Billing_Module {
         $mark_paid = !empty($_POST['mark_paid']);
         $send_email = !empty($_POST['send_email']);
         $pay_ctx = null;
-        if ($mark_paid) {
+        $pay_list = null;
+        $has_payments_payload = isset($_POST['payments']) && (string) wp_unslash($_POST['payments']) !== ''
+            && (string) wp_unslash($_POST['payments']) !== '[]';
+        if ($mark_paid && !$has_payments_payload) {
             $pay_ctx = $this->validate_payment_context_from_request();
             if (is_wp_error($pay_ctx)) {
                 wp_send_json_error(['message' => $pay_ctx->get_error_message()]);
@@ -740,6 +743,13 @@ class Riverso_Billing_Module {
             $built = $this->build_facto_payload_from_request(false);
             if (is_wp_error($built)) {
                 wp_send_json_error(['message' => $built->get_error_message()]);
+            }
+
+            if ($mark_paid && $has_payments_payload) {
+                $pay_list = $this->validate_emit_payments_list((float) $built['totals']['total_amount']);
+                if (is_wp_error($pay_list)) {
+                    wp_send_json_error(['message' => $pay_list->get_error_message()]);
+                }
             }
 
             $client = $this->facto_client();
@@ -848,7 +858,38 @@ class Riverso_Billing_Module {
 
             $warnings = [];
             $immediate_payment = null;
-            if ($mark_paid && $pay_ctx) {
+            if ($mark_paid && is_array($pay_list) && $pay_list) {
+                $registered = [];
+                foreach ($pay_list as $pay_item) {
+                    $ctx = $pay_item['ctx'];
+                    $result = $this->register_and_sync_payment([
+                        'draft_id' => $draft_id,
+                        'dte_id' => (int) $insert_id,
+                        'pay_date' => current_time('Y-m-d'),
+                        'caja_id' => $ctx['caja']['id'],
+                        'caja' => $ctx['caja']['nombre'],
+                        'method_id' => $ctx['method']['id'],
+                        'method' => $ctx['method']['nombre'],
+                        'amount_due' => (float) $pay_item['amount_due'],
+                        'amount_paid' => (float) $pay_item['amount_paid'],
+                        'change_amount' => (float) $pay_item['change_amount'],
+                        'amount_applied' => (float) $pay_item['amount_applied'],
+                        'notes' => isset($_POST['pay_notes']) ? sanitize_textarea_field(wp_unslash($_POST['pay_notes'])) : '',
+                        'cheque_numero' => $ctx['cheque_numero'],
+                        'cheque_titular' => $ctx['cheque_titular'],
+                        'cheque_banco' => $ctx['cheque_banco'],
+                        'facto_sync_status' => 'pending',
+                    ]);
+                    if (empty($result['ok'])) {
+                        $warnings[] = $result['message'] ?? 'No se pudo registrar un cobro.';
+                    } elseif (!empty($result['sync']) && empty($result['sync']['ok'])) {
+                        $warnings[] = 'Pago registrado, sync FACTO: ' . ($result['sync']['message'] ?? 'error');
+                    } else {
+                        $registered[] = $result;
+                    }
+                }
+                $immediate_payment = $registered ? $registered[count($registered) - 1] : null;
+            } elseif ($mark_paid && $pay_ctx) {
                 $immediate_payment = $this->register_and_sync_payment([
                     'draft_id' => $draft_id,
                     'dte_id' => (int) $insert_id,
@@ -2479,16 +2520,17 @@ class Riverso_Billing_Module {
     }
 
     /**
+     * @param array<string, mixed> $input
      * @return array{caja:array,method:array,cheque_numero:string,cheque_titular:string,cheque_banco:string}|WP_Error
      */
-    private function validate_payment_context_from_request() {
-        $caja_id = isset($_POST['pay_caja_id']) ? absint($_POST['pay_caja_id']) : 0;
-        if ($caja_id <= 0) {
-            $caja_id = isset($_POST['caja_id']) ? absint($_POST['caja_id']) : 0;
+    private function validate_payment_context(array $input) {
+        $caja_id = isset($input['caja_id']) ? absint($input['caja_id']) : 0;
+        if ($caja_id <= 0 && isset($input['pay_caja_id'])) {
+            $caja_id = absint($input['pay_caja_id']);
         }
-        $method_id = isset($_POST['pay_method_id']) ? absint($_POST['pay_method_id']) : 0;
-        if ($method_id <= 0) {
-            $method_id = isset($_POST['method_id']) ? absint($_POST['method_id']) : 0;
+        $method_id = isset($input['method_id']) ? absint($input['method_id']) : 0;
+        if ($method_id <= 0 && isset($input['pay_method_id'])) {
+            $method_id = absint($input['pay_method_id']);
         }
         $cash = $this->cash_repo();
         if (!$cash) {
@@ -2514,9 +2556,9 @@ class Riverso_Billing_Module {
         if (!$method || empty($method['activo']) || empty($method['visible'])) {
             return new WP_Error('no_method', 'Selecciona un método de pago.');
         }
-        $cheque_numero = isset($_POST['cheque_numero']) ? sanitize_text_field(wp_unslash($_POST['cheque_numero'])) : '';
-        $cheque_titular = isset($_POST['cheque_titular']) ? sanitize_text_field(wp_unslash($_POST['cheque_titular'])) : '';
-        $cheque_banco = isset($_POST['cheque_banco']) ? sanitize_text_field(wp_unslash($_POST['cheque_banco'])) : '';
+        $cheque_numero = isset($input['cheque_numero']) ? sanitize_text_field((string) $input['cheque_numero']) : '';
+        $cheque_titular = isset($input['cheque_titular']) ? sanitize_text_field((string) $input['cheque_titular']) : '';
+        $cheque_banco = isset($input['cheque_banco']) ? sanitize_text_field((string) $input['cheque_banco']) : '';
         if (!empty($method['requiere_cheque']) && ($cheque_numero === '' || $cheque_titular === '' || $cheque_banco === '')) {
             return new WP_Error('cheque', 'Completa número, titular y banco del cheque.');
         }
@@ -2527,6 +2569,102 @@ class Riverso_Billing_Module {
             'cheque_titular' => $cheque_titular,
             'cheque_banco' => $cheque_banco,
         ];
+    }
+
+    /**
+     * @return array{caja:array,method:array,cheque_numero:string,cheque_titular:string,cheque_banco:string}|WP_Error
+     */
+    private function validate_payment_context_from_request() {
+        $caja_id = isset($_POST['pay_caja_id']) ? absint($_POST['pay_caja_id']) : 0;
+        if ($caja_id <= 0) {
+            $caja_id = isset($_POST['caja_id']) ? absint($_POST['caja_id']) : 0;
+        }
+        $method_id = isset($_POST['pay_method_id']) ? absint($_POST['pay_method_id']) : 0;
+        if ($method_id <= 0) {
+            $method_id = isset($_POST['method_id']) ? absint($_POST['method_id']) : 0;
+        }
+        return $this->validate_payment_context([
+            'caja_id' => $caja_id,
+            'method_id' => $method_id,
+            'cheque_numero' => isset($_POST['cheque_numero']) ? wp_unslash($_POST['cheque_numero']) : '',
+            'cheque_titular' => isset($_POST['cheque_titular']) ? wp_unslash($_POST['cheque_titular']) : '',
+            'cheque_banco' => isset($_POST['cheque_banco']) ? wp_unslash($_POST['cheque_banco']) : '',
+        ]);
+    }
+
+    /**
+     * Valida y normaliza la lista de cobros del modal Atajo (antes de emitir).
+     *
+     * @param float $doc_total
+     * @return array<int, array{ctx:array,amount_paid:float,change_amount:float,amount_applied:float,amount_due:float}>|WP_Error
+     */
+    private function validate_emit_payments_list($doc_total) {
+        $raw = isset($_POST['payments']) ? wp_unslash($_POST['payments']) : '';
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            $items = is_array($decoded) ? $decoded : [];
+        } else {
+            $items = is_array($raw) ? $raw : [];
+        }
+        if (!$items) {
+            return new WP_Error('no_payments', 'Agrega al menos un cobro para marcar como pagado.');
+        }
+        $doc_total = round((float) $doc_total, 2);
+        $remaining = $doc_total;
+        $out = [];
+        foreach ($items as $idx => $item) {
+            if (!is_array($item)) {
+                return new WP_Error('bad_payment', 'Cobro #' . ((int) $idx + 1) . ' inválido.');
+            }
+            $ctx = $this->validate_payment_context([
+                'caja_id' => $item['caja_id'] ?? 0,
+                'method_id' => $item['method_id'] ?? 0,
+                'cheque_numero' => $item['cheque_numero'] ?? '',
+                'cheque_titular' => $item['cheque_titular'] ?? '',
+                'cheque_banco' => $item['cheque_banco'] ?? '',
+            ]);
+            if (is_wp_error($ctx)) {
+                return new WP_Error(
+                    $ctx->get_error_code(),
+                    'Cobro #' . ((int) $idx + 1) . ': ' . $ctx->get_error_message()
+                );
+            }
+            $amount_paid = round((float) ($item['amount_paid'] ?? 0), 2);
+            $change_amount = round((float) ($item['change_amount'] ?? 0), 2);
+            if (empty($ctx['method']['permite_vuelto'])) {
+                $change_amount = 0;
+            }
+            $applied = isset($item['amount_applied'])
+                ? round((float) $item['amount_applied'], 2)
+                : round(max(0, $amount_paid - $change_amount), 2);
+            if ($applied <= 0) {
+                return new WP_Error('bad_amount', 'Cobro #' . ((int) $idx + 1) . ': el monto aplicado debe ser mayor a 0.');
+            }
+            if ($applied - $remaining > 0.009) {
+                return new WP_Error('overpay', 'Cobro #' . ((int) $idx + 1) . ': supera el saldo pendiente.');
+            }
+            if ($change_amount > 0 && empty($ctx['method']['permite_vuelto'])) {
+                return new WP_Error('no_vuelto', 'Cobro #' . ((int) $idx + 1) . ': este método no admite vuelto.');
+            }
+            if ($change_amount > 0 && abs(($amount_paid - $change_amount) - $applied) > 0.009) {
+                return new WP_Error('bad_vuelto', 'Cobro #' . ((int) $idx + 1) . ': vuelto inconsistente.');
+            }
+            $out[] = [
+                'ctx' => $ctx,
+                'amount_paid' => $amount_paid,
+                'change_amount' => $change_amount,
+                'amount_applied' => $applied,
+                'amount_due' => $remaining,
+            ];
+            $remaining = round($remaining - $applied, 2);
+        }
+        if ($remaining > 0.009) {
+            return new WP_Error(
+                'underpay',
+                'La suma de cobros no cubre el total. Saldo: $' . number_format($remaining, 0, ',', '.')
+            );
+        }
+        return $out;
     }
 
     /**

@@ -18,6 +18,8 @@
     boletaTab: "detalles",
     refs: [],
     payments: [],
+    emitCobros: [],
+    emitShortcut: "efectivo",
     selectedQuoteRef: null,
     draftSaveTimer: null,
     emitEmailsApi: null,
@@ -53,6 +55,44 @@
     37: "BOLETA ELECTRÓNICA",
     41: "BOLETA EXENTA ELECTRÓNICA",
   };
+
+  var EMIT_SHORTCUTS = [
+    {
+      key: "efectivo",
+      label: "Efectivo",
+      caja: "Efectivo",
+      method: "Efectivo",
+      factoTypeId: "1",
+    },
+    {
+      key: "mercado_pago",
+      label: "Mercado Pago",
+      caja: "Tarjeta",
+      method: "Mercado Pago",
+      factoTypeId: "17",
+    },
+    {
+      key: "debito",
+      label: "Tarjeta Débito",
+      caja: "Tarjeta",
+      method: "Tarjeta de débito",
+      factoTypeId: "5",
+    },
+    {
+      key: "credito",
+      label: "Tarjeta Crédito",
+      caja: "Tarjeta",
+      method: "Tarjeta de crédito",
+      factoTypeId: "4",
+    },
+    {
+      key: "transferencia",
+      label: "Transferencia Bancaria",
+      caja: "Transferencias",
+      method: "Transferencia electrónica bancaria",
+      factoTypeId: "10",
+    },
+  ];
 
   function $(id) {
     return document.getElementById(id);
@@ -1084,9 +1124,44 @@
     }
   }
 
+  function optionValueByName(sel, name) {
+    if (!sel) return "";
+    var wanted = String(name || "").trim().toLowerCase();
+    var found = "";
+    Array.prototype.forEach.call(sel.options || [], function (opt) {
+      if (found || !opt.value) return;
+      var label = String(opt.getAttribute("data-nombre") || opt.textContent || "").trim().toLowerCase();
+      if (label === wanted) found = opt.value;
+    });
+    return found;
+  }
+
+  function selectHasValue(sel, value) {
+    if (!sel || !value) return false;
+    var ok = false;
+    Array.prototype.forEach.call(sel.options || [], function (opt) {
+      if (opt.value === value) ok = true;
+    });
+    return ok;
+  }
+
+  /** Caja y método del modal de emisión: Efectivo, salvo una elección previa que siga en la lista. */
+  function applyEmitPayDefault(sel, previous) {
+    if (!sel) return;
+    var efectivo = optionValueByName(sel, "Efectivo");
+    if (selectHasValue(sel, previous)) sel.value = previous;
+    else if (efectivo) sel.value = efectivo;
+  }
+
+  function selectEmitPayDefaults() {
+    applyEmitPayDefault($("bill-emit-caja"), "");
+    applyEmitPayDefault($("bill-emit-method"), "");
+  }
+
   function applyPagoCajas(boxes) {
     boxes = boxes || [];
     cfg.cashBoxes = boxes;
+    var emitPrev = ($("bill-emit-caja") || {}).value || "";
     ["bill-pago-caja", "bill-emit-caja"].forEach(function (id) {
       var sel = $(id);
       if (!sel) return;
@@ -1102,6 +1177,9 @@
         })
         .join("");
     });
+    applyEmitPayDefault($("bill-emit-caja"), emitPrev);
+    refreshShortcutButtons();
+    if ($("bill-emit-mark-paid")) syncEmitPayFieldsEnabled();
   }
 
   function paymentMethods() {
@@ -1109,12 +1187,14 @@
   }
 
   function fillPagoMethods() {
+    var emitPrev = ($("bill-emit-method") || {}).value || "";
     var html = paymentMethods().map(function (m) {
       return '<option value="' + String(m.id) + '">' + escAttr(m.nombre) + "</option>";
     }).join("");
     ["bill-pago-method", "bill-emit-method"].forEach(function (id) {
       if ($(id)) $(id).innerHTML = html || '<option value="">Sin métodos</option>';
     });
+    applyEmitPayDefault($("bill-emit-method"), emitPrev);
     toggleChequeFields("bill-pago-method", "bill-pago-cheque");
     toggleChequeFields("bill-emit-method", "bill-emit-cheque");
   }
@@ -1968,16 +2048,288 @@
       });
   }
 
+  function isEmitAtajoMode() {
+    return !!($("bill-emit-atajo") && $("bill-emit-atajo").checked);
+  }
+
+  function emitDocTotal() {
+    return Math.round(Number(boletaTotals().total_amount) || 0);
+  }
+
+  function emitCobrosApplied() {
+    return (state.emitCobros || []).reduce(function (sum, c) {
+      return sum + (Number(c.amount_applied) || 0);
+    }, 0);
+  }
+
+  function emitRemaining() {
+    return Math.max(0, Math.round(emitDocTotal() - emitCobrosApplied()));
+  }
+
+  function findCajaByName(name) {
+    var wanted = String(name || "").trim().toLowerCase();
+    return (cfg.cashBoxes || []).filter(function (b) {
+      return String(b.nombre || "").trim().toLowerCase() === wanted;
+    })[0] || null;
+  }
+
+  function findMethodByShortcut(sc) {
+    if (!sc) return null;
+    var byFacto = paymentMethods().filter(function (m) {
+      return String(m.facto_payment_type_id || "") === String(sc.factoTypeId || "");
+    })[0];
+    if (byFacto) return byFacto;
+    var wanted = String(sc.method || "").trim().toLowerCase();
+    return paymentMethods().filter(function (m) {
+      return String(m.nombre || "").trim().toLowerCase() === wanted;
+    })[0] || null;
+  }
+
+  function resolveShortcut(key) {
+    var sc = EMIT_SHORTCUTS.filter(function (s) { return s.key === key; })[0] || null;
+    if (!sc) return null;
+    var caja = findCajaByName(sc.caja);
+    var method = findMethodByShortcut(sc);
+    var disabled = !caja;
+    var reason = "";
+    if (!caja) {
+      reason = "Caja \"" + sc.caja + "\" no está abierta o sin permiso de pago";
+    } else if (!method) {
+      reason = "Método \"" + sc.method + "\" no disponible";
+      disabled = true;
+    }
+    return {
+      key: sc.key,
+      label: sc.label,
+      cajaName: sc.caja,
+      methodName: sc.method,
+      caja: caja,
+      method: method,
+      disabled: disabled,
+      reason: reason,
+    };
+  }
+
+  function currentEmitShortcut() {
+    return resolveShortcut(state.emitShortcut || "efectivo");
+  }
+
+  function refreshShortcutButtons() {
+    document.querySelectorAll(".bill-shortcut-btn").forEach(function (btn) {
+      var key = btn.getAttribute("data-shortcut") || "";
+      var resolved = resolveShortcut(key);
+      var active = key === (state.emitShortcut || "efectivo");
+      btn.classList.toggle("is-active", active);
+      if (!resolved) {
+        btn.disabled = true;
+        btn.title = "Atajo no disponible";
+        return;
+      }
+      btn.disabled = !!resolved.disabled;
+      btn.title = resolved.disabled ? resolved.reason : resolved.label;
+    });
+  }
+
+  function setEmitShortcut(key) {
+    var resolved = resolveShortcut(key);
+    if (!resolved || resolved.disabled) return;
+    state.emitShortcut = key;
+    refreshShortcutButtons();
+    syncEmitAtajoMontoUi();
+  }
+
+  function renderEmitCobros() {
+    var list = $("bill-emit-cobros");
+    if (!list) return;
+    var cobros = state.emitCobros || [];
+    if (!cobros.length) {
+      list.innerHTML = "";
+      list.hidden = true;
+      return;
+    }
+    list.hidden = false;
+    list.innerHTML = cobros.map(function (c, idx) {
+      var vueltoTxt = c.change_amount > 0 ? " · vuelto " + money(c.change_amount) : "";
+      return (
+        '<li class="bill-emit-cobro-item" data-idx="' + idx + '">' +
+          "<span><strong>" + escAttr(c.method_label || c.method || "") + "</strong>" +
+          " · " + escAttr(c.caja_label || c.caja || "") +
+          " · " + money(c.amount_applied) + vueltoTxt + "</span>" +
+          '<button type="button" class="bill-emit-cobro-remove" data-idx="' + idx + '" aria-label="Quitar cobro">×</button>' +
+        "</li>"
+      );
+    }).join("");
+    list.querySelectorAll(".bill-emit-cobro-remove").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        removeEmitCobro(parseInt(btn.getAttribute("data-idx"), 10) || 0);
+      });
+    });
+  }
+
+  function syncEmitAtajoMontoUi() {
+    var remaining = emitRemaining();
+    var input = $("bill-emit-atajo-monto");
+    var addBtn = $("bill-emit-add-cobro");
+    var hint = $("bill-emit-atajo-hint");
+    var sc = currentEmitShortcut();
+    if (input && document.activeElement !== input) {
+      input.value = remaining > 0 ? String(remaining) : "";
+    }
+    var paid = parseFloat((input || {}).value) || 0;
+    var canVuelto = !!(sc && sc.method && sc.method.permite_vuelto);
+    var showAdd = remaining > 0 && paid > 0 && paid < remaining;
+    if (addBtn) addBtn.hidden = !showAdd;
+    if (!hint) return;
+    hint.classList.remove("is-vuelto", "is-error");
+    if (sc && sc.disabled) {
+      hint.textContent = sc.reason;
+      hint.classList.add("is-error");
+      return;
+    }
+    if (remaining <= 0 && (state.emitCobros || []).length) {
+      hint.textContent = "Documento cubierto con los cobros agregados.";
+      return;
+    }
+    if (paid > remaining && remaining > 0) {
+      if (canVuelto) {
+        hint.textContent = "Vuelto " + money(Math.round(paid - remaining));
+        hint.classList.add("is-vuelto");
+      } else {
+        hint.textContent = "El monto supera el saldo. Solo Efectivo admite vuelto.";
+        hint.classList.add("is-error");
+      }
+      return;
+    }
+    if (showAdd) {
+      hint.textContent = "Saldo restante tras este cobro: " + money(Math.round(remaining - paid));
+      return;
+    }
+    hint.textContent = remaining > 0 ? "Saldo pendiente: " + money(remaining) : "";
+  }
+
+  function buildCurrentEmitCobro() {
+    var remaining = emitRemaining();
+    var sc = currentEmitShortcut();
+    if (!sc || sc.disabled || !sc.caja || !sc.method) {
+      return { ok: false, message: (sc && sc.reason) || "Selecciona un atajo válido." };
+    }
+    if (remaining <= 0) {
+      return { ok: false, message: "El documento ya está cubierto." };
+    }
+    var paid = Math.round(parseFloat(($("bill-emit-atajo-monto") || {}).value) || 0);
+    if (paid <= 0) {
+      return { ok: false, message: "Ingresa un monto mayor a 0." };
+    }
+    var canVuelto = !!sc.method.permite_vuelto;
+    if (paid > remaining && !canVuelto) {
+      return { ok: false, message: "El monto supera el saldo. Solo Efectivo admite vuelto." };
+    }
+    var applied = Math.min(paid, remaining);
+    var change = canVuelto ? Math.max(0, paid - remaining) : 0;
+    return {
+      ok: true,
+      cobro: {
+        shortcut: sc.key,
+        caja_id: sc.caja.id,
+        caja: sc.caja.nombre,
+        caja_label: sc.caja.nombre,
+        method_id: sc.method.id,
+        method: sc.method.nombre,
+        method_label: sc.label,
+        amount_due: remaining,
+        amount_paid: paid,
+        change_amount: change,
+        amount_applied: applied,
+      },
+    };
+  }
+
+  function addEmitCobro() {
+    var built = buildCurrentEmitCobro();
+    if (!built.ok) {
+      showMissingPopup("Pago", built.message, []);
+      return;
+    }
+    if (built.cobro.amount_applied >= emitRemaining()) {
+      syncEmitAtajoMontoUi();
+      return;
+    }
+    state.emitCobros.push(built.cobro);
+    renderEmitCobros();
+    if ($("bill-emit-atajo-monto")) $("bill-emit-atajo-monto").value = String(emitRemaining());
+    refreshShortcutButtons();
+    syncEmitAtajoMontoUi();
+  }
+
+  function removeEmitCobro(idx) {
+    state.emitCobros.splice(idx, 1);
+    renderEmitCobros();
+    if ($("bill-emit-atajo-monto")) $("bill-emit-atajo-monto").value = String(emitRemaining() || "");
+    syncEmitAtajoMontoUi();
+  }
+
+  function resetEmitAtajo() {
+    state.emitCobros = [];
+    state.emitShortcut = "efectivo";
+    renderEmitCobros();
+    refreshShortcutButtons();
+    if ($("bill-emit-atajo-monto")) {
+      $("bill-emit-atajo-monto").value = String(emitDocTotal() || "");
+    }
+    syncEmitAtajoMontoUi();
+  }
+
+  function collectEmitPaymentsForPayload() {
+    var payments = (state.emitCobros || []).slice();
+    var remaining = Math.max(0, Math.round(emitDocTotal() - payments.reduce(function (s, c) {
+      return s + (Number(c.amount_applied) || 0);
+    }, 0)));
+    if (remaining <= 0) return { ok: true, payments: payments };
+    var built = buildCurrentEmitCobro();
+    if (!built.ok) {
+      if (payments.length && remaining > 0) {
+        return { ok: false, message: "Completa el saldo pendiente o agrega el cobro actual." };
+      }
+      return { ok: false, message: built.message };
+    }
+    payments.push(built.cobro);
+    var applied = payments.reduce(function (s, c) { return s + (Number(c.amount_applied) || 0); }, 0);
+    if (Math.round(applied) < emitDocTotal()) {
+      return { ok: false, message: "La suma de cobros no cubre el total del documento. Saldo: " + money(emitDocTotal() - applied) };
+    }
+    return { ok: true, payments: payments };
+  }
+
+  function syncEmitModeVisibility() {
+    var atajo = isEmitAtajoMode();
+    var atajoWrap = $("bill-emit-atajo-fields");
+    var classicWrap = $("bill-emit-pay-fields");
+    if (atajoWrap) atajoWrap.hidden = !atajo;
+    if (classicWrap) classicWrap.hidden = atajo;
+  }
+
   function syncEmitPayFieldsEnabled() {
     var on = $("bill-emit-mark-paid") && $("bill-emit-mark-paid").checked;
-    var wrap = $("bill-emit-pay-fields");
-    if (wrap) {
-      wrap.classList.toggle("is-disabled", !on);
-      wrap.querySelectorAll("input, select, textarea").forEach(function (el) {
-        el.disabled = !on;
+    syncEmitModeVisibility();
+    var atajo = isEmitAtajoMode();
+    var classicWrap = $("bill-emit-pay-fields");
+    var atajoWrap = $("bill-emit-atajo-fields");
+    if (classicWrap) {
+      classicWrap.classList.toggle("is-disabled", !on || atajo);
+      classicWrap.querySelectorAll("input, select, textarea").forEach(function (el) {
+        el.disabled = !on || atajo;
       });
     }
-    if (on) {
+    if (atajoWrap) {
+      atajoWrap.classList.toggle("is-disabled", !on || !atajo);
+      atajoWrap.querySelectorAll("input, button").forEach(function (el) {
+        if (el.classList.contains("bill-shortcut-btn")) return;
+        el.disabled = !on || !atajo;
+      });
+      refreshShortcutButtons();
+      if (on && atajo) syncEmitAtajoMontoUi();
+    }
+    if (on && !atajo) {
       toggleChequeFields("bill-emit-method", "bill-emit-cheque");
       var m = methodById(($("bill-emit-method") || {}).value);
       var chequeOn = !!(m && m.requiere_cheque);
@@ -2008,6 +2360,8 @@
   function openEmitModal() {
     fillPagoMethods();
     fillPagoCajas();
+    resetEmitAtajo();
+    if ($("bill-emit-atajo")) $("bill-emit-atajo").checked = true;
     var type = currentTypeId();
     if ($("bill-emit-close-local")) {
       $("bill-emit-close-local").disabled = type !== 37;
@@ -2040,12 +2394,19 @@
     payload.send_email = selectedEmails.length ? 1 : 0;
     payload.email_to = selectedEmails.join(",");
     payload.email_extra = "";
-    payload.pay_caja_id = ($("bill-emit-caja") || {}).value || "";
-    payload.pay_method_id = ($("bill-emit-method") || {}).value || "";
     payload.pay_notes = ($("bill-emit-notes") || {}).value || "";
     payload.cheque_numero = ($("bill-emit-cheque-num") || {}).value || "";
     payload.cheque_titular = ($("bill-emit-cheque-tit") || {}).value || "";
     payload.cheque_banco = ($("bill-emit-cheque-banco") || {}).value || "";
+    if (payload.mark_paid && isEmitAtajoMode()) {
+      var collected = collectEmitPaymentsForPayload();
+      payload.payments = collected.ok ? collected.payments : [];
+      payload.pay_caja_id = "";
+      payload.pay_method_id = "";
+    } else {
+      payload.pay_caja_id = ($("bill-emit-caja") || {}).value || "";
+      payload.pay_method_id = ($("bill-emit-method") || {}).value || "";
+    }
     return payload;
   }
 
@@ -2086,24 +2447,32 @@
       return;
     }
     if ($("bill-emit-mark-paid") && $("bill-emit-mark-paid").checked) {
-      var cajaId = parseInt(($("bill-emit-caja") || {}).value, 10) || 0;
-      var methodId = parseInt(($("bill-emit-method") || {}).value, 10) || 0;
-      if (!cajaId) {
-        showMissingPopup("Pago", "Selecciona una caja abierta para marcar como pagado.", []);
-        return;
-      }
-      if (!methodId) {
-        showMissingPopup("Pago", "Selecciona un método de pago.", []);
-        return;
-      }
-      var m = methodById(methodId);
-      if (m && m.requiere_cheque) {
-        var n = (($("bill-emit-cheque-num") || {}).value || "").trim();
-        var t = (($("bill-emit-cheque-tit") || {}).value || "").trim();
-        var b = (($("bill-emit-cheque-banco") || {}).value || "").trim();
-        if (!n || !t || !b) {
-          showMissingPopup("Pago", "Completa número, titular y banco del cheque.", []);
+      if (isEmitAtajoMode()) {
+        var collected = collectEmitPaymentsForPayload();
+        if (!collected.ok) {
+          showMissingPopup("Pago", collected.message, []);
           return;
+        }
+      } else {
+        var cajaId = parseInt(($("bill-emit-caja") || {}).value, 10) || 0;
+        var methodId = parseInt(($("bill-emit-method") || {}).value, 10) || 0;
+        if (!cajaId) {
+          showMissingPopup("Pago", "Selecciona una caja abierta para marcar como pagado.", []);
+          return;
+        }
+        if (!methodId) {
+          showMissingPopup("Pago", "Selecciona un método de pago.", []);
+          return;
+        }
+        var m = methodById(methodId);
+        if (m && m.requiere_cheque) {
+          var n = (($("bill-emit-cheque-num") || {}).value || "").trim();
+          var t = (($("bill-emit-cheque-tit") || {}).value || "").trim();
+          var b = (($("bill-emit-cheque-banco") || {}).value || "").trim();
+          if (!n || !t || !b) {
+            showMissingPopup("Pago", "Completa número, titular y banco del cheque.", []);
+            return;
+          }
         }
       }
     }
@@ -2699,7 +3068,31 @@
       });
     }
     if ($("bill-emit-mark-paid")) {
-      $("bill-emit-mark-paid").addEventListener("change", syncEmitPayFieldsEnabled);
+      $("bill-emit-mark-paid").addEventListener("change", function () {
+        if ($("bill-emit-mark-paid").checked) {
+          selectEmitPayDefaults();
+          if (isEmitAtajoMode()) resetEmitAtajo();
+        }
+        syncEmitPayFieldsEnabled();
+      });
+    }
+    if ($("bill-emit-atajo")) {
+      $("bill-emit-atajo").addEventListener("change", function () {
+        if ($("bill-emit-atajo").checked) resetEmitAtajo();
+        syncEmitPayFieldsEnabled();
+      });
+    }
+    document.querySelectorAll(".bill-shortcut-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (!$("bill-emit-mark-paid") || !$("bill-emit-mark-paid").checked) return;
+        setEmitShortcut(btn.getAttribute("data-shortcut") || "efectivo");
+      });
+    });
+    if ($("bill-emit-atajo-monto")) {
+      $("bill-emit-atajo-monto").addEventListener("input", syncEmitAtajoMontoUi);
+    }
+    if ($("bill-emit-add-cobro")) {
+      $("bill-emit-add-cobro").addEventListener("click", addEmitCobro);
     }
     if ($("bill-emit-method")) {
       $("bill-emit-method").addEventListener("change", function () {

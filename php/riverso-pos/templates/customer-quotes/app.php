@@ -538,7 +538,8 @@ if (!function_exists('riverso_pos_cq_json')) {
                             <span>Precio manual</span>
                         </label>
                         <div class="cq-line-mode-radios" id="cq-line-mode-radios" hidden>
-                            <label><input type="radio" name="cq-line-mode" value="auto"> Usar regla</label>
+                            <label><input type="radio" name="cq-line-mode" value="auto"> <span id="cq-line-mode-auto-label">Usar regla</span></label>
+                            <label id="cq-line-mode-std-wrap" hidden><input type="radio" name="cq-line-mode" value="std"> <span id="cq-line-mode-std-label">Regla estándar ferretería (R-1)</span></label>
                             <label><input type="radio" name="cq-line-mode" value="ref"> Cambiar precio de referencia (P)</label>
                             <label><input type="radio" name="cq-line-mode" value="manual"> Ignorar regla — precio final</label>
                         </div>
@@ -585,6 +586,15 @@ if (!function_exists('riverso_pos_cq_json')) {
                             <span>Monto final</span>
                             <input type="text" id="cq-line-final-amount" readonly tabindex="-1" autocomplete="off">
                         </label>
+                    </div>
+                    <div class="cq-line-by-amount" id="cq-line-by-amount">
+                        <p class="cq-line-by-amount-row">
+                            <strong>Por monto:</strong>
+                            Monto $ <input type="text" id="cq-line-monto" class="cq-line-monto-input" inputmode="decimal" autocomplete="off" placeholder="1000">
+                            <button type="button" class="cq-btn cq-btn-small" id="cq-line-by-amount-btn">¿Cuánto entregar?</button>
+                        </p>
+                        <p class="cq-modal-hint">Total deseado antes de descuentos. Calcula la cantidad a entregar con la regla activa.</p>
+                        <div id="cq-line-by-amount-result" class="cq-line-by-amount-result"></div>
                     </div>
                     <p id="cq-line-discount-hint" class="cq-line-preview" role="status"></p>
                     <p id="cq-line-preview" class="cq-line-preview" role="status"></p>

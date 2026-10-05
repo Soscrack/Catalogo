@@ -1050,6 +1050,36 @@
     }
   }
 
+  function applyPagoCajas(boxes) {
+    var sel = $("bill-pago-caja");
+    if (!sel) return;
+    boxes = boxes || [];
+    cfg.cashBoxes = boxes;
+    if (!boxes.length) {
+      sel.innerHTML = '<option value="">No hay cajas abiertas</option>';
+      sel.disabled = true;
+      return;
+    }
+    sel.disabled = false;
+    sel.innerHTML = boxes
+      .map(function (b) {
+        return '<option value="' + String(b.id) + '" data-nombre="' + escAttr(b.nombre) + '">' + escAttr(b.nombre) + "</option>";
+      })
+      .join("");
+  }
+
+  function fillPagoCajas() {
+    applyPagoCajas(cfg.cashBoxes || []);
+    if (!cfg.actions || !cfg.actions.cashBoxes) return Promise.resolve();
+    return post(cfg.actions.cashBoxes, {})
+      .then(function (data) {
+        applyPagoCajas(data.cashBoxes || []);
+      })
+      .catch(function () {
+        /* mantener snapshot de página */
+      });
+  }
+
   function openPagoModal() {
     var due = Math.max(0, boletaTotals().total_amount - (state.payments || []).reduce(function (s, p) {
       return s + (Number(p.amount_paid) || 0);
@@ -1058,6 +1088,7 @@
     if ($("bill-pago-paid")) $("bill-pago-paid").value = String(Math.round(due));
     if ($("bill-pago-vuelto")) $("bill-pago-vuelto").value = "0";
     if ($("bill-pago-notes")) $("bill-pago-notes").value = "";
+    fillPagoCajas();
     if ($("bill-pago-modal")) {
       $("bill-pago-modal").hidden = false;
       $("bill-pago-modal").setAttribute("aria-hidden", "false");
@@ -2202,10 +2233,21 @@
         var dueTxt = (($("bill-pago-due") || {}).value || "").replace(/[^0-9]/g, "");
         var due = parseFloat(dueTxt) || 0;
         var paid = parseFloat(($("bill-pago-paid") || {}).value) || 0;
+        var cajaSel = $("bill-pago-caja");
+        var cajaId = cajaSel ? parseInt(cajaSel.value, 10) || 0 : 0;
+        if (!cajaId) {
+          showMissingPopup("Pago", "No hay cajas abiertas con permiso para pagar. Abre una caja en Manejo de Caja.", []);
+          return;
+        }
+        var cajaNombre = "";
+        if (cajaSel && cajaSel.selectedOptions && cajaSel.selectedOptions[0]) {
+          cajaNombre = cajaSel.selectedOptions[0].getAttribute("data-nombre") || cajaSel.selectedOptions[0].textContent || "";
+        }
         post(cfg.actions.draftPayment, {
           draft_id: state.draftId,
           pay_date: ($("bill-pago-fecha") || {}).value || cfg.todayDate,
-          caja: ($("bill-pago-caja") || {}).value || "Efectivo",
+          caja_id: cajaId,
+          caja: cajaNombre,
           method: ($("bill-pago-method") || {}).value || "Efectivo",
           amount_due: due,
           amount_paid: paid,

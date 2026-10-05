@@ -543,7 +543,7 @@ class Riverso_Customer_Quote_Repository {
             $rule_adjusted = false;
         }
         $price_mode = isset($line['price_mode']) ? strtolower(trim((string) $line['price_mode'])) : '';
-        if (!in_array($price_mode, array('auto', 'manual', 'ref'), true)) {
+        if (!in_array($price_mode, array('auto', 'manual', 'ref', 'std'), true)) {
             $price_mode = 'auto';
         }
         $price_ref = null;
@@ -561,7 +561,7 @@ class Riverso_Customer_Quote_Repository {
                 $price_total = null;
             }
         }
-        if ($price_mode === 'auto') {
+        if ($price_mode === 'auto' || $price_mode === 'std') {
             $price_ref = null;
             $price_total = null;
         } elseif ($price_mode === 'manual') {
@@ -588,7 +588,7 @@ class Riverso_Customer_Quote_Repository {
             'grupo_id' => $grupo_id > 0 ? $grupo_id : null,
             'rule_total' => $rule_total,
             'rule_adjusted' => $rule_adjusted,
-            'price_mode' => $price_mode === 'auto' ? null : $price_mode,
+            'price_mode' => ($price_mode === 'auto') ? null : $price_mode,
             'price_ref' => $price_ref,
             'price_total' => $price_total,
         );
@@ -930,7 +930,7 @@ class Riverso_Customer_Quote_Repository {
 
     private function normalize_price_mode_present($value) {
         $mode = strtolower(trim((string) $value));
-        if (in_array($mode, array('manual', 'ref'), true)) {
+        if (in_array($mode, array('manual', 'ref', 'std'), true)) {
             return $mode;
         }
         return 'auto';

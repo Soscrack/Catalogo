@@ -55,6 +55,10 @@ class Riverso_POS_Permissions {
         // === CLIENTES COMERCIALES ===
         'riverso_view_customers'     => 'Ver clientes',
         'riverso_edit_customers'     => 'Crear y editar clientes',
+
+        // === COBRANZA / CAJA ===
+        'riverso_view_cash'              => 'Ver manejo de caja',
+        'riverso_manage_cash_accounts'   => 'Administrar cuentas bancarias y efectivo',
         
         // === VENTAS / POS ===
         'riverso_use_pos'            => 'Usar POS interno',
@@ -183,6 +187,10 @@ class Riverso_POS_Permissions {
             'riverso_view_customers',
             'riverso_edit_customers',
         ],
+        'Cobranza / Caja' => [
+            'riverso_view_cash',
+            'riverso_manage_cash_accounts',
+        ],
         'Ventas / POS' => [
             'riverso_use_pos',
             'riverso_create_sales',
@@ -298,6 +306,7 @@ class Riverso_POS_Permissions {
                 'riverso_view_quotes',
                 'riverso_create_quotes',
                 'riverso_emit_dte',
+                'riverso_view_cash',
                 'riverso_view_customers',
                 'riverso_edit_customers',
                 'riverso_view_tasks',

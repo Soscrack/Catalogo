@@ -575,9 +575,7 @@ if (!function_exists('riverso_pos_billing_json')) {
                     <label class="bill-field">
                         <span>Caja (*)</span>
                         <select id="bill-pago-caja">
-                            <option value="Efectivo">Efectivo</option>
-                            <option value="Tarjeta">Tarjeta</option>
-                            <option value="Transferencia">Transferencia</option>
+                            <option value="">Cargando cajas…</option>
                         </select>
                     </label>
                     <label class="bill-field">
@@ -687,7 +685,8 @@ if (!function_exists('riverso_pos_billing_json')) {
                     <span>Precio manual</span>
                 </label>
                 <div class="cq-line-mode-radios" id="bill-line-mode-radios" hidden>
-                    <label><input type="radio" name="bill-line-mode" value="auto"> Usar regla</label>
+                    <label><input type="radio" name="bill-line-mode" value="auto"> <span id="bill-line-mode-auto-label">Usar regla</span></label>
+                    <label id="bill-line-mode-std-wrap" hidden><input type="radio" name="bill-line-mode" value="std"> <span id="bill-line-mode-std-label">Regla estándar ferretería (R-1)</span></label>
                     <label><input type="radio" name="bill-line-mode" value="ref"> Cambiar precio de referencia (P)</label>
                     <label><input type="radio" name="bill-line-mode" value="manual"> Ignorar regla — precio final</label>
                 </div>
@@ -734,6 +733,15 @@ if (!function_exists('riverso_pos_billing_json')) {
                     <span>Monto final</span>
                     <input type="text" id="bill-line-final-amount" readonly tabindex="-1" autocomplete="off">
                 </label>
+            </div>
+            <div class="cq-line-by-amount" id="bill-line-by-amount">
+                <p class="cq-line-by-amount-row">
+                    <strong>Por monto:</strong>
+                    Monto $ <input type="text" id="bill-line-monto" class="cq-line-monto-input" inputmode="decimal" autocomplete="off" placeholder="1000">
+                    <button type="button" class="cq-btn cq-btn-small" id="bill-line-by-amount-btn">¿Cuánto entregar?</button>
+                </p>
+                <p class="cq-modal-hint">Total deseado antes de descuentos. Calcula la cantidad a entregar con la regla activa.</p>
+                <div id="bill-line-by-amount-result" class="cq-line-by-amount-result"></div>
             </div>
             <p id="bill-line-discount-hint" class="cq-line-preview" role="status"></p>
             <p id="bill-line-preview" class="cq-line-preview" role="status"></p>

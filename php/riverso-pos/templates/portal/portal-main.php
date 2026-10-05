@@ -950,6 +950,14 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                         $active_group = $group_id;
                         break 2;
                     }
+                    $children = (!empty($item['children']) && is_array($item['children'])) ? $item['children'] : [];
+                    foreach ($children as $child) {
+                        $child_slug = $child['portal_slug'] ?? null;
+                        if ($child_slug && $child_slug === $current_page) {
+                            $active_group = $group_id;
+                            break 3;
+                        }
+                    }
                 }
             }
             foreach ($module_groups as $group_id => $group):
@@ -2737,6 +2745,36 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
             Riverso_Billing_Module::get_instance()->render_app('portal');
         } else {
             echo '<p>No se pudo cargar Facturación.</p>';
+        }
+        ?>
+
+        <?php elseif ($current_page === 'manejo-caja'): ?>
+        <?php
+        if (!class_exists('Riverso_Cash_Module')) {
+            $cm = RIVERSO_POS_PLUGIN_DIR . 'sales/cash/class-cash-module.php';
+            if (file_exists($cm)) {
+                require_once $cm;
+            }
+        }
+        if (class_exists('Riverso_Cash_Module')) {
+            Riverso_Cash_Module::get_instance()->render_app('portal');
+        } else {
+            echo '<p>No se pudo cargar Manejo de Caja.</p>';
+        }
+        ?>
+
+        <?php elseif ($current_page === 'cuentas-caja'): ?>
+        <?php
+        if (!class_exists('Riverso_Cash_Module')) {
+            $cm = RIVERSO_POS_PLUGIN_DIR . 'sales/cash/class-cash-module.php';
+            if (file_exists($cm)) {
+                require_once $cm;
+            }
+        }
+        if (class_exists('Riverso_Cash_Module')) {
+            Riverso_Cash_Module::get_instance()->render_accounts('portal');
+        } else {
+            echo '<p>No se pudo cargar Cuentas bancarias y efectivo.</p>';
         }
         ?>
 

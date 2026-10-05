@@ -42,6 +42,18 @@
     color: #fff;
 }
 
+.riverso-cq--portal .cq-btn-save-line {
+    border: 0;
+    background: #1fa463;
+    color: #fff;
+    font-weight: 600;
+}
+
+.riverso-cq--portal .cq-btn-save-line:hover {
+    background: #188a53;
+    color: #fff;
+}
+
 .riverso-cq--portal .cq-btn-manual {
     background: #6d28d9;
     border-color: #6d28d9;

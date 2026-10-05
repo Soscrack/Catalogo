@@ -13,13 +13,15 @@ class Riverso_POS_Nav_Registry {
      * Grupos de menú (orden de aparición).
      */
     const GROUPS = [
-        'inicio'      => ['label' => 'Inicio', 'order' => 10],
-        'ventas'      => ['label' => 'Ventas', 'order' => 20],
-        'facturacion' => ['label' => 'Facturación', 'order' => 25],
-        'catalogo'    => ['label' => 'Catálogo', 'order' => 30],
-        'bodega'      => ['label' => 'Bodega', 'order' => 40],
-        'compras'     => ['label' => 'Compras', 'order' => 50],
-        'gestion'     => ['label' => 'Gestión', 'order' => 60],
+        'inicio'         => ['label' => 'Inicio', 'order' => 10],
+        'ventas'         => ['label' => 'Ventas', 'order' => 20],
+        'facturacion'    => ['label' => 'Facturación', 'order' => 25],
+        'cobranza'       => ['label' => 'Cobranza', 'order' => 27],
+        'catalogo'       => ['label' => 'Catálogo', 'order' => 30],
+        'bodega'         => ['label' => 'Bodega', 'order' => 40],
+        'compras'        => ['label' => 'Compras', 'order' => 50],
+        'gestion'        => ['label' => 'Gestión', 'order' => 60],
+        'administracion' => ['label' => 'Administración', 'order' => 70],
     ];
 
     /**
@@ -166,6 +168,46 @@ class Riverso_POS_Nav_Registry {
                         'label' => 'Libros contables',
                         'icon' => 'book',
                         'wip' => true,
+                    ],
+                ],
+            ],
+
+            // === Cobranza ===
+            [
+                'id' => 'cobranza',
+                'group' => 'cobranza',
+                'label' => 'Cobranza',
+                'icon' => 'money-alt',
+                'surfaces' => ['portal', 'admin'],
+                'portal_slug' => 'manejo-caja',
+                'capability' => 'riverso_view_cash',
+                'children' => [
+                    [
+                        'id' => 'cobranza-buscar-cobros',
+                        'label' => 'Buscar Cobros',
+                        'icon' => 'list-view',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'cobranza-buscar-pagos',
+                        'label' => 'Buscar Pagos',
+                        'icon' => 'money',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'cobranza-documentos-impagos',
+                        'label' => 'Documentos Impagos',
+                        'icon' => 'portfolio',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'cobranza-manejo-caja',
+                        'label' => 'Manejo Caja',
+                        'icon' => 'money-alt',
+                        'portal_slug' => 'manejo-caja',
+                        'admin_page' => 'riverso-pos-cash',
+                        'admin_callback' => 'render_cash',
+                        'capability' => 'riverso_view_cash',
                     ],
                 ],
             ],
@@ -478,6 +520,94 @@ class Riverso_POS_Nav_Registry {
                 'admin_callback' => 'render_audit',
                 'admin_capability' => 'riverso_view_audit',
             ],
+
+            // === Administración ===
+            [
+                'id' => 'administracion',
+                'group' => 'administracion',
+                'label' => 'Administración',
+                'icon' => 'admin-settings',
+                'surfaces' => ['portal', 'admin'],
+                'portal_slug' => 'cuentas-caja',
+                'capability' => 'riverso_manage_cash_accounts',
+                'children' => [
+                    [
+                        'id' => 'admin-usuarios',
+                        'label' => 'Usuarios',
+                        'icon' => 'groups',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-cuentas-caja',
+                        'label' => 'Cuentas bancarias y efectivo',
+                        'icon' => 'money',
+                        'portal_slug' => 'cuentas-caja',
+                        'admin_page' => 'riverso-pos-cash-accounts',
+                        'admin_callback' => 'render_cash_accounts',
+                        'capability' => 'riverso_manage_cash_accounts',
+                    ],
+                    [
+                        'id' => 'admin-timbraje-caf',
+                        'label' => 'Timbraje CAF',
+                        'icon' => 'yes-alt',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-certificados',
+                        'label' => 'Certificados digitales',
+                        'icon' => 'awards',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-tipos-documentos',
+                        'label' => 'Tipos de documentos',
+                        'icon' => 'media-text',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-datos-empresa',
+                        'label' => 'Datos de la empresa',
+                        'icon' => 'admin-generic',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-areas-negocio',
+                        'label' => 'Áreas de negocio / Centros de costo',
+                        'icon' => 'portfolio',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-importar-exportar',
+                        'label' => 'Importar / Exportar',
+                        'icon' => 'randomize',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-api',
+                        'label' => 'API',
+                        'icon' => 'rest-api',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-sucursales',
+                        'label' => 'Sucursales',
+                        'icon' => 'building',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-notif-cobranza',
+                        'label' => 'Notificaciones cobranza',
+                        'icon' => 'bell',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-planes',
+                        'label' => 'Planes y servicio contratados',
+                        'icon' => 'tickets-alt',
+                        'wip' => true,
+                    ],
+                ],
+            ],
         ];
     }
 
@@ -557,6 +687,21 @@ class Riverso_POS_Nav_Registry {
                 'label' => $item['label'],
                 'group' => $item['group'],
             ];
+            $children = (!empty($item['children']) && is_array($item['children'])) ? $item['children'] : [];
+            foreach ($children as $child) {
+                if (!empty($child['wip'])) {
+                    continue;
+                }
+                $child_slug = $child['portal_slug'] ?? null;
+                if (!$child_slug) {
+                    continue;
+                }
+                $modules[$child_slug] = [
+                    'icon'  => $child['icon'] ?? ($item['icon'] ?? 'admin-generic'),
+                    'label' => $child['label'],
+                    'group' => $item['group'],
+                ];
+            }
         }
         return $modules;
     }

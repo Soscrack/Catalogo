@@ -61,6 +61,7 @@ class Riverso_Task_Module {
         'confirmar_estructura_atributos' => 'Confirmar estructura de atributos',
         'autorizar_publicacion' => 'Autorizar publicación',
         'revisar_calidad_catalogo' => 'Revisar salud del catálogo',
+        'certificar_arqueo' => 'Certificar arqueo de caja',
     ];
 
     /**
@@ -83,6 +84,7 @@ class Riverso_Task_Module {
         'autorizar_publicacion' => 'administracion',
         'confirmar_estructura_atributos' => 'administracion',
         'revisar_calidad_catalogo' => 'administracion',
+        'certificar_arqueo' => 'administracion',
         'codigo_faltante' => 'productos',
         'barcode_faltante' => 'productos',
         'confirmar_barcode_legacy' => 'productos',

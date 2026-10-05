@@ -889,6 +889,50 @@
     color: #6b6258;
 }
 
+.cq-line-by-amount {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border: 1px solid #efe6da;
+    border-radius: 8px;
+    background: #fffaf3;
+}
+
+.cq-line-by-amount-row {
+    margin: 0 0 6px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+
+.cq-line-monto-input {
+    width: 110px;
+    padding: 6px 8px;
+    border: 1px solid #d5c8b6;
+    border-radius: 6px;
+}
+
+.cq-line-by-amount-result {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.cq-line-by-amount-result .cq-qty-opt {
+    font-size: 0.85rem;
+}
+
+.cq-line-by-amount-result .cq-qty-opt.is-selected {
+    outline: 2px solid #c45c26;
+}
+
+.cq-btn-small {
+    padding: 4px 10px;
+    font-size: 0.85rem;
+}
+
 .cq-line-fields {
     display: grid;
     grid-template-columns: 1fr 1fr;

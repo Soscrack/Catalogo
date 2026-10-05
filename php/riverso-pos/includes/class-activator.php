@@ -367,6 +367,7 @@ class Riverso_POS_Activator {
         self::create_phase65_receiver_designs($prefix, $charset_collate);
         self::create_phase66_billing_drafts($prefix, $charset_collate);
         self::create_phase67_billing_draft_line_context($prefix, $charset_collate);
+        self::create_phase68_cajas($prefix, $charset_collate);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -5504,6 +5505,16 @@ class Riverso_POS_Activator {
     }
 
     /**
+     * Garantiza tablas de cajas / cobranza (deploy sin bump).
+     */
+    public static function ensure_cajas_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::create_phase68_cajas($prefix, $charset_collate);
+    }
+
+    /**
      * Fase 56: recalcular doc_hash de escaneos cuyo folio tenía ceros a la izquierda.
      * No renombra folios de facturas ni toca tablas de precios.
      */
@@ -6027,6 +6038,174 @@ class Riverso_POS_Activator {
                 Riverso_POS_Audit::log('schema.phase67_billing_draft_line_context', 'billing_drafts', 0, array(
                     'actor_type' => 'computer',
                     'details' => 'Fase 67: contexto familia/regla en líneas de borrador boleta',
+                ));
+            }
+        }
+    }
+
+    /**
+     * Fase 68: cajas / cuentas bancarias, permisos, arqueos y movimientos.
+     * También agrega caja_id a billing_draft_payments.
+     */
+    private static function create_phase68_cajas($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        global $wpdb;
+
+        $sql_cajas = "CREATE TABLE {$prefix}cajas (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            nombre VARCHAR(128) NOT NULL,
+            tipo VARCHAR(32) NOT NULL DEFAULT 'fisica',
+            estado VARCHAR(16) NOT NULL DEFAULT 'cerrada',
+            saldo_efectivo DECIMAL(14,2) NOT NULL DEFAULT 0,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_cajas_activo (activo),
+            KEY idx_cajas_estado (estado)
+        ) $charset_collate;";
+        dbDelta($sql_cajas);
+
+        $sql_permisos = "CREATE TABLE {$prefix}caja_permisos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            caja_id BIGINT UNSIGNED NOT NULL,
+            user_id BIGINT UNSIGNED NOT NULL,
+            ver_saldo TINYINT(1) NOT NULL DEFAULT 0,
+            pagar TINYINT(1) NOT NULL DEFAULT 0,
+            borrar_pago TINYINT(1) NOT NULL DEFAULT 0,
+            transferir TINYINT(1) NOT NULL DEFAULT 0,
+            abrir_cerrar TINYINT(1) NOT NULL DEFAULT 0,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_caja_user (caja_id, user_id),
+            KEY idx_caja_perm_user (user_id)
+        ) $charset_collate;";
+        dbDelta($sql_permisos);
+
+        $sql_arqueos = "CREATE TABLE {$prefix}caja_arqueos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            caja_id BIGINT UNSIGNED NOT NULL,
+            tipo VARCHAR(16) NOT NULL DEFAULT 'apertura',
+            fecha DATETIME NOT NULL,
+            monto_efectivo DECIMAL(14,2) NOT NULL DEFAULT 0,
+            docs_recibidos DECIMAL(14,2) NOT NULL DEFAULT 0,
+            docs_emitidos DECIMAL(14,2) NOT NULL DEFAULT 0,
+            total DECIMAL(14,2) NOT NULL DEFAULT 0,
+            saldo_sistema DECIMAL(14,2) NOT NULL DEFAULT 0,
+            diferencia DECIMAL(14,2) NOT NULL DEFAULT 0,
+            usuario_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            certificador_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            estado VARCHAR(16) NOT NULL DEFAULT 'aprobado',
+            aprobado_por BIGINT UNSIGNED NULL DEFAULT NULL,
+            aprobado_at DATETIME NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_arqueo_caja (caja_id),
+            KEY idx_arqueo_estado (estado),
+            KEY idx_arqueo_cert (certificador_id)
+        ) $charset_collate;";
+        dbDelta($sql_arqueos);
+
+        $sql_movs = "CREATE TABLE {$prefix}caja_movimientos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            caja_id BIGINT UNSIGNED NOT NULL,
+            tipo VARCHAR(32) NOT NULL DEFAULT 'ajuste_arqueo',
+            monto DECIMAL(14,2) NOT NULL DEFAULT 0,
+            origen VARCHAR(32) NOT NULL DEFAULT '',
+            origen_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            detalle VARCHAR(255) NOT NULL DEFAULT '',
+            fecha DATETIME NOT NULL,
+            usuario_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_caja_mov_caja (caja_id),
+            KEY idx_caja_mov_fecha (fecha),
+            KEY idx_caja_mov_origen (origen, origen_id)
+        ) $charset_collate;";
+        dbDelta($sql_movs);
+
+        // Agregar caja_id a pagos de borrador (dbDelta agrega columna si falta).
+        $sql_payments = "CREATE TABLE {$prefix}billing_draft_payments (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            draft_id BIGINT UNSIGNED NOT NULL,
+            pay_date DATE NULL DEFAULT NULL,
+            caja VARCHAR(64) NOT NULL DEFAULT '',
+            caja_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            method VARCHAR(64) NOT NULL DEFAULT '',
+            amount_due DECIMAL(14,2) NOT NULL DEFAULT 0,
+            amount_paid DECIMAL(14,2) NOT NULL DEFAULT 0,
+            change_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            notes VARCHAR(500) NOT NULL DEFAULT '',
+            charge_code VARCHAR(32) NOT NULL DEFAULT '',
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_pay_draft (draft_id),
+            KEY idx_bill_draft_pay_caja (caja_id)
+        ) $charset_collate;";
+        dbDelta($sql_payments);
+
+        // Seed inicial si la tabla está vacía.
+        $count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$prefix}cajas");
+        if ($count === 0) {
+            $now = current_time('mysql');
+            $seeds = [
+                ['Efectivo', 'fisica'],
+                ['Tarjeta', 'bancaria_manual'],
+                ['Arca de Riverso', 'fisica'],
+                ['Arca Virtual', 'bancaria_manual'],
+                ['Transferencias', 'bancaria_manual'],
+                ['CHEQUE AL DIA', 'bancaria_manual'],
+            ];
+            $caja_ids = [];
+            foreach ($seeds as $seed) {
+                $wpdb->insert("{$prefix}cajas", [
+                    'nombre' => $seed[0],
+                    'tipo' => $seed[1],
+                    'estado' => 'cerrada',
+                    'saldo_efectivo' => 0,
+                    'activo' => 1,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+                if ($wpdb->insert_id) {
+                    $caja_ids[] = (int) $wpdb->insert_id;
+                }
+            }
+            // Permisos completos a administradores sobre cajas sembradas.
+            $admin_ids = get_users([
+                'role__in' => ['administrator', 'riverso_admin'],
+                'fields' => 'ID',
+            ]);
+            foreach ($caja_ids as $cid) {
+                foreach ($admin_ids as $uid) {
+                    $exists = $wpdb->get_var($wpdb->prepare(
+                        "SELECT id FROM {$prefix}caja_permisos WHERE caja_id = %d AND user_id = %d LIMIT 1",
+                        $cid,
+                        (int) $uid
+                    ));
+                    if ($exists) {
+                        continue;
+                    }
+                    $wpdb->insert("{$prefix}caja_permisos", [
+                        'caja_id' => $cid,
+                        'user_id' => (int) $uid,
+                        'ver_saldo' => 1,
+                        'pagar' => 1,
+                        'borrar_pago' => 1,
+                        'transferir' => 1,
+                        'abrir_cerrar' => 1,
+                    ]);
+                }
+            }
+        }
+
+        if (get_option('riverso_pos_phase68_cajas') !== '1') {
+            update_option('riverso_pos_phase68_cajas', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase68_cajas', 'cajas', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 68: cajas, permisos, arqueos y movimientos',
                 ));
             }
         }

@@ -1,0 +1,7 @@
+-- Fase 68: cajas / cuentas bancarias, permisos, arqueos y movimientos
+-- Tablas vía dbDelta en Riverso_POS_Activator::create_phase68_cajas()
+-- {prefix}riverso_cajas
+-- {prefix}riverso_caja_permisos
+-- {prefix}riverso_caja_arqueos
+-- {prefix}riverso_caja_movimientos
+-- Columna adicional: {prefix}riverso_billing_draft_payments.caja_id

@@ -938,6 +938,38 @@
     background: #fcf0f1;
 }
 
+.riverso-price-rules .rpr-tiers .t-max-delta-input {
+    width: 100%;
+    min-width: 110px;
+    font-family: Consolas, "SFMono-Regular", Menlo, Monaco, monospace;
+    font-size: 13px;
+    padding: 6px 8px;
+    border: 1px solid #8c8f94;
+    border-radius: 4px;
+    background: #fff8f0;
+}
+
+.riverso-price-rules .rpr-tiers .t-max-delta-input:focus {
+    background: #fff;
+    border-color: #d97706;
+    box-shadow: 0 0 0 1px #d97706;
+    outline: none;
+}
+
+.riverso-price-rules .rpr-tiers .t-max-delta-input.is-invalid {
+    border-color: #d63638;
+    background: #fcf0f1;
+}
+
+.riverso-price-rules .rpr-curve-table {
+    max-width: 720px;
+    margin-top: 8px;
+}
+
+.riverso-price-rules .rpr-curve-table tr.rpr-curve-capped td {
+    background: #fff8f0;
+}
+
 .riverso-price-rules .rpr-preview-line {
     font-size: 11px;
     line-height: 1.35;
@@ -955,6 +987,25 @@
 
 .riverso-price-rules .rpr-sim-total {
     font-size: 1.05em;
+}
+
+.riverso-price-rules .rpr-sim-by-total {
+    margin-top: 6px;
+}
+
+.riverso-price-rules .rpr-sim-by-total #sim-by-total-result {
+    display: inline-block;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.riverso-price-rules .rpr-qty-opt {
+    margin: 2px 4px 2px 0;
+}
+
+.riverso-price-rules .rpr-by-total-msg {
+    color: #646970;
+    font-size: 13px;
 }
 
 .riverso-price-rules .rpr-assign-list {

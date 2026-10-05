@@ -111,6 +111,7 @@ class Riverso_Billing_Module {
         add_action('wp_ajax_riverso_billing_family_price', [$this, 'ajax_family_price']);
         add_action('wp_ajax_riverso_billing_line_stock', [$this, 'ajax_line_stock']);
         add_action('wp_ajax_riverso_billing_search_quotes', [$this, 'ajax_search_quotes']);
+        add_action('wp_ajax_riverso_billing_cash_boxes', [$this, 'ajax_cash_boxes']);
     }
 
     /**
@@ -127,6 +128,16 @@ class Riverso_Billing_Module {
             $user_name = trim((string) ($user->display_name ?: $user->user_login));
         }
         $issuer_data = isset($issuer['issuer']) && is_array($issuer['issuer']) ? $issuer['issuer'] : [];
+        $cash_boxes = [];
+        if (!class_exists('Riverso_Cash_Module')) {
+            $cash_file = RIVERSO_POS_PLUGIN_DIR . 'sales/cash/class-cash-module.php';
+            if (file_exists($cash_file)) {
+                require_once $cash_file;
+            }
+        }
+        if (class_exists('Riverso_Cash_Module')) {
+            $cash_boxes = Riverso_Cash_Module::get_instance()->repo()->list_payable_open(get_current_user_id());
+        }
         return [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('riverso_billing'),
@@ -137,6 +148,7 @@ class Riverso_Billing_Module {
             'todayDate' => current_time('Y-m-d'),
             'quoteId' => $quote_id,
             'currentUserName' => $user_name,
+            'cashBoxes' => $cash_boxes,
             'caps' => [
                 'emit' => $this->can_emit(),
                 'viewStock' => current_user_can('riverso_view_stock')
@@ -186,8 +198,24 @@ class Riverso_Billing_Module {
                 'familyPrice' => 'riverso_billing_family_price',
                 'lineStock' => 'riverso_billing_line_stock',
                 'searchQuotes' => 'riverso_billing_search_quotes',
+                'cashBoxes' => 'riverso_billing_cash_boxes',
             ],
         ];
+    }
+
+    public function ajax_cash_boxes() {
+        $this->authorize();
+        $boxes = [];
+        if (!class_exists('Riverso_Cash_Module')) {
+            $cash_file = RIVERSO_POS_PLUGIN_DIR . 'sales/cash/class-cash-module.php';
+            if (file_exists($cash_file)) {
+                require_once $cash_file;
+            }
+        }
+        if (class_exists('Riverso_Cash_Module')) {
+            $boxes = Riverso_Cash_Module::get_instance()->repo()->list_payable_open(get_current_user_id());
+        }
+        wp_send_json_success(['cashBoxes' => $boxes]);
     }
 
     public function render_app($surface = null) {
@@ -1405,19 +1433,65 @@ class Riverso_Billing_Module {
     public function ajax_draft_payment() {
         $this->authorize();
         $draft_id = isset($_POST['draft_id']) ? absint($_POST['draft_id']) : 0;
+        $caja_id = isset($_POST['caja_id']) ? absint($_POST['caja_id']) : 0;
+        $caja_nombre = isset($_POST['caja']) ? sanitize_text_field(wp_unslash($_POST['caja'])) : '';
+
+        if ($caja_id <= 0) {
+            wp_send_json_error(['message' => 'Selecciona una caja abierta.']);
+        }
+        if (!class_exists('Riverso_Cash_Module')) {
+            $cash_file = RIVERSO_POS_PLUGIN_DIR . 'sales/cash/class-cash-module.php';
+            if (file_exists($cash_file)) {
+                require_once $cash_file;
+            }
+        }
+        if (!class_exists('Riverso_Cash_Module')) {
+            wp_send_json_error(['message' => 'Módulo de caja no disponible.']);
+        }
+        $cash = Riverso_Cash_Module::get_instance()->repo();
+        $caja = $cash->get($caja_id);
+        if (!$caja) {
+            wp_send_json_error(['message' => 'Caja no encontrada.']);
+        }
+        if (($caja['estado'] ?? '') !== 'abierta') {
+            wp_send_json_error(['message' => 'La caja no está abierta.']);
+        }
+        $user_id = get_current_user_id();
+        if (!$cash->user_has_perm($caja_id, $user_id, 'pagar')) {
+            wp_send_json_error(['message' => 'No tienes permiso para pagar en esta caja.']);
+        }
+        if ($caja_nombre === '') {
+            $caja_nombre = (string) $caja['nombre'];
+        }
+
+        $amount_paid = isset($_POST['amount_paid']) ? (float) $_POST['amount_paid'] : 0;
+        $change_amount = isset($_POST['change_amount']) ? (float) $_POST['change_amount'] : 0;
+        $ingreso = round(max(0, $amount_paid - $change_amount), 2);
+
         $result = $this->drafts->add_payment($draft_id, [
             'pay_date' => isset($_POST['pay_date']) ? sanitize_text_field(wp_unslash($_POST['pay_date'])) : '',
-            'caja' => isset($_POST['caja']) ? sanitize_text_field(wp_unslash($_POST['caja'])) : 'Efectivo',
+            'caja' => $caja_nombre,
+            'caja_id' => $caja_id,
             'method' => isset($_POST['method']) ? sanitize_text_field(wp_unslash($_POST['method'])) : 'Efectivo',
             'amount_due' => isset($_POST['amount_due']) ? (float) $_POST['amount_due'] : 0,
-            'amount_paid' => isset($_POST['amount_paid']) ? (float) $_POST['amount_paid'] : 0,
-            'change_amount' => isset($_POST['change_amount']) ? (float) $_POST['change_amount'] : 0,
+            'amount_paid' => $amount_paid,
+            'change_amount' => $change_amount,
             'notes' => isset($_POST['notes']) ? sanitize_textarea_field(wp_unslash($_POST['notes'])) : '',
             'charge_code' => isset($_POST['charge_code']) ? sanitize_text_field(wp_unslash($_POST['charge_code'])) : '',
         ]);
         if (empty($result['ok'])) {
             wp_send_json_error(['message' => $result['message'] ?? 'No se pudo registrar el pago.']);
         }
+
+        if ($ingreso > 0) {
+            $cash->register_payment_ingreso(
+                $caja_id,
+                $ingreso,
+                (int) $result['id'],
+                'Pago borrador #' . $draft_id
+            );
+        }
+
         $draft = $this->present_draft($this->drafts->get($draft_id));
         wp_send_json_success(['draft' => $draft, 'payment_id' => (int) $result['id']]);
     }
@@ -1598,8 +1672,33 @@ class Riverso_Billing_Module {
                 $p_override = null;
             }
         }
-        $pack = $catalog->local_price_pack($pb, $qty, $p_override);
+        $rule_mode = isset($_POST['rule_mode']) ? strtolower(trim((string) wp_unslash($_POST['rule_mode']))) : 'auto';
+        if (!in_array($rule_mode, ['auto', 'std', 'manual', 'ref'], true)) {
+            $rule_mode = 'auto';
+        }
+        $pack = $catalog->local_price_pack($pb, $qty, $p_override, $rule_mode);
         $offers = $catalog->family_offers_for_base($pb);
+
+        $by_total = null;
+        $target_total = isset($_POST['target_total']) ? (float) $_POST['target_total'] : 0.0;
+        if ($target_total > 0) {
+            $upp = isset($_POST['units_per_pack']) ? (float) $_POST['units_per_pack'] : 1.0;
+            if ($upp <= 0) {
+                $upp = 1.0;
+            }
+            $others = isset($_POST['others_units']) ? (float) $_POST['others_units'] : 0.0;
+            if ($others < 0) {
+                $others = 0.0;
+            }
+            $by_total = $catalog->qty_for_amount($pb, $target_total, [
+                'rule_mode' => $rule_mode,
+                'p_ref' => $p_override,
+                'units_per_pack' => $upp,
+                'others_units' => $others,
+            ]);
+            $by_total['target_total'] = $target_total;
+        }
+
         wp_send_json_success([
             'pricing' => $pack,
             'family' => $offers,
@@ -1608,10 +1707,16 @@ class Riverso_Billing_Module {
             'rule_adjusted' => !empty($pack['rule_adjusted']),
             'unitario0' => isset($pack['unitario0']) ? $pack['unitario0'] : null,
             'has_rule' => !empty($pack['has_rule']),
+            'rule_codigo' => isset($pack['rule_codigo']) ? $pack['rule_codigo'] : null,
+            'rule_nombre' => isset($pack['rule_nombre']) ? $pack['rule_nombre'] : null,
+            'assigned_rule_codigo' => isset($pack['assigned_rule_codigo']) ? $pack['assigned_rule_codigo'] : null,
+            'std_rule' => isset($pack['std_rule']) ? $pack['std_rule'] : null,
             'p_asignado' => isset($pack['p_asignado']) ? $pack['p_asignado'] : null,
             'producto_base_id' => $pb,
             'family_qty' => $qty,
             'p_ref' => $p_override,
+            'rule_mode' => $rule_mode,
+            'by_total' => $by_total,
         ]);
     }
 

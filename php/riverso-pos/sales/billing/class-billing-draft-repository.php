@@ -136,7 +136,7 @@ class Riverso_Billing_Draft_Repository {
                 $afecto = !empty($line['afecto']) ? 1 : 0;
             }
             $price_mode = strtolower(trim((string) ($line['price_mode'] ?? 'auto')));
-            if (!in_array($price_mode, ['auto', 'ref', 'manual'], true)) {
+            if (!in_array($price_mode, ['auto', 'ref', 'manual', 'std'], true)) {
                 $price_mode = 'auto';
             }
             $upp = (float) ($line['units_per_pack'] ?? 1);
@@ -148,11 +148,11 @@ class Riverso_Billing_Draft_Repository {
                 $unit_cost = round((float) $line['unit_cost'], 4);
             }
             $price_ref = null;
-            if (isset($line['price_ref']) && $line['price_ref'] !== null && $line['price_ref'] !== '') {
+            if ($price_mode === 'ref' && isset($line['price_ref']) && $line['price_ref'] !== null && $line['price_ref'] !== '') {
                 $price_ref = round((float) $line['price_ref'], 6);
             }
             $price_total = null;
-            if (isset($line['price_total']) && $line['price_total'] !== null && $line['price_total'] !== '') {
+            if ($price_mode === 'manual' && isset($line['price_total']) && $line['price_total'] !== null && $line['price_total'] !== '') {
                 $price_total = round((float) $line['price_total'], 2);
             }
             $rule_total = null;
@@ -227,10 +227,12 @@ class Riverso_Billing_Draft_Repository {
         if (($draft['status'] ?? '') !== 'emitted') {
             return ['ok' => false, 'message' => 'Cierra el documento antes de ingresar pagos.'];
         }
+        $caja_id = !empty($payment['caja_id']) ? absint($payment['caja_id']) : null;
         $ok = $wpdb->insert($this->payments_table(), [
             'draft_id' => absint($draft_id),
             'pay_date' => $this->sanitize_date($payment['pay_date'] ?? current_time('Y-m-d')),
             'caja' => substr((string) ($payment['caja'] ?? 'Efectivo'), 0, 64),
+            'caja_id' => $caja_id,
             'method' => substr((string) ($payment['method'] ?? 'Efectivo'), 0, 64),
             'amount_due' => round((float) ($payment['amount_due'] ?? 0), 2),
             'amount_paid' => round((float) ($payment['amount_paid'] ?? 0), 2),
@@ -356,6 +358,7 @@ class Riverso_Billing_Draft_Repository {
                 'id' => (int) $r['id'],
                 'pay_date' => (string) ($r['pay_date'] ?? ''),
                 'caja' => (string) ($r['caja'] ?? ''),
+                'caja_id' => !empty($r['caja_id']) ? (int) $r['caja_id'] : null,
                 'method' => (string) ($r['method'] ?? ''),
                 'amount_due' => (float) ($r['amount_due'] ?? 0),
                 'amount_paid' => (float) ($r['amount_paid'] ?? 0),

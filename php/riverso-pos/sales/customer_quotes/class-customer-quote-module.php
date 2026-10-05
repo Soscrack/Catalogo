@@ -1323,8 +1323,33 @@ class Riverso_Customer_Quote_Module {
                 $p_override = null;
             }
         }
-        $pack = $this->catalog->local_price_pack($pb, $qty, $p_override);
+        $rule_mode = strtolower(trim($this->post_string('rule_mode')));
+        if (!in_array($rule_mode, array('auto', 'std', 'manual', 'ref'), true)) {
+            $rule_mode = 'auto';
+        }
+        $pack = $this->catalog->local_price_pack($pb, $qty, $p_override, $rule_mode);
         $offers = $this->catalog->family_offers_for_base($pb);
+
+        $by_total = null;
+        $target_total = (float) $this->post_string('target_total');
+        if ($target_total > 0) {
+            $upp = (float) $this->post_string('units_per_pack');
+            if ($upp <= 0) {
+                $upp = 1.0;
+            }
+            $others = (float) $this->post_string('others_units');
+            if ($others < 0) {
+                $others = 0.0;
+            }
+            $by_total = $this->catalog->qty_for_amount($pb, $target_total, array(
+                'rule_mode' => $rule_mode,
+                'p_ref' => $p_override,
+                'units_per_pack' => $upp,
+                'others_units' => $others,
+            ));
+            $by_total['target_total'] = $target_total;
+        }
+
         $this->ok(array(
             'pricing' => $pack,
             'family' => $offers,
@@ -1333,10 +1358,16 @@ class Riverso_Customer_Quote_Module {
             'rule_adjusted' => !empty($pack['rule_adjusted']),
             'unitario0' => isset($pack['unitario0']) ? $pack['unitario0'] : null,
             'has_rule' => !empty($pack['has_rule']),
+            'rule_codigo' => isset($pack['rule_codigo']) ? $pack['rule_codigo'] : null,
+            'rule_nombre' => isset($pack['rule_nombre']) ? $pack['rule_nombre'] : null,
+            'assigned_rule_codigo' => isset($pack['assigned_rule_codigo']) ? $pack['assigned_rule_codigo'] : null,
+            'std_rule' => isset($pack['std_rule']) ? $pack['std_rule'] : null,
             'p_asignado' => isset($pack['p_asignado']) ? $pack['p_asignado'] : null,
             'producto_base_id' => $pb,
             'family_qty' => $qty,
             'p_ref' => $p_override,
+            'rule_mode' => $rule_mode,
+            'by_total' => $by_total,
         ));
     }
 

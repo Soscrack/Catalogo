@@ -10,8 +10,10 @@
   var state = {
     lineModal: {
       index: -1, mode: "auto", taxView: "bruto", previewSeq: 0,
-      hasRule: false, isFamily: false, catalogP: null, unitario0: null,
-      ruleTotal: null, priceRef: null, unitGross: 0, totalGross: 0
+      hasRule: false, isFamily: false, hasLocalProduct: false,
+      catalogP: null, unitario0: null,
+      ruleTotal: null, ruleCodigo: null, ruleNombre: null, stdRule: null,
+      priceRef: null, unitGross: 0, totalGross: 0
     },
     familyLineIndex: -1,
     familyPriceSeq: 0,
@@ -1035,7 +1037,7 @@
 
     function linePriceMode(line) {
         var mode = line && line.price_mode ? String(line.price_mode).toLowerCase() : "auto";
-        if (mode === "manual" || mode === "ref") return mode;
+        if (mode === "manual" || mode === "ref" || mode === "std") return mode;
         return "auto";
     }
 
@@ -1118,7 +1120,7 @@
     }
 
     function setLineModalMode(mode) {
-        if (mode !== "manual" && mode !== "ref") mode = "auto";
+        if (mode !== "manual" && mode !== "ref" && mode !== "std") mode = "auto";
         state.lineModal.mode = mode;
         if (billEls.lineModeManual) {
             billEls.lineModeManual.checked = mode === "manual";
@@ -1135,7 +1137,7 @@
                 state.lineModal.totalGross = round2((Number(state.lineModal.unitGross) || 0) * scale);
             }
             refreshLineModalFields(true);
-        } else if (mode === "ref" || mode === "auto") {
+        } else if (mode === "ref" || mode === "auto" || mode === "std") {
             scheduleLineModalPreview();
         } else {
             refreshLineModalFields(true);
@@ -1476,9 +1478,11 @@
         if (!(familyQty > 0)) familyQty = 1;
         var payload = {
             producto_base_id: String(pb),
-            family_qty: String(familyQty)
+            family_qty: String(familyQty),
+            rule_mode: state.lineModal.mode === "std" ? "std" : (state.lineModal.mode === "manual" ? "manual" : "auto")
         };
         if (state.lineModal.mode === "ref") {
+            payload.rule_mode = "auto";
             var pref = Number(state.lineModal.priceRef);
             if (!(pref > 0) && billEls.linePref) {
                 pref = round4(viewToBruto(parseClNumber(billEls.linePref.value)));
@@ -1508,7 +1512,11 @@
             ? Number(data.rule_total)
             : (data.pricing && data.pricing.rule_total != null ? Number(data.pricing.rule_total) : null);
         var ruleAdjusted = !!(data.rule_adjusted || (data.pricing && data.pricing.rule_adjusted));
-        lm.hasRule = !!(data.has_rule || (data.pricing && data.pricing.has_rule) || ruleAdjusted || (data.unit_price != null && lm.catalogP != null && Number(data.unit_price) !== Number(lm.catalogP)));
+        lm.ruleCodigo = data.assigned_rule_codigo || (data.pricing && data.pricing.assigned_rule_codigo) || null;
+        lm.ruleNombre = data.rule_nombre || (data.pricing && data.pricing.rule_nombre) || null;
+        lm.stdRule = data.std_rule || (data.pricing && data.pricing.std_rule) || null;
+        lm.hasRule = !!(data.has_rule || (data.pricing && data.pricing.has_rule) || ruleAdjusted || lm.ruleCodigo
+            || (data.unit_price != null && lm.catalogP != null && Number(data.unit_price) !== Number(lm.catalogP)));
         if (ruleAdjusted && ruleTotal != null) lm.ruleTotal = ruleTotal;
         else lm.ruleTotal = ruleTotal;
         if (lm.mode !== "manual") {
@@ -1525,14 +1533,15 @@
                 lm.totalGross = round2(lm.unitGross * lineBillableUnits(draft));
             }
         }
-        configureLineModalModes(lm.hasRule, !!gid);
+        configureLineModalModes(lm.hasRule, !!gid, lm.hasLocalProduct);
         refreshLineModalFields(true);
     }
 
-    function configureLineModalModes(hasRule, isFamily) {
+    function configureLineModalModes(hasRule, isFamily, hasLocalProduct) {
         var lm = state.lineModal;
         lm.hasRule = !!hasRule;
         lm.isFamily = !!isFamily;
+        if (hasLocalProduct != null) lm.hasLocalProduct = !!hasLocalProduct;
         if (billEls.lineFamilyNote) {
             if (isFamily) {
                 billEls.lineFamilyNote.hidden = false;
@@ -1542,14 +1551,16 @@
                 billEls.lineFamilyNote.textContent = "";
             }
         }
-        if (hasRule && isFamily) {
+        var showRadios = !!lm.hasLocalProduct;
+        if (showRadios) {
             if (billEls.lineModeManualWrap) billEls.lineModeManualWrap.hidden = true;
             if (billEls.lineModeRadios) billEls.lineModeRadios.hidden = false;
         } else {
             if (billEls.lineModeManualWrap) billEls.lineModeManualWrap.hidden = false;
             if (billEls.lineModeRadios) billEls.lineModeRadios.hidden = true;
-            if (lm.mode === "ref") lm.mode = "auto";
+            if (lm.mode === "ref" || lm.mode === "std") lm.mode = "auto";
         }
+        updateRuleModeLabels();
         if (billEls.lineModeManual) billEls.lineModeManual.checked = lm.mode === "manual";
         if (billEls.lineModeRadios) {
             Array.prototype.forEach.call(billEls.lineModeRadios.querySelectorAll('input[name="bill-line-mode"]'), function (radio) {
@@ -1557,6 +1568,30 @@
             });
         }
         updateLineModalModeUi();
+    }
+
+    function updateRuleModeLabels() {
+        var lm = state.lineModal;
+        if (billEls.lineModeAutoLabel) {
+            if (lm.ruleCodigo) {
+                billEls.lineModeAutoLabel.textContent = "Usar regla (" + lm.ruleCodigo + ")";
+            } else {
+                billEls.lineModeAutoLabel.textContent = "Usar regla (sin regla: precio lista)";
+            }
+        }
+        var std = lm.stdRule;
+        var showStd = !!(std && std.codigo);
+        if (showStd && lm.mode !== "std" && lm.ruleCodigo
+            && String(lm.ruleCodigo).toUpperCase() === String(std.codigo).toUpperCase()) {
+            showStd = false;
+        }
+        if (billEls.lineModeStdWrap) billEls.lineModeStdWrap.hidden = !showStd;
+        if (billEls.lineModeStdLabel && std) {
+            billEls.lineModeStdLabel.textContent = (std.nombre || "Regla estándar") + " (" + std.codigo + ")";
+        }
+        if (billEls.lineByAmount) {
+            billEls.lineByAmount.hidden = !lm.hasLocalProduct;
+        }
     }
 
     function openLineModal(index) {
@@ -1569,9 +1604,13 @@
         lm.mode = linePriceMode(line);
         lm.hasRule = false;
         lm.isFamily = !!lineGrupoId(line);
+        lm.hasLocalProduct = !!(line.producto_base_id);
         lm.catalogP = null;
         lm.unitario0 = null;
         lm.ruleTotal = line._rule_total != null ? Number(line._rule_total) : null;
+        lm.ruleCodigo = null;
+        lm.ruleNombre = null;
+        lm.stdRule = null;
         lm.priceRef = line.price_ref != null ? Number(line.price_ref) : (Number(line.unit_price) || 0);
         lm.unitGross = Number(line.unit_price) || 0;
         if (lm.mode === "manual" && line.price_total != null) {
@@ -1612,7 +1651,9 @@
         updateLineModalDiscountHint(line);
         updateLineModalFinalAmount();
         setLineTaxView("bruto");
-        configureLineModalModes(false, lm.isFamily);
+        if (billEls.lineByAmountResult) billEls.lineByAmountResult.innerHTML = "";
+        if (billEls.lineMonto) billEls.lineMonto.value = "";
+        configureLineModalModes(false, lm.isFamily, lm.hasLocalProduct);
         setLineModalMode(lm.mode);
         billEls.lineModal.hidden = false;
         billEls.lineModal.setAttribute("aria-hidden", "false");
@@ -1694,6 +1735,8 @@
                 });
             } else if (mode === "ref") {
                 applyPriceModeToGroup(gid, "ref", { price_ref: priceRef });
+            } else if (mode === "std") {
+                applyPriceModeToGroup(gid, "std", {});
             } else {
                 applyPriceModeToGroup(gid, "auto", {});
             }
@@ -2165,9 +2208,11 @@
         var seq = ++state.familyPriceSeq;
         var payload = {
             producto_base_id: String(priceBaseId),
-            family_qty: String(familyQty)
+            family_qty: String(familyQty),
+            rule_mode: mode === "std" ? "std" : (mode === "manual" ? "manual" : "auto")
         };
         if (mode === "ref") {
+            payload.rule_mode = "auto";
             var pref = null;
             indexes.forEach(function (idx) {
                 if (pref != null) return;
@@ -2279,13 +2324,16 @@
         var packs2 = Number(line.quantity || 1);
         var upp2 = lineUnitsPerPack(line);
         if (!(upp2 > 0)) { upp2 = 1; }
+        var mode = linePriceMode(line);
         var seq = ++state.familyPriceSeq;
         var payload = {
             producto_base_id: String(pb),
-            family_qty: String(packs2 * upp2)
+            family_qty: String(packs2 * upp2),
+            rule_mode: mode === "std" ? "std" : "auto"
         };
-        if (linePriceMode(line) === "ref" && line.price_ref != null && Number(line.price_ref) > 0) {
+        if (mode === "ref" && line.price_ref != null && Number(line.price_ref) > 0) {
             payload.p_ref = String(line.price_ref);
+            payload.rule_mode = "auto";
         }
         return post(cfgProxy.actions.familyPrice, payload).then(function (data) {
             if (seq !== state.familyPriceSeq) return;
@@ -2296,6 +2344,116 @@
             if (seq !== state.familyPriceSeq) return;
             renderBoletaEditor();
             renderBoletaEditorTotals();
+        });
+    }
+
+    function formatByAmountOpt(opt, label, exact) {
+        if (!opt) return "";
+        var exactTxt = exact ? " · exacto" : "";
+        return '<button type="button" class="cq-btn cq-btn-small cq-qty-opt" data-qty="' + String(opt.qty) + '">'
+            + label + " <strong>" + formatQty(opt.qty) + " u.</strong> → Total "
+            + formatPlain(opt.total) + " (" + formatPlain(opt.unitario) + " c/u)"
+            + exactTxt + "</button>";
+    }
+
+    function renderByAmountResult(bt) {
+        if (!billEls.lineByAmountResult) return;
+        if (!bt) {
+            billEls.lineByAmountResult.innerHTML = "";
+            return;
+        }
+        if (!bt.debajo) {
+            var msg = bt.minimo
+                ? ("El monto no alcanza para 1 u. (mínimo " + formatPlain(bt.minimo.total) + ")")
+                : "Sin tramo aplicable";
+            billEls.lineByAmountResult.innerHTML = '<span class="cq-modal-hint">' + msg + "</span>"
+                + (bt.arriba ? " " + formatByAmountOpt(bt.arriba, "Opción:") : "");
+            return;
+        }
+        var html = formatByAmountOpt(bt.debajo, "Entregar", !!bt.exacto);
+        if (!bt.exacto && bt.arriba) {
+            html += " " + formatByAmountOpt(bt.arriba, "o");
+        }
+        billEls.lineByAmountResult.innerHTML = html;
+    }
+
+    function runLineByAmount() {
+        var line = (getLines() || [])[state.lineModal.index];
+        if (!line || !cfgProxy.actions || !cfgProxy.actions.familyPrice) return;
+        var montoView = parseClNumber(billEls.lineMonto ? billEls.lineMonto.value : "");
+        if (!(montoView > 0)) {
+            if (billEls.lineByAmountResult) {
+                billEls.lineByAmountResult.innerHTML = '<span class="cq-modal-hint">Ingresa un monto válido</span>';
+            }
+            return;
+        }
+        var monto = round2(viewToBruto(montoView));
+        var pb = Number(line.producto_base_id) || 0;
+        var gid = lineGrupoId(line);
+        if (gid) pb = familyPriceBaseId(gid) || pb;
+        if (!pb) {
+            if (billEls.lineByAmountResult) {
+                billEls.lineByAmountResult.innerHTML = '<span class="cq-modal-hint">Sin producto local</span>';
+            }
+            return;
+        }
+        var upp = lineUnitsPerPack(line);
+        if (!(upp > 0)) upp = 1;
+        var others = 0;
+        if (gid) {
+            var total = totalFamilyUnitsQuoted(gid);
+            var thisUnits = lineBillableUnits(line);
+            var qtyDraft = parseClNumber(billEls.lineQty ? billEls.lineQty.value : line.quantity);
+            if (qtyDraft > 0) thisUnits = round3(qtyDraft * upp);
+            others = Math.max(0, total - thisUnits);
+        }
+        var mode = state.lineModal.mode;
+        if (mode === "manual") {
+            var unit = Number(state.lineModal.unitGross) || 0;
+            if (!(unit > 0)) {
+                renderByAmountResult({ debajo: null, arriba: null, exacto: false, minimo: null });
+                return;
+            }
+            var packPrice = unit * upp;
+            var k = Math.floor(monto / packPrice);
+            var minimo = { qty: 1, total: round2(packPrice), unitario: unit };
+            if (k < 1) {
+                renderByAmountResult({ debajo: null, arriba: minimo, exacto: false, minimo: minimo });
+                return;
+            }
+            var debajo = { qty: k, total: round2(packPrice * k), unitario: unit };
+            var exacto = Math.abs(debajo.total - monto) < 0.01;
+            var arriba = exacto ? null : { qty: k + 1, total: round2(packPrice * (k + 1)), unitario: unit };
+            renderByAmountResult({ debajo: debajo, arriba: arriba, exacto: exacto, minimo: minimo });
+            return;
+        }
+        if (billEls.lineByAmountResult) {
+            billEls.lineByAmountResult.innerHTML = '<span class="cq-modal-hint">Calculando…</span>';
+        }
+        var payload = {
+            producto_base_id: String(pb),
+            family_qty: String(Math.max(1, others + upp)),
+            target_total: String(monto),
+            units_per_pack: String(upp),
+            others_units: String(others),
+            rule_mode: mode === "std" ? "std" : "auto"
+        };
+        if (mode === "ref") {
+            var pref = Number(state.lineModal.priceRef);
+            if (!(pref > 0) && billEls.linePref) {
+                pref = round4(viewToBruto(parseClNumber(billEls.linePref.value)));
+            }
+            if (pref > 0) payload.p_ref = String(pref);
+        }
+        post(cfgProxy.actions.familyPrice, payload).then(function (data) {
+            renderByAmountResult(data.by_total);
+            if (data.std_rule) state.lineModal.stdRule = data.std_rule;
+            if (data.assigned_rule_codigo !== undefined) state.lineModal.ruleCodigo = data.assigned_rule_codigo || null;
+            updateRuleModeLabels();
+        }).catch(function () {
+            if (billEls.lineByAmountResult) {
+                billEls.lineByAmountResult.innerHTML = '<span class="cq-modal-hint">Error al calcular</span>';
+            }
         });
     }
 
@@ -2408,8 +2566,15 @@
       lineModeManual: g("bill-line-mode-manual"),
       lineModeManualWrap: g("bill-line-mode-manual-wrap"),
       lineModeRadios: g("bill-line-mode-radios"),
+      lineModeAutoLabel: g("bill-line-mode-auto-label"),
+      lineModeStdWrap: g("bill-line-mode-std-wrap"),
+      lineModeStdLabel: g("bill-line-mode-std-label"),
       lineFamilyNote: g("bill-line-family-note"),
       lineRuleInfo: g("bill-line-rule-info"),
+      lineByAmount: g("bill-line-by-amount"),
+      lineMonto: g("bill-line-monto"),
+      lineByAmountBtn: g("bill-line-by-amount-btn"),
+      lineByAmountResult: g("bill-line-by-amount-result"),
       linePreview: g("bill-line-preview"),
       lineDiscountHint: g("bill-line-discount-hint"),
       lineUnitLabel: g("bill-line-unit-label"),
@@ -2595,6 +2760,33 @@
     if (billEls.lineModeRadios) {
       billEls.lineModeRadios.addEventListener("change", function (e) {
         if (e.target && e.target.name === "bill-line-mode") setLineModalMode(e.target.value);
+      });
+    }
+    if (billEls.lineByAmountBtn) {
+      billEls.lineByAmountBtn.addEventListener("click", runLineByAmount);
+    }
+    if (billEls.lineMonto) {
+      billEls.lineMonto.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          runLineByAmount();
+        }
+      });
+    }
+    if (billEls.lineByAmountResult) {
+      billEls.lineByAmountResult.addEventListener("click", function (e) {
+        var btn = e.target.closest(".cq-qty-opt");
+        if (!btn) return;
+        var qty = Number(btn.getAttribute("data-qty"));
+        if (!(qty > 0)) return;
+        Array.prototype.forEach.call(billEls.lineByAmountResult.querySelectorAll(".cq-qty-opt"), function (b) {
+          b.classList.toggle("is-selected", b === btn);
+        });
+        if (billEls.lineQty) {
+          billEls.lineQty.value = formatQty(qty);
+        }
+        onLineModalQtyInput(true);
+        scheduleLineModalPreview();
       });
     }
     if (billEls.lineQty) {

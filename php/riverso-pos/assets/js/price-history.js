@@ -3624,7 +3624,7 @@
         html += '<h3 style="margin:12px 0 8px;">Tramos</h3>';
         html += '<table class="widefat striped rpf-rule-view-tiers"><thead><tr>' +
             '<th>#</th><th>Desde</th><th>Hasta</th><th>Fórmula P/u</th><th>Fórmula T</th>' +
-            '<th>Piso u.</th><th>Piso total</th>';
+            '<th>Máx ΔT</th><th>Piso u.</th><th>Piso total</th>';
         if (pAsignado != null && pAsignado !== '' && !isNaN(Number(pAsignado))) {
             html += '<th>P/u c/P</th>';
         }
@@ -3643,6 +3643,7 @@
             html += '<td>' + esc(hasta != null && hasta !== '' ? fmtQty(hasta) : '∞') + '</td>';
             html += '<td><code>' + esc(formula || '—') + '</code></td>';
             html += '<td>' + (formulaT ? ('<code>' + esc(formulaT) + '</code>') : '—') + '</td>';
+            html += '<td>' + (t.max_delta_t ? ('<code>' + esc(t.max_delta_t) + '</code>') : '—') + '</td>';
             html += '<td>' + (pisoU != null && pisoU !== '' ? money(pisoU) : '—') + '</td>';
             html += '<td>' + (pisoT != null && pisoT !== '' ? money(pisoT) : '—') + '</td>';
             if (pAsignado != null && pAsignado !== '' && !isNaN(Number(pAsignado))) {

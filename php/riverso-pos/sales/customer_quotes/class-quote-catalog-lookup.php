@@ -283,16 +283,27 @@ class Riverso_Quote_Catalog_Lookup {
     /**
      * Precio local + regla de familia (qty agregada).
      *
-     * @param int   $producto_base_id
-     * @param float $family_qty
-     * @return array{unit_price:float,unit_cost:?float,local_price:?float,rule_price:?float,rule_total:?float,rule_adjusted:bool,unitario0:?float,p_asignado:?float,c_ref:?float}
+     * @param int         $producto_base_id
+     * @param float       $family_qty
+     * @param float|null  $p_override
+     * @param string|null $rule_mode  auto|std|manual (manual = sin aplicar regla)
+     * @return array
      */
-    public function local_price_pack($producto_base_id, $family_qty = 1.0, $p_override = null) {
+    public function local_price_pack($producto_base_id, $family_qty = 1.0, $p_override = null, $rule_mode = null) {
         $producto_base_id = (int) $producto_base_id;
         $family_qty = (float) $family_qty;
         if ($family_qty <= 0) {
             $family_qty = 1.0;
         }
+        $rule_mode = strtolower(trim((string) $rule_mode));
+        if (!in_array($rule_mode, array('auto', 'std', 'manual', 'ref'), true)) {
+            $rule_mode = 'auto';
+        }
+        // ref usa la misma regla asignada que auto, con P override.
+        if ($rule_mode === 'ref') {
+            $rule_mode = 'auto';
+        }
+
         $unit_price = 0.0;
         $unit_cost = null;
         $local_price = null;
@@ -303,18 +314,45 @@ class Riverso_Quote_Catalog_Lookup {
         $p_asignado = null;
         $c_ref = null;
         $has_rule = false;
+        $rule_codigo = null;
+        $rule_nombre = null;
+        $assigned_rule_codigo = null;
+        $assigned_rule_nombre = null;
+        $std_rule = null;
         $p_override = ($p_override === null || $p_override === '') ? null : (float) $p_override;
         if ($p_override !== null && $p_override <= 0) {
             $p_override = null;
         }
 
+        $rules_mod = class_exists('Riverso_Price_Rules_Module')
+            ? Riverso_Price_Rules_Module::get_instance()
+            : null;
+        if ($rules_mod) {
+            $std = $rules_mod->get_standard_rule();
+            if ($std) {
+                $std_rule = array(
+                    'codigo' => $std['codigo'],
+                    'nombre' => $std['nombre'],
+                );
+            }
+        }
+
         if ($producto_base_id > 0 && class_exists('Riverso_Pricing_Module')) {
             $pricing = Riverso_Pricing_Module::get_instance();
+            // P de catálogo: preferir unitario de familia vía resolve_p_asignado.
+            if ($rules_mod) {
+                $p_asignado = $rules_mod->resolve_p_asignado_for_base($producto_base_id);
+            }
             $row = $pricing->get_local_price($producto_base_id);
             if (is_array($row)) {
-                if (isset($row['p_asignado']) && $row['p_asignado'] !== null && $row['p_asignado'] !== '') {
+                if ($p_asignado === null && isset($row['p_asignado']) && $row['p_asignado'] !== null && $row['p_asignado'] !== '') {
                     $p_asignado = (float) $row['p_asignado'];
+                }
+                if ($p_asignado !== null) {
                     if (!isset($row['estado_aprobacion']) || $row['estado_aprobacion'] === 'aprobado' || $row['estado_aprobacion'] === '' || $row['estado_aprobacion'] === null) {
+                        $local_price = $p_asignado;
+                        $unit_price = $p_asignado;
+                    } elseif ($local_price === null) {
                         $local_price = $p_asignado;
                         $unit_price = $p_asignado;
                     }
@@ -328,12 +366,34 @@ class Riverso_Quote_Catalog_Lookup {
                 $local_price = $p_override;
                 $unit_price = $p_override;
             }
-            if (class_exists('Riverso_Price_Rules_Module')) {
-                $detail = Riverso_Price_Rules_Module::get_instance()->apply_for_base_detail(
-                    $producto_base_id,
-                    $family_qty,
-                    $local_price
-                );
+
+            if ($rules_mod && $rule_mode !== 'manual') {
+                $detail = null;
+                if ($rule_mode === 'std') {
+                    $std = $rules_mod->get_standard_rule();
+                    if ($std && !empty($std['tiers'])) {
+                        $detail = $rules_mod->apply_rule_tiers_detail(
+                            $std['tiers'],
+                            $producto_base_id,
+                            $family_qty,
+                            $local_price
+                        );
+                        if ($detail) {
+                            $rule_codigo = $std['codigo'];
+                            $rule_nombre = $std['nombre'];
+                        }
+                    }
+                } else {
+                    $detail = $rules_mod->apply_for_base_detail(
+                        $producto_base_id,
+                        $family_qty,
+                        $local_price
+                    );
+                    if ($detail) {
+                        $rule_codigo = isset($detail['rule_codigo']) ? $detail['rule_codigo'] : null;
+                        $rule_nombre = isset($detail['rule_nombre']) ? $detail['rule_nombre'] : null;
+                    }
+                }
                 if (is_array($detail) && isset($detail['price'])) {
                     $rule_price = (float) $detail['price'];
                     $unit_price = $rule_price;
@@ -342,6 +402,19 @@ class Riverso_Quote_Catalog_Lookup {
                     $has_rule = true;
                     if (isset($detail['breakdown']['unitario0'])) {
                         $unitario0 = (float) $detail['breakdown']['unitario0'];
+                    }
+                }
+            }
+
+            if ($rules_mod) {
+                $assigned_meta = $rules_mod->get_resolved_rule_meta($producto_base_id);
+                if ($assigned_meta) {
+                    $assigned_rule_codigo = $assigned_meta['codigo'];
+                    $assigned_rule_nombre = $assigned_meta['nombre'];
+                    if ($rule_codigo === null && $rule_mode !== 'std') {
+                        $rule_codigo = $assigned_meta['codigo'];
+                        $rule_nombre = $assigned_meta['nombre'];
+                        $has_rule = true;
                     }
                 }
             }
@@ -375,11 +448,187 @@ class Riverso_Quote_Catalog_Lookup {
             'p_asignado' => $p_asignado,
             'c_ref' => $c_ref,
             'has_rule' => $has_rule,
+            'rule_codigo' => $rule_codigo,
+            'rule_nombre' => $rule_nombre,
+            'assigned_rule_codigo' => $assigned_rule_codigo,
+            'assigned_rule_nombre' => $assigned_rule_nombre,
+            'std_rule' => $std_rule,
+            'rule_mode' => $rule_mode,
             'has_local_price' => $unit_price_r > 0,
             'sin_precio_local' => $unit_price_r <= 0,
             'family_qty' => $family_qty,
             'producto_base_id' => $producto_base_id,
             'p_override' => $p_override,
+        );
+    }
+
+    /**
+     * Cantidad a entregar para un monto total deseado (antes de descuentos).
+     *
+     * @param int   $producto_base_id
+     * @param float $monto
+     * @param array $opts rule_mode, p_ref, units_per_pack, others_units
+     * @return array
+     */
+    public function qty_for_amount($producto_base_id, $monto, array $opts = array()) {
+        $producto_base_id = (int) $producto_base_id;
+        $monto = (float) $monto;
+        $empty = array(
+            'debajo' => null,
+            'arriba' => null,
+            'exacto' => false,
+            'minimo' => null,
+        );
+        if ($producto_base_id <= 0 || $monto <= 0) {
+            return $empty;
+        }
+
+        $rule_mode = isset($opts['rule_mode']) ? strtolower(trim((string) $opts['rule_mode'])) : 'auto';
+        if (!in_array($rule_mode, array('auto', 'std', 'manual', 'ref'), true)) {
+            $rule_mode = 'auto';
+        }
+        $p_ref = isset($opts['p_ref']) && $opts['p_ref'] !== null && $opts['p_ref'] !== ''
+            ? (float) $opts['p_ref'] : null;
+        if ($p_ref !== null && $p_ref <= 0) {
+            $p_ref = null;
+        }
+        $upp = isset($opts['units_per_pack']) ? (float) $opts['units_per_pack'] : 1.0;
+        if ($upp <= 0) {
+            $upp = 1.0;
+        }
+        $step = max(1, (int) round($upp));
+        // Si upp no es entero, buscar en unidades y reportar qty en packs fraccionables ≈ units/upp.
+        $step_units = (abs($upp - $step) < 0.0001) ? $step : 1;
+        $others = isset($opts['others_units']) ? max(0.0, (float) $opts['others_units']) : 0.0;
+
+        $pack = $this->local_price_pack($producto_base_id, 1.0, $p_ref, $rule_mode === 'ref' ? 'auto' : $rule_mode);
+        $p = $p_ref !== null ? $p_ref : (isset($pack['p_asignado']) ? $pack['p_asignado'] : null);
+        if ($p === null || $p <= 0) {
+            $p = isset($pack['unit_price']) ? (float) $pack['unit_price'] : 0.0;
+        }
+
+        $tiers = array();
+        $rules_mod = class_exists('Riverso_Price_Rules_Module')
+            ? Riverso_Price_Rules_Module::get_instance()
+            : null;
+
+        if ($rule_mode === 'manual' || !$rules_mod) {
+            return $this->qty_for_amount_flat($p > 0 ? $p : (float) $pack['unit_price'], $monto, $upp);
+        }
+
+        if ($rule_mode === 'std') {
+            $std = $rules_mod->get_standard_rule();
+            $tiers = $std && !empty($std['tiers']) ? $std['tiers'] : array();
+        } else {
+            $meta = $rules_mod->get_resolved_rule_meta($producto_base_id);
+            if ($meta) {
+                $tiers = $rules_mod->get_tiers($meta['id']) ?: array();
+            }
+        }
+
+        if (empty($tiers)) {
+            $unit = (float) $pack['unit_price'];
+            if ($unit <= 0 && $p > 0) {
+                $unit = $p;
+            }
+            return $this->qty_for_amount_flat($unit, $monto, $upp);
+        }
+
+        if ($others > 0.0001) {
+            $result = Riverso_Price_Rule_Engine::qty_for_line_share($tiers, $p, $monto, $step_units, $others);
+        } else {
+            $result = Riverso_Price_Rule_Engine::qty_for_total($tiers, $p, $monto, $step_units);
+        }
+
+        return $this->normalize_qty_amount_result($result, $upp, $step_units);
+    }
+
+    /**
+     * Sin regla: k = floor(monto / (unit × upp)).
+     */
+    private function qty_for_amount_flat($unit_price, $monto, $upp) {
+        $unit = max(0.01, (float) $unit_price);
+        $upp = max(0.0001, (float) $upp);
+        $pack_price = $unit * $upp;
+        $k = (int) floor($monto / $pack_price);
+        $empty = array(
+            'debajo' => null,
+            'arriba' => null,
+            'exacto' => false,
+            'minimo' => null,
+        );
+        $min_total = round($pack_price, 2);
+        $minimo = array(
+            'qty' => 1,
+            'packs' => 1,
+            'units' => $upp,
+            'total' => $min_total,
+            'unitario' => round($unit, 4),
+        );
+        if ($k < 1) {
+            return array(
+                'debajo' => null,
+                'arriba' => $minimo,
+                'exacto' => false,
+                'minimo' => $minimo,
+            );
+        }
+        $debajo_total = round($pack_price * $k, 2);
+        $debajo = array(
+            'qty' => $k,
+            'packs' => $k,
+            'units' => $k * $upp,
+            'total' => $debajo_total,
+            'unitario' => round($unit, 4),
+        );
+        $exacto = abs($debajo_total - $monto) < 0.01;
+        $arriba = null;
+        if (!$exacto) {
+            $arriba = array(
+                'qty' => $k + 1,
+                'packs' => $k + 1,
+                'units' => ($k + 1) * $upp,
+                'total' => round($pack_price * ($k + 1), 2),
+                'unitario' => round($unit, 4),
+            );
+        }
+        return array(
+            'debajo' => $debajo,
+            'arriba' => $arriba,
+            'exacto' => $exacto,
+            'minimo' => $minimo,
+        );
+    }
+
+    /**
+     * Convierte qty en unidades del motor a cantidad de línea (paquetes).
+     */
+    private function normalize_qty_amount_result(array $result, $upp, $step_units) {
+        $upp = max(0.0001, (float) $upp);
+        $map = function ($row) use ($upp, $step_units) {
+            if (!$row) {
+                return null;
+            }
+            $units = (int) $row['qty'];
+            $packs = ($step_units > 1)
+                ? (int) floor($units / $step_units)
+                : (int) round($units / $upp);
+            if ($packs < 1 && $units > 0) {
+                $packs = max(1, (int) ceil($units / $upp));
+            }
+            return array(
+                'qty' => $packs,
+                'packs' => $packs,
+                'units' => $units,
+                'total' => (float) $row['total'],
+                'unitario' => (float) $row['unitario'],
+            );
+        };
+        return array(
+            'debajo' => $map(isset($result['debajo']) ? $result['debajo'] : null),
+            'arriba' => $map(isset($result['arriba']) ? $result['arriba'] : null),
+            'exacto' => !empty($result['exacto']),
+            'minimo' => $map(isset($result['minimo']) ? $result['minimo'] : null),
         );
     }
 

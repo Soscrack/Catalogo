@@ -115,6 +115,14 @@ $actividad_reciente = $wpdb->get_results("
             <?php printf(__('Hola, %s', 'riverso-pos'), $current_user->display_name); ?>
         </span>
     </h1>
+
+    <p class="riverso-portal-shortcut">
+        <a href="<?php echo esc_url(home_url('/interno/')); ?>" class="button button-primary">
+            <span class="dashicons dashicons-admin-site-alt3" aria-hidden="true"></span>
+            <?php esc_html_e('Portal interno', 'riverso-pos'); ?>
+        </a>
+        <span class="riverso-portal-shortcut-url">riverso.cl/interno</span>
+    </p>
     
     <!-- Cards de estadísticas principales -->
     <div class="riverso-stats-grid stats-main">
@@ -503,6 +511,31 @@ $actividad_reciente = $wpdb->get_results("
     font-size: 14px;
     font-weight: normal;
     color: #666;
+}
+
+.riverso-portal-shortcut {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0 16px;
+}
+
+.riverso-portal-shortcut .button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.riverso-portal-shortcut .dashicons {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.riverso-portal-shortcut-url {
+    color: #646970;
+    font-size: 13px;
 }
 
 .stats-main {

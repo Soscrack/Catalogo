@@ -109,6 +109,25 @@ class Riverso_POS_Admin_Menu {
                 }
             }
         }
+
+        $this->register_portal_shortcut($top_cap);
+    }
+
+    /**
+     * Acceso directo al portal /interno, primero en el menú de Riverso POS.
+     */
+    private function register_portal_shortcut($capability) {
+        global $submenu;
+
+        if (!isset($submenu['riverso-pos']) || !is_array($submenu['riverso-pos'])) {
+            return;
+        }
+
+        array_unshift($submenu['riverso-pos'], [
+            __('Portal interno', 'riverso-pos'),
+            $capability,
+            home_url('/interno/'),
+        ]);
     }
 
     /**
@@ -118,6 +137,12 @@ class Riverso_POS_Admin_Menu {
         ?>
         <script>
         (function () {
+            var portalUrl = <?php echo wp_json_encode(home_url('/interno/')); ?>;
+            document.querySelectorAll('#toplevel_page_riverso-pos .wp-submenu a').forEach(function (link) {
+                if ((link.textContent || '').trim() === 'Portal interno') {
+                    link.setAttribute('href', portalUrl);
+                }
+            });
             document.querySelectorAll('#adminmenu .riverso-nav-label').forEach(function (label) {
                 var link = label.closest('a');
                 if (!link) return;

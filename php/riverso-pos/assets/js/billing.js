@@ -5,6 +5,7 @@
   var state = {
     step: 1,
     quoteId: cfg.quoteId || 0,
+    quoteNumber: "",
     estimatedFolio: null,
     lines: [],
     docType: 37,
@@ -19,6 +20,7 @@
     payments: [],
     selectedQuoteRef: null,
     draftSaveTimer: null,
+    emitEmailsApi: null,
     linesReady: false,
     advanced: false,
     advScope: "todo",
@@ -142,8 +144,10 @@
     state.docType = type;
     var typeEl = $("bill-folio-type");
     if (typeEl) typeEl.textContent = TYPE_LABELS[type] || "DOCUMENTO";
-    var num = $("bill-folio-est");
-    if (num) num.textContent = state.estimatedFolio != null ? String(state.estimatedFolio) : "—";
+    var folioText = state.estimatedFolio != null ? String(state.estimatedFolio) : "—";
+    if ($("bill-folio-est")) $("bill-folio-est").textContent = folioText;
+    if ($("bill-boleta-folio-est")) $("bill-boleta-folio-est").textContent = folioText;
+    if ($("bill-draft-type")) $("bill-draft-type").textContent = TYPE_LABELS[type] || "DOCUMENTO";
     var recv = $("bill-receiver-card");
     if (recv) {
       // Boleta: ocultar receptor y no usarlo. Factura: visible y obligatorio.
@@ -694,78 +698,11 @@
     return { ok: true };
   }
 
-  function emptyLine() {
-    return { sku: "", description: "", quantity: 1, unit_price_bruto: 0, afecto: true };
-  }
-
-  function renderLines() {
-    var tbody = $("bill-lines-body");
-    if (!tbody) return;
-    tbody.innerHTML = "";
-    state.lines.forEach(function (line, idx) {
-      var tr = document.createElement("tr");
-      tr.innerHTML =
-        '<td><input type="text" data-k="sku" data-i="' + idx + '" value="' + escAttr(line.sku) + '"></td>' +
-        '<td><input type="text" data-k="description" data-i="' + idx + '" value="' + escAttr(line.description) + '"></td>' +
-        '<td style="width:80px"><input type="number" min="0.001" step="0.001" data-k="quantity" data-i="' + idx + '" value="' + escAttr(line.quantity) + '"></td>' +
-        '<td style="width:110px"><input type="number" min="0" step="1" data-k="unit_price_bruto" data-i="' + idx + '" value="' + escAttr(line.unit_price_bruto) + '"></td>' +
-        '<td style="width:70px;text-align:center"><input type="checkbox" data-k="afecto" data-i="' + idx + '"' + (line.afecto ? " checked" : "") + "></td>" +
-        '<td class="bill-line-total" data-i="' + idx + '">' + money((Number(line.quantity) || 0) * (Number(line.unit_price_bruto) || 0)) + "</td>" +
-        '<td><button type="button" class="bill-btn bill-btn-secondary" data-rm="' + idx + '">×</button></td>';
-      tbody.appendChild(tr);
-    });
-    recalcTotalsLocal();
-  }
-
   function escAttr(v) {
     return String(v == null ? "" : v)
       .replace(/&/g, "&amp;")
       .replace(/"/g, "&quot;")
       .replace(/</g, "&lt;");
-  }
-
-  function recalcTotalsLocal() {
-    var net = 0;
-    var iva = 0;
-    var total = 0;
-    state.lines.forEach(function (line) {
-      var qty = Number(line.quantity) || 0;
-      var bruto = Number(line.unit_price_bruto) || 0;
-      var lineBruto = Math.round(qty * bruto * 100) / 100;
-      total += lineBruto;
-      if (line.afecto) {
-        var lineNet = Math.round((lineBruto / 1.19) * 100) / 100;
-        net += lineNet;
-        iva += Math.round((lineBruto - lineNet) * 100) / 100;
-      } else {
-        net += lineBruto;
-      }
-    });
-    net = Math.round(net * 100) / 100;
-    iva = Math.round(iva * 100) / 100;
-    total = Math.round(total * 100) / 100;
-    if ($("bill-tot-net")) $("bill-tot-net").textContent = money(net);
-    if ($("bill-tot-iva")) $("bill-tot-iva").textContent = money(iva);
-    if ($("bill-tot-total")) $("bill-tot-total").textContent = money(total);
-  }
-
-  function syncLineFromInput(el) {
-    var i = parseInt(el.getAttribute("data-i"), 10);
-    var k = el.getAttribute("data-k");
-    if (!state.lines[i] || !k) return;
-    if (k === "afecto") {
-      state.lines[i].afecto = !!el.checked;
-    } else if (k === "quantity" || k === "unit_price_bruto") {
-      state.lines[i][k] = parseFloat(el.value) || 0;
-    } else {
-      state.lines[i][k] = el.value;
-    }
-    var tot = document.querySelector('.bill-line-total[data-i="' + i + '"]');
-    if (tot) {
-      var line = state.lines[i];
-      tot.textContent = money((Number(line.quantity) || 0) * (Number(line.unit_price_bruto) || 0));
-    }
-    recalcTotalsLocal();
   }
 
   function payloadBase() {
@@ -777,21 +714,19 @@
       payment_conditions: ($("bill-payment") || {}).value || "0",
       quote_id: state.quoteId || 0,
       lines: state.lines,
+      refs: state.refs,
     }, r);
   }
 
-  /** Payload de previsualización: en boleta usa fecha/pago del paso 2. */
+  /** Payload de previsualización/emisión: fecha y pago vienen del paso 2. */
   function previewPayload() {
-    var type = currentTypeId();
     var base = payloadBase();
-    if (type === 37) {
-      base.issue_date = ($("bill-boleta-issue-date") || {}).value
-        || ($("bill-issue-date") || {}).value
-        || cfg.todayDate;
-      base.payment_conditions = ($("bill-boleta-payment") || {}).value
-        || ($("bill-payment") || {}).value
-        || "0";
-    }
+    base.issue_date = ($("bill-boleta-issue-date") || {}).value
+      || ($("bill-issue-date") || {}).value
+      || cfg.todayDate;
+    base.payment_conditions = ($("bill-boleta-payment") || {}).value
+      || ($("bill-payment") || {}).value
+      || "0";
     if (state.estimatedFolio != null) {
       base.estimated_folio = String(state.estimatedFolio);
     }
@@ -909,18 +844,48 @@
 
   function syncStep2Mode() {
     var type = currentTypeId();
-    var inv = $("bill-step-2-invoice");
-    var bol = $("bill-step-2-boleta");
-    if (inv) inv.hidden = type === 37;
-    if (bol) bol.hidden = type !== 37;
-    if (type === 37) {
-      if ($("bill-boleta-folio-est")) {
-        $("bill-boleta-folio-est").textContent = state.estimatedFolio != null ? String(state.estimatedFolio) : "—";
+    if ($("bill-draft-type")) $("bill-draft-type").textContent = TYPE_LABELS[type] || "DOCUMENTO";
+    if ($("bill-boleta-folio-est")) {
+      $("bill-boleta-folio-est").textContent = state.estimatedFolio != null ? String(state.estimatedFolio) : "—";
+    }
+    renderStep2Receiver();
+    renderBoletaLines();
+    renderRefs();
+    renderPagosPanel();
+    setBoletaTab(state.boletaTab || "detalles");
+  }
+
+  /** Tarjeta RECEPTOR (solo lectura) del paso 2; se edita volviendo al paso 1. */
+  function renderStep2Receiver() {
+    var card = $("bill-step2-receiver");
+    if (!card) return;
+    var isInvoice = currentTypeId() === 2;
+    card.hidden = !isInvoice;
+    if (!isInvoice) return;
+    var r = collectReceiver();
+    var put = function (id, value) {
+      var el = $(id);
+      if (el) el.textContent = String(value || "").trim() || "—";
+    };
+    put("bill-s2-recv-rut", r.receiver_rut);
+    put("bill-s2-recv-name", r.receiver_legal_name);
+    put("bill-s2-recv-address", r.receiver_address);
+    put("bill-s2-recv-comuna", r.receiver_district);
+    put("bill-s2-recv-city", r.receiver_city);
+    put("bill-s2-recv-giro", r.receiver_activity);
+    put("bill-s2-recv-phone", r.receiver_phone);
+    var map = $("bill-s2-recv-map");
+    if (map) {
+      var q = [r.receiver_address, r.receiver_district, r.receiver_city].filter(function (s) {
+        return String(s || "").trim();
+      }).join(", ");
+      if (q) {
+        map.href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q + ", Chile");
+        map.removeAttribute("aria-disabled");
+      } else {
+        map.href = "#";
+        map.setAttribute("aria-disabled", "true");
       }
-      renderBoletaLines();
-      renderRefs();
-      renderPagosPanel();
-      setBoletaTab(state.boletaTab || "detalles");
     }
   }
 
@@ -994,25 +959,35 @@
     if (!list) return;
     list.innerHTML = "";
     if (!state.refs.length) {
-      list.innerHTML = "<li class='bill-hint' style='border:0'>Sin referencias</li>";
+      list.innerHTML = "<tr><td colspan='5' class='bill-refs-empty'>Sin referencias</td></tr>";
       return;
     }
     state.refs.forEach(function (ref, idx) {
-      var li = document.createElement("li");
-      var label = ref.ref_label || (ref.ref_type === "quote"
-        ? ("Cotización " + (ref.quote_number || ("#" + ref.quote_id)))
-        : ((ref.ref_doc_type || "Folio") + " " + (ref.ref_folio || "")));
-      li.innerHTML = "<span>" + escAttr(label) + "</span>";
+      var isQuote = ref.ref_type === "quote";
+      var docType = isQuote ? "Cotización" : (ref.ref_doc_type || "Documento");
+      var folio = isQuote
+        ? (ref.quote_number || ref.ref_folio || ref.quote_id || "")
+        : (ref.ref_folio || "");
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td>Otras referencias</td>" +
+        "<td>--</td>" +
+        "<td>" + escAttr(docType) + "</td>" +
+        "<td>" + escAttr(folio) + "</td>" +
+        "<td class='bill-refs-actions'></td>";
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "bill-btn bill-btn-secondary";
-      btn.textContent = "Quitar";
+      btn.className = "bill-btn bill-btn-ref-more";
+      btn.textContent = "Más opciones";
       btn.addEventListener("click", function () {
+        if (!window.confirm("¿Quitar esta referencia?")) {
+          return;
+        }
         state.refs.splice(idx, 1);
         renderRefs();
       });
-      li.appendChild(btn);
-      list.appendChild(li);
+      tr.querySelector(".bill-refs-actions").appendChild(btn);
+      list.appendChild(tr);
     });
   }
 
@@ -1197,9 +1172,12 @@
 
   function saveDraft(opts) {
     opts = opts || {};
+    syncQuoteReference();
     var t = boletaTotals();
-    var data = {
+    var type = currentTypeId();
+    var data = Object.assign({
       draft_id: state.draftId || 0,
+      document_type_id: type,
       status: state.draftStatus || "draft",
       issue_date: ($("bill-boleta-issue-date") || {}).value || cfg.todayDate,
       due_date: ($("bill-boleta-due-date") || {}).value || "",
@@ -1212,7 +1190,7 @@
       total_amount: t.total_amount,
       lines: state.lines,
       refs: state.refs,
-    };
+    }, type === 2 ? collectReceiver() : emptyReceiverPayload());
     return post(cfg.actions.draftSave, data).then(function (res) {
       if (res.draft) {
         if (opts.silent) {
@@ -1227,6 +1205,57 @@
   }
 
   /** Autoguardado: solo id/metadatos; no pisa precios ni vuelve a pedir la regla. */
+  function syncDraftDeleteButton() {
+    var btn = $("bill-draft-delete");
+    if (!btn) return;
+    var canDelete =
+      !!state.draftId &&
+      (state.draftStatus === "draft" || state.draftStatus === "closed_local");
+    btn.hidden = !canDelete;
+    btn.disabled = !canDelete;
+  }
+
+  function openDraftDeleteModal() {
+    var modal = $("bill-draft-delete-modal");
+    if (!modal) return;
+    modal.hidden = false;
+    modal.setAttribute("aria-hidden", "false");
+    if ($("bill-draft-delete-ok")) $("bill-draft-delete-ok").focus();
+  }
+
+  function closeDraftDeleteModal() {
+    var modal = $("bill-draft-delete-modal");
+    if (!modal) return;
+    modal.hidden = true;
+    modal.setAttribute("aria-hidden", "true");
+  }
+
+  function confirmDraftDelete() {
+    if (!state.draftId) {
+      closeDraftDeleteModal();
+      showAlert("No hay borrador para borrar.", true);
+      return;
+    }
+    var action = (cfg.actions && cfg.actions.draftDelete) || "riverso_billing_draft_delete";
+    var okBtn = $("bill-draft-delete-ok");
+    if (okBtn) okBtn.disabled = true;
+    showAlert("Borrando documento…");
+    post(action, { draft_id: state.draftId })
+      .then(function (data) {
+        closeDraftDeleteModal();
+        var url =
+          (data && data.redirect) ||
+          cfg.searchUrl ||
+          (cfg.portalUrl || "/interno/facturacion/");
+        window.location.href = url;
+      })
+      .catch(function (err) {
+        if (okBtn) okBtn.disabled = false;
+        closeDraftDeleteModal();
+        showAlert(err.message || "No se pudo borrar el borrador", true);
+      });
+  }
+
   function applyDraftMeta(draft) {
     if (!draft) return;
     state.draftId = draft.id || 0;
@@ -1243,6 +1272,7 @@
     if ($("bill-draft-banner-text")) {
       $("bill-draft-banner-text").textContent = bannerText(state.draftStatus);
     }
+    syncDraftDeleteButton();
   }
 
   function bannerText(status) {
@@ -1302,9 +1332,36 @@
     }
     renderRefs();
     renderPagosPanel();
+    syncDraftDeleteButton();
   }
 
-  function createBoletaDraftAndOpen() {
+  function syncQuoteReference() {
+    var type = currentTypeId();
+    if (type === 2 && state.quoteId) {
+      var exists = state.refs.some(function (r) {
+        return r.ref_type === "quote" && Number(r.quote_id) === Number(state.quoteId);
+      });
+      if (!exists) {
+        var num = state.quoteNumber || String(state.quoteId);
+        state.refs.push({
+          ref_type: "quote",
+          quote_id: state.quoteId,
+          quote_number: state.quoteNumber || "",
+          ref_doc_type: "Cotización",
+          ref_folio: num,
+          ref_label: "Cotización " + num,
+        });
+      }
+      return;
+    }
+    if (state.quoteId) {
+      state.refs = state.refs.filter(function (r) {
+        return !(r.ref_type === "quote" && Number(r.quote_id) === Number(state.quoteId));
+      });
+    }
+  }
+
+  function createDraftAndOpen() {
     // Sync issue/payment from step 1.
     if ($("bill-boleta-issue-date") && $("bill-issue-date")) {
       $("bill-boleta-issue-date").value = $("bill-issue-date").value || cfg.todayDate;
@@ -1312,14 +1369,7 @@
     if ($("bill-boleta-payment") && $("bill-payment")) {
       $("bill-boleta-payment").value = $("bill-payment").value || "0";
     }
-    if (state.quoteId && !state.refs.some(function (r) { return r.ref_type === "quote" && Number(r.quote_id) === Number(state.quoteId); })) {
-      state.refs.push({
-        ref_type: "quote",
-        quote_id: state.quoteId,
-        quote_number: "",
-        ref_label: "Cotización #" + state.quoteId,
-      });
-    }
+    syncQuoteReference();
     if (!state.lines.length) state.lines = [];
     var btn = $("bill-to-step-2");
     if (btn) btn.disabled = true;
@@ -1327,6 +1377,7 @@
     return saveDraft({ silent: true })
       .then(function () {
         goStep(2);
+        syncDraftDeleteButton();
         showAlert("Borrador listo. Agrega productos en Detalles.");
       })
       .catch(function (e) {
@@ -1554,7 +1605,7 @@
     var type = currentTypeId();
 
     if (type === 37) {
-      createBoletaDraftAndOpen();
+      createDraftAndOpen();
       return;
     }
 
@@ -1567,26 +1618,20 @@
         if (data.customer && data.customer.id && $("bill-customer-id")) {
           $("bill-customer-id").value = String(data.customer.id);
         }
-        if (data.created) {
-          showAlert("Cliente creado para próximas emisiones.");
-        } else {
-          showAlert("");
-        }
-        if (!state.lines.length) {
-          state.lines = [emptyLine()];
-          renderLines();
-        }
-        goStep(2);
+        if (btn) btn.disabled = false;
+        return createDraftAndOpen().then(function () {
+          if (data.created && state.step === 2) {
+            showAlert("Cliente creado para próximas emisiones. Agrega productos en Detalles.");
+          }
+        });
       })
       .catch(function (e) {
+        if (btn) btn.disabled = false;
         showMissingPopup(
           "No se pudo continuar",
           e.message || "No se pudo validar el receptor",
           []
         );
-      })
-      .finally(function () {
-        if (btn) btn.disabled = false;
       });
   }
 
@@ -1708,6 +1753,21 @@
     }
   }
 
+  function fillReceiverFromDraft(draft) {
+    fillReceiver({
+      id: draft.customer_id || 0,
+      rut: draft.receiver_rut,
+      razon_social: draft.receiver_legal_name,
+      giro: draft.receiver_activity,
+      direccion: draft.receiver_address,
+      comuna: draft.receiver_district,
+      ciudad: draft.receiver_city,
+      facturacion_telefono: draft.receiver_phone,
+      codigo_postal: draft.receiver_postal,
+    }, true);
+    if ($("bill-recv-activity-code")) $("bill-recv-activity-code").value = draft.receiver_activity_code || "";
+  }
+
   function loadDraftIfAny() {
     var draftId = Number(cfg.draftId || state.draftId || 0) || 0;
     if (!draftId) return false;
@@ -1722,17 +1782,17 @@
           $("bill-doc-type").value = String(data.draft.document_type_id || 37);
         }
         state.docType = Number(data.draft.document_type_id || 37) || 37;
+        if (state.docType === 2) {
+          fillReceiverFromDraft(data.draft);
+        }
         applyDraft(data.draft);
         updateFolioCard();
+        estimateFolio();
         goStep(2);
         showAlert("Borrador #" + draftId + " cargado.");
       })
       .catch(function (err) {
         showAlert(err.message || "No se pudo cargar el borrador", true);
-        if (!state.lines.length) {
-          state.lines = [emptyLine()];
-          renderLines();
-        }
         lockAllDetails();
       });
     return true;
@@ -1740,10 +1800,6 @@
 
   function loadQuoteIfAny() {
     if (!state.quoteId) {
-      if (!state.lines.length) {
-        state.lines = [emptyLine()];
-        renderLines();
-      }
       lockAllDetails();
       return;
     }
@@ -1753,6 +1809,7 @@
           showAlert("Esta cotización ya tiene DTE folio " + (data.already_emitted.folio || "") + ".", true);
         }
         var q = data.quote || {};
+        state.quoteNumber = q.quote_number || "";
         var meta = $("bill-quote-meta");
         if (meta) {
           meta.hidden = false;
@@ -1804,13 +1861,10 @@
             discount_amount: 0,
           };
         });
-        if (!state.lines.length) state.lines = [];
-        renderLines();
+        renderBoletaLines();
       })
       .catch(function (err) {
         showAlert(err.message || "No se pudo cargar la cotización", true);
-        state.lines = [emptyLine()];
-        renderLines();
         lockAllDetails();
       });
   }
@@ -1935,6 +1989,22 @@
     }
   }
 
+  function mountEmitEmails() {
+    var box = $("bill-emit-emails");
+    if (!box || !window.RiversoBillingEmails) return;
+    if (state.emitEmailsApi && typeof state.emitEmailsApi.destroy === "function") {
+      state.emitEmailsApi.destroy();
+    }
+    var type = currentTypeId();
+    var rut = type === 2 ? ((($("bill-recv-rut") || {}).value) || "").trim() : "";
+    state.emitEmailsApi = window.RiversoBillingEmails.mount(box, {
+      rut: rut,
+      persist: type === 2 && !!rut,
+      cfg: cfg,
+      post: post,
+    });
+  }
+
   function openEmitModal() {
     fillPagoMethods();
     fillPagoCajas();
@@ -1945,10 +2015,7 @@
         ? "Solo disponible en boleta"
         : "";
     }
-    if ($("bill-emit-email-to") && !$("bill-emit-email-to").value) {
-      var email = (($("bill-recv-email") || {}).value || "").trim();
-      $("bill-emit-email-to").value = email;
-    }
+    mountEmitEmails();
     syncEmitPayFieldsEnabled();
     if ($("bill-emit-modal")) {
       $("bill-emit-modal").hidden = false;
@@ -1965,11 +2032,14 @@
 
   function emitPayload() {
     var payload = previewPayload();
+    var selectedEmails = state.emitEmailsApi && typeof state.emitEmailsApi.getSelected === "function"
+      ? state.emitEmailsApi.getSelected()
+      : [];
     payload.draft_id = state.draftId || 0;
     payload.mark_paid = $("bill-emit-mark-paid") && $("bill-emit-mark-paid").checked ? 1 : 0;
-    payload.send_email = $("bill-emit-email") && $("bill-emit-email").checked ? 1 : 0;
-    payload.email_to = ($("bill-emit-email-to") || {}).value || "";
-    payload.email_extra = ($("bill-emit-email-extra") || {}).value || "";
+    payload.send_email = selectedEmails.length ? 1 : 0;
+    payload.email_to = selectedEmails.join(",");
+    payload.email_extra = "";
     payload.pay_caja_id = ($("bill-emit-caja") || {}).value || "";
     payload.pay_method_id = ($("bill-emit-method") || {}).value || "";
     payload.pay_notes = ($("bill-emit-notes") || {}).value || "";
@@ -2043,7 +2113,7 @@
     var send = function () {
       return post(cfg.actions.emit, emitPayload());
     };
-    var chain = currentTypeId() === 37 && !state.draftId
+    var chain = !state.draftId
       ? saveDraft({ silent: true }).then(send)
       : send();
     chain
@@ -2118,6 +2188,8 @@
     if ($("bill-doc-type")) {
       $("bill-doc-type").addEventListener("change", function () {
         updateFolioCard();
+        syncQuoteReference();
+        renderRefs();
         estimateFolio();
       });
     }
@@ -2172,33 +2244,7 @@
     document.querySelectorAll(".bill-back-step-1").forEach(function (btn) {
       btn.addEventListener("click", function () { goStep(1); });
     });
-    if ($("bill-add-line")) {
-      $("bill-add-line").addEventListener("click", function () {
-        state.lines.push(emptyLine());
-        renderLines();
-      });
-    }
-    if ($("bill-lines-body")) {
-      $("bill-lines-body").addEventListener("input", function (e) {
-        var t = e.target;
-        if (t && t.getAttribute("data-k")) syncLineFromInput(t);
-      });
-      $("bill-lines-body").addEventListener("change", function (e) {
-        var t = e.target;
-        if (t && t.getAttribute("data-k")) syncLineFromInput(t);
-      });
-      $("bill-lines-body").addEventListener("click", function (e) {
-        var t = e.target;
-        if (t && t.getAttribute("data-rm") != null) {
-          var i = parseInt(t.getAttribute("data-rm"), 10);
-          state.lines.splice(i, 1);
-          if (!state.lines.length) state.lines.push(emptyLine());
-          renderLines();
-        }
-      });
-    }
-
-    // Boleta editor
+    // Editor borrador (boleta y factura)
     var tabs = $("bill-boleta-tabs");
     if (tabs) {
       tabs.addEventListener("click", function (e) {
@@ -2602,6 +2648,8 @@
             ref_type: "quote",
             quote_id: qt.id,
             quote_number: qt.quote_number || "",
+            ref_doc_type: "Cotización",
+            ref_folio: qt.quote_number || String(qt.id),
             ref_label: "Cotización " + (qt.quote_number || ("#" + qt.id)),
           });
         } else {
@@ -2641,13 +2689,8 @@
     if ($("bill-pago-save")) {
       $("bill-pago-save").addEventListener("click", savePago);
     }
-    if ($("bill-emit") || $("bill-boleta-emit")) {
-      [$("bill-emit"), $("bill-boleta-emit")].forEach(function (btn) {
-        if (!btn) return;
-        btn.addEventListener("click", function () {
-          openEmitModal();
-        });
-      });
+    if ($("bill-boleta-emit")) {
+      $("bill-boleta-emit").addEventListener("click", openEmitModal);
     }
     if ($("bill-emit-close")) $("bill-emit-close").addEventListener("click", closeEmitModal);
     if ($("bill-emit-modal")) {
@@ -2697,6 +2740,9 @@
         if ($("bill-emit-modal") && !$("bill-emit-modal").hidden) {
           closeEmitModal();
         }
+        if ($("bill-draft-delete-modal") && !$("bill-draft-delete-modal").hidden) {
+          closeDraftDeleteModal();
+        }
       }
     });
     fillPagoMethods();
@@ -2706,9 +2752,31 @@
       });
     }
 
+    if ($("bill-draft-delete")) {
+      $("bill-draft-delete").addEventListener("click", function () {
+        if (!state.draftId) {
+          showAlert("Guarda el borrador antes de borrarlo.", true);
+          return;
+        }
+        openDraftDeleteModal();
+      });
+    }
+    if ($("bill-draft-delete-ok")) {
+      $("bill-draft-delete-ok").addEventListener("click", confirmDraftDelete);
+    }
+    if ($("bill-draft-delete-cancel")) {
+      $("bill-draft-delete-cancel").addEventListener("click", closeDraftDeleteModal);
+    }
+    if ($("bill-draft-delete-modal")) {
+      $("bill-draft-delete-modal").addEventListener("click", function (e) {
+        if (e.target === $("bill-draft-delete-modal")) closeDraftDeleteModal();
+      });
+    }
+
     updateFolioCard();
     estimateFolio();
     lockAllDetails();
+    syncDraftDeleteButton();
     if (!loadDraftIfAny()) {
       loadQuoteIfAny();
     }

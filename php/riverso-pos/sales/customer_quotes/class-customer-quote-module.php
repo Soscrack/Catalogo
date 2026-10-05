@@ -173,7 +173,6 @@ class Riverso_Customer_Quote_Module {
                 'transition' => 'riverso_cq_transition',
                 'search' => 'riverso_cq_search',
                 'lineStock' => 'riverso_cq_line_stock',
-                'invoice' => 'riverso_cq_invoice',
                 'receivedList' => 'riverso_cq_received_list',
                 'receivedPreview' => 'riverso_cq_received_preview',
                 'receivedImport' => 'riverso_cq_received_import',
@@ -337,7 +336,7 @@ class Riverso_Customer_Quote_Module {
         if ($quote === null) {
             $this->fail('Cotización no encontrada.', 404);
         }
-        $this->ok(array('quote' => $this->catalog->hydrate_quote_families($quote)));
+        $this->ok(array('quote' => $this->present_quote_with_docs($quote)));
     }
 
     public function ajax_save() {
@@ -355,7 +354,7 @@ class Riverso_Customer_Quote_Module {
         } catch (Riverso_Quote_Exception $error) {
             $this->fail($error->getMessage());
         }
-        $quote = $this->catalog->hydrate_quote_families($quote);
+        $quote = $this->present_quote_with_docs($quote);
         $this->ok(array(
             'quote' => $quote,
             'message' => 'Cotización ' . $quote['quote_number'] . ' guardada.',
@@ -370,7 +369,7 @@ class Riverso_Customer_Quote_Module {
             $this->fail($error->getMessage());
         }
         $this->ok(array(
-            'quote' => $this->catalog->hydrate_quote_families($quote),
+            'quote' => $this->present_quote_with_docs($quote),
             'message' => 'Estado actualizado a ' . $quote['status_label'] . '.',
         ));
     }
@@ -1584,6 +1583,124 @@ class Riverso_Customer_Quote_Module {
 
     private function ok(array $data) {
         wp_send_json_success($data);
+    }
+
+    /**
+     * @param array<string, mixed> $quote
+     * @return array<string, mixed>
+     */
+    private function present_quote_with_docs(array $quote) {
+        $quote = $this->catalog->hydrate_quote_families($quote);
+        $quote['associated_documents'] = $this->list_associated_documents((int) ($quote['id'] ?? 0));
+        return $quote;
+    }
+
+    /**
+     * @param int $quote_id
+     * @return array<int, array<string, mixed>>
+     */
+    private function list_associated_documents($quote_id) {
+        $quote_id = absint($quote_id);
+        if ($quote_id <= 0) {
+            return [];
+        }
+
+        $draft_path = RIVERSO_POS_PLUGIN_DIR . 'sales/billing/class-billing-draft-repository.php';
+        $dte_path = RIVERSO_POS_PLUGIN_DIR . 'sales/billing/class-dte-issued-repository.php';
+        if (!class_exists('Riverso_Billing_Draft_Repository') && file_exists($draft_path)) {
+            require_once $draft_path;
+        }
+        if (!class_exists('Riverso_Dte_Issued_Repository') && file_exists($dte_path)) {
+            require_once $dte_path;
+        }
+
+        $drafts = [];
+        $issued = [];
+        if (class_exists('Riverso_Billing_Draft_Repository')) {
+            $drafts = (new Riverso_Billing_Draft_Repository())->list_by_quote($quote_id);
+        }
+        if (class_exists('Riverso_Dte_Issued_Repository')) {
+            $issued = (new Riverso_Dte_Issued_Repository())->list_by_quote($quote_id);
+        }
+
+        $covered = [];
+        $out = [];
+        foreach ($drafts as $d) {
+            if (!is_array($d)) {
+                continue;
+            }
+            $dte_id = !empty($d['dte_id']) ? (int) $d['dte_id'] : 0;
+            if ($dte_id > 0) {
+                $covered[$dte_id] = true;
+            }
+            $out[] = $this->present_associated_document($d);
+        }
+        foreach ($issued as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $id = (int) ($row['id'] ?? 0);
+            if ($id > 0 && isset($covered[$id])) {
+                continue;
+            }
+            $out[] = $this->present_associated_document([
+                'draft_id' => null,
+                'dte_id' => $id,
+                'document_type_id' => (int) ($row['document_type_id'] ?? 37),
+                'status' => !empty($row['folio']) ? 'emitted' : 'draft',
+                'folio' => (string) ($row['folio'] ?? ''),
+            ]);
+        }
+        return $out;
+    }
+
+    /**
+     * @param array<string, mixed> $doc
+     * @return array<string, mixed>
+     */
+    private function present_associated_document(array $doc) {
+        $type_id = (int) ($doc['document_type_id'] ?? 37);
+        $type = $this->associated_document_type_label($type_id);
+        $status = (string) ($doc['status'] ?? 'draft');
+        $folio = trim((string) ($doc['folio'] ?? ''));
+        $emitted = $status === 'emitted' || ($folio !== '' && !empty($doc['dte_id']));
+        if ($emitted) {
+            $status_word = 'emitida';
+        } elseif ($status === 'closed_local') {
+            $status_word = 'cerrada';
+        } else {
+            $status_word = 'borrador';
+        }
+        $label = $type . ' ' . $status_word;
+        if ($folio !== '') {
+            $label .= ' (N°' . $folio . ')';
+        }
+        return [
+            'draft_id' => !empty($doc['draft_id']) ? (int) $doc['draft_id'] : null,
+            'dte_id' => !empty($doc['dte_id']) ? (int) $doc['dte_id'] : null,
+            'document_type_id' => $type_id,
+            'status' => $emitted ? 'emitted' : $status,
+            'folio' => $folio,
+            'label' => $label,
+        ];
+    }
+
+    /**
+     * @param int $type_id
+     * @return string
+     */
+    private function associated_document_type_label($type_id) {
+        $type_id = (int) $type_id;
+        if ($type_id === 2) {
+            return 'Factura electrónica';
+        }
+        if ($type_id === 37) {
+            return 'Boleta electrónica';
+        }
+        if (class_exists('Riverso_Billing_Totals') && method_exists('Riverso_Billing_Totals', 'type_label')) {
+            return Riverso_Billing_Totals::type_label($type_id);
+        }
+        return 'Documento';
     }
 
     private function fail($message, $status = 400) {

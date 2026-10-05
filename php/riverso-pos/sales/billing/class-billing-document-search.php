@@ -124,11 +124,16 @@ class Riverso_Billing_Document_Search {
             return [];
         }
 
-        // Receptor no está en cabecera de borrador; filtrar por RUT/nombre excluye borradores.
+        // Solo borradores de factura guardan receptor; boletas quedan fuera al filtrar por RUT/nombre.
         $rut = $this->normalize_rut_filter($filters['receiver_rut'] ?? '');
+        if ($rut !== '') {
+            $where[] = "REPLACE(REPLACE(REPLACE(UPPER(IFNULL(d.receiver_rut,'')), '.', ''), '-', ''), ' ', '') LIKE %s";
+            $params[] = '%' . $wpdb->esc_like($rut) . '%';
+        }
         $receiver_name = trim((string) ($filters['receiver_name'] ?? ''));
-        if ($rut !== '' || $receiver_name !== '') {
-            return [];
+        if ($receiver_name !== '') {
+            $where[] = 'd.receiver_legal_name LIKE %s';
+            $params[] = '%' . $wpdb->esc_like($receiver_name) . '%';
         }
 
         $sql = "SELECT d.*,
@@ -288,6 +293,8 @@ class Riverso_Billing_Document_Search {
         $unpaid = round(max(0, $total - $paid), 2);
         $status = (string) ($row['status'] ?? 'draft');
         $type_id = (int) ($row['document_type_id'] ?? 37);
+        $recv_rut = trim((string) ($row['receiver_rut'] ?? ''));
+        $recv_name = trim((string) ($row['receiver_legal_name'] ?? ''));
         return [
             'kind' => $status === 'closed_local' ? 'closed_local' : 'draft',
             'source' => 'draft',
@@ -301,9 +308,11 @@ class Riverso_Billing_Document_Search {
             'group_label' => $this->type_label($type_id) . ' borrador',
             'folio' => '',
             'issue_date' => (string) ($row['issue_date'] ?? ''),
-            'receiver_rut' => '',
-            'receiver_legal_name' => '',
-            'receiver_display' => 'Registros internos o con boletas',
+            'receiver_rut' => $recv_rut,
+            'receiver_legal_name' => $recv_name,
+            'receiver_display' => $recv_rut !== ''
+                ? trim($recv_name . ' · ' . $recv_rut, ' ·')
+                : 'Registros internos o con boletas',
             'net_amount' => round((float) ($row['net_amount'] ?? 0), 2),
             'taxes_amount' => round((float) ($row['tax_amount'] ?? 0), 2),
             'total_amount' => $total,

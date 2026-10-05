@@ -45,6 +45,32 @@ class Riverso_Dte_Issued_Repository {
     }
 
     /**
+     * @param int $quote_id
+     * @return array<int, array<string, mixed>>
+     */
+    public function list_by_quote($quote_id) {
+        global $wpdb;
+        $quote_id = absint($quote_id);
+        if ($quote_id <= 0) {
+            return [];
+        }
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM {$this->table}
+                 WHERE quote_id = %d
+                 ORDER BY id DESC",
+                $quote_id
+            ),
+            ARRAY_A
+        ) ?: [];
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = $this->present($row);
+        }
+        return $out;
+    }
+
+    /**
      * @param int $id
      * @return array|null
      */
@@ -107,6 +133,13 @@ class Riverso_Dte_Issued_Repository {
      * @return array
      */
     private function present(array $row) {
+        $payment_url = '';
+        if (!empty($row['response_json'])) {
+            $resp = json_decode((string) $row['response_json'], true);
+            if (is_array($resp) && !empty($resp['payment_link']['payment_url'])) {
+                $payment_url = (string) $resp['payment_link']['payment_url'];
+            }
+        }
         return [
             'id' => (int) $row['id'],
             'quote_id' => isset($row['quote_id']) ? (int) $row['quote_id'] : null,
@@ -116,11 +149,16 @@ class Riverso_Dte_Issued_Repository {
             'facto_document_id' => isset($row['facto_document_id']) ? (int) $row['facto_document_id'] : null,
             'folio' => (string) ($row['folio'] ?? ''),
             'issue_date' => (string) ($row['issue_date'] ?? ''),
+            'payment_conditions' => (string) ($row['payment_conditions'] ?? '0'),
+            'receiver_rut' => (string) ($row['receiver_rut'] ?? ''),
+            'receiver_legal_name' => (string) ($row['receiver_legal_name'] ?? ''),
             'net_amount' => round((float) $row['net_amount'], 2),
             'taxes_amount' => round((float) $row['taxes_amount'], 2),
             'total_amount' => round((float) $row['total_amount'], 2),
             'facto_status' => isset($row['facto_status']) ? (int) $row['facto_status'] : null,
             'facto_error' => (string) ($row['facto_error'] ?? ''),
+            'payment_url' => $payment_url,
+            'created_by' => isset($row['created_by']) ? (int) $row['created_by'] : null,
             'created_at' => (string) ($row['created_at'] ?? ''),
         ];
     }

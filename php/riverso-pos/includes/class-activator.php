@@ -365,6 +365,7 @@ class Riverso_POS_Activator {
         self::create_phase63_clientes($prefix, $charset_collate);
         self::create_phase64_dte_issued($prefix, $charset_collate);
         self::create_phase65_receiver_designs($prefix, $charset_collate);
+        self::create_phase70_receiver_emails($prefix, $charset_collate);
         self::create_phase66_billing_drafts($prefix, $charset_collate);
         self::create_phase67_billing_draft_line_context($prefix, $charset_collate);
         self::create_phase68_cajas($prefix, $charset_collate);
@@ -5495,6 +5496,16 @@ class Riverso_POS_Activator {
     }
 
     /**
+     * Garantiza tabla de correos de receptor por RUT (deploy sin bump).
+     */
+    public static function ensure_receiver_emails_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::create_phase70_receiver_emails($prefix, $charset_collate);
+    }
+
+    /**
      * Garantiza tablas de borradores de boleta (deploy sin bump).
      */
     public static function ensure_billing_drafts_schema() {
@@ -5901,6 +5912,37 @@ class Riverso_POS_Activator {
                 Riverso_POS_Audit::log('schema.phase65_receiver_designs', 'billing_receiver_designs', 0, array(
                     'actor_type' => 'computer',
                     'details' => 'Fase 65: diseños receptor + caché SII stc',
+                ));
+            }
+        }
+    }
+
+    /**
+     * Fase 70: correos de envío DTE asociados a RUT de receptor.
+     */
+    private static function create_phase70_receiver_emails($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE {$prefix}billing_receiver_emails (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            rut VARCHAR(20) NOT NULL,
+            email VARCHAR(190) NOT NULL,
+            is_selected TINYINT(1) NOT NULL DEFAULT 1,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_recv_email_rut_email (rut, email),
+            KEY idx_recv_email_rut (rut)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        if (get_option('riverso_pos_phase70_receiver_emails') !== '1') {
+            update_option('riverso_pos_phase70_receiver_emails', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase70_receiver_emails', 'billing_receiver_emails', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 70: correos de receptor por RUT',
                 ));
             }
         }
@@ -6319,6 +6361,17 @@ class Riverso_POS_Activator {
 
         self::maybe_add_table_column($prefix . 'cajas', 'facto_cash_account_id', 'VARCHAR(16) NULL DEFAULT NULL');
         self::maybe_add_table_column($prefix . 'billing_drafts', 'dte_id', 'BIGINT UNSIGNED NULL DEFAULT NULL');
+        // Receptor del borrador (factura electrónica 33/2); vacío en boleta.
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'customer_id', 'BIGINT UNSIGNED NULL DEFAULT NULL');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_rut', 'VARCHAR(16) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_legal_name', 'VARCHAR(255) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_activity', 'VARCHAR(255) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_activity_code', 'VARCHAR(16) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_address', 'VARCHAR(255) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_district', 'VARCHAR(128) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_city', 'VARCHAR(128) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_phone', 'VARCHAR(64) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_postal', 'VARCHAR(16) NOT NULL DEFAULT \'0\'');
         self::maybe_add_table_column($prefix . 'billing_draft_payments', 'dte_id', 'BIGINT UNSIGNED NULL DEFAULT NULL');
         self::maybe_add_table_column($prefix . 'billing_draft_payments', 'method_id', 'BIGINT UNSIGNED NULL DEFAULT NULL');
         self::maybe_add_table_column($prefix . 'billing_draft_payments', 'amount_applied', 'DECIMAL(14,2) NOT NULL DEFAULT 0');

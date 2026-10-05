@@ -128,7 +128,8 @@
         message: document.getElementById("cq-message"),
         transition: document.getElementById("cq-transition"),
         invoice: document.getElementById("cq-invoice"),
-        emitDte: document.getElementById("cq-emit-dte"),
+        associatedCard: document.getElementById("cq-associated-card"),
+        associatedList: document.getElementById("cq-associated-list"),
         orderLink: document.getElementById("cq-order-link"),
         importBtn: document.getElementById("cq-import"),
         importModal: document.getElementById("cq-import-modal"),
@@ -1093,19 +1094,9 @@
             els.transition.hidden = true;
         }
         if (els.invoice) {
-            var canInvoice = !!quote.can_invoice || (quote.status === "listed" && quote.quote_type === "venta" && !quote.order_id);
-            els.invoice.hidden = !(quote.id && canInvoice);
-            els.invoice.disabled = false;
+            syncInvoiceButton(quote);
         }
-        if (els.emitDte) {
-            var canEmit = !!(cfg.canEmitDte) && quote.id && quote.status === "listed" && quote.quote_type === "venta";
-            els.emitDte.hidden = !canEmit;
-            if (canEmit && cfg.billingEmitUrl) {
-                els.emitDte.href = cfg.billingEmitUrl + (cfg.billingEmitUrl.indexOf("?") >= 0 ? "&" : "?") + "quote_id=" + encodeURIComponent(String(quote.id));
-            } else {
-                els.emitDte.removeAttribute("href");
-            }
-        }
+        renderAssociatedDocs(quote.associated_documents || []);
         if (els.orderLink) {
             if (quote.order_id && quote.order_url) {
                 els.orderLink.hidden = false;
@@ -2689,18 +2680,11 @@
             els.transition.hidden = true;
         }
         if (els.invoice) {
-            var canInvoice = !!state.quote.can_invoice
-                || (state.quote.status === "listed" && state.quote.quote_type === "venta" && !state.quote.order_id);
-            els.invoice.hidden = !(state.quote.id && canInvoice);
+            syncInvoiceButton(state.quote);
         }
-        if (els.emitDte) {
-            var canEmitSave = !!(cfg.canEmitDte) && state.quote.id && state.quote.status === "listed" && state.quote.quote_type === "venta";
-            els.emitDte.hidden = !canEmitSave;
-            if (canEmitSave && cfg.billingEmitUrl) {
-                els.emitDte.href = cfg.billingEmitUrl + (cfg.billingEmitUrl.indexOf("?") >= 0 ? "&" : "?") + "quote_id=" + encodeURIComponent(String(state.quote.id));
-            } else {
-                els.emitDte.removeAttribute("href");
-            }
+        if (quote.associated_documents) {
+            state.quote.associated_documents = quote.associated_documents;
+            renderAssociatedDocs(quote.associated_documents);
         }
         if (els.orderLink) {
             if (state.quote.order_id && state.quote.order_url) {
@@ -2825,45 +2809,99 @@
     }
 
 
-    function invoiceQuote() {
-        if (!state.quote.id || state.invoicing) {
+    function billingUrlForQuote(id) {
+        var base = cfg.billingEmitUrl || "/interno/facturacion/";
+        var sep = base.indexOf("?") >= 0 ? "&" : "?";
+        return base + sep + "quote_id=" + encodeURIComponent(String(id));
+    }
+
+    function canShowInvoice(quote) {
+        return !!(cfg.canEmitDte) && !!(quote && quote.id) && (quote.quote_type || "venta") === "venta";
+    }
+
+    function syncInvoiceButton(quote) {
+        if (!els.invoice) {
             return;
         }
-        if (state.quote.status !== "listed" || state.quote.quote_type !== "venta") {
-            setMessage("Solo se facturan cotizaciones Lista de tipo Venta.", true);
+        els.invoice.hidden = !canShowInvoice(quote);
+        els.invoice.disabled = false;
+    }
+
+    function associatedDocUrl(doc) {
+        var base = (cfg.billingEmitUrl || "/interno/facturacion/").replace(/\?.*$/, "");
+        if (doc && doc.dte_id) {
+            return base + "?vista=documento&dte_id=" + encodeURIComponent(String(doc.dte_id));
+        }
+        if (doc && doc.draft_id) {
+            return base + "?draft_id=" + encodeURIComponent(String(doc.draft_id));
+        }
+        return "";
+    }
+
+    function renderAssociatedDocs(list) {
+        if (!els.associatedCard || !els.associatedList) {
             return;
         }
-        var lines = state.quote.lines || [];
-        var cliente = state.quote.customer_name || "Sin cliente";
-        var bruto = formatMoney(state.quote.net_total);
-        var neto = formatMoney(round2((Number(state.quote.net_total) || 0) / IVA_FACTOR));
-        var n = lines.length;
-        var msg = "¿Facturar cotización " + (state.quote.quote_number || "") + "?\n"
-            + "Cliente: " + cliente + "\n"
-            + "Bruto: " + bruto + " (Neto: " + neto + ")\n"
-            + "Líneas: " + n + "\n\n"
-            + "Se creará un pedido WooCommerce pendiente.";
-        if (!window.confirm(msg)) {
+        var docs = Array.isArray(list) ? list : [];
+        els.associatedList.innerHTML = "";
+        if (!docs.length) {
+            els.associatedCard.hidden = true;
             return;
         }
-        state.invoicing = true;
-        if (els.invoice) {
-            els.invoice.disabled = true;
-        }
-        setMessage("Facturando…", false);
-        post(cfg.actions.invoice, { id: String(state.quote.id) }).then(function (data) {
-            state.quote = data.quote;
-            paintEditor();
-            state.snapshot = serialize(state.quote);
-            setMessage(data.message || "Cotización facturada.", false);
-        }).catch(function (error) {
-            setMessage(error.message, true);
-            if (els.invoice) {
-                els.invoice.disabled = false;
+        els.associatedCard.hidden = false;
+        docs.forEach(function (doc) {
+            var url = associatedDocUrl(doc);
+            var li = document.createElement("li");
+            li.className = "cq-associated-item";
+            var btn = document.createElement(url ? "a" : "span");
+            btn.className = "cq-btn cq-btn-associated";
+            btn.textContent = "Ver documento";
+            if (url) {
+                btn.href = url;
             }
-        }).finally(function () {
-            state.invoicing = false;
+            var label = document.createElement("span");
+            label.className = "cq-associated-label";
+            label.textContent = doc.label || "Documento";
+            li.appendChild(btn);
+            li.appendChild(label);
+            els.associatedList.appendChild(li);
         });
+    }
+
+    function invoiceQuote() {
+        if ((state.quote.quote_type || "venta") !== "venta") {
+            setMessage("Solo se pueden facturar cotizaciones de tipo Venta.", true);
+            return;
+        }
+        if (!cfg.canEmitDte) {
+            setMessage("No tienes permiso para facturar.", true);
+            return;
+        }
+        function go(id) {
+            if (!id) {
+                setMessage("Guarda la cotización antes de facturar.", true);
+                if (els.invoice) {
+                    els.invoice.disabled = false;
+                }
+                return;
+            }
+            window.location.href = billingUrlForQuote(id);
+        }
+        if (isDirty() || !state.quote.id) {
+            if (els.invoice) {
+                els.invoice.disabled = true;
+            }
+            setMessage("Guardando cotización…", false);
+            saveQuote(false).then(function (quote) {
+                go(quote && quote.id ? quote.id : state.quote.id);
+            }).catch(function () {
+                if (els.invoice) {
+                    els.invoice.disabled = false;
+                }
+            });
+            return;
+        }
+        go(state.quote.id);
     }
 
     function openImportModal() {

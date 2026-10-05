@@ -9,10 +9,12 @@ $asset_base = rtrim((string) (isset($riverso_billing['assetBase']) ? $riverso_bi
 $version = defined('RIVERSO_POS_VERSION') ? RIVERSO_POS_VERSION : '0.1.0';
 $js_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/billing.js';
 $js_lines_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/billing-lines.js';
+$js_emails_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/billing-emails.js';
 $css_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/css/billing.css';
 $css_cq_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/css/customer-quotes.css';
 $js_ver = (is_string($js_path) && is_file($js_path)) ? (string) filemtime($js_path) : $version;
 $js_lines_ver = (is_string($js_lines_path) && is_file($js_lines_path)) ? (string) filemtime($js_lines_path) : $version;
+$js_emails_ver = (is_string($js_emails_path) && is_file($js_emails_path)) ? (string) filemtime($js_emails_path) : $version;
 $css_ver = (is_string($css_path) && is_file($css_path)) ? (string) filemtime($css_path) : $version;
 $css_cq_ver = (is_string($css_cq_path) && is_file($css_cq_path)) ? (string) filemtime($css_cq_path) : $version;
 $issuer = isset($riverso_billing['issuer']['issuer']) && is_array($riverso_billing['issuer']['issuer'])
@@ -243,66 +245,14 @@ if (!function_exists('riverso_pos_billing_json')) {
         </section>
 
         <section id="bill-step-2" class="bill-step" hidden>
-            <!-- Factura: detalle simple -->
-            <div id="bill-step-2-invoice">
-                <div class="bill-card">
-                    <div class="bill-card-head">
-                        <h2>DETALLE DEL DOCUMENTO</h2>
-                        <div class="bill-quote-meta" id="bill-quote-meta" hidden></div>
-                    </div>
-                    <div class="bill-table-wrap">
-                        <table class="bill-table" id="bill-lines-table">
-                            <thead>
-                                <tr>
-                                    <th>SKU</th>
-                                    <th>Descripción</th>
-                                    <th>Cant.</th>
-                                    <th>P. bruto</th>
-                                    <th>Afecto</th>
-                                    <th>Total</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody id="bill-lines-body"></tbody>
-                        </table>
-                    </div>
-                    <button type="button" class="bill-btn bill-btn-secondary" id="bill-add-line">+ Línea</button>
-                    <div class="bill-totals" id="bill-totals">
-                        <div><span>Neto</span><strong id="bill-tot-net">$0</strong></div>
-                        <div><span>IVA</span><strong id="bill-tot-iva">$0</strong></div>
-                        <div class="bill-tot-grand"><span>Total</span><strong id="bill-tot-total">$0</strong></div>
-                    </div>
-                </div>
-                <div class="bill-step-footer bill-step-footer-split">
-                    <button type="button" class="bill-btn bill-btn-secondary bill-back-step-1">Volver</button>
-                    <span class="bill-step-label">Paso 2 de 2</span>
-                    <div class="bill-step-actions">
-                        <div class="bill-preview-wrap">
-                            <div class="bill-preview-menu" id="bill-preview-menu-invoice" hidden role="menu">
-                                <button type="button" class="bill-preview-item" role="menuitem" data-preview="pdf">Previsualizar: PDF oficial</button>
-                                <button type="button" class="bill-preview-item" role="menuitem" data-preview="thermal50">Previsualizar: Formato térmico 50mm</button>
-                                <button type="button" class="bill-preview-item" role="menuitem" data-preview="family">Previsualizar: Carta por familia</button>
-                                <button type="button" class="bill-preview-item" role="menuitem" data-preview="product">Previsualizar: Carta por producto</button>
-                            </div>
-                            <button type="button" class="bill-btn bill-btn-primary bill-preview-toggle" id="bill-preview" aria-haspopup="menu" aria-expanded="false" aria-controls="bill-preview-menu-invoice">
-                                <svg class="bill-preview-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
-                                <span>Previsualizar</span>
-                                <span class="bill-preview-caret" aria-hidden="true">▾</span>
-                            </button>
-                        </div>
-                        <button type="button" class="bill-btn bill-btn-primary bill-btn-lg" id="bill-emit">Emitir</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Boleta: editor borrador -->
-            <div id="bill-step-2-boleta" hidden>
+            <!-- Editor borrador (boleta y factura) -->
+            <div id="bill-step-2-boleta">
                 <div class="bill-card bill-issuer-card">
                     <div class="bill-card-head">
                         <h2>EMISOR Y DATOS DEL DOCUMENTO</h2>
                         <div class="bill-issuer-actions">
                             <button type="button" class="bill-btn bill-btn-secondary" disabled title="WIP">Opciones [WIP]</button>
-                            <button type="button" class="bill-btn bill-btn-danger" id="bill-draft-delete" disabled title="WIP">Borrar [WIP]</button>
+                            <button type="button" class="bill-btn bill-btn-danger" id="bill-draft-delete" hidden>Borrar</button>
                         </div>
                     </div>
                     <div class="bill-issuer-layout">
@@ -323,7 +273,7 @@ if (!function_exists('riverso_pos_billing_json')) {
                         </div>
                         <div class="bill-draft-badge-card">
                             <div class="bill-draft-rut">RUT: <strong><?php echo esc_html($issuer_rut !== '' ? $issuer_rut : '—'); ?></strong></div>
-                            <div class="bill-draft-type">BOLETA ELECTRÓNICA</div>
+                            <div class="bill-draft-type" id="bill-draft-type">BOLETA ELECTRÓNICA</div>
                             <div class="bill-draft-banner" id="bill-draft-banner">
                                 <span id="bill-draft-banner-text">DOC EN BORRADOR</span>
                             </div>
@@ -344,6 +294,7 @@ if (!function_exists('riverso_pos_billing_json')) {
                             <select id="bill-boleta-payment">
                                 <option value="0" selected>Contado</option>
                                 <option value="30">30 días</option>
+                                <option value="0,30">50% contado / 50% 30 días</option>
                             </select>
                         </label>
                         <label class="bill-field">
@@ -370,6 +321,48 @@ if (!function_exists('riverso_pos_billing_json')) {
                         </label>
                     </div>
                     <input type="hidden" id="bill-draft-id" value="0">
+                </div>
+
+                <div class="bill-card bill-step2-receiver-card" id="bill-step2-receiver" hidden>
+                    <div class="bill-card-head">
+                        <h2>RECEPTOR</h2>
+                        <button type="button" class="bill-btn bill-btn-secondary bill-back-step-1" title="Cambiar receptor en el paso 1">Cambiar receptor</button>
+                    </div>
+                    <div class="bill-grid bill-grid-4 bill-draft-meta">
+                        <div class="bill-field">
+                            <span>RUT</span>
+                            <div class="bill-static-value" id="bill-s2-recv-rut">—</div>
+                        </div>
+                        <div class="bill-field">
+                            <span>Razón social</span>
+                            <div class="bill-static-value" id="bill-s2-recv-name">—</div>
+                        </div>
+                        <div class="bill-field">
+                            <span>Dirección</span>
+                            <div class="bill-static-with-action">
+                                <div class="bill-static-value" id="bill-s2-recv-address">—</div>
+                                <a class="bill-static-action" id="bill-s2-recv-map" href="#" target="_blank" rel="noopener noreferrer" title="Ver en mapa" aria-label="Ver dirección en mapa">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm6.93 6h-2.95a15.65 15.65 0 0 0-1.38-3.56A8.03 8.03 0 0 1 18.93 8zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14a8.2 8.2 0 0 1 0-4h3.38a16.5 16.5 0 0 0 0 4H4.26zm.81 2h2.95c.32 1.25.78 2.45 1.38 3.56A8 8 0 0 1 5.07 16zm2.95-8H5.07a8 8 0 0 1 4.33-3.56A15.65 15.65 0 0 0 8.02 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66a14.7 14.7 0 0 1 0-4h4.68a14.7 14.7 0 0 1 0 4zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95a8.03 8.03 0 0 1-4.33 3.56zM16.36 14a16.5 16.5 0 0 0 0-4h3.38a8.2 8.2 0 0 1 0 4h-3.38z"/></svg>
+                                </a>
+                            </div>
+                        </div>
+                        <div class="bill-field">
+                            <span>Comuna</span>
+                            <div class="bill-static-value" id="bill-s2-recv-comuna">—</div>
+                        </div>
+                        <div class="bill-field">
+                            <span>Ciudad</span>
+                            <div class="bill-static-value" id="bill-s2-recv-city">—</div>
+                        </div>
+                        <div class="bill-field">
+                            <span>Giro</span>
+                            <div class="bill-static-value" id="bill-s2-recv-giro">—</div>
+                        </div>
+                        <div class="bill-field">
+                            <span>Teléfono</span>
+                            <div class="bill-static-value" id="bill-s2-recv-phone">—</div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="bill-card bill-tabs-card">
@@ -461,7 +454,21 @@ if (!function_exists('riverso_pos_billing_json')) {
                                 <button type="button" class="bill-btn bill-btn-primary" id="bill-ref-save">Agregar</button>
                             </div>
                         </div>
-                        <ul id="bill-refs-list" class="bill-refs-list"></ul>
+                        <p class="bill-refs-subtitle">Referenciado por</p>
+                        <div class="bill-table-wrap bill-refs-table-wrap">
+                            <table class="bill-refs-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tipo de Operación</th>
+                                        <th>Razón</th>
+                                        <th>Tipo de Documento</th>
+                                        <th>Folio</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bill-refs-list"></tbody>
+                            </table>
+                        </div>
                     </div>
 
                     <div class="bill-tab-panel" id="bill-tab-pagos" data-panel="pagos" hidden>
@@ -593,6 +600,26 @@ if (!function_exists('riverso_pos_billing_json')) {
         </div>
     </div>
 
+    <div id="bill-draft-delete-modal" class="riverso-bill bill-modal-overlay" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="bill-draft-delete-title" aria-describedby="bill-draft-delete-msg">
+        <div class="bill-modal bill-modal-confirm" role="document">
+            <div class="bill-modal-header bill-confirm-header">
+                <span class="bill-confirm-icon" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </span>
+                <h3 id="bill-draft-delete-title">BORRAR DOCUMENTO</h3>
+            </div>
+            <div class="bill-modal-body">
+                <p id="bill-draft-delete-msg">¿Está seguro que desea borrar este documento? Esta acción es <strong>PERMANENTE</strong>.</p>
+            </div>
+            <div class="bill-modal-footer">
+                <button type="button" class="bill-btn bill-btn-secondary" id="bill-draft-delete-cancel">Cancelar</button>
+                <button type="button" class="bill-btn bill-btn-danger" id="bill-draft-delete-ok">Borrar</button>
+            </div>
+        </div>
+    </div>
+
     <div id="bill-pago-modal" class="bill-modal-overlay" hidden aria-hidden="true" role="dialog" aria-modal="true">
         <div class="bill-modal bill-modal-lg" role="document">
             <div class="bill-modal-header">
@@ -671,22 +698,7 @@ if (!function_exists('riverso_pos_billing_json')) {
                         <option value="facto">Certificado configurado en FACTO</option>
                     </select>
                 </label>
-                <label class="bill-check">
-                    <input type="checkbox" id="bill-emit-email">
-                    <span>Enviar por correo</span>
-                </label>
-                <label class="bill-field">
-                    <span>Destinatario</span>
-                    <input type="email" id="bill-emit-email-to" placeholder="cliente@correo.cl">
-                </label>
-                <label class="bill-field">
-                    <span>Destinatarios extra</span>
-                    <input type="text" id="bill-emit-email-extra" placeholder="separados por coma">
-                </label>
-                <label class="bill-field">
-                    <span>Adjunto</span>
-                    <input type="text" value="PDF y XML" readonly disabled>
-                </label>
+                <div id="bill-emit-emails"></div>
                 <label class="bill-field">
                     <span>Casilla de intercambio del cliente [WIP]</span>
                     <input type="text" disabled placeholder="No disponible">
@@ -970,4 +982,5 @@ if (!function_exists('riverso_pos_billing_json')) {
 window.RIVERSO_BILLING = <?php echo riverso_pos_billing_json($riverso_billing); ?>;
 </script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing-lines.js?ver=<?php echo htmlspecialchars($js_lines_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing-emails.js?ver=<?php echo htmlspecialchars($js_emails_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing.js?ver=<?php echo htmlspecialchars($js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>

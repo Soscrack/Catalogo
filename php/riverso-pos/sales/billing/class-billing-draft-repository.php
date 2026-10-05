@@ -1,6 +1,6 @@
 <?php
 /**
- * Borradores de boleta electrónica (locales, sin FACTO).
+ * Borradores de boleta y factura electrónica (locales, sin FACTO).
  *
  * @package Riverso_POS
  */
@@ -56,6 +56,65 @@ class Riverso_Billing_Draft_Repository {
     }
 
     /**
+     * Documentos (borrador o emitido) ligados a una cotización.
+     *
+     * @param int $quote_id
+     * @return array<int, array<string, mixed>>
+     */
+    public function list_by_quote($quote_id) {
+        global $wpdb;
+        $quote_id = absint($quote_id);
+        if ($quote_id <= 0) {
+            return [];
+        }
+        $dte_table = $wpdb->prefix . 'riverso_dte_issued';
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT d.id, d.document_type_id, d.status, d.dte_id, d.quote_id,
+                    i.folio AS folio, i.id AS issued_id
+             FROM {$this->drafts_table()} d
+             LEFT JOIN {$dte_table} i ON i.id = d.dte_id
+             WHERE d.quote_id = %d
+             ORDER BY d.id DESC",
+            $quote_id
+        ), ARRAY_A) ?: [];
+        $out = [];
+        foreach ($rows as $row) {
+            $dte_id = !empty($row['dte_id']) ? (int) $row['dte_id'] : 0;
+            if ($dte_id <= 0 && !empty($row['issued_id'])) {
+                $dte_id = (int) $row['issued_id'];
+            }
+            $out[] = [
+                'draft_id' => (int) $row['id'],
+                'dte_id' => $dte_id > 0 ? $dte_id : null,
+                'document_type_id' => (int) ($row['document_type_id'] ?? 37),
+                'status' => (string) ($row['status'] ?? 'draft'),
+                'folio' => (string) ($row['folio'] ?? ''),
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * @param int $dte_id
+     * @return array<string, mixed>|null
+     */
+    public function find_by_dte($dte_id) {
+        global $wpdb;
+        $dte_id = absint($dte_id);
+        if ($dte_id <= 0) {
+            return null;
+        }
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$this->drafts_table()} WHERE dte_id = %d ORDER BY id DESC LIMIT 1",
+            $dte_id
+        ), ARRAY_A);
+        if (!$row) {
+            return null;
+        }
+        return $this->present_full($row);
+    }
+
+    /**
      * @param array<string, mixed> $data
      * @return array{ok:bool,id?:int,message?:string}
      */
@@ -65,8 +124,24 @@ class Riverso_Billing_Draft_Repository {
         $user_id = get_current_user_id() ?: null;
         $now = current_time('mysql');
 
+        $type_id = (int) ($data['document_type_id'] ?? 37);
+        if (!in_array($type_id, [2, 37], true)) {
+            $type_id = 37;
+        }
+        $is_invoice = $type_id === 2;
+
         $header = [
-            'document_type_id' => 37,
+            'document_type_id' => $type_id,
+            'customer_id' => $is_invoice && !empty($data['customer_id']) ? absint($data['customer_id']) : null,
+            'receiver_rut' => $is_invoice ? substr((string) ($data['receiver_rut'] ?? ''), 0, 16) : '',
+            'receiver_legal_name' => $is_invoice ? substr((string) ($data['receiver_legal_name'] ?? ''), 0, 255) : '',
+            'receiver_activity' => $is_invoice ? substr((string) ($data['receiver_activity'] ?? ''), 0, 255) : '',
+            'receiver_activity_code' => $is_invoice ? substr((string) ($data['receiver_activity_code'] ?? ''), 0, 16) : '',
+            'receiver_address' => $is_invoice ? substr((string) ($data['receiver_address'] ?? ''), 0, 255) : '',
+            'receiver_district' => $is_invoice ? substr((string) ($data['receiver_district'] ?? ''), 0, 128) : '',
+            'receiver_city' => $is_invoice ? substr((string) ($data['receiver_city'] ?? ''), 0, 128) : '',
+            'receiver_phone' => $is_invoice ? substr((string) ($data['receiver_phone'] ?? ''), 0, 64) : '',
+            'receiver_postal' => $is_invoice ? substr((string) ($data['receiver_postal'] ?? '0'), 0, 16) : '0',
             'status' => in_array(($data['status'] ?? 'draft'), ['draft', 'emitted', 'closed_local'], true)
                 ? (string) $data['status']
                 : 'draft',
@@ -386,6 +461,41 @@ class Riverso_Billing_Draft_Repository {
     }
 
     /**
+     * Borra un borrador local (status draft o closed_local) con líneas, refs y pagos.
+     *
+     * @param int $id
+     * @return array{ok:bool,draft?:array,payments?:array,message?:string}
+     */
+    public function delete_draft($id) {
+        global $wpdb;
+        $id = absint($id);
+        if ($id <= 0) {
+            return ['ok' => false, 'message' => 'Borrador inválido.'];
+        }
+        $draft = $this->get($id);
+        if (!$draft) {
+            return ['ok' => false, 'message' => 'Borrador no encontrado.'];
+        }
+        $status = (string) ($draft['status'] ?? '');
+        if (!in_array($status, ['draft', 'closed_local'], true)) {
+            return ['ok' => false, 'message' => 'Solo se pueden borrar borradores o documentos cerrados sin SII.'];
+        }
+        $payments = $this->list_document_payments($id, 0);
+        $wpdb->delete($this->payments_table(), ['draft_id' => $id]);
+        $wpdb->delete($this->refs_table(), ['draft_id' => $id]);
+        $wpdb->delete($this->lines_table(), ['draft_id' => $id]);
+        $ok = $wpdb->delete($this->drafts_table(), ['id' => $id]);
+        if (!$ok) {
+            return ['ok' => false, 'message' => 'No se pudo borrar el borrador.'];
+        }
+        return [
+            'ok' => true,
+            'draft' => $draft,
+            'payments' => $payments,
+        ];
+    }
+
+    /**
      * @param int $id
      * @return array{ok:bool,payment?:array,message?:string}
      */
@@ -469,6 +579,16 @@ class Riverso_Billing_Draft_Repository {
         return [
             'id' => $id,
             'document_type_id' => (int) ($row['document_type_id'] ?? 37),
+            'customer_id' => !empty($row['customer_id']) ? (int) $row['customer_id'] : null,
+            'receiver_rut' => (string) ($row['receiver_rut'] ?? ''),
+            'receiver_legal_name' => (string) ($row['receiver_legal_name'] ?? ''),
+            'receiver_activity' => (string) ($row['receiver_activity'] ?? ''),
+            'receiver_activity_code' => (string) ($row['receiver_activity_code'] ?? ''),
+            'receiver_address' => (string) ($row['receiver_address'] ?? ''),
+            'receiver_district' => (string) ($row['receiver_district'] ?? ''),
+            'receiver_city' => (string) ($row['receiver_city'] ?? ''),
+            'receiver_phone' => (string) ($row['receiver_phone'] ?? ''),
+            'receiver_postal' => (string) ($row['receiver_postal'] ?? '0'),
             'status' => (string) ($row['status'] ?? 'draft'),
             'issue_date' => (string) ($row['issue_date'] ?? ''),
             'due_date' => (string) ($row['due_date'] ?? ''),

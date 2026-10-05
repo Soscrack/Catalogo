@@ -8,8 +8,10 @@ $surface = (isset($riverso_billing['surface']) && $riverso_billing['surface'] ==
 $asset_base = rtrim((string) (isset($riverso_billing['assetBase']) ? $riverso_billing['assetBase'] : ''), '/');
 $version = defined('RIVERSO_POS_VERSION') ? RIVERSO_POS_VERSION : '0.1.0';
 $js_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/billing-search.js';
+$js_emails_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/billing-emails.js';
 $css_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/css/billing.css';
 $js_ver = (is_string($js_path) && is_file($js_path)) ? (string) filemtime($js_path) : $version;
+$js_emails_ver = (is_string($js_emails_path) && is_file($js_emails_path)) ? (string) filemtime($js_emails_path) : $version;
 $css_ver = (is_string($css_path) && is_file($css_path)) ? (string) filemtime($css_path) : $version;
 $search_users = isset($riverso_billing['searchUsers']) && is_array($riverso_billing['searchUsers'])
     ? $riverso_billing['searchUsers']
@@ -216,7 +218,25 @@ if (!function_exists('riverso_pos_billing_json')) {
     </div>
 </div>
 
+<div id="bill-email-modal" class="riverso-bill bill-modal-overlay" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="bill-email-title">
+    <div class="bill-modal" role="document">
+        <div class="bill-modal-header">
+            <h3 id="bill-email-title">Enviar por correo</h3>
+            <button type="button" class="bill-modal-x" id="bill-email-close" aria-label="Cerrar">×</button>
+        </div>
+        <div class="bill-modal-body">
+            <p id="bill-email-doc-label" class="bill-hint"></p>
+            <div id="bill-email-widget"></div>
+        </div>
+        <div class="bill-modal-footer">
+            <button type="button" class="bill-btn bill-btn-secondary" id="bill-email-cancel">Cancelar</button>
+            <button type="button" class="bill-btn bill-btn-primary" id="bill-email-send">Enviar</button>
+        </div>
+    </div>
+</div>
+
 <script>
 window.RIVERSO_BILLING = <?php echo riverso_pos_billing_json($riverso_billing); ?>;
 </script>
+<script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing-emails.js?ver=<?php echo htmlspecialchars($js_emails_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing-search.js?ver=<?php echo htmlspecialchars($js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>

@@ -11,6 +11,9 @@
     pageSize: {},
     page: {},
     openMenus: null,
+    emailApi: null,
+    emailDteId: 0,
+    emailRut: "",
   };
 
   function $(id) {
@@ -141,6 +144,11 @@
     return base + "?draft_id=" + encodeURIComponent(String(draftId));
   }
 
+  function documentUrl(dteId) {
+    var base = cfg.documentUrl || ((cfg.portalUrl || "/interno/facturacion/").replace(/\?.*$/, "") + "?vista=documento");
+    return base + (base.indexOf("?") === -1 ? "?" : "&") + "dte_id=" + encodeURIComponent(String(dteId));
+  }
+
   function openPdf(dteId) {
     var action = (cfg.actions && cfg.actions.documentPdf) || "riverso_billing_document_pdf";
     showAlert("Obteniendo PDF…");
@@ -163,6 +171,96 @@
       .catch(function (err) {
         showAlert(err.message || "No se pudo obtener el PDF", true);
       });
+  }
+
+  function closeEmailModal() {
+    var modal = $("bill-email-modal");
+    if (modal) {
+      modal.hidden = true;
+      modal.setAttribute("aria-hidden", "true");
+    }
+    if (state.emailApi && typeof state.emailApi.destroy === "function") {
+      state.emailApi.destroy();
+    }
+    state.emailApi = null;
+    state.emailDteId = 0;
+    state.emailRut = "";
+  }
+
+  function openEmailModal(row) {
+    if (!row || !row.dte_id) return;
+    closeAllActionMenus();
+    state.emailDteId = Number(row.dte_id) || 0;
+    state.emailRut = String(row.receiver_rut || "").trim();
+    var label = $("bill-email-doc-label");
+    if (label) {
+      label.textContent =
+        (row.document_type_label || "Documento") +
+        " N° " +
+        (row.folio || "—") +
+        (state.emailRut ? " · RUT " + state.emailRut : "");
+    }
+    var box = $("bill-email-widget");
+    if (box && window.RiversoBillingEmails) {
+      if (state.emailApi && typeof state.emailApi.destroy === "function") {
+        state.emailApi.destroy();
+      }
+      state.emailApi = window.RiversoBillingEmails.mount(box, {
+        rut: state.emailRut,
+        persist: !!state.emailRut,
+        cfg: cfg,
+        post: post,
+      });
+    }
+    var modal = $("bill-email-modal");
+    if (modal) {
+      modal.hidden = false;
+      modal.setAttribute("aria-hidden", "false");
+    }
+  }
+
+  function sendDocumentEmail() {
+    if (!state.emailDteId) {
+      showAlert("Documento inválido.", true);
+      return;
+    }
+    var selected =
+      state.emailApi && typeof state.emailApi.getSelected === "function"
+        ? state.emailApi.getSelected()
+        : [];
+    if (!selected.length) {
+      showAlert("Marca al menos un correo para enviar.", true);
+      return;
+    }
+    var btn = $("bill-email-send");
+    if (btn) btn.disabled = true;
+    showAlert("Enviando correo…");
+    var action = (cfg.actions && cfg.actions.documentEmail) || "riverso_billing_document_email";
+    post(action, {
+      dte_id: state.emailDteId,
+      emails: JSON.stringify(selected),
+    })
+      .then(function (data) {
+        closeEmailModal();
+        showAlert((data && data.message) || "Correo enviado.");
+      })
+      .catch(function (err) {
+        showAlert(err.message || "No se pudo enviar el correo", true);
+      })
+      .finally(function () {
+        if (btn) btn.disabled = false;
+      });
+  }
+
+  function findRowByDte(dteId) {
+    var id = String(dteId);
+    for (var g = 0; g < state.groups.length; g++) {
+      var rows = (state.groups[g] && state.groups[g].rows) || [];
+      for (var i = 0; i < rows.length; i++) {
+        if (String(rows[i].dte_id) === id) return rows[i];
+      }
+    }
+    return null;
   }
 
   function closeAllActionMenus() {
@@ -207,20 +305,27 @@
       var menuId = "bs-menu-" + row.dte_id;
       return (
         '<div class="bill-search-split">' +
-        '<button type="button" class="bill-search-split-main" data-pdf="' +
-        row.dte_id +
-        '" title="Ver PDF" aria-label="Ver PDF">' +
-        '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm1 13h-2v2h-2v-2H9v-2h2v-2h2v2h2v2zm-1-7V3.5L18.5 8H14z"/></svg>' +
-        "</button>" +
+        '<a class="bill-search-split-main" href="' +
+        escapeAttr(documentUrl(row.dte_id)) +
+        '" title="Ver documento" aria-label="Ver documento">' +
+        '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>' +
+        '<span class="bill-search-pdf-mark">Ver</span>' +
+        "</a>" +
         '<button type="button" class="bill-search-split-toggle" data-menu="' +
         menuId +
         '" aria-haspopup="menu" aria-expanded="false" aria-label="Más acciones">▾</button>' +
         '<div class="bill-search-action-menu" id="' +
         menuId +
         '" hidden role="menu">' +
+        '<a class="bill-search-action-item" role="menuitem" href="' +
+        escapeAttr(documentUrl(row.dte_id)) +
+        '"><span class="bill-search-action-icon">▸</span> Ver documento</a>' +
         '<button type="button" class="bill-search-action-item" role="menuitem" data-pdf="' +
         row.dte_id +
         '"><span class="bill-search-action-icon">PDF</span> PDF</button>' +
+        '<button type="button" class="bill-search-action-item" role="menuitem" data-email="' +
+        row.dte_id +
+        '"><span class="bill-search-action-icon">✉</span> Enviar por correo</button>' +
         '<button type="button" class="bill-search-action-item is-wip" role="menuitem" disabled title="En desarrollo">' +
         '<span class="bill-search-action-icon">⊘</span> Emitir nota crédito [WIP]</button>' +
         "</div></div>"
@@ -448,6 +553,15 @@
           return;
         }
 
+        var emailBtn = t.closest("[data-email]");
+        if (emailBtn && emailBtn.getAttribute("data-email")) {
+          e.preventDefault();
+          e.stopPropagation();
+          closeAllActionMenus();
+          openEmailModal(findRowByDte(emailBtn.getAttribute("data-email")));
+          return;
+        }
+
         var toggle = t.closest(".bill-search-split-toggle");
         if (toggle) {
           e.preventDefault();
@@ -506,6 +620,20 @@
         }
       });
     }
+
+    if ($("bill-email-close")) $("bill-email-close").addEventListener("click", closeEmailModal);
+    if ($("bill-email-cancel")) $("bill-email-cancel").addEventListener("click", closeEmailModal);
+    if ($("bill-email-send")) $("bill-email-send").addEventListener("click", sendDocumentEmail);
+    if ($("bill-email-modal")) {
+      $("bill-email-modal").addEventListener("click", function (e) {
+        if (e.target === $("bill-email-modal")) closeEmailModal();
+      });
+    }
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && $("bill-email-modal") && !$("bill-email-modal").hidden) {
+        closeEmailModal();
+      }
+    });
 
     root.setAttribute("data-ready", "1");
   }

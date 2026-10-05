@@ -214,7 +214,6 @@ if (!function_exists('riverso_pos_cq_json')) {
                     <span id="cq-expired-badge" class="cq-expired-tag" hidden>Vencida</span>
                     <button type="button" class="cq-btn" id="cq-transition" hidden>Pasar a lista</button>
                     <button type="button" class="cq-btn cq-btn-primary" id="cq-invoice" hidden>Facturar</button>
-                    <a id="cq-emit-dte" class="cq-btn" href="#" hidden>Emitir DTE</a>
                     <a id="cq-order-link" class="cq-link cq-order-link" href="#" target="_blank" rel="noopener" hidden>Ver pedido</a>
                     <button type="button" class="cq-btn" id="cq-import" hidden title="Importar desde cotización recibida">Importar</button>
                     <label class="cq-pdf-template" title="Plantilla del PDF">
@@ -284,6 +283,11 @@ if (!function_exists('riverso_pos_cq_json')) {
                         <dd id="cq-total-profit-neto-hint" class="cq-total-neto-hint" hidden>(Neto: —)</dd>
                     </div>
                 </dl>
+            </div>
+
+            <div class="cq-card" id="cq-associated-card" hidden>
+                <h2 class="cq-associated-title">DOCUMENTOS ASOCIADOS</h2>
+                <ul class="cq-associated-list" id="cq-associated-list"></ul>
             </div>
 
             <div class="cq-card">

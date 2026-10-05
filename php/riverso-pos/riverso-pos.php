@@ -100,6 +100,7 @@ final class Riverso_POS {
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-facto.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-factura-adjuntos.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-messaging.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-smtp.php';
         
         // Aliases de compatibilidad: cargar clases movidas a core/
         // (permiten que código antiguo siga usando el path antiguo)

@@ -10,20 +10,34 @@ if (!defined('ABSPATH')) {
 }
 
 class Riverso_Quote_Catalog_Lookup {
+    /** @var array{total:int,page:int,per_page:int,pages:int,capped:bool} */
+    public $search_meta = array(
+        'total' => 0,
+        'page' => 1,
+        'per_page' => 20,
+        'pages' => 1,
+        'capped' => false,
+    );
+
     /**
-     * @param string $query
-     * @param int    $limit
-     * @param string $mode    quick|advanced
-     * @param string $scope   todo|descripcion|codigos (solo advanced)
-     * @param string $channel local|online
+     * @param string   $query
+     * @param int      $limit
+     * @param string   $mode    quick|advanced
+     * @param string   $scope   todo|descripcion|codigos (solo advanced)
+     * @param string   $channel local|online
+     * @param int      $page    Página de la lupa (30 por página).
+     * @param string[] $contains
      * @return array
      */
-    public function search($query, $limit = 20, $mode = 'quick', $scope = 'todo', $channel = 'local') {
+    public function search($query, $limit = 20, $mode = 'quick', $scope = 'todo', $channel = 'local', $page = 1, array $contains = array()) {
+        $mode = $mode === 'advanced' ? 'advanced' : 'quick';
+        $per_page = $mode === 'advanced' ? 30 : max(1, (int) $limit);
+        $this->remember_search_meta(0, 1, $per_page, false);
         $channel = $this->normalize_channel($channel);
         if ($channel === 'local') {
-            return $this->search_local($query, $limit, $mode, $scope);
+            return $this->search_local($query, $limit, $mode, $scope, $page, $contains);
         }
-        return $this->search_online($query, $limit, $mode, $scope);
+        return $this->search_online($query, $limit, $mode, $scope, $page, $contains);
     }
 
     /**
@@ -38,31 +52,43 @@ class Riverso_Quote_Catalog_Lookup {
     /**
      * Online = lookup Woo actual (publish|private).
      */
-    private function search_online($query, $limit = 20, $mode = 'quick', $scope = 'todo') {
+    private function search_online($query, $limit = 20, $mode = 'quick', $scope = 'todo', $page = 1, array $contains = array()) {
         global $wpdb;
         $query = trim((string) $query);
         $limit = max(1, (int) $limit);
         $mode = $mode === 'advanced' ? 'advanced' : 'quick';
         $scope = $this->normalize_scope($scope);
+        $advanced = $mode === 'advanced';
+        $per_page = $advanced ? 30 : $limit;
+        $id_cap = $advanced ? 300 : $per_page;
         if ($query === '' || !isset($wpdb->posts, $wpdb->postmeta)) {
             return array();
         }
-        if ($mode === 'advanced' && $scope === 'descripcion' && $this->mb_len($query) < 2) {
+        if ($advanced && $scope === 'descripcion' && $this->mb_len($query) < 2 && !$contains) {
             return array();
         }
 
         $ids = array();
         if ($mode === 'quick' || $scope === 'codigos' || $scope === 'todo') {
-            $ids = array_merge($ids, $this->ids_by_codes($query, $limit));
+            $ids = array_merge($ids, $this->ids_by_codes($query, $id_cap));
         }
-        if ($mode === 'advanced' && ($scope === 'descripcion' || $scope === 'todo') && $this->mb_len($query) >= 2) {
-            $ids = array_merge($ids, $this->ids_by_description($query, $limit));
+        if ($advanced && ($scope === 'descripcion' || $scope === 'todo') && $this->mb_len($query) >= 2) {
+            $ids = array_merge($ids, $this->ids_by_description($query, $id_cap));
         }
         $ids = array_values(array_unique(array_map('intval', $ids)));
         if ($ids === array()) {
             return array();
         }
-        $rows = $this->hydrate($ids, $query, $limit, $mode, $scope);
+        $rows = $this->hydrate($ids, $query, $id_cap, $mode, $scope);
+        if ($advanced && $contains) {
+            $rows = $this->filter_contains_words($rows, $contains, $scope);
+        }
+        $rows = array_values($rows);
+        $total = count($rows);
+        $page = $this->remember_search_meta($total, $advanced ? $page : 1, $per_page, $advanced && $total >= $id_cap);
+        if ($advanced) {
+            $rows = array_slice($rows, ($page - 1) * $per_page, $per_page);
+        }
         foreach ($rows as &$row) {
             $row['channel'] = 'online';
             $row = $this->enrich_online_pricing($row);
@@ -74,22 +100,28 @@ class Riverso_Quote_Catalog_Lookup {
     /**
      * Local = quick-view (producto_base) + get_local_price / family helpers.
      */
-    private function search_local($query, $limit = 20, $mode = 'quick', $scope = 'todo') {
+    private function search_local($query, $limit = 20, $mode = 'quick', $scope = 'todo', $page = 1, array $contains = array()) {
         $query = trim((string) $query);
         $limit = max(1, (int) $limit);
         $mode = $mode === 'advanced' ? 'advanced' : 'quick';
         $scope = $this->normalize_scope($scope);
-        if ($query === '') {
+        $advanced = $mode === 'advanced';
+        $per_page = $advanced ? 30 : $limit;
+        $id_cap = $advanced ? 300 : $per_page;
+        if ($query === '' && !$contains) {
             return array();
         }
-        if ($mode === 'advanced' && $scope === 'descripcion' && $this->mb_len($query) < 2) {
+        if ($advanced && $scope === 'descripcion' && $this->mb_len($query) < 2 && !$contains) {
             return array();
+        }
+        if ($query === '' && $contains) {
+            $query = trim((string) $contains[0]);
         }
 
         $this->ensure_quick_view();
         if (!class_exists('Riverso_Product_Quick_View_Service')) {
-            // Fallback legacy: tienda-local (ayuda), no catálogo paralelo.
-            return $this->search_local_via_tienda($query, $limit);
+            $legacy = $this->search_local_via_tienda($query, $id_cap);
+            return $this->finalize_local_page($legacy, $advanced ? $page : 1, $per_page, false, $query);
         }
 
         $qv = Riverso_Product_Quick_View_Service::get_instance();
@@ -101,34 +133,89 @@ class Riverso_Quote_Catalog_Lookup {
         }
 
         if ($mode === 'quick') {
-            $hits = $qv->lookup_for_quotes($query, $limit);
+            $hits = $qv->lookup_for_quotes($query, $limit, true);
             if (!$hits && $this->mb_len($query) >= 2) {
-                $hits = $qv->search_for_quotes($query, 'todos', $limit);
+                $hits = $qv->search_for_quotes($query, 'todos', $limit, true);
             }
-        } else {
-            $hits = $qv->search_for_quotes($query, $field, $limit);
+            if (!is_array($hits) || !$hits) {
+                $legacy = $this->search_local_via_tienda($query, $limit);
+                return $this->finalize_local_page($legacy, 1, $per_page, false, $query);
+            }
+            $out = array();
+            foreach ($hits as $hit) {
+                $mapped = $this->map_local_hit($hit);
+                if ($mapped !== null) {
+                    $out[] = $mapped;
+                }
+                if (count($out) >= $limit) {
+                    break;
+                }
+            }
+            $out = $this->apply_internal_ean_quantity($out, $query);
+            $this->remember_search_meta(count($out), 1, $per_page, false);
+            return $out;
         }
 
-        if (!is_array($hits) || !$hits) {
-            // Legacy help only if quick-view vacío.
-            $legacy = $this->search_local_via_tienda($query, $limit);
-            if ($legacy) {
-                return $legacy;
+        $contains_scope = $contains ? $scope : '';
+        $ids = $qv->search_ids_for_quotes($query, $field, $id_cap, true, $contains, $contains_scope);
+        if (!$ids) {
+            $legacy = $this->search_local_via_tienda($query, $id_cap);
+            if ($contains) {
+                $legacy = $this->filter_contains_words($legacy, $contains, $scope);
             }
-            return array();
+            return $this->finalize_local_page($legacy, $page, $per_page, false, $query);
         }
 
+        $total = count($ids);
+        $page = $this->remember_search_meta($total, $page, $per_page, $total >= $id_cap);
+        $page_ids = array_slice($ids, ($page - 1) * $per_page, $per_page);
+        $hits = $qv->hydrate_quote_rows($page_ids, $query);
         $out = array();
-        foreach ($hits as $hit) {
+        foreach (is_array($hits) ? $hits : array() as $hit) {
             $mapped = $this->map_local_hit($hit);
             if ($mapped !== null) {
                 $out[] = $mapped;
             }
-            if (count($out) >= $limit) {
-                break;
-            }
         }
         return $this->apply_internal_ean_quantity($out, $query);
+    }
+
+    /**
+     * @param array  $rows
+     * @param int    $page
+     * @param int    $per_page
+     * @param bool   $capped
+     * @param string $query
+     * @return array
+     */
+    private function finalize_local_page(array $rows, $page, $per_page, $capped, $query) {
+        $rows = array_values($rows);
+        $total = count($rows);
+        $page = $this->remember_search_meta($total, $page, $per_page, $capped);
+        $slice = array_slice($rows, ($page - 1) * max(1, (int) $per_page), max(1, (int) $per_page));
+        return $this->apply_internal_ean_quantity($slice, $query);
+    }
+
+    /**
+     * @param int  $total
+     * @param int  $page
+     * @param int  $per_page
+     * @param bool $capped
+     * @return int Página ya acotada.
+     */
+    private function remember_search_meta($total, $page, $per_page, $capped = false) {
+        $per_page = max(1, (int) $per_page);
+        $total = max(0, (int) $total);
+        $pages = $total > 0 ? (int) ceil($total / $per_page) : 1;
+        $page = min(max(1, (int) $page), $pages);
+        $this->search_meta = array(
+            'total' => $total,
+            'page' => $page,
+            'per_page' => $per_page,
+            'pages' => $pages,
+            'capped' => (bool) $capped,
+        );
+        return $page;
     }
 
     /**
@@ -208,9 +295,13 @@ class Riverso_Quote_Catalog_Lookup {
         if ($pb_id <= 0) {
             return null;
         }
-        $sku = isset($hit['canonical_sku']) ? (string) $hit['canonical_sku'] : (isset($hit['sku']) ? (string) $hit['sku'] : '');
-        if ($sku === '') {
-            $sku = 'PB-' . $pb_id;
+        $sku = isset($hit['canonical_sku']) ? trim((string) $hit['canonical_sku']) : '';
+        if ($sku === '' && isset($hit['sku'])) {
+            $sku = trim((string) $hit['sku']);
+        }
+        // Canal local: solo productos con SKU local real (canonical_sku). Sin PB- sintético.
+        if ($sku === '' || preg_match('/^PB-\d+$/i', $sku)) {
+            return null;
         }
 
         $wc_id = $this->resolve_wc_product_id($pb_id);

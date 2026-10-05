@@ -49,7 +49,7 @@ class Riverso_Product_Quick_View_Service {
             wp_send_json_error(['message' => 'Código requerido']);
         }
 
-        $ids = $this->resolve_exact_product_ids($code);
+        $ids = $this->sort_ids_local_sku_first($this->resolve_exact_product_ids($code));
         $items = $this->hydrate_grid_rows($ids, $code);
 
         $related_ids = [];
@@ -62,6 +62,7 @@ class Riverso_Product_Quick_View_Service {
             $related_ids = array_values(array_filter($related_ids, function ($rid) use ($exact_set) {
                 return empty($exact_set[(int) $rid]);
             }));
+            $related_ids = $this->sort_ids_local_sku_first($related_ids);
         }
         $related = $this->hydrate_grid_rows($related_ids, $code);
 
@@ -81,7 +82,9 @@ class Riverso_Product_Quick_View_Service {
         $this->require_view();
         $term = isset($_POST['term']) ? trim(sanitize_text_field(wp_unslash($_POST['term']))) : '';
         $field = isset($_POST['field']) ? sanitize_key(wp_unslash($_POST['field'])) : 'todos';
-        $limit = min(40, max(5, absint($_POST['limit'] ?? 25)));
+        $per_page = 30;
+        $page = max(1, absint($_POST['page'] ?? 1));
+        $cap = 300;
 
         $palabras_raw = $_POST['palabras'] ?? [];
         if (!is_array($palabras_raw)) {
@@ -116,16 +119,51 @@ class Riverso_Product_Quick_View_Service {
             $field = 'todos';
         }
 
-        $ids = $this->search_product_ids($term, $field, $limit, $palabras);
-        $items = $this->hydrate_grid_rows($ids, $term !== '' ? $term : null);
+        $ids = $this->sort_ids_local_sku_first($this->search_product_ids($term, $field, $cap, $palabras));
+        $total = count($ids);
+        $pages = $total > 0 ? (int) ceil($total / $per_page) : 1;
+        if ($page > $pages) {
+            $page = $pages;
+        }
+        $slice = array_slice($ids, ($page - 1) * $per_page, $per_page);
+        $items = $this->hydrate_grid_rows($slice, $term !== '' ? $term : null);
 
         wp_send_json_success([
             'term' => $term,
             'field' => $field,
             'palabras' => $palabras,
             'count' => count($items),
+            'total' => $total,
+            'page' => $page,
+            'pages' => $pages,
+            'per_page' => $per_page,
+            'capped' => $total >= $cap,
             'items' => $items,
         ]);
+    }
+
+    /**
+     * Mantiene el orden relativo y deja primero los que tienen canonical_sku.
+     *
+     * @param int[] $ids
+     * @return int[]
+     */
+    private function sort_ids_local_sku_first(array $ids) {
+        $ids = array_values(array_filter(array_map('intval', $ids)));
+        if (!$ids) {
+            return [];
+        }
+        $with = array_fill_keys($this->filter_ids_with_local_sku($ids), true);
+        $first = [];
+        $rest = [];
+        foreach ($ids as $id) {
+            if (!empty($with[$id])) {
+                $first[] = $id;
+            } else {
+                $rest[] = $id;
+            }
+        }
+        return array_merge($first, $rest);
     }
 
     /**
@@ -319,13 +357,53 @@ class Riverso_Product_Quick_View_Service {
     }
 
     /**
+     * Una palabra del filtro "contiene" debe aparecer según el alcance.
+     *
+     * @param string $word
+     * @param string $scope todo|descripcion|codigos
+     * @return string SQL ya preparado (fragmento booleano).
+     */
+    private function sql_contains_word($word, $scope) {
+        global $wpdb;
+        $prefix = $this->prefix();
+        $like = '%' . $wpdb->esc_like($word) . '%';
+        $barcode = "EXISTS (SELECT 1 FROM {$prefix}codigo_barra cb
+            WHERE cb.producto_base_id = pb.id AND cb.activo = 1 AND cb.codigo LIKE %s)";
+        $supplier = "EXISTS (SELECT 1 FROM {$prefix}producto_proveedor pp
+            WHERE pp.producto_base_id = pb.id AND pp.activo = 1
+              AND (pp.codigo_proveedor LIKE %s OR pp.codigo_barras_proveedor LIKE %s))";
+        if ($scope === 'codigos') {
+            return $wpdb->prepare(
+                "(pb.canonical_sku LIKE %s OR {$barcode} OR {$supplier})",
+                $like,
+                $like,
+                $like,
+                $like
+            );
+        }
+        if ($scope === 'todo') {
+            return $wpdb->prepare(
+                "(pb.nombre_canonico LIKE %s OR pb.canonical_sku LIKE %s OR {$barcode} OR {$supplier})",
+                $like,
+                $like,
+                $like,
+                $like,
+                $like
+            );
+        }
+        return $wpdb->prepare('pb.nombre_canonico LIKE %s', $like);
+    }
+
+    /**
      * @param string $term
      * @param string $field
      * @param int    $limit
-     * @param array  $palabras Palabras que deben aparecer todas en nombre_canonico (AND).
+     * @param array  $palabras Palabras extra (AND). Sin $contains_scope filtran nombre_canonico.
+     * @param bool   $require_local_sku Solo producto_base con canonical_sku.
+     * @param string $contains_scope    todo|descripcion|codigos|'' ('' = solo nombre, compat hub).
      * @return int[]
      */
-    private function search_product_ids($term, $field, $limit, array $palabras = []) {
+    private function search_product_ids($term, $field, $limit, array $palabras = [], $require_local_sku = false, $contains_scope = '') {
         global $wpdb;
         $prefix = $this->prefix();
         $term = trim((string) $term);
@@ -333,15 +411,25 @@ class Riverso_Product_Quick_View_Service {
         $ids = [];
 
         $base_where = "pb.estado = 'activo' AND pb.deleted_at IS NULL";
+        if ($require_local_sku) {
+            $base_where .= " AND pb.canonical_sku IS NOT NULL AND TRIM(pb.canonical_sku) <> ''";
+        }
+        $contains_scope = in_array($contains_scope, ['todo', 'descripcion', 'codigos'], true) ? $contains_scope : '';
         foreach ($palabras as $palabra) {
             $w = trim((string) $palabra);
             if ($w === '') {
                 continue;
             }
-            $base_where .= $wpdb->prepare(
-                ' AND pb.nombre_canonico LIKE %s',
-                '%' . $wpdb->esc_like($w) . '%'
-            );
+            if ($contains_scope !== '') {
+                $fragment = $this->sql_contains_word($w, $contains_scope);
+            } else {
+                $fragment = $wpdb->prepare(
+                    'pb.nombre_canonico LIKE %s',
+                    '%' . $wpdb->esc_like($w) . '%'
+                );
+            }
+            // El WHERE se reinyecta en otro prepare(); los % literales deben ir duplicados.
+            $base_where .= ' AND ' . str_replace('%', '%%', $fragment);
         }
 
         // Solo palabras: una consulta sobre producto_base.
@@ -580,15 +668,18 @@ class Riverso_Product_Quick_View_Service {
      * @param int    $limit
      * @return array
      */
-    public function lookup_for_quotes($code, $limit = 20) {
+    public function lookup_for_quotes($code, $limit = 20, $require_local_sku = false) {
         $code = trim((string) $code);
         $limit = max(1, (int) $limit);
         if ($code === '') {
             return [];
         }
         $ids = $this->resolve_exact_product_ids($code);
+        if ($require_local_sku && $ids) {
+            $ids = $this->filter_ids_with_local_sku($ids);
+        }
         if (!$ids && strlen($code) >= 2) {
-            $ids = $this->search_product_ids($code, 'codigos', $limit);
+            $ids = $this->search_product_ids($code, 'codigos', $limit, [], (bool) $require_local_sku);
         }
         $ids = array_slice(array_values(array_unique(array_map('intval', $ids))), 0, $limit);
         return $this->hydrate_grid_rows($ids, $code);
@@ -602,7 +693,7 @@ class Riverso_Product_Quick_View_Service {
      * @param int    $limit
      * @return array
      */
-    public function search_for_quotes($term, $field = 'todos', $limit = 20) {
+    public function search_for_quotes($term, $field = 'todos', $limit = 20, $require_local_sku = false) {
         $term = trim((string) $term);
         $limit = max(1, (int) $limit);
         $allowed = ['todos', 'nombre', 'proveedor', 'codigo_proveedor', 'sku', 'barcode', 'codigos'];
@@ -615,8 +706,87 @@ class Riverso_Product_Quick_View_Service {
                 return [];
             }
         }
-        $ids = $this->search_product_ids($term, $field, $limit);
+        $ids = $this->search_product_ids($term, $field, $limit, [], (bool) $require_local_sku);
         return $this->hydrate_grid_rows($ids, $term);
+    }
+
+    /**
+     * IDs para cotizaciones, sin hidratar (paginación de la lupa).
+     *
+     * @param string   $term
+     * @param string   $field
+     * @param int      $limit
+     * @param bool     $require_local_sku
+     * @param string[] $contains
+     * @param string   $contains_scope todo|descripcion|codigos
+     * @return int[]
+     */
+    public function search_ids_for_quotes($term, $field = 'todos', $limit = 20, $require_local_sku = false, array $contains = [], $contains_scope = '') {
+        $term = trim((string) $term);
+        $limit = max(1, (int) $limit);
+        $allowed = ['todos', 'nombre', 'proveedor', 'codigo_proveedor', 'sku', 'barcode', 'codigos'];
+        $field = sanitize_key((string) $field);
+        if (!in_array($field, $allowed, true)) {
+            $field = 'todos';
+        }
+        $words = [];
+        foreach ($contains as $word) {
+            $word = trim((string) $word);
+            if ($word !== '') {
+                $words[] = $word;
+            }
+        }
+        if ($term === '' && $words) {
+            $term = $words[0];
+        }
+        if ($term === '') {
+            return [];
+        }
+        $scope = in_array($contains_scope, ['todo', 'descripcion', 'codigos'], true) ? $contains_scope : '';
+        return $this->search_product_ids($term, $field, $limit, $words, (bool) $require_local_sku, $scope);
+    }
+
+    /**
+     * @param int[]       $ids
+     * @param string|null $term
+     * @return array
+     */
+    public function hydrate_quote_rows(array $ids, $term = null) {
+        return $this->hydrate_grid_rows($ids, $term);
+    }
+
+    /**
+     * Conserva el orden y descarta producto_base sin canonical_sku.
+     *
+     * @param int[] $ids
+     * @return int[]
+     */
+    public function filter_ids_with_local_sku(array $ids) {
+        global $wpdb;
+        $prefix = $this->prefix();
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if (!$ids) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+        $rows = $wpdb->get_col($wpdb->prepare(
+            "SELECT id FROM {$prefix}producto_base
+             WHERE id IN ({$placeholders})
+               AND canonical_sku IS NOT NULL
+               AND TRIM(canonical_sku) <> ''",
+            $ids
+        )) ?: [];
+        $ok = [];
+        foreach ($rows as $id) {
+            $ok[(int) $id] = true;
+        }
+        $out = [];
+        foreach ($ids as $id) {
+            if (!empty($ok[$id])) {
+                $out[] = $id;
+            }
+        }
+        return $out;
     }
 
     public function build_summary($producto_base_id) {

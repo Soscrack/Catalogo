@@ -11,6 +11,10 @@
         modalScope: "todo",
         modalResults: [],
         modalContains: [],
+        modalPage: 1,
+        modalPages: 1,
+        modalTotal: 0,
+        modalPerPage: 30,
         familyLineIndex: -1,
         familyPriceSeq: 0,
         priceRecalcChain: Promise.resolve(),
@@ -45,7 +49,9 @@
             ruleNombre: null,
             stdRule: null,
             editingField: null
-        }
+        },
+        boundCustomerName: "",
+        customerSearchRows: []
     };
 
     var IVA_FACTOR = 1.19;
@@ -81,6 +87,21 @@
         issueDate: document.getElementById("cq-issue-date"),
         seller: document.getElementById("cq-seller"),
         customer: document.getElementById("cq-customer"),
+        customerSearchBtn: document.getElementById("cq-customer-search"),
+        customerNewBtn: document.getElementById("cq-customer-new"),
+        customerClear: document.getElementById("cq-customer-clear"),
+        custSearchModal: document.getElementById("cq-customer-search-modal"),
+        custSearchNombre: document.getElementById("cq-cust-search-nombre"),
+        custSearchRut: document.getElementById("cq-cust-search-rut"),
+        custSearchRazon: document.getElementById("cq-cust-search-razon"),
+        custSearchBtn: document.getElementById("cq-cust-search-btn"),
+        custSearchHint: document.getElementById("cq-cust-search-hint"),
+        custSearchResultsWrap: document.getElementById("cq-cust-search-results-wrap"),
+        custSearchLocal: document.getElementById("cq-cust-search-local"),
+        custSearchTbody: document.getElementById("cq-cust-search-tbody"),
+        custNewModal: document.getElementById("cq-customer-new-modal"),
+        custNewForm: document.getElementById("cq-cust-new-form"),
+        custNewSave: document.getElementById("cq-cust-new-save"),
         type: document.getElementById("cq-type"),
         channel: document.getElementById("cq-channel"),
         channelLocal: document.getElementById("cq-channel-local"),
@@ -102,6 +123,10 @@
         modalQ: document.getElementById("cq-modal-q"),
         modalSearchBtn: document.getElementById("cq-modal-search-btn"),
         modalResults: document.getElementById("cq-modal-results"),
+        modalPager: document.getElementById("cq-modal-pager"),
+        modalPagePrev: document.getElementById("cq-modal-page-prev"),
+        modalPageNext: document.getElementById("cq-modal-page-next"),
+        modalPageNumbers: document.getElementById("cq-modal-page-numbers"),
         modalHint: document.getElementById("cq-modal-hint"),
         modalClose: document.getElementById("cq-modal-close"),
         modalContains: document.getElementById("cq-modal-contains"),
@@ -265,7 +290,21 @@
         });
     }
     if (els.modalSearchBtn) {
-        els.modalSearchBtn.addEventListener("click", searchAdvanced);
+        els.modalSearchBtn.addEventListener("click", function () { searchAdvanced(1); });
+    }
+    if (els.modalPagePrev) {
+        els.modalPagePrev.addEventListener("click", function () {
+            if ((state.modalPage || 1) > 1) {
+                searchAdvanced((state.modalPage || 1) - 1);
+            }
+        });
+    }
+    if (els.modalPageNext) {
+        els.modalPageNext.addEventListener("click", function () {
+            if ((state.modalPage || 1) < (state.modalPages || 1)) {
+                searchAdvanced((state.modalPage || 1) + 1);
+            }
+        });
     }
     if (els.modalQ) {
         els.modalQ.addEventListener("keydown", function (event) {
@@ -568,6 +607,7 @@
     ["input", "change"].forEach(function (eventName) {
         els.customer.addEventListener(eventName, function () {
             syncHeader();
+            updateCustomerClearLink();
             if (eventName === "change") scheduleAutosave(300);
             else scheduleAutosave(600);
         });
@@ -590,6 +630,73 @@
         els.issueDate.addEventListener("change", function () {
             syncHeader();
             scheduleAutosave(0);
+        });
+    }
+    if (els.customerSearchBtn) {
+        els.customerSearchBtn.addEventListener("click", openCustomerSearchModal);
+    }
+    if (els.customerNewBtn) {
+        els.customerNewBtn.addEventListener("click", openCustomerNewModal);
+    }
+    if (els.customerClear) {
+        els.customerClear.addEventListener("click", clearSelectedCustomer);
+    }
+    if (els.custSearchModal) {
+        els.custSearchModal.addEventListener("click", function (event) {
+            if (event.target && event.target.getAttribute("data-cq-cust-search-close") === "1") {
+                closeCustomerSearchModal();
+            }
+        });
+    }
+    if (els.custSearchBtn) {
+        els.custSearchBtn.addEventListener("click", runCustomerSearch);
+    }
+    ["custSearchNombre", "custSearchRut", "custSearchRazon"].forEach(function (key) {
+        if (!els[key]) return;
+        els[key].addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                runCustomerSearch();
+            }
+        });
+    });
+    if (els.custSearchLocal) {
+        els.custSearchLocal.addEventListener("input", function () {
+            renderCustomerSearchRows(state.customerSearchRows || []);
+        });
+    }
+    if (els.custSearchTbody) {
+        els.custSearchTbody.addEventListener("click", function (event) {
+            var btn = event.target.closest("[data-select-customer]");
+            if (!btn) return;
+            var id = parseInt(btn.getAttribute("data-select-customer"), 10) || 0;
+            var row = null;
+            var rows = state.customerSearchRows || [];
+            for (var i = 0; i < rows.length; i++) {
+                if ((rows[i].id || 0) === id) {
+                    row = rows[i];
+                    break;
+                }
+            }
+            if (row) {
+                selectCustomer(row);
+            }
+        });
+    }
+    if (els.custNewModal) {
+        els.custNewModal.addEventListener("click", function (event) {
+            if (event.target && event.target.getAttribute("data-cq-cust-new-close") === "1") {
+                closeCustomerNewModal();
+            }
+        });
+    }
+    if (els.custNewSave) {
+        els.custNewSave.addEventListener("click", saveCustomerFromQuote);
+    }
+    if (els.custNewForm) {
+        ["cust-has-contacto", "cust-has-facturacion", "cust-has-datos-extra"].forEach(function (id) {
+            var cb = document.getElementById(id);
+            if (cb) cb.addEventListener("change", syncCustomerFormSections);
         });
     }
 
@@ -1067,6 +1174,7 @@
             els.seller.value = quote.seller_name || cfg.currentUserName || "";
         }
         els.customer.value = quote.customer_name || "";
+        state.boundCustomerName = quote.customer_id ? (quote.customer_name || "") : "";
         els.type.value = quote.quote_type || "venta";
         setChannel(quote.channel || "local", false);
         els.validityDays.value = quote.validity_days === null || quote.validity_days === undefined ? "" : String(quote.validity_days);
@@ -1074,6 +1182,9 @@
         [els.customer, els.type, els.validityDays, els.validityTerms, els.search].forEach(function (input) {
             input.disabled = !editable;
         });
+        if (els.customerSearchBtn) els.customerSearchBtn.disabled = !editable;
+        if (els.customerNewBtn) els.customerNewBtn.disabled = !editable;
+        updateCustomerClearLink();
         if (els.channelLocal) els.channelLocal.disabled = !editable;
         if (els.channelOnline) els.channelOnline.disabled = !editable;
         document.getElementById("cq-search-btn").disabled = !editable;
@@ -1820,7 +1931,13 @@
     }
 
     function syncHeader() {
-        state.quote.customer_name = els.customer.value.trim();
+        var name = els.customer.value.trim();
+        state.quote.customer_name = name;
+        if (state.quote.customer_id && state.boundCustomerName
+            && name !== state.boundCustomerName) {
+            state.quote.customer_id = null;
+            state.boundCustomerName = "";
+        }
         state.quote.quote_type = els.type.value;
         state.quote.channel = currentChannel();
         state.quote.validity_days = els.validityDays.value === "" ? null : Number(els.validityDays.value);
@@ -2001,7 +2118,11 @@
         }
         setModalScope(state.modalScope || "todo");
         state.modalResults = [];
+        state.modalPage = 1;
+        state.modalPages = 1;
+        state.modalTotal = 0;
         renderModalResults();
+        renderModalPager();
         renderModalContainsTags();
         setModalHint("");
         els.modal.hidden = false;
@@ -2228,7 +2349,11 @@
             searchAdvanced();
         } else {
             state.modalResults = [];
+            state.modalPage = 1;
+            state.modalPages = 1;
+            state.modalTotal = 0;
             renderModalResults();
+            renderModalPager();
             setModalHint("");
         }
     }
@@ -2284,15 +2409,20 @@
         els.modalHint.classList.toggle("is-error", !!isError && !!text);
     }
 
-    function searchAdvanced() {
+    function searchAdvanced(page) {
         if (!els.modalQ) return;
+        var requested = (typeof page === "number" && isFinite(page) && page > 0) ? Math.floor(page) : 1;
         var query = els.modalQ.value.trim();
         var scope = state.modalScope || "todo";
         var contains = (state.modalContains || []).slice();
         if (!query && !contains.length) {
             setModalHint("Ingresa un término de búsqueda o agrega una palabra.", true);
             state.modalResults = [];
+            state.modalPage = 1;
+            state.modalPages = 1;
+            state.modalTotal = 0;
             renderModalResults();
+            renderModalPager();
             return;
         }
         if (!query && contains.length) {
@@ -2302,7 +2432,11 @@
         if ((scope === "descripcion") && query.length < 2 && !contains.length) {
             setModalHint("Escribe al menos 2 caracteres para buscar por descripción.", true);
             state.modalResults = [];
+            state.modalPage = 1;
+            state.modalPages = 1;
+            state.modalTotal = 0;
             renderModalResults();
+            renderModalPager();
             return;
         }
         setModalHint("Buscando…");
@@ -2311,26 +2445,79 @@
             mode: "advanced",
             scope: scope,
             channel: currentChannel(),
-            contains: JSON.stringify(contains)
+            contains: JSON.stringify(contains),
+            page: requested
         }).then(function (data) {
             state.modalResults = data.products || [];
+            state.modalPage = data.page || requested;
+            state.modalPages = data.pages || 1;
+            state.modalTotal = data.total != null ? Number(data.total) : state.modalResults.length;
+            state.modalPerPage = data.per_page || 30;
             renderModalResults();
+            renderModalPager();
             if (state.modalResults.length === 0) {
                 var label = contains.length
                     ? ("«" + query + "» + contiene: " + contains.join(", "))
                     : ("«" + query + "»");
                 setModalHint(data.hint || ("Sin resultados para " + label + "."), true);
             } else {
-                setModalHint(state.modalResults.length + " resultado(s). Elige Agregar — el modal no agrega solo.");
+                var from = ((state.modalPage - 1) * state.modalPerPage) + 1;
+                var to = from + state.modalResults.length - 1;
+                var hint = state.modalTotal + " resultado(s).";
+                if (state.modalPages > 1) {
+                    hint += " Página " + state.modalPage + " de " + state.modalPages + " (" + from + "–" + to + ").";
+                }
+                if (data.capped) {
+                    hint += " Hay más coincidencias; afina la búsqueda.";
+                }
+                hint += " Elige Agregar — el modal no agrega solo.";
+                setModalHint(hint, false);
             }
         }).catch(function (error) {
             setModalHint(error.message, true);
         });
     }
 
+    function renderModalPager() {
+        if (!els.modalPager) return;
+        var pages = state.modalPages || 1;
+        var current = state.modalPage || 1;
+        if (pages <= 1) {
+            els.modalPager.hidden = true;
+            if (els.modalPageNumbers) els.modalPageNumbers.innerHTML = "";
+            return;
+        }
+        els.modalPager.hidden = false;
+        if (els.modalPagePrev) els.modalPagePrev.disabled = current <= 1;
+        if (els.modalPageNext) els.modalPageNext.disabled = current >= pages;
+        if (!els.modalPageNumbers) return;
+        els.modalPageNumbers.innerHTML = "";
+        var windowSize = 5;
+        var start = Math.max(1, current - Math.floor(windowSize / 2));
+        var end = Math.min(pages, start + windowSize - 1);
+        start = Math.max(1, end - windowSize + 1);
+        for (var i = start; i <= end; i += 1) {
+            (function (page) {
+                var btn = document.createElement("button");
+                btn.type = "button";
+                btn.textContent = String(page);
+                btn.setAttribute("aria-label", "Página " + page);
+                if (page === current) {
+                    btn.className = "is-active";
+                    btn.setAttribute("aria-current", "page");
+                }
+                btn.addEventListener("click", function () {
+                    searchAdvanced(page);
+                });
+                els.modalPageNumbers.appendChild(btn);
+            })(i);
+        }
+    }
+
     function renderModalResults() {
         if (!els.modalResults) return;
         els.modalResults.innerHTML = "";
+        els.modalResults.scrollTop = 0;
         (state.modalResults || []).forEach(function (product) {
             var li = document.createElement("li");
             var info = document.createElement("div");
@@ -2798,6 +2985,7 @@
     function serialize(quote) {
         return JSON.stringify({
             id: quote.id,
+            customer_id: quote.customer_id || null,
             customer_name: quote.customer_name || "",
             quote_type: quote.quote_type,
             channel: quote.channel || "local",
@@ -3437,7 +3625,7 @@
         if (els.channelOnline) { els.channelOnline.classList.toggle("is-active", channel === "online"); }
         if (els.search) {
             els.search.placeholder = channel === "local"
-                ? "Local: SKU / barcode / proveedor (producto_base)"
+                ? "Local: solo productos con SKU local"
                 : "Online: SKU / barcode / proveedor (Woo)";
         }
         if (interactive) {
@@ -5036,5 +5224,331 @@
     function setListMessage(text, isError) {
         els.listMessage.textContent = text || "";
         els.listMessage.className = "cq-message" + (text ? (isError ? " is-error" : " is-ok") : "");
+    }
+
+    function updateCustomerClearLink() {
+        if (!els.customerClear) return;
+        var has = !!(state.quote && state.quote.customer_id);
+        els.customerClear.hidden = !has;
+        els.customerClear.disabled = state.quote && state.quote.editable === false;
+    }
+
+    function selectCustomer(customer) {
+        if (!customer) return;
+        var name = (customer.nombre_fantasia || customer.razon_social || "").trim();
+        state.quote.customer_id = customer.id ? parseInt(customer.id, 10) : null;
+        if (!state.quote.customer_id) {
+            state.quote.customer_id = null;
+        }
+        state.quote.customer_name = name;
+        state.boundCustomerName = name;
+        if (els.customer) {
+            els.customer.value = name;
+        }
+        updateCustomerClearLink();
+        closeCustomerSearchModal();
+        closeCustomerNewModal();
+        scheduleAutosave(0);
+        setMessage(name ? ("Cliente «" + name + "» seleccionado.") : "Cliente seleccionado.", false);
+    }
+
+    function clearSelectedCustomer() {
+        if (state.quote.editable === false) return;
+        state.quote.customer_id = null;
+        state.quote.customer_name = "";
+        state.boundCustomerName = "";
+        if (els.customer) els.customer.value = "";
+        updateCustomerClearLink();
+        scheduleAutosave(0);
+    }
+
+    function openCustomerSearchModal() {
+        if (!els.custSearchModal) return;
+        if (state.quote.editable === false) return;
+        if (els.custSearchNombre) els.custSearchNombre.value = "";
+        if (els.custSearchRut) els.custSearchRut.value = "";
+        if (els.custSearchRazon) els.custSearchRazon.value = "";
+        if (els.custSearchLocal) els.custSearchLocal.value = "";
+        state.customerSearchRows = [];
+        if (els.custSearchResultsWrap) els.custSearchResultsWrap.hidden = true;
+        if (els.custSearchHint) {
+            els.custSearchHint.hidden = false;
+            els.custSearchHint.textContent = "Por favor seleccione parámetros para realizar la búsqueda";
+            els.custSearchHint.classList.remove("is-error");
+        }
+        if (els.custSearchTbody) els.custSearchTbody.innerHTML = "";
+        els.custSearchModal.hidden = false;
+        els.custSearchModal.setAttribute("aria-hidden", "false");
+        if (els.custSearchNombre) els.custSearchNombre.focus();
+    }
+
+    function closeCustomerSearchModal() {
+        if (!els.custSearchModal) return;
+        els.custSearchModal.hidden = true;
+        els.custSearchModal.setAttribute("aria-hidden", "true");
+    }
+
+    function runCustomerSearch() {
+        var nombre = els.custSearchNombre ? els.custSearchNombre.value.trim() : "";
+        var rut = els.custSearchRut ? els.custSearchRut.value.trim() : "";
+        var razon = els.custSearchRazon ? els.custSearchRazon.value.trim() : "";
+        if (!nombre && !rut && !razon) {
+            if (els.custSearchHint) {
+                els.custSearchHint.hidden = false;
+                els.custSearchHint.textContent = "Por favor seleccione parámetros para realizar la búsqueda";
+                els.custSearchHint.classList.add("is-error");
+            }
+            if (els.custSearchResultsWrap) els.custSearchResultsWrap.hidden = true;
+            return;
+        }
+        if (els.custSearchHint) {
+            els.custSearchHint.hidden = false;
+            els.custSearchHint.textContent = "Buscando…";
+            els.custSearchHint.classList.remove("is-error");
+        }
+        var action = (cfg.actions && cfg.actions.customersSearch) || "riverso_cq_customers_search";
+        post(action, { nombre: nombre, rut: rut, razon_social: razon })
+            .then(function (data) {
+                state.customerSearchRows = (data && data.customers) || [];
+                if (els.custSearchHint) {
+                    if (!state.customerSearchRows.length) {
+                        els.custSearchHint.textContent = "No se encontraron clientes con esos parámetros.";
+                        els.custSearchHint.classList.add("is-error");
+                    } else {
+                        els.custSearchHint.hidden = true;
+                    }
+                }
+                renderCustomerSearchRows(state.customerSearchRows);
+                if (els.custSearchResultsWrap) {
+                    els.custSearchResultsWrap.hidden = !state.customerSearchRows.length;
+                }
+            })
+            .catch(function (err) {
+                if (els.custSearchHint) {
+                    els.custSearchHint.hidden = false;
+                    els.custSearchHint.textContent = (err && err.message) || "No se pudo buscar.";
+                    els.custSearchHint.classList.add("is-error");
+                }
+                if (els.custSearchResultsWrap) els.custSearchResultsWrap.hidden = true;
+            });
+    }
+
+    function renderCustomerSearchRows(rows) {
+        if (!els.custSearchTbody) return;
+        var q = els.custSearchLocal ? els.custSearchLocal.value.trim().toLowerCase() : "";
+        var filtered = (rows || []).filter(function (c) {
+            if (!q) return true;
+            var blob = [
+                c.nombre_fantasia || "",
+                c.razon_social || "",
+                c.rut || ""
+            ].join(" ").toLowerCase();
+            return blob.indexOf(q) !== -1;
+        });
+        if (!filtered.length) {
+            els.custSearchTbody.innerHTML =
+                '<tr><td colspan="4" class="cq-cust-empty">Sin resultados</td></tr>';
+            return;
+        }
+        els.custSearchTbody.innerHTML = filtered
+            .map(function (c) {
+                return (
+                    "<tr>" +
+                    "<td>" +
+                    escapeHtml(c.nombre_fantasia || c.razon_social || "—") +
+                    "</td>" +
+                    "<td>" +
+                    escapeHtml(c.rut || "—") +
+                    "</td>" +
+                    "<td>Si</td>" +
+                    '<td><button type="button" class="cq-btn cq-btn-customer-select" data-select-customer="' +
+                    escapeHtml(c.id) +
+                    '">Seleccionar</button></td>' +
+                    "</tr>"
+                );
+            })
+            .join("");
+    }
+
+    function openCustomerNewModal() {
+        if (!els.custNewModal) return;
+        if (state.quote.editable === false) return;
+        if (!(cfg.caps && cfg.caps.editCustomers)) {
+            setMessage("No tienes permisos para crear clientes.", true);
+            return;
+        }
+        resetCustomerNewForm();
+        els.custNewModal.hidden = false;
+        els.custNewModal.setAttribute("aria-hidden", "false");
+        var nombre = document.getElementById("cust-nombre-fantasia");
+        if (nombre) nombre.focus();
+    }
+
+    function closeCustomerNewModal() {
+        if (!els.custNewModal) return;
+        els.custNewModal.hidden = true;
+        els.custNewModal.setAttribute("aria-hidden", "true");
+        setCustomerFormMsg("");
+    }
+
+    function resetCustomerNewForm() {
+        if (!els.custNewForm) return;
+        els.custNewForm.reset();
+        var idEl = document.getElementById("cust-id");
+        if (idEl) idEl.value = "0";
+        var hasContacto = document.getElementById("cust-has-contacto");
+        var hasFact = document.getElementById("cust-has-facturacion");
+        var hasExtra = document.getElementById("cust-has-datos-extra");
+        if (hasContacto) hasContacto.checked = true;
+        if (hasFact) hasFact.checked = true;
+        if (hasExtra) hasExtra.checked = true;
+        var pais = document.getElementById("cust-pais");
+        var tipoId = document.getElementById("cust-tipo-id");
+        var codigo = document.getElementById("cust-codigo-postal");
+        var comuna = document.getElementById("cust-comuna");
+        if (pais) pais.value = "CHILE";
+        if (tipoId) tipoId.value = "RUT_CLIENTE";
+        if (codigo) codigo.value = "0";
+        if (comuna) comuna.value = "";
+        var names = els.custNewForm.querySelectorAll(".cust-extra-nombre");
+        var values = els.custNewForm.querySelectorAll(".cust-extra-valor");
+        for (var i = 0; i < names.length; i++) {
+            names[i].value = "";
+            if (values[i]) values[i].value = "";
+        }
+        var title = document.getElementById("cust-card-general-title");
+        if (title) title.textContent = "Crear cliente";
+        syncCustomerFormSections();
+        setCustomerFormMsg("");
+    }
+
+    function syncCustomerFormSections() {
+        toggleCustSection("cust-has-contacto", "cust-section-contacto");
+        toggleCustSection("cust-has-facturacion", "cust-section-facturacion");
+        toggleCustSection("cust-has-datos-extra", "cust-section-extra");
+    }
+
+    function toggleCustSection(checkboxId, sectionId) {
+        var checkbox = document.getElementById(checkboxId);
+        var section = document.getElementById(sectionId);
+        if (!checkbox || !section) return;
+        if (checkbox.checked) {
+            section.classList.remove("is-collapsed");
+        } else {
+            section.classList.add("is-collapsed");
+        }
+    }
+
+    function setCustomerFormMsg(text, ok) {
+        var el = document.getElementById("cust-form-msg");
+        if (!el) return;
+        if (!text) {
+            el.hidden = true;
+            el.textContent = "";
+            el.className = "cust-form-msg";
+            return;
+        }
+        el.hidden = false;
+        el.textContent = text;
+        el.className = "cust-form-msg " + (ok ? "is-ok" : "is-error");
+    }
+
+    function collectCustomerDatosExtra() {
+        if (!els.custNewForm) return [];
+        var names = els.custNewForm.querySelectorAll(".cust-extra-nombre");
+        var values = els.custNewForm.querySelectorAll(".cust-extra-valor");
+        var out = [];
+        for (var i = 0; i < 4; i++) {
+            out.push({
+                nombre: names[i] ? String(names[i].value || "").trim() : "",
+                valor: values[i] ? String(values[i].value || "").trim() : ""
+            });
+        }
+        return out;
+    }
+
+    function validateCustomerNewForm() {
+        var nombre = document.getElementById("cust-nombre-fantasia");
+        if (!nombre || !String(nombre.value || "").trim()) {
+            return "El nombre de fantasía es obligatorio";
+        }
+        var hasContacto = document.getElementById("cust-has-contacto");
+        if (hasContacto && hasContacto.checked) {
+            var pn = document.getElementById("cust-primer-nombre");
+            var ap = document.getElementById("cust-apellido-paterno");
+            if (!pn || !String(pn.value || "").trim()) {
+                return "El primer nombre del contacto es obligatorio";
+            }
+            if (!ap || !String(ap.value || "").trim()) {
+                return "El apellido paterno del contacto es obligatorio";
+            }
+        }
+        return "";
+    }
+
+    function boolFlag(el) {
+        return el && el.checked ? "1" : "0";
+    }
+
+    function valOf(id) {
+        var el = document.getElementById(id);
+        return el ? String(el.value || "") : "";
+    }
+
+    function saveCustomerFromQuote() {
+        if (state.quote.editable === false) return;
+        var err = validateCustomerNewForm();
+        if (err) {
+            setCustomerFormMsg(err, false);
+            return;
+        }
+        if (els.custNewSave) els.custNewSave.disabled = true;
+        setCustomerFormMsg("");
+        var action = (cfg.actions && cfg.actions.customerSave) || "riverso_cq_customer_save";
+        var payload = {
+            id: 0,
+            nombre_fantasia: valOf("cust-nombre-fantasia"),
+            has_contacto: boolFlag(document.getElementById("cust-has-contacto")),
+            primer_nombre: valOf("cust-primer-nombre"),
+            apellido_paterno: valOf("cust-apellido-paterno"),
+            contacto_telefono: valOf("cust-contacto-telefono"),
+            contacto_email: valOf("cust-contacto-email"),
+            has_facturacion: boolFlag(document.getElementById("cust-has-facturacion")),
+            pais: valOf("cust-pais") || "CHILE",
+            tipo_identificacion: valOf("cust-tipo-id") || "RUT_CLIENTE",
+            rut: valOf("cust-rut"),
+            razon_social: valOf("cust-razon-social"),
+            direccion: valOf("cust-direccion"),
+            comuna: valOf("cust-comuna"),
+            ciudad: valOf("cust-ciudad"),
+            giro: valOf("cust-giro"),
+            facturacion_telefono: valOf("cust-facturacion-telefono"),
+            codigo_postal: valOf("cust-codigo-postal") || "0",
+            has_datos_extra: boolFlag(document.getElementById("cust-has-datos-extra")),
+            datos_extra: JSON.stringify(collectCustomerDatosExtra()),
+            activo: "1"
+        };
+        post(action, payload)
+            .then(function (data) {
+                if (els.custNewSave) els.custNewSave.disabled = false;
+                var customer = data && data.customer ? data.customer : null;
+                if (!customer && data && data.id) {
+                    customer = {
+                        id: data.id,
+                        nombre_fantasia: payload.nombre_fantasia,
+                        razon_social: payload.razon_social
+                    };
+                }
+                if (!customer) {
+                    setCustomerFormMsg("Cliente creado, pero no se pudo seleccionar.", false);
+                    return;
+                }
+                setCustomerFormMsg(data.message || "Cliente creado", true);
+                selectCustomer(customer);
+            })
+            .catch(function (e) {
+                if (els.custNewSave) els.custNewSave.disabled = false;
+                setCustomerFormMsg((e && e.message) || "No se pudo guardar", false);
+            });
     }
 })();

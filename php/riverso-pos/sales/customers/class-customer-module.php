@@ -153,9 +153,12 @@ class Riverso_Customer_Module {
         wp_send_json_success(['customer' => $customer]);
     }
 
-    public function ajax_save() {
-        $this->authorize_edit();
-
+    /**
+     * Arma el payload de guardado desde $_POST (reutilizable desde cotizaciones).
+     *
+     * @return array<string, mixed>
+     */
+    public function input_from_request() {
         $datos_extra = [];
         if (isset($_POST['datos_extra'])) {
             $raw = wp_unslash($_POST['datos_extra']);
@@ -167,7 +170,7 @@ class Riverso_Customer_Module {
             }
         }
 
-        $input = [
+        return [
             'id' => isset($_POST['id']) ? (int) $_POST['id'] : 0,
             'nombre_fantasia' => $this->post_string('nombre_fantasia'),
             'has_contacto' => !empty($_POST['has_contacto']),
@@ -190,6 +193,12 @@ class Riverso_Customer_Module {
             'datos_extra' => $datos_extra,
             'activo' => !isset($_POST['activo']) || !empty($_POST['activo']),
         ];
+    }
+
+    public function ajax_save() {
+        $this->authorize_edit();
+
+        $input = $this->input_from_request();
 
         $result = $this->repo->save($input);
         if (empty($result['ok'])) {

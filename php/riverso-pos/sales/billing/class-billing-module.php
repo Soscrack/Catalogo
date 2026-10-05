@@ -11,6 +11,9 @@ if (!defined('ABSPATH')) {
 
 class Riverso_Billing_Module {
 
+    /** Diferencia máxima (CLP) entre total en pantalla y total FACTO que se absorbe en el último cobro. */
+    const EMIT_ROUNDING_TOLERANCE = 3;
+
     private static $instance = null;
 
     /** @var Riverso_Dte_Issued_Repository */
@@ -853,7 +856,7 @@ class Riverso_Billing_Module {
             ]);
 
             if ($draft_id > 0) {
-                $this->drafts->mark_emitted($draft_id, (int) $insert_id);
+                $this->drafts->mark_emitted($draft_id, (int) $insert_id, (float) $built['totals']['total_amount']);
             }
 
             $warnings = [];
@@ -2612,7 +2615,10 @@ class Riverso_Billing_Module {
         $doc_total = round((float) $doc_total, 2);
         $remaining = $doc_total;
         $out = [];
+        $count = count($items);
+        $pos = 0;
         foreach ($items as $idx => $item) {
+            $pos++;
             if (!is_array($item)) {
                 return new WP_Error('bad_payment', 'Cobro #' . ((int) $idx + 1) . ' inválido.');
             }
@@ -2637,6 +2643,16 @@ class Riverso_Billing_Module {
             $applied = isset($item['amount_applied'])
                 ? round((float) $item['amount_applied'], 2)
                 : round(max(0, $amount_paid - $change_amount), 2);
+            // El total en pantalla (bruto comercial) puede diferir en pesos del total FACTO por redondeo de neto/IVA.
+            if ($pos === $count && $remaining > 0 && abs($applied - $remaining) > 0.009
+                && abs($applied - $remaining) <= self::EMIT_ROUNDING_TOLERANCE) {
+                if ($change_amount > 0) {
+                    $change_amount = round(max(0, $amount_paid - $remaining), 2);
+                } else {
+                    $amount_paid = $remaining;
+                }
+                $applied = $remaining;
+            }
             if ($applied <= 0) {
                 return new WP_Error('bad_amount', 'Cobro #' . ((int) $idx + 1) . ': el monto aplicado debe ser mayor a 0.');
             }

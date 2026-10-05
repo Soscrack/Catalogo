@@ -114,10 +114,11 @@ $can_manage_codes = current_user_can('riverso_manage_codes');
         <tbody id="products-tbody"><tr><td colspan="9">Cargando...</td></tr></tbody>
     </table>
 
-    <div style="margin-top:12px; display:flex; gap:8px; justify-content:center;">
-        <button class="button" id="products-prev" style="display:none;">← Anterior</button>
+    <div id="products-pager" style="margin-top:12px; display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap;">
+        <button type="button" class="button" id="products-prev" style="display:none;">← Anterior</button>
+        <span id="products-page-numbers" style="display:inline-flex; gap:4px; flex-wrap:wrap;"></span>
         <span id="products-page-info" style="align-self:center; color:#666;"></span>
-        <button class="button" id="products-next" style="display:none;">Siguiente →</button>
+        <button type="button" class="button" id="products-next" style="display:none;">Siguiente →</button>
     </div>
 
     <?php if ($can_manage): ?>
@@ -1261,7 +1262,7 @@ jQuery(function($){
     }
     let searchTimeout = null;
     let currentOffset = 0;
-    let currentLimit = 20;
+    let currentLimit = 30;
     let currentTotal = 0;
     let currentPages = 0;
 
@@ -1478,7 +1479,9 @@ jQuery(function($){
         $('#products-counter').text(`Mostrando ${startItem} a ${endItem} de ${currentTotal}`);
 
         const currentPage = Math.floor(currentOffset / currentLimit) + 1;
-        $('#products-page-info').text(`Página ${currentPage} de ${currentPages || 1}`);
+        const totalPages = currentPages || 1;
+        $('#products-page-info').text(`Página ${currentPage} de ${totalPages}`);
+        renderProductPageNumbers(currentPage, totalPages);
 
         if (currentOffset > 0) {
             $('#products-prev').show();
@@ -1513,6 +1516,28 @@ jQuery(function($){
             currentPages = r.data.pages || 0;
             render(r.data.items || []);
         });
+    }
+
+    function renderProductPageNumbers(currentPage, totalPages) {
+        const $box = $('#products-page-numbers');
+        $box.empty();
+        if (totalPages <= 1) {
+            return;
+        }
+        const windowSize = 5;
+        let start = Math.max(1, currentPage - Math.floor(windowSize / 2));
+        let end = Math.min(totalPages, start + windowSize - 1);
+        start = Math.max(1, end - windowSize + 1);
+        for (let page = start; page <= end; page += 1) {
+            const $btn = $('<button type="button" class="button"></button>').text(String(page));
+            if (page === currentPage) {
+                $btn.addClass('button-primary').attr('aria-current', 'page');
+            }
+            $btn.on('click', function () {
+                loadPage((page - 1) * currentLimit);
+            });
+            $box.append($btn);
+        }
     }
 
     function loadPage(offset) {

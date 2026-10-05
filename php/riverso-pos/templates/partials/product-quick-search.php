@@ -22,6 +22,27 @@ $can_manage_pqs = !empty($can_manage);
 
     <div id="pqs-status" class="pqs-status" style="display:none;"></div>
 
+    <div id="pqs-browse" class="pqs-results">
+        <p class="pqs-intro" style="margin-top:14px;">Productos con SKU local primero. 30 por página.</p>
+        <table class="wp-list-table widefat fixed striped pqs-grid">
+            <thead>
+                <tr>
+                    <th style="width:14%">SKU local</th>
+                    <th style="width:36%">Nombre</th>
+                    <th style="width:25%">Código proveedor</th>
+                    <th style="width:25%">Barcode</th>
+                </tr>
+            </thead>
+            <tbody id="pqs-browse-tbody"><tr><td colspan="4">Cargando…</td></tr></tbody>
+        </table>
+        <div id="pqs-browse-pager" style="margin-top:10px; display:none; gap:6px; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="button" id="pqs-browse-prev">← Anterior</button>
+            <span id="pqs-browse-pages" style="display:inline-flex; gap:4px; flex-wrap:wrap;"></span>
+            <span id="pqs-browse-info" style="color:#666;"></span>
+            <button type="button" class="button" id="pqs-browse-next">Siguiente →</button>
+        </div>
+    </div>
+
     <div id="pqs-results" class="pqs-results" style="display:none;">
         <table class="wp-list-table widefat fixed striped pqs-grid">
             <thead>
@@ -272,6 +293,12 @@ $can_manage_pqs = !empty($can_manage);
                 </thead>
                 <tbody id="pqs-lupa-tbody"><tr><td colspan="6" style="color:#666;">Escribí y buscá…</td></tr></tbody>
             </table>
+            <div id="pqs-lupa-pager" style="margin-top:10px; display:none; gap:6px; align-items:center; flex-wrap:wrap;">
+                <button type="button" class="button" id="pqs-lupa-prev">← Anterior</button>
+                <span id="pqs-lupa-pages" style="display:inline-flex; gap:4px; flex-wrap:wrap;"></span>
+                <span id="pqs-lupa-info" style="color:#666;"></span>
+                <button type="button" class="button" id="pqs-lupa-next">Siguiente →</button>
+            </div>
         </div>
     </div>
 </div>

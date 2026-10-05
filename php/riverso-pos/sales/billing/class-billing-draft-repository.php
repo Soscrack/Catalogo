@@ -398,21 +398,26 @@ class Riverso_Billing_Draft_Repository {
     }
 
     /**
-     * @param int $draft_id
-     * @param int $dte_id
+     * @param int        $draft_id
+     * @param int        $dte_id
+     * @param float|null $total_amount total emitido (FACTO); null conserva el del borrador
      */
-    public function mark_emitted($draft_id, $dte_id) {
+    public function mark_emitted($draft_id, $dte_id, $total_amount = null) {
         global $wpdb;
         $draft_id = absint($draft_id);
         $dte_id = absint($dte_id);
         if ($draft_id <= 0) {
             return;
         }
-        $wpdb->update($this->drafts_table(), [
+        $data = [
             'status' => 'emitted',
             'dte_id' => $dte_id > 0 ? $dte_id : null,
             'updated_at' => current_time('mysql'),
-        ], ['id' => $draft_id]);
+        ];
+        if ($total_amount !== null) {
+            $data['total_amount'] = round((float) $total_amount, 2);
+        }
+        $wpdb->update($this->drafts_table(), $data, ['id' => $draft_id]);
         if ($dte_id > 0) {
             $wpdb->query($wpdb->prepare(
                 "UPDATE {$this->payments_table()}

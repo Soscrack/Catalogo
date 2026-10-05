@@ -21,6 +21,8 @@
         lastQuery: '',
         related: [],
         lupaWords: [],
+        browsePage: 1,
+        lupaPage: 1,
         viewMode: localStorage.getItem('pqs_view_mode') || 'neto',
         costMode: localStorage.getItem('pqs_cost_mode') || 'referencia',
     };
@@ -878,6 +880,7 @@
     }
 
     function loadSummary(id) {
+        hideBrowse();
         setStatus($('#pqs-status'), 'Cargando…');
         return post('riverso_products_quick_summary', { producto_base_id: id }).then(function (r) {
             if (!r || !r.success) {
@@ -889,13 +892,124 @@
         });
     }
 
+    function paintPager(opts) {
+        var pages = opts.pages || 1;
+        var current = opts.page || 1;
+        if (!opts.pager || !opts.pager.length) {
+            return;
+        }
+        if (pages <= 1) {
+            opts.pager.hide();
+            if (opts.numbers) {
+                opts.numbers.empty();
+            }
+            return;
+        }
+        opts.pager.css('display', 'flex');
+        if (opts.prev) {
+            opts.prev.prop('disabled', current <= 1);
+        }
+        if (opts.next) {
+            opts.next.prop('disabled', current >= pages);
+        }
+        if (opts.info) {
+            var label = 'Página ' + current + ' de ' + pages;
+            if (opts.total) {
+                label += ' · ' + opts.total + ' productos';
+            }
+            opts.info.text(label);
+        }
+        if (!opts.numbers) {
+            return;
+        }
+        opts.numbers.empty();
+        var windowSize = 5;
+        var start = Math.max(1, current - Math.floor(windowSize / 2));
+        var end = Math.min(pages, start + windowSize - 1);
+        start = Math.max(1, end - windowSize + 1);
+        for (var i = start; i <= end; i += 1) {
+            (function (page) {
+                var $btn = $('<button type="button" class="button"></button>').text(String(page));
+                if (page === current) {
+                    $btn.addClass('button-primary').attr('aria-current', 'page');
+                }
+                $btn.on('click', function () {
+                    opts.onPage(page);
+                });
+                opts.numbers.append($btn);
+            })(i);
+        }
+    }
+
+    function showBrowse() {
+        $('#pqs-browse').show();
+    }
+
+    function hideBrowse() {
+        $('#pqs-browse').hide();
+    }
+
+    function loadBrowse(page) {
+        if (!$('#pqs-browse').length) {
+            return;
+        }
+        var requested = (typeof page === 'number' && isFinite(page) && page > 0) ? Math.floor(page) : 1;
+        var per = 30;
+        $('#pqs-browse-tbody').html('<tr><td colspan="4">Cargando…</td></tr>');
+        post('riverso_products_list', {
+            status: 'active',
+            search: '',
+            completeness: 'todos',
+            catalog_id: '',
+            offset: (requested - 1) * per,
+            limit: per
+        }).then(function (r) {
+            if (!r || !r.success) {
+                $('#pqs-browse-tbody').html('<tr><td colspan="4">No se pudo cargar el listado.</td></tr>');
+                return;
+            }
+            var data = r.data || {};
+            var items = data.items || [];
+            var total = data.total || 0;
+            var pages = data.pages || 1;
+            var current = Math.floor((data.offset || 0) / per) + 1;
+            state.browsePage = current;
+            if (!items.length) {
+                $('#pqs-browse-tbody').html('<tr><td colspan="4">Sin productos.</td></tr>');
+            } else {
+                $('#pqs-browse-tbody').html(items.map(function (it) {
+                    var sku = it.sku_local || it.canonical_sku || '';
+                    return '<tr class="pqs-browse-row" data-id="' + esc(it.id) + '" style="cursor:pointer;">' +
+                        '<td><code>' + esc(sku || '—') + '</code></td>' +
+                        '<td>' + esc(it.nombre_canonico || '—') + '</td>' +
+                        '<td><code>' + esc(it.codigos_proveedor || '—') + '</code></td>' +
+                        '<td><code>' + esc(it.barcode_sample || '—') + '</code></td>' +
+                        '</tr>';
+                }).join(''));
+            }
+            paintPager({
+                pager: $('#pqs-browse-pager'),
+                numbers: $('#pqs-browse-pages'),
+                info: $('#pqs-browse-info'),
+                prev: $('#pqs-browse-prev'),
+                next: $('#pqs-browse-next'),
+                page: current,
+                pages: pages,
+                total: total,
+                onPage: loadBrowse
+            });
+        });
+    }
+
     function doLookup() {
         var code = ($('#pqs-input').val() || '').trim();
         if (!code) {
             setStatus($('#pqs-status'), 'Ingresá un código', 'empty');
+            showBrowse();
             return;
         }
         setStatus($('#pqs-status'), 'Buscando…');
+        hideBrowse();
         $('#pqs-viewer').hide();
         state.editing = false;
         stopWatchEditorClose();
@@ -903,6 +1017,7 @@
             if (!r || !r.success) {
                 setStatus($('#pqs-status'), (r && r.data && r.data.message) || 'Error', 'error');
                 hideRelated();
+                showBrowse();
                 return;
             }
             var items = r.data.items || [];
@@ -911,6 +1026,7 @@
                 setStatus($('#pqs-status'), 'Sin coincidencias para «' + code + '»', 'empty');
                 $('#pqs-results').hide();
                 hideRelated();
+                showBrowse();
                 return;
             }
             if (items.length === 1) {
@@ -977,11 +1093,13 @@
         $('#pqs-lupa-word').val('').focus();
     }
 
-    function doLupaSearch() {
+    function doLupaSearch(page) {
+        var requested = (typeof page === 'number' && isFinite(page) && page > 0) ? Math.floor(page) : 1;
         var term = ($('#pqs-lupa-input').val() || '').trim();
         var field = $('#pqs-lupa-field').val() || 'todos';
         if (term.length < 2 && !state.lupaWords.length) {
             setStatus($('#pqs-lupa-status'), 'Escribí al menos 2 caracteres o agregá una palabra', 'empty');
+            $('#pqs-lupa-pager').hide();
             return;
         }
         setStatus($('#pqs-lupa-status'), 'Buscando…');
@@ -989,14 +1107,38 @@
             term: term,
             field: field,
             palabras: state.lupaWords.slice(),
+            page: requested
         }).then(function (r) {
             if (!r || !r.success) {
                 setStatus($('#pqs-lupa-status'), (r && r.data && r.data.message) || 'Error', 'error');
                 return;
             }
-            var items = r.data.items || [];
-            setStatus($('#pqs-lupa-status'), items.length ? (items.length + ' resultados') : 'Sin resultados', items.length ? '' : 'empty');
+            var data = r.data || {};
+            var items = data.items || [];
+            var total = data.total != null ? data.total : items.length;
+            var pages = data.pages || 1;
+            var current = data.page || requested;
+            state.lupaPage = current;
+            var hint = items.length ? (total + ' resultados') : 'Sin resultados';
+            if (pages > 1) {
+                hint += '. Página ' + current + ' de ' + pages;
+            }
+            if (data.capped) {
+                hint += '. Hay más coincidencias; afina la búsqueda.';
+            }
+            setStatus($('#pqs-lupa-status'), hint, items.length ? '' : 'empty');
             renderLupaRows(items);
+            paintPager({
+                pager: $('#pqs-lupa-pager'),
+                numbers: $('#pqs-lupa-pages'),
+                info: $('#pqs-lupa-info'),
+                prev: $('#pqs-lupa-prev'),
+                next: $('#pqs-lupa-next'),
+                page: current,
+                pages: pages,
+                total: total,
+                onPage: doLupaSearch
+            });
         });
     }
 
@@ -1163,7 +1305,27 @@
                 closeLupa();
             }
         });
-        $('#pqs-lupa-search').on('click', doLupaSearch);
+        $('#pqs-lupa-search').on('click', function () { doLupaSearch(1); });
+        $('#pqs-lupa-prev').on('click', function () {
+            if (state.lupaPage > 1) {
+                doLupaSearch(state.lupaPage - 1);
+            }
+        });
+        $('#pqs-lupa-next').on('click', function () {
+            doLupaSearch(state.lupaPage + 1);
+        });
+        $('#pqs-browse-prev').on('click', function () {
+            if (state.browsePage > 1) {
+                loadBrowse(state.browsePage - 1);
+            }
+        });
+        $('#pqs-browse-next').on('click', function () {
+            loadBrowse(state.browsePage + 1);
+        });
+        $('#pqs-browse-tbody').on('click', '.pqs-browse-row', function () {
+            hideBrowse();
+            loadSummary($(this).data('id'));
+        });
         $('#pqs-lupa-input').on('keydown', function (e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -1204,6 +1366,9 @@
             state.summary = null;
             state.editing = false;
             $('#pqs-viewer').removeClass('pqs-editing');
+            if (!$('#pqs-results').is(':visible')) {
+                showBrowse();
+            }
         });
 
         $('#pqs-btn-edit').on('click', function () {
@@ -2010,6 +2175,7 @@
             }
             bindEvents();
             updatePricingUi();
+            loadBrowse(1);
             try {
                 var params = new URLSearchParams(window.location.search);
                 var quickId = parseInt(params.get('quick_id') || '', 10) || 0;

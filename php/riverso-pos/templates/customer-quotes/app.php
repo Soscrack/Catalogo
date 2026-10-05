@@ -16,9 +16,12 @@ $version = defined('RIVERSO_POS_VERSION') ? RIVERSO_POS_VERSION : '0.1.0';
 $js_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/customer-quotes.js';
 $css_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/css/customer-quotes.css';
 $css_portal_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/css/customer-quotes-portal.css';
+$css_customers_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/css/customers.css';
 $js_ver = (is_string($js_path) && is_file($js_path)) ? (string) filemtime($js_path) : $version;
 $css_ver = (is_string($css_path) && is_file($css_path)) ? (string) filemtime($css_path) : $version;
 $css_portal_ver = (is_string($css_portal_path) && is_file($css_portal_path)) ? (string) filemtime($css_portal_path) : $version;
+$css_customers_ver = (is_string($css_customers_path) && is_file($css_customers_path)) ? (string) filemtime($css_customers_path) : $version;
+$cq_comunas = (isset($riverso_cq['comunas']) && is_array($riverso_cq['comunas'])) ? $riverso_cq['comunas'] : [];
 
 if (!function_exists('riverso_pos_cq_json')) {
     function riverso_pos_cq_json($data) {
@@ -40,10 +43,12 @@ if (!function_exists('riverso_pos_cq_json')) {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Cotizaciones de venta</title>
     <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes.css?ver=<?php echo htmlspecialchars($css_ver, ENT_QUOTES, 'UTF-8'); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customers.css?ver=<?php echo htmlspecialchars($css_customers_ver, ENT_QUOTES, 'UTF-8'); ?>">
 </head>
 <body class="riverso-cq-body">
 <?php else: ?>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes.css?ver=<?php echo htmlspecialchars($css_ver, ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customers.css?ver=<?php echo htmlspecialchars($css_customers_ver, ENT_QUOTES, 'UTF-8'); ?>">
 <?php if ($surface === 'portal'): ?>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes-portal.css?ver=<?php echo htmlspecialchars($css_portal_ver, ENT_QUOTES, 'UTF-8'); ?>">
 <?php endif; ?>
@@ -241,10 +246,19 @@ if (!function_exists('riverso_pos_cq_json')) {
                         <span>Vendedor</span>
                         <input type="text" id="cq-seller" readonly tabindex="-1" placeholder="—">
                     </label>
-                    <label class="cq-field">
-                        <span>Cliente <small>(opcional)</small></span>
-                        <input type="text" id="cq-customer" maxlength="191" autocomplete="off" placeholder="Nombre del cliente">
-                    </label>
+                    <div class="cq-field cq-customer-field">
+                        <span>Cliente registrado <small>(opcional)</small></span>
+                        <div class="cq-customer-row">
+                            <input type="text" id="cq-customer" maxlength="191" autocomplete="off" placeholder="Nombre del cliente">
+                            <button type="button" class="cq-btn cq-btn-customer-action" id="cq-customer-search" title="Buscar cliente" aria-label="Buscar cliente">
+                                <span aria-hidden="true">🔍</span>
+                            </button>
+                            <button type="button" class="cq-btn cq-btn-customer-action" id="cq-customer-new" title="Crear cliente" aria-label="Crear cliente">
+                                <span aria-hidden="true">+</span>
+                            </button>
+                        </div>
+                        <button type="button" class="cq-link cq-customer-clear" id="cq-customer-clear" hidden>Quitar cliente</button>
+                    </div>
                     <label class="cq-field">
                         <span>Tipo</span>
                         <select id="cq-type">
@@ -337,6 +351,11 @@ if (!function_exists('riverso_pos_cq_json')) {
                             </div>
                             <p id="cq-modal-hint" class="cq-modal-hint" role="status"></p>
                             <ul id="cq-modal-results" class="cq-results cq-modal-results"></ul>
+                            <div class="cq-pager cq-modal-pager" id="cq-modal-pager" hidden>
+                                <button type="button" class="cq-btn" id="cq-modal-page-prev">Anterior</button>
+                                <span id="cq-modal-page-numbers" class="cq-page-numbers"></span>
+                                <button type="button" class="cq-btn" id="cq-modal-page-next">Siguiente</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -609,6 +628,85 @@ if (!function_exists('riverso_pos_cq_json')) {
                 </footer>
             </div>
         </div>
+
+        <div id="cq-customer-search-modal" class="cq-modal" hidden aria-hidden="true">
+            <div class="cq-modal-backdrop" data-cq-cust-search-close="1"></div>
+            <div class="cq-modal-dialog cq-customer-search-dialog" role="dialog" aria-modal="true" aria-labelledby="cq-cust-search-title">
+                <header class="cq-modal-head">
+                    <h3 id="cq-cust-search-title">Buscar cliente</h3>
+                    <button type="button" class="cq-modal-close" id="cq-cust-search-close" aria-label="Cerrar" data-cq-cust-search-close="1">×</button>
+                </header>
+                <div class="cq-modal-body">
+                    <label class="cq-field cq-field-wide">
+                        <span>Nombre Interno Entidad</span>
+                        <input type="text" id="cq-cust-search-nombre" autocomplete="off" placeholder="Nombre Interno Entidad">
+                    </label>
+                    <h4 class="cq-cust-section-title">Facturación</h4>
+                    <div class="cq-cust-search-grid">
+                        <label class="cq-field">
+                            <span>RUT</span>
+                            <input type="text" id="cq-cust-search-rut" autocomplete="off" placeholder="RUT">
+                        </label>
+                        <label class="cq-field">
+                            <span>Nombre o Razón Social</span>
+                            <input type="text" id="cq-cust-search-razon" autocomplete="off" placeholder="Nombre o Razón Social">
+                        </label>
+                    </div>
+                    <div class="cq-cust-search-actions">
+                        <button type="button" class="cq-btn cq-btn-customer-search" id="cq-cust-search-btn">Buscar</button>
+                    </div>
+                    <p id="cq-cust-search-hint" class="cq-modal-hint">Por favor seleccione parámetros para realizar la búsqueda</p>
+                    <div id="cq-cust-search-results-wrap" hidden>
+                        <h4 class="cq-cust-section-title">Búsqueda de entidades</h4>
+                        <label class="cq-cust-local-filter">
+                            <span>Buscar:</span>
+                            <input type="text" id="cq-cust-search-local" autocomplete="off">
+                        </label>
+                        <div class="cq-cust-table-wrap">
+                            <table class="cq-cust-table" id="cq-cust-search-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th>RUT</th>
+                                        <th>Cliente</th>
+                                        <th>Seleccionar</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cq-cust-search-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="cq-customer-new-modal" class="cq-modal" hidden aria-hidden="true">
+            <div class="cq-modal-backdrop" data-cq-cust-new-close="1"></div>
+            <div class="cq-modal-dialog cq-customer-new-dialog" role="dialog" aria-modal="true" aria-labelledby="cq-cust-new-title">
+                <header class="cq-modal-head">
+                    <h3 id="cq-cust-new-title">Crear cliente</h3>
+                    <button type="button" class="cq-modal-close" id="cq-cust-new-close" aria-label="Cerrar" data-cq-cust-new-close="1">×</button>
+                </header>
+                <div class="cq-modal-body cq-customer-new-body">
+                    <form id="cq-cust-new-form" class="riverso-cust" novalidate>
+                        <?php
+                        $comunas = $cq_comunas;
+                        $show_footer = false;
+                        $can_edit = true;
+                        $form_fields = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'templates/customers/form-fields.php';
+                        if (is_string($form_fields) && is_file($form_fields)) {
+                            include $form_fields;
+                        }
+                        ?>
+                    </form>
+                </div>
+                <footer class="cq-modal-foot">
+                    <button type="button" class="cq-btn" id="cq-cust-new-cancel" data-cq-cust-new-close="1">Cancelar</button>
+                    <button type="button" class="cq-btn cq-btn-primary" id="cq-cust-new-save">Guardar cliente</button>
+                </footer>
+            </div>
+        </div>
+
         <p id="cq-list-message" class="cq-message" role="status"></p>
     </div>
 </div>

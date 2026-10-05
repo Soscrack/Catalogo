@@ -100,6 +100,8 @@ class Riverso_Customer_Quote_Module {
         add_action('wp_ajax_riverso_cq_unit_product', array($this, 'ajax_unit_product'));
         add_action('wp_ajax_riverso_cq_tienda_local', array($this, 'ajax_tienda_local'));
         add_action('wp_ajax_riverso_cq_family_price', array($this, 'ajax_family_price'));
+        add_action('wp_ajax_riverso_cq_customers_search', array($this, 'ajax_customers_search'));
+        add_action('wp_ajax_riverso_cq_customer_save', array($this, 'ajax_customer_save'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_assets'));
     }
 
@@ -164,8 +166,23 @@ class Riverso_Customer_Quote_Module {
             'caps' => array(
                 'viewStock' => (bool) $can_view_stock,
                 'doInventory' => (bool) $can_inventory,
+                'editCustomers' => current_user_can('riverso_edit_customers')
+                    || current_user_can('riverso_create_quotes')
+                    || current_user_can('riverso_edit_quotes')
+                    || current_user_can('manage_options'),
             ),
             'warehouseUrl' => $warehouse_url,
+            'comunas' => (function () {
+                if (!class_exists('Riverso_Customer_Module')) {
+                    $path = RIVERSO_POS_PLUGIN_DIR . 'sales/customers/class-customer-module.php';
+                    if (file_exists($path)) {
+                        require_once $path;
+                    }
+                }
+                return class_exists('Riverso_Customer_Module')
+                    ? Riverso_Customer_Module::chile_comunas()
+                    : array();
+            })(),
             'actions' => array(
                 'list' => 'riverso_cq_list',
                 'get' => 'riverso_cq_get',
@@ -185,6 +202,8 @@ class Riverso_Customer_Quote_Module {
                 'tiendaLocal' => 'riverso_cq_tienda_local',
                 'familyPrice' => 'riverso_cq_family_price',
                 'pdf' => 'riverso_cq_pdf',
+                'customersSearch' => 'riverso_cq_customers_search',
+                'customerSave' => 'riverso_cq_customer_save',
             ),
             'defaultChannel' => 'local',
             'todayDate' => current_time('Y-m-d'),
@@ -387,6 +406,10 @@ class Riverso_Customer_Quote_Module {
         }
         $channel = $this->catalog->normalize_channel($this->post_string('channel'));
         $contains = $this->post_contains_words();
+        $page = isset($_POST['page']) ? (int) $_POST['page'] : 1;
+        if ($page < 1) {
+            $page = 1;
+        }
         if ($query === '' && $contains) {
             $query = $contains[0];
         }
@@ -397,22 +420,32 @@ class Riverso_Customer_Quote_Module {
                     'products' => array(),
                     'hint' => 'Escribe al menos 2 caracteres para buscar por descripción.',
                     'channel' => $channel,
+                    'total' => 0,
+                    'page' => 1,
+                    'per_page' => 30,
+                    'pages' => 1,
                 ));
                 return;
             }
         }
-        $limit = $contains ? 60 : 20;
-        $products = $this->catalog->search($query, $limit, $mode, $scope, $channel);
-        if ($contains) {
+        $limit = $mode === 'advanced' ? 30 : 20;
+        $products = $this->catalog->search($query, $limit, $mode, $scope, $channel, $page, $mode === 'advanced' ? $contains : array());
+        if ($mode !== 'advanced' && $contains) {
             $products = $this->catalog->filter_contains_words($products, $contains, $scope);
             $products = array_slice(array_values($products), 0, 20);
         }
+        $meta = is_array($this->catalog->search_meta) ? $this->catalog->search_meta : array();
         $this->ok(array(
             'products' => $products,
             'mode' => $mode,
             'scope' => $scope,
             'channel' => $channel,
             'contains' => $contains,
+            'total' => isset($meta['total']) ? (int) $meta['total'] : count($products),
+            'page' => isset($meta['page']) ? (int) $meta['page'] : 1,
+            'per_page' => isset($meta['per_page']) ? (int) $meta['per_page'] : $limit,
+            'pages' => isset($meta['pages']) ? (int) $meta['pages'] : 1,
+            'capped' => !empty($meta['capped']),
         ));
     }
 
@@ -690,17 +723,42 @@ class Riverso_Customer_Quote_Module {
             }
 
             $note = 'Facturado desde cotización ' . (isset($quote['quote_number']) ? $quote['quote_number'] : ('#' . $id));
+            // customer_id de la cotización es id de riverso_clientes, no de usuario WP.
+            $billing_name = isset($quote['customer_name']) ? (string) $quote['customer_name'] : '';
+            $billing_email = '';
+            $billing_phone = '';
+            $cliente_id = isset($quote['customer_id']) ? (int) $quote['customer_id'] : 0;
+            if ($cliente_id > 0) {
+                $crepo = $this->customer_repo();
+                if ($crepo) {
+                    $cust = $crepo->get($cliente_id);
+                    if ($cust) {
+                        if ($billing_name === '' && !empty($cust['nombre_fantasia'])) {
+                            $billing_name = (string) $cust['nombre_fantasia'];
+                        }
+                        if (!empty($cust['contacto_email'])) {
+                            $billing_email = (string) $cust['contacto_email'];
+                        }
+                        if (!empty($cust['contacto_telefono'])) {
+                            $billing_phone = (string) $cust['contacto_telefono'];
+                        } elseif (!empty($cust['facturacion_telefono'])) {
+                            $billing_phone = (string) $cust['facturacion_telefono'];
+                        }
+                    }
+                }
+            }
             $order = Riverso_POS_Module::create_pending_wc_order(array(
                 'items' => $order_items,
-                'customer_id' => isset($quote['customer_id']) ? (int) $quote['customer_id'] : 0,
-                'customer_name' => isset($quote['customer_name']) ? (string) $quote['customer_name'] : '',
-                'customer_email' => '',
-                'customer_phone' => '',
+                'customer_id' => 0,
+                'customer_name' => $billing_name,
+                'customer_email' => $billing_email,
+                'customer_phone' => $billing_phone,
                 'notes' => $note,
                 'created_via' => 'riverso_customer_quote',
                 'meta' => array(
                     '_riverso_customer_quote_id' => $id,
                     '_riverso_customer_quote_number' => isset($quote['quote_number']) ? (string) $quote['quote_number'] : '',
+                    '_riverso_cliente_id' => $cliente_id > 0 ? $cliente_id : '',
                 ),
             ));
 
@@ -1370,6 +1428,128 @@ class Riverso_Customer_Quote_Module {
         ));
     }
 
+    /**
+     * Proxy: buscar clientes comerciales (nonce cotizaciones).
+     */
+    public function ajax_customers_search() {
+        $this->authorize();
+        $repo = $this->customer_repo();
+        if (!$repo) {
+            $this->fail('Módulo de clientes no disponible.');
+        }
+
+        $nombre = $this->post_string('nombre');
+        $rut = $this->post_string('rut');
+        $razon_social = $this->post_string('razon_social');
+        if ($nombre === '' && $rut === '' && $razon_social === '') {
+            $this->fail('Por favor seleccione parámetros para realizar la búsqueda');
+        }
+
+        $result = $repo->list_customers(
+            array(
+                'status' => 'active',
+                'nombre' => $nombre,
+                'rut' => $rut,
+                'razon_social' => $razon_social,
+            ),
+            1,
+            20
+        );
+
+        $customers = array();
+        foreach ($result['items'] as $row) {
+            $customers[] = array(
+                'id' => (int) ($row['id'] ?? 0),
+                'nombre_fantasia' => (string) ($row['nombre_fantasia'] ?? ''),
+                'rut' => (string) ($row['rut'] ?? ''),
+                'razon_social' => (string) ($row['razon_social'] ?? ''),
+                'es_cliente' => true,
+                'contacto_email' => (string) ($row['contacto_email'] ?? ''),
+                'contacto_telefono' => (string) ($row['contacto_telefono'] ?? ''),
+                'facturacion_telefono' => (string) ($row['facturacion_telefono'] ?? ''),
+            );
+        }
+
+        $this->ok(array(
+            'customers' => $customers,
+            'total' => (int) ($result['total'] ?? 0),
+        ));
+    }
+
+    /**
+     * Proxy: crear cliente comercial desde cotización (nonce cotizaciones).
+     */
+    public function ajax_customer_save() {
+        $this->authorize();
+        $can_create = current_user_can('riverso_edit_customers')
+            || current_user_can('riverso_create_quotes')
+            || current_user_can('riverso_edit_quotes')
+            || current_user_can('manage_options');
+        if (!$can_create) {
+            $this->fail('Sin permisos para crear clientes', 403);
+        }
+
+        $this->ensure_customer_module_loaded();
+        if (!class_exists('Riverso_Customer_Module')) {
+            $this->fail('Módulo de clientes no disponible.');
+        }
+
+        $module = Riverso_Customer_Module::get_instance();
+        $input = $module->input_from_request();
+        // Desde cotización siempre se crea (no editar).
+        $input['id'] = 0;
+
+        $repo = $this->customer_repo();
+        if (!$repo) {
+            $this->fail('Módulo de clientes no disponible.');
+        }
+
+        $result = $repo->save($input);
+        if (empty($result['ok'])) {
+            $this->fail(isset($result['message']) ? (string) $result['message'] : 'No se pudo guardar');
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('customer_created', 'customer', (int) $result['id'], array(
+                'entity_name' => $input['nombre_fantasia'],
+                'source' => 'customer_quote',
+            ));
+        }
+
+        $this->ok(array(
+            'message' => $result['message'] ?? 'Cliente creado',
+            'id' => (int) $result['id'],
+            'customer' => $result['customer'] ?? null,
+        ));
+    }
+
+    /**
+     * @return Riverso_Customer_Repository|null
+     */
+    private function customer_repo() {
+        $this->ensure_customer_module_loaded();
+        if (!class_exists('Riverso_Customer_Repository')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'sales/customers/class-customer-repository.php';
+            if (file_exists($path)) {
+                require_once $path;
+            }
+        }
+        if (!class_exists('Riverso_Customer_Repository')) {
+            return null;
+        }
+        return new Riverso_Customer_Repository();
+    }
+
+    private function ensure_customer_module_loaded() {
+        if (class_exists('Riverso_Customer_Module')) {
+            return;
+        }
+        $path = RIVERSO_POS_PLUGIN_DIR . 'sales/customers/class-customer-module.php';
+        if (file_exists($path)) {
+            require_once $path;
+        }
+    }
+
     private function ensure_quick_view_loaded() {
         if (class_exists('Riverso_Product_Quick_View_Service')) {
             return;
@@ -1388,6 +1568,10 @@ class Riverso_Customer_Quote_Module {
         // Reusa map vía search_local interno: construir producto mínimo.
         $pb = isset($hit['id']) ? (int) $hit['id'] : 0;
         if ($pb <= 0) {
+            return null;
+        }
+        $sku = trim((string) (isset($hit['canonical_sku']) ? $hit['canonical_sku'] : ''));
+        if ($sku === '') {
             return null;
         }
         $rows = $this->catalog->search(

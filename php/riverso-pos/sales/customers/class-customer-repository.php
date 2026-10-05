@@ -55,6 +55,28 @@ class Riverso_Customer_Repository {
             $params = array_merge($params, [$like, $like, $like, $like, $like, $like]);
         }
 
+        $nombre = isset($filters['nombre']) ? trim((string) $filters['nombre']) : '';
+        if ($nombre !== '') {
+            $where[] = 'nombre_fantasia LIKE %s';
+            $params[] = '%' . $wpdb->esc_like($nombre) . '%';
+        }
+
+        $rut_filter = isset($filters['rut']) ? trim((string) $filters['rut']) : '';
+        if ($rut_filter !== '') {
+            $rut_digits = preg_replace('/[^0-9kK]/', '', $rut_filter);
+            $rut_digits = is_string($rut_digits) ? strtoupper($rut_digits) : '';
+            if ($rut_digits !== '') {
+                $where[] = "REPLACE(REPLACE(UPPER(IFNULL(rut, '')), '.', ''), '-', '') LIKE %s";
+                $params[] = '%' . $wpdb->esc_like($rut_digits) . '%';
+            }
+        }
+
+        $razon_social = isset($filters['razon_social']) ? trim((string) $filters['razon_social']) : '';
+        if ($razon_social !== '') {
+            $where[] = 'razon_social LIKE %s';
+            $params[] = '%' . $wpdb->esc_like($razon_social) . '%';
+        }
+
         $where_sql = implode(' AND ', $where);
 
         $count_sql = "SELECT COUNT(*) FROM {$this->table} WHERE {$where_sql}";

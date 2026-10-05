@@ -132,7 +132,7 @@ class Riverso_Product_Module {
         $completeness = sanitize_text_field($args['completeness'] ?? 'todos');
         $catalog_id = absint($args['catalog_id'] ?? 0);
         $offset = intval($args['offset'] ?? 0);
-        $limit = min(200, max(1, intval($args['limit'] ?? 20)));
+        $limit = min(200, max(1, intval($args['limit'] ?? 30)));
         $has_search = ($search !== '');
         $woo_match = ['all' => [], 'exact' => []];
         $palabras = is_array($args['palabras'] ?? null) ? $args['palabras'] : [];
@@ -226,7 +226,9 @@ class Riverso_Product_Module {
             $having = $this->get_completeness_having_clause($completeness);
         }
 
-        $order_sql = 'ORDER BY pb.updated_at DESC, pb.id DESC';
+        // Con SKU local primero; dentro de cada grupo, lo más reciente.
+        $sku_rank = "CASE WHEN pb.canonical_sku IS NOT NULL AND TRIM(pb.canonical_sku) <> '' THEN 0 ELSE 1 END";
+        $order_sql = "ORDER BY {$sku_rank} ASC, pb.updated_at DESC, pb.id DESC";
         if ($has_search) {
             $woo_exact_in = $this->sql_int_list($woo_match['exact']);
             $woo_exact_sql = $woo_exact_in !== ''
@@ -234,6 +236,7 @@ class Riverso_Product_Module {
                 : '';
             $order_sql = $wpdb->prepare(
                 "ORDER BY
+                    {$sku_rank} ASC,
                     CASE
                         WHEN pp.codigo_proveedor = %s THEN 0
                         {$woo_exact_sql}
@@ -1916,7 +1919,7 @@ class Riverso_Product_Module {
             'completeness' => sanitize_text_field($_POST['completeness'] ?? 'todos'),
             'catalog_id' => absint($_POST['catalog_id'] ?? 0),
             'offset' => intval($_POST['offset'] ?? 0),
-            'limit' => intval($_POST['limit'] ?? 50),
+            'limit' => intval($_POST['limit'] ?? 30),
             'palabras' => $palabras,
         ]);
 

@@ -982,7 +982,9 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                             <?php echo esc_html($item['label']); ?>
                         </div>
                         <div class="nav-block-items">
-                            <?php foreach ($children as $child):
+                            <?php
+                            $query_vista = isset($_GET['vista']) ? sanitize_key((string) $_GET['vista']) : '';
+                            foreach ($children as $child):
                                 $child_slug = $child['portal_slug'] ?? $slug;
                                 $child_icon = $child['icon'] ?? 'admin-generic';
                                 $child_query = isset($child['portal_query']) ? (string) $child['portal_query'] : '';
@@ -1005,10 +1007,14 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                                 if ($current_page === $child_slug) {
                                     if ($child_query === 'nueva=1') {
                                         $child_active = $query_nueva;
+                                    } elseif ($child_query === 'vista=buscar') {
+                                        $child_active = ($query_vista === 'buscar');
                                     } elseif ($child_query === '') {
-                                        // En facturación no hay query "nueva"; marcar activo por slug.
+                                        // En facturación: Emitir activo solo sin vista; cotizaciones sin "nueva".
                                         if ($child_slug === 'customer-quotes') {
                                             $child_active = !$query_nueva;
+                                        } elseif ($child_slug === 'facturacion') {
+                                            $child_active = ($query_vista === '');
                                         } else {
                                             $child_active = true;
                                         }

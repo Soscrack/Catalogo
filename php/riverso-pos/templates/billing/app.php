@@ -479,8 +479,11 @@ if (!function_exists('riverso_pos_billing_json')) {
                                         <tr>
                                             <th>Tipo</th>
                                             <th>Fecha</th>
-                                            <th>Método</th>
+                                            <th>Tipo</th>
                                             <th>Caja</th>
+                                            <th>Doc Num</th>
+                                            <th>Doc Tit</th>
+                                            <th>Banco Doc</th>
                                             <th>Detalles</th>
                                             <th>Cobro/Pagos</th>
                                             <th>Acciones</th>
@@ -512,7 +515,7 @@ if (!function_exists('riverso_pos_billing_json')) {
                     <button type="button" class="bill-btn bill-btn-secondary bill-back-step-1">Volver</button>
                     <span class="bill-step-label">Paso 2 de 2</span>
                     <div class="bill-step-actions bill-boleta-actions">
-                        <button type="button" class="bill-btn bill-btn-primary bill-btn-lg" id="bill-boleta-emit" disabled>Emitir documento [WIP]</button>
+                        <button type="button" class="bill-btn bill-btn-primary bill-btn-lg" id="bill-boleta-emit">Emitir documento</button>
                         <div class="bill-preview-wrap">
                             <div class="bill-preview-menu" id="bill-preview-menu-boleta" hidden role="menu">
                                 <button type="button" class="bill-preview-item" role="menuitem" data-preview="pdf">Previsualizar: PDF oficial</button>
@@ -537,6 +540,36 @@ if (!function_exists('riverso_pos_billing_json')) {
                 <h2 id="bill-done-title">Documento emitido</h2>
                 <p id="bill-done-msg"></p>
                 <p id="bill-done-folio" class="bill-done-folio"></p>
+                <div id="bill-done-pagos" class="bill-done-pagos" hidden>
+                    <h3>$ Pagos</h3>
+                    <div class="bill-table-wrap">
+                        <table class="bill-table">
+                            <thead>
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th>Fecha</th>
+                                    <th>Tipo</th>
+                                    <th>Caja</th>
+                                    <th>Doc Num</th>
+                                    <th>Doc Tit</th>
+                                    <th>Banco Doc</th>
+                                    <th>Detalles</th>
+                                    <th>Cobro/Pagos</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bill-done-pagos-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="bill-pagos-totals">
+                        <span>Total cobros: <strong id="bill-done-pagos-cobros">$0</strong></span>
+                        <span>Total Pagos: <strong id="bill-done-pagos-pagos">$0</strong></span>
+                        <span>Monto impago: <strong id="bill-done-pagos-impago">$0</strong></span>
+                    </div>
+                    <div class="bill-step-actions">
+                        <button type="button" class="bill-btn bill-btn-primary" id="bill-done-pago-open">Registrar pago</button>
+                    </div>
+                </div>
                 <div class="bill-step-actions">
                     <a class="bill-btn bill-btn-secondary" id="bill-done-quotes" href="<?php echo esc_url($riverso_billing['quotesUrl'] ?? '#'); ?>">Ir a cotizaciones</a>
                     <button type="button" class="bill-btn bill-btn-primary" id="bill-done-new">Emitir otro</button>
@@ -584,12 +617,7 @@ if (!function_exists('riverso_pos_billing_json')) {
                     </label>
                     <label class="bill-field">
                         <span>Método de pago (*)</span>
-                        <select id="bill-pago-method">
-                            <option value="Efectivo">Efectivo</option>
-                            <option value="Mercado Pago">Mercado Pago</option>
-                            <option value="Transferencia">Transferencia</option>
-                            <option value="Tarjeta">Tarjeta</option>
-                        </select>
+                        <select id="bill-pago-method"></select>
                     </label>
                     <label class="bill-field">
                         <span>Monto pagado (*)</span>
@@ -598,6 +626,20 @@ if (!function_exists('riverso_pos_billing_json')) {
                     <label class="bill-field">
                         <span>Vuelto</span>
                         <input type="text" id="bill-pago-vuelto" readonly value="0">
+                    </label>
+                </div>
+                <div id="bill-pago-cheque" class="bill-grid bill-grid-3" hidden>
+                    <label class="bill-field">
+                        <span>Doc Num (*)</span>
+                        <input type="text" id="bill-pago-cheque-num">
+                    </label>
+                    <label class="bill-field">
+                        <span>Doc Tit (*)</span>
+                        <input type="text" id="bill-pago-cheque-tit">
+                    </label>
+                    <label class="bill-field">
+                        <span>Banco Doc (*)</span>
+                        <input type="text" id="bill-pago-cheque-banco">
                     </label>
                 </div>
                 <label class="bill-field">
@@ -609,6 +651,85 @@ if (!function_exists('riverso_pos_billing_json')) {
                 <button type="button" class="bill-btn bill-btn-danger" id="bill-pago-cancel">Anular</button>
                 <button type="button" class="bill-btn bill-btn-primary" id="bill-pago-save">Registrar pago</button>
             </div>
+        </div>
+    </div>
+
+</div>
+
+<div id="bill-emit-modal" class="riverso-bill bill-modal-overlay bill-emit-overlay" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="bill-emit-title">
+    <div class="bill-modal bill-modal-emit" role="document">
+        <div class="bill-modal-header">
+            <h3 id="bill-emit-title">Emitir documento</h3>
+            <button type="button" class="bill-modal-x" id="bill-emit-close" aria-label="Cerrar">×</button>
+        </div>
+        <div class="bill-modal-body bill-emit-split">
+            <div class="bill-emit-col">
+                <h4>Emitir y enviar al S.I.I.</h4>
+                <label class="bill-field">
+                    <span>Certificado digital</span>
+                    <select id="bill-emit-cert" disabled>
+                        <option value="facto">Certificado configurado en FACTO</option>
+                    </select>
+                </label>
+                <label class="bill-check">
+                    <input type="checkbox" id="bill-emit-email">
+                    <span>Enviar por correo</span>
+                </label>
+                <label class="bill-field">
+                    <span>Destinatario</span>
+                    <input type="email" id="bill-emit-email-to" placeholder="cliente@correo.cl">
+                </label>
+                <label class="bill-field">
+                    <span>Destinatarios extra</span>
+                    <input type="text" id="bill-emit-email-extra" placeholder="separados por coma">
+                </label>
+                <label class="bill-field">
+                    <span>Adjunto</span>
+                    <input type="text" value="PDF y XML" readonly disabled>
+                </label>
+                <label class="bill-field">
+                    <span>Casilla de intercambio del cliente [WIP]</span>
+                    <input type="text" disabled placeholder="No disponible">
+                </label>
+                <label class="bill-check bill-check-wip">
+                    <input type="checkbox" disabled>
+                    <span>Enlace de pago [WIP]</span>
+                </label>
+                <label class="bill-check">
+                    <input type="checkbox" id="bill-emit-print">
+                    <span>Impresión rápida</span>
+                </label>
+            </div>
+            <div class="bill-emit-col">
+                <h4>PAGO DE DOCUMENTO</h4>
+                <label class="bill-check">
+                    <input type="checkbox" id="bill-emit-mark-paid">
+                    <span>Marcar como pagado inmediatamente</span>
+                </label>
+                <div id="bill-emit-pay-fields" class="bill-emit-pay-fields">
+                    <label class="bill-field">
+                        <span>Caja (*)</span>
+                        <select id="bill-emit-caja"></select>
+                    </label>
+                    <label class="bill-field">
+                        <span>Método de pago (*)</span>
+                        <select id="bill-emit-method"></select>
+                    </label>
+                    <div id="bill-emit-cheque" class="bill-emit-cheque" hidden>
+                        <label class="bill-field"><span>Doc Num (*)</span><input type="text" id="bill-emit-cheque-num"></label>
+                        <label class="bill-field"><span>Doc Tit (*)</span><input type="text" id="bill-emit-cheque-tit"></label>
+                        <label class="bill-field"><span>Banco Doc (*)</span><input type="text" id="bill-emit-cheque-banco"></label>
+                    </div>
+                    <label class="bill-field">
+                        <span>Comentarios</span>
+                        <textarea id="bill-emit-notes" rows="3"></textarea>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="bill-modal-footer bill-emit-footer">
+            <button type="button" class="bill-btn bill-btn-success bill-emit-btn-full" id="bill-emit-confirm">Emitir y enviar al S.I.I.</button>
+            <button type="button" class="bill-btn bill-btn-danger bill-emit-btn-full" id="bill-emit-close-local">Cerrar y NO enviar al S.I.I.</button>
         </div>
     </div>
 </div>

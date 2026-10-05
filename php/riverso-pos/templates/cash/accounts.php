@@ -72,6 +72,27 @@ if (!function_exists('riverso_pos_cash_json')) {
                 </table>
             </div>
             <div class="cash-pager" id="cash-acc-pager"></div>
+
+            <div class="cash-card" style="margin-top:24px">
+                <h2>Métodos de pago</h2>
+                <p class="cash-hint">IDs de FACTO usados al sincronizar cobros. Los métodos internos pueden ocultarse del modal.</p>
+                <div class="cash-table-wrap">
+                    <table class="cash-table">
+                        <thead>
+                            <tr>
+                                <th>Método</th>
+                                <th>ID FACTO</th>
+                                <th>Visible</th>
+                                <th>Cheque</th>
+                                <th>Vuelto</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cash-methods-body">
+                            <tr><td colspan="5" class="cash-empty">Cargando…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </section>
 
         <!-- Editar -->
@@ -83,6 +104,10 @@ if (!function_exists('riverso_pos_cash_json')) {
                     <label class="cash-field">
                         <span>Nombre</span>
                         <input type="text" id="cash-edit-nombre" maxlength="128">
+                    </label>
+                    <label class="cash-field">
+                        <span>ID caja FACTO</span>
+                        <input type="text" id="cash-edit-facto" maxlength="16" placeholder="Ej. 1">
                     </label>
                     <label class="cash-field">
                         <span>Tipo de caja</span>

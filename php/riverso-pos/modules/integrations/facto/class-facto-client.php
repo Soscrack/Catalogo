@@ -112,6 +112,11 @@ class Riverso_Facto_Client {
 
         $response = wp_remote_request($url, $args);
         if (is_wp_error($response)) {
+            $code = $response->get_error_code();
+            if (in_array($code, ['http_request_failed', 'http_request_timeout'], true)
+                || strpos($response->get_error_message(), 'timed out') !== false) {
+                return new WP_Error('facto_timeout', $response->get_error_message(), $response->get_error_data());
+            }
             return $response;
         }
 
@@ -222,6 +227,22 @@ class Riverso_Facto_Client {
         unset($payload['_riverso_emit_confirmed']);
 
         return $this->request('POST', 'documents', $payload);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array|WP_Error
+     */
+    public function create_payment(array $payload) {
+        return $this->request('POST', 'payments', $payload);
+    }
+
+    /**
+     * @param int|string $payment_id
+     * @return array|WP_Error
+     */
+    public function get_payment($payment_id) {
+        return $this->request('GET', 'payments/' . rawurlencode((string) $payment_id));
     }
 
     /**

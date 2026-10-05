@@ -62,6 +62,8 @@ class Riverso_Task_Module {
         'autorizar_publicacion' => 'Autorizar publicación',
         'revisar_calidad_catalogo' => 'Revisar salud del catálogo',
         'certificar_arqueo' => 'Certificar arqueo de caja',
+        'sincronizar_pago_facto' => 'Sincronizar pago con FACTO',
+        'eliminar_pago_facto' => 'Eliminar pago en FACTO',
     ];
 
     /**
@@ -85,6 +87,8 @@ class Riverso_Task_Module {
         'confirmar_estructura_atributos' => 'administracion',
         'revisar_calidad_catalogo' => 'administracion',
         'certificar_arqueo' => 'administracion',
+        'sincronizar_pago_facto' => 'administracion',
+        'eliminar_pago_facto' => 'administracion',
         'codigo_faltante' => 'productos',
         'barcode_faltante' => 'productos',
         'confirmar_barcode_legacy' => 'productos',

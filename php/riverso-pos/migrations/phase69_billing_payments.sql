@@ -1,0 +1,2 @@
+-- Referencia fase 69: métodos de pago FACTO + columnas de sync.
+-- El schema real lo aplica Riverso_POS_Activator::create_phase69_billing_payments.

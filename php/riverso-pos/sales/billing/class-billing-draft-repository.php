@@ -67,7 +67,7 @@ class Riverso_Billing_Draft_Repository {
 
         $header = [
             'document_type_id' => 37,
-            'status' => in_array(($data['status'] ?? 'draft'), ['draft', 'emitted'], true)
+            'status' => in_array(($data['status'] ?? 'draft'), ['draft', 'emitted', 'closed_local'], true)
                 ? (string) $data['status']
                 : 'draft',
             'issue_date' => $this->sanitize_date($data['issue_date'] ?? ''),
@@ -84,12 +84,17 @@ class Riverso_Billing_Draft_Repository {
         ];
 
         if ($id > 0) {
-            $existing = $wpdb->get_var($wpdb->prepare(
-                "SELECT id FROM {$this->drafts_table()} WHERE id = %d",
+            $existing = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, status FROM {$this->drafts_table()} WHERE id = %d",
                 $id
-            ));
+            ), ARRAY_A);
             if (!$existing) {
                 return ['ok' => false, 'message' => 'Borrador no encontrado.'];
+            }
+            $current_status = (string) ($existing['status'] ?? 'draft');
+            if (in_array($current_status, ['emitted', 'closed_local'], true)
+                && ($header['status'] === 'draft')) {
+                $header['status'] = $current_status;
             }
             $ok = $wpdb->update($this->drafts_table(), $header, ['id' => $id]);
             if ($ok === false) {
@@ -219,26 +224,78 @@ class Riverso_Billing_Draft_Repository {
      * @return array{ok:bool,id?:int,message?:string}
      */
     public function add_payment($draft_id, array $payment) {
+        return $this->add_document_payment(array_merge($payment, [
+            'draft_id' => absint($draft_id),
+        ]));
+    }
+
+    /**
+     * @param array<string, mixed> $payment
+     * @return array{ok:bool,id?:int,message?:string}
+     */
+    public function add_document_payment(array $payment) {
         global $wpdb;
-        $draft = $this->get($draft_id);
-        if (!$draft) {
+        $draft_id = !empty($payment['draft_id']) ? absint($payment['draft_id']) : 0;
+        $dte_id = !empty($payment['dte_id']) ? absint($payment['dte_id']) : 0;
+        $draft = $draft_id > 0 ? $this->get($draft_id) : null;
+        if ($draft_id > 0 && !$draft) {
             return ['ok' => false, 'message' => 'Documento no encontrado.'];
         }
-        if (($draft['status'] ?? '') !== 'emitted') {
+        if ($draft && !in_array(($draft['status'] ?? ''), ['emitted', 'closed_local'], true)) {
             return ['ok' => false, 'message' => 'Cierra el documento antes de ingresar pagos.'];
         }
+        if ($dte_id <= 0 && $draft) {
+            $dte_id = (int) ($draft['dte_id'] ?? 0);
+        }
+        if ($draft_id <= 0 && $dte_id <= 0) {
+            return ['ok' => false, 'message' => 'Indica el documento a pagar.'];
+        }
+
+        $amount_paid = round((float) ($payment['amount_paid'] ?? 0), 2);
+        $change_amount = round((float) ($payment['change_amount'] ?? 0), 2);
+        $applied = isset($payment['amount_applied'])
+            ? round((float) $payment['amount_applied'], 2)
+            : round(max(0, $amount_paid - $change_amount), 2);
+        if ($applied <= 0) {
+            return ['ok' => false, 'message' => 'El monto aplicado debe ser mayor a 0.'];
+        }
+
+        $total = 0.0;
+        if ($draft) {
+            $total = (float) ($draft['total_amount'] ?? 0);
+        } elseif ($dte_id > 0 && class_exists('Riverso_Dte_Issued_Repository')) {
+            $issued = new Riverso_Dte_Issued_Repository();
+            $dte = $issued->get($dte_id);
+            $total = $dte ? (float) ($dte['total_amount'] ?? 0) : 0.0;
+        }
+        $paid_so_far = $this->sum_applied($draft_id, $dte_id);
+        if (round($paid_so_far + $applied, 2) > round($total + 0.009, 2)) {
+            return ['ok' => false, 'message' => 'El pago supera el saldo pendiente.'];
+        }
+
         $caja_id = !empty($payment['caja_id']) ? absint($payment['caja_id']) : null;
+        $sync = (string) ($payment['facto_sync_status'] ?? 'pending');
+        if (!in_array($sync, ['off', 'pending', 'sending', 'ok', 'error', 'unknown'], true)) {
+            $sync = 'pending';
+        }
         $ok = $wpdb->insert($this->payments_table(), [
-            'draft_id' => absint($draft_id),
+            'draft_id' => $draft_id > 0 ? $draft_id : null,
+            'dte_id' => $dte_id > 0 ? $dte_id : null,
             'pay_date' => $this->sanitize_date($payment['pay_date'] ?? current_time('Y-m-d')),
             'caja' => substr((string) ($payment['caja'] ?? 'Efectivo'), 0, 64),
             'caja_id' => $caja_id,
             'method' => substr((string) ($payment['method'] ?? 'Efectivo'), 0, 64),
+            'method_id' => !empty($payment['method_id']) ? absint($payment['method_id']) : null,
             'amount_due' => round((float) ($payment['amount_due'] ?? 0), 2),
-            'amount_paid' => round((float) ($payment['amount_paid'] ?? 0), 2),
-            'change_amount' => round((float) ($payment['change_amount'] ?? 0), 2),
+            'amount_paid' => $amount_paid,
+            'change_amount' => $change_amount,
+            'amount_applied' => $applied,
             'notes' => substr((string) ($payment['notes'] ?? ''), 0, 500),
             'charge_code' => substr((string) ($payment['charge_code'] ?? ''), 0, 32),
+            'cheque_numero' => substr((string) ($payment['cheque_numero'] ?? ''), 0, 64),
+            'cheque_titular' => substr((string) ($payment['cheque_titular'] ?? ''), 0, 128),
+            'cheque_banco' => substr((string) ($payment['cheque_banco'] ?? ''), 0, 128),
+            'facto_sync_status' => $sync,
             'created_by' => get_current_user_id() ?: null,
             'created_at' => current_time('mysql'),
         ]);
@@ -246,6 +303,161 @@ class Riverso_Billing_Draft_Repository {
             return ['ok' => false, 'message' => 'No se pudo registrar el pago.'];
         }
         return ['ok' => true, 'id' => (int) $wpdb->insert_id];
+    }
+
+    /**
+     * @param int $draft_id
+     * @param int $dte_id
+     * @return float
+     */
+    public function sum_applied($draft_id = 0, $dte_id = 0) {
+        $sum = 0.0;
+        foreach ($this->list_document_payments($draft_id, $dte_id) as $p) {
+            $applied = (float) ($p['amount_applied'] ?? 0);
+            if ($applied <= 0) {
+                $applied = max(0, (float) ($p['amount_paid'] ?? 0) - (float) ($p['change_amount'] ?? 0));
+            }
+            $sum += $applied;
+        }
+        return round($sum, 2);
+    }
+
+    /**
+     * @param int $draft_id
+     * @param int $dte_id
+     */
+    public function mark_emitted($draft_id, $dte_id) {
+        global $wpdb;
+        $draft_id = absint($draft_id);
+        $dte_id = absint($dte_id);
+        if ($draft_id <= 0) {
+            return;
+        }
+        $wpdb->update($this->drafts_table(), [
+            'status' => 'emitted',
+            'dte_id' => $dte_id > 0 ? $dte_id : null,
+            'updated_at' => current_time('mysql'),
+        ], ['id' => $draft_id]);
+        if ($dte_id > 0) {
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$this->payments_table()}
+                 SET dte_id = %d,
+                     facto_sync_status = CASE
+                        WHEN facto_sync_status IN ('off','') THEN 'pending'
+                        ELSE facto_sync_status
+                     END
+                 WHERE draft_id = %d AND (dte_id IS NULL OR dte_id = 0)",
+                $dte_id,
+                $draft_id
+            ));
+        }
+    }
+
+    /**
+     * @param int $draft_id
+     */
+    public function mark_closed_local($draft_id) {
+        global $wpdb;
+        $draft_id = absint($draft_id);
+        if ($draft_id <= 0) {
+            return;
+        }
+        $wpdb->update($this->drafts_table(), [
+            'status' => 'closed_local',
+            'updated_at' => current_time('mysql'),
+        ], ['id' => $draft_id]);
+    }
+
+    /**
+     * @param int $id
+     * @return array<string, mixed>|null
+     */
+    public function get_payment($id) {
+        global $wpdb;
+        $id = absint($id);
+        if ($id <= 0) {
+            return null;
+        }
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$this->payments_table()} WHERE id = %d LIMIT 1",
+            $id
+        ), ARRAY_A);
+        return $row ? $this->present_payment($row) : null;
+    }
+
+    /**
+     * @param int $id
+     * @return array{ok:bool,payment?:array,message?:string}
+     */
+    public function delete_payment($id) {
+        global $wpdb;
+        $pay = $this->get_payment($id);
+        if (!$pay) {
+            return ['ok' => false, 'message' => 'Pago no encontrado.'];
+        }
+        $ok = $wpdb->delete($this->payments_table(), ['id' => absint($id)]);
+        if (!$ok) {
+            return ['ok' => false, 'message' => 'No se pudo borrar el pago.'];
+        }
+        return ['ok' => true, 'payment' => $pay];
+    }
+
+    /**
+     * @param int $draft_id
+     * @param int $dte_id
+     * @return array<int, array<string, mixed>>
+     */
+    public function list_document_payments($draft_id = 0, $dte_id = 0) {
+        global $wpdb;
+        $draft_id = absint($draft_id);
+        $dte_id = absint($dte_id);
+        if ($draft_id <= 0 && $dte_id <= 0) {
+            return [];
+        }
+        if ($draft_id > 0 && $dte_id > 0) {
+            $rows = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$this->payments_table()}
+                 WHERE draft_id = %d OR dte_id = %d
+                 ORDER BY id ASC",
+                $draft_id,
+                $dte_id
+            ), ARRAY_A) ?: [];
+        } elseif ($draft_id > 0) {
+            $rows = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$this->payments_table()} WHERE draft_id = %d ORDER BY id ASC",
+                $draft_id
+            ), ARRAY_A) ?: [];
+        } else {
+            $rows = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$this->payments_table()} WHERE dte_id = %d ORDER BY id ASC",
+                $dte_id
+            ), ARRAY_A) ?: [];
+        }
+        $seen = [];
+        $out = [];
+        foreach ($rows as $r) {
+            $id = (int) $r['id'];
+            if (isset($seen[$id])) {
+                continue;
+            }
+            $seen[$id] = true;
+            $out[] = $this->present_payment($r);
+        }
+        return $out;
+    }
+
+    /**
+     * @param int $draft_id
+     * @return array<int, array<string, mixed>>
+     */
+    public function list_pending_sync($draft_id) {
+        $out = [];
+        foreach ($this->list_payments($draft_id) as $p) {
+            if (in_array(($p['facto_sync_status'] ?? ''), ['pending', 'error'], true) && empty($p['facto_payment_id'])) {
+                $out[] = $p;
+            }
+        }
+        return $out;
     }
 
     /**
@@ -263,6 +475,7 @@ class Riverso_Billing_Draft_Repository {
             'payment_conditions' => (string) ($row['payment_conditions'] ?? '0'),
             'sale_state' => (string) ($row['sale_state'] ?? 'VENTA: Concretada'),
             'quote_id' => isset($row['quote_id']) ? (int) $row['quote_id'] : null,
+            'dte_id' => !empty($row['dte_id']) ? (int) $row['dte_id'] : null,
             'net_amount' => round((float) ($row['net_amount'] ?? 0), 2),
             'exempt_amount' => round((float) ($row['exempt_amount'] ?? 0), 2),
             'tax_amount' => round((float) ($row['tax_amount'] ?? 0), 2),
@@ -272,7 +485,7 @@ class Riverso_Billing_Draft_Repository {
             'updated_at' => (string) ($row['updated_at'] ?? ''),
             'lines' => $this->list_lines($id),
             'refs' => $this->list_refs($id),
-            'payments' => $this->list_payments($id),
+            'payments' => $this->list_document_payments($id, !empty($row['dte_id']) ? (int) $row['dte_id'] : 0),
         ];
     }
 
@@ -347,27 +560,41 @@ class Riverso_Billing_Draft_Repository {
      * @return array<int, array<string, mixed>>
      */
     private function list_payments($draft_id) {
-        global $wpdb;
-        $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$this->payments_table()} WHERE draft_id = %d ORDER BY id ASC",
-            $draft_id
-        ), ARRAY_A) ?: [];
-        $out = [];
-        foreach ($rows as $r) {
-            $out[] = [
-                'id' => (int) $r['id'],
-                'pay_date' => (string) ($r['pay_date'] ?? ''),
-                'caja' => (string) ($r['caja'] ?? ''),
-                'caja_id' => !empty($r['caja_id']) ? (int) $r['caja_id'] : null,
-                'method' => (string) ($r['method'] ?? ''),
-                'amount_due' => (float) ($r['amount_due'] ?? 0),
-                'amount_paid' => (float) ($r['amount_paid'] ?? 0),
-                'change_amount' => (float) ($r['change_amount'] ?? 0),
-                'notes' => (string) ($r['notes'] ?? ''),
-                'charge_code' => (string) ($r['charge_code'] ?? ''),
-            ];
+        return $this->list_document_payments($draft_id, 0);
+    }
+
+    /**
+     * @param array<string, mixed> $r
+     * @return array<string, mixed>
+     */
+    private function present_payment(array $r) {
+        $applied = (float) ($r['amount_applied'] ?? 0);
+        if ($applied <= 0) {
+            $applied = max(0, (float) ($r['amount_paid'] ?? 0) - (float) ($r['change_amount'] ?? 0));
         }
-        return $out;
+        return [
+            'id' => (int) $r['id'],
+            'draft_id' => !empty($r['draft_id']) ? (int) $r['draft_id'] : null,
+            'dte_id' => !empty($r['dte_id']) ? (int) $r['dte_id'] : null,
+            'pay_date' => (string) ($r['pay_date'] ?? ''),
+            'caja' => (string) ($r['caja'] ?? ''),
+            'caja_id' => !empty($r['caja_id']) ? (int) $r['caja_id'] : null,
+            'method' => (string) ($r['method'] ?? ''),
+            'method_id' => !empty($r['method_id']) ? (int) $r['method_id'] : null,
+            'amount_due' => (float) ($r['amount_due'] ?? 0),
+            'amount_paid' => (float) ($r['amount_paid'] ?? 0),
+            'change_amount' => (float) ($r['change_amount'] ?? 0),
+            'amount_applied' => $applied,
+            'notes' => (string) ($r['notes'] ?? ''),
+            'charge_code' => (string) ($r['charge_code'] ?? ''),
+            'cheque_numero' => (string) ($r['cheque_numero'] ?? ''),
+            'cheque_titular' => (string) ($r['cheque_titular'] ?? ''),
+            'cheque_banco' => (string) ($r['cheque_banco'] ?? ''),
+            'facto_payment_id' => (string) ($r['facto_payment_id'] ?? ''),
+            'facto_sync_status' => (string) ($r['facto_sync_status'] ?? 'off'),
+            'facto_sync_error' => (string) ($r['facto_sync_error'] ?? ''),
+            'facto_synced_at' => (string) ($r['facto_synced_at'] ?? ''),
+        ];
     }
 
     /**

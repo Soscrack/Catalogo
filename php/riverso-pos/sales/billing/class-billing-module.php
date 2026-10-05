@@ -39,6 +39,9 @@ class Riverso_Billing_Module {
             'class-receiver-design-repository.php',
             'class-sii-stc-client.php',
             'class-billing-draft-repository.php',
+            'class-payment-method-repository.php',
+            'class-billing-payment-sync.php',
+            'class-billing-document-search.php',
         ] as $file) {
             $path = $dir . $file;
             if (file_exists($path)) {
@@ -65,6 +68,9 @@ class Riverso_Billing_Module {
             }
             if (method_exists('Riverso_POS_Activator', 'ensure_billing_drafts_schema')) {
                 Riverso_POS_Activator::ensure_billing_drafts_schema();
+            }
+            if (method_exists('Riverso_POS_Activator', 'ensure_billing_payments_schema')) {
+                Riverso_POS_Activator::ensure_billing_payments_schema();
             }
         }
     }
@@ -112,6 +118,13 @@ class Riverso_Billing_Module {
         add_action('wp_ajax_riverso_billing_line_stock', [$this, 'ajax_line_stock']);
         add_action('wp_ajax_riverso_billing_search_quotes', [$this, 'ajax_search_quotes']);
         add_action('wp_ajax_riverso_billing_cash_boxes', [$this, 'ajax_cash_boxes']);
+        add_action('wp_ajax_riverso_billing_close_local', [$this, 'ajax_close_local']);
+        add_action('wp_ajax_riverso_billing_payment_retry', [$this, 'ajax_payment_retry']);
+        add_action('wp_ajax_riverso_billing_payment_delete', [$this, 'ajax_payment_delete']);
+        add_action('wp_ajax_riverso_billing_payments_list', [$this, 'ajax_payments_list']);
+        add_action('wp_ajax_riverso_billing_payment_methods', [$this, 'ajax_payment_methods']);
+        add_action('wp_ajax_riverso_billing_search_documents', [$this, 'ajax_search_documents']);
+        add_action('wp_ajax_riverso_billing_document_pdf', [$this, 'ajax_document_pdf']);
     }
 
     /**
@@ -122,6 +135,7 @@ class Riverso_Billing_Module {
             ? riverso_facto_issuer_profile()
             : ['ok' => false, 'missing' => ['Config FACTO'], 'issuer' => []];
         $quote_id = isset($_GET['quote_id']) ? absint($_GET['quote_id']) : 0;
+        $draft_id = isset($_GET['draft_id']) ? absint($_GET['draft_id']) : 0;
         $user = function_exists('wp_get_current_user') ? wp_get_current_user() : null;
         $user_name = '';
         if ($user && !empty($user->ID)) {
@@ -138,17 +152,26 @@ class Riverso_Billing_Module {
         if (class_exists('Riverso_Cash_Module')) {
             $cash_boxes = Riverso_Cash_Module::get_instance()->repo()->list_payable_open(get_current_user_id());
         }
+        $payment_methods = [];
+        if (class_exists('Riverso_Payment_Method_Repository')) {
+            $payment_methods = (new Riverso_Payment_Method_Repository())->list_all(true, true);
+        }
+        $search_users = $this->list_search_users();
         return [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('riverso_billing'),
             'assetBase' => rtrim(RIVERSO_POS_PLUGIN_URL, '/') . '/assets',
             'surface' => 'portal',
             'portalUrl' => home_url('/interno/facturacion/'),
+            'searchUrl' => home_url('/interno/facturacion/?vista=buscar'),
             'quotesUrl' => home_url('/interno/customer-quotes/'),
             'todayDate' => current_time('Y-m-d'),
             'quoteId' => $quote_id,
+            'draftId' => $draft_id,
             'currentUserName' => $user_name,
+            'searchUsers' => $search_users,
             'cashBoxes' => $cash_boxes,
+            'paymentMethods' => $payment_methods,
             'caps' => [
                 'emit' => $this->can_emit(),
                 'viewStock' => current_user_can('riverso_view_stock')
@@ -199,6 +222,13 @@ class Riverso_Billing_Module {
                 'lineStock' => 'riverso_billing_line_stock',
                 'searchQuotes' => 'riverso_billing_search_quotes',
                 'cashBoxes' => 'riverso_billing_cash_boxes',
+                'closeLocal' => 'riverso_billing_close_local',
+                'paymentRetry' => 'riverso_billing_payment_retry',
+                'paymentDelete' => 'riverso_billing_payment_delete',
+                'paymentsList' => 'riverso_billing_payments_list',
+                'paymentMethods' => 'riverso_billing_payment_methods',
+                'searchDocuments' => 'riverso_billing_search_documents',
+                'documentPdf' => 'riverso_billing_document_pdf',
             ],
         ];
     }
@@ -228,6 +258,11 @@ class Riverso_Billing_Module {
         }
         $riverso_billing = $this->app_config();
         $riverso_billing['surface'] = $surface;
+        $vista = isset($_GET['vista']) ? sanitize_key((string) wp_unslash($_GET['vista'])) : '';
+        if ($vista === 'buscar') {
+            include RIVERSO_POS_PLUGIN_DIR . 'templates/billing/search.php';
+            return;
+        }
         include RIVERSO_POS_PLUGIN_DIR . 'templates/billing/app.php';
     }
 
@@ -636,6 +671,16 @@ class Riverso_Billing_Module {
     public function ajax_emit() {
         $this->authorize();
         $quote_id = isset($_POST['quote_id']) ? absint($_POST['quote_id']) : 0;
+        $draft_id = isset($_POST['draft_id']) ? absint($_POST['draft_id']) : 0;
+        $mark_paid = !empty($_POST['mark_paid']);
+        $send_email = !empty($_POST['send_email']);
+        $pay_ctx = null;
+        if ($mark_paid) {
+            $pay_ctx = $this->validate_payment_context_from_request();
+            if (is_wp_error($pay_ctx)) {
+                wp_send_json_error(['message' => $pay_ctx->get_error_message()]);
+            }
+        }
 
         if ($quote_id > 0) {
             $existing = $this->issued->find_success_by_quote($quote_id);
@@ -761,16 +806,83 @@ class Riverso_Billing_Module {
                     : '0',
             ]);
 
+            if ($draft_id > 0) {
+                $this->drafts->mark_emitted($draft_id, (int) $insert_id);
+            }
+
+            $warnings = [];
+            $immediate_payment = null;
+            if ($mark_paid && $pay_ctx) {
+                $immediate_payment = $this->register_and_sync_payment([
+                    'draft_id' => $draft_id,
+                    'dte_id' => (int) $insert_id,
+                    'pay_date' => current_time('Y-m-d'),
+                    'caja_id' => $pay_ctx['caja']['id'],
+                    'caja' => $pay_ctx['caja']['nombre'],
+                    'method_id' => $pay_ctx['method']['id'],
+                    'method' => $pay_ctx['method']['nombre'],
+                    'amount_due' => (float) $built['totals']['total_amount'],
+                    'amount_paid' => (float) $built['totals']['total_amount'],
+                    'change_amount' => 0,
+                    'amount_applied' => (float) $built['totals']['total_amount'],
+                    'notes' => isset($_POST['pay_notes']) ? sanitize_textarea_field(wp_unslash($_POST['pay_notes'])) : '',
+                    'cheque_numero' => $pay_ctx['cheque_numero'],
+                    'cheque_titular' => $pay_ctx['cheque_titular'],
+                    'cheque_banco' => $pay_ctx['cheque_banco'],
+                    'facto_sync_status' => 'pending',
+                ]);
+                if (empty($immediate_payment['ok'])) {
+                    $warnings[] = $immediate_payment['message'] ?? 'No se pudo registrar el pago inmediato.';
+                } elseif (!empty($immediate_payment['sync']) && empty($immediate_payment['sync']['ok'])) {
+                    $warnings[] = 'Pago registrado, sync FACTO: ' . ($immediate_payment['sync']['message'] ?? 'error');
+                }
+            }
+
+            if ($draft_id > 0) {
+                foreach ($this->drafts->list_pending_sync($draft_id) as $pending) {
+                    $sync = Riverso_Billing_Payment_Sync::sync((int) $pending['id']);
+                    if (empty($sync['ok'])) {
+                        $warnings[] = 'Pago #' . $pending['id'] . ': ' . ($sync['message'] ?? 'error de sync');
+                    }
+                }
+            }
+
+            $email_result = null;
+            if ($send_email) {
+                $email_result = $this->send_dte_email(
+                    $resp,
+                    $doc_id,
+                    $folio,
+                    Riverso_Billing_Totals::type_label($built['document_type_id']),
+                    isset($_POST['email_to']) ? sanitize_text_field(wp_unslash($_POST['email_to'])) : '',
+                    isset($_POST['email_extra']) ? sanitize_text_field(wp_unslash($_POST['email_extra'])) : ''
+                );
+                if (empty($email_result['ok'])) {
+                    $warnings[] = $email_result['message'] ?? 'No se pudo enviar el correo.';
+                }
+            }
+
             $msg = 'Documento emitido.';
             if ($status === 2) {
                 $msg = 'Documento creado pero no enviado al SII' . ($error_msg !== '' ? ': ' . $error_msg : '.');
             } elseif ($status === 0) {
                 $msg = 'Documento emitido y enviado al SII.';
             }
+            if ($warnings) {
+                $msg .= ' ' . implode(' ', $warnings);
+            }
+
+            $payments = $this->drafts->list_document_payments($draft_id, (int) $insert_id);
+            $draft = $draft_id > 0 ? $this->present_draft($this->drafts->get($draft_id)) : null;
 
             wp_send_json_success([
                 'idempotent' => false,
                 'message' => $msg,
+                'warnings' => $warnings,
+                'email' => $email_result,
+                'immediate_payment' => $immediate_payment,
+                'draft' => $draft,
+                'payments' => $payments,
                 'dte' => [
                     'id' => (int) $insert_id,
                     'facto_document_id' => $doc_id,
@@ -1368,6 +1480,7 @@ class Riverso_Billing_Module {
             'facturacion_telefono' => (string) ($c['facturacion_telefono'] ?? ''),
             'codigo_postal' => (string) ($c['codigo_postal'] ?? '0'),
             'has_facturacion' => !empty($c['has_facturacion']),
+            'email' => (string) ($c['contacto_email'] ?? $c['email'] ?? ''),
         ];
     }
 
@@ -1385,34 +1498,7 @@ class Riverso_Billing_Module {
 
     public function ajax_draft_save() {
         $this->authorize();
-        $payload = [
-            'id' => isset($_POST['draft_id']) ? absint($_POST['draft_id']) : 0,
-            'status' => isset($_POST['status']) ? sanitize_text_field(wp_unslash($_POST['status'])) : 'draft',
-            'issue_date' => isset($_POST['issue_date']) ? sanitize_text_field(wp_unslash($_POST['issue_date'])) : '',
-            'due_date' => isset($_POST['due_date']) ? sanitize_text_field(wp_unslash($_POST['due_date'])) : '',
-            'payment_conditions' => isset($_POST['payment_conditions']) ? sanitize_text_field(wp_unslash($_POST['payment_conditions'])) : '0',
-            'sale_state' => isset($_POST['sale_state']) ? sanitize_text_field(wp_unslash($_POST['sale_state'])) : 'VENTA: Concretada',
-            'quote_id' => isset($_POST['quote_id']) ? absint($_POST['quote_id']) : 0,
-            'net_amount' => 0,
-            'exempt_amount' => 0,
-            'tax_amount' => 0,
-            'total_amount' => 0,
-            'lines' => [],
-            'refs' => [],
-        ];
-        $lines_raw = isset($_POST['lines']) ? wp_unslash($_POST['lines']) : '[]';
-        $refs_raw = isset($_POST['refs']) ? wp_unslash($_POST['refs']) : '[]';
-        $raw_lines = is_string($lines_raw) ? (json_decode($lines_raw, true) ?: []) : (is_array($lines_raw) ? $lines_raw : []);
-        $payload['refs'] = is_string($refs_raw) ? (json_decode($refs_raw, true) ?: []) : (is_array($refs_raw) ? $refs_raw : []);
-
-        $prepared = $this->prepare_draft_lines_for_save($raw_lines);
-        $payload['lines'] = $prepared['lines'];
-        $payload['net_amount'] = $prepared['net_amount'];
-        $payload['exempt_amount'] = $prepared['exempt_amount'];
-        $payload['tax_amount'] = $prepared['tax_amount'];
-        $payload['total_amount'] = $prepared['total_amount'];
-
-        $result = $this->drafts->save($payload);
+        $result = $this->save_draft_from_request();
         if (empty($result['ok'])) {
             wp_send_json_error(['message' => $result['message'] ?? 'No se pudo guardar el borrador.']);
         }
@@ -1432,68 +1518,263 @@ class Riverso_Billing_Module {
 
     public function ajax_draft_payment() {
         $this->authorize();
+        $ctx = $this->validate_payment_context_from_request();
+        if (is_wp_error($ctx)) {
+            wp_send_json_error(['message' => $ctx->get_error_message()]);
+        }
         $draft_id = isset($_POST['draft_id']) ? absint($_POST['draft_id']) : 0;
-        $caja_id = isset($_POST['caja_id']) ? absint($_POST['caja_id']) : 0;
-        $caja_nombre = isset($_POST['caja']) ? sanitize_text_field(wp_unslash($_POST['caja'])) : '';
-
-        if ($caja_id <= 0) {
-            wp_send_json_error(['message' => 'Selecciona una caja abierta.']);
-        }
-        if (!class_exists('Riverso_Cash_Module')) {
-            $cash_file = RIVERSO_POS_PLUGIN_DIR . 'sales/cash/class-cash-module.php';
-            if (file_exists($cash_file)) {
-                require_once $cash_file;
-            }
-        }
-        if (!class_exists('Riverso_Cash_Module')) {
-            wp_send_json_error(['message' => 'Módulo de caja no disponible.']);
-        }
-        $cash = Riverso_Cash_Module::get_instance()->repo();
-        $caja = $cash->get($caja_id);
-        if (!$caja) {
-            wp_send_json_error(['message' => 'Caja no encontrada.']);
-        }
-        if (($caja['estado'] ?? '') !== 'abierta') {
-            wp_send_json_error(['message' => 'La caja no está abierta.']);
-        }
-        $user_id = get_current_user_id();
-        if (!$cash->user_has_perm($caja_id, $user_id, 'pagar')) {
-            wp_send_json_error(['message' => 'No tienes permiso para pagar en esta caja.']);
-        }
-        if ($caja_nombre === '') {
-            $caja_nombre = (string) $caja['nombre'];
-        }
-
+        $dte_id = isset($_POST['dte_id']) ? absint($_POST['dte_id']) : 0;
         $amount_paid = isset($_POST['amount_paid']) ? (float) $_POST['amount_paid'] : 0;
         $change_amount = isset($_POST['change_amount']) ? (float) $_POST['change_amount'] : 0;
-        $ingreso = round(max(0, $amount_paid - $change_amount), 2);
-
-        $result = $this->drafts->add_payment($draft_id, [
+        if (empty($ctx['method']['permite_vuelto'])) {
+            $change_amount = 0;
+        }
+        $applied = round(max(0, $amount_paid - $change_amount), 2);
+        $result = $this->register_and_sync_payment([
+            'draft_id' => $draft_id,
+            'dte_id' => $dte_id,
             'pay_date' => isset($_POST['pay_date']) ? sanitize_text_field(wp_unslash($_POST['pay_date'])) : '',
-            'caja' => $caja_nombre,
-            'caja_id' => $caja_id,
-            'method' => isset($_POST['method']) ? sanitize_text_field(wp_unslash($_POST['method'])) : 'Efectivo',
+            'caja_id' => $ctx['caja']['id'],
+            'caja' => $ctx['caja']['nombre'],
+            'method_id' => $ctx['method']['id'],
+            'method' => $ctx['method']['nombre'],
             'amount_due' => isset($_POST['amount_due']) ? (float) $_POST['amount_due'] : 0,
             'amount_paid' => $amount_paid,
             'change_amount' => $change_amount,
+            'amount_applied' => $applied,
             'notes' => isset($_POST['notes']) ? sanitize_textarea_field(wp_unslash($_POST['notes'])) : '',
             'charge_code' => isset($_POST['charge_code']) ? sanitize_text_field(wp_unslash($_POST['charge_code'])) : '',
+            'cheque_numero' => $ctx['cheque_numero'],
+            'cheque_titular' => $ctx['cheque_titular'],
+            'cheque_banco' => $ctx['cheque_banco'],
+            'facto_sync_status' => 'pending',
         ]);
         if (empty($result['ok'])) {
             wp_send_json_error(['message' => $result['message'] ?? 'No se pudo registrar el pago.']);
         }
+        $draft = $draft_id > 0 ? $this->present_draft($this->drafts->get($draft_id)) : null;
+        $payments = $this->drafts->list_document_payments($draft_id, $dte_id);
+        wp_send_json_success([
+            'draft' => $draft,
+            'payments' => $payments,
+            'payment_id' => (int) ($result['id'] ?? 0),
+            'sync' => $result['sync'] ?? null,
+        ]);
+    }
 
-        if ($ingreso > 0) {
-            $cash->register_payment_ingreso(
-                $caja_id,
-                $ingreso,
-                (int) $result['id'],
-                'Pago borrador #' . $draft_id
+    public function ajax_close_local() {
+        $this->authorize();
+        $type = isset($_POST['document_type_id']) ? absint($_POST['document_type_id']) : 37;
+        if ($type !== 37) {
+            wp_send_json_error(['message' => 'Cerrar sin enviar al SII solo está disponible en boleta.']);
+        }
+        $saved = $this->save_draft_from_request('closed_local');
+        if (empty($saved['ok'])) {
+            wp_send_json_error(['message' => $saved['message'] ?? 'No se pudo cerrar el documento.']);
+        }
+        $this->drafts->mark_closed_local((int) $saved['id']);
+        $draft = $this->present_draft($this->drafts->get((int) $saved['id']));
+        if (class_exists('Riverso_Audit_Module')) {
+            Riverso_Audit_Module::get_instance()->log(
+                'billing.draft_closed_local',
+                'billing_draft',
+                (int) $saved['id'],
+                [],
+                [],
+                'Cierre local sin envío al SII'
             );
         }
+        wp_send_json_success([
+            'message' => 'Documento cerrado sin enviar al SII. Ya puedes registrar pagos.',
+            'draft' => $draft,
+        ]);
+    }
 
-        $draft = $this->present_draft($this->drafts->get($draft_id));
-        wp_send_json_success(['draft' => $draft, 'payment_id' => (int) $result['id']]);
+    public function ajax_payment_retry() {
+        $this->authorize();
+        $id = isset($_POST['payment_id']) ? absint($_POST['payment_id']) : 0;
+        $pay = $this->drafts->get_payment($id);
+        if (!$pay) {
+            wp_send_json_error(['message' => 'Pago no encontrado.']);
+        }
+        $status = (string) ($pay['facto_sync_status'] ?? '');
+        $force_unknown = !empty($_POST['confirm_unknown']);
+        if ($status === 'unknown' && !$force_unknown) {
+            wp_send_json_error([
+                'message' => 'Este pago quedó en estado desconocido. Reintentar podría duplicarlo en FACTO.',
+                'needs_confirm' => true,
+            ]);
+        }
+        if ($status !== 'error' && !($status === 'unknown' && $force_unknown) && $status !== 'pending') {
+            wp_send_json_error(['message' => 'Este pago no se puede reintentar.']);
+        }
+        $sync = Riverso_Billing_Payment_Sync::sync($id);
+        $draft_id = (int) ($pay['draft_id'] ?? 0);
+        $dte_id = (int) ($pay['dte_id'] ?? 0);
+        wp_send_json_success([
+            'sync' => $sync,
+            'payments' => $this->drafts->list_document_payments($draft_id, $dte_id),
+            'draft' => $draft_id > 0 ? $this->present_draft($this->drafts->get($draft_id)) : null,
+        ]);
+    }
+
+    public function ajax_payment_delete() {
+        $this->authorize();
+        $id = isset($_POST['payment_id']) ? absint($_POST['payment_id']) : 0;
+        $pay = $this->drafts->get_payment($id);
+        if (!$pay) {
+            wp_send_json_error(['message' => 'Pago no encontrado.']);
+        }
+        $caja_id = (int) ($pay['caja_id'] ?? 0);
+        $cash = $this->cash_repo();
+        if ($caja_id > 0 && $cash && !$cash->user_has_perm($caja_id, get_current_user_id(), 'borrar_pago')) {
+            wp_send_json_error(['message' => 'No tienes permiso para borrar pagos en esta caja.']);
+        }
+        $deleted = $this->drafts->delete_payment($id);
+        if (empty($deleted['ok'])) {
+            wp_send_json_error(['message' => $deleted['message'] ?? 'No se pudo borrar.']);
+        }
+        if ($caja_id > 0 && $cash) {
+            $applied = (float) ($pay['amount_applied'] ?? 0);
+            if ($applied > 0) {
+                $cash->register_payment_reverso($caja_id, $applied, $id, 'Reverso pago #' . $id);
+            }
+        }
+        if (!empty($pay['facto_payment_id']) && function_exists('riverso_create_task')) {
+            $dte = !empty($pay['dte_id']) ? $this->issued->get((int) $pay['dte_id']) : null;
+            riverso_create_task('eliminar_pago_facto', 'Eliminar pago P' . $pay['facto_payment_id'] . ' en FACTO', [
+                'prioridad' => 'alta',
+                'descripcion' => 'Borrar en FACTO el pago ' . $pay['facto_payment_id']
+                    . ' (folio ' . ($dte['folio'] ?? '—') . ', $' . number_format((float) $pay['amount_applied'], 0, ',', '.') . ').',
+                'datos_extra' => [
+                    'facto_payment_id' => $pay['facto_payment_id'],
+                    'payment_id' => $id,
+                    'folio' => $dte['folio'] ?? '',
+                    'amount' => $pay['amount_applied'],
+                ],
+            ]);
+        }
+        if (class_exists('Riverso_Audit_Module')) {
+            Riverso_Audit_Module::get_instance()->log(
+                'billing.payment_deleted',
+                'billing_payment',
+                $id,
+                $pay,
+                [],
+                'Pago borrado'
+            );
+        }
+        $draft_id = (int) ($pay['draft_id'] ?? 0);
+        $dte_id = (int) ($pay['dte_id'] ?? 0);
+        wp_send_json_success([
+            'payments' => $this->drafts->list_document_payments($draft_id, $dte_id),
+            'draft' => $draft_id > 0 ? $this->present_draft($this->drafts->get($draft_id)) : null,
+        ]);
+    }
+
+    public function ajax_payments_list() {
+        $this->authorize();
+        $draft_id = isset($_POST['draft_id']) ? absint($_POST['draft_id']) : 0;
+        $dte_id = isset($_POST['dte_id']) ? absint($_POST['dte_id']) : 0;
+        wp_send_json_success([
+            'payments' => $this->drafts->list_document_payments($draft_id, $dte_id),
+            'draft' => $draft_id > 0 ? $this->present_draft($this->drafts->get($draft_id)) : null,
+        ]);
+    }
+
+    public function ajax_search_documents() {
+        $this->authorize();
+        if (!class_exists('Riverso_Billing_Document_Search')) {
+            wp_send_json_error(['message' => 'Búsqueda no disponible.']);
+        }
+        $filters = [
+            'date_from' => isset($_POST['date_from']) ? sanitize_text_field(wp_unslash($_POST['date_from'])) : '',
+            'date_to' => isset($_POST['date_to']) ? sanitize_text_field(wp_unslash($_POST['date_to'])) : '',
+            'receiver_rut' => isset($_POST['receiver_rut']) ? sanitize_text_field(wp_unslash($_POST['receiver_rut'])) : '',
+            'receiver_name' => isset($_POST['receiver_name']) ? sanitize_text_field(wp_unslash($_POST['receiver_name'])) : '',
+            'document_number' => isset($_POST['document_number']) ? sanitize_text_field(wp_unslash($_POST['document_number'])) : '',
+            'payment_status' => isset($_POST['payment_status']) ? sanitize_key(wp_unslash($_POST['payment_status'])) : 'all',
+            'document_status' => isset($_POST['document_status']) ? sanitize_key(wp_unslash($_POST['document_status'])) : '',
+            'total_min' => isset($_POST['total_min']) ? sanitize_text_field(wp_unslash($_POST['total_min'])) : '',
+            'total_max' => isset($_POST['total_max']) ? sanitize_text_field(wp_unslash($_POST['total_max'])) : '',
+            'created_by' => isset($_POST['created_by']) ? absint($_POST['created_by']) : 0,
+            'folio_from' => isset($_POST['folio_from']) ? sanitize_text_field(wp_unslash($_POST['folio_from'])) : '',
+            'folio_to' => isset($_POST['folio_to']) ? sanitize_text_field(wp_unslash($_POST['folio_to'])) : '',
+            'sii_status' => isset($_POST['sii_status']) ? sanitize_key(wp_unslash($_POST['sii_status'])) : '',
+            'include_issued' => !isset($_POST['include_issued']) || !empty($_POST['include_issued']),
+            'include_drafts' => !isset($_POST['include_drafts']) || !empty($_POST['include_drafts']),
+        ];
+        $result = (new Riverso_Billing_Document_Search())->search($filters);
+        wp_send_json_success($result);
+    }
+
+    public function ajax_document_pdf() {
+        $this->authorize();
+        $dte_id = isset($_POST['dte_id']) ? absint($_POST['dte_id']) : 0;
+        if ($dte_id <= 0) {
+            wp_send_json_error(['message' => 'Documento inválido.']);
+        }
+        $dte = $this->issued->get($dte_id);
+        if (!$dte || empty($dte['facto_document_id'])) {
+            wp_send_json_error(['message' => 'Documento emitido no encontrado.']);
+        }
+        $full = $this->facto_client()->get_document((int) $dte['facto_document_id']);
+        if (is_wp_error($full)) {
+            wp_send_json_error(['message' => $full->get_error_message()]);
+        }
+        $electronic = isset($full['electronic_document']) && is_array($full['electronic_document'])
+            ? $full['electronic_document']
+            : [];
+        $pdf_b64 = (string) ($electronic['document_pdf'] ?? '');
+        if ($pdf_b64 === '') {
+            wp_send_json_error(['message' => 'FACTO no devolvió el PDF del documento.']);
+        }
+        wp_send_json_success([
+            'pdf_base64' => $pdf_b64,
+            'folio' => (string) ($dte['folio'] ?? ''),
+            'document_type_label' => (string) ($dte['document_type_label'] ?? ''),
+        ]);
+    }
+
+    /**
+     * Usuarios para filtro "Ingresado por".
+     *
+     * @return array<int, array{id:int,name:string}>
+     */
+    private function list_search_users() {
+        $users = get_users([
+            'role__in' => ['administrator', 'riverso_admin', 'riverso_ventas', 'riverso_cotizador'],
+            'fields' => ['ID', 'display_name', 'user_login'],
+            'orderby' => 'display_name',
+            'order' => 'ASC',
+            'number' => 200,
+        ]);
+        $out = [];
+        $seen = [];
+        foreach ($users as $u) {
+            $id = (int) $u->ID;
+            if (isset($seen[$id])) {
+                continue;
+            }
+            $seen[$id] = true;
+            $name = trim((string) ($u->display_name ?: $u->user_login));
+            if ($name === '') {
+                continue;
+            }
+            $out[] = [
+                'id' => $id,
+                'name' => $name,
+            ];
+        }
+        return $out;
+    }
+
+    public function ajax_payment_methods() {
+        $this->authorize();
+        $repo = class_exists('Riverso_Payment_Method_Repository')
+            ? new Riverso_Payment_Method_Repository()
+            : null;
+        wp_send_json_success(['methods' => $repo ? $repo->list_all(true, true) : []]);
     }
 
     public function ajax_product_lookup() {
@@ -1753,6 +2034,206 @@ class Riverso_Billing_Module {
             ];
         }
         wp_send_json_success(['quotes' => $out]);
+    }
+
+    /**
+     * @param string $force_status
+     * @return array{ok:bool,id?:int,message?:string}
+     */
+    private function save_draft_from_request($force_status = '') {
+        $payload = [
+            'id' => isset($_POST['draft_id']) ? absint($_POST['draft_id']) : 0,
+            'status' => $force_status !== ''
+                ? $force_status
+                : (isset($_POST['status']) ? sanitize_text_field(wp_unslash($_POST['status'])) : 'draft'),
+            'issue_date' => isset($_POST['issue_date']) ? sanitize_text_field(wp_unslash($_POST['issue_date'])) : '',
+            'due_date' => isset($_POST['due_date']) ? sanitize_text_field(wp_unslash($_POST['due_date'])) : '',
+            'payment_conditions' => isset($_POST['payment_conditions']) ? sanitize_text_field(wp_unslash($_POST['payment_conditions'])) : '0',
+            'sale_state' => isset($_POST['sale_state']) ? sanitize_text_field(wp_unslash($_POST['sale_state'])) : 'VENTA: Concretada',
+            'quote_id' => isset($_POST['quote_id']) ? absint($_POST['quote_id']) : 0,
+            'net_amount' => 0,
+            'exempt_amount' => 0,
+            'tax_amount' => 0,
+            'total_amount' => 0,
+            'lines' => [],
+            'refs' => [],
+        ];
+        $lines_raw = isset($_POST['lines']) ? wp_unslash($_POST['lines']) : '[]';
+        $refs_raw = isset($_POST['refs']) ? wp_unslash($_POST['refs']) : '[]';
+        $raw_lines = is_string($lines_raw) ? (json_decode($lines_raw, true) ?: []) : (is_array($lines_raw) ? $lines_raw : []);
+        $payload['refs'] = is_string($refs_raw) ? (json_decode($refs_raw, true) ?: []) : (is_array($refs_raw) ? $refs_raw : []);
+        $prepared = $this->prepare_draft_lines_for_save($raw_lines);
+        $payload['lines'] = $prepared['lines'];
+        $payload['net_amount'] = $prepared['net_amount'];
+        $payload['exempt_amount'] = $prepared['exempt_amount'];
+        $payload['tax_amount'] = $prepared['tax_amount'];
+        $payload['total_amount'] = $prepared['total_amount'];
+        return $this->drafts->save($payload);
+    }
+
+    /**
+     * @return array{caja:array,method:array,cheque_numero:string,cheque_titular:string,cheque_banco:string}|WP_Error
+     */
+    private function validate_payment_context_from_request() {
+        $caja_id = isset($_POST['pay_caja_id']) ? absint($_POST['pay_caja_id']) : 0;
+        if ($caja_id <= 0) {
+            $caja_id = isset($_POST['caja_id']) ? absint($_POST['caja_id']) : 0;
+        }
+        $method_id = isset($_POST['pay_method_id']) ? absint($_POST['pay_method_id']) : 0;
+        if ($method_id <= 0) {
+            $method_id = isset($_POST['method_id']) ? absint($_POST['method_id']) : 0;
+        }
+        $cash = $this->cash_repo();
+        if (!$cash) {
+            return new WP_Error('no_cash', 'Módulo de caja no disponible.');
+        }
+        if ($caja_id <= 0) {
+            return new WP_Error('no_caja', 'Selecciona una caja abierta.');
+        }
+        $caja = $cash->get($caja_id);
+        if (!$caja) {
+            return new WP_Error('no_caja', 'Caja no encontrada.');
+        }
+        if (($caja['estado'] ?? '') !== 'abierta') {
+            return new WP_Error('caja_cerrada', 'La caja no está abierta.');
+        }
+        if (!$cash->user_has_perm($caja_id, get_current_user_id(), 'pagar')) {
+            return new WP_Error('no_perm', 'No tienes permiso para pagar en esta caja.');
+        }
+        if (!class_exists('Riverso_Payment_Method_Repository')) {
+            return new WP_Error('no_method', 'Catálogo de métodos no disponible.');
+        }
+        $method = (new Riverso_Payment_Method_Repository())->get($method_id);
+        if (!$method || empty($method['activo']) || empty($method['visible'])) {
+            return new WP_Error('no_method', 'Selecciona un método de pago.');
+        }
+        $cheque_numero = isset($_POST['cheque_numero']) ? sanitize_text_field(wp_unslash($_POST['cheque_numero'])) : '';
+        $cheque_titular = isset($_POST['cheque_titular']) ? sanitize_text_field(wp_unslash($_POST['cheque_titular'])) : '';
+        $cheque_banco = isset($_POST['cheque_banco']) ? sanitize_text_field(wp_unslash($_POST['cheque_banco'])) : '';
+        if (!empty($method['requiere_cheque']) && ($cheque_numero === '' || $cheque_titular === '' || $cheque_banco === '')) {
+            return new WP_Error('cheque', 'Completa número, titular y banco del cheque.');
+        }
+        return [
+            'caja' => $caja,
+            'method' => $method,
+            'cheque_numero' => $cheque_numero,
+            'cheque_titular' => $cheque_titular,
+            'cheque_banco' => $cheque_banco,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payment
+     * @return array{ok:bool,id?:int,message?:string,sync?:array}
+     */
+    private function register_and_sync_payment(array $payment) {
+        $result = $this->drafts->add_document_payment($payment);
+        if (empty($result['ok'])) {
+            return $result;
+        }
+        $pay_id = (int) $result['id'];
+        $applied = (float) ($payment['amount_applied'] ?? 0);
+        $cash = $this->cash_repo();
+        if ($applied > 0 && $cash && !empty($payment['caja_id'])) {
+            $cash->register_payment_ingreso(
+                (int) $payment['caja_id'],
+                $applied,
+                $pay_id,
+                'Pago documento #' . ($payment['draft_id'] ?: $payment['dte_id'] ?: $pay_id)
+            );
+        }
+        $sync = ['ok' => true, 'status' => 'pending', 'message' => 'Pendiente de sync.'];
+        $dte_id = (int) ($payment['dte_id'] ?? 0);
+        $dte = $dte_id > 0 ? $this->issued->get($dte_id) : null;
+        if ($dte && !empty($dte['facto_document_id'])) {
+            $sync = Riverso_Billing_Payment_Sync::sync($pay_id);
+        }
+        return [
+            'ok' => true,
+            'id' => $pay_id,
+            'sync' => $sync,
+        ];
+    }
+
+    /**
+     * @return Riverso_Cash_Repository|null
+     */
+    private function cash_repo() {
+        if (!class_exists('Riverso_Cash_Module')) {
+            $cash_file = RIVERSO_POS_PLUGIN_DIR . 'sales/cash/class-cash-module.php';
+            if (file_exists($cash_file)) {
+                require_once $cash_file;
+            }
+        }
+        return class_exists('Riverso_Cash_Module')
+            ? Riverso_Cash_Module::get_instance()->repo()
+            : null;
+    }
+
+    /**
+     * @param array       $resp
+     * @param int         $doc_id
+     * @param string      $folio
+     * @param string      $type_label
+     * @param string      $to
+     * @param string      $extra
+     * @return array{ok:bool,message:string}
+     */
+    private function send_dte_email(array $resp, $doc_id, $folio, $type_label, $to, $extra) {
+        $emails = [];
+        foreach (array_merge(preg_split('/[,\s;]+/', (string) $to) ?: [], preg_split('/[,\s;]+/', (string) $extra) ?: []) as $addr) {
+            $addr = sanitize_email(trim((string) $addr));
+            if ($addr !== '' && is_email($addr)) {
+                $emails[$addr] = $addr;
+            }
+        }
+        if (!$emails) {
+            return ['ok' => false, 'message' => 'Indica al menos un correo válido.'];
+        }
+        $electronic = isset($resp['electronic_document']) && is_array($resp['electronic_document'])
+            ? $resp['electronic_document']
+            : [];
+        if ((empty($electronic['document_pdf']) || empty($electronic['document_xml'])) && $doc_id > 0) {
+            $full = $this->facto_client()->get_document($doc_id);
+            if (!is_wp_error($full) && !empty($full['electronic_document']) && is_array($full['electronic_document'])) {
+                $electronic = $full['electronic_document'];
+            }
+        }
+        $attachments = [];
+        $tmp_dir = trailingslashit(wp_upload_dir()['basedir']) . 'riverso-tmp';
+        wp_mkdir_p($tmp_dir);
+        $safe_folio = preg_replace('/[^0-9A-Za-z_-]/', '', (string) $folio) ?: 'dte';
+        if (!empty($electronic['document_pdf'])) {
+            $pdf = $tmp_dir . '/' . $safe_folio . '.pdf';
+            file_put_contents($pdf, base64_decode((string) $electronic['document_pdf']));
+            $attachments[] = $pdf;
+        }
+        if (!empty($electronic['document_xml'])) {
+            $xml = $tmp_dir . '/' . $safe_folio . '.xml';
+            file_put_contents($xml, base64_decode((string) $electronic['document_xml']));
+            $attachments[] = $xml;
+        }
+        $subject = $type_label . ' N° ' . $folio . ' – Riverso';
+        $body = 'Adjunto el documento tributario ' . $type_label . ' N° ' . $folio . '.';
+        $sent = wp_mail(array_values($emails), $subject, $body, ['Content-Type: text/plain; charset=UTF-8'], $attachments);
+        foreach ($attachments as $file) {
+            if (is_file($file)) {
+                unlink($file);
+            }
+        }
+        if (class_exists('Riverso_Audit_Module')) {
+            Riverso_Audit_Module::get_instance()->log(
+                'billing.dte_email',
+                'dte_issued',
+                (int) $doc_id,
+                [],
+                ['to' => array_values($emails), 'folio' => $folio, 'ok' => $sent],
+                'Correo DTE folio ' . $folio
+            );
+        }
+        return $sent
+            ? ['ok' => true, 'message' => 'Correo enviado.']
+            : ['ok' => false, 'message' => 'wp_mail no pudo enviar el correo.'];
     }
 
     private function can_emit() {

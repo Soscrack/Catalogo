@@ -133,6 +133,7 @@ class Riverso_Cash_Repository {
             'estado' => 'cerrada',
             'saldo_efectivo' => 0,
             'activo' => 1,
+            'facto_cash_account_id' => $this->sanitize_facto_id($data['facto_cash_account_id'] ?? ''),
             'created_by' => get_current_user_id() ?: null,
             'created_at' => $now,
             'updated_at' => $now,
@@ -172,6 +173,9 @@ class Riverso_Cash_Repository {
             [
                 'nombre' => substr($nombre, 0, 128),
                 'tipo' => $tipo,
+                'facto_cash_account_id' => array_key_exists('facto_cash_account_id', $data)
+                    ? $this->sanitize_facto_id($data['facto_cash_account_id'])
+                    : ($caja['facto_cash_account_id'] ?? null),
                 'updated_at' => current_time('mysql'),
             ],
             ['id' => absint($id)]
@@ -735,6 +739,45 @@ class Riverso_Cash_Repository {
     }
 
     /**
+     * Revierte un ingreso de pago (monto negativo).
+     *
+     * @param int    $caja_id
+     * @param float  $monto
+     * @param int    $payment_id
+     * @param string $detalle
+     * @return array{ok:bool,id?:int,message?:string}
+     */
+    public function register_payment_reverso($caja_id, $monto, $payment_id, $detalle = '') {
+        $caja = $this->get($caja_id);
+        if (!$caja) {
+            return ['ok' => false, 'message' => 'Caja no encontrada.'];
+        }
+        $monto = round((float) $monto, 2);
+        if ($monto <= 0) {
+            return ['ok' => false, 'message' => 'El monto del reverso debe ser positivo.'];
+        }
+        return $this->add_movimiento([
+            'caja_id' => $caja_id,
+            'tipo' => 'reverso_pago',
+            'monto' => -1 * $monto,
+            'origen' => 'billing_payment',
+            'origen_id' => absint($payment_id),
+            'detalle' => $detalle !== '' ? $detalle : 'Reverso de pago',
+            'fecha' => current_time('mysql'),
+            'usuario_id' => get_current_user_id(),
+        ]);
+    }
+
+    /**
+     * @param mixed $value
+     * @return string|null
+     */
+    private function sanitize_facto_id($value) {
+        $id = substr(sanitize_text_field((string) $value), 0, 16);
+        return $id !== '' ? $id : null;
+    }
+
+    /**
      * @param int $caja_id
      * @param int $limit
      * @return array<int, array<string, mixed>>
@@ -858,6 +901,7 @@ class Riverso_Cash_Repository {
             'estado' => (string) ($row['estado'] ?? 'cerrada'),
             'saldo_efectivo' => round((float) ($row['saldo_efectivo'] ?? 0), 2),
             'activo' => !empty($row['activo']),
+            'facto_cash_account_id' => (string) ($row['facto_cash_account_id'] ?? ''),
             'created_by' => $row['created_by'] !== null ? (int) $row['created_by'] : null,
             'created_at' => (string) ($row['created_at'] ?? ''),
             'updated_at' => (string) ($row['updated_at'] ?? ''),

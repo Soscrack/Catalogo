@@ -45,6 +45,23 @@ class Riverso_Dte_Issued_Repository {
     }
 
     /**
+     * @param int $id
+     * @return array|null
+     */
+    public function get($id) {
+        global $wpdb;
+        $id = absint($id);
+        if ($id <= 0) {
+            return null;
+        }
+        $row = $wpdb->get_row(
+            $wpdb->prepare("SELECT * FROM {$this->table} WHERE id = %d LIMIT 1", $id),
+            ARRAY_A
+        );
+        return is_array($row) ? $this->present($row) : null;
+    }
+
+    /**
      * @param array $data
      * @return int|WP_Error
      */

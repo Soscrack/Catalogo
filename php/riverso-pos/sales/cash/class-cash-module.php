@@ -31,6 +31,10 @@ class Riverso_Cash_Module {
             require_once $repo_file;
         }
         $this->repo = new Riverso_Cash_Repository();
+        $pm_file = RIVERSO_POS_PLUGIN_DIR . 'sales/billing/class-payment-method-repository.php';
+        if (file_exists($pm_file)) {
+            require_once $pm_file;
+        }
         $this->init_hooks();
     }
 
@@ -87,6 +91,8 @@ class Riverso_Cash_Module {
         add_action('wp_ajax_riverso_cash_movimientos', [$this, 'ajax_movimientos']);
         add_action('wp_ajax_riverso_cash_certificadores', [$this, 'ajax_certificadores']);
         add_action('wp_ajax_riverso_cash_pending', [$this, 'ajax_pending']);
+        add_action('wp_ajax_riverso_cash_payment_methods', [$this, 'ajax_payment_methods']);
+        add_action('wp_ajax_riverso_cash_payment_method_update', [$this, 'ajax_payment_method_update']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_assets']);
     }
 
@@ -153,6 +159,8 @@ class Riverso_Cash_Module {
                 'movimientos' => 'riverso_cash_movimientos',
                 'certificadores' => 'riverso_cash_certificadores',
                 'pending' => 'riverso_cash_pending',
+                'paymentMethods' => 'riverso_cash_payment_methods',
+                'paymentMethodUpdate' => 'riverso_cash_payment_method_update',
             ],
         ];
     }
@@ -208,6 +216,9 @@ class Riverso_Cash_Module {
         $result = $this->repo->create([
             'nombre' => isset($_POST['nombre']) ? sanitize_text_field(wp_unslash($_POST['nombre'])) : '',
             'tipo' => isset($_POST['tipo']) ? sanitize_text_field(wp_unslash($_POST['tipo'])) : 'fisica',
+            'facto_cash_account_id' => isset($_POST['facto_cash_account_id'])
+                ? sanitize_text_field(wp_unslash($_POST['facto_cash_account_id']))
+                : '',
         ]);
         if (empty($result['ok'])) {
             wp_send_json_error(['message' => $result['message'] ?? 'Error al crear.']);
@@ -223,6 +234,9 @@ class Riverso_Cash_Module {
         $result = $this->repo->update($id, [
             'nombre' => isset($_POST['nombre']) ? sanitize_text_field(wp_unslash($_POST['nombre'])) : '',
             'tipo' => isset($_POST['tipo']) ? sanitize_text_field(wp_unslash($_POST['tipo'])) : 'fisica',
+            'facto_cash_account_id' => isset($_POST['facto_cash_account_id'])
+                ? sanitize_text_field(wp_unslash($_POST['facto_cash_account_id']))
+                : '',
         ]);
         if (empty($result['ok'])) {
             wp_send_json_error(['message' => $result['message'] ?? 'Error al actualizar.']);
@@ -476,5 +490,35 @@ class Riverso_Cash_Module {
         if (!$this->can_view() && !$this->can_manage()) {
             wp_send_json_error(['message' => 'Sin permisos'], 403);
         }
+    }
+
+    public function ajax_payment_methods() {
+        $this->authorize_manage();
+        if (!class_exists('Riverso_Payment_Method_Repository')) {
+            wp_send_json_error(['message' => 'Repositorio de métodos no disponible.']);
+        }
+        $repo = new Riverso_Payment_Method_Repository();
+        wp_send_json_success(['methods' => $repo->list_all(false, false)]);
+    }
+
+    public function ajax_payment_method_update() {
+        $this->authorize_manage();
+        if (!class_exists('Riverso_Payment_Method_Repository')) {
+            wp_send_json_error(['message' => 'Repositorio de métodos no disponible.']);
+        }
+        $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
+        $repo = new Riverso_Payment_Method_Repository();
+        $result = $repo->update($id, [
+            'facto_payment_type_id' => isset($_POST['facto_payment_type_id'])
+                ? sanitize_text_field(wp_unslash($_POST['facto_payment_type_id']))
+                : '',
+            'visible' => !empty($_POST['visible']),
+            'requiere_cheque' => !empty($_POST['requiere_cheque']),
+            'permite_vuelto' => !empty($_POST['permite_vuelto']),
+        ]);
+        if (empty($result['ok'])) {
+            wp_send_json_error(['message' => $result['message'] ?? 'No se pudo guardar.']);
+        }
+        wp_send_json_success(['method' => $repo->get($id)]);
     }
 }

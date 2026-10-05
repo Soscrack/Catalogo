@@ -659,6 +659,7 @@
         $("cash-edit-id").value = c.id;
         $("cash-edit-nombre").value = c.nombre;
         $("cash-edit-tipo").value = c.tipo;
+        if ($("cash-edit-facto")) $("cash-edit-facto").value = c.facto_cash_account_id || "";
         var list = $("cash-accounts-list-view");
         var edit = $("cash-accounts-edit-view");
         if (list) list.hidden = true;
@@ -836,6 +837,7 @@
           id: state.editId,
           nombre: (($("cash-edit-nombre") || {}).value || "").trim(),
           tipo: (($("cash-edit-tipo") || {}).value || "fisica"),
+          facto_cash_account_id: (($("cash-edit-facto") || {}).value || "").trim(),
         })
           .then(function () {
             toast("Caja guardada.");
@@ -902,8 +904,52 @@
     });
   });
 
+  function loadPaymentMethods() {
+    var body = $("cash-methods-body");
+    if (!body || !cfg.actions.paymentMethods) return;
+    post(cfg.actions.paymentMethods, {})
+      .then(function (data) {
+        var rows = data.methods || [];
+        if (!rows.length) {
+          body.innerHTML = '<tr><td colspan="5" class="cash-empty">Sin métodos</td></tr>';
+          return;
+        }
+        body.innerHTML = "";
+        rows.forEach(function (m) {
+          var tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td>" + esc(m.nombre) + "</td>" +
+            '<td><input type="text" class="cash-method-id" data-id="' + m.id + '" value="' + esc(m.facto_payment_type_id || "") + '" maxlength="16"></td>' +
+            '<td><input type="checkbox" class="cash-method-vis" data-id="' + m.id + '"' + (m.visible ? " checked" : "") + "></td>" +
+            '<td><input type="checkbox" class="cash-method-chq" data-id="' + m.id + '"' + (m.requiere_cheque ? " checked" : "") + "></td>" +
+            '<td><input type="checkbox" class="cash-method-vlt" data-id="' + m.id + '"' + (m.permite_vuelto ? " checked" : "") + "></td>";
+          body.appendChild(tr);
+        });
+        body.querySelectorAll("input").forEach(function (el) {
+          el.addEventListener("change", function () {
+            var id = parseInt(el.getAttribute("data-id"), 10) || 0;
+            var row = el.closest("tr");
+            if (!id || !row) return;
+            post(cfg.actions.paymentMethodUpdate, {
+              id: id,
+              facto_payment_type_id: (row.querySelector(".cash-method-id") || {}).value || "",
+              visible: row.querySelector(".cash-method-vis") && row.querySelector(".cash-method-vis").checked ? 1 : 0,
+              requiere_cheque: row.querySelector(".cash-method-chq") && row.querySelector(".cash-method-chq").checked ? 1 : 0,
+              permite_vuelto: row.querySelector(".cash-method-vlt") && row.querySelector(".cash-method-vlt").checked ? 1 : 0,
+            }).catch(function (e) {
+              toast(e.message, true);
+            });
+          });
+        });
+      })
+      .catch(function (e) {
+        body.innerHTML = '<tr><td colspan="5" class="cash-empty">' + esc(e.message) + "</td></tr>";
+      });
+  }
+
   if (view === "accounts") {
     bindAccounts();
+    loadPaymentMethods();
   } else {
     bindManejo();
   }

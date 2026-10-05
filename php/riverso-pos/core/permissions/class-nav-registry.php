@@ -143,7 +143,8 @@ class Riverso_POS_Nav_Registry {
                         'id' => 'facturacion-buscar',
                         'label' => 'Buscar documentos tributarios',
                         'icon' => 'search',
-                        'wip' => true,
+                        'portal_slug' => 'facturacion',
+                        'portal_query' => 'vista=buscar',
                     ],
                     [
                         'id' => 'facturacion-cotizaciones-aprobadas',

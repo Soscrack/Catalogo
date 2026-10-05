@@ -368,6 +368,7 @@ class Riverso_POS_Activator {
         self::create_phase66_billing_drafts($prefix, $charset_collate);
         self::create_phase67_billing_draft_line_context($prefix, $charset_collate);
         self::create_phase68_cajas($prefix, $charset_collate);
+        self::create_phase69_billing_payments($prefix, $charset_collate);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -5512,6 +5513,17 @@ class Riverso_POS_Activator {
         $prefix = $wpdb->prefix . 'riverso_';
         $charset_collate = $wpdb->get_charset_collate();
         self::create_phase68_cajas($prefix, $charset_collate);
+        self::create_phase69_billing_payments($prefix, $charset_collate);
+    }
+
+    /**
+     * Garantiza métodos de pago + columnas FACTO en cajas/borradores (deploy sin bump).
+     */
+    public static function ensure_billing_payments_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::create_phase69_billing_payments($prefix, $charset_collate);
     }
 
     /**
@@ -6209,6 +6221,196 @@ class Riverso_POS_Activator {
                 ));
             }
         }
+    }
+
+    /**
+     * Fase 69: métodos de pago FACTO, IDs de caja y pagos de documento.
+     */
+    private static function create_phase69_billing_payments($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        global $wpdb;
+
+        $sql_methods = "CREATE TABLE {$prefix}payment_methods (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            nombre VARCHAR(128) NOT NULL,
+            facto_payment_type_id VARCHAR(16) NOT NULL DEFAULT '',
+            visible TINYINT(1) NOT NULL DEFAULT 1,
+            requiere_cheque TINYINT(1) NOT NULL DEFAULT 0,
+            permite_vuelto TINYINT(1) NOT NULL DEFAULT 0,
+            orden INT UNSIGNED NOT NULL DEFAULT 0,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            PRIMARY KEY (id),
+            KEY idx_pay_method_activo (activo)
+        ) $charset_collate;";
+        dbDelta($sql_methods);
+
+        $sql_cajas = "CREATE TABLE {$prefix}cajas (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            nombre VARCHAR(128) NOT NULL,
+            tipo VARCHAR(32) NOT NULL DEFAULT 'fisica',
+            estado VARCHAR(16) NOT NULL DEFAULT 'cerrada',
+            saldo_efectivo DECIMAL(14,2) NOT NULL DEFAULT 0,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            facto_cash_account_id VARCHAR(16) NULL DEFAULT NULL,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_cajas_activo (activo),
+            KEY idx_cajas_estado (estado)
+        ) $charset_collate;";
+        dbDelta($sql_cajas);
+
+        $sql_drafts = "CREATE TABLE {$prefix}billing_drafts (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            document_type_id INT UNSIGNED NOT NULL DEFAULT 37,
+            status VARCHAR(16) NOT NULL DEFAULT 'draft',
+            issue_date DATE NULL DEFAULT NULL,
+            due_date DATE NULL DEFAULT NULL,
+            payment_conditions VARCHAR(32) NOT NULL DEFAULT '0',
+            sale_state VARCHAR(64) NOT NULL DEFAULT 'VENTA: Concretada',
+            quote_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            dte_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            net_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            exempt_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            tax_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            total_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            updated_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_status (status),
+            KEY idx_bill_draft_quote (quote_id),
+            KEY idx_bill_draft_dte (dte_id)
+        ) $charset_collate;";
+        dbDelta($sql_drafts);
+
+        $sql_payments = "CREATE TABLE {$prefix}billing_draft_payments (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            draft_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            dte_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            pay_date DATE NULL DEFAULT NULL,
+            caja VARCHAR(64) NOT NULL DEFAULT '',
+            caja_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            method VARCHAR(64) NOT NULL DEFAULT '',
+            method_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            amount_due DECIMAL(14,2) NOT NULL DEFAULT 0,
+            amount_paid DECIMAL(14,2) NOT NULL DEFAULT 0,
+            change_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            amount_applied DECIMAL(14,2) NOT NULL DEFAULT 0,
+            notes VARCHAR(500) NOT NULL DEFAULT '',
+            charge_code VARCHAR(32) NOT NULL DEFAULT '',
+            cheque_numero VARCHAR(64) NOT NULL DEFAULT '',
+            cheque_titular VARCHAR(128) NOT NULL DEFAULT '',
+            cheque_banco VARCHAR(128) NOT NULL DEFAULT '',
+            facto_payment_id VARCHAR(32) NULL DEFAULT NULL,
+            facto_sync_status VARCHAR(16) NOT NULL DEFAULT 'off',
+            facto_sync_error TEXT NULL,
+            facto_synced_at DATETIME NULL DEFAULT NULL,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_pay_draft (draft_id),
+            KEY idx_bill_draft_pay_caja (caja_id),
+            KEY idx_bill_draft_pay_dte (dte_id)
+        ) $charset_collate;";
+        dbDelta($sql_payments);
+
+        self::maybe_add_table_column($prefix . 'cajas', 'facto_cash_account_id', 'VARCHAR(16) NULL DEFAULT NULL');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'dte_id', 'BIGINT UNSIGNED NULL DEFAULT NULL');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'dte_id', 'BIGINT UNSIGNED NULL DEFAULT NULL');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'method_id', 'BIGINT UNSIGNED NULL DEFAULT NULL');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'amount_applied', 'DECIMAL(14,2) NOT NULL DEFAULT 0');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'cheque_numero', 'VARCHAR(64) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'cheque_titular', 'VARCHAR(128) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'cheque_banco', 'VARCHAR(128) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'facto_payment_id', 'VARCHAR(32) NULL DEFAULT NULL');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'facto_sync_status', 'VARCHAR(16) NOT NULL DEFAULT \'off\'');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'facto_sync_error', 'TEXT NULL');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'facto_synced_at', 'DATETIME NULL DEFAULT NULL');
+        $wpdb->query("ALTER TABLE {$prefix}billing_draft_payments MODIFY draft_id BIGINT UNSIGNED NULL DEFAULT NULL");
+        $wpdb->query("UPDATE {$prefix}billing_draft_payments SET amount_applied = GREATEST(0, amount_paid - change_amount) WHERE amount_applied = 0 AND amount_paid > 0");
+
+        $count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$prefix}payment_methods");
+        if ($count === 0) {
+            $seeds = [
+                ['Amipass', '13', 1, 0, 0, 10],
+                ['Cheque a plazo', '3', 1, 1, 0, 20],
+                ['Cheque al día', '2', 1, 1, 0, 30],
+                ['Depósito bancario', '9', 1, 0, 0, 40],
+                ['Edenred', '14', 1, 0, 0, 50],
+                ['Efectivo', '1', 1, 0, 1, 60],
+                ['Factura contra nota de crédito', '7', 0, 0, 0, 70],
+                ['GetNet', '19', 1, 0, 0, 80],
+                ['Mercado Pago', '17', 1, 0, 0, 90],
+                ['Nota de crédito', '6', 0, 0, 0, 100],
+                ['Otros documentos', '8', 1, 0, 0, 110],
+                ['Pago automático API', '15', 0, 0, 0, 120],
+                ['Redelcom', '16', 1, 0, 0, 130],
+                ['Sodexo', '12', 1, 0, 0, 140],
+                ['Tarjeta de crédito', '4', 1, 0, 0, 150],
+                ['Tarjeta de débito', '5', 1, 0, 0, 160],
+                ['Transferencia electrónica bancaria', '10', 1, 0, 0, 170],
+                ['WebPay', '18', 1, 0, 0, 180],
+            ];
+            foreach ($seeds as $seed) {
+                $wpdb->insert("{$prefix}payment_methods", [
+                    'nombre' => $seed[0],
+                    'facto_payment_type_id' => $seed[1],
+                    'visible' => $seed[2],
+                    'requiere_cheque' => $seed[3],
+                    'permite_vuelto' => $seed[4],
+                    'orden' => $seed[5],
+                    'activo' => 1,
+                ]);
+            }
+        }
+
+        $caja_map = [
+            'Efectivo' => '1',
+            'Tarjeta' => '2',
+            'Arca de Riverso' => '3',
+            'Arca Virtual' => '4',
+            'Transferencias' => '5',
+            'CHEQUE AL DIA' => '7',
+        ];
+        foreach ($caja_map as $nombre => $facto_id) {
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}cajas SET facto_cash_account_id = %s
+                 WHERE nombre = %s AND (facto_cash_account_id IS NULL OR facto_cash_account_id = '')",
+                $facto_id,
+                $nombre
+            ));
+        }
+
+        if (get_option('riverso_facto_payments_sync') === false) {
+            update_option('riverso_facto_payments_sync', '1');
+        }
+
+        if (get_option('riverso_pos_phase69_billing_payments') !== '1') {
+            update_option('riverso_pos_phase69_billing_payments', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase69_billing_payments', 'payment_methods', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 69: métodos de pago y sincronización FACTO',
+                ));
+            }
+        }
+    }
+
+    /**
+     * @param string $table
+     * @param string $column
+     * @param string $definition
+     */
+    private static function maybe_add_table_column($table, $column, $definition) {
+        global $wpdb;
+        $cols = $wpdb->get_col("DESC {$table}", 0);
+        if (!is_array($cols) || in_array($column, $cols, true)) {
+            return;
+        }
+        $wpdb->query("ALTER TABLE {$table} ADD {$column} {$definition}");
     }
 
     /**

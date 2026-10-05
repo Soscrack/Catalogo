@@ -11,8 +11,9 @@
     receiverMode: "locked", // locked | found | manual
     comunas: [],
     comunaActiveIndex: -1,
-    draftId: 0,
+    draftId: cfg.draftId || 0,
     draftStatus: "draft",
+    dteId: 0,
     boletaTab: "detalles",
     refs: [],
     payments: [],
@@ -1015,57 +1016,143 @@
     });
   }
 
-  function renderPagosPanel() {
-    var isDraft = state.draftStatus !== "emitted";
-    if ($("bill-pagos-draft-msg")) $("bill-pagos-draft-msg").hidden = !isDraft;
-    if ($("bill-pagos-emitted")) $("bill-pagos-emitted").hidden = isDraft;
-    if (isDraft) return;
-    var body = $("bill-pagos-body");
+  function canPay() {
+    return state.draftStatus === "emitted" || state.draftStatus === "closed_local" || state.dteId > 0;
+  }
+
+  function paymentApplied(p) {
+    var applied = Number(p.amount_applied);
+    if (applied > 0) return applied;
+    return Math.max(0, (Number(p.amount_paid) || 0) - (Number(p.change_amount) || 0));
+  }
+
+  function unpaidAmount() {
+    var totalDue = boletaTotals().total_amount;
+    if (state.dteTotal) totalDue = Number(state.dteTotal) || totalDue;
+    var paid = (state.payments || []).reduce(function (s, p) { return s + paymentApplied(p); }, 0);
+    return Math.max(0, Math.round(totalDue - paid));
+  }
+
+  function syncStatusHtml(p) {
+    var st = p.facto_sync_status || "off";
+    if (st === "ok") return '<span class="bill-sync bill-sync-ok" title="En FACTO">FACTO ok</span>';
+    if (st === "pending" || st === "sending") return '<span class="bill-sync bill-sync-pending">Pendiente FACTO</span>';
+    if (st === "error") {
+      return '<span class="bill-sync bill-sync-error">Error</span> <button type="button" class="bill-btn bill-btn-secondary bill-pay-retry" data-id="' + p.id + '">Reintentar</button>';
+    }
+    if (st === "unknown") {
+      return '<span class="bill-sync bill-sync-unknown">Desconocido</span> <button type="button" class="bill-btn bill-btn-secondary bill-pay-retry" data-id="' + p.id + '" data-unknown="1">Revisar / reintentar</button>';
+    }
+    return "";
+  }
+
+  function fillPagosBody(bodyId, cobrosId, pagosId, impagoId) {
+    var body = $(bodyId);
     if (!body) return;
     body.innerHTML = "";
-    var totalPaid = 0;
     var totalDue = boletaTotals().total_amount;
-    // Cobro row
+    if (state.dteTotal) totalDue = Number(state.dteTotal) || totalDue;
+    var totalPaid = 0;
+    var due = unpaidAmount();
     var trC = document.createElement("tr");
+    var payBtn = due > 0
+      ? '<button type="button" class="bill-btn bill-btn-primary bill-pago-open">Pagar (' + money(due) + ")</button>"
+      : "";
     trC.innerHTML =
-      "<td>COBRO</td><td>" + escAttr(($("bill-boleta-issue-date") || {}).value || "") + "</td>" +
-      "<td></td><td></td><td>Cobro contado</td><td>" + money(totalDue) + "</td>" +
-      '<td><button type="button" class="bill-btn bill-btn-primary" id="bill-pago-open">Pagar ' + money(totalDue) + "</button></td>";
+      "<td>COBRO</td><td>" + escAttr(($("bill-boleta-issue-date") || $("bill-issue-date") || {}).value || "") + "</td>" +
+      "<td>Cobro contado</td><td></td><td></td><td></td><td></td><td></td><td>" + money(totalDue) + "</td>" +
+      "<td>" + payBtn + ' <button type="button" class="bill-btn bill-btn-wip" disabled>Borrar [WIP]</button></td>';
     body.appendChild(trC);
     (state.payments || []).forEach(function (p) {
-      totalPaid += Number(p.amount_paid) || 0;
+      var applied = paymentApplied(p);
+      totalPaid += applied;
       var tr = document.createElement("tr");
       tr.innerHTML =
         "<td>PAGO</td><td>" + escAttr(p.pay_date || "") + "</td>" +
         "<td>" + escAttr(p.method || "") + "</td><td>" + escAttr(p.caja || "") + "</td>" +
-        "<td>" + escAttr(p.notes || "") + "</td><td>-" + money(p.amount_paid || 0) + "</td><td></td>";
+        "<td>" + escAttr(p.cheque_numero || "") + "</td><td>" + escAttr(p.cheque_titular || "") + "</td>" +
+        "<td>" + escAttr(p.cheque_banco || "") + "</td>" +
+        "<td>" + escAttr(p.notes || "") + (p.facto_payment_id ? " · Asociado a P" + p.facto_payment_id : "") + "</td>" +
+        "<td>-" + money(applied) + "</td>" +
+        '<td>' + syncStatusHtml(p) + ' <button type="button" class="bill-btn bill-btn-danger bill-pay-del" data-id="' + p.id + '">Borrar</button></td>';
       body.appendChild(tr);
     });
-    if ($("bill-pagos-cobros")) $("bill-pagos-cobros").textContent = money(totalDue);
-    if ($("bill-pagos-pagos")) $("bill-pagos-pagos").textContent = money(totalPaid);
-    if ($("bill-pagos-impago")) $("bill-pagos-impago").textContent = money(Math.max(0, totalDue - totalPaid));
-    var openBtn = $("bill-pago-open");
-    if (openBtn) {
-      openBtn.addEventListener("click", openPagoModal);
+    if ($(cobrosId)) $(cobrosId).textContent = money(totalDue);
+    if ($(pagosId)) {
+      $(pagosId).textContent = money(totalPaid);
+      $(pagosId).classList.toggle("is-zero", totalPaid <= 0);
+    }
+    if ($(impagoId)) $(impagoId).textContent = money(Math.max(0, totalDue - totalPaid));
+    body.querySelectorAll(".bill-pago-open").forEach(function (btn) {
+      btn.addEventListener("click", openPagoModal);
+    });
+    body.querySelectorAll(".bill-pay-retry").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        retryPayment(parseInt(btn.getAttribute("data-id"), 10) || 0, btn.getAttribute("data-unknown") === "1");
+      });
+    });
+    body.querySelectorAll(".bill-pay-del").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        deletePayment(parseInt(btn.getAttribute("data-id"), 10) || 0);
+      });
+    });
+  }
+
+  function renderPagosPanel() {
+    var open = canPay();
+    if ($("bill-pagos-draft-msg")) $("bill-pagos-draft-msg").hidden = open;
+    if ($("bill-pagos-emitted")) $("bill-pagos-emitted").hidden = !open;
+    if (open) fillPagosBody("bill-pagos-body", "bill-pagos-cobros", "bill-pagos-pagos", "bill-pagos-impago");
+    if (state.dteId) {
+      if ($("bill-done-pagos")) $("bill-done-pagos").hidden = false;
+      fillPagosBody("bill-done-pagos-body", "bill-done-pagos-cobros", "bill-done-pagos-pagos", "bill-done-pagos-impago");
     }
   }
 
   function applyPagoCajas(boxes) {
-    var sel = $("bill-pago-caja");
-    if (!sel) return;
     boxes = boxes || [];
     cfg.cashBoxes = boxes;
-    if (!boxes.length) {
-      sel.innerHTML = '<option value="">No hay cajas abiertas</option>';
-      sel.disabled = true;
-      return;
-    }
-    sel.disabled = false;
-    sel.innerHTML = boxes
-      .map(function (b) {
-        return '<option value="' + String(b.id) + '" data-nombre="' + escAttr(b.nombre) + '">' + escAttr(b.nombre) + "</option>";
-      })
-      .join("");
+    ["bill-pago-caja", "bill-emit-caja"].forEach(function (id) {
+      var sel = $(id);
+      if (!sel) return;
+      if (!boxes.length) {
+        sel.innerHTML = '<option value="">No hay cajas abiertas</option>';
+        sel.disabled = true;
+        return;
+      }
+      sel.disabled = false;
+      sel.innerHTML = boxes
+        .map(function (b) {
+          return '<option value="' + String(b.id) + '" data-nombre="' + escAttr(b.nombre) + '">' + escAttr(b.nombre) + "</option>";
+        })
+        .join("");
+    });
+  }
+
+  function paymentMethods() {
+    return cfg.paymentMethods || [];
+  }
+
+  function fillPagoMethods() {
+    var html = paymentMethods().map(function (m) {
+      return '<option value="' + String(m.id) + '">' + escAttr(m.nombre) + "</option>";
+    }).join("");
+    ["bill-pago-method", "bill-emit-method"].forEach(function (id) {
+      if ($(id)) $(id).innerHTML = html || '<option value="">Sin métodos</option>';
+    });
+    toggleChequeFields("bill-pago-method", "bill-pago-cheque");
+    toggleChequeFields("bill-emit-method", "bill-emit-cheque");
+  }
+
+  function methodById(id) {
+    id = parseInt(id, 10) || 0;
+    return paymentMethods().filter(function (m) { return Number(m.id) === id; })[0] || null;
+  }
+
+  function toggleChequeFields(selectId, wrapId) {
+    var m = methodById(($(selectId) || {}).value);
+    var wrap = $(wrapId);
+    if (wrap) wrap.hidden = !(m && m.requiere_cheque);
   }
 
   function fillPagoCajas() {
@@ -1081,13 +1168,19 @@
   }
 
   function openPagoModal() {
-    var due = Math.max(0, boletaTotals().total_amount - (state.payments || []).reduce(function (s, p) {
-      return s + (Number(p.amount_paid) || 0);
-    }, 0));
+    var due = unpaidAmount();
+    if (due <= 0) {
+      showAlert("El documento ya está pagado.");
+      return;
+    }
     if ($("bill-pago-due")) $("bill-pago-due").value = money(due);
     if ($("bill-pago-paid")) $("bill-pago-paid").value = String(Math.round(due));
     if ($("bill-pago-vuelto")) $("bill-pago-vuelto").value = "0";
     if ($("bill-pago-notes")) $("bill-pago-notes").value = "";
+    ["bill-pago-cheque-num", "bill-pago-cheque-tit", "bill-pago-cheque-banco"].forEach(function (id) {
+      if ($(id)) $(id).value = "";
+    });
+    fillPagoMethods();
     fillPagoCajas();
     if ($("bill-pago-modal")) {
       $("bill-pago-modal").hidden = false;
@@ -1148,13 +1241,20 @@
     }
     if (draft.quote_id) state.quoteId = draft.quote_id;
     if ($("bill-draft-banner-text")) {
-      $("bill-draft-banner-text").textContent = state.draftStatus === "emitted" ? "DOC EMITIDO" : "DOC EN BORRADOR";
+      $("bill-draft-banner-text").textContent = bannerText(state.draftStatus);
     }
+  }
+
+  function bannerText(status) {
+    if (status === "emitted") return "DOC EMITIDO";
+    if (status === "closed_local") return "DOC CERRADO (sin SII)";
+    return "DOC EN BORRADOR";
   }
 
   function applyDraft(draft) {
     state.draftId = draft.id || 0;
     state.draftStatus = draft.status || "draft";
+    if (draft.dte_id) state.dteId = draft.dte_id;
     if ($("bill-draft-id")) $("bill-draft-id").value = String(state.draftId);
     if (draft.issue_date && $("bill-boleta-issue-date")) $("bill-boleta-issue-date").value = draft.issue_date;
     if ($("bill-boleta-due-date")) $("bill-boleta-due-date").value = draft.due_date || "";
@@ -1193,7 +1293,7 @@
     state.payments = draft.payments || [];
     if (draft.quote_id) state.quoteId = draft.quote_id;
     if ($("bill-draft-banner-text")) {
-      $("bill-draft-banner-text").textContent = state.draftStatus === "emitted" ? "DOC EMITIDO" : "DOC EN BORRADOR";
+      $("bill-draft-banner-text").textContent = bannerText(state.draftStatus);
     }
     if (Lines && typeof Lines.hydrateAfterLoad === "function") {
       Lines.hydrateAfterLoad();
@@ -1608,6 +1708,36 @@
     }
   }
 
+  function loadDraftIfAny() {
+    var draftId = Number(cfg.draftId || state.draftId || 0) || 0;
+    if (!draftId) return false;
+    var action = (cfg.actions && cfg.actions.draftGet) || "riverso_billing_draft_get";
+    showAlert("Cargando borrador…");
+    post(action, { draft_id: draftId })
+      .then(function (data) {
+        if (!data || !data.draft) {
+          throw new Error("Borrador no encontrado.");
+        }
+        if ($("bill-doc-type")) {
+          $("bill-doc-type").value = String(data.draft.document_type_id || 37);
+        }
+        state.docType = Number(data.draft.document_type_id || 37) || 37;
+        applyDraft(data.draft);
+        updateFolioCard();
+        goStep(2);
+        showAlert("Borrador #" + draftId + " cargado.");
+      })
+      .catch(function (err) {
+        showAlert(err.message || "No se pudo cargar el borrador", true);
+        if (!state.lines.length) {
+          state.lines = [emptyLine()];
+          renderLines();
+        }
+        lockAllDetails();
+      });
+    return true;
+  }
+
   function loadQuoteIfAny() {
     if (!state.quoteId) {
       if (!state.lines.length) {
@@ -1682,6 +1812,289 @@
         state.lines = [emptyLine()];
         renderLines();
         lockAllDetails();
+      });
+  }
+
+  function updatePagoVuelto() {
+    var dueTxt = (($("bill-pago-due") || {}).value || "").replace(/[^0-9]/g, "");
+    var due = parseFloat(dueTxt) || 0;
+    var paid = parseFloat(($("bill-pago-paid") || {}).value) || 0;
+    var m = methodById(($("bill-pago-method") || {}).value);
+    var vuelto = m && m.permite_vuelto ? Math.max(0, Math.round(paid - due)) : 0;
+    if ($("bill-pago-vuelto")) $("bill-pago-vuelto").value = String(vuelto);
+  }
+
+  function applyPaymentsPayload(res) {
+    if (res.draft) applyDraft(res.draft);
+    if (res.payments) state.payments = res.payments;
+    renderPagosPanel();
+  }
+
+  function savePago() {
+    if (!state.draftId && !state.dteId) {
+      showAlert("Guarda o emite el documento primero.", true);
+      return;
+    }
+    var due = unpaidAmount();
+    var paid = parseFloat(($("bill-pago-paid") || {}).value) || 0;
+    var m = methodById(($("bill-pago-method") || {}).value);
+    if (!m) {
+      showMissingPopup("Pago", "Selecciona un método de pago.", []);
+      return;
+    }
+    if (!(m.permite_vuelto) && paid > due) {
+      showMissingPopup("Pago", "Este método no permite vuelto. El monto no puede superar el saldo.", []);
+      return;
+    }
+    var cajaSel = $("bill-pago-caja");
+    var cajaId = cajaSel ? parseInt(cajaSel.value, 10) || 0 : 0;
+    if (!cajaId) {
+      showMissingPopup("Pago", "No hay cajas abiertas con permiso para pagar. Abre una caja en Manejo de Caja.", []);
+      return;
+    }
+    var cajaNombre = "";
+    if (cajaSel && cajaSel.selectedOptions && cajaSel.selectedOptions[0]) {
+      cajaNombre = cajaSel.selectedOptions[0].getAttribute("data-nombre") || cajaSel.selectedOptions[0].textContent || "";
+    }
+    var vuelto = m.permite_vuelto ? Math.max(0, paid - due) : 0;
+    post(cfg.actions.draftPayment, {
+      draft_id: state.draftId,
+      dte_id: state.dteId,
+      pay_date: ($("bill-pago-fecha") || {}).value || cfg.todayDate,
+      caja_id: cajaId,
+      caja: cajaNombre,
+      method_id: m.id,
+      amount_due: due,
+      amount_paid: paid,
+      change_amount: vuelto,
+      notes: ($("bill-pago-notes") || {}).value || "",
+      cheque_numero: ($("bill-pago-cheque-num") || {}).value || "",
+      cheque_titular: ($("bill-pago-cheque-tit") || {}).value || "",
+      cheque_banco: ($("bill-pago-cheque-banco") || {}).value || "",
+    })
+      .then(function (res) {
+        applyPaymentsPayload(res);
+        var left = unpaidAmount();
+        if (left > 0) {
+          openPagoModal();
+          showAlert("Pago registrado. Quedan " + money(left) + ".");
+        } else {
+          closePagoModal();
+          showAlert("Pago registrado. Documento saldado.");
+        }
+      })
+      .catch(function (err) {
+        showMissingPopup("Pago", err.message || "No se pudo registrar", []);
+      });
+  }
+
+  function retryPayment(id, unknown) {
+    if (!id) return;
+    if (unknown && !window.confirm("Reintentar un pago desconocido puede duplicarlo en FACTO. ¿Continuar?")) return;
+    post(cfg.actions.paymentRetry, { payment_id: id, confirm_unknown: unknown ? 1 : 0 })
+      .then(function (res) {
+        applyPaymentsPayload(res);
+        showAlert((res.sync && res.sync.message) || "Sincronización actualizada.");
+      })
+      .catch(function (err) {
+        showAlert(err.message || "No se pudo reintentar", true);
+      });
+  }
+
+  function deletePayment(id) {
+    if (!id) return;
+    if (!window.confirm("¿Borrar este pago? Se revertirá el movimiento de caja.")) return;
+    post(cfg.actions.paymentDelete, { payment_id: id })
+      .then(function (res) {
+        applyPaymentsPayload(res);
+        showAlert("Pago borrado.");
+      })
+      .catch(function (err) {
+        showAlert(err.message || "No se pudo borrar", true);
+      });
+  }
+
+  function syncEmitPayFieldsEnabled() {
+    var on = $("bill-emit-mark-paid") && $("bill-emit-mark-paid").checked;
+    var wrap = $("bill-emit-pay-fields");
+    if (wrap) {
+      wrap.classList.toggle("is-disabled", !on);
+      wrap.querySelectorAll("input, select, textarea").forEach(function (el) {
+        el.disabled = !on;
+      });
+    }
+    if (on) {
+      toggleChequeFields("bill-emit-method", "bill-emit-cheque");
+      var m = methodById(($("bill-emit-method") || {}).value);
+      var chequeOn = !!(m && m.requiere_cheque);
+      ["bill-emit-cheque-num", "bill-emit-cheque-tit", "bill-emit-cheque-banco"].forEach(function (id) {
+        if ($(id)) $(id).disabled = !chequeOn;
+      });
+    } else if ($("bill-emit-cheque")) {
+      $("bill-emit-cheque").hidden = true;
+    }
+  }
+
+  function openEmitModal() {
+    fillPagoMethods();
+    fillPagoCajas();
+    var type = currentTypeId();
+    if ($("bill-emit-close-local")) {
+      $("bill-emit-close-local").disabled = type !== 37;
+      $("bill-emit-close-local").title = type !== 37
+        ? "Solo disponible en boleta"
+        : "";
+    }
+    if ($("bill-emit-email-to") && !$("bill-emit-email-to").value) {
+      var email = (($("bill-recv-email") || {}).value || "").trim();
+      $("bill-emit-email-to").value = email;
+    }
+    syncEmitPayFieldsEnabled();
+    if ($("bill-emit-modal")) {
+      $("bill-emit-modal").hidden = false;
+      $("bill-emit-modal").setAttribute("aria-hidden", "false");
+    }
+  }
+
+  function closeEmitModal() {
+    if ($("bill-emit-modal")) {
+      $("bill-emit-modal").hidden = true;
+      $("bill-emit-modal").setAttribute("aria-hidden", "true");
+    }
+  }
+
+  function emitPayload() {
+    var payload = previewPayload();
+    payload.draft_id = state.draftId || 0;
+    payload.mark_paid = $("bill-emit-mark-paid") && $("bill-emit-mark-paid").checked ? 1 : 0;
+    payload.send_email = $("bill-emit-email") && $("bill-emit-email").checked ? 1 : 0;
+    payload.email_to = ($("bill-emit-email-to") || {}).value || "";
+    payload.email_extra = ($("bill-emit-email-extra") || {}).value || "";
+    payload.pay_caja_id = ($("bill-emit-caja") || {}).value || "";
+    payload.pay_method_id = ($("bill-emit-method") || {}).value || "";
+    payload.pay_notes = ($("bill-emit-notes") || {}).value || "";
+    payload.cheque_numero = ($("bill-emit-cheque-num") || {}).value || "";
+    payload.cheque_titular = ($("bill-emit-cheque-tit") || {}).value || "";
+    payload.cheque_banco = ($("bill-emit-cheque-banco") || {}).value || "";
+    return payload;
+  }
+
+  function showEmitResult(data) {
+    var dte = data.dte || {};
+    state.dteId = dte.id || state.dteId;
+    state.dteTotal = dte.totals && dte.totals.total_amount ? dte.totals.total_amount : state.dteTotal;
+    if (data.draft) applyDraft(data.draft);
+    if (data.payments) state.payments = data.payments;
+    goStep(3);
+    if ($("bill-done-title")) {
+      $("bill-done-title").textContent = data.idempotent ? "Documento ya emitido" : "Documento emitido";
+    }
+    if ($("bill-done-msg")) $("bill-done-msg").textContent = data.message || "";
+    if ($("bill-done-folio")) {
+      $("bill-done-folio").textContent = (dte.document_type_label || "") + " N° " + (dte.folio || "—");
+    }
+    renderPagosPanel();
+    if ($("bill-emit-print") && $("bill-emit-print").checked) {
+      runPreview("pdf");
+    }
+  }
+
+  function hasEmitableLines() {
+    return (state.lines || []).some(function (line) {
+      if (!line) return false;
+      var desc = String(line.description || line.concepto || "").trim();
+      var sku = String(line.sku || "").trim();
+      var qty = Number(line.quantity) || 0;
+      var price = Number(line.unit_price_bruto != null ? line.unit_price_bruto : line.unit_price) || 0;
+      return !!(desc || sku) && qty > 0 && price > 0;
+    });
+  }
+
+  function confirmEmit() {
+    if (!hasEmitableLines()) {
+      showAlert("Agrega líneas al documento.", true);
+      return;
+    }
+    if ($("bill-emit-mark-paid") && $("bill-emit-mark-paid").checked) {
+      var cajaId = parseInt(($("bill-emit-caja") || {}).value, 10) || 0;
+      var methodId = parseInt(($("bill-emit-method") || {}).value, 10) || 0;
+      if (!cajaId) {
+        showMissingPopup("Pago", "Selecciona una caja abierta para marcar como pagado.", []);
+        return;
+      }
+      if (!methodId) {
+        showMissingPopup("Pago", "Selecciona un método de pago.", []);
+        return;
+      }
+      var m = methodById(methodId);
+      if (m && m.requiere_cheque) {
+        var n = (($("bill-emit-cheque-num") || {}).value || "").trim();
+        var t = (($("bill-emit-cheque-tit") || {}).value || "").trim();
+        var b = (($("bill-emit-cheque-banco") || {}).value || "").trim();
+        if (!n || !t || !b) {
+          showMissingPopup("Pago", "Completa número, titular y banco del cheque.", []);
+          return;
+        }
+      }
+    }
+    var btn = $("bill-emit-confirm");
+    if (btn) btn.disabled = true;
+    showAlert("Emitiendo…");
+    var send = function () {
+      return post(cfg.actions.emit, emitPayload());
+    };
+    var chain = currentTypeId() === 37 && !state.draftId
+      ? saveDraft({ silent: true }).then(send)
+      : send();
+    chain
+      .then(function (data) {
+        closeEmitModal();
+        showEmitResult(data);
+      })
+      .catch(function (err) {
+        showAlert(err.message || "Error al emitir", true);
+      })
+      .finally(function () {
+        if (btn) btn.disabled = false;
+      });
+  }
+
+  function confirmCloseLocal() {
+    if (currentTypeId() !== 37) {
+      showAlert("Cerrar sin enviar solo está disponible en boleta.", true);
+      return;
+    }
+    var ok = window.confirm(
+      "Esta opción se utiliza para documentos que ya enviaste al S.I.I. y estás registrando de manera referencial ¿Está seguro que desea cerrar y NO enviar al S.I.I.?"
+    );
+    if (!ok) return;
+    var btn = $("bill-emit-close-local");
+    if (btn) btn.disabled = true;
+    saveDraft({ silent: true })
+      .then(function () {
+        var data = {
+          draft_id: state.draftId,
+          document_type_id: 37,
+          issue_date: ($("bill-boleta-issue-date") || {}).value || cfg.todayDate,
+          due_date: ($("bill-boleta-due-date") || {}).value || "",
+          payment_conditions: ($("bill-boleta-payment") || {}).value || "0",
+          quote_id: state.quoteId || 0,
+          lines: state.lines,
+          refs: state.refs,
+        };
+        return post(cfg.actions.closeLocal, data);
+      })
+      .then(function (res) {
+        closeEmitModal();
+        if (res.draft) applyDraft(res.draft);
+        setBoletaTab("pagos");
+        showAlert(res.message || "Documento cerrado.");
+      })
+      .catch(function (err) {
+        showAlert(err.message || "No se pudo cerrar", true);
+      })
+      .finally(function () {
+        if (btn) btn.disabled = currentTypeId() !== 37;
       });
   }
 
@@ -2216,54 +2629,46 @@
     }
     if ($("bill-pago-close")) $("bill-pago-close").addEventListener("click", closePagoModal);
     if ($("bill-pago-cancel")) $("bill-pago-cancel").addEventListener("click", closePagoModal);
-    if ($("bill-pago-paid")) {
-      $("bill-pago-paid").addEventListener("input", function () {
-        var dueTxt = (($("bill-pago-due") || {}).value || "").replace(/[^0-9]/g, "");
-        var due = parseFloat(dueTxt) || 0;
-        var paid = parseFloat($("bill-pago-paid").value) || 0;
-        if ($("bill-pago-vuelto")) $("bill-pago-vuelto").value = String(Math.max(0, Math.round(paid - due)));
+    if ($("bill-pago-method")) {
+      $("bill-pago-method").addEventListener("change", function () {
+        toggleChequeFields("bill-pago-method", "bill-pago-cheque");
+        updatePagoVuelto();
       });
+    }
+    if ($("bill-pago-paid")) {
+      $("bill-pago-paid").addEventListener("input", updatePagoVuelto);
     }
     if ($("bill-pago-save")) {
-      $("bill-pago-save").addEventListener("click", function () {
-        if (!state.draftId) {
-          showAlert("Guarda el borrador primero.", true);
-          return;
-        }
-        var dueTxt = (($("bill-pago-due") || {}).value || "").replace(/[^0-9]/g, "");
-        var due = parseFloat(dueTxt) || 0;
-        var paid = parseFloat(($("bill-pago-paid") || {}).value) || 0;
-        var cajaSel = $("bill-pago-caja");
-        var cajaId = cajaSel ? parseInt(cajaSel.value, 10) || 0 : 0;
-        if (!cajaId) {
-          showMissingPopup("Pago", "No hay cajas abiertas con permiso para pagar. Abre una caja en Manejo de Caja.", []);
-          return;
-        }
-        var cajaNombre = "";
-        if (cajaSel && cajaSel.selectedOptions && cajaSel.selectedOptions[0]) {
-          cajaNombre = cajaSel.selectedOptions[0].getAttribute("data-nombre") || cajaSel.selectedOptions[0].textContent || "";
-        }
-        post(cfg.actions.draftPayment, {
-          draft_id: state.draftId,
-          pay_date: ($("bill-pago-fecha") || {}).value || cfg.todayDate,
-          caja_id: cajaId,
-          caja: cajaNombre,
-          method: ($("bill-pago-method") || {}).value || "Efectivo",
-          amount_due: due,
-          amount_paid: paid,
-          change_amount: Math.max(0, paid - due),
-          notes: ($("bill-pago-notes") || {}).value || "",
-        })
-          .then(function (res) {
-            if (res.draft) applyDraft(res.draft);
-            closePagoModal();
-            showAlert("Pago registrado.");
-          })
-          .catch(function (err) {
-            showMissingPopup("Pago", err.message || "No se pudo registrar", []);
-          });
+      $("bill-pago-save").addEventListener("click", savePago);
+    }
+    if ($("bill-emit") || $("bill-boleta-emit")) {
+      [$("bill-emit"), $("bill-boleta-emit")].forEach(function (btn) {
+        if (!btn) return;
+        btn.addEventListener("click", function () {
+          openEmitModal();
+        });
       });
     }
+    if ($("bill-emit-close")) $("bill-emit-close").addEventListener("click", closeEmitModal);
+    if ($("bill-emit-modal")) {
+      $("bill-emit-modal").addEventListener("click", function (e) {
+        if (e.target === $("bill-emit-modal")) closeEmitModal();
+      });
+    }
+    if ($("bill-emit-mark-paid")) {
+      $("bill-emit-mark-paid").addEventListener("change", syncEmitPayFieldsEnabled);
+    }
+    if ($("bill-emit-method")) {
+      $("bill-emit-method").addEventListener("change", function () {
+        if ($("bill-emit-mark-paid") && $("bill-emit-mark-paid").checked) {
+          toggleChequeFields("bill-emit-method", "bill-emit-cheque");
+          syncEmitPayFieldsEnabled();
+        }
+      });
+    }
+    if ($("bill-emit-confirm")) $("bill-emit-confirm").addEventListener("click", confirmEmit);
+    if ($("bill-emit-close-local")) $("bill-emit-close-local").addEventListener("click", confirmCloseLocal);
+    if ($("bill-done-pago-open")) $("bill-done-pago-open").addEventListener("click", openPagoModal);
 
     document.querySelectorAll(".bill-preview-toggle").forEach(function (btn) {
       btn.addEventListener("click", function (e) {
@@ -2287,38 +2692,14 @@
       closeAllPreviewMenus();
     });
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") closeAllPreviewMenus();
-    });
-    if ($("bill-emit")) {
-      $("bill-emit").addEventListener("click", function () {
-        if (!state.lines.length) {
-          showAlert("Agrega líneas al documento.", true);
-          return;
+      if (e.key === "Escape") {
+        closeAllPreviewMenus();
+        if ($("bill-emit-modal") && !$("bill-emit-modal").hidden) {
+          closeEmitModal();
         }
-        if (!window.confirm("¿Emitir el documento tributario en FACTO?")) return;
-        $("bill-emit").disabled = true;
-        showAlert("Emitiendo…");
-        post(cfg.actions.emit, payloadBase())
-          .then(function (data) {
-            var dte = data.dte || {};
-            goStep(3);
-            if ($("bill-done-title")) {
-              $("bill-done-title").textContent = data.idempotent ? "Documento ya emitido" : "Documento emitido";
-            }
-            if ($("bill-done-msg")) $("bill-done-msg").textContent = data.message || "";
-            if ($("bill-done-folio")) {
-              $("bill-done-folio").textContent =
-                (dte.document_type_label || "") + " N° " + (dte.folio || "—");
-            }
-          })
-          .catch(function (err) {
-            showAlert(err.message || "Error al emitir", true);
-          })
-          .finally(function () {
-            $("bill-emit").disabled = false;
-          });
-      });
-    }
+      }
+    });
+    fillPagoMethods();
     if ($("bill-done-new")) {
       $("bill-done-new").addEventListener("click", function () {
         window.location.href = cfg.portalUrl || "/interno/facturacion/";
@@ -2328,7 +2709,9 @@
     updateFolioCard();
     estimateFolio();
     lockAllDetails();
-    loadQuoteIfAny();
+    if (!loadDraftIfAny()) {
+      loadQuoteIfAny();
+    }
     root.setAttribute("data-ready", "1");
   }
 

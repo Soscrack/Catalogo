@@ -284,7 +284,9 @@
   gap: 8px;
 }
 
-.rx-scan-doc-actions select {
+.riverso-rx .rx-scan-doc-actions select {
+  width: auto;
+  max-width: 220px;
   padding: 5px 6px;
   border: 1px solid var(--rx-border);
   border-radius: 4px;
@@ -316,7 +318,12 @@
   background: #fffaf3;
 }
 
-.rx-inbox-head { margin-bottom: 4px; }
+.rx-inbox-head {
+  cursor: pointer;
+  list-style: revert;
+}
+
+.rx-inbox[open] .rx-inbox-head { margin-bottom: 6px; }
 
 /* Documento */
 .rx-doc-meta {

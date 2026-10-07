@@ -734,7 +734,10 @@
         items.forEach(function (d) {
           state.scanDocs[d.id] = d;
         });
-        $("rx-inbox").hidden = !items.length;
+        var inbox = $("rx-inbox");
+        inbox.hidden = !items.length;
+        // Minimizado por defecto; se despliega solo al buscar algo que esté ahí.
+        inbox.open = !!state.search && items.length > 0;
         $("rx-inbox-total").textContent =
           data.total > items.length ? "(últimos " + items.length + " de " + data.total + ")" : "(" + (data.total || 0) + ")";
         $("rx-inbox-list").innerHTML = items.map(scanDocHtml).join("");

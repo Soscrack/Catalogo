@@ -41,12 +41,12 @@ $json_flags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_AP
             </div>
             <div id="rx-ingest-list" class="rx-ingest-list"></div>
 
-            <div class="rx-inbox" id="rx-inbox" hidden>
-                <div class="rx-inbox-head">
+            <details class="rx-inbox" id="rx-inbox" hidden>
+                <summary class="rx-inbox-head">
                     <strong>Escaneados sin ingresar</strong> <span class="rx-sub" id="rx-inbox-total"></span>
-                </div>
+                </summary>
                 <div id="rx-inbox-list"></div>
-            </div>
+            </details>
 
             <div class="rx-chips" id="rx-filters" role="tablist">
                 <button type="button" class="rx-chip" data-filter="pendientes">Pendientes <span></span></button>

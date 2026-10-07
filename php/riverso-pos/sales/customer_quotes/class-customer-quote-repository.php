@@ -7,6 +7,8 @@ if (!defined('ABSPATH')) {
 }
 
 class Riverso_Customer_Quote_Repository {
+    const RESERVATION_REF = 'customer_quote';
+
     private $table_quotes;
     private $table_items;
     /** @var array<string, bool>|null */
@@ -25,7 +27,7 @@ class Riverso_Customer_Quote_Repository {
     public function list_quotes(array $filters = array()) {
         global $wpdb;
         $this->ensure_sale_schema();
-        $this->promote_documented_quotes();
+        $this->sync_documented_quotes();
         // Filtro por fecha de emisión (issue_date; respaldo DATE(created_at)).
         $sql = "SELECT q.*, (SELECT COUNT(*) FROM {$this->table_items} i WHERE i.quote_id = q.id) AS line_count
                 FROM {$this->table_quotes} q";
@@ -94,7 +96,37 @@ class Riverso_Customer_Quote_Repository {
         if (!is_array($rows)) {
             return array();
         }
-        return array_map(array($this, 'present_summary'), $rows);
+        $out = array_map(array($this, 'present_summary'), $rows);
+        $ids = array();
+        foreach ($out as $q) {
+            $ids[] = (int) $q['id'];
+        }
+        $sales = $this->attach_comparisons($this->sale_summaries($ids), false);
+        foreach ($out as $i => $q) {
+            $sale = isset($sales[$q['id']]) ? $sales[$q['id']] : $this->empty_sale_summary();
+            unset($sale['document_draft_ids']);
+            $out[$i]['sale'] = $sale;
+            if ($sale['has_documents']) {
+                $out[$i]['is_expired'] = false;
+            }
+            $out[$i]['status_label'] = self::status_label_with_changes($q['status'], $q['status_label'], $sale);
+        }
+        return $out;
+    }
+
+    /**
+     * «Facturada con cambios» cuando el documento difiere de lo cotizado.
+     *
+     * @param string     $status
+     * @param string     $label
+     * @param array|null $sale
+     * @return string
+     */
+    public static function status_label_with_changes($status, $label, $sale) {
+        if ($status === Riverso_Quote_Status::INVOICED && !empty($sale['comparison']['has_changes'])) {
+            return 'Facturada con cambios';
+        }
+        return $label;
     }
 
     /**
@@ -167,8 +199,10 @@ class Riverso_Customer_Quote_Repository {
         if ($id > 0 && $existing === null) {
             throw new Riverso_Quote_Exception('Cotización no encontrada.');
         }
-        if ($existing !== null && $existing['status'] === Riverso_Quote_Status::INVOICED) {
-            throw new Riverso_Quote_Exception('Una cotización facturada no se puede editar en este corte.');
+        if ($existing !== null && !Riverso_Quote_Status::is_editable($existing['status'])) {
+            throw new Riverso_Quote_Exception(
+                'La cotización está ' . $existing['status_label'] . ' y no se puede editar. Vuelva a Borrador para modificarla.'
+            );
         }
 
         $customer_name = $this->clip((string) (isset($input['customer_name']) ? $input['customer_name'] : ''), 191);
@@ -312,29 +346,29 @@ class Riverso_Customer_Quote_Repository {
     }
 
     /**
-     * Borrador ↔ lista. La utilidad negativa o el margen bajo no impiden pasar a lista.
+     * Cambio manual de estado (ver Riverso_Quote_Status::allowed_targets).
+     * Con documento de venta asociado el estado lo maneja la facturación.
+     * Aprobar reserva stock (aunque quede negativo); salir de Aprobada lo libera.
      */
     public function transition($id, $to) {
-        global $wpdb;
         $quote = $this->find((int) $id);
         if ($quote === null) {
             throw new Riverso_Quote_Exception('Cotización no encontrada.');
         }
         $to = strtolower(trim((string) $to));
         if (!Riverso_Quote_Status::can_transition((string) $quote['status'], $to)) {
-            throw new Riverso_Quote_Exception('Solo se puede pasar entre Borrador y Lista. Para facturar use Facturar.');
+            throw new Riverso_Quote_Exception(
+                'No se puede pasar de ' . $quote['status_label'] . ' a ' . Riverso_Quote_Status::label($to) . '.'
+            );
+        }
+        if ($quote['status'] !== $to && $this->has_associated_document((int) $id)) {
+            throw new Riverso_Quote_Exception('La cotización tiene un documento de venta asociado; su estado lo define la facturación.');
+        }
+        if ($to === Riverso_Quote_Status::LISTED && empty($quote['lines'])) {
+            throw new Riverso_Quote_Exception('Agregue al menos un producto antes de aprobar.');
         }
         if ($quote['status'] !== $to) {
-            $wpdb->update(
-                $this->table_quotes,
-                array(
-                    'status' => $to,
-                    'updated_at' => current_time('mysql'),
-                ),
-                array('id' => (int) $id),
-                array('%s', '%s'),
-                array('%d')
-            );
+            $this->apply_status($quote, $to);
         }
         $updated = $this->find((int) $id);
         if ($updated === null) {
@@ -368,7 +402,7 @@ class Riverso_Customer_Quote_Repository {
             return $quote;
         }
         if ($quote['status'] !== Riverso_Quote_Status::LISTED) {
-            throw new Riverso_Quote_Exception('Solo una cotización en Lista se puede facturar.');
+            throw new Riverso_Quote_Exception('Solo una cotización Aprobada se puede facturar.');
         }
 
         $now = current_time('mysql');
@@ -393,6 +427,7 @@ class Riverso_Customer_Quote_Repository {
             throw new Riverso_Quote_Exception('No se pudo facturar: la cotización cambió de estado.');
         }
 
+        $this->release_stock($id);
         $updated = $this->find($id);
         if ($updated === null) {
             throw new Riverso_Quote_Exception('Cotización no encontrada tras facturar.');
@@ -401,58 +436,553 @@ class Riverso_Customer_Quote_Repository {
     }
 
     /**
-     * Pasa a Lista una cotización que ya tiene documento de facturación.
-     * Idempotente: si ya está en Lista, no escribe.
+     * Compatibilidad: antes la facturación dejaba la cotización en Lista/Aprobada.
      *
      * @param int $id
      */
     public function mark_listed($id) {
-        global $wpdb;
+        $this->sync_document_status($id);
+    }
+
+    /**
+     * Ajusta el estado según los documentos de venta asociados:
+     * - documento emitido o boleta cerrada → Facturada (libera la reserva de stock);
+     * - solo borrador de documento y la cotización en Borrador → Aprobada (reserva stock).
+     * Rechazada/Anulada sin venta no se tocan.
+     *
+     * @param int $id
+     * @return bool true si cambió el estado.
+     */
+    public function sync_document_status($id) {
         $id = (int) $id;
         if ($id <= 0) {
-            return;
+            return false;
         }
         $quote = $this->find($id);
-        if ($quote === null || $quote['status'] === Riverso_Quote_Status::LISTED) {
-            return;
+        if ($quote === null) {
+            return false;
         }
+        $summaries = $this->sale_summaries(array($id));
+        $sale = isset($summaries[$id]) ? $summaries[$id] : $this->empty_sale_summary();
+        $target = null;
+        if ($sale['sold']) {
+            $target = Riverso_Quote_Status::INVOICED;
+        } elseif ($sale['has_documents'] && $quote['status'] === Riverso_Quote_Status::DRAFT) {
+            $target = Riverso_Quote_Status::LISTED;
+        } elseif ($quote['status'] === Riverso_Quote_Status::INVOICED && empty($quote['order_id'])) {
+            // Se eliminó el documento que la facturó (p. ej. boleta cerrada sin SII): vuelve a Aprobada.
+            $target = Riverso_Quote_Status::LISTED;
+        }
+        if ($target === null || $target === $quote['status']) {
+            return false;
+        }
+        $this->apply_status($quote, $target);
+        return true;
+    }
+
+    /**
+     * Facturar implica que el cliente aceptó: un Borrador con productos pasa a Aprobada
+     * al cargarse en Facturación. Si luego no se emite, sigue Aprobada (con reserva).
+     *
+     * @param int $id
+     * @return bool true si cambió el estado.
+     */
+    public function approve_for_billing($id) {
+        $quote = $this->find((int) $id);
+        if ($quote === null || $quote['status'] !== Riverso_Quote_Status::DRAFT || empty($quote['lines'])) {
+            return false;
+        }
+        $this->apply_status($quote, Riverso_Quote_Status::LISTED);
+        return true;
+    }
+
+    /**
+     * Escribe el estado y ajusta reservas: Aprobada reserva, cualquier otro estado libera.
+     *
+     * @param array  $quote Cotización presentada (con líneas).
+     * @param string $status
+     */
+    private function apply_status(array $quote, $status) {
+        global $wpdb;
+        $id = (int) $quote['id'];
         $wpdb->update(
             $this->table_quotes,
             array(
-                'status' => Riverso_Quote_Status::LISTED,
+                'status' => $status,
                 'updated_at' => current_time('mysql'),
             ),
             array('id' => $id),
             array('%s', '%s'),
             array('%d')
         );
+        if ($status === Riverso_Quote_Status::LISTED) {
+            $this->reserve_stock($quote);
+        } else {
+            $this->release_stock($id);
+        }
     }
 
     /**
-     * Cotizaciones con borrador o DTE asociado quedan en Lista.
+     * Red de seguridad al listar: corrige estados de cotizaciones con documentos
+     * (p. ej. emitidas antes de existir el estado Facturada).
      */
-    public function promote_documented_quotes() {
+    public function sync_documented_quotes() {
         global $wpdb;
-        $clauses = array();
         $drafts = $wpdb->prefix . 'riverso_billing_drafts';
         $issued = $wpdb->prefix . 'riverso_dte_issued';
-        if ($this->table_exists($drafts)) {
-            $clauses[] = "EXISTS (SELECT 1 FROM {$drafts} d WHERE d.quote_id = q.id)";
-        }
+        $sold = array();
+        $any = array();
         if ($this->table_exists($issued)) {
-            $clauses[] = "EXISTS (SELECT 1 FROM {$issued} i WHERE i.quote_id = q.id)";
+            $exists_dte = "EXISTS (SELECT 1 FROM {$issued} i WHERE i.quote_id = q.id
+                AND i.facto_document_id IS NOT NULL AND (i.facto_status IS NULL OR i.facto_status IN (0, 2)))";
+            $sold[] = $exists_dte;
+            $any[] = $exists_dte;
         }
-        if (!$clauses) {
+        if ($this->table_exists($drafts)) {
+            $sold[] = "EXISTS (SELECT 1 FROM {$drafts} d WHERE d.quote_id = q.id AND d.status IN ('closed_local', 'emitted'))";
+            $any[] = "EXISTS (SELECT 1 FROM {$drafts} d2 WHERE d2.quote_id = q.id)";
+        }
+        if (!$any) {
             return;
         }
-        $table = str_replace('`', '', $this->table_quotes);
+        // Solo candidatas a cambiar: vendidas sin Facturada, o borradores con documento.
+        $ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT q.id FROM {$this->table_quotes} q
+             WHERE (q.status <> %s AND (" . implode(' OR ', $sold ?: array('0')) . "))
+                OR (q.status = %s AND (" . implode(' OR ', $any) . '))
+             LIMIT 200',
+            Riverso_Quote_Status::INVOICED,
+            Riverso_Quote_Status::DRAFT
+        ));
+        foreach ((array) $ids as $qid) {
+            $this->sync_document_status((int) $qid);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function empty_sale_summary() {
+        return array(
+            'has_documents' => false,
+            'sold' => false,
+            'total' => 0.0,
+            'paid' => 0.0,
+            'status' => 'none',
+            'status_label' => 'Sin documento',
+            'folios' => array(),
+            // Borradores de Facturación que respaldan la venta (para comparar líneas).
+            'document_draft_ids' => array(),
+        );
+    }
+
+    /**
+     * Estado de venta derivado de borradores, DTE emitidos y pagos de facturación.
+     * none: sin documento · billing: borrador en facturación · unpaid: vendida sin pago ·
+     * partial: pago parcial · paid: pagada.
+     *
+     * @param int[] $ids
+     * @return array<int, array<string, mixed>>
+     */
+    public function sale_summaries(array $ids) {
+        global $wpdb;
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        $out = array();
+        foreach ($ids as $id) {
+            $out[$id] = $this->empty_sale_summary();
+        }
+        if (!$ids) {
+            return $out;
+        }
+        $drafts_t = $wpdb->prefix . 'riverso_billing_drafts';
+        $issued_t = $wpdb->prefix . 'riverso_dte_issued';
+        $payments_t = $wpdb->prefix . 'riverso_billing_draft_payments';
+        $in = implode(',', $ids);
+
+        $issued = $this->table_exists($issued_t) ? $wpdb->get_results(
+            "SELECT id, quote_id, document_type_id, folio, total_amount FROM {$issued_t}
+             WHERE quote_id IN ({$in})
+               AND facto_document_id IS NOT NULL
+               AND (facto_status IS NULL OR facto_status IN (0, 2))",
+            ARRAY_A
+        ) : array();
+        $drafts = $this->table_exists($drafts_t) ? $wpdb->get_results(
+            "SELECT * FROM {$drafts_t} WHERE quote_id IN ({$in})",
+            ARRAY_A
+        ) : array();
+
+        $sold_dte = array();     // dte_id => quote_id
+        $sold_draft = array();   // draft_id => quote_id
+        foreach ((array) $issued as $row) {
+            $qid = (int) $row['quote_id'];
+            if (!isset($out[$qid])) {
+                continue;
+            }
+            $sold_dte[(int) $row['id']] = $qid;
+            $out[$qid]['has_documents'] = true;
+            $out[$qid]['sold'] = true;
+            $out[$qid]['total'] += (float) $row['total_amount'];
+            $out[$qid]['folios'][] = $this->short_doc_label((int) $row['document_type_id'], (string) $row['folio']);
+        }
+        foreach ((array) $drafts as $row) {
+            $qid = (int) $row['quote_id'];
+            if (!isset($out[$qid])) {
+                continue;
+            }
+            $out[$qid]['has_documents'] = true;
+            $dte_id = !empty($row['dte_id']) ? (int) $row['dte_id'] : 0;
+            if ($dte_id > 0 && isset($sold_dte[$dte_id])) {
+                $sold_draft[(int) $row['id']] = $qid;
+                $out[$qid]['document_draft_ids'][] = (int) $row['id'];
+            } elseif (in_array((string) $row['status'], array('closed_local', 'emitted'), true)) {
+                // Boleta cerrada sin SII, o emitido cuyo DTE no quedó ligado a la cotización.
+                $sold_draft[(int) $row['id']] = $qid;
+                $out[$qid]['document_draft_ids'][] = (int) $row['id'];
+                if ($dte_id > 0) {
+                    $sold_dte[$dte_id] = $qid;
+                }
+                $out[$qid]['sold'] = true;
+                $out[$qid]['total'] += (float) $row['total_amount'];
+                $out[$qid]['folios'][] = $this->short_doc_label((int) $row['document_type_id'], '')
+                    . ((string) $row['status'] === 'closed_local' ? ' cerrada' : ' emitida');
+            }
+        }
+
+        if (($sold_dte || $sold_draft) && $this->table_exists($payments_t)) {
+            $conds = array();
+            if ($sold_draft) {
+                $conds[] = 'draft_id IN (' . implode(',', array_keys($sold_draft)) . ')';
+            }
+            if ($sold_dte) {
+                $conds[] = 'dte_id IN (' . implode(',', array_keys($sold_dte)) . ')';
+            }
+            $payments = $wpdb->get_results(
+                "SELECT id, draft_id, dte_id,
+                        CASE WHEN amount_applied > 0 THEN amount_applied
+                             ELSE GREATEST(0, amount_paid - change_amount) END AS applied
+                 FROM {$payments_t} WHERE " . implode(' OR ', $conds),
+                ARRAY_A
+            );
+            foreach ((array) $payments as $p) {
+                $did = (int) $p['draft_id'];
+                $tid = (int) $p['dte_id'];
+                $qid = isset($sold_draft[$did]) ? $sold_draft[$did] : (isset($sold_dte[$tid]) ? $sold_dte[$tid] : 0);
+                if ($qid > 0) {
+                    $out[$qid]['paid'] += (float) $p['applied'];
+                }
+            }
+        }
+
+        foreach ($out as $qid => $sale) {
+            $sale['total'] = round($sale['total'], 2);
+            $sale['paid'] = round($sale['paid'], 2);
+            if (!$sale['has_documents']) {
+                $sale['status'] = 'none';
+                $sale['status_label'] = 'Sin documento';
+            } elseif (!$sale['sold']) {
+                $sale['status'] = 'billing';
+                $sale['status_label'] = 'En facturación';
+            } elseif ($sale['paid'] <= 0.009) {
+                $sale['status'] = 'unpaid';
+                $sale['status_label'] = 'Por cobrar';
+            } elseif ($sale['total'] - $sale['paid'] > 0.009) {
+                $sale['status'] = 'partial';
+                $sale['status_label'] = 'Pago parcial';
+            } else {
+                $sale['status'] = 'paid';
+                $sale['status_label'] = 'Pagada';
+            }
+            $out[$qid] = $sale;
+        }
+        return $out;
+    }
+
+    /**
+     * Agrega a cada resumen de venta la comparación cotizado vs. documento emitido/cerrado.
+     * La cotización no se modifica: queda como lo ofrecido y el documento manda.
+     *
+     * @param array<int, array<string, mixed>> $sales quote_id => resumen (sale_summaries)
+     * @param bool $with_lines false: solo indicadores (listado)
+     * @return array<int, array<string, mixed>>
+     */
+    public function attach_comparisons(array $sales, $with_lines = true) {
+        global $wpdb;
+        $draft_to_quote = array();
+        foreach ($sales as $qid => $sale) {
+            $sales[$qid]['comparison'] = null;
+            if (empty($sale['sold'])) {
+                continue;
+            }
+            foreach ((array) $sale['document_draft_ids'] as $did) {
+                $draft_to_quote[(int) $did] = (int) $qid;
+            }
+            $sales[$qid]['comparison'] = array(
+                'available' => false,
+                'has_changes' => false,
+                'quote_total' => 0.0,
+                'document_total' => (float) $sale['total'],
+                'added' => 0,
+                'removed' => 0,
+                'changed' => 0,
+                'lines' => array(),
+            );
+        }
+        $lines_t = $wpdb->prefix . 'riverso_billing_draft_lines';
+        if (!$draft_to_quote || !$this->table_exists($lines_t)) {
+            return $sales;
+        }
+        $doc_rows = $wpdb->get_results(
+            "SELECT draft_id, sku, description, quantity, line_total_bruto, product_id, producto_base_id
+             FROM {$lines_t} WHERE draft_id IN (" . implode(',', array_keys($draft_to_quote)) . ')
+             ORDER BY draft_id ASC, position ASC, id ASC',
+            ARRAY_A
+        );
+        $doc = array();
+        foreach ((array) $doc_rows as $row) {
+            $qid = $draft_to_quote[(int) $row['draft_id']];
+            $doc[$qid][] = array(
+                'producto_base_id' => (int) $row['producto_base_id'],
+                'product_id' => (int) $row['product_id'],
+                'sku' => (string) $row['sku'],
+                'description' => (string) $row['description'],
+                'quantity' => (float) $row['quantity'],
+                'total' => (float) $row['line_total_bruto'],
+            );
+        }
+        $quote_ids = array_keys($doc);
+        if (!$quote_ids) {
+            return $sales;
+        }
+        $item_rows = $wpdb->get_results(
+            "SELECT * FROM {$this->table_items} WHERE quote_id IN (" . implode(',', array_map('intval', $quote_ids)) . ')
+             ORDER BY quote_id ASC, sort_order ASC, id ASC',
+            ARRAY_A
+        );
+        $offered = array();
+        foreach ((array) $item_rows as $row) {
+            $line = $this->present_line($row);
+            $offered[(int) $row['quote_id']][] = array(
+                'producto_base_id' => (int) $line['producto_base_id'],
+                'product_id' => (int) $line['product_id'],
+                'sku' => $line['sku'],
+                'description' => $line['description'],
+                'quantity' => (float) $line['quantity'],
+                'total' => (float) $line['line_net'],
+            );
+        }
+        $headers = $wpdb->get_results(
+            "SELECT id, COALESCE(net_total, total, 0) AS quote_total FROM {$this->table_quotes}
+             WHERE id IN (" . implode(',', array_map('intval', $quote_ids)) . ')',
+            ARRAY_A
+        );
+        $quote_totals = array();
+        foreach ((array) $headers as $h) {
+            $quote_totals[(int) $h['id']] = (float) $h['quote_total'];
+        }
+        foreach ($quote_ids as $qid) {
+            $cmp = $this->compare_lines(
+                isset($offered[$qid]) ? $offered[$qid] : array(),
+                $doc[$qid]
+            );
+            $quote_total = isset($quote_totals[$qid]) ? round($quote_totals[$qid], 2) : 0.0;
+            $document_total = (float) $sales[$qid]['total'];
+            // Tolerancia de redondeo: los documentos se emiten en pesos enteros.
+            $tolerance = max(2.0, (float) count($doc[$qid]));
+            $total_differs = abs($quote_total - $document_total) > $tolerance;
+            $sales[$qid]['comparison'] = array(
+                'available' => true,
+                'has_changes' => $cmp['lines'] || $total_differs,
+                'quote_total' => $quote_total,
+                'document_total' => $document_total,
+                'added' => $cmp['added'],
+                'removed' => $cmp['removed'],
+                'changed' => $cmp['changed'],
+                'lines' => $with_lines ? $cmp['lines'] : array(),
+            );
+        }
+        return $sales;
+    }
+
+    /**
+     * @param array $offered Líneas cotizadas normalizadas.
+     * @param array $billed  Líneas del documento normalizadas.
+     * @return array{lines: array, added: int, removed: int, changed: int}
+     */
+    private function compare_lines(array $offered, array $billed) {
+        $a = $this->aggregate_compare_lines($offered);
+        $b = $this->aggregate_compare_lines($billed);
+        $out = array('lines' => array(), 'added' => 0, 'removed' => 0, 'changed' => 0);
+        foreach ($a as $key => $q) {
+            if (!isset($b[$key])) {
+                $out['removed']++;
+                $out['lines'][] = $this->compare_entry('removed', $q, null);
+                continue;
+            }
+            $d = $b[$key];
+            if (abs($q['quantity'] - $d['quantity']) > 0.0005 || abs($q['total'] - $d['total']) > 1.0) {
+                $out['changed']++;
+                $out['lines'][] = $this->compare_entry('changed', $q, $d);
+            }
+        }
+        foreach ($b as $key => $d) {
+            if (!isset($a[$key])) {
+                $out['added']++;
+                $out['lines'][] = $this->compare_entry('added', null, $d);
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Agrupa por producto (producto_base, producto WC, SKU o descripción) sumando cantidad y total.
+     *
+     * @param array $lines
+     * @return array<string, array>
+     */
+    private function aggregate_compare_lines(array $lines) {
+        $out = array();
+        foreach ($lines as $line) {
+            if ($line['producto_base_id'] > 0) {
+                $key = 'pb:' . $line['producto_base_id'];
+            } elseif ($line['product_id'] > 0) {
+                $key = 'wc:' . $line['product_id'];
+            } elseif (trim($line['sku']) !== '') {
+                $key = 'sku:' . strtolower(trim($line['sku']));
+            } else {
+                $key = 'tx:' . strtolower(trim(preg_replace('/\s+/', ' ', $line['description'])));
+            }
+            if (!isset($out[$key])) {
+                $out[$key] = array(
+                    'sku' => $line['sku'],
+                    'description' => $line['description'],
+                    'quantity' => 0.0,
+                    'total' => 0.0,
+                );
+            }
+            $out[$key]['quantity'] += $line['quantity'];
+            $out[$key]['total'] += $line['total'];
+        }
+        return $out;
+    }
+
+    /**
+     * @param string     $type added|removed|changed
+     * @param array|null $quoted
+     * @param array|null $billed
+     * @return array<string, mixed>
+     */
+    private function compare_entry($type, $quoted, $billed) {
+        $ref = $billed !== null ? $billed : $quoted;
+        return array(
+            'type' => $type,
+            'sku' => (string) $ref['sku'],
+            'description' => (string) ($quoted !== null && $quoted['description'] !== '' ? $quoted['description'] : $ref['description']),
+            'quote_quantity' => $quoted !== null ? round($quoted['quantity'], 3) : null,
+            'quote_total' => $quoted !== null ? round($quoted['total'], 2) : null,
+            'document_quantity' => $billed !== null ? round($billed['quantity'], 3) : null,
+            'document_total' => $billed !== null ? round($billed['total'], 2) : null,
+        );
+    }
+
+    /**
+     * @param int    $type_id
+     * @param string $folio
+     * @return string
+     */
+    private function short_doc_label($type_id, $folio) {
+        if ($type_id === 2 || $type_id === 33) {
+            $label = 'Factura';
+        } elseif ($type_id === 37 || $type_id === 39) {
+            $label = 'Boleta';
+        } else {
+            $label = 'Doc.';
+        }
+        $folio = trim((string) $folio);
+        return $folio !== '' ? $label . ' N°' . $folio : $label;
+    }
+
+    /**
+     * Reserva stock de las líneas con producto (cantidad en unidades de la presentación cotizada).
+     * Permite dejar el disponible en negativo. Vence con la validez de la cotización, si la tiene.
+     *
+     * @param array $quote Cotización presentada (con líneas).
+     */
+    public function reserve_stock(array $quote) {
+        if (!class_exists('Riverso_Reservation_Service') || empty($quote['id'])) {
+            return;
+        }
+        $quote_id = (int) $quote['id'];
+        $this->release_stock($quote_id);
+        $expires_at = null;
+        $days = isset($quote['validity_days']) ? (int) $quote['validity_days'] : 0;
+        if ($days > 0 && !empty($quote['issue_date'])) {
+            $until = strtotime($quote['issue_date'] . ' +' . $days . ' days');
+            if ($until !== false) {
+                $expires_at = date('Y-m-d', $until) . ' 23:59:59';
+            }
+        }
+        $service = Riverso_Reservation_Service::get_instance();
+        foreach ((array) (isset($quote['lines']) ? $quote['lines'] : array()) as $line) {
+            $qty = isset($line['quantity']) ? (float) $line['quantity'] : 0.0;
+            $base_id = $this->line_producto_base_id($line);
+            if ($qty <= 0 || $base_id <= 0) {
+                continue;
+            }
+            $service->reserve($base_id, $qty, array(
+                'origen' => 'cotizacion',
+                'referencia_tipo' => self::RESERVATION_REF,
+                'referencia_id' => $quote_id,
+                'expires_at' => $expires_at,
+                'allow_negative' => true,
+            ));
+        }
+    }
+
+    /**
+     * Libera las reservas activas de la cotización.
+     *
+     * @param int $quote_id
+     */
+    public function release_stock($quote_id) {
+        global $wpdb;
+        $quote_id = (int) $quote_id;
+        $table = $wpdb->prefix . 'riverso_reservas';
+        if ($quote_id <= 0 || !$this->table_exists($table)) {
+            return;
+        }
         $wpdb->query($wpdb->prepare(
-            "UPDATE `{$table}` q
-             SET q.status = %s, q.updated_at = %s
-             WHERE q.status <> %s AND (" . implode(' OR ', $clauses) . ')',
-            Riverso_Quote_Status::LISTED,
+            "UPDATE {$table} SET estado = 'liberada', released_at = %s
+             WHERE referencia_tipo = %s AND referencia_id = %d AND estado = 'activa'",
             current_time('mysql'),
-            Riverso_Quote_Status::LISTED
+            self::RESERVATION_REF,
+            $quote_id
+        ));
+    }
+
+    /**
+     * producto_base de la línea; si falta, se resuelve por el producto WC (mismo criterio que el stock).
+     *
+     * @param array $line
+     * @return int
+     */
+    private function line_producto_base_id(array $line) {
+        $base_id = isset($line['producto_base_id']) ? (int) $line['producto_base_id'] : 0;
+        if ($base_id > 0) {
+            return $base_id;
+        }
+        $wc_id = isset($line['product_id']) ? (int) $line['product_id'] : 0;
+        if ($wc_id <= 0) {
+            return 0;
+        }
+        global $wpdb;
+        $table = $wpdb->prefix . 'riverso_producto_base';
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$table}
+             WHERE deleted_at IS NULL AND (woocommerce_variation_id = %d OR woocommerce_product_id = %d)
+             ORDER BY (woocommerce_variation_id = %d) DESC, id ASC LIMIT 1",
+            $wc_id,
+            $wc_id,
+            $wc_id
         ));
     }
 
@@ -512,6 +1042,60 @@ class Riverso_Customer_Quote_Repository {
         if (!$deleted) {
             throw new Riverso_Quote_Exception('No se pudo borrar la cotización.' . $this->db_error_suffix());
         }
+        $this->release_stock($id);
+    }
+
+    /**
+     * Borra la cotización solo si es un borrador sin líneas ni documentos asociados.
+     * La condición va en el mismo DELETE para no borrar algo que se llenó entre medio.
+     *
+     * @param int $id
+     * @return bool true si se borró.
+     */
+    public function discard_if_empty($id) {
+        global $wpdb;
+        $id = (int) $id;
+        if ($id <= 0 || $this->has_associated_document($id)) {
+            return false;
+        }
+        $deleted = $wpdb->query($wpdb->prepare(
+            "DELETE FROM {$this->table_quotes}
+             WHERE id = %d
+               AND (status IS NULL OR status IN ('', %s, 'borrador'))
+               AND NOT EXISTS (SELECT 1 FROM {$this->table_items} i WHERE i.quote_id = %d)",
+            $id,
+            Riverso_Quote_Status::DRAFT,
+            $id
+        ));
+        return is_int($deleted) && $deleted > 0;
+    }
+
+    /**
+     * Respaldo del descarte desde el navegador (beacon perdido, pestaña cerrada a la fuerza):
+     * borra borradores vacíos sin cambios hace más de $max_age_hours.
+     *
+     * @param int $max_age_hours
+     * @return int Cotizaciones borradas.
+     */
+    public function sweep_empty_drafts($max_age_hours = 12) {
+        global $wpdb;
+        $cutoff = date('Y-m-d H:i:s', (int) current_time('timestamp') - max(1, (int) $max_age_hours) * HOUR_IN_SECONDS);
+        $ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT q.id FROM {$this->table_quotes} q
+             WHERE (q.status IS NULL OR q.status IN ('', %s, 'borrador'))
+               AND COALESCE(q.updated_at, q.created_at) < %s
+               AND NOT EXISTS (SELECT 1 FROM {$this->table_items} i WHERE i.quote_id = q.id)
+             LIMIT 50",
+            Riverso_Quote_Status::DRAFT,
+            $cutoff
+        ));
+        $count = 0;
+        foreach ((array) $ids as $id) {
+            if ($this->discard_if_empty((int) $id)) {
+                $count++;
+            }
+        }
+        return $count;
     }
 
     /**
@@ -584,6 +1168,7 @@ class Riverso_Customer_Quote_Repository {
                 'price_mode' => isset($line['price_mode']) ? $line['price_mode'] : null,
                 'price_ref' => isset($line['price_ref']) ? $line['price_ref'] : null,
                 'price_total' => isset($line['price_total']) ? $line['price_total'] : null,
+                'stock_breakdown' => isset($line['stock_breakdown']) ? $line['stock_breakdown'] : null,
             );
 
             // Schema legado: quantity INT. Evitar "1.000" si la columna no es decimal.
@@ -729,6 +1314,10 @@ class Riverso_Customer_Quote_Repository {
             'price_mode' => ($price_mode === 'auto') ? null : $price_mode,
             'price_ref' => $price_ref,
             'price_total' => $price_total,
+            // Detalle de entrega (bolsas leídas / sueltas) para la salida de stock al facturar.
+            'stock_breakdown' => class_exists('Riverso_Sale_Stock_Service')
+                ? Riverso_Sale_Stock_Service::breakdown_json(isset($line['stock_breakdown']) ? $line['stock_breakdown'] : null, $quantity)
+                : null,
         );
     }
 
@@ -840,14 +1429,18 @@ class Riverso_Customer_Quote_Repository {
         $net = isset($row['net_total']) && $row['net_total'] !== null && $row['net_total'] !== ''
             ? (float) $row['net_total']
             : (float) (isset($row['total']) ? $row['total'] : 0);
-        $validity = isset($row['validity_days']) && $row['validity_days'] !== null && $row['validity_days'] !== ''
-            ? (int) $row['validity_days']
-            : (isset($row['valid_days']) && $row['valid_days'] !== null && $row['valid_days'] !== '' ? (int) $row['valid_days'] : null);
+        // validity_days NULL = sin validez. Solo filas sin esa columna usan valid_days legado
+        // (que tiene DEFAULT 3 y no refleja lo que el usuario dejó vacío).
+        if (array_key_exists('validity_days', $row)) {
+            $validity = $row['validity_days'] !== null && $row['validity_days'] !== '' ? (int) $row['validity_days'] : null;
+        } else {
+            $validity = isset($row['valid_days']) && $row['valid_days'] !== null && $row['valid_days'] !== '' ? (int) $row['valid_days'] : null;
+        }
         $transitions = array();
         foreach ($targets as $target) {
             $transitions[] = array(
                 'status' => $target,
-                'label' => Riverso_Quote_Status::transition_label($target),
+                'label' => Riverso_Quote_Status::transition_label($target, $status),
             );
         }
         $created_at = (string) (isset($row['created_at']) ? $row['created_at'] : '');
@@ -861,7 +1454,9 @@ class Riverso_Customer_Quote_Repository {
             isset($row['created_by']) ? $row['created_by'] : null,
             isset($row['seller_name']) ? $row['seller_name'] : null
         );
-        $is_expired = $this->is_expired($issue_date, $validity, isset($row['valid_until']) ? $row['valid_until'] : null);
+        // Vencida solo aplica a cotizaciones abiertas (Borrador/Aprobada).
+        $is_expired = in_array($status, array(Riverso_Quote_Status::DRAFT, Riverso_Quote_Status::LISTED), true)
+            && $this->is_expired($issue_date, $validity, isset($row['valid_until']) ? $row['valid_until'] : null);
         $margin_percent = $this->nullable_float(isset($row['margin_percent']) ? $row['margin_percent'] : null);
         $profit_total = $this->nullable_float(isset($row['profit_total']) ? $row['profit_total'] : null);
         $discount_total = round((float) (isset($row['discount_total']) ? $row['discount_total'] : 0), 2);
@@ -917,7 +1512,7 @@ class Riverso_Customer_Quote_Repository {
             'seller_name' => $seller_name,
             'is_expired' => $is_expired,
             'updated_at' => (string) (isset($row['updated_at']) ? $row['updated_at'] : ''),
-            'editable' => $status !== Riverso_Quote_Status::INVOICED,
+            'editable' => Riverso_Quote_Status::is_editable($status),
             'allowed_transitions' => $transitions,
             'order_id' => $this->nullable_int(isset($row['order_id']) ? $row['order_id'] : null),
             'order_url' => $this->resolve_order_url(isset($row['order_id']) ? $row['order_id'] : null),
@@ -985,12 +1580,9 @@ class Riverso_Customer_Quote_Repository {
             return false;
         }
         $days = (int) $validity_days;
-        if ($days < 0) {
+        // Sin validez o 0 días = sin vencimiento.
+        if ($days <= 0) {
             return false;
-        }
-        // Validez 0 días = vencida de inmediato (sin ventana útil).
-        if ($days === 0) {
-            return true;
         }
         $today = function_exists('current_time') ? current_time('Y-m-d') : date('Y-m-d');
         $issue = '';
@@ -1063,6 +1655,7 @@ class Riverso_Customer_Quote_Repository {
             'price_ref' => $this->nullable_float4(isset($line['price_ref']) ? $line['price_ref'] : null),
             'price_total' => $this->nullable_float(isset($line['price_total']) ? $line['price_total'] : null),
             'local_only' => empty($line['product_id']),
+            'stock_breakdown' => !empty($line['stock_breakdown']) ? json_decode((string) $line['stock_breakdown'], true) : null,
         );
     }
 

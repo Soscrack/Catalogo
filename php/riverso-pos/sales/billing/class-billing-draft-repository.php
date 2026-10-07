@@ -11,6 +11,19 @@ if (!defined('ABSPATH')) {
 
 class Riverso_Billing_Draft_Repository {
 
+    /** @var bool|null Columna stock_breakdown en líneas (fase 71). */
+    private $has_breakdown_column = null;
+
+    /** @return bool */
+    private function has_breakdown_column() {
+        if ($this->has_breakdown_column === null) {
+            global $wpdb;
+            $cols = $wpdb->get_col("SHOW COLUMNS FROM {$this->lines_table()}", 0);
+            $this->has_breakdown_column = is_array($cols) && in_array('stock_breakdown', $cols, true);
+        }
+        return $this->has_breakdown_column;
+    }
+
     /** @return string */
     private function drafts_table() {
         global $wpdb;
@@ -239,7 +252,7 @@ class Riverso_Billing_Draft_Repository {
             if (isset($line['rule_total']) && $line['rule_total'] !== null && $line['rule_total'] !== '') {
                 $rule_total = round((float) $line['rule_total'], 2);
             }
-            $wpdb->insert($this->lines_table(), [
+            $line_row = [
                 'draft_id' => $draft_id,
                 'position' => $pos,
                 'sku' => substr((string) ($line['sku'] ?? ''), 0, 64),
@@ -265,7 +278,15 @@ class Riverso_Billing_Draft_Repository {
                 'discount_amount' => round((float) ($line['discount_amount'] ?? 0), 2),
                 'rule_total' => $rule_total,
                 'rule_adjusted' => !empty($line['rule_adjusted']) || !empty($line['_rule_adjusted']) ? 1 : 0,
-            ]);
+            ];
+            // Detalle de entrega (bolsas / sueltas) para la salida de stock.
+            if ($this->has_breakdown_column() && class_exists('Riverso_Sale_Stock_Service')) {
+                $line_row['stock_breakdown'] = Riverso_Sale_Stock_Service::breakdown_json(
+                    $line['stock_breakdown'] ?? null,
+                    $line_row['quantity']
+                );
+            }
+            $wpdb->insert($this->lines_table(), $line_row);
         }
     }
 
@@ -651,6 +672,7 @@ class Riverso_Billing_Draft_Repository {
                 'discount_amount' => (float) ($r['discount_amount'] ?? 0),
                 'rule_total' => isset($r['rule_total']) && $r['rule_total'] !== null ? (float) $r['rule_total'] : null,
                 'rule_adjusted' => !empty($r['rule_adjusted']),
+                'stock_breakdown' => !empty($r['stock_breakdown']) ? json_decode((string) $r['stock_breakdown'], true) : null,
             ];
         }
         return $out;

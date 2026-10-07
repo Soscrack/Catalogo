@@ -370,6 +370,8 @@ class Riverso_POS_Activator {
         self::create_phase67_billing_draft_line_context($prefix, $charset_collate);
         self::create_phase68_cajas($prefix, $charset_collate);
         self::create_phase69_billing_payments($prefix, $charset_collate);
+        self::create_phase71_sale_stock_exit($prefix, $charset_collate);
+        self::create_phase72_purchase_reception($prefix, $charset_collate);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -6268,6 +6270,210 @@ class Riverso_POS_Activator {
     /**
      * Fase 69: métodos de pago FACTO, IDs de caja y pagos de documento.
      */
+    /**
+     * Garantiza el schema de salida de stock por venta (si el deploy no corrió la migración).
+     */
+    public static function ensure_sale_stock_exit() {
+        global $wpdb;
+        self::create_phase71_sale_stock_exit($wpdb->prefix . 'riverso_', $wpdb->get_charset_collate());
+    }
+
+    /**
+     * Fase 71: salida de stock por venta.
+     * - producto_ubicacion.cantidad a decimal (metros, kilos) + marca contado/estimado.
+     * - Ubicación virtual SIN-UBICAR: recibe lo vendido sin lugar con saldo; se cuadra con conteos.
+     * - Detalle de entrega por línea (bolsas / sueltas) en cotizaciones y documentos.
+     * - Registro de lo descontado por documento (para revertir exacto) y bolsas vendidas.
+     */
+    private static function create_phase71_sale_stock_exit($prefix, $charset_collate) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $pu = "{$prefix}producto_ubicacion";
+        if (self::table_exists($pu)) {
+            $type = (string) $wpdb->get_var($wpdb->prepare(
+                "SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = 'cantidad'",
+                DB_NAME,
+                $pu
+            ));
+            if ($type !== '' && strtolower($type) !== 'decimal') {
+                $wpdb->query("ALTER TABLE `{$pu}` MODIFY cantidad DECIMAL(12,4) DEFAULT 0");
+            }
+            self::add_column_if_missing($pu, 'origen_cantidad', "origen_cantidad VARCHAR(10) NOT NULL DEFAULT 'contado'");
+            self::add_column_if_missing($pu, 'contado_en', 'contado_en DATETIME NULL DEFAULT NULL');
+        }
+
+        $ub = "{$prefix}ubicaciones";
+        if (self::table_exists($ub)) {
+            $exists = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM `{$ub}` WHERE codigo = %s", 'SIN-UBICAR'));
+            if ($exists <= 0) {
+                // Inactiva para que no aparezca en escaneos ni como lugar por defecto; sí suma al stock total.
+                $wpdb->insert($ub, array(
+                    'codigo' => 'SIN-UBICAR',
+                    'nombre' => 'Sin ubicar',
+                    'tipo' => 'virtual',
+                    'descripcion' => 'Ubicación virtual: ventas sin lugar con saldo. Se cuadra con los conteos.',
+                    'capacidad' => 0,
+                    'activo' => 0,
+                ));
+            }
+        }
+
+        foreach (array("{$prefix}customer_quote_items", "{$prefix}billing_draft_lines") as $lines_table) {
+            if (self::table_exists($lines_table)) {
+                self::add_column_if_missing($lines_table, 'stock_breakdown', 'stock_breakdown TEXT NULL');
+            }
+        }
+
+        $bolsas = "{$prefix}bolsas";
+        if (self::table_exists($bolsas)) {
+            self::add_column_if_missing($bolsas, 'venta_draft_id', 'venta_draft_id BIGINT UNSIGNED NULL DEFAULT NULL');
+            self::add_column_if_missing($bolsas, 'vendida_en', 'vendida_en DATETIME NULL DEFAULT NULL');
+            self::add_index_if_missing($bolsas, 'idx_bolsa_disponible', 'KEY idx_bolsa_disponible (producto_base_id, estado, cantidad)');
+        }
+
+        $sql = "CREATE TABLE {$prefix}venta_stock (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            draft_id BIGINT UNSIGNED NOT NULL,
+            draft_line_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            componente VARCHAR(10) NOT NULL DEFAULT 'suelto',
+            ubicacion_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            cantidad DECIMAL(12,4) NOT NULL DEFAULT 0,
+            movimiento_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            bolsa_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            abierto_descontado DECIMAL(12,4) NOT NULL DEFAULT 0,
+            supuesto TINYINT(1) NOT NULL DEFAULT 0,
+            estado VARCHAR(12) NOT NULL DEFAULT 'aplicado',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            revertido_en DATETIME NULL DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_venta_stock_draft (draft_id, estado),
+            KEY idx_venta_stock_producto (producto_base_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+    }
+
+    /**
+     * Garantiza el schema de recepción de compras (si el deploy no corrió la migración).
+     */
+    public static function ensure_purchase_reception() {
+        global $wpdb;
+        self::create_phase72_purchase_reception($wpdb->prefix . 'riverso_', $wpdb->get_charset_collate());
+    }
+
+    /**
+     * Fase 72: recepción de compras.
+     * - Ubicación física RECEPCION (zona de llegada): lo recibido entra ahí y luego se ordena.
+     * - recepciones: estado de recepción por documento (factura o guía), aparte del flujo de costos.
+     * - recepcion_lineas: esperado / recibido / ordenado / reclamado en unidades de stock.
+     * - reclamos_proveedor + reclamo_lineas: faltantes y mal estado que esperan nota de crédito.
+     */
+    private static function create_phase72_purchase_reception($prefix, $charset_collate) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $ub = "{$prefix}ubicaciones";
+        if (self::table_exists($ub)) {
+            $exists = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM `{$ub}` WHERE codigo = %s", 'RECEPCION'));
+            if ($exists <= 0) {
+                $wpdb->insert($ub, array(
+                    'codigo' => 'RECEPCION',
+                    'nombre' => 'Recepción',
+                    'tipo' => 'recepcion',
+                    'descripcion' => 'Zona de llegada: la mercadería recibida queda aquí hasta ordenarla.',
+                    'capacidad' => 0,
+                    'activo' => 1,
+                    'barcode' => 'RECEPCION',
+                ));
+            }
+        }
+
+        $sql = "CREATE TABLE {$prefix}recepciones (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            factura_id BIGINT UNSIGNED NOT NULL,
+            proveedor_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            estado VARCHAR(12) NOT NULL DEFAULT 'parcial',
+            ubicacion_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            cubierta_por BIGINT UNSIGNED NULL DEFAULT NULL,
+            motivo TEXT NULL,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            completada_en DATETIME NULL DEFAULT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_recepcion_factura (factura_id),
+            KEY idx_recepcion_estado (estado),
+            KEY idx_recepcion_cubierta (cubierta_por)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}recepcion_lineas (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            recepcion_id BIGINT UNSIGNED NOT NULL,
+            factura_item_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            asignado_manual TINYINT(1) NOT NULL DEFAULT 0,
+            nombre VARCHAR(255) NULL DEFAULT NULL,
+            codigo_proveedor VARCHAR(100) NULL DEFAULT NULL,
+            factor DECIMAL(12,4) NOT NULL DEFAULT 1,
+            cantidad_esperada DECIMAL(12,4) NOT NULL DEFAULT 0,
+            cantidad_recibida DECIMAL(12,4) NOT NULL DEFAULT 0,
+            cantidad_ordenada DECIMAL(12,4) NOT NULL DEFAULT 0,
+            cantidad_reclamada DECIMAL(12,4) NOT NULL DEFAULT 0,
+            costo_unitario DECIMAL(12,4) NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_rx_linea_recepcion (recepcion_id),
+            KEY idx_rx_linea_item (factura_item_id),
+            KEY idx_rx_linea_producto (producto_base_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}reclamos_proveedor (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            factura_id BIGINT UNSIGNED NOT NULL,
+            recepcion_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            proveedor_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            estado VARCHAR(12) NOT NULL DEFAULT 'por_enviar',
+            tarea_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            nota_credito_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            notas TEXT NULL,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            enviado_en DATETIME NULL DEFAULT NULL,
+            resuelto_en DATETIME NULL DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_reclamo_factura (factura_id),
+            KEY idx_reclamo_estado (estado),
+            KEY idx_reclamo_proveedor (proveedor_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}reclamo_lineas (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            reclamo_id BIGINT UNSIGNED NOT NULL,
+            recepcion_linea_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            factura_item_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            producto_base_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            nombre VARCHAR(255) NULL DEFAULT NULL,
+            motivo VARCHAR(20) NOT NULL DEFAULT 'faltante',
+            cantidad DECIMAL(12,4) NOT NULL DEFAULT 0,
+            costo_unitario DECIMAL(12,4) NULL DEFAULT NULL,
+            movimiento_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            notas TEXT NULL,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_reclamo_linea_reclamo (reclamo_id),
+            KEY idx_reclamo_linea_rx (recepcion_linea_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+    }
+
     private static function create_phase69_billing_payments($prefix, $charset_collate) {
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         global $wpdb;

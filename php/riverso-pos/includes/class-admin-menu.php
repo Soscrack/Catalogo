@@ -179,6 +179,14 @@ class Riverso_POS_Admin_Menu {
      * Renderiza la página de recepción
      */
     public function render_reception() {
+        // Recepción nueva (zona Recepción → ordenar → reclamos); ?legacy=1 abre la antigua.
+        if (empty($_GET['legacy']) && class_exists('Riverso_Purchase_Reception_Module')) {
+            echo '<div class="wrap">';
+            Riverso_Purchase_Reception_Module::get_instance()->render_app('admin');
+            echo '<p style="margin-top:24px"><a href="' . esc_url(admin_url('admin.php?page=riverso-pos-reception&legacy=1')) . '">Recepción antigua (aprobación de facturas en modo recepción)</a></p>';
+            echo '</div>';
+            return;
+        }
         $this->render_page('reception');
     }
     

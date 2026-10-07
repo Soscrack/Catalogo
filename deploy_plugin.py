@@ -74,6 +74,19 @@ def _ssh_connect(ssh):
     ssh.connect(**kwargs)
 
 
+def local_plugin_version(source=None):
+    """Versión de riverso-pos.php local (la que debe quedar activa tras el deploy)."""
+    import re
+    from pathlib import Path
+
+    plugin = Path(source) if source else Path(ROOT) / 'php' / 'riverso-pos'
+    text = (plugin / 'riverso-pos.php').read_text(encoding='utf-8')
+    match = re.search(r"define\(\s*'RIVERSO_POS_VERSION'\s*,\s*'([0-9.]+)'", text)
+    if not match:
+        raise RuntimeError('No se encontró RIVERSO_POS_VERSION en riverso-pos.php')
+    return match.group(1)
+
+
 def main(source=None, skip_migration=False):
     zip_path = build_zip(source)
 
@@ -93,6 +106,7 @@ def main(source=None, skip_migration=False):
     # Preflight, backup, deploy and migrate. A PHP syntax failure stops before
     # touching the active plugin; a migration failure restores the backup.
     skip_flag = '1' if skip_migration else '0'
+    expected_version = local_plugin_version(source)
     commands = f'''
 set -e
 SKIP_MIGRATION={skip_flag}
@@ -153,7 +167,7 @@ VERSION=$(sudo -u riverso.cl_1xybiw6rlcq "$PHP_BIN" -r '
 fi
 VERSION=$(echo "$VERSION" | tr -d "[:space:]")
 echo "VERSION_CHECK=$VERSION"
-test "$VERSION" = "1.8.57"
+test "$VERSION" = "{expected_version}"
 
 if [ "$SKIP_MIGRATION" = "1" ]; then
   echo "schema-skip competencia tables should be applied via tools/migrate_competencia_remote.py"

@@ -228,7 +228,8 @@ $facto_ready = function_exists('riverso_facto_is_configured') && riverso_facto_i
                 const cls = 'facto-run-state-' + (r.state || 'running');
                 const pages = (r.page_from || '?') + '–' + (r.page_to || '?') +
                     ' (' + (r.pages_scanned || 0) + ' escaneadas)';
-                const when = r.finished_at || r.started_at || '';
+                const when = (r.finished_at || r.started_at || '') +
+                    (String(r.started_by) === '0' ? ' <span class="description">· cron</span>' : '');
                 let resume = '';
                 if (r.state === 'running' || r.state === 'error') {
                     resume = '<button type="button" class="button button-small facto-resume-run" ' +

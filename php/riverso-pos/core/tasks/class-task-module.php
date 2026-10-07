@@ -64,6 +64,7 @@ class Riverso_Task_Module {
         'certificar_arqueo' => 'Certificar arqueo de caja',
         'sincronizar_pago_facto' => 'Sincronizar pago con FACTO',
         'eliminar_pago_facto' => 'Eliminar pago en FACTO',
+        'reclamo_proveedor' => 'Enviar reclamo a proveedor',
     ];
 
     /**
@@ -89,6 +90,7 @@ class Riverso_Task_Module {
         'certificar_arqueo' => 'administracion',
         'sincronizar_pago_facto' => 'administracion',
         'eliminar_pago_facto' => 'administracion',
+        'reclamo_proveedor' => 'administracion',
         'codigo_faltante' => 'productos',
         'barcode_faltante' => 'productos',
         'confirmar_barcode_legacy' => 'productos',

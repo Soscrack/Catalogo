@@ -89,14 +89,21 @@ if (!function_exists('riverso_pos_cq_json')) {
                         <select id="cq-status-filter">
                             <option value="all">** Todas **</option>
                             <option value="draft">Borrador</option>
-                            <option value="listed">Lista</option>
+                            <option value="listed">Aprobada</option>
                             <option value="invoiced">Facturada</option>
+                            <option value="rejected">Rechazada</option>
+                            <option value="cancelled">Anulada</option>
                         </select>
                     </label>
-                    <label class="cq-field cq-field-disabled" title="Estado de venta aún no modelado">
+                    <label class="cq-field" title="Según los documentos de venta y pagos registrados en Facturación">
                         <span>Estado de Venta</span>
-                        <select id="cq-sale-status-filter" disabled>
+                        <select id="cq-sale-status-filter">
                             <option value="all">** Todas **</option>
+                            <option value="none">Sin documento</option>
+                            <option value="billing">En facturación</option>
+                            <option value="unpaid">Por cobrar</option>
+                            <option value="partial">Pago parcial</option>
+                            <option value="paid">Pagada</option>
                         </select>
                     </label>
                     <label class="cq-field cq-field-wide">
@@ -217,7 +224,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                 <div class="cq-top-actions">
                     <span id="cq-status" class="cq-badge cq-badge-draft">Borrador</span>
                     <span id="cq-expired-badge" class="cq-expired-tag" hidden>Vencida</span>
-                    <button type="button" class="cq-btn" id="cq-transition" hidden>Pasar a lista</button>
+                    <span id="cq-transitions" class="cq-transitions"></span>
                     <button type="button" class="cq-btn cq-btn-danger" id="cq-delete" hidden>Borrar</button>
                     <button type="button" class="cq-btn cq-btn-primary" id="cq-invoice" hidden>Facturar</button>
                     <a id="cq-order-link" class="cq-link cq-order-link" href="#" target="_blank" rel="noopener" hidden>Ver pedido</a>
@@ -237,7 +244,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                 <div class="cq-header-grid">
                     <label class="cq-field">
                         <span>Nº cotización</span>
-                        <input type="text" id="cq-quote-number" readonly tabindex="-1" placeholder="Se asigna al guardar">
+                        <input type="text" id="cq-quote-number" readonly tabindex="-1" placeholder="Reservando…">
                     </label>
                     <label class="cq-field">
                         <span>Fecha emisión</span>

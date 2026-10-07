@@ -2120,7 +2120,8 @@ class Riverso_Invoice_Module {
     public function ajax_upload_invoice() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
 
-        if (!$this->user_can_intake_invoices()) {
+        // Recepción también ingresa el XML que llega con el pedido.
+        if (!$this->user_can_intake_invoices() && !current_user_can('riverso_receive_items')) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
 

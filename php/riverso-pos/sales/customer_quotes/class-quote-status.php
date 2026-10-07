@@ -1,14 +1,17 @@
 <?php
 /**
- * Estados de cotización de venta (P0+P1).
+ * Estados de cotización de venta.
  *
- * Flujo: borrador (draft) ↔ lista (listed).
- * Facturada (invoiced) vía AJAX riverso_cq_invoice (no transición ciega).
+ * Manuales: Borrador ↔ Aprobada; Borrador/Aprobada → Rechazada | Anulada; Rechazada/Anulada → Borrador.
+ * Automático: Facturada (invoiced) cuando un documento de venta queda emitido o cerrado.
+ * Solo Borrador es editable. Aprobada reserva stock (ver repositorio).
  *
  * Mapeo legado → plan:
- * - draft, borrador, rejected, expired, cancelled, canceled → draft
- * - sent, viewed, accepted, approved, lista, listed, converted → listed
+ * - draft, borrador, expired → draft
+ * - sent, viewed, accepted, approved, lista, listed, converted → listed (Aprobada)
  * - invoiced, billed, facturada → invoiced
+ * - rejected, rechazada → rejected
+ * - cancelled, canceled, anulada → cancelled
  */
 if (!defined('ABSPATH')) {
     exit;
@@ -18,13 +21,19 @@ class Riverso_Quote_Status {
     const DRAFT = 'draft';
     const LISTED = 'listed';
     const INVOICED = 'invoiced';
+    const REJECTED = 'rejected';
+    const CANCELLED = 'cancelled';
 
     public static function label($status) {
         switch (self::normalize_legacy((string) $status)) {
             case self::LISTED:
-                return 'Lista';
+                return 'Aprobada';
             case self::INVOICED:
                 return 'Facturada';
+            case self::REJECTED:
+                return 'Rechazada';
+            case self::CANCELLED:
+                return 'Anulada';
             default:
                 return 'Borrador';
         }
@@ -35,10 +44,7 @@ class Riverso_Quote_Status {
         $map = array(
             'draft' => self::DRAFT,
             'borrador' => self::DRAFT,
-            'rejected' => self::DRAFT,
             'expired' => self::DRAFT,
-            'cancelled' => self::DRAFT,
-            'canceled' => self::DRAFT,
             'sent' => self::LISTED,
             'viewed' => self::LISTED,
             'accepted' => self::LISTED,
@@ -49,42 +55,58 @@ class Riverso_Quote_Status {
             'invoiced' => self::INVOICED,
             'billed' => self::INVOICED,
             'facturada' => self::INVOICED,
+            'rejected' => self::REJECTED,
+            'rechazada' => self::REJECTED,
+            'cancelled' => self::CANCELLED,
+            'canceled' => self::CANCELLED,
+            'anulada' => self::CANCELLED,
         );
         return isset($map[$status]) ? $map[$status] : self::DRAFT;
+    }
+
+    /** Solo el borrador admite cambios de contenido. */
+    public static function is_editable($status) {
+        return self::normalize_legacy($status) === self::DRAFT;
     }
 
     public static function can_transition($from, $to) {
         $from = self::normalize_legacy($from);
         $to = strtolower(trim((string) $to));
-        if (!in_array($to, array(self::DRAFT, self::LISTED, self::INVOICED), true)) {
-            return false;
-        }
         if ($from === $to) {
             return true;
         }
-        return ($from === self::DRAFT && $to === self::LISTED)
-            || ($from === self::LISTED && $to === self::DRAFT);
+        return in_array($to, self::allowed_targets($from), true);
     }
 
+    /** Destinos manuales. Facturada solo la asigna la emisión de documentos. */
     public static function allowed_targets($status) {
-        $status = self::normalize_legacy($status);
-        if ($status === self::DRAFT) {
-            return array(self::LISTED);
+        switch (self::normalize_legacy($status)) {
+            case self::DRAFT:
+                return array(self::LISTED, self::REJECTED, self::CANCELLED);
+            case self::LISTED:
+                return array(self::DRAFT, self::REJECTED, self::CANCELLED);
+            case self::REJECTED:
+            case self::CANCELLED:
+                return array(self::DRAFT);
+            default:
+                return array();
         }
-        if ($status === self::LISTED) {
-            return array(self::DRAFT);
-        }
-        return array();
     }
 
-    public static function transition_label($target) {
-        if ($target === self::LISTED) {
-            return 'Pasar a lista';
+    public static function transition_label($target, $from = null) {
+        switch ($target) {
+            case self::LISTED:
+                return 'Aprobar';
+            case self::REJECTED:
+                return 'Rechazar';
+            case self::CANCELLED:
+                return 'Anular';
+            case self::DRAFT:
+                $from = $from === null ? null : self::normalize_legacy($from);
+                return ($from === self::REJECTED || $from === self::CANCELLED) ? 'Reabrir' : 'Volver a borrador';
+            default:
+                return '';
         }
-        if ($target === self::DRAFT) {
-            return 'Volver a borrador';
-        }
-        return '';
     }
 }
 

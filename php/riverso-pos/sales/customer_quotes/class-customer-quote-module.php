@@ -17,8 +17,10 @@ class Riverso_Customer_Quote_Module {
 
     const QUOTE_STATES = array(
         'draft' => 'Borrador',
-        'listed' => 'Lista',
+        'listed' => 'Aprobada',
         'invoiced' => 'Facturada',
+        'rejected' => 'Rechazada',
+        'cancelled' => 'Anulada',
     );
 
     public static function get_instance() {
@@ -85,8 +87,10 @@ class Riverso_Customer_Quote_Module {
         add_action('wp_ajax_riverso_cq_save', array($this, 'ajax_save'));
         add_action('wp_ajax_riverso_cq_transition', array($this, 'ajax_transition'));
         add_action('wp_ajax_riverso_cq_delete', array($this, 'ajax_delete'));
+        add_action('wp_ajax_riverso_cq_discard_empty', array($this, 'ajax_discard_empty'));
         add_action('wp_ajax_riverso_cq_search', array($this, 'ajax_search'));
         add_action('wp_ajax_riverso_cq_line_stock', array($this, 'ajax_line_stock'));
+        add_action('wp_ajax_riverso_cq_bag_sizes', array($this, 'ajax_bag_sizes'));
         add_action('wp_ajax_riverso_cq_invoice', array($this, 'ajax_invoice'));
         add_action('wp_ajax_riverso_cq_received_list', array($this, 'ajax_received_list'));
         add_action('wp_ajax_riverso_cq_received_preview', array($this, 'ajax_received_preview'));
@@ -194,8 +198,10 @@ class Riverso_Customer_Quote_Module {
                 'save' => 'riverso_cq_save',
                 'transition' => 'riverso_cq_transition',
                 'delete' => 'riverso_cq_delete',
+                'discardEmpty' => 'riverso_cq_discard_empty',
                 'search' => 'riverso_cq_search',
                 'lineStock' => 'riverso_cq_line_stock',
+                'bagSizes' => 'riverso_cq_bag_sizes',
                 'receivedList' => 'riverso_cq_received_list',
                 'receivedPreview' => 'riverso_cq_received_preview',
                 'receivedImport' => 'riverso_cq_received_import',
@@ -342,6 +348,7 @@ class Riverso_Customer_Quote_Module {
         }
         $filters['order_by'] = $order_by;
         $filters['order_dir'] = $order_dir;
+        $this->quotes->sweep_empty_drafts(12);
         try {
             $this->ok(array(
                 'quotes' => $this->quotes->list_quotes($filters),
@@ -390,9 +397,6 @@ class Riverso_Customer_Quote_Module {
         $this->authorize();
         $id = (int) $this->post_string('id');
         $to = $this->post_string('status');
-        if ($this->quotes->has_associated_document($id) && Riverso_Quote_Status::normalize_legacy($to) !== Riverso_Quote_Status::LISTED) {
-            $this->fail('Esta cotización tiene un documento asociado y permanece en Lista.');
-        }
         try {
             $quote = $this->quotes->transition($id, $to);
         } catch (Riverso_Quote_Exception $error) {
@@ -422,6 +426,20 @@ class Riverso_Customer_Quote_Module {
         $this->ok(array(
             'deleted_id' => $id,
             'message' => 'Cotización borrada.',
+        ));
+    }
+
+    /**
+     * Descarta un borrador vacío al salir del editor (botón volver, cierre de pestaña vía beacon).
+     * No exige permiso de borrado: el repositorio solo borra borradores sin líneas ni documentos.
+     */
+    public function ajax_discard_empty() {
+        $this->authorize();
+        $id = (int) $this->post_string('id');
+        $deleted = $this->quotes->discard_if_empty($id);
+        $this->ok(array(
+            'deleted' => $deleted,
+            'deleted_id' => $id,
         ));
     }
 
@@ -565,6 +583,18 @@ class Riverso_Customer_Quote_Module {
     }
 
     /**
+     * Tamaños de bolsa registrados y disponibles de un producto (detalle de entrega).
+     */
+    public function ajax_bag_sizes() {
+        $this->authorize();
+        $pb = (int) $this->post_string('producto_base_id');
+        $sizes = ($pb > 0 && class_exists('Riverso_Sale_Stock_Service'))
+            ? Riverso_Sale_Stock_Service::get_instance()->bag_sizes($pb)
+            : array();
+        $this->ok(array('sizes' => $sizes));
+    }
+
+    /**
      * Mapa de stock por product_id WC (uso interno y módulos hermanos).
      *
      * @param int[] $wc_product_ids
@@ -628,6 +658,7 @@ class Riverso_Customer_Quote_Module {
         $can_inventory = current_user_can('riverso_do_inventory')
             || current_user_can('riverso_edit_stock')
             || current_user_can('manage_options');
+        $reservations = class_exists('Riverso_Reservation_Service') ? Riverso_Reservation_Service::get_instance() : null;
         foreach ($wc_product_ids as $wc_id) {
             if (!isset($by_wc[$wc_id])) {
                 continue;
@@ -640,10 +671,21 @@ class Riverso_Customer_Quote_Module {
             if ($inv && method_exists($inv, 'get_stock_status_for_product')) {
                 $stock = $inv->get_stock_status_for_product($base_id);
             }
+            $reserved = $reservations ? (float) $reservations->get_reserved($base_id) : 0.0;
+            // Orden en que saldría al vender (Modo avanzado muestra la vista previa).
+            $sale_stock = class_exists('Riverso_Sale_Stock_Service') ? Riverso_Sale_Stock_Service::get_instance() : null;
+            $cascade = $sale_stock ? $sale_stock->cascade_candidates($base_id) : array();
+            $unlocated = $sale_stock ? $sale_stock->unlocated_balance($base_id) : 0.0;
+            $stock_total = $stock !== null ? (float) $stock['stock_total'] : null;
             $out[(string) $wc_id] = array(
                 'product_id' => (int) $wc_id,
                 'producto_base_id' => $base_id,
-                'stock_total' => $stock !== null ? (float) $stock['stock_total'] : null,
+                'stock_total' => $stock_total,
+                // Reservado por cotizaciones aprobadas; disponible puede ser negativo.
+                'reservado' => round($reserved, 4),
+                'cascada' => $cascade,
+                'sin_ubicar' => round($unlocated, 4),
+                'disponible' => $stock_total !== null ? round($stock_total - $reserved, 4) : null,
                 'estado_confianza' => $stock !== null ? (string) $stock['estado_confianza'] : null,
                 'estado_inventariado' => $stock !== null ? (string) $stock['estado_inventariado'] : null,
                 'alerta' => $stock !== null ? (int) $stock['alerta'] : 0,
@@ -694,7 +736,7 @@ class Riverso_Customer_Quote_Module {
             }
 
             if ($quote['status'] !== Riverso_Quote_Status::LISTED) {
-                $this->fail('Solo se puede facturar una cotización en estado Lista.');
+                $this->fail('Solo se puede facturar una cotización Aprobada.');
             }
             if (($quote['quote_type'] ?? '') !== Riverso_Quote_Type::VENTA) {
                 $this->fail('Solo las cotizaciones de tipo Venta se pueden facturar.');
@@ -1808,15 +1850,26 @@ class Riverso_Customer_Quote_Module {
     private function present_quote_with_docs(array $quote) {
         $id = (int) ($quote['id'] ?? 0);
         $docs = $this->list_associated_documents($id);
-        if ($docs && ($quote['status'] ?? '') !== Riverso_Quote_Status::LISTED) {
-            $this->quotes->mark_listed($id);
+        if ($docs && $this->quotes->sync_document_status($id)) {
             $fresh = $this->quotes->find($id);
             if (is_array($fresh)) {
                 $quote = $fresh;
             }
         }
+        $sales = $id > 0 ? $this->quotes->attach_comparisons($this->quotes->sale_summaries(array($id))) : array();
+        $quote['sale'] = isset($sales[$id]) ? $sales[$id] : null;
+        if ($quote['sale'] !== null) {
+            unset($quote['sale']['document_draft_ids']);
+            $quote['status_label'] = Riverso_Customer_Quote_Repository::status_label_with_changes(
+                (string) ($quote['status'] ?? ''),
+                (string) ($quote['status_label'] ?? ''),
+                $quote['sale']
+            );
+        }
         if ($docs) {
+            // Con documento de venta el estado lo maneja la facturación.
             $quote['allowed_transitions'] = array();
+            $quote['is_expired'] = false;
         }
         $quote = $this->catalog->hydrate_quote_families($quote);
         $quote['associated_documents'] = $docs;

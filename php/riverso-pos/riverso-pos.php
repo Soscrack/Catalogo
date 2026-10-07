@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constantes del plugin
-define('RIVERSO_POS_VERSION', '1.8.57');
+define('RIVERSO_POS_VERSION', '1.8.58');
 define('RIVERSO_POS_PLUGIN_FILE', __FILE__);
 define('RIVERSO_POS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RIVERSO_POS_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -360,6 +360,13 @@ final class Riverso_POS {
                     RIVERSO_POS_PLUGIN_DIR . 'sales/cash/class-cash-module.php',
                 ],
             ],
+            'reception' => [
+                'file' => 'class-purchase-reception-module.php',
+                'class' => 'Riverso_Purchase_Reception_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'purchases/reception/class-purchase-reception-module.php',
+                ],
+            ],
             'pos'             => [
                 'file' => 'class-pos-module.php',
                 'class' => 'Riverso_POS_Module',
@@ -433,6 +440,7 @@ final class Riverso_POS {
             RIVERSO_POS_PLUGIN_DIR . 'inventory/stock/class-stock-service.php',
             RIVERSO_POS_PLUGIN_DIR . 'inventory/reservations/class-reservation-service.php',
             RIVERSO_POS_PLUGIN_DIR . 'inventory/stock_count/class-stock-count-service.php',
+            RIVERSO_POS_PLUGIN_DIR . 'inventory/sales/class-sale-stock-service.php',
             RIVERSO_POS_PLUGIN_DIR . 'woocommerce/woocommerce-module.php',
             RIVERSO_POS_PLUGIN_DIR . 'purchases/purchase_orders/class-purchase-order-module.php',
             RIVERSO_POS_PLUGIN_DIR . 'purchases/reception/class-reception-service.php',

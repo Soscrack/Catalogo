@@ -47,3 +47,6 @@ prompts/.env
 .env
 .env.deploy
 .env.local
+
+# Claude Code (configuración personal)
+.claude/settings.local.json

@@ -27,7 +27,7 @@ $can_history = current_user_can('riverso_view_inventory_history') || $can_count 
 $can_stock_status = $can_count || $can_history;
 $location_types = class_exists('Riverso_Warehouse_Module') ? Riverso_Warehouse_Module::LOCATION_TYPES : [
     'pasillo' => 'Pasillo', 'estante' => 'Estante', 'rack' => 'Rack', 'piso' => 'Piso',
-    'meson' => 'Mesón', 'vitrina' => 'Vitrina', 'bodega_ext' => 'Bodega Externa',
+    'meson' => 'Mesón', 'vitrina' => 'Vitrina', 'bodega_ext' => 'Bodega Externa', 'recepcion' => 'Recepción',
 ];
 ?>
 

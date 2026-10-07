@@ -2754,6 +2754,22 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
         }
         ?>
 
+        <?php elseif ($current_page === 'recepcion'): ?>
+        <!-- Recepción de compras: recibir → ordenar → reclamar -->
+        <?php
+        if (!class_exists('Riverso_Purchase_Reception_Module')) {
+            $rxm = RIVERSO_POS_PLUGIN_DIR . 'purchases/reception/class-purchase-reception-module.php';
+            if (file_exists($rxm)) {
+                require_once $rxm;
+            }
+        }
+        if (class_exists('Riverso_Purchase_Reception_Module')) {
+            Riverso_Purchase_Reception_Module::get_instance()->render_app('portal');
+        } else {
+            echo '<p>No se pudo cargar Recepción.</p>';
+        }
+        ?>
+
         <?php elseif ($current_page === 'manejo-caja'): ?>
         <?php
         if (!class_exists('Riverso_Cash_Module')) {

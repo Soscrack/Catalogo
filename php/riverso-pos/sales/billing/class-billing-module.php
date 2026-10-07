@@ -560,6 +560,14 @@ class Riverso_Billing_Module {
         if (is_wp_error($payload)) {
             wp_send_json_error(['message' => $payload->get_error_message()]);
         }
+        // Llevar la cotización a Facturación la aprueba (Borrador → Aprobada, reserva stock).
+        if (method_exists('Riverso_Customer_Quote_Repository', 'approve_for_billing')) {
+            try {
+                (new Riverso_Customer_Quote_Repository())->approve_for_billing($id);
+            } catch (Exception $error) {
+                // No bloquear la facturación por el estado de la cotización.
+            }
+        }
         wp_send_json_success($payload);
     }
 
@@ -727,7 +735,7 @@ class Riverso_Billing_Module {
         if ($quote_id > 0) {
             $existing = $this->issued->find_success_by_quote($quote_id);
             if ($existing) {
-                $this->mark_linked_quote_listed($quote_id);
+                $this->sync_linked_quote_status($quote_id);
                 wp_send_json_success([
                     'idempotent' => true,
                     'message' => 'Ya existe un DTE para esta cotización (folio ' . $existing['folio'] . ').',
@@ -861,6 +869,10 @@ class Riverso_Billing_Module {
             }
 
             $warnings = [];
+            $stock_warning = $this->apply_sale_stock($draft_id);
+            if ($stock_warning !== '') {
+                $warnings[] = $stock_warning;
+            }
             $immediate_payment = null;
             if ($mark_paid && is_array($pay_list) && $pay_list) {
                 $registered = [];
@@ -974,7 +986,7 @@ class Riverso_Billing_Module {
 
             $payments = $this->drafts->list_document_payments($draft_id, (int) $insert_id);
             $draft = $draft_id > 0 ? $this->present_draft($this->drafts->get($draft_id)) : null;
-            $this->mark_linked_quote_listed($quote_id);
+            $this->sync_linked_quote_status($quote_id > 0 ? $quote_id : (int) ($draft['quote_id'] ?? 0));
 
             wp_send_json_success([
                 'idempotent' => false,
@@ -1233,6 +1245,9 @@ class Riverso_Billing_Module {
         if ($type !== Riverso_Quote_Type::VENTA) {
             return new WP_Error('bad_type', 'Solo cotizaciones de tipo Venta.');
         }
+        if ($status === Riverso_Quote_Status::REJECTED || $status === Riverso_Quote_Status::CANCELLED) {
+            return new WP_Error('closed_quote', 'La cotización está ' . Riverso_Quote_Status::label($status) . '. Reábrala para facturar.');
+        }
 
         $existing = $this->issued->find_success_by_quote($quote_id);
 
@@ -1286,6 +1301,7 @@ class Riverso_Billing_Module {
                 'price_discount' => (float) ($line['price_discount'] ?? 0),
                 'margin_discount' => (float) ($line['margin_discount'] ?? 0),
                 'discount_amount' => (float) ($line['discount_amount'] ?? 0),
+                'stock_breakdown' => $line['stock_breakdown'] ?? null,
             ];
         }
 
@@ -1601,7 +1617,7 @@ class Riverso_Billing_Module {
         }
         $draft = $this->present_draft($this->drafts->get((int) $result['id']));
         if (!empty($draft['quote_id'])) {
-            $this->mark_linked_quote_listed((int) $draft['quote_id']);
+            $this->sync_linked_quote_status((int) $draft['quote_id']);
         }
         wp_send_json_success(['draft' => $draft]);
     }
@@ -1649,6 +1665,11 @@ class Riverso_Billing_Module {
                 ]);
             }
         }
+        // Devolver el stock que descontó (boleta cerrada) y re-sincronizar la cotización.
+        if (class_exists('Riverso_Sale_Stock_Service')) {
+            Riverso_Sale_Stock_Service::get_instance()->revert_document($id);
+        }
+        $this->sync_linked_quote_status((int) ($result['draft']['quote_id'] ?? 0));
         if (class_exists('Riverso_Audit_Module')) {
             Riverso_Audit_Module::get_instance()->log(
                 'billing.draft_deleted',
@@ -1722,9 +1743,10 @@ class Riverso_Billing_Module {
             wp_send_json_error(['message' => $saved['message'] ?? 'No se pudo cerrar el documento.']);
         }
         $this->drafts->mark_closed_local((int) $saved['id']);
+        $this->apply_sale_stock((int) $saved['id']);
         $draft = $this->present_draft($this->drafts->get((int) $saved['id']));
         if (!empty($draft['quote_id'])) {
-            $this->mark_linked_quote_listed((int) $draft['quote_id']);
+            $this->sync_linked_quote_status((int) $draft['quote_id']);
         }
         if (class_exists('Riverso_Audit_Module')) {
             Riverso_Audit_Module::get_instance()->log(
@@ -2480,11 +2502,32 @@ class Riverso_Billing_Module {
     }
 
     /**
-     * Cotización facturada con documento asociado queda en Lista.
+     * Descuenta el stock del documento (cascada de ubicaciones). Nunca bloquea la emisión.
+     *
+     * @param int $draft_id
+     * @return string Advertencia para el usuario, o vacío.
+     */
+    private function apply_sale_stock($draft_id) {
+        $draft_id = absint($draft_id);
+        if ($draft_id <= 0 || !class_exists('Riverso_Sale_Stock_Service')) {
+            return '';
+        }
+        try {
+            $result = Riverso_Sale_Stock_Service::get_instance()->apply_document($draft_id);
+        } catch (Exception $error) {
+            return 'No se pudo descontar el stock: ' . $error->getMessage();
+        }
+        $message = (string) ($result['message'] ?? '');
+        return strpos($message, 'No se pudo') === 0 ? $message : '';
+    }
+
+    /**
+     * Ajusta el estado de la cotización según sus documentos de venta:
+     * borrador de documento → Aprobada; documento emitido o boleta cerrada → Facturada.
      *
      * @param int $quote_id
      */
-    private function mark_linked_quote_listed($quote_id) {
+    private function sync_linked_quote_status($quote_id) {
         $quote_id = absint($quote_id);
         if ($quote_id <= 0) {
             return;
@@ -2497,13 +2540,13 @@ class Riverso_Billing_Module {
         if (!class_exists('Riverso_Customer_Quote_Repository') && file_exists($repo_path)) {
             require_once $repo_path;
         }
-        if (!class_exists('Riverso_Customer_Quote_Repository') || !method_exists('Riverso_Customer_Quote_Repository', 'mark_listed')) {
+        if (!class_exists('Riverso_Customer_Quote_Repository') || !method_exists('Riverso_Customer_Quote_Repository', 'sync_document_status')) {
             return;
         }
         try {
-            (new Riverso_Customer_Quote_Repository())->mark_listed($quote_id);
+            (new Riverso_Customer_Quote_Repository())->sync_document_status($quote_id);
         } catch (Exception $error) {
-            // La emisión ya quedó guardada; el listado vuelve a promover al abrir cotizaciones.
+            // La emisión ya quedó guardada; el listado de cotizaciones vuelve a sincronizar.
         }
     }
 

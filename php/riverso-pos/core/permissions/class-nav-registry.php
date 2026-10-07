@@ -310,9 +310,12 @@ class Riverso_POS_Nav_Registry {
                 'id' => 'reception',
                 'group' => 'bodega',
                 'label' => 'Recepción',
-                'surfaces' => ['admin'],
+                'icon' => 'download',
+                'surfaces' => ['portal', 'admin'],
+                'portal_slug' => 'recepcion',
                 'admin_page' => 'riverso-pos-reception',
                 'admin_callback' => 'render_reception',
+                'portal_capability_any' => ['riverso_receive_items', 'riverso_approve_reception'],
                 'admin_capability' => 'riverso_receive_items',
             ],
             [

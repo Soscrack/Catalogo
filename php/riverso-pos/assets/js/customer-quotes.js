@@ -30,8 +30,10 @@
         autosave: {
             timer: null,
             saving: false,
-            pending: false
+            pending: false,
+            inflight: null
         },
+        discardedId: null,
         lineModal: {
             index: -1,
             taxView: "bruto",
@@ -55,6 +57,7 @@
     };
 
     var IVA_FACTOR = 1.19;
+    var MSG_DISCARDED_NEW = "La cotización estaba vacía y se descartó. Se reservó un número nuevo.";
 
     var els = {
         listView: document.getElementById("cq-list-view"),
@@ -68,6 +71,7 @@
         filterNumber: document.getElementById("cq-filter-number"),
         filterCustomer: document.getElementById("cq-filter-customer"),
         filterResponsable: document.getElementById("cq-filter-responsable"),
+        saleStatusFilter: document.getElementById("cq-sale-status-filter"),
         includeQuotes: document.getElementById("cq-include-quotes"),
         resultsPanel: document.getElementById("cq-results-panel"),
         resultsCount: document.getElementById("cq-results-count"),
@@ -151,7 +155,7 @@
         lines: document.getElementById("cq-lines"),
         linesEmpty: document.getElementById("cq-lines-empty"),
         message: document.getElementById("cq-message"),
-        transition: document.getElementById("cq-transition"),
+        transitions: document.getElementById("cq-transitions"),
         deleteBtn: document.getElementById("cq-delete"),
         invoice: document.getElementById("cq-invoice"),
         associatedCard: document.getElementById("cq-associated-card"),
@@ -225,21 +229,12 @@
     };
 
     document.getElementById("cq-new").addEventListener("click", function () {
-        openEditor(emptyQuote());
+        startNewQuote({ push: true });
     });
     document.getElementById("cq-back").addEventListener("click", function () {
-        if (state.autosave.timer) {
-            clearTimeout(state.autosave.timer);
-            state.autosave.timer = null;
-        }
-        if (state.view === "editor" && state.quote.editable !== false
-            && (state.quote.id || (state.quote.lines || []).length)) {
-            saveQuote(true).finally(function () {
-                showList();
-            });
-            return;
-        }
-        showList();
+        leaveCurrentEditor().then(function () {
+            showList();
+        });
     });
     document.getElementById("cq-search-btn").addEventListener("click", searchProducts);
     if (els.channelLocal) els.channelLocal.addEventListener("click", function () { setChannel("local", true); });
@@ -387,6 +382,12 @@
         });
     }
     if (els.pageSize) {
+        if (els.saleStatusFilter) {
+            els.saleStatusFilter.addEventListener("change", function () {
+                state.listPage = 1;
+                renderList();
+            });
+        }
         els.pageSize.addEventListener("change", function () {
             state.listPageSize = parseInt(els.pageSize.value, 10) || 10;
             state.listPage = 1;
@@ -463,7 +464,6 @@
     }
     els.save.addEventListener("click", function () { saveQuote(false); });
     els.clear.addEventListener("click", clearQuote);
-    els.transition.addEventListener("click", transitionQuote);
     if (els.deleteBtn) {
         els.deleteBtn.addEventListener("click", deleteQuote);
     }
@@ -712,6 +712,51 @@
         }
     });
 
+    // Cerrar pestaña, recargar o navegar fuera: un borrador vacío se descarta.
+    window.addEventListener("pagehide", function () {
+        if (state.view !== "editor" || !isEmptyDraft(state.quote)) {
+            return;
+        }
+        state.discardedId = state.quote.id;
+        sendDiscardBeacon(state.quote.id);
+    });
+
+    // Volver con Atrás desde caché del navegador: la cotización pudo descartarse en pagehide.
+    window.addEventListener("pageshow", function (event) {
+        if (!event.persisted || !state.discardedId) {
+            return;
+        }
+        var id = state.discardedId;
+        state.discardedId = null;
+        if (state.view === "editor" && state.quote.id === id) {
+            openQuote(id, { onMissing: function () { startNewQuote({ message: MSG_DISCARDED_NEW }); } });
+        }
+    });
+
+    window.addEventListener("popstate", function () {
+        var target = readLocationTarget();
+        if (target.quoteId > 0 && state.view === "editor" && state.quote.id === target.quoteId) {
+            return;
+        }
+        if (!target.quoteId && !target.isNew && state.view === "list") {
+            return;
+        }
+        leaveCurrentEditor().then(function () {
+            if (target.quoteId > 0) {
+                openQuote(target.quoteId, {
+                    onMissing: function () {
+                        showList();
+                        setListMessage("La cotización ya no existe.", true);
+                    }
+                });
+            } else if (target.isNew) {
+                startNewQuote();
+            } else {
+                showList();
+            }
+        });
+    });
+
     if (!bootFromDeepLink()) {
         updateOrderButtonLabel();
         showList();
@@ -748,24 +793,130 @@
         };
     }
 
-    function bootFromDeepLink() {
+    function readLocationTarget() {
         var params;
         try {
             params = new URLSearchParams(window.location.search || "");
         } catch (err) {
-            return false;
+            return { quoteId: 0, isNew: false };
         }
-        var quoteId = parseInt(params.get("quote") || "0", 10);
-        var isNew = params.get("nueva") === "1";
-        if (quoteId > 0) {
-            openQuote(quoteId);
+        return {
+            quoteId: parseInt(params.get("quote") || "0", 10) || 0,
+            isNew: params.get("nueva") === "1"
+        };
+    }
+
+    function bootFromDeepLink() {
+        var target = readLocationTarget();
+        if (target.quoteId > 0) {
+            // 404 típico tras F5 sobre una cotización vacía (descartada en pagehide).
+            openQuote(target.quoteId, { onMissing: function () { startNewQuote({ message: MSG_DISCARDED_NEW }); } });
             return true;
         }
-        if (isNew) {
-            openEditor(emptyQuote());
+        if (target.isNew) {
+            startNewQuote();
             return true;
         }
         return false;
+    }
+
+    /**
+     * Abre el editor vacío y reserva número en el servidor (borrador sin líneas).
+     * Si el usuario sale sin agregar líneas, el borrador se descarta.
+     */
+    function startNewQuote(opts) {
+        opts = opts || {};
+        openEditor(emptyQuote(), { push: !!opts.push });
+        if (opts.message) {
+            setMessage(opts.message, false);
+        }
+        performSave({ silent: true, reserve: true }).catch(function () {
+            // Sin reserva: el número se asigna al primer guardado con líneas (error ya informado).
+        });
+    }
+
+    function isEmptyDraft(quote) {
+        return !!(quote && quote.id)
+            && quote.editable !== false
+            && (quote.status || "draft") === "draft"
+            && !(quote.lines || []).length;
+    }
+
+    /**
+     * Cierra el trabajo pendiente del editor antes de salir de él:
+     * espera recálculos/guardado en curso y luego descarta (si quedó vacío) o guarda.
+     */
+    function leaveCurrentEditor() {
+        if (state.view !== "editor") {
+            return Promise.resolve();
+        }
+        if (state.autosave.timer) {
+            clearTimeout(state.autosave.timer);
+            state.autosave.timer = null;
+        }
+        state.autosave.pending = false;
+        var quote = state.quote;
+        return Promise.resolve(state.priceRecalcChain)
+            .then(function () { return state.autosave.inflight; })
+            .catch(function () { return null; })
+            .then(function () {
+                if (state.quote !== quote || quote.editable === false) {
+                    return null;
+                }
+                if (isEmptyDraft(quote)) {
+                    return post(cfg.actions.discardEmpty, { id: String(quote.id) }).catch(function () { return null; });
+                }
+                if (quote.id || (quote.lines || []).length) {
+                    return performSave({ silent: true }).catch(function () { return null; });
+                }
+                return null;
+            });
+    }
+
+    function sendDiscardBeacon(id) {
+        if (!cfg.ajaxUrl || !cfg.actions || !cfg.actions.discardEmpty) {
+            return;
+        }
+        var body = new FormData();
+        body.append("action", cfg.actions.discardEmpty);
+        if (cfg.nonce) {
+            body.append("nonce", cfg.nonce);
+        }
+        body.append("id", String(id));
+        try {
+            if (navigator.sendBeacon && navigator.sendBeacon(cfg.ajaxUrl, body)) {
+                return;
+            }
+        } catch (err) { /* fallback abajo */ }
+        try {
+            fetch(cfg.ajaxUrl, { method: "POST", body: body, keepalive: true, credentials: "same-origin" });
+        } catch (err) { /* ignore */ }
+    }
+
+    function newQuotePortalUrl() {
+        var base = String(cfg.portalUrl || (window.location.origin + window.location.pathname));
+        var sep = base.indexOf("?") >= 0 ? "&" : "?";
+        return base + sep + "nueva=1";
+    }
+
+    function editorUrl() {
+        return state.quote.id ? quotePortalUrl(state.quote.id) : newQuotePortalUrl();
+    }
+
+    function setBrowserUrl(url, push) {
+        try {
+            if (!url || !window.history || !window.history.replaceState) {
+                return;
+            }
+            if (new URL(url, window.location.href).href === window.location.href) {
+                return;
+            }
+            if (push) {
+                window.history.pushState({ cq: 1 }, "", url);
+            } else {
+                window.history.replaceState({ cq: 1 }, "", url);
+            }
+        } catch (err) { /* ignore */ }
     }
 
     function showList() {
@@ -780,7 +931,7 @@
         loadList();
     }
 
-    function openEditor(quote) {
+    function openEditor(quote, opts) {
         // Defensa: algunos payloads legados usan items en vez de lines.
         if ((!quote.lines || !quote.lines.length) && quote.items && quote.items.length) {
             quote.lines = quote.items;
@@ -796,12 +947,16 @@
         setSaveStatus("");
         state.quote = quote;
         state.view = "editor";
+        if (opts && opts.push) {
+            setBrowserUrl(editorUrl(), true);
+        }
         els.listView.hidden = true;
         els.editorView.hidden = false;
         els.results.hidden = true;
         els.results.innerHTML = "";
         els.search.value = "";
         setMessage("");
+        quote.lines.forEach(lineBreakdown);
         paintEditor();
         state.snapshot = serialize(state.quote);
         if (state.advanced) {
@@ -877,6 +1032,12 @@
     function applyClientFilters() {
         var q = String(state.listQuery || "").trim().toLowerCase();
         var rows = state.quotes || [];
+        var saleFilter = els.saleStatusFilter ? els.saleStatusFilter.value : "all";
+        if (saleFilter && saleFilter !== "all") {
+            rows = rows.filter(function (quote) {
+                return (quote.sale && quote.sale.status ? quote.sale.status : "none") === saleFilter;
+            });
+        }
         if (!q) {
             state.filteredQuotes = rows.slice();
             return;
@@ -887,6 +1048,8 @@
                 quote.customer_name,
                 quote.seller_name,
                 quote.status_label,
+                quote.sale ? quote.sale.status_label : "",
+                quote.sale ? (quote.sale.folios || []).join(" ") : "",
                 formatMoney(quote.net_total)
             ].join(" ").toLowerCase();
             return hay.indexOf(q) >= 0;
@@ -945,8 +1108,9 @@
             tr.appendChild(cell(quote.customer_name || "Sin cliente"));
             tr.appendChild(cell(quote.seller_name || "—"));
             tr.appendChild(badgeCell(quote.status, quote.status_label));
-            tr.appendChild(cell("—"));
-            tr.appendChild(cell("—"));
+            var sale = quote.sale || { status: "none", status_label: "Sin documento", folios: [] };
+            tr.appendChild(badgeCell("sale-" + sale.status, sale.status_label));
+            tr.appendChild(cell((sale.folios || []).length ? sale.folios.join(", ") : "—"));
             var net = cell(formatMoney(quote.net_total));
             net.className = "cq-num";
             tr.appendChild(net);
@@ -989,7 +1153,7 @@
         main.addEventListener("click", function (event) {
             event.stopPropagation();
             closeViewMenus();
-            openQuote(quote.id);
+            openQuote(quote.id, { push: true });
         });
         var toggle = document.createElement("button");
         toggle.type = "button";
@@ -1117,8 +1281,8 @@
                 quote.customer_name || "",
                 quote.seller_name || "",
                 quote.status_label || "",
-                "",
-                "",
+                quote.sale ? quote.sale.status_label : "",
+                quote.sale ? (quote.sale.folios || []).join(", ") : "",
                 String(quote.net_total != null ? quote.net_total : "")
             ].map(csvEscape).join(";"));
         });
@@ -1150,16 +1314,27 @@
             .replace(/"/g, "&quot;");
     }
 
-    function openQuote(id) {
-        post(cfg.actions.get, { id: String(id) }).then(function (data) {
-            openEditor(data.quote);
+    function openQuote(id, opts) {
+        opts = opts || {};
+        return post(cfg.actions.get, { id: String(id) }).then(function (data) {
+            openEditor(data.quote, { push: !!opts.push });
         }).catch(function (error) {
+            if (error && error.status === 404 && opts.onMissing) {
+                opts.onMissing(error);
+                return;
+            }
+            if (state.view !== "list") {
+                showList();
+            }
             setListMessage(error.message, true);
         });
     }
 
     function paintEditor() {
         var quote = state.quote;
+        if (state.view === "editor") {
+            setBrowserUrl(editorUrl(), false);
+        }
         els.title.textContent = quote.quote_number || "Nueva cotización";
         els.status.textContent = quote.status_label || "Borrador";
         els.status.className = "cq-badge cq-badge-" + (quote.status || "draft");
@@ -1201,19 +1376,12 @@
         }
         els.save.hidden = !editable;
         els.clear.hidden = !editable;
-        var transition = (quote.allowed_transitions || [])[0];
-        if (quote.id && transition) {
-            els.transition.hidden = false;
-            els.transition.textContent = transition.label;
-            els.transition.dataset.status = transition.status;
-        } else {
-            els.transition.hidden = true;
-        }
+        renderTransitions(quote);
         if (els.invoice) {
             syncInvoiceButton(quote);
         }
         syncDeleteButton(quote);
-        renderAssociatedDocs(quote.associated_documents || []);
+        renderAssociatedDocs(quote.associated_documents || [], quote.sale);
         if (els.orderLink) {
             if (quote.order_id && quote.order_url) {
                 els.orderLink.hidden = false;
@@ -1232,9 +1400,51 @@
         if (editable) {
             recalcAllFamilyGroups();
         }
-        if (quote.status === "invoiced") {
-            setMessage("Esta cotización está facturada y no se edita en este corte.", false);
+        var lockText = lockMessage(quote);
+        if (lockText) {
+            setMessage(lockText, false);
         }
+    }
+
+    /** Explica por qué la cotización no se puede editar y cómo modificarla. */
+    function lockMessage(quote) {
+        var hasDocs = (quote.associated_documents || []).length > 0;
+        switch (quote.status) {
+            case "listed":
+                return hasDocs
+                    ? "Cotización Aprobada con documento de venta en preparación; no se puede modificar."
+                    : "Cotización Aprobada: bloqueada para edición y con stock reservado. Para modificarla, use «Volver a borrador».";
+            case "invoiced":
+                return quote.sale && quote.sale.comparison && quote.sale.comparison.has_changes
+                    ? "Cotización Facturada con cambios respecto de lo cotizado (ver detalle en Documentos asociados); no se puede modificar."
+                    : "Cotización Facturada; no se puede modificar.";
+            case "rejected":
+                return "Cotización Rechazada. Use «Reabrir» para volver a Borrador.";
+            case "cancelled":
+                return "Cotización Anulada. Use «Reabrir» para volver a Borrador.";
+            default:
+                return "";
+        }
+    }
+
+    function renderTransitions(quote) {
+        if (!els.transitions) {
+            return;
+        }
+        els.transitions.innerHTML = "";
+        if (!quote.id) {
+            return;
+        }
+        (quote.allowed_transitions || []).forEach(function (transition) {
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "cq-btn" + (transition.status === "cancelled" || transition.status === "rejected" ? " cq-btn-danger" : "");
+            btn.textContent = transition.label;
+            btn.addEventListener("click", function () {
+                transitionQuote(transition.status);
+            });
+            els.transitions.appendChild(btn);
+        });
     }
 
     function renderLines() {
@@ -1588,6 +1798,7 @@
             state.quote.lines[index].quantity = next;
             input.value = formatQty(next);
             updateQtyMeta(wrap, state.quote.lines[index]);
+            renderBreakdownChip(td, state.quote.lines[index], index, editable);
             if (state.quote.lines[index].producto_base_id) {
                 trackPriceRecalc(recalcLocalLinePrice(state.quote.lines[index], index)).then(function () {
                     scheduleAutosave(0);
@@ -1606,6 +1817,7 @@
             line.quantity = parsed;
             input.value = formatQty(parsed);
             updateQtyMeta(wrap, line);
+            renderBreakdownChip(td, line, index, editable);
             var gid = lineGrupoId(line);
             if (gid) {
                 trackPriceRecalc(recalcFamilyPrices(gid)).then(function () {
@@ -1646,7 +1858,387 @@
         wrap.appendChild(plus);
         updateQtyMeta(wrap, line);
         td.appendChild(wrap);
+        renderBreakdownChip(td, line, index, editable);
         return td;
+    }
+
+    /* ===== Detalle de entrega (bolsas leídas / sueltas) para la salida de stock ===== */
+
+    /**
+     * Detalle de entrega de la línea, ajustado a su cantidad. Leer el EAN13 de una bolsa suma
+     * una bolsa; escribir la cantidad deja la diferencia como sueltas "supuestas" (editables).
+     */
+    function lineBreakdown(line) {
+        var pb = line.producto_base_id != null ? Number(line.producto_base_id) : 0;
+        var bd = line.stock_breakdown;
+        if (!bd || typeof bd !== "object" || (bd.pb != null && Number(bd.pb) !== pb)) {
+            // Sin detalle, o cambió el producto (otra presentación): todo como sueltas supuestas.
+            bd = { bags: [], loose: round3(Number(line.quantity || 0)), assumed: true };
+        }
+        bd.bags = (Array.isArray(bd.bags) ? bd.bags : []).map(function (bag) {
+            return { size: Number(bag.size) || 0, count: Math.floor(Number(bag.count) || 0), ean: bag.ean || "" };
+        }).filter(function (bag) { return bag.size > 0 && bag.count > 0; });
+        bd.loose = round3(Number(bd.loose || 0));
+        bd.assumed = bd.assumed !== false;
+        bd.pb = pb;
+        line.stock_breakdown = bd;
+        return reconcileBreakdown(line, bd);
+    }
+
+    function bagsUnits(bd) {
+        var total = 0;
+        (bd.bags || []).forEach(function (bag) { total += bag.size * bag.count; });
+        return round3(total);
+    }
+
+    function reconcileBreakdown(line, bd) {
+        var qty = round3(Number(line.quantity || 0));
+        var total = round3(bagsUnits(bd) + bd.loose);
+        if (Math.abs(total - qty) < 0.0005) {
+            return bd;
+        }
+        if (qty > total) {
+            bd.loose = round3(bd.loose + (qty - total));
+            bd.assumed = true;
+            return bd;
+        }
+        // Bajó la cantidad: primero sueltas, luego bolsas (la última leída).
+        var excess = round3(total - qty);
+        var fromLoose = Math.min(bd.loose, excess);
+        bd.loose = round3(bd.loose - fromLoose);
+        excess = round3(excess - fromLoose);
+        while (excess > 0.0005 && bd.bags.length) {
+            var last = bd.bags[bd.bags.length - 1];
+            last.count -= 1;
+            excess = round3(excess - last.size);
+            if (last.count <= 0) {
+                bd.bags.pop();
+            }
+        }
+        if (excess < -0.0005) {
+            bd.loose = round3(bd.loose - excess);
+            bd.assumed = true;
+        }
+        if (bd.loose <= 0.0005) {
+            bd.loose = 0;
+            bd.assumed = false;
+        }
+        return bd;
+    }
+
+    /** Suma una lectura al detalle: EAN13 interno de bolsa = 1 bolsa; otro código = sueltas. */
+    function addScanToBreakdown(bd, product, qty) {
+        var bagSize = Number(product.scan_quantity || 0);
+        if (bagSize > 0 && product.barcode) {
+            var found = null;
+            bd.bags.forEach(function (bag) {
+                if (!found && Math.abs(bag.size - bagSize) < 0.0005) {
+                    found = bag;
+                }
+            });
+            if (found) {
+                found.count += 1;
+            } else {
+                bd.bags.push({ size: bagSize, count: 1, ean: String(product.barcode) });
+            }
+            return bd;
+        }
+        bd.loose = round3(bd.loose + qty);
+        return bd;
+    }
+
+    function breakdownPayload(line) {
+        var bd = lineBreakdown(line);
+        return {
+            bags: bd.bags.map(function (bag) { return { size: bag.size, count: bag.count, ean: bag.ean || "" }; }),
+            loose: bd.loose,
+            assumed: !!bd.assumed
+        };
+    }
+
+    /** Solo importa donde hay ambigüedad: unitario de familia (¿suelto o bolsa?) o bolsas leídas. */
+    function lineNeedsBreakdown(line) {
+        var bd = line.stock_breakdown;
+        var hasBags = !!(bd && Array.isArray(bd.bags) && bd.bags.length);
+        return hasBags || (!!lineGrupoId(line) && lineIsUnitario(line));
+    }
+
+    function breakdownText(bd) {
+        var parts = bd.bags.map(function (bag) {
+            return formatPlain(bag.count) + (bag.count === 1 ? " bolsa ×" : " bolsas ×") + formatPlain(bag.size);
+        });
+        if (bd.loose > 0) {
+            parts.push(formatPlain(bd.loose) + (Math.abs(bd.loose - 1) < 0.0005 ? " suelta" : " sueltas"));
+        }
+        var text = parts.join(" + ") || "—";
+        return bd.assumed && bd.loose > 0 ? "≈ " + text + " (supuesto)" : text;
+    }
+
+    function renderBreakdownChip(td, line, index, editable) {
+        var old = td.querySelector(".cq-breakdown-chip");
+        if (old) {
+            old.parentNode.removeChild(old);
+        }
+        if (!line || !(Number(line.quantity) > 0) || !lineNeedsBreakdown(line)) {
+            return;
+        }
+        var bd = lineBreakdown(line);
+        var chip = document.createElement(editable ? "button" : "span");
+        if (editable) {
+            chip.type = "button";
+            chip.addEventListener("click", function () { openBreakdownModal(index); });
+        }
+        chip.className = "cq-breakdown-chip" + (bd.assumed && bd.loose > 0 ? " is-assumed" : "");
+        chip.textContent = breakdownText(bd);
+        chip.title = editable
+            ? "Cómo se entrega (para descontar stock al facturar). Clic para corregir."
+            : "Cómo se entrega (para descontar stock al facturar).";
+        td.appendChild(chip);
+    }
+
+    /** Reparto de la salida según la cascada de ubicaciones (vista previa, Modo avanzado). */
+    function cascadePlan(cascada, qty) {
+        var remaining = round3(qty);
+        var plan = [];
+        (cascada || []).forEach(function (row) {
+            if (remaining <= 0.0005) {
+                return;
+            }
+            var take = round3(Math.min(Number(row.cantidad) || 0, remaining));
+            if (take > 0) {
+                plan.push({ nombre: row.nombre || row.codigo || "?", cantidad: take, estimado: !!row.estimado });
+                remaining = round3(remaining - take);
+            }
+        });
+        if (remaining > 0.0005) {
+            plan.push({ nombre: "Sin ubicar", cantidad: remaining, estimado: false });
+        }
+        return plan;
+    }
+
+    var breakdownModal = null;
+
+    function ensureBreakdownModal() {
+        if (breakdownModal) {
+            return breakdownModal;
+        }
+        var root = document.createElement("div");
+        root.className = "cq-modal";
+        root.hidden = true;
+        root.setAttribute("aria-hidden", "true");
+        root.innerHTML = '<div class="cq-modal-backdrop" data-cq-bd-close="1"></div>'
+            + '<div class="cq-modal-dialog cq-breakdown-dialog" role="dialog" aria-modal="true" aria-labelledby="cq-bd-title">'
+            + '<header class="cq-modal-head"><h3 id="cq-bd-title">Detalle de entrega</h3>'
+            + '<button type="button" class="cq-modal-close" aria-label="Cerrar" data-cq-bd-close="1">×</button></header>'
+            + '<div class="cq-modal-body">'
+            + '<p class="cq-modal-hint" data-role="line"></p>'
+            + '<div class="cq-bd-rows" data-role="rows"></div>'
+            + '<div class="cq-bd-add"><input type="text" inputmode="decimal" data-role="new-size" placeholder="Unidades por bolsa" aria-label="Otro tamaño de bolsa">'
+            + '<button type="button" class="cq-btn" data-role="add-size">Agregar tamaño</button></div>'
+            + '<p class="cq-bd-loose" data-role="loose"></p>'
+            + '<div class="cq-bd-suggest" data-role="suggest"></div>'
+            + '<p class="cq-modal-hint" data-role="info">Las bolsas registradas se marcan vendidas (sus unidades ya salieron al embolsar). '
+            + 'Las no registradas y las sueltas descuentan unidades.</p>'
+            + '</div>'
+            + '<footer class="cq-modal-foot"><button type="button" class="cq-btn" data-cq-bd-close="1">Cancelar</button>'
+            + '<button type="button" class="cq-btn cq-btn-primary" data-role="save">Guardar detalle</button></footer>'
+            + '</div>';
+        var host = document.getElementById("riverso-cq") || document.body;
+        host.appendChild(root);
+        breakdownModal = { root: root, index: -1, draft: null, sizes: [] };
+        root.addEventListener("click", function (event) {
+            var target = event.target;
+            if (target && target.getAttribute && target.getAttribute("data-cq-bd-close")) {
+                closeBreakdownModal();
+            }
+        });
+        root.addEventListener("keydown", function (event) {
+            if (event.key === "Escape") {
+                closeBreakdownModal();
+            }
+        });
+        root.querySelector('[data-role="add-size"]').addEventListener("click", function () {
+            var input = root.querySelector('[data-role="new-size"]');
+            var size = round3(parseClNumber(input.value));
+            if (size > 0) {
+                addBreakdownSize(size, 0);
+                input.value = "";
+                renderBreakdownModal();
+            }
+        });
+        root.querySelector('[data-role="save"]').addEventListener("click", saveBreakdownModal);
+        return breakdownModal;
+    }
+
+    function addBreakdownSize(size, disponibles) {
+        var modal = breakdownModal;
+        var found = null;
+        modal.sizes.forEach(function (item) {
+            if (!found && Math.abs(item.size - size) < 0.0005) {
+                found = item;
+            }
+        });
+        if (found) {
+            if (disponibles != null) {
+                found.disponibles = disponibles;
+            }
+            return found;
+        }
+        var item = { size: size, disponibles: disponibles == null ? null : disponibles };
+        modal.sizes.push(item);
+        modal.sizes.sort(function (a, b) { return a.size - b.size; });
+        return item;
+    }
+
+    function breakdownDraftCount(size) {
+        var count = 0;
+        breakdownModal.draft.bags.forEach(function (bag) {
+            if (Math.abs(bag.size - size) < 0.0005) {
+                count = bag.count;
+            }
+        });
+        return count;
+    }
+
+    function setBreakdownDraftCount(size, count, ean) {
+        var bags = breakdownModal.draft.bags.filter(function (bag) { return Math.abs(bag.size - size) >= 0.0005; });
+        if (count > 0) {
+            bags.push({ size: size, count: count, ean: ean || "" });
+        }
+        bags.sort(function (a, b) { return a.size - b.size; });
+        breakdownModal.draft.bags = bags;
+    }
+
+    function openBreakdownModal(index) {
+        var line = state.quote.lines[index];
+        if (!line || state.quote.editable === false) {
+            return;
+        }
+        var modal = ensureBreakdownModal();
+        var bd = lineBreakdown(line);
+        modal.index = index;
+        modal.draft = { bags: bd.bags.map(function (bag) { return { size: bag.size, count: bag.count, ean: bag.ean }; }) };
+        modal.sizes = [];
+        bd.bags.forEach(function (bag) { addBreakdownSize(bag.size, null); });
+        modal.root.querySelector('[data-role="line"]').textContent = (line.sku ? line.sku + " · " : "")
+            + (line.description || "") + " — cantidad " + formatPlain(line.quantity);
+        modal.root.hidden = false;
+        modal.root.setAttribute("aria-hidden", "false");
+        renderBreakdownModal();
+        if (cfg.actions && cfg.actions.bagSizes && line.producto_base_id) {
+            post(cfg.actions.bagSizes, { producto_base_id: String(line.producto_base_id) }).then(function (data) {
+                if (modal.index !== index) {
+                    return;
+                }
+                (data.sizes || []).forEach(function (item) { addBreakdownSize(Number(item.size), Number(item.disponibles) || 0); });
+                renderBreakdownModal();
+            }).catch(function () { /* sin tamaños registrados: se puede escribir uno */ });
+        }
+    }
+
+    function closeBreakdownModal() {
+        if (!breakdownModal) {
+            return;
+        }
+        breakdownModal.root.hidden = true;
+        breakdownModal.root.setAttribute("aria-hidden", "true");
+        breakdownModal.index = -1;
+    }
+
+    function breakdownModalLoose() {
+        var line = state.quote.lines[breakdownModal.index];
+        var qty = round3(Number(line ? line.quantity : 0));
+        return round3(qty - bagsUnits(breakdownModal.draft));
+    }
+
+    function renderBreakdownModal() {
+        var modal = breakdownModal;
+        var rows = modal.root.querySelector('[data-role="rows"]');
+        rows.innerHTML = "";
+        if (!modal.sizes.length) {
+            var empty = document.createElement("p");
+            empty.className = "cq-modal-hint";
+            empty.textContent = "Sin bolsas registradas para este producto. Si se entregó embolsado, agregue el tamaño.";
+            rows.appendChild(empty);
+        }
+        modal.sizes.forEach(function (item) {
+            var row = document.createElement("label");
+            row.className = "cq-bd-row";
+            var name = document.createElement("span");
+            name.textContent = "Bolsas de " + formatPlain(item.size);
+            var input = document.createElement("input");
+            input.type = "number";
+            input.min = "0";
+            input.step = "1";
+            input.value = String(breakdownDraftCount(item.size));
+            input.addEventListener("input", function () {
+                setBreakdownDraftCount(item.size, Math.max(0, Math.floor(Number(input.value) || 0)));
+                renderBreakdownSummary();
+            });
+            var hint = document.createElement("em");
+            hint.className = "cq-float-hint";
+            hint.textContent = item.disponibles == null
+                ? ""
+                : (item.disponibles > 0 ? item.disponibles + " registradas" : "sin registrar (se descuentan como sueltas)");
+            row.appendChild(name);
+            row.appendChild(input);
+            row.appendChild(hint);
+            rows.appendChild(row);
+        });
+        renderBreakdownSummary();
+    }
+
+    function renderBreakdownSummary() {
+        var modal = breakdownModal;
+        var loose = breakdownModalLoose();
+        var looseEl = modal.root.querySelector('[data-role="loose"]');
+        var save = modal.root.querySelector('[data-role="save"]');
+        if (loose < -0.0005) {
+            looseEl.textContent = "Las bolsas superan la cantidad de la línea por " + formatPlain(-loose) + ".";
+            looseEl.classList.add("is-error");
+            save.disabled = true;
+        } else {
+            looseEl.textContent = "Sueltas: " + formatPlain(Math.max(0, loose));
+            looseEl.classList.remove("is-error");
+            save.disabled = false;
+        }
+        // Sugerencia: si las sueltas alcanzan para bolsas registradas, ofrecer usarlas.
+        var suggest = modal.root.querySelector('[data-role="suggest"]');
+        suggest.innerHTML = "";
+        modal.sizes.forEach(function (item) {
+            var free = (item.disponibles || 0) - breakdownDraftCount(item.size);
+            var n = Math.min(Math.floor(Math.max(0, loose) / item.size), free);
+            if (n > 0) {
+                var btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "cq-btn cq-btn-small";
+                btn.textContent = "Usar " + n + (n === 1 ? " bolsa" : " bolsas") + " de " + formatPlain(item.size);
+                btn.addEventListener("click", function () {
+                    setBreakdownDraftCount(item.size, breakdownDraftCount(item.size) + n);
+                    renderBreakdownModal();
+                });
+                suggest.appendChild(btn);
+            }
+        });
+    }
+
+    function saveBreakdownModal() {
+        var modal = breakdownModal;
+        var line = state.quote.lines[modal.index];
+        var loose = breakdownModalLoose();
+        if (!line || loose < -0.0005) {
+            return;
+        }
+        line.stock_breakdown = {
+            bags: modal.draft.bags.filter(function (bag) { return bag.count > 0; }),
+            loose: Math.max(0, loose),
+            assumed: false,
+            pb: line.producto_base_id != null ? Number(line.producto_base_id) : 0
+        };
+        closeBreakdownModal();
+        renderLines();
+        scheduleAutosave(0);
+        setMessage("Detalle de entrega actualizado.", false);
     }
 
     function priceCell(line, index, editable) {
@@ -2676,6 +3268,7 @@
             return String(line.sku || "").toLowerCase() === sku && sku !== "";
         });
         if (existing) {
+            addScanToBreakdown(lineBreakdown(existing), product, addQty);
             existing.quantity = round3(Number(existing.quantity || 0) + addQty);
             if (product.unit_cost !== null && product.unit_cost !== undefined && product.unit_cost !== "") {
                 existing.unit_cost = Number(product.unit_cost);
@@ -2705,7 +3298,13 @@
                 _family: fam,
                 price_mode: product.price_mode || "auto",
                 price_ref: product.price_ref != null ? Number(product.price_ref) : null,
-                price_total: product.price_total != null ? Number(product.price_total) : null
+                price_total: product.price_total != null ? Number(product.price_total) : null,
+                stock_breakdown: addScanToBreakdown({
+                    bags: [],
+                    loose: 0,
+                    assumed: false,
+                    pb: product.producto_base_id != null ? Number(product.producto_base_id) : 0
+                }, product, round3(addQty))
             });
         }
         var target = existing || lines[lines.length - 1];
@@ -2768,7 +3367,8 @@
                         : null,
                     price_total: linePriceMode(line) === "manual" && line.price_total != null
                         ? line.price_total
-                        : null
+                        : null,
+                    stock_breakdown: breakdownPayload(line)
                 };
             })
         };
@@ -2854,6 +3454,9 @@
         if (els.title) {
             els.title.textContent = quote.quote_number || "Nueva cotización";
         }
+        if (state.view === "editor") {
+            setBrowserUrl(editorUrl(), false);
+        }
         if (els.status) {
             els.status.textContent = quote.status_label || "Borrador";
             els.status.className = "cq-badge cq-badge-" + (quote.status || "draft");
@@ -2864,14 +3467,7 @@
         if (els.expiredBadge) {
             els.expiredBadge.hidden = !state.quote.is_expired;
         }
-        var transition = (state.quote.allowed_transitions || [])[0];
-        if (state.quote.id && transition) {
-            els.transition.hidden = false;
-            els.transition.textContent = transition.label;
-            els.transition.dataset.status = transition.status;
-        } else {
-            els.transition.hidden = true;
-        }
+        renderTransitions(state.quote);
         if (els.invoice) {
             syncInvoiceButton(state.quote);
         }
@@ -2896,10 +3492,14 @@
     function performSave(opts) {
         opts = opts || {};
         var silent = !!opts.silent;
+        var reserve = !!opts.reserve;
         syncHeader();
         var hasId = !!state.quote.id;
         var lineCount = (state.quote.lines || []).length;
-        if (!hasId && lineCount === 0) {
+        if (reserve && hasId) {
+            return Promise.resolve(null);
+        }
+        if (!reserve && !hasId && lineCount === 0) {
             if (!silent) {
                 setMessage("Agrega al menos un producto para guardar.", true);
             }
@@ -2916,11 +3516,16 @@
             return Promise.resolve(null);
         }
         state.autosave.saving = true;
-        setSaveStatus("Guardando…", "saving");
+        setSaveStatus(reserve ? "Reservando número…" : "Guardando…", "saving");
         if (!silent) {
             els.save.disabled = true;
         }
-        return post(cfg.actions.save, { payload: JSON.stringify(buildSavePayload()) }).then(function (data) {
+        var target = state.quote;
+        var request = post(cfg.actions.save, { payload: JSON.stringify(buildSavePayload()) }).then(function (data) {
+            if (state.quote !== target) {
+                // El editor cambió de cotización mientras se guardaba.
+                return data.quote;
+            }
             if (silent) {
                 applySavedMeta(data.quote);
             } else {
@@ -2929,14 +3534,15 @@
                 state.snapshot = serialize(state.quote);
                 setMessage(data.message || "Cotización guardada.", false);
             }
-            setSaveStatus("Guardado", "saved");
+            setSaveStatus(reserve ? "" : "Guardado", reserve ? "" : "saved");
             return data.quote;
         }).catch(function (error) {
-            setSaveStatus("Error al guardar", "error");
+            setSaveStatus(reserve ? "No se pudo reservar número" : "Error al guardar", "error");
             setMessage(error.message, true);
             throw error;
         }).finally(function () {
             state.autosave.saving = false;
+            state.autosave.inflight = null;
             if (!silent) {
                 els.save.disabled = false;
             }
@@ -2945,6 +3551,8 @@
                 scheduleAutosave(150);
             }
         });
+        state.autosave.inflight = request.catch(function () { return null; });
+        return request;
     }
 
     function saveQuote(silent) {
@@ -2960,12 +3568,29 @@
         });
     }
 
+    /** Quita todas las líneas manteniendo la cotización (id y número). */
     function clearQuote() {
-        if (isDirty() && !window.confirm("¿Limpiar la cotización? Se perderán los cambios no guardados.")) {
+        if (state.quote.editable === false) {
             return;
         }
-        openEditor(emptyQuote());
-        setMessage("Cotización limpia.", false);
+        var lines = state.quote.lines || [];
+        if (!lines.length) {
+            setMessage("La cotización no tiene líneas.", false);
+            return;
+        }
+        var label = state.quote.quote_number ? " " + state.quote.quote_number : "";
+        var warning = "¿Está seguro de limpiar la cotización" + label + "? Se quitarán todas las líneas (" + lines.length + ").";
+        if ((state.quote.status || "draft") === "draft") {
+            warning += "\n\nSi sale de la cotización sin agregar productos, se borrará automáticamente.";
+        }
+        if (!window.confirm(warning)) {
+            return;
+        }
+        state.quote.lines = [];
+        renderLines();
+        renderTotals();
+        scheduleAutosave(0);
+        setMessage("Líneas eliminadas.", false);
     }
 
     function syncDeleteButton(quote) {
@@ -3008,17 +3633,60 @@
         });
     }
 
-    function transitionQuote() {
-        var target = els.transition.dataset.status;
+    function transitionConfirmText(target) {
+        var label = state.quote.quote_number || "esta cotización";
+        if (target === "listed") {
+            return "¿Aprobar " + label + "?\n\nQuedará bloqueada para edición y se reservará el stock de sus productos.";
+        }
+        if (target === "rejected") {
+            return "¿Marcar " + label + " como Rechazada?\n\nSe liberará el stock reservado, si lo hay.";
+        }
+        if (target === "cancelled") {
+            return "¿Anular " + label + "?\n\nSe liberará el stock reservado, si lo hay.";
+        }
+        if (target === "draft" && state.quote.status === "listed") {
+            return "¿Volver " + label + " a Borrador?\n\nSe liberará el stock reservado y podrá editarla de nuevo.";
+        }
+        return "";
+    }
+
+    /** Espera recálculos y guardados en curso y guarda cambios pendientes. */
+    function flushPendingSave() {
+        if (state.autosave.timer) {
+            clearTimeout(state.autosave.timer);
+            state.autosave.timer = null;
+        }
+        state.autosave.pending = false;
+        return Promise.resolve(state.priceRecalcChain)
+            .then(function () { return state.autosave.inflight; })
+            .catch(function () { return null; })
+            .then(function () {
+                if (state.quote.editable !== false && state.quote.id && isDirty()) {
+                    return performSave({ silent: true });
+                }
+                return null;
+            });
+    }
+
+    function transitionQuote(target) {
         if (!state.quote.id || !target) {
             setMessage("Guarda la cotización antes de cambiar el estado.", true);
             return;
         }
-        post(cfg.actions.transition, { id: String(state.quote.id), status: target }).then(function (data) {
+        var question = transitionConfirmText(target);
+        if (question && !window.confirm(question)) {
+            return;
+        }
+        flushPendingSave().then(function () {
+            return post(cfg.actions.transition, { id: String(state.quote.id), status: target });
+        }).then(function (data) {
             state.quote = data.quote;
             paintEditor();
             state.snapshot = serialize(state.quote);
             setMessage(data.message || "Estado actualizado.", false);
+            if (state.advanced) {
+                refreshLineStock();
+            }
         }).catch(function (error) {
             setMessage(error.message, true);
         });
@@ -3051,7 +3719,9 @@
     }
 
     function canShowInvoice(quote) {
-        return !!(cfg.canEmitDte) && !!(quote && quote.id) && (quote.quote_type || "venta") === "venta";
+        var status = quote && quote.status ? quote.status : "draft";
+        return !!(cfg.canEmitDte) && !!(quote && quote.id) && (quote.quote_type || "venta") === "venta"
+            && (status === "draft" || status === "listed");
     }
 
     function syncInvoiceButton(quote) {
@@ -3073,17 +3743,36 @@
         return "";
     }
 
-    function renderAssociatedDocs(list) {
+    function renderAssociatedDocs(list, sale) {
         if (!els.associatedCard || !els.associatedList) {
             return;
         }
         var docs = Array.isArray(list) ? list : [];
         els.associatedList.innerHTML = "";
+        Array.prototype.forEach.call(
+            els.associatedCard.querySelectorAll(".cq-sale-summary, .cq-sale-compare"),
+            function (node) { node.parentNode.removeChild(node); }
+        );
+        var summary = null;
         if (!docs.length) {
             els.associatedCard.hidden = true;
             return;
         }
         els.associatedCard.hidden = false;
+        if (sale && sale.status && sale.status !== "none") {
+            summary = document.createElement("p");
+            summary.className = "cq-sale-summary";
+            var text = "Estado de venta: " + (sale.status_label || "");
+            if (sale.sold) {
+                text += " · Pagado " + formatMoney(sale.paid || 0) + " de " + formatMoney(sale.total || 0);
+            }
+            summary.textContent = text;
+            els.associatedCard.appendChild(summary);
+            var compare = renderSaleComparison(sale.comparison);
+            if (compare) {
+                els.associatedCard.appendChild(compare);
+            }
+        }
         docs.forEach(function (doc) {
             var url = associatedDocUrl(doc);
             var li = document.createElement("li");
@@ -3103,6 +3792,62 @@
         });
     }
 
+    /** Cambios entre lo cotizado y lo facturado (la cotización no se modifica). */
+    function renderSaleComparison(cmp) {
+        if (!cmp) {
+            return null;
+        }
+        var wrap = document.createElement("div");
+        wrap.className = "cq-sale-compare";
+        if (!cmp.available) {
+            wrap.textContent = "No hay detalle de líneas del documento para compararlo con la cotización.";
+            return wrap;
+        }
+        if (!cmp.has_changes) {
+            wrap.textContent = "Facturada sin cambios respecto de lo cotizado.";
+            return wrap;
+        }
+        var title = document.createElement("p");
+        title.className = "cq-sale-compare-title";
+        var diff = Number(cmp.document_total || 0) - Number(cmp.quote_total || 0);
+        title.textContent = "Cambios respecto de lo cotizado · Total cotizado " + formatMoney(cmp.quote_total)
+            + " · Facturado " + formatMoney(cmp.document_total)
+            + " (" + (diff >= 0 ? "+" : "−") + formatMoney(Math.abs(diff)) + ")";
+        wrap.appendChild(title);
+        var lines = cmp.lines || [];
+        if (!lines.length) {
+            return wrap;
+        }
+        var table = document.createElement("table");
+        table.className = "cq-table cq-sale-compare-table";
+        var head = document.createElement("tr");
+        ["Cambio", "Producto", "Cotizado", "Facturado"].forEach(function (text) {
+            var th = document.createElement("th");
+            th.scope = "col";
+            th.textContent = text;
+            head.appendChild(th);
+        });
+        var thead = document.createElement("thead");
+        thead.appendChild(head);
+        table.appendChild(thead);
+        var body = document.createElement("tbody");
+        var typeLabels = { added: "Agregado", removed: "Quitado", changed: "Modificado" };
+        lines.forEach(function (line) {
+            var tr = document.createElement("tr");
+            tr.className = "cq-compare-" + line.type;
+            tr.appendChild(cell(typeLabels[line.type] || line.type));
+            tr.appendChild(cell((line.sku ? line.sku + " · " : "") + (line.description || "")));
+            tr.appendChild(cell(line.quote_quantity == null ? "—"
+                : formatPlain(line.quote_quantity) + " · " + formatMoney(line.quote_total)));
+            tr.appendChild(cell(line.document_quantity == null ? "—"
+                : formatPlain(line.document_quantity) + " · " + formatMoney(line.document_total)));
+            body.appendChild(tr);
+        });
+        table.appendChild(body);
+        wrap.appendChild(table);
+        return wrap;
+    }
+
     function invoiceQuote() {
         if ((state.quote.quote_type || "venta") !== "venta") {
             setMessage("Solo se pueden facturar cotizaciones de tipo Venta.", true);
@@ -3110,6 +3855,11 @@
         }
         if (!cfg.canEmitDte) {
             setMessage("No tienes permiso para facturar.", true);
+            return;
+        }
+        if ((state.quote.status || "draft") === "draft" && !window.confirm(
+            "Al facturar, la cotización pasa a Aprobada: queda bloqueada para edición y reserva el stock.\n\n¿Continuar a Facturación?"
+        )) {
             return;
         }
         function go(id) {
@@ -3330,7 +4080,9 @@
             return response.json().then(function (payload) {
                 if (!response.ok || !payload.success) {
                     var message = payload && payload.data && payload.data.message ? payload.data.message : "No se pudo completar la acción.";
-                    throw new Error(message);
+                    var error = new Error(message);
+                    error.status = response.status;
+                    throw error;
                 }
                 return payload.data;
             });
@@ -3528,10 +4280,37 @@
             return td;
         }
         td.textContent = formatPlain(info.stock_total);
+        var notes = [];
         if (info.critico) {
-            td.title = "Stock crítico";
+            notes.push("Stock crítico");
         } else if (info.alerta) {
-            td.title = "Stock en alerta";
+            notes.push("Stock en alerta");
+        }
+        var reserved = Number(info.reservado || 0);
+        if (reserved > 0) {
+            var res = document.createElement("span");
+            res.className = "cq-stock-reserved";
+            res.textContent = "Res. " + formatPlain(reserved) + " · Disp. " + formatPlain(info.disponible);
+            td.appendChild(res);
+            notes.push("Reservado por cotizaciones aprobadas: " + formatPlain(reserved)
+                + ". Disponible: " + formatPlain(info.disponible));
+        }
+        var looseQty = line && Number(line.quantity) > 0 ? lineBreakdown(line).loose : 0;
+        if (Array.isArray(info.cascada) && looseQty > 0) {
+            var plan = cascadePlan(info.cascada, looseQty);
+            var preview = document.createElement("span");
+            preview.className = "cq-stock-cascade";
+            preview.textContent = "Sale de: " + plan.map(function (p) {
+                return p.nombre + " " + (p.estimado ? "≈" : "") + formatPlain(p.cantidad);
+            }).join(" · ");
+            td.appendChild(preview);
+            notes.push(preview.textContent);
+        }
+        if (Number(info.sin_ubicar) < -0.0005) {
+            notes.push("Sin ubicar: " + formatPlain(info.sin_ubicar) + " (vendido sin lugar identificado; se cuadra al contar)");
+        }
+        if (notes.length) {
+            td.title = notes.join(". ");
         }
         return td;
     }

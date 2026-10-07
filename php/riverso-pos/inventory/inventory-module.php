@@ -30,6 +30,7 @@ class Riverso_Inventory_Module {
             'stock/class-stock-service.php',
             'reservations/class-reservation-service.php',
             'stock_count/class-stock-count-service.php',
+            'sales/class-sale-stock-service.php',
             // warehouse: no recargar la clase — se carga desde modules/warehouse/
         ];
 

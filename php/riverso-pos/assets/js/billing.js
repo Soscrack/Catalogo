@@ -1397,6 +1397,7 @@
         _rule_total: l._rule_total != null ? l._rule_total : (l.rule_adjusted ? l.rule_total : null),
         _rule_adjusted: !!(l._rule_adjusted || l.rule_adjusted),
         _family: l._family || {},
+        stock_breakdown: l.stock_breakdown || null,
       };
     });
     state.refs = draft.refs || [];
@@ -1939,6 +1940,7 @@
             price_discount: 0,
             margin_discount: 0,
             discount_amount: 0,
+            stock_breakdown: l.stock_breakdown || null,
           };
         });
         renderBoletaLines();

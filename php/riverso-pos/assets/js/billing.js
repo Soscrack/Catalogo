@@ -2373,9 +2373,40 @@
     }
     mountEmitEmails();
     syncEmitPayFieldsEnabled();
+    if ($("bill-emit-print")) $("bill-emit-print").checked = storageGet(QUICK_PRINT_KEY) === "1";
     if ($("bill-emit-modal")) {
       $("bill-emit-modal").hidden = false;
       $("bill-emit-modal").setAttribute("aria-hidden", "false");
+    }
+  }
+
+  // Impresión rápida ("Imprimir Ya!"): la estación de este dispositivo y la última elección
+  // del checkbox se recuerdan en este navegador.
+  var PRINT_STATION_KEY = "riverso.print.station";
+  var QUICK_PRINT_KEY = "riverso.print.quickEmit";
+
+  function storageGet(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function storageSet(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (e) {
+      // Navegador sin almacenamiento: solo se pierde el recuerdo de la elección.
+    }
+  }
+
+  function printStationId() {
+    try {
+      var station = JSON.parse(storageGet(PRINT_STATION_KEY) || "null");
+      return station && station.id ? Number(station.id) || 0 : 0;
+    } catch (e) {
+      return 0;
     }
   }
 
@@ -2400,6 +2431,8 @@
     payload.cheque_numero = ($("bill-emit-cheque-num") || {}).value || "";
     payload.cheque_titular = ($("bill-emit-cheque-tit") || {}).value || "";
     payload.cheque_banco = ($("bill-emit-cheque-banco") || {}).value || "";
+    payload.quick_print = $("bill-emit-print") && $("bill-emit-print").checked ? 1 : 0;
+    payload.print_station_id = payload.quick_print ? printStationId() : 0;
     if (payload.mark_paid && isEmitAtajoMode()) {
       var collected = collectEmitPaymentsForPayload();
       payload.payments = collected.ok ? collected.payments : [];
@@ -2420,8 +2453,12 @@
   function showEmitResult(data) {
     var dte = data.dte || {};
     if (dte.id) {
+      // El trabajo de impresión rápida ya quedó en la cola; la vista del documento sigue su estado.
+      var printJobId = data.print_job && data.print_job.id ? data.print_job.id : 0;
       showAlert((data.message || "Documento emitido") + " Abriendo documento…");
-      window.location.assign(documentViewUrl(dte.id));
+      window.location.assign(
+        documentViewUrl(dte.id) + (printJobId ? "&print_job=" + encodeURIComponent(String(printJobId)) : "")
+      );
       return;
     }
     state.dteId = dte.id || state.dteId;
@@ -2437,9 +2474,6 @@
       $("bill-done-folio").textContent = (dte.document_type_label || "") + " N° " + (dte.folio || "—");
     }
     renderPagosPanel();
-    if ($("bill-emit-print") && $("bill-emit-print").checked) {
-      runPreview("pdf");
-    }
   }
 
   function hasEmitableLines() {
@@ -3092,6 +3126,11 @@
       $("bill-emit-atajo").addEventListener("change", function () {
         if ($("bill-emit-atajo").checked) resetEmitAtajo();
         syncEmitPayFieldsEnabled();
+      });
+    }
+    if ($("bill-emit-print")) {
+      $("bill-emit-print").addEventListener("change", function () {
+        storageSet(QUICK_PRINT_KEY, $("bill-emit-print").checked ? "1" : "0");
       });
     }
     document.querySelectorAll(".bill-shortcut-btn").forEach(function (btn) {

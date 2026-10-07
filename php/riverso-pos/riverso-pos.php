@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constantes del plugin
-define('RIVERSO_POS_VERSION', '1.8.58');
+define('RIVERSO_POS_VERSION', '1.8.59');
 define('RIVERSO_POS_PLUGIN_FILE', __FILE__);
 define('RIVERSO_POS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RIVERSO_POS_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -270,6 +270,13 @@ final class Riverso_POS {
                 'class' => 'Riverso_REST_Module',
                 'paths' => [
                     RIVERSO_POS_PLUGIN_DIR . 'core/rest/class-rest-module.php',
+                ],
+            ],
+            'printing' => [
+                'file' => 'class-print-module.php',
+                'class' => 'Riverso_Print_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'core/printing/class-print-module.php',
                 ],
             ],
             'quotes'    => ['file' => 'class-received-quote-module.php', 'class' => 'Riverso_POS_Received_Quote_Module'],

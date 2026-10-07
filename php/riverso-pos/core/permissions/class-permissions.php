@@ -51,6 +51,7 @@ class Riverso_POS_Permissions {
         'riverso_create_quotes'      => 'Crear cotizaciones clientes',
         'riverso_approve_quotes'     => 'Aprobar cotizaciones clientes',
         'riverso_emit_dte'           => 'Emitir DTE (factura/boleta FACTO)',
+        'riverso_manage_printing'    => 'Configurar impresión directa (hubs, presets, ruteo)',
 
         // === CLIENTES COMERCIALES ===
         'riverso_view_customers'     => 'Ver clientes',
@@ -182,6 +183,7 @@ class Riverso_POS_Permissions {
             'riverso_create_quotes',
             'riverso_approve_quotes',
             'riverso_emit_dte',
+            'riverso_manage_printing',
         ],
         'Clientes' => [
             'riverso_view_customers',

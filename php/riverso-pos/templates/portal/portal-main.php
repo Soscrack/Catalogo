@@ -1007,8 +1007,8 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                                 if ($current_page === $child_slug) {
                                     if ($child_query === 'nueva=1') {
                                         $child_active = $query_nueva;
-                                    } elseif ($child_query === 'vista=buscar') {
-                                        $child_active = ($query_vista === 'buscar');
+                                    } elseif (strpos($child_query, 'vista=') === 0) {
+                                        $child_active = ($query_vista === substr($child_query, 6));
                                     } elseif ($child_query === '') {
                                         // En facturación: Emitir activo solo sin vista; cotizaciones sin "nueva".
                                         if ($child_slug === 'customer-quotes') {

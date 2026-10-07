@@ -302,6 +302,10 @@ class Riverso_Billing_Module {
             include RIVERSO_POS_PLUGIN_DIR . 'templates/billing/document.php';
             return;
         }
+        if ($vista === 'impresion') {
+            include RIVERSO_POS_PLUGIN_DIR . 'templates/billing/printing.php';
+            return;
+        }
         include RIVERSO_POS_PLUGIN_DIR . 'templates/billing/app.php';
     }
 
@@ -988,10 +992,25 @@ class Riverso_Billing_Module {
             $draft = $draft_id > 0 ? $this->present_draft($this->drafts->get($draft_id)) : null;
             $this->sync_linked_quote_status($quote_id > 0 ? $quote_id : (int) ($draft['quote_id'] ?? 0));
 
+            // Impresión rápida: se encola aquí (no en el navegador) para que no se pierda con la
+            // redirección. Si la impresora o el hub fallan, la emisión igual queda hecha.
+            $print_job = null;
+            if (!empty($_POST['quick_print']) && (int) $insert_id > 0 && class_exists('Riverso_Print_Module')) {
+                try {
+                    $print_job = Riverso_Print_Module::get_instance()->enqueue_dte((int) $insert_id, [
+                        'origen' => 'emision',
+                        'station_id' => isset($_POST['print_station_id']) ? absint($_POST['print_station_id']) : 0,
+                    ]);
+                } catch (\Throwable $e) {
+                    $print_job = null;
+                }
+            }
+
             wp_send_json_success([
                 'idempotent' => false,
                 'message' => $msg,
                 'warnings' => $warnings,
+                'print_job' => $print_job,
                 'email' => $email_result,
                 'immediate_payment' => $immediate_payment,
                 'draft' => $draft,

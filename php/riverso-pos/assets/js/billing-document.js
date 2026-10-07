@@ -349,6 +349,7 @@
         state.doc = data.document || null;
         if (!state.doc) throw new Error("Documento no encontrado.");
         render(state.doc);
+        refreshPrintNow();
         showAlert((data.warnings || []).join(" "), !!(data.warnings && data.warnings.length));
       })
       .catch(function (err) {
@@ -769,9 +770,90 @@
     });
   }
 
-  function runAction(name) {
+  // ── Imprimir Ya! (impresión directa vía hub local) ──
+
+  function printNow(presetId) {
+    if (!window.RiversoPrint) {
+      showAlert("La impresión directa no está disponible. Usa Imprimir.", true);
+      return;
+    }
+    window.RiversoPrint.printDte(state.doc.dte_id, {
+      presetId: presetId || 0,
+      fallbackDialog: printPdf,
+      onDone: refreshPrintNow,
+    });
+  }
+
+  function refreshPrintNow() {
+    var menu = $("bd-menu-print-now");
+    var btn = $("bd-print-now");
+    if (!menu || !btn || !state.doc) return;
+    var rp = window.RiversoPrint;
+    if (!rp) {
+      menu.innerHTML = '<div class="bill-doc-menu-note">Impresión directa no disponible.</div>';
+      return;
+    }
+    rp.describe(state.doc.document_type_id)
+      .then(function (ov) {
+        var route = ov.route;
+        var dot = $("bd-print-now-dot");
+        if (dot) dot.className = "bill-doc-now-dot is-" + (!route ? "none" : route.ok ? "ok" : "error");
+        btn.title = !route
+          ? ov.noRouteMessage || "Sin impresora configurada."
+          : route.ok
+            ? "Imprimir directo en " + route.nombre + (route.printer ? " (" + route.printer + ")" : "")
+            : route.message;
+        var html = '<div class="bill-doc-menu-note">' + (route
+          ? "Destino: <strong>" + esc(route.nombre) + "</strong>" + (route.printer ? " · " + esc(route.printer) : "") +
+            (route.ok ? "" : '<br><span class="is-error">' + esc(route.message) + "</span>")
+          : '<span class="is-error">' + esc(ov.noRouteMessage) + "</span>") + "</div>";
+        if (ov.presets && ov.presets.length) {
+          html += '<div class="bill-doc-menu-label">Imprimir en…</div>';
+          html += ov.presets.map(function (p) {
+            return '<button type="button" class="bill-doc-menu-item" role="menuitem" data-doc-action="print-now" data-preset-id="' + esc(p.id) + '"' +
+              (p.ok ? "" : ' title="' + esc(p.message) + '"') + ">" +
+              '<span class="bill-doc-now-dot is-' + (p.ok ? "ok" : "error") + '" aria-hidden="true"></span>' + esc(p.nombre) +
+              (p.printer ? " <small>" + esc(p.printer) + "</small>" : "") + "</button>";
+          }).join("");
+        }
+        var st = rp.station();
+        html += '<div class="bill-doc-menu-sep"></div>' +
+          '<div class="bill-doc-menu-note">Este dispositivo: <strong>' + esc(st ? st.nombre : "sin estación") + "</strong></div>";
+        if (rp.config.configUrl) {
+          html += '<a class="bill-doc-menu-item" role="menuitem" href="' + esc(rp.config.configUrl) + '">Configurar impresión…</a>';
+        }
+        menu.innerHTML = html;
+      })
+      .catch(function (err) {
+        menu.innerHTML = '<div class="bill-doc-menu-note is-error">' + esc(err.message || "No se pudo consultar la impresión.") + "</div>";
+      });
+  }
+
+  /** Viene de "Emitir" con Impresión rápida: seguir el trabajo que el servidor ya encoló. */
+  function trackPrintFromUrl() {
+    var params = new URLSearchParams(window.location.search);
+    var jobId = Number(params.get("print_job")) || 0;
+    if (!jobId || !window.RiversoPrint) return;
+    params.delete("print_job");
+    if (window.history && window.history.replaceState) {
+      var qs = params.toString();
+      window.history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : "") + window.location.hash);
+    }
+    window.RiversoPrint.track(jobId, {
+      dteId: Number(cfg.dteId) || 0,
+      fallbackDialog: function () {
+        if (state.doc) printPdf();
+      },
+      onDone: refreshPrintNow,
+    });
+  }
+
+  function runAction(name, el) {
     if (!state.doc) return;
     switch (name) {
+      case "print-now":
+        printNow(el ? Number(el.getAttribute("data-preset-id")) || 0 : 0);
+        break;
       case "print-pdf":
         printPdf();
         break;
@@ -847,7 +929,7 @@
         e.preventDefault();
         e.stopPropagation();
         closeMenus();
-        runAction(actBtn.getAttribute("data-doc-action"));
+        runAction(actBtn.getAttribute("data-doc-action"), actBtn);
         return;
       }
 
@@ -910,6 +992,7 @@
 
     root.setAttribute("data-ready", "1");
     load();
+    trackPrintFromUrl();
   }
 
   if (document.readyState === "loading") {

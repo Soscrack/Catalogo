@@ -12,7 +12,11 @@ $js_path = $plugin_dir . 'assets/js/billing-document.js';
 $js_emails_path = $plugin_dir . 'assets/js/billing-emails.js';
 $css_path = $plugin_dir . 'assets/css/billing.css';
 $css_cq_path = $plugin_dir . 'assets/css/customer-quotes.css';
+$js_print_path = $plugin_dir . 'assets/js/print-quick.js';
+$css_print_path = $plugin_dir . 'assets/css/printing.css';
 $js_ver = is_file($js_path) ? (string) filemtime($js_path) : $version;
+$js_print_ver = is_file($js_print_path) ? (string) filemtime($js_print_path) : $version;
+$css_print_ver = is_file($css_print_path) ? (string) filemtime($css_print_path) : $version;
 $js_emails_ver = is_file($js_emails_path) ? (string) filemtime($js_emails_path) : $version;
 $css_ver = is_file($css_path) ? (string) filemtime($css_path) : $version;
 $css_cq_ver = is_file($css_cq_path) ? (string) filemtime($css_cq_path) : $version;
@@ -40,6 +44,7 @@ if (!function_exists('riverso_pos_billing_json')) {
 ?>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/billing.css?ver=<?php echo htmlspecialchars($css_ver, ENT_QUOTES, 'UTF-8'); ?>">
 <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes.css?ver=<?php echo htmlspecialchars($css_cq_ver, ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/printing.css?ver=<?php echo htmlspecialchars($css_print_ver, ENT_QUOTES, 'UTF-8'); ?>">
 
 <div class="wrap riverso-bill-wrap riverso-bill-wrap--<?php echo htmlspecialchars($surface, ENT_QUOTES, 'UTF-8'); ?>">
     <div id="riverso-billing-document" class="riverso-bill bill-doc" data-ready="0">
@@ -58,6 +63,17 @@ if (!function_exists('riverso_pos_billing_json')) {
                     <h2>EMISOR Y DATOS DEL DOCUMENTO</h2>
                     <div class="bill-doc-toolbar" role="toolbar" aria-label="Acciones del documento">
                         <div class="bill-doc-toolbar-row">
+                            <div class="bill-doc-split">
+                                <button type="button" class="bill-doc-tool bill-doc-now" id="bd-print-now" data-doc-action="print-now" title="Imprimir directo con el preset configurado">
+                                    <span class="bill-doc-now-dot" id="bd-print-now-dot" aria-hidden="true"></span>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+                                    <span>Imprimir Ya!</span>
+                                </button>
+                                <button type="button" class="bill-doc-tool bill-doc-caret bill-doc-now" data-doc-menu="bd-menu-print-now" aria-haspopup="menu" aria-expanded="false" aria-label="Opciones de Imprimir Ya!">▾</button>
+                                <div class="bill-doc-menu bill-doc-menu--now" id="bd-menu-print-now" role="menu" hidden>
+                                    <div class="bill-doc-menu-note">Cargando impresoras…</div>
+                                </div>
+                            </div>
                             <div class="bill-doc-split">
                                 <button type="button" class="bill-doc-tool" data-doc-action="print-pdf" title="Imprimir PDF oficial">
                                     <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
@@ -367,6 +383,12 @@ if (!function_exists('riverso_pos_billing_json')) {
 
 <script>
 window.RIVERSO_BILLING = <?php echo riverso_pos_billing_json($riverso_billing); ?>;
+<?php if (class_exists('Riverso_Print_Module')) : ?>
+window.RIVERSO_PRINT = <?php echo riverso_pos_billing_json(Riverso_Print_Module::get_instance()->client_config()); ?>;
+<?php endif; ?>
 </script>
+<?php if (class_exists('Riverso_Print_Module')) : ?>
+<script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/print-quick.js?ver=<?php echo htmlspecialchars($js_print_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<?php endif; ?>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing-emails.js?ver=<?php echo htmlspecialchars($js_emails_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing-document.js?ver=<?php echo htmlspecialchars($js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>

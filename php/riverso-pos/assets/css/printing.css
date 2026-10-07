@@ -1,0 +1,560 @@
+/* Impresión directa ("Imprimir Ya!"): botón, avisos y configuración. */
+
+/* ── Botón en la barra del documento ── */
+.bill-doc .bill-doc-tool.bill-doc-now {
+  background: #84cc16;
+  color: #14532d;
+}
+
+.bill-doc .bill-doc-tool.bill-doc-now:hover {
+  background: #a3e635;
+}
+
+.bill-doc .bill-doc-tool.bill-doc-caret.bill-doc-now {
+  border-left-color: #65a30d;
+}
+
+.bill-doc-now-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgba(20, 83, 45, 0.35);
+  flex: 0 0 auto;
+}
+
+.bill-doc-now-dot.is-ok {
+  background: #16a34a;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.bill-doc-now-dot.is-error {
+  background: #dc2626;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.bill-doc-now-dot.is-none {
+  background: #9ca3af;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.bill-doc .bill-doc-menu--now {
+  left: 0;
+  right: auto;
+  min-width: 280px;
+  max-width: min(360px, calc(100vw - 32px));
+}
+
+.bill-doc .bill-doc-menu-note {
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #4b5563;
+}
+
+.bill-doc .bill-doc-menu-note .is-error,
+.bill-doc .bill-doc-menu-note.is-error {
+  color: #b91c1c;
+}
+
+.bill-doc .bill-doc-menu-label {
+  padding: 6px 12px 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.bill-doc .bill-doc-menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: #e5e7eb;
+}
+
+.bill-doc .bill-doc-menu--now .bill-doc-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.bill-doc .bill-doc-menu--now .bill-doc-menu-item small {
+  margin-left: auto;
+  color: #6b7280;
+  font-size: 11px;
+}
+
+/* ── Aviso de progreso ── */
+.rp-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 100100;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(360px, calc(100vw - 32px));
+  padding: 12px 14px;
+  background: #fff;
+  color: #1f2937;
+  border: 1px solid #e5e7eb;
+  border-left: 4px solid #2563eb;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.rp-toast[hidden] {
+  display: none;
+}
+
+.rp-toast.is-ok {
+  border-left-color: #16a34a;
+}
+
+.rp-toast.is-error {
+  border-left-color: #dc2626;
+}
+
+.rp-toast-icon {
+  flex: 0 0 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 13px;
+  color: #fff;
+}
+
+.rp-toast.is-ok .rp-toast-icon {
+  background: #16a34a;
+}
+
+.rp-toast.is-error .rp-toast-icon {
+  background: #dc2626;
+}
+
+.rp-toast-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.rp-toast-body strong {
+  font-size: 13px;
+}
+
+.rp-toast-body span {
+  color: #4b5563;
+}
+
+.rp-toast-x {
+  border: 0;
+  background: transparent;
+  color: #6b7280;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.rp-spin {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #bfdbfe;
+  border-top-color: #2563eb;
+  animation: rp-spin 0.8s linear infinite;
+}
+
+@keyframes rp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rp-spin {
+    animation-duration: 2.4s;
+  }
+}
+
+/* ── Aviso de emergencia ── */
+.rp-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(17, 24, 39, 0.55);
+}
+
+.rp-modal {
+  width: min(500px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  background: #fff;
+  color: #1f2937;
+  border-radius: 12px;
+  border: 1px solid #fecaca;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.25);
+}
+
+.rp-modal-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 16px 18px 8px;
+}
+
+.rp-modal-head h3 {
+  margin: 0;
+  font-size: 17px;
+  color: #991b1b;
+}
+
+.rp-modal-icon {
+  flex: 0 0 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 18px;
+}
+
+.rp-modal-body {
+  padding: 4px 18px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.rp-msg {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+.rp-alts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rp-alts-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4b5563;
+}
+
+.rp-muted {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.rp-modal-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 18px 16px;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+}
+
+.rp-foot-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.rp-btn {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #111827;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.rp-btn small {
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.rp-btn:hover {
+  background: #f3f4f6;
+}
+
+.rp-btn-primary {
+  background: #84cc16;
+  border-color: #65a30d;
+  color: #14532d;
+}
+
+.rp-btn-primary:hover {
+  background: #a3e635;
+}
+
+.rp-btn-primary small {
+  color: #365314;
+}
+
+.rp-btn-strong {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+.rp-btn-strong:hover {
+  background: #374151;
+}
+
+.rp-link {
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .rp-toast {
+    right: 16px;
+    bottom: 16px;
+  }
+  .rp-foot-actions {
+    width: 100%;
+  }
+  .rp-foot-actions .rp-btn {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+}
+
+/* ── Configuración ── */
+.rp-config .rp-config-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.rp-config .rp-config-top .bill-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.rp-config .rp-config-title {
+  margin: 0 0 4px;
+  font-size: 22px;
+  color: #111827;
+}
+
+.rp-config .bill-card-head {
+  align-items: center;
+}
+
+.rp-config .bill-card-head h2 {
+  margin: 0;
+}
+
+.rp-config .rp-inline-check {
+  padding: 0;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.rp-config .rp-station-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.rp-config .rp-station-field {
+  min-width: 240px;
+}
+
+.rp-config .rp-station-row .bill-hint {
+  margin: 0 0 8px;
+}
+
+.rp-table td {
+  vertical-align: top;
+}
+
+.rp-table tr.is-off td {
+  color: #9ca3af;
+}
+
+.rp-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.rp-empty {
+  color: #6b7280;
+  text-align: center !important;
+  padding: 16px 8px !important;
+}
+
+.rp-actions {
+  white-space: nowrap;
+  text-align: right !important;
+}
+
+.rp-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rp-badge.is-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.rp-badge.is-error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.rp-badge.is-warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.rp-badge.is-busy {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.rp-badge.is-muted {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.rp-mini {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #111827;
+  border-radius: 6px;
+  padding: 4px 9px;
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rp-mini:hover {
+  background: #f3f4f6;
+}
+
+.rp-mini.is-danger {
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.rp-dialog .bill-modal.rp-dialog-box {
+  width: min(640px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+
+.rp-dialog [hidden] {
+  display: none !important;
+}
+
+.rp-dialog .bill-modal-body .bill-field {
+  margin-bottom: 10px;
+}
+
+.rp-dialog .bill-grid {
+  margin-bottom: 0;
+}
+
+.rp-dialog .bill-grid .bill-field {
+  margin-bottom: 0;
+}
+
+.rp-dialog-error {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 13px;
+}
+
+.rp-dialog .rp-checks {
+  display: flex;
+  gap: 18px;
+}
+
+.rp-quick-fill {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.rp-quick-fill .rp-mini:first-of-type {
+  margin-left: 6px;
+}
+
+.rp-secret {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.rp-secret span {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4b5563;
+}
+
+.rp-secret code {
+  display: block;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #f3f4f6;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+  .rp-config .rp-config-top {
+    flex-direction: column;
+  }
+  .rp-dialog .bill-grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

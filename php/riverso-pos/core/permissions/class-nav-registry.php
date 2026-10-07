@@ -147,6 +147,13 @@ class Riverso_POS_Nav_Registry {
                         'portal_query' => 'vista=buscar',
                     ],
                     [
+                        'id' => 'facturacion-impresion',
+                        'label' => 'Impresión',
+                        'icon' => 'printer',
+                        'portal_slug' => 'facturacion',
+                        'portal_query' => 'vista=impresion',
+                    ],
+                    [
                         'id' => 'facturacion-cotizaciones-aprobadas',
                         'label' => 'Cotizaciones Aprobadas',
                         'icon' => 'portfolio',

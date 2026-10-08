@@ -51,6 +51,13 @@ if (!function_exists('riverso_pos_billing_json')) {
 <div class="wrap riverso-bill-wrap riverso-bill-wrap--<?php echo htmlspecialchars($surface, ENT_QUOTES, 'UTF-8'); ?>">
     <div id="riverso-billing" class="riverso-bill" data-ready="0">
 
+        <div class="bill-seller-bar">
+            <label class="cq-advanced-toggle cq-seller-toggle" for="bill-seller-view" title="Muestra margen, utilidad y stock. Mantenla apagada frente al cliente.">
+                <input type="checkbox" id="bill-seller-view" autocomplete="off">
+                <span>Interfaz vendedor</span>
+            </label>
+        </div>
+
         <div id="bill-alerts" class="bill-alerts" hidden></div>
 
         <?php if (!$issuer_ok): ?>
@@ -82,6 +89,7 @@ if (!function_exists('riverso_pos_billing_json')) {
                             $types = isset($riverso_billing['documentTypes']) && is_array($riverso_billing['documentTypes'])
                                 ? $riverso_billing['documentTypes']
                                 : [];
+                            $initial_doc_type = (int) ($riverso_billing['initialDocType'] ?? 37);
                             foreach ($types as $t):
                                 $tid = (int) ($t['id'] ?? 0);
                                 $enabled = !empty($t['enabled']);
@@ -91,7 +99,7 @@ if (!function_exists('riverso_pos_billing_json')) {
                                 }
                             ?>
                             <option value="<?php echo $enabled ? (int) $tid : ''; ?>"
-                                <?php echo $tid === 37 ? 'selected' : ''; ?>
+                                <?php echo $tid === $initial_doc_type ? 'selected' : ''; ?>
                                 <?php echo $enabled ? '' : 'disabled'; ?>>
                                 <?php echo esc_html($label); ?>
                             </option>
@@ -402,8 +410,8 @@ if (!function_exists('riverso_pos_billing_json')) {
                                         <th scope="col" class="cq-num">Total bruto</th>
                                         <th scope="col" class="cq-num cq-advanced" title="Porcentaje de descuento sobre el bruto de la línea">Dscto precio</th>
                                         <th scope="col" class="cq-num cq-advanced" title="Mismo descuento como % del margen">Dscto margen</th>
-                                        <th scope="col" class="cq-num cq-advanced">Utilidad</th>
-                                        <th scope="col" class="cq-num cq-advanced" title="Stock en bodega (live)">Stock</th>
+                                        <th scope="col" class="cq-num cq-advanced cq-seller-only">Utilidad</th>
+                                        <th scope="col" class="cq-num cq-advanced cq-seller-only" title="Stock en bodega (live)">Stock</th>
                                         <th scope="col">Acciones</th>
                                     </tr>
                                 </thead>
@@ -415,8 +423,8 @@ if (!function_exists('riverso_pos_billing_json')) {
                             <button type="button" class="bill-btn bill-btn-wip" disabled>Agregar Descuento / Recargo [WIP]</button>
                             <div class="bill-totals bill-totals-boleta" id="bill-boleta-totals">
                                 <div><span>Dscto</span><strong id="bill-boleta-discount">$0</strong></div>
-                                <div><span>Margen</span><strong id="bill-boleta-margin">—</strong></div>
-                                <div><span>Utilidad</span><strong id="bill-boleta-profit">—</strong></div>
+                                <div class="cq-seller-only"><span>Margen</span><strong id="bill-boleta-margin">—</strong></div>
+                                <div class="cq-seller-only"><span>Utilidad</span><strong id="bill-boleta-profit">—</strong></div>
                                 <div><span>Neto</span><strong id="bill-boleta-net">$0</strong></div>
                                 <div><span>Exento</span><strong id="bill-boleta-exento">$0</strong></div>
                                 <div><span>IVA</span><strong id="bill-boleta-iva">$0</strong></div>

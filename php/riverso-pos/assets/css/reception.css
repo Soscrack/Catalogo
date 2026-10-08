@@ -248,6 +248,13 @@
 .rx-drop:focus { border-color: var(--rx-green); outline: none; }
 .rx-drop.is-dragover { border-color: var(--rx-green); background: #f1f8e9; }
 
+/* En pantallas táctiles no hay arrastrar: el toque abre la cámara o los archivos. */
+.rx-drop-touch { display: none; }
+@media (pointer: coarse) {
+  .rx-drop-desk { display: none; }
+  .rx-drop-touch { display: inline; }
+}
+
 .rx-ingest-list:empty { display: none; }
 .rx-ingest-list { margin-bottom: 12px; }
 

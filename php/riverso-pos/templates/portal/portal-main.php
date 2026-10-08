@@ -65,6 +65,7 @@
             color: white;
             position: fixed;
             height: 100vh;
+            height: 100dvh;
             display: flex;
             flex-direction: column;
             z-index: 100;
@@ -304,6 +305,8 @@
         /* Main Content */
         .portal-main {
             flex: 1;
+            /* Sin esto, una tabla ancha estira todo el main y la página entera hace scroll lateral. */
+            min-width: 0;
             margin-left: var(--sidebar-width);
             padding: 30px;
         }
@@ -536,6 +539,7 @@
             background: var(--bg-light);
             border-radius: 8px;
             text-decoration: none;
+            text-align: center;
             color: var(--text-primary);
             transition: all 0.2s;
         }
@@ -573,8 +577,8 @@
             padding: 60px;
         }
         
-        /* Responsive */
-        @media (max-width: 768px) {
+        /* Responsive: menú lateral como cajón también en tablets en vertical (iPad 820–1024px). */
+        @media (max-width: 1024px) {
             .portal-menu-toggle { display: inline-flex; }
             .portal-sidebar {
                 width: min(280px, 86vw);
@@ -708,6 +712,7 @@
             width: 100%;
             max-width: 620px;
             max-height: 90vh;
+            max-height: 90dvh;
             overflow: auto;
             box-shadow: 0 10px 40px rgba(0,0,0,.25);
         }
@@ -865,7 +870,18 @@
             flex-wrap: wrap;
         }
         .bulk-queue-item.run .bulk-status { color: var(--primary); }
+
+        .dash-columns {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 800px) {
+            .dash-columns { grid-template-columns: 1fr; }
+        }
     </style>
+    <?php $portal_mobile_css = RIVERSO_POS_PLUGIN_DIR . 'assets/css/portal-mobile.css'; ?>
+    <link rel="stylesheet" href="<?php echo esc_url(RIVERSO_POS_PLUGIN_URL . 'assets/css/portal-mobile.css?ver=' . (is_file($portal_mobile_css) ? filemtime($portal_mobile_css) : RIVERSO_POS_VERSION)); ?>">
 </head>
 <body>
 <?php
@@ -1071,6 +1087,21 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
             <h1 class="page-title">
                 <?php
                 $page_title = $modules[$current_page]['label'] ?? null;
+                // Vistas del menú que comparten ruta (?nueva=1, ?vista=buscar…): título de la vista abierta.
+                foreach (($modules[$current_page]['views'] ?? []) as $view_query => $view_label) {
+                    parse_str($view_query, $view_params);
+                    $view_match = !empty($view_params);
+                    foreach ($view_params as $view_key => $view_value) {
+                        if (!isset($_GET[$view_key]) || sanitize_text_field(wp_unslash((string) $_GET[$view_key])) !== (string) $view_value) {
+                            $view_match = false;
+                            break;
+                        }
+                    }
+                    if ($view_match) {
+                        $page_title = $view_label;
+                        break;
+                    }
+                }
                 echo esc_html($page_title ?: ($current_page === 'dashboard' ? 'Dashboard' : ucfirst(str_replace('-', ' ', (string) $current_page))));
                 ?>
             </h1>
@@ -1121,7 +1152,7 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
             <?php endif; ?>
         </div>
         
-        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+        <div class="dash-columns">
             <!-- Tareas Pendientes -->
             <div class="content-section">
                 <div class="section-header">
@@ -1179,7 +1210,25 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                             <span>Nueva Venta</span>
                         </a>
                         <?php endif; ?>
-                        
+
+                        <?php if (!empty($modules['customer-quotes'])): ?>
+                        <a href="<?php echo esc_url(home_url('/interno/customer-quotes/?nueva=1')); ?>" class="quick-action">
+                            <span class="dashicons dashicons-edit-page"></span>
+                            <span>Hacer cotización</span>
+                        </a>
+                        <?php endif; ?>
+
+                        <?php if (!empty($modules['facturacion'])): ?>
+                        <a href="<?php echo esc_url(home_url('/interno/facturacion/?tipo=boleta')); ?>" class="quick-action">
+                            <span class="dashicons dashicons-tickets-alt"></span>
+                            <span>Emitir boleta</span>
+                        </a>
+                        <a href="<?php echo esc_url(home_url('/interno/facturacion/?tipo=factura')); ?>" class="quick-action">
+                            <span class="dashicons dashicons-media-document"></span>
+                            <span>Emitir factura</span>
+                        </a>
+                        <?php endif; ?>
+
                         <?php if (current_user_can('riverso_create_tasks')): ?>
                         <a href="<?php echo esc_url(admin_url('admin.php?page=riverso-pos-tasks&action=new')); ?>" class="quick-action">
                             <span class="dashicons dashicons-plus-alt"></span>
@@ -1381,7 +1430,7 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                 <h2 class="section-title">Punto de Venta</h2>
             </div>
             <div class="section-body">
-                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+                <div class="dash-columns">
                     <div>
                         <div class="search-box" style="margin-bottom: 20px;">
                             <input type="text" id="pos-search" placeholder="Buscar producto por SKU o nombre..." 
@@ -3109,7 +3158,7 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                 </div>
                 <p style="margin-top:8px;font-size:13px;color:var(--text-secondary);">Los cambios de nombre, copias, modo, color y EAN aplican solo a esta impresión. El SKU no se modifica. El precio se muestra con 2 decimales; usa <strong>Redondear</strong> o <strong>Desredondear</strong> en esta impresión. Cambiar el precio a otro valor requiere permiso.</p>
 
-                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;align-items:center;">
+                <div class="po-editor-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;align-items:center;">
                     <button type="button" class="btn btn-secondary po-close-order">Cerrar</button>
                     <?php if ($po_can_create): ?>
                     <button type="button" class="btn btn-primary po-workflow-btn" id="po-portal-save">Guardar borrador</button>
@@ -6103,6 +6152,8 @@ function portalEliminarFactura(id, folio) {
 })();
 </script>
 
+<?php $portal_mobile_js = RIVERSO_POS_PLUGIN_DIR . 'assets/js/portal-mobile.js'; ?>
+<script src="<?php echo esc_url(RIVERSO_POS_PLUGIN_URL . 'assets/js/portal-mobile.js?ver=' . (is_file($portal_mobile_js) ? filemtime($portal_mobile_js) : RIVERSO_POS_VERSION)); ?>"></script>
 <?php wp_footer(); ?>
 </body>
 </html>

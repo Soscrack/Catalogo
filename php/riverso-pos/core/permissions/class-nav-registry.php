@@ -683,8 +683,13 @@ class Riverso_POS_Nav_Registry {
     /**
      * Módulos accesibles en portal (formato legacy de get_accessible_modules).
      *
+     * Si varios hijos comparten portal_slug (p. ej. Cotizaciones: buscar / crear), el
+     * slug conserva la etiqueta del ítem padre y cada hijo con portal_query queda en
+     * 'views' (query => etiqueta) para que el título siga a la vista abierta.
+     * Un hijo único con el mismo slug sigue reemplazando la etiqueta, como antes.
+     *
      * @param int|null $user_id
-     * @return array<string, array{icon: string, label: string, group: string}>
+     * @return array<string, array{icon: string, label: string, group: string, views?: array<string, string>}>
      */
     public static function get_portal_modules($user_id = null) {
         $modules = [];
@@ -698,13 +703,30 @@ class Riverso_POS_Nav_Registry {
                 'label' => $item['label'],
                 'group' => $item['group'],
             ];
-            $children = (!empty($item['children']) && is_array($item['children'])) ? $item['children'] : [];
-            foreach ($children as $child) {
-                if (!empty($child['wip'])) {
+            $children = [];
+            $per_slug = [];
+            foreach ((!empty($item['children']) && is_array($item['children'])) ? $item['children'] : [] as $child) {
+                $child_slug = $child['portal_slug'] ?? null;
+                if (!empty($child['wip']) || !$child_slug) {
                     continue;
                 }
-                $child_slug = $child['portal_slug'] ?? null;
-                if (!$child_slug) {
+                $children[] = $child;
+                $per_slug[$child_slug] = ($per_slug[$child_slug] ?? 0) + 1;
+            }
+            foreach ($children as $child) {
+                $child_slug = $child['portal_slug'];
+                if ($per_slug[$child_slug] > 1) {
+                    if (!isset($modules[$child_slug])) {
+                        $modules[$child_slug] = [
+                            'icon'  => $item['icon'] ?? 'admin-generic',
+                            'label' => $item['label'],
+                            'group' => $item['group'],
+                        ];
+                    }
+                    $query = (string) ($child['portal_query'] ?? '');
+                    if ($query !== '') {
+                        $modules[$child_slug]['views'][$query] = $child['label'];
+                    }
                     continue;
                 }
                 $modules[$child_slug] = [

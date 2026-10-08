@@ -1513,6 +1513,16 @@
 .riverso-bill:not(.is-advanced) .cq-advanced {
   display: none;
 }
+/* Interfaz vendedor apagada: margen, utilidad y stock no se muestran
+   (la pantalla puede estar a la vista del cliente). */
+.riverso-bill:not(.is-seller) .cq-seller-only {
+  display: none;
+}
+.riverso-bill .bill-seller-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
 .riverso-bill #bill-lines-empty {
   margin: 8px 0 0;
 }

@@ -275,7 +275,7 @@
         tr.appendChild(inputCell(line, index, "price_discount", editable));
         tr.appendChild(inputCell(line, index, "margin_discount", editable));
         var utility = document.createElement("td");
-        utility.className = "cq-num cq-advanced cq-line-profit";
+        utility.className = "cq-num cq-advanced cq-seller-only cq-line-profit";
         tr.appendChild(utility);
         tr.appendChild(stockCell(line));
 
@@ -804,7 +804,7 @@
 
     function stockCell(line) {
         var td = document.createElement("td");
-        td.className = "cq-num cq-advanced cq-stock-cell";
+        td.className = "cq-num cq-advanced cq-seller-only cq-stock-cell";
         var info = line && line._stock ? line._stock : null;
         if (!info || info.producto_base_id === null || info.producto_base_id === undefined) {
             td.textContent = "—";

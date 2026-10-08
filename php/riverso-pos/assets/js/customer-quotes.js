@@ -122,6 +122,7 @@
         lupa: document.getElementById("cq-lupa"),
         manualBtn: document.getElementById("cq-manual"),
         advanced: document.getElementById("cq-advanced"),
+        sellerView: document.getElementById("cq-seller-view"),
         results: document.getElementById("cq-results"),
         modal: document.getElementById("cq-advanced-modal"),
         modalQ: document.getElementById("cq-modal-q"),
@@ -451,6 +452,14 @@
         closeViewMenus();
         closeOrderMenu();
     });
+    // Interfaz vendedor: margen, utilidad, stock y costos solo a la vista del vendedor.
+    // Parte siempre apagada (también si el navegador restaura el formulario).
+    if (els.sellerView) {
+        els.sellerView.checked = false;
+        els.sellerView.addEventListener("change", function () {
+            document.getElementById("riverso-cq").classList.toggle("is-seller", els.sellerView.checked);
+        });
+    }
     if (els.advanced) {
         els.advanced.addEventListener("change", function () {
             state.advanced = els.advanced.checked;
@@ -1699,7 +1708,7 @@
         tr.appendChild(inputCell(line, index, "price_discount", editable));
         tr.appendChild(inputCell(line, index, "margin_discount", editable));
         var utility = document.createElement("td");
-        utility.className = "cq-num cq-advanced cq-line-profit";
+        utility.className = "cq-num cq-advanced cq-seller-only cq-line-profit";
         tr.appendChild(utility);
         tr.appendChild(stockCell(line));
         tr.appendChild(confianzaCell(line));
@@ -4015,7 +4024,7 @@
             q.className = "cq-num";
             tr.appendChild(q);
             var c = cell(formatMoney(line.unit_cost));
-            c.className = "cq-num";
+            c.className = "cq-num cq-seller-only";
             tr.appendChild(c);
             var p = cell(formatMoney(line.unit_price));
             p.className = "cq-num";
@@ -4268,7 +4277,7 @@
 
     function stockCell(line) {
         var td = document.createElement("td");
-        td.className = "cq-num cq-advanced cq-stock-cell";
+        td.className = "cq-num cq-advanced cq-seller-only cq-stock-cell";
         var info = line && line._stock ? line._stock : null;
         if (!info || info.producto_base_id === null || info.producto_base_id === undefined) {
             td.textContent = "—";
@@ -4317,7 +4326,7 @@
 
     function confianzaCell(line) {
         var td = document.createElement("td");
-        td.className = "cq-advanced cq-conf-cell";
+        td.className = "cq-advanced cq-seller-only cq-conf-cell";
         var info = line && line._stock ? line._stock : null;
         var conf = info && info.estado_confianza ? String(info.estado_confianza) : "";
         if (!conf) {
@@ -4336,7 +4345,7 @@
 
     function inventariarCell(line) {
         var td = document.createElement("td");
-        td.className = "cq-advanced cq-inv-cell";
+        td.className = "cq-advanced cq-seller-only cq-inv-cell";
         var btn = document.createElement("button");
         btn.type = "button";
         btn.className = "cq-btn cq-btn-inventariar";

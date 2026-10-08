@@ -222,6 +222,10 @@ if (!function_exists('riverso_pos_cq_json')) {
                     <h1 id="cq-editor-title">Nueva cotización</h1>
                 </div>
                 <div class="cq-top-actions">
+                    <label class="cq-advanced-toggle cq-seller-toggle" for="cq-seller-view" title="Muestra margen, utilidad, stock y costos. Mantenla apagada frente al cliente.">
+                        <input type="checkbox" id="cq-seller-view" autocomplete="off">
+                        <span>Interfaz vendedor</span>
+                    </label>
                     <span id="cq-status" class="cq-badge cq-badge-draft">Borrador</span>
                     <span id="cq-expired-badge" class="cq-expired-tag" hidden>Vencida</span>
                     <span id="cq-transitions" class="cq-transitions"></span>
@@ -298,8 +302,8 @@ if (!function_exists('riverso_pos_cq_json')) {
                         <dd id="cq-total-neto-hint" class="cq-total-neto-hint">(Neto: $0)</dd>
                     </div>
                     <div><dt>Descuentos</dt><dd id="cq-total-discount">$0</dd></div>
-                    <div><dt>Margen</dt><dd id="cq-total-margin">—</dd></div>
-                    <div>
+                    <div class="cq-seller-only"><dt>Margen</dt><dd id="cq-total-margin">—</dd></div>
+                    <div class="cq-seller-only">
                         <dt>Utilidad</dt>
                         <dd id="cq-total-profit">—</dd>
                         <dd id="cq-total-profit-neto-hint" class="cq-total-neto-hint" hidden>(Neto: —)</dd>
@@ -468,10 +472,10 @@ if (!function_exists('riverso_pos_cq_json')) {
                                 <th scope="col" class="cq-num">Total bruto</th>
                                 <th scope="col" class="cq-num cq-advanced" title="Porcentaje de descuento sobre el bruto de la línea (equivalente al dscto margen)">Dscto precio</th>
                                 <th scope="col" class="cq-num cq-advanced" title="Mismo descuento expresado como % del margen bruto − costo (equivalente al dscto precio)">Dscto margen</th>
-                                <th scope="col" class="cq-num cq-advanced">Utilidad</th>
-                                <th scope="col" class="cq-num cq-advanced" title="Stock en bodega (live)">Stock</th>
-                                <th scope="col" class="cq-advanced" title="Confianza del inventario">Confianza</th>
-                                <th scope="col" class="cq-advanced">Inventariar</th>
+                                <th scope="col" class="cq-num cq-advanced cq-seller-only">Utilidad</th>
+                                <th scope="col" class="cq-num cq-advanced cq-seller-only" title="Stock en bodega (live)">Stock</th>
+                                <th scope="col" class="cq-advanced cq-seller-only" title="Confianza del inventario">Confianza</th>
+                                <th scope="col" class="cq-advanced cq-seller-only">Inventariar</th>
                                 <th scope="col">Acciones</th>
                             </tr>
                         </thead>
@@ -514,7 +518,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                                         <th scope="col">SKU</th>
                                         <th scope="col">Descripción</th>
                                         <th scope="col" class="cq-num">Cant.</th>
-                                        <th scope="col" class="cq-num">Costo</th>
+                                        <th scope="col" class="cq-num cq-seller-only">Costo</th>
                                         <th scope="col" class="cq-num">P. catálogo</th>
                                     </tr>
                                 </thead>

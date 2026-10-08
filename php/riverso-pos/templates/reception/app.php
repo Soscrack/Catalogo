@@ -36,7 +36,8 @@ $json_flags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_AP
 
             <!-- Documento que llega con el pedido: escaneo (PDF/imagen) o XML -->
             <div class="rx-drop" id="rx-drop" tabindex="0" role="button" aria-label="Ingresar documento">
-                <strong>Arrastra aquí la factura o guía que llegó con el pedido</strong>
+                <strong class="rx-drop-desk">Arrastra aquí la factura o guía que llegó con el pedido</strong>
+                <strong class="rx-drop-touch">Toca para fotografiar o elegir la factura o guía que llegó con el pedido</strong>
                 <span class="rx-sub">PDF o foto del documento escaneado, o el XML. Si ya estaba ingresado se abre directo (sin volver a procesar con IA).</span>
             </div>
             <div id="rx-ingest-list" class="rx-ingest-list"></div>

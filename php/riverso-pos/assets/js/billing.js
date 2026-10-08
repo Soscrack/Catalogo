@@ -2600,6 +2600,15 @@
 
     initComunaCombo();
 
+    // Interfaz vendedor: margen, utilidad y stock solo a la vista del vendedor.
+    // Parte siempre apagada (también si el navegador restaura el formulario).
+    if ($("bill-seller-view")) {
+      $("bill-seller-view").checked = false;
+      $("bill-seller-view").addEventListener("change", function () {
+        root.classList.toggle("is-seller", $("bill-seller-view").checked);
+      });
+    }
+
     if ($("bill-doc-type")) {
       $("bill-doc-type").addEventListener("change", function () {
         updateFolioCard();

@@ -1,0 +1,477 @@
+/**
+ * Portal interno — celular y tablet.
+ *
+ * Se carga en el <head> del portal, antes que el CSS de cada módulo (que va en el body).
+ * Por eso las reglas de módulo llevan el prefijo .portal-main: ganan por especificidad
+ * sin depender del orden. Cortes: 1024px (tablet: menú como cajón, barras fijas) y
+ * 640px (celular: tablas como tarjetas). Las tarjetas las etiqueta portal-mobile.js.
+ */
+
+/* ---------- Barra de WordPress: en tablet/celular tapa el encabezado y el botón del menú ---------- */
+@media (max-width: 1024px) {
+    #wpadminbar { display: none !important; }
+    /* WordPress empuja la página con html { margin-top: 46px !important }. */
+    :root { margin-top: 0 !important; }
+}
+
+/* ---------- Pantallas táctiles ---------- */
+@media (pointer: coarse) {
+    /* iOS hace zoom al enfocar campos con letra menor a 16px. */
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not(.scan-input),
+    select,
+    textarea {
+        font-size: 16px !important;
+    }
+
+    .portal-main :is(.btn, .cq-btn, .bill-btn, .rx-btn, .rx-tab, .bill-tab, .wh-tab) {
+        min-height: 40px;
+    }
+    .portal-main :is(.btn-sm, .rx-btn-sm, .rx-chip) {
+        min-height: 36px;
+    }
+    .portal-main .portal-warehouse-section .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .portal-main .cq-stepper-btn {
+        width: 2.4rem;
+        height: 2.4rem;
+    }
+    .portal-main .rvm-cards td.rvm-corner input[type="checkbox"],
+    .portal-main .cq-seller-toggle input[type="checkbox"] {
+        width: 22px;
+        height: 22px;
+    }
+    .portal-main .cq-seller-toggle { min-height: 40px; }
+}
+
+/* ---------- Encabezado y secciones del portal (celular) ---------- */
+@media (max-width: 640px) {
+    .portal-main .portal-header {
+        justify-content: flex-start;
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+    .portal-main .portal-header .header-actions { display: none; }
+    .portal-main .page-title { font-size: 20px; }
+
+    .portal-main .section-header {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 14px 16px;
+    }
+    .portal-main .section-body { padding: 14px 16px; }
+
+    .portal-main .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+    .portal-main .stat-card { padding: 12px; }
+    .portal-main .stat-card .stat-icon {
+        width: 32px;
+        height: 32px;
+        margin-bottom: 8px;
+    }
+    .portal-main .stat-card .stat-value { font-size: 24px; }
+}
+
+/* ---------- Tablas de trabajo → tarjetas (celular) ---------- */
+.portal-main .rvm-more-btn { display: none; }
+
+@media (max-width: 640px) {
+    .portal-main .rvm-cards-wrap {
+        overflow: visible !important;
+        border: 0 !important;
+        background: transparent !important;
+        padding: 0 !important;
+    }
+    .portal-main table.rvm-cards,
+    .portal-main table.rvm-cards > tbody {
+        display: block;
+        width: 100%;
+        background: transparent;
+    }
+    .portal-main table.rvm-cards > thead { display: none; }
+    .portal-main table.rvm-cards > tbody > tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 12px;
+        position: relative;
+        margin: 0 0 10px;
+        padding: 12px 14px;
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    .portal-main table.rvm-cards > tbody > tr > td {
+        display: block;
+        min-width: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        text-align: left;
+        white-space: normal;
+        font-size: 14px;
+    }
+    .portal-main table.rvm-cards > tbody > tr > td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 2px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: #6b7280;
+    }
+    .portal-main table.rvm-cards > tbody > tr > td[data-label]:empty { display: none; }
+    .portal-main table.rvm-cards td.rvm-title {
+        grid-column: 1 / -1;
+        order: -1;
+        font-size: 15px;
+    }
+    .portal-main table.rvm-cards tr:has(> td.rvm-corner) > td.rvm-title { padding-right: 40px; }
+    .portal-main table.rvm-cards td.rvm-corner {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+    .portal-main table.rvm-cards td.rvm-actions {
+        grid-column: 1 / -1;
+        order: 99;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 6px;
+    }
+    .portal-main table.rvm-cards td.rvm-hide { display: none; }
+    .portal-main table.rvm-cards td :is(input:not([type="checkbox"]):not([type="radio"]), select) { max-width: 100%; }
+
+    /* Cargando / sin resultados / cabecera de familia / detalle expandido */
+    .portal-main table.rvm-cards > tbody > tr.rvm-row-full {
+        display: block;
+        padding: 8px 4px;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+    }
+    .portal-main table.rvm-cards > tbody > tr.rvm-row-full > td {
+        display: block;
+        padding: 0;
+        border: 0;
+    }
+}
+
+/* ---------- Barras de acción fijas abajo (tablet y celular) ---------- */
+@media (max-width: 1024px) {
+    /* El «volver arriba» del tema queda encima de los botones de la barra. */
+    #ast-scroll-top { display: none !important; }
+
+    /* Cotización no editable: el pie solo trae un aviso, no vale la pena fijarlo. */
+    .portal-main #cq-editor-view .cq-footer:has(#cq-save:not([hidden])),
+    .portal-main .riverso-bill .bill-step-footer,
+    .portal-main #rx-receive-actions,
+    .portal-main .po-editor-actions,
+    .portal-main #wh-inv-scan > .scan-box > div:last-child {
+        position: sticky;
+        bottom: 0;
+        z-index: 30;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.08);
+    }
+}
+
+/* ---------- Cotizaciones ---------- */
+@media (max-width: 1024px) {
+    /* El número no se parte: si no caben, las acciones bajan a otra fila. */
+    .portal-main .riverso-cq--portal #cq-editor-view .cq-top { flex-wrap: wrap; }
+    .portal-main .riverso-cq--portal #cq-editor-view .cq-top > div:first-child { flex: 0 0 auto; }
+}
+
+@media (max-width: 800px) {
+    .portal-main .riverso-cq .cq-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+    .portal-main .cq-search-grid .cq-field-disabled,
+    .portal-main .cq-search-checks .cq-field-disabled { display: none; }
+
+    .portal-main .cq-search-row { flex-wrap: wrap; }
+    .portal-main .cq-search-row input { flex: 1 1 100%; }
+
+    /* Editor: acciones secundarias detrás de «Más» (lo agrega portal-mobile.js). */
+    .portal-main #cq-editor-view #cq-options { display: none; }
+    .portal-main .cq-top-actions:not(.rvm-more-open) > :is(#cq-delete, #cq-import, .cq-pdf-template) { display: none; }
+    .portal-main .cq-top-actions .rvm-more-btn { display: inline-flex; }
+
+    /* Línea: el contador − cantidad + no cabe en media tarjeta. */
+    .portal-main .rvm-cards td.cq-qty-cell { grid-column: 1 / -1; }
+    .portal-main .rvm-cards .cq-qty-stepper { justify-content: flex-start; }
+    .portal-main .rvm-cards .cq-qty-meta { text-align: left; }
+
+    .portal-main #cq-editor-view .cq-footer :is(#cq-message, #cq-save-status):empty { display: none; }
+    .portal-main #cq-editor-view .cq-footer-actions .cq-btn {
+        flex: 1 1 0;
+        justify-content: center;
+    }
+}
+
+/* ---------- Filtros plegables (celular) ---------- */
+@media (max-width: 640px) {
+    .portal-main .rvm-collapsible .rvm-collapse-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        cursor: pointer;
+    }
+    .portal-main .rvm-collapsible .rvm-collapse-head::after {
+        content: "▾";
+        font-size: 14px;
+        transition: transform 0.15s ease;
+    }
+    .portal-main .rvm-collapsible.rvm-collapsed .rvm-collapse-head::after { transform: rotate(-90deg); }
+    .portal-main .rvm-collapsible.rvm-collapsed > :not(.rvm-collapse-head) { display: none; }
+    .portal-main .cq-search-card.rvm-collapsed .cq-search-card-title { margin-bottom: 0; }
+}
+
+/* ---------- Facturación ---------- */
+@media (max-width: 640px) {
+    /* Pestañas y botones aún sin terminar: en celular solo ocupan espacio. */
+    .portal-main .bill-tab:is([data-tab="comentarios"], [data-tab="observaciones"], [data-tab="periodico"]),
+    .portal-main .riverso-bill .bill-btn-wip,
+    .portal-main .bill-search-field--wip,
+    .portal-main .bill-search-scope--wip { display: none; }
+
+    /* Buscar DTE: dos campos por fila; «Tipo de identificación» hoy solo admite RUT. */
+    .portal-main .bill-search .bill-search-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .portal-main .bill-search .bill-search-field:has(#bs-id-type) { display: none; }
+    .portal-main .bill-search .bill-search-page-size select {
+        display: inline-block;
+        width: auto;
+    }
+
+    .portal-main .riverso-bill .bill-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+    }
+    .portal-main .riverso-bill .bill-tab {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    /* Totales del documento a lo ancho (sin el botón WIP quedaban en una columna angosta). */
+    .portal-main .riverso-bill .bill-totals-boleta {
+        flex: 1 1 100%;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .portal-main .riverso-bill .bill-step-footer .bill-step-label { display: none; }
+    .portal-main .riverso-bill #bill-to-step-2 { width: 100%; }
+
+    /* Paso 2: Volver | Guardar borrador / Previsualizar | Emitir, para que la barra fija
+       no ocupe media pantalla. Las acciones se aplanan dentro de la grilla del pie. */
+    .portal-main .riverso-bill .bill-boleta-footer {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+    }
+    .portal-main .riverso-bill .bill-boleta-actions { display: contents; }
+    .portal-main .riverso-bill .bill-boleta-actions #bill-draft-save { order: 1; }
+    .portal-main .riverso-bill .bill-boleta-actions .bill-preview-wrap { order: 2; }
+    .portal-main .riverso-bill .bill-boleta-actions #bill-boleta-emit { order: 3; }
+    .portal-main .riverso-bill .bill-boleta-footer :is(.bill-btn, .bill-preview-toggle) {
+        width: 100%;
+        min-width: 0;
+        justify-content: center;
+        padding: 8px 10px;
+        font-size: 14px;
+    }
+}
+
+/* ---------- Recepción ---------- */
+@media (max-width: 1024px) {
+    /* Lector de códigos siempre a mano mientras se recorren las líneas. */
+    .portal-main #rx-tab-recibir .rx-scan {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        padding: 8px;
+        background: #fff;
+        border-radius: 0 0 10px 10px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    }
+}
+
+@media (max-width: 640px) {
+    .portal-main .rx-toolbar input[type="search"] {
+        flex: 1 1 auto;
+        max-width: none;
+    }
+    .portal-main .rx-order-tools label {
+        display: flex;
+        flex: 1 1 100%;
+    }
+    .portal-main .rx-order-tools :is(label select, #rx-loc-scan) { flex: 1 1 auto; }
+
+    /* Barras fijas de Recibir lo más bajas posible: lector y botón en una fila,
+       acciones en dos columnas. */
+    .portal-main #rx-tab-recibir .rx-scan { flex-wrap: nowrap; }
+    .portal-main #rx-tab-recibir .rx-scan input {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+    .portal-main #rx-tab-recibir .rx-scan .rx-btn {
+        flex: 0 0 auto;
+        padding: 8px 10px;
+        font-size: 14px;
+    }
+    .portal-main #rx-receive-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+    }
+    .portal-main #rx-receive-actions .rx-spacer { display: none; }
+    .portal-main #rx-receive-actions .rx-btn {
+        justify-content: center;
+        padding: 8px 10px;
+        font-size: 14px;
+        line-height: 1.2;
+        white-space: normal;
+        text-align: center;
+    }
+
+    /* Lista: proveedor a lo ancho; fecha, ítems y estado en una fila. */
+    .portal-main #rx-list-view .rvm-cards > tbody > tr { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .portal-main #rx-list-view .rvm-cards td[data-label="Proveedor"] { grid-column: 1 / -1; }
+
+    /* Recibir: título, tres cantidades en fila y el campo a llenar bien grande. */
+    .portal-main .rx-lines.rvm-cards > tbody > tr { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .portal-main .rx-lines.rvm-cards td[data-label="Recibir ahora"] {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+    .portal-main .rx-lines.rvm-cards td[data-label="Recibir ahora"]::before {
+        margin: 0;
+        font-size: 13px;
+    }
+    .portal-main .rx-lines.rvm-cards .rx-qty {
+        width: 8rem;
+        padding: 8px 10px;
+        font-size: 18px !important;
+        text-align: right;
+    }
+    .portal-main .rx-lines.rvm-cards tr.is-full { background: #f1f8e9; border-color: #c5e1a5; }
+    .portal-main .rx-lines.rvm-cards tr.is-partial { background: #fffde7; border-color: #fff59d; }
+    .portal-main .rx-lines.rvm-cards tr.is-over { background: #fff3e0; border-color: #ffcc80; }
+
+    /* Ordenar: destino a lo ancho. */
+    .portal-main #rx-tab-ordenar .rvm-cards td[data-label="Destino"] { grid-column: 1 / -1; }
+    .portal-main #rx-tab-ordenar .rvm-cards td[data-label="Destino"] select { width: 100%; }
+}
+
+/* ---------- Impresiones ---------- */
+@media (max-width: 640px) {
+    .portal-main .po-toolbar #po-portal-search {
+        flex: 1 1 100%;
+        min-width: 0 !important;
+    }
+    .portal-main .po-toolbar select { flex: 1 1 auto; }
+    .portal-main #po-portal-editor .rvm-cards td:is([data-label="Nombre en etiqueta"], [data-label="Precio"]) { grid-column: 1 / -1; }
+    .portal-main #po-portal-editor .rvm-cards .po-nombre { min-width: 0 !important; }
+
+    /* Barra fija del editor en tres columnas; «Cerrar» ya está en el encabezado. */
+    .portal-main .po-editor-actions {
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px !important;
+    }
+    .portal-main .po-editor-actions .po-close-order { display: none; }
+    .portal-main .po-editor-actions .btn {
+        justify-content: center;
+        padding: 8px 6px;
+        font-size: 13px;
+        text-align: center;
+    }
+    .portal-main .po-editor-actions #po-portal-msg { grid-column: 1 / -1; }
+    .portal-main .po-editor-actions #po-portal-msg:empty { display: none; }
+}
+
+/* ---------- Bodega ---------- */
+@media (max-width: 1024px) {
+    .portal-main .wh-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+    .portal-main .wh-tab {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    /* Conteo: el campo de escaneo queda arriba mientras se baja por la lista. */
+    .portal-main #wh-inv-scan #wh-scan {
+        display: block;
+        position: sticky;
+        top: 8px;
+        z-index: 30;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+    }
+}
+
+@media (max-width: 640px) {
+    .portal-main .wh-toolbar select { flex: 1 1 40%; }
+
+    .portal-main .scan-loc {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .portal-main .scan-loc .loc-name { font-size: 17px; }
+    .portal-main .scan-loc .loc-tools :is(select, input) {
+        flex: 1 1 140px;
+        min-width: 0;
+        width: auto !important;
+    }
+
+    /* Filas del conteo: producto arriba, cantidad / lugar / estado en fila, acciones abajo. */
+    .portal-main .item-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px 10px;
+        padding: 10px 0;
+    }
+    .portal-main .item-row.item-head { display: none; }
+    .portal-main .item-row > :is(div:first-child, .row-actions) { grid-column: 1 / -1; }
+    .portal-main .item-row > .row-actions { justify-content: flex-start; }
+    .portal-main .item-row > div:nth-child(n+2):not(.row-actions)::before {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: #6b7280;
+    }
+    .portal-main .item-row > div:nth-child(2)::before { content: "Cant."; }
+    .portal-main .item-row > div:nth-child(3)::before { content: "Lugar"; }
+    .portal-main .item-row > div:nth-child(4)::before { content: "Estado"; }
+    .portal-main .item-row input[type="number"] { width: 100%; }
+}
+
+/* ---------- Modales: alto visible real en iOS (100vh incluye la zona bajo la barra) ---------- */
+@media (max-width: 640px) {
+    .portal-main .cq-modal { padding: 8px; }
+    .portal-main .cq-modal-dialog {
+        width: 100%;
+        max-height: calc(100dvh - 16px);
+    }
+    body .wh-modal-card { max-height: 90dvh; }
+    body .rx-modal { max-height: calc(100dvh - 90px); }
+    body .bill-modal-emit { max-height: calc(100dvh - 32px); }
+}

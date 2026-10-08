@@ -156,6 +156,9 @@ class Riverso_Billing_Module {
         $quote_id = isset($_GET['quote_id']) ? absint($_GET['quote_id']) : 0;
         $draft_id = isset($_GET['draft_id']) ? absint($_GET['draft_id']) : 0;
         $dte_id = isset($_GET['dte_id']) ? absint($_GET['dte_id']) : 0;
+        // Accesos rápidos del inicio: ?tipo=factura | ?tipo=boleta preselecciona el documento.
+        $tipo = isset($_GET['tipo']) ? sanitize_key((string) $_GET['tipo']) : '';
+        $initial_doc_type = $tipo === 'factura' ? 2 : 37;
         $user = function_exists('wp_get_current_user') ? wp_get_current_user() : null;
         $user_name = '';
         if ($user && !empty($user->ID)) {
@@ -190,6 +193,7 @@ class Riverso_Billing_Module {
             'quoteId' => $quote_id,
             'draftId' => $draft_id,
             'dteId' => $dte_id,
+            'initialDocType' => $initial_doc_type,
             'currentUserName' => $user_name,
             'searchUsers' => $search_users,
             'cashBoxes' => $cash_boxes,

@@ -206,12 +206,14 @@ $location_types = class_exists('Riverso_Warehouse_Module') ? Riverso_Warehouse_M
             </select>
             <button type="button" class="btn btn-secondary" id="wh-hist-reload">Actualizar</button>
         </div>
-        <table class="wh-table">
-            <thead>
-                <tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>Estado</th><th>Lugar</th><th>Inicio</th><th></th></tr>
-            </thead>
-            <tbody id="wh-hist-body"><tr><td colspan="7">Cargando...</td></tr></tbody>
-        </table>
+        <div style="overflow-x:auto;">
+            <table class="wh-table">
+                <thead>
+                    <tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>Estado</th><th>Lugar</th><th>Inicio</th><th></th></tr>
+                </thead>
+                <tbody id="wh-hist-body"><tr><td colspan="7">Cargando...</td></tr></tbody>
+            </table>
+        </div>
     </div>
     <?php endif; ?>
 

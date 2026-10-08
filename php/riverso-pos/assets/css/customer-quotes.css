@@ -178,6 +178,36 @@
     display: none;
 }
 
+/* Interfaz vendedor apagada: margen, utilidad, stock y costos no se muestran
+   (la pantalla puede estar a la vista del cliente). */
+.riverso-cq:not(.is-seller) .cq-seller-only {
+    display: none;
+}
+
+.riverso-cq:not(.is-seller) .cq-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.riverso-cq:not(.is-seller) .cq-line.cq-stock-critico,
+.riverso-cq:not(.is-seller) .cq-line.cq-stock-alerta {
+    box-shadow: none;
+}
+
+/* Compartido con Facturación (billing carga este CSS). */
+.cq-seller-toggle {
+    padding: 4px 10px;
+    border: 1px solid #d9cbb8;
+    border-radius: 999px;
+    background: #fff;
+    font-size: 0.85rem;
+}
+
+.is-seller .cq-seller-toggle {
+    border-color: #f59e0b;
+    background: #fef3c7;
+    color: #78350f;
+}
+
 
 .cq-search-row input {
     flex: 1;

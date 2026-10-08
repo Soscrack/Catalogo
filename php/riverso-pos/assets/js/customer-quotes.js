@@ -223,6 +223,9 @@
         pdf: document.getElementById("cq-pdf"),
         pdfTemplate: document.getElementById("cq-pdf-template"),
         options: document.getElementById("cq-options"),
+        optionsMenu: document.getElementById("cq-options-menu"),
+        optDraft: document.getElementById("cq-opt-draft"),
+        optionsNote: document.getElementById("cq-options-note"),
         expiredBadge: document.getElementById("cq-expired-badge"),
         save: document.getElementById("cq-save"),
         saveStatus: document.getElementById("cq-save-status"),
@@ -356,6 +359,10 @@
         if (els.modal && !els.modal.hidden) {
             event.preventDefault();
             closeAdvancedSearch();
+            return;
+        }
+        if (els.optionsMenu && !els.optionsMenu.hidden) {
+            closeOptionsMenu();
         }
     });
     if (els.applyFilters) {
@@ -451,6 +458,7 @@
     document.addEventListener("click", function () {
         closeViewMenus();
         closeOrderMenu();
+        closeOptionsMenu();
     });
     // Interfaz vendedor: margen, utilidad, stock y costos solo a la vista del vendedor.
     // Parte siempre apagada (también si el navegador restaura el formulario).
@@ -474,7 +482,10 @@
     els.save.addEventListener("click", function () { saveQuote(false); });
     els.clear.addEventListener("click", clearQuote);
     if (els.deleteBtn) {
-        els.deleteBtn.addEventListener("click", deleteQuote);
+        els.deleteBtn.addEventListener("click", function () {
+            closeOptionsMenu();
+            deleteQuote();
+        });
     }
     if (els.invoice) {
         els.invoice.addEventListener("click", invoiceQuote);
@@ -613,9 +624,27 @@
     if (els.pdf) {
         els.pdf.addEventListener("click", openQuotePdf);
     }
-    if (els.options) {
-        els.options.addEventListener("click", function () {
-            setMessage("Opciones de cotización: próximamente (stub P1b).", false);
+    if (els.options && els.optionsMenu) {
+        els.options.addEventListener("click", function (event) {
+            event.stopPropagation();
+            var open = els.optionsMenu.hidden;
+            closeViewMenus();
+            closeOrderMenu();
+            closeOptionsMenu();
+            if (open) {
+                syncOptionsMenu(state.quote);
+                els.optionsMenu.hidden = false;
+                els.options.setAttribute("aria-expanded", "true");
+            }
+        });
+        els.optionsMenu.addEventListener("click", function (event) {
+            event.stopPropagation();
+        });
+    }
+    if (els.optDraft) {
+        els.optDraft.addEventListener("click", function () {
+            closeOptionsMenu();
+            returnQuoteToDraft();
         });
     }
     ["input", "change"].forEach(function (eventName) {
@@ -940,6 +969,18 @@
         loadList();
     }
 
+    /** Líneas recién leídas del servidor: detalle de entrega y total fijo de la regla. */
+    function prepareLoadedLines(quote) {
+        (quote.lines || []).forEach(function (line) {
+            lineBreakdown(line);
+            // T_final guardado de la regla: total fijo, sin rearmarlo desde el unitario.
+            if (line.rule_adjusted && line.rule_total != null) {
+                line._rule_adjusted = true;
+                line._rule_total = Number(line.rule_total);
+            }
+        });
+    }
+
     function openEditor(quote, opts) {
         // Defensa: algunos payloads legados usan items en vez de lines.
         if ((!quote.lines || !quote.lines.length) && quote.items && quote.items.length) {
@@ -965,7 +1006,7 @@
         els.results.innerHTML = "";
         els.search.value = "";
         setMessage("");
-        quote.lines.forEach(lineBreakdown);
+        prepareLoadedLines(quote);
         paintEditor();
         state.snapshot = serialize(state.quote);
         if (state.advanced) {
@@ -1389,7 +1430,7 @@
         if (els.invoice) {
             syncInvoiceButton(quote);
         }
-        syncDeleteButton(quote);
+        syncOptionsMenu(quote);
         renderAssociatedDocs(quote.associated_documents || [], quote.sale);
         if (els.orderLink) {
             if (quote.order_id && quote.order_url) {
@@ -1421,8 +1462,8 @@
         switch (quote.status) {
             case "listed":
                 return hasDocs
-                    ? "Cotización Aprobada con documento de venta en preparación; no se puede modificar."
-                    : "Cotización Aprobada: bloqueada para edición y con stock reservado. Para modificarla, use «Volver a borrador».";
+                    ? "Cotización Aprobada con documento de venta en preparación; no se puede modificar. Para editarla, use Opciones › Devolver a Borrador."
+                    : "Cotización Aprobada: bloqueada para edición y con stock reservado. Para modificarla, use Opciones › Devolver a Borrador.";
             case "invoiced":
                 return quote.sale && quote.sale.comparison && quote.sale.comparison.has_changes
                     ? "Cotización Facturada con cambios respecto de lo cotizado (ver detalle en Documentos asociados); no se puede modificar."
@@ -1445,6 +1486,10 @@
             return;
         }
         (quote.allowed_transitions || []).forEach(function (transition) {
+            // Aprobada → Borrador está en Opciones › Devolver a Borrador.
+            if (quote.status === "listed" && transition.status === "draft") {
+                return;
+            }
             var btn = document.createElement("button");
             btn.type = "button";
             btn.className = "cq-btn" + (transition.status === "cancelled" || transition.status === "rejected" ? " cq-btn-danger" : "");
@@ -3484,7 +3529,10 @@
             state.quote.associated_documents = quote.associated_documents;
             renderAssociatedDocs(quote.associated_documents);
         }
-        syncDeleteButton(state.quote);
+        if (quote.options) {
+            state.quote.options = quote.options;
+        }
+        syncOptionsMenu(state.quote);
         if (els.orderLink) {
             if (state.quote.order_id && state.quote.order_url) {
                 els.orderLink.hidden = false;
@@ -3602,13 +3650,63 @@
         setMessage("Líneas eliminadas.", false);
     }
 
-    function syncDeleteButton(quote) {
-        if (!els.deleteBtn) {
+    function closeOptionsMenu() {
+        if (els.optionsMenu) els.optionsMenu.hidden = true;
+        if (els.options) els.options.setAttribute("aria-expanded", "false");
+    }
+
+    /** Opciones del servidor (present_quote_with_docs): volver a Borrador y borrar. */
+    function quoteOptions(quote) {
+        var opts = quote && quote.options ? quote.options : {};
+        return {
+            canReturnDraft: !!opts.can_return_draft,
+            canDelete: !!opts.can_delete && cfg.canDelete !== false,
+            blockedReason: opts.blocked_reason || "",
+            discardsDocuments: Number(opts.discards_documents) || 0
+        };
+    }
+
+    function syncOptionsMenu(quote) {
+        var hasId = !!(quote && quote.id);
+        var opts = quoteOptions(quote);
+        var status = quote && quote.status ? quote.status : "draft";
+        if (els.optDraft) {
+            els.optDraft.disabled = !hasId || !opts.canReturnDraft;
+            els.optDraft.title = status === "listed" ? "" : "Solo para cotizaciones Aprobadas.";
+        }
+        if (els.deleteBtn) {
+            els.deleteBtn.disabled = !hasId || !opts.canDelete;
+            els.deleteBtn.title = cfg.canDelete === false ? "No tienes permiso para borrar cotizaciones." : "";
+        }
+        if (els.optionsNote) {
+            var note = "";
+            if (!hasId) {
+                note = "Guarda la cotización para ver estas opciones.";
+            } else if (opts.blockedReason) {
+                note = "No disponible: " + opts.blockedReason;
+            } else if (opts.discardsDocuments > 0) {
+                note = "Se descartará el documento en preparación en Facturación (sin emitir).";
+            }
+            els.optionsNote.textContent = note;
+            els.optionsNote.hidden = note === "";
+        }
+    }
+
+    function discardDocumentsText() {
+        return quoteOptions(state.quote).discardsDocuments > 0
+            ? "\n\nTambién se descartará el documento en preparación en Facturación (no emitido)."
+            : "";
+    }
+
+    function returnQuoteToDraft() {
+        var opts = quoteOptions(state.quote);
+        if (!state.quote.id || !opts.canReturnDraft) {
+            setMessage(opts.blockedReason
+                ? "No se puede volver a Borrador: " + opts.blockedReason
+                : "Solo una cotización Aprobada puede volver a Borrador.", true);
             return;
         }
-        var docs = quote && Array.isArray(quote.associated_documents) ? quote.associated_documents : [];
-        var canDelete = cfg.canDelete !== false;
-        els.deleteBtn.hidden = !canDelete || !(quote && quote.id) || docs.length > 0;
+        transitionQuote("draft");
     }
 
     function deleteQuote() {
@@ -3616,14 +3714,17 @@
             setMessage("Guarda la cotización antes de borrarla.", true);
             return;
         }
-        var docs = state.quote.associated_documents || [];
-        if (docs.length) {
-            setMessage("No se puede borrar: la cotización tiene un documento asociado.", true);
-            syncDeleteButton(state.quote);
+        var opts = quoteOptions(state.quote);
+        if (!opts.canDelete) {
+            setMessage(opts.blockedReason
+                ? "No se puede borrar: " + opts.blockedReason
+                : "No tienes permiso para borrar cotizaciones.", true);
+            syncOptionsMenu(state.quote);
             return;
         }
         var label = state.quote.quote_number || ("#" + state.quote.id);
-        if (!window.confirm("¿Está seguro de borrar la cotización " + label + "? Esta acción no se puede deshacer.")) {
+        if (!window.confirm("¿Está seguro de borrar la cotización " + label + "? Esta acción no se puede deshacer."
+            + discardDocumentsText())) {
             return;
         }
         if (els.deleteBtn) {
@@ -3636,9 +3737,7 @@
         }).catch(function (error) {
             setMessage(error.message, true);
         }).finally(function () {
-            if (els.deleteBtn) {
-                els.deleteBtn.disabled = false;
-            }
+            syncOptionsMenu(state.quote);
         });
     }
 
@@ -3654,7 +3753,8 @@
             return "¿Anular " + label + "?\n\nSe liberará el stock reservado, si lo hay.";
         }
         if (target === "draft" && state.quote.status === "listed") {
-            return "¿Volver " + label + " a Borrador?\n\nSe liberará el stock reservado y podrá editarla de nuevo.";
+            return "¿Volver " + label + " a Borrador?\n\nSe liberará el stock reservado y podrá editarla de nuevo."
+                + discardDocumentsText();
         }
         return "";
     }
@@ -3690,6 +3790,10 @@
             return post(cfg.actions.transition, { id: String(state.quote.id), status: target });
         }).then(function (data) {
             state.quote = data.quote;
+            if (!state.quote.lines) {
+                state.quote.lines = [];
+            }
+            prepareLoadedLines(state.quote);
             paintEditor();
             state.snapshot = serialize(state.quote);
             setMessage(data.message || "Estado actualizado.", false);

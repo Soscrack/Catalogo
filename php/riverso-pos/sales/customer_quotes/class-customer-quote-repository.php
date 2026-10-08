@@ -361,11 +361,23 @@ class Riverso_Customer_Quote_Repository {
                 'No se puede pasar de ' . $quote['status_label'] . ' a ' . Riverso_Quote_Status::label($to) . '.'
             );
         }
-        if ($quote['status'] !== $to && $this->has_associated_document((int) $id)) {
+        // Aprobada → Borrador: se permite con un documento en facturación sin emitir; ese
+        // borrador se descarta (si no, la sincronización la devolvería a Aprobada).
+        $back_to_draft = $quote['status'] === Riverso_Quote_Status::LISTED && $to === Riverso_Quote_Status::DRAFT;
+        $discard = array();
+        if ($back_to_draft) {
+            $discard = $this->billing_drafts_to_discard((int) $id);
+            if ($discard['blocked'] !== null) {
+                throw new Riverso_Quote_Exception('No se puede volver a Borrador: ' . $discard['blocked']);
+            }
+        } elseif ($quote['status'] !== $to && $this->has_associated_document((int) $id)) {
             throw new Riverso_Quote_Exception('La cotización tiene un documento de venta asociado; su estado lo define la facturación.');
         }
         if ($to === Riverso_Quote_Status::LISTED && empty($quote['lines'])) {
             throw new Riverso_Quote_Exception('Agregue al menos un producto antes de aprobar.');
+        }
+        if (!empty($discard['ids'])) {
+            $this->discard_billing_drafts($discard['ids'], (int) $id);
         }
         if ($quote['status'] !== $to) {
             $this->apply_status($quote, $to);
@@ -1020,7 +1032,97 @@ class Riverso_Customer_Quote_Repository {
     }
 
     /**
-     * Borra la cotización y sus líneas. Rechaza si hay documento asociado.
+     * Documentos en facturación que se descartan al volver la cotización a Borrador o borrarla.
+     * Bloquea si ya hay venta (DTE emitido, boleta cerrada) o pagos registrados.
+     *
+     * @param int $id
+     * @return array{ids:int[],blocked:?string} blocked = motivo para no permitirlo.
+     */
+    public function billing_drafts_to_discard($id) {
+        global $wpdb;
+        $id = (int) $id;
+        $out = array('ids' => array(), 'blocked' => null);
+        if ($id <= 0) {
+            return $out;
+        }
+        $issued_t = $wpdb->prefix . 'riverso_dte_issued';
+        if ($this->table_exists($issued_t) && (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$issued_t} WHERE quote_id = %d LIMIT 1",
+            $id
+        )) > 0) {
+            $out['blocked'] = 'la cotización tiene un documento emitido (Facturada).';
+            return $out;
+        }
+        $drafts_t = $wpdb->prefix . 'riverso_billing_drafts';
+        if (!$this->table_exists($drafts_t)) {
+            return $out;
+        }
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, status FROM {$drafts_t} WHERE quote_id = %d",
+            $id
+        ), ARRAY_A);
+        foreach ((array) $rows as $row) {
+            if ((string) $row['status'] !== 'draft') {
+                $out['blocked'] = 'la cotización tiene un documento emitido o cerrado (Facturada).';
+                $out['ids'] = array();
+                return $out;
+            }
+            $out['ids'][] = (int) $row['id'];
+        }
+        $payments_t = $wpdb->prefix . 'riverso_billing_draft_payments';
+        if ($out['ids'] && $this->table_exists($payments_t)) {
+            $paid = (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM {$payments_t} WHERE draft_id IN (" . implode(',', $out['ids']) . ')'
+            );
+            if ($paid > 0) {
+                $out['blocked'] = 'el documento en facturación tiene pagos registrados. Bórrelos en Facturación primero.';
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Borra documentos de facturación sin emitir ni pagos (ver billing_drafts_to_discard).
+     *
+     * @param int[] $draft_ids
+     * @param int   $quote_id
+     */
+    private function discard_billing_drafts(array $draft_ids, $quote_id) {
+        if (!$draft_ids) {
+            return;
+        }
+        $path = RIVERSO_POS_PLUGIN_DIR . 'sales/billing/class-billing-draft-repository.php';
+        if (!class_exists('Riverso_Billing_Draft_Repository') && file_exists($path)) {
+            require_once $path;
+        }
+        if (!class_exists('Riverso_Billing_Draft_Repository')) {
+            throw new Riverso_Quote_Exception('No se pudo descartar el documento en facturación.');
+        }
+        $repo = new Riverso_Billing_Draft_Repository();
+        foreach ($draft_ids as $draft_id) {
+            $result = $repo->delete_draft((int) $draft_id);
+            if (empty($result['ok'])) {
+                throw new Riverso_Quote_Exception(
+                    'No se pudo descartar el documento en facturación #' . (int) $draft_id . ': '
+                    . (isset($result['message']) ? $result['message'] : 'error desconocido.')
+                );
+            }
+            if (class_exists('Riverso_Audit_Module')) {
+                Riverso_Audit_Module::get_instance()->log(
+                    'billing.draft_deleted',
+                    'billing_draft',
+                    (int) $draft_id,
+                    isset($result['draft']) ? $result['draft'] : array(),
+                    array(),
+                    'Borrador descartado desde la cotización #' . (int) $quote_id
+                );
+            }
+        }
+    }
+
+    /**
+     * Borra la cotización y sus líneas. Facturada no se borra; un documento en
+     * facturación sin emitir ni pagos se descarta junto con ella.
      *
      * @param int $id
      */
@@ -1031,9 +1133,14 @@ class Riverso_Customer_Quote_Repository {
         if ($quote === null) {
             throw new Riverso_Quote_Exception('Cotización no encontrada.');
         }
-        if ($this->has_associated_document($id)) {
-            throw new Riverso_Quote_Exception('No se puede borrar: la cotización tiene un documento asociado.');
+        if ($quote['status'] === Riverso_Quote_Status::INVOICED) {
+            throw new Riverso_Quote_Exception('No se puede borrar una cotización Facturada.');
         }
+        $discard = $this->billing_drafts_to_discard($id);
+        if ($discard['blocked'] !== null) {
+            throw new Riverso_Quote_Exception('No se puede borrar: ' . $discard['blocked']);
+        }
+        $this->discard_billing_drafts($discard['ids'], $id);
         $deleted_items = $wpdb->delete($this->table_items, array('quote_id' => $id), array('%d'));
         if ($deleted_items === false) {
             throw new Riverso_Quote_Exception('No se pudieron borrar las líneas de la cotización.' . $this->db_error_suffix());
@@ -1168,6 +1275,9 @@ class Riverso_Customer_Quote_Repository {
                 'price_mode' => isset($line['price_mode']) ? $line['price_mode'] : null,
                 'price_ref' => isset($line['price_ref']) ? $line['price_ref'] : null,
                 'price_total' => isset($line['price_total']) ? $line['price_total'] : null,
+                // T_final de la regla (total de la familia si hay grupo); calculate() lo quita si no aplica.
+                'rule_total' => !empty($line['rule_adjusted']) && isset($line['rule_total']) ? $line['rule_total'] : null,
+                'rule_adjusted' => !empty($line['rule_adjusted']) && isset($line['rule_total']) ? 1 : 0,
                 'stock_breakdown' => isset($line['stock_breakdown']) ? $line['stock_breakdown'] : null,
             );
 
@@ -1629,6 +1739,12 @@ class Riverso_Customer_Quote_Repository {
             $stored_total = (float) $line['total'];
         }
         $line_net = $stored_total !== null ? round($stored_total, 2) : (float) $normalized['line_net'];
+        // Regla ajustada: T_final fijo y unitario de 4 decimales (calculate() lo dejaría en 2).
+        $rule_adjusted = !empty($line['rule_adjusted'])
+            && isset($line['rule_total']) && $line['rule_total'] !== null && $line['rule_total'] !== '';
+        $unit_price = $rule_adjusted
+            ? round((float) $line['unit_price'], 4)
+            : (float) $normalized['unit_price'];
         return array(
             'id' => (int) (isset($line['id']) ? $line['id'] : 0),
             'product_id' => $this->nullable_int(isset($line['product_id']) ? $line['product_id'] : null),
@@ -1638,7 +1754,7 @@ class Riverso_Customer_Quote_Repository {
             'barcode' => (string) (isset($line['barcode']) ? $line['barcode'] : ''),
             'description' => $desc,
             'quantity' => (float) $normalized['quantity'],
-            'unit_price' => (float) $normalized['unit_price'],
+            'unit_price' => $unit_price,
             'unit_cost' => $normalized['unit_cost'],
             'price_discount' => (float) $normalized['price_discount'],
             'margin_discount' => (float) $normalized['margin_discount'],
@@ -1654,6 +1770,8 @@ class Riverso_Customer_Quote_Repository {
             'price_mode' => $this->normalize_price_mode_present(isset($line['price_mode']) ? $line['price_mode'] : null),
             'price_ref' => $this->nullable_float4(isset($line['price_ref']) ? $line['price_ref'] : null),
             'price_total' => $this->nullable_float(isset($line['price_total']) ? $line['price_total'] : null),
+            'rule_total' => $rule_adjusted ? round((float) $line['rule_total'], 2) : null,
+            'rule_adjusted' => $rule_adjusted,
             'local_only' => empty($line['product_id']),
             'stock_breakdown' => !empty($line['stock_breakdown']) ? json_decode((string) $line['stock_breakdown'], true) : null,
         );
@@ -1713,7 +1831,10 @@ class Riverso_Customer_Quote_Repository {
         if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_issue_date')) {
             Riverso_POS_Activator::ensure_customer_quotes_issue_date();
         }
-        // Invalidar cache de columnas: phase57/58/59/60/62 pudieron agregar campos.
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_rule_total')) {
+            Riverso_POS_Activator::ensure_customer_quotes_rule_total();
+        }
+        // Invalidar cache de columnas: phase57/58/59/60/62/74 pudieron agregar campos.
         $this->item_columns = null;
         $this->quote_columns = null;
     }

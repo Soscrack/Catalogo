@@ -206,8 +206,7 @@
     .portal-main .cq-search-row input { flex: 1 1 100%; }
 
     /* Editor: acciones secundarias detrás de «Más» (lo agrega portal-mobile.js). */
-    .portal-main #cq-editor-view #cq-options { display: none; }
-    .portal-main .cq-top-actions:not(.rvm-more-open) > :is(#cq-delete, #cq-import, .cq-pdf-template) { display: none; }
+    .portal-main .cq-top-actions:not(.rvm-more-open) > :is(.cq-options-wrap, #cq-import, .cq-pdf-template) { display: none; }
     .portal-main .cq-top-actions .rvm-more-btn { display: inline-flex; }
 
     /* Línea: el contador − cantidad + no cabe en media tarjeta. */

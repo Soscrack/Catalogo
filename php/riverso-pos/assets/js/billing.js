@@ -1923,8 +1923,10 @@
         } else {
           lockAllDetails();
         }
+        // Misma línea que la cotización (modo, regla R-x, total fijo, descuentos): el total
+        // de facturación sale igual que el de la cotización, sin rearmarlo desde el unitario.
         state.lines = (data.lines || []).map(function (l) {
-          var unit = Number(l.unit_price_bruto != null ? l.unit_price_bruto : l.unit_price) || 0;
+          var unit = Number(l.unit_price != null ? l.unit_price : l.unit_price_bruto) || 0;
           return {
             sku: l.sku || "",
             description: l.description || "",
@@ -1935,11 +1937,21 @@
             product_id: l.product_id || null,
             producto_base_id: l.producto_base_id || null,
             units_per_pack: l.units_per_pack != null ? Number(l.units_per_pack) : 1,
+            family_mode: l.family_mode || "",
+            packaging: l.packaging || "",
+            grupo_id: l.grupo_id || null,
             _family: l._family || l.family || {},
-            price_mode: "auto",
-            price_discount: 0,
-            margin_discount: 0,
-            discount_amount: 0,
+            unit_cost: l.unit_cost != null ? l.unit_cost : null,
+            price_mode: l.price_mode || "auto",
+            price_ref: l.price_ref != null ? l.price_ref : null,
+            price_total: l.price_total != null ? l.price_total : null,
+            price_discount: Number(l.price_discount) || 0,
+            margin_discount: Number(l.margin_discount) || 0,
+            discount_amount: Number(l.discount_amount) || 0,
+            rule_total: l.rule_adjusted ? l.rule_total : null,
+            rule_adjusted: !!l.rule_adjusted,
+            _rule_total: l.rule_adjusted && l.rule_total != null ? Number(l.rule_total) : null,
+            _rule_adjusted: !!(l.rule_adjusted && l.rule_total != null),
             stock_breakdown: l.stock_breakdown || null,
           };
         });

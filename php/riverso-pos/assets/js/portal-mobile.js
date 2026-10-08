@@ -182,7 +182,7 @@
         }
     }
 
-    /** Editor de cotización: en celular, Borrar / Importar / plantilla PDF van detrás de «Más». */
+    /** Editor de cotización: en celular, Opciones / Importar / plantilla PDF van detrás de «Más». */
     function quoteMoreButton() {
         var bar = document.querySelector("#cq-editor-view .cq-top-actions");
         if (!bar || bar.querySelector(".rvm-more-btn")) {

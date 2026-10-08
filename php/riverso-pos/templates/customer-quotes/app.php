@@ -229,7 +229,6 @@ if (!function_exists('riverso_pos_cq_json')) {
                     <span id="cq-status" class="cq-badge cq-badge-draft">Borrador</span>
                     <span id="cq-expired-badge" class="cq-expired-tag" hidden>Vencida</span>
                     <span id="cq-transitions" class="cq-transitions"></span>
-                    <button type="button" class="cq-btn cq-btn-danger" id="cq-delete" hidden>Borrar</button>
                     <button type="button" class="cq-btn cq-btn-primary" id="cq-invoice" hidden>Facturar</button>
                     <a id="cq-order-link" class="cq-link cq-order-link" href="#" target="_blank" rel="noopener" hidden>Ver pedido</a>
                     <button type="button" class="cq-btn" id="cq-import" hidden title="Importar desde cotización recibida">Importar</button>
@@ -240,7 +239,14 @@ if (!function_exists('riverso_pos_cq_json')) {
                         </select>
                     </label>
                     <button type="button" class="cq-btn" id="cq-pdf" title="Abrir cotización en PDF">PDF</button>
-                    <button type="button" class="cq-btn" id="cq-options" title="Opciones (próximamente)">Opciones</button>
+                    <div class="cq-order-wrap cq-options-wrap">
+                        <button type="button" class="cq-btn" id="cq-options" aria-haspopup="true" aria-expanded="false">Opciones ▾</button>
+                        <div class="cq-order-menu cq-options-menu" id="cq-options-menu" hidden role="menu">
+                            <button type="button" role="menuitem" id="cq-opt-draft">Devolver a Borrador</button>
+                            <button type="button" role="menuitem" id="cq-delete" class="cq-opt-danger">Borrar</button>
+                            <p id="cq-options-note" class="cq-options-note" hidden></p>
+                        </div>
+                    </div>
                 </div>
             </header>
 

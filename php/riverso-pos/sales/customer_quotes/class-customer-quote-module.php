@@ -57,6 +57,9 @@ class Riverso_Customer_Quote_Module {
         if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_issue_date')) {
             Riverso_POS_Activator::ensure_customer_quotes_issue_date();
         }
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_rule_total')) {
+            Riverso_POS_Activator::ensure_customer_quotes_rule_total();
+        }
     }
 
     public function init() {
@@ -1871,6 +1874,21 @@ class Riverso_Customer_Quote_Module {
             $quote['allowed_transitions'] = array();
             $quote['is_expired'] = false;
         }
+        // Menú Opciones: volver a Borrador (desde Aprobada) y borrar; nunca una Facturada.
+        // Un documento en facturación sin emitir ni pagos se descarta en la misma acción.
+        $status = (string) ($quote['status'] ?? '');
+        $discard = $id > 0
+            ? $this->quotes->billing_drafts_to_discard($id)
+            : array('ids' => array(), 'blocked' => null);
+        $blocked = $status === Riverso_Quote_Status::INVOICED
+            ? 'la cotización está Facturada.'
+            : $discard['blocked'];
+        $quote['options'] = array(
+            'can_return_draft' => $status === Riverso_Quote_Status::LISTED && $blocked === null,
+            'can_delete' => $id > 0 && $blocked === null,
+            'blocked_reason' => $blocked,
+            'discards_documents' => count($discard['ids']),
+        );
         $quote = $this->catalog->hydrate_quote_families($quote);
         $quote['associated_documents'] = $docs;
         return $quote;

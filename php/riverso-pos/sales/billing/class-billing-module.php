@@ -1208,6 +1208,7 @@ class Riverso_Billing_Module {
                 'description' => $persist_line['description'],
                 'quantity' => $qty,
                 'unit_price_bruto' => $pack_unit_bruto,
+                'line_total_bruto' => $persist_line['line_total_bruto'],
                 'afecto' => $persist_line['afecto'],
             ];
         }
@@ -1274,9 +1275,17 @@ class Riverso_Billing_Module {
 
         $existing = $this->issued->find_success_by_quote($quote_id);
 
-        $iva_map = $this->load_iva_map($quote['lines'] ?? []);
+        $quote_lines = $quote['lines'] ?? [];
+        $catalog = $this->quote_catalog();
+        if ($catalog && $quote_lines) {
+            // _family da el grupo: sin él, el total de regla de una familia se contaría por línea.
+            $hydrated = $catalog->hydrate_quote_families(['lines' => $quote_lines]);
+            $quote_lines = $hydrated['lines'] ?? $quote_lines;
+        }
+        $iva_map = $this->load_iva_map($quote_lines);
         $lines = [];
-        foreach (($quote['lines'] ?? []) as $line) {
+        $stored_net = [];
+        foreach ($quote_lines as $line) {
             if (!is_array($line)) {
                 continue;
             }
@@ -1284,39 +1293,34 @@ class Riverso_Billing_Module {
             if ($qty <= 0) {
                 continue;
             }
-            $billable = $qty;
-            if (class_exists('Riverso_Quote_Totals') && method_exists('Riverso_Quote_Totals', 'billable_units')) {
-                // Preferir unidades facturables si existe helper público — fallback qty.
-            }
             $pb = isset($line['producto_base_id']) ? (int) $line['producto_base_id'] : 0;
             $afecto = true;
             if ($pb > 0 && isset($iva_map[$pb]) && $iva_map[$pb] === 'exento') {
                 $afecto = false;
             }
-            // Precio bruto comercial: price_total / qty, o unit_price si ya es bruto de cotización.
-            $bruto_unit = 0.0;
-            if (!empty($line['price_total']) && $qty > 0) {
-                $bruto_unit = round((float) $line['price_total'] / $qty, 2);
-            } elseif (isset($line['line_net']) && $qty > 0) {
-                // En cotizaciones net_total/line_net son brutos comerciales (ancla del PDF).
-                $bruto_unit = round((float) $line['line_net'] / $qty, 2);
-            } else {
-                $bruto_unit = round((float) ($line['unit_price'] ?? 0), 2);
-            }
+            // La misma línea comercial de la cotización: unitario por unidad, modo, regla y
+            // descuentos. Facturación recalcula el total igual que la cotización.
+            $unit = (float) ($line['unit_price'] ?? 0);
+            $rule_adjusted = !empty($line['rule_adjusted'])
+                && isset($line['rule_total']) && $line['rule_total'] !== null && $line['rule_total'] !== '';
+            $family = isset($line['_family']) && is_array($line['_family']) ? $line['_family'] : null;
+            $gid = $family && !empty($family['grupo_id']) ? (int) $family['grupo_id'] : 0;
             $sku = (string) ($line['sku'] ?? $line['supplier_code'] ?? '');
             $desc = (string) ($line['description'] ?? $line['name'] ?? '');
             $lines[] = [
                 'sku' => $sku,
                 'description' => $desc,
                 'quantity' => $qty,
-                'unit_price_bruto' => $bruto_unit,
-                'unit_price' => $bruto_unit,
+                'unit_price_bruto' => $unit,
+                'unit_price' => $unit,
                 'afecto' => $afecto,
                 'product_id' => !empty($line['product_id']) ? (int) $line['product_id'] : null,
                 'producto_base_id' => $pb > 0 ? $pb : null,
                 'units_per_pack' => (float) ($line['units_per_pack'] ?? 1),
                 'family_mode' => (string) ($line['family_mode'] ?? ''),
                 'packaging' => (string) ($line['packaging'] ?? ''),
+                'grupo_id' => $gid > 0 ? $gid : null,
+                '_family' => $family,
                 'unit_cost' => array_key_exists('unit_cost', $line) ? $line['unit_cost'] : null,
                 'price_mode' => (string) ($line['price_mode'] ?? 'auto'),
                 'price_ref' => isset($line['price_ref']) ? $line['price_ref'] : null,
@@ -1324,9 +1328,13 @@ class Riverso_Billing_Module {
                 'price_discount' => (float) ($line['price_discount'] ?? 0),
                 'margin_discount' => (float) ($line['margin_discount'] ?? 0),
                 'discount_amount' => (float) ($line['discount_amount'] ?? 0),
+                'rule_total' => $rule_adjusted ? round((float) $line['rule_total'], 2) : null,
+                'rule_adjusted' => $rule_adjusted,
                 'stock_breakdown' => $line['stock_breakdown'] ?? null,
             ];
+            $stored_net[] = round((float) ($line['line_net'] ?? 0), 2);
         }
+        $lines = $this->pin_quote_line_totals($lines, $stored_net);
 
         $receiver = null;
         $customer_id = isset($quote['customer_id']) ? (int) $quote['customer_id'] : 0;
@@ -1369,6 +1377,56 @@ class Riverso_Billing_Module {
             'lines' => $lines,
             'already_emitted' => $existing,
         ];
+    }
+
+    /**
+     * Cotizaciones guardadas antes de la fase 74 no traen rule_total y su unitario quedó
+     * en 2 decimales: unitario × cantidad ya no da el total guardado (R-1 $500 → $499,98).
+     * Si una línea, o su familia, no cuadra con lo guardado, ese total queda como total fijo.
+     *
+     * @param array<int,array> $lines  Líneas para facturación (con grupo_id y modo de precio).
+     * @param array<int,float> $stored line_net guardado por índice (bruto después de descuento).
+     * @return array<int,array>
+     */
+    private function pin_quote_line_totals(array $lines, array $stored) {
+        if (!class_exists('Riverso_Quote_Totals')) {
+            return $lines;
+        }
+        $groups = [];
+        foreach ($lines as $i => $line) {
+            $key = !empty($line['grupo_id']) ? 'g' . (int) $line['grupo_id'] : 'l' . $i;
+            $groups[$key][] = $i;
+        }
+        foreach ($groups as $indexes) {
+            $group = [];
+            foreach ($indexes as $i) {
+                $line = $lines[$i];
+                $manual_total = ($line['price_mode'] ?? '') === 'manual'
+                    && isset($line['price_total']) && $line['price_total'] !== null && $line['price_total'] !== '';
+                if (!empty($line['rule_adjusted']) || $manual_total) {
+                    continue 2;
+                }
+                $group[] = $line;
+            }
+            $calc = Riverso_Quote_Totals::calculate($group);
+            $matches = true;
+            $gross = 0.0;
+            foreach ($indexes as $pos => $i) {
+                $calc_line = $calc['lines'][$pos] ?? [];
+                if (abs((float) ($calc_line['line_net'] ?? 0) - (float) ($stored[$i] ?? 0)) > 0.005) {
+                    $matches = false;
+                }
+                $gross += (float) ($stored[$i] ?? 0) + (float) ($calc_line['discount_amount'] ?? 0);
+            }
+            if ($matches) {
+                continue;
+            }
+            foreach ($indexes as $i) {
+                $lines[$i]['rule_total'] = round($gross, 2);
+                $lines[$i]['rule_adjusted'] = true;
+            }
+        }
+        return $lines;
     }
 
     /**

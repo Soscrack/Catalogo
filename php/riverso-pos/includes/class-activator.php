@@ -373,6 +373,7 @@ class Riverso_POS_Activator {
         self::create_phase71_sale_stock_exit($prefix, $charset_collate);
         self::create_phase72_purchase_reception($prefix, $charset_collate);
         self::create_phase73_printing($prefix, $charset_collate);
+        self::create_phase74_customer_quotes_rule_total($prefix);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -5469,6 +5470,18 @@ class Riverso_POS_Activator {
     }
 
     /**
+     * Garantiza rule_total / rule_adjusted y unit_price de 4 decimales en líneas de cotización.
+     */
+    public static function ensure_customer_quotes_rule_total() {
+        global $wpdb;
+        // Corre en cada carga del módulo: una vez aplicada, no repetir las consultas de schema.
+        if (get_option('riverso_pos_phase74_customer_quotes_rule_total') === '1') {
+            return;
+        }
+        self::create_phase74_customer_quotes_rule_total($wpdb->prefix . 'riverso_');
+    }
+
+    /**
      * Garantiza tabla de clientes comerciales (deploy sin bump de versión).
      */
     public static function ensure_clientes_schema() {
@@ -5744,6 +5757,44 @@ class Riverso_POS_Activator {
             Riverso_POS_Audit::log('schema.phase60_customer_quotes_price_mode', 'customer_quote_items', 0, array(
                 'actor_type' => 'computer',
                 'details' => 'Fase 60: price_mode/price_ref/price_total en lineas de cotizacion',
+            ));
+        }
+    }
+
+    /**
+     * Fase 74: total de regla en líneas de cotización.
+     * - rule_total / rule_adjusted: T_final del motor de reglas. Sin esto el total se
+     *   rearma desde un unitario redondeado (R-1 $500 en 6 u. → 83,33 × 6 = $499,98).
+     * - unit_price DECIMAL(14,4): el unitario de una regla ajustada lleva 4 decimales.
+     * Idempotente: add_column_if_missing + MODIFY solo si la escala es menor a 4.
+     */
+    private static function create_phase74_customer_quotes_rule_total($prefix) {
+        global $wpdb;
+        $items = "{$prefix}customer_quote_items";
+        if (!self::table_exists($items)) {
+            return;
+        }
+        self::add_column_if_missing($items, 'rule_total', 'rule_total DECIMAL(14,2) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'rule_adjusted', 'rule_adjusted TINYINT(1) NOT NULL DEFAULT 0');
+
+        $scale = $wpdb->get_var($wpdb->prepare(
+            "SELECT NUMERIC_SCALE FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = 'unit_price'",
+            DB_NAME,
+            $items
+        ));
+        if ($scale !== null && (int) $scale < 4) {
+            $wpdb->query("ALTER TABLE `{$items}` MODIFY COLUMN unit_price DECIMAL(14,4) NOT NULL DEFAULT 0");
+        }
+
+        if (get_option('riverso_pos_phase74_customer_quotes_rule_total') === '1') {
+            return;
+        }
+        update_option('riverso_pos_phase74_customer_quotes_rule_total', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase74_customer_quotes_rule_total', 'customer_quote_items', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 74: rule_total/rule_adjusted y unit_price DECIMAL(14,4) en lineas de cotizacion',
             ));
         }
     }

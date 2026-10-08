@@ -61,6 +61,15 @@ class Riverso_Billing_Totals {
             }
 
             $line_bruto = round($bruto * $qty, 2);
+            // Total exacto de la línea (regla / precio fijo): el unitario a 2 decimales × cantidad
+            // se corre ($500 en 6 u. → 83,33 × 6 = $499,98). Solo se acepta si la diferencia es
+            // la del redondeo del unitario, no un total desfasado.
+            if (isset($line['line_total_bruto']) && $line['line_total_bruto'] !== null && $line['line_total_bruto'] !== '') {
+                $exact = round((float) $line['line_total_bruto'], 2);
+                if (abs($exact - $line_bruto) <= 0.005 * $qty + 0.01) {
+                    $line_bruto = $exact;
+                }
+            }
             if ($afecto) {
                 $has_afecto = true;
                 // FACTO rounding_type=gross: neto = round(qty × unit neto), IVA = bruto entero − neto.

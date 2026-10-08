@@ -97,7 +97,7 @@ estación tiene prioridad sobre la general.
 
 - **Registro:** menú del ícono → *Abrir registro* (`%LOCALAPPDATA%\RiversoPrintHub\logs`, se guardan 14 días).
 - **Token rechazado** (ícono rojo): genera un token nuevo en *Facturación → Impresión → Nuevo token* y pégalo en *Configurar…*.
-- **La térmica aparece «Sin conexión USB» estando encendida:** cierra el hub, pon `"UsbPresenceCheck": false` en `%LOCALAPPDATA%\RiversoPrintHub\config.json` y ábrelo de nuevo. Los problemas se seguirán detectando cuando el trabajo no avance en la cola.
+- **La térmica aparece «Sin conexión USB» estando encendida:** usa el menú del ícono → *Diagnóstico USB…*. Abre un informe con las impresoras USB que Windows ve conectadas y el puerto de cada una (debe coincidir con el `USB002` de la cola). Mientras se revisa, desmarca *Avisar si la impresora USB está desconectada*. Una térmica apagada se seguirá detectando al imprimir, porque el trabajo queda con error en la cola de Windows y se cancela, solo que unos segundos más tarde.
 - **«El driver no acepta ESC/POS directo»:** usa el modo *Driver de Windows* en ese preset.
 
 ## Notas técnicas

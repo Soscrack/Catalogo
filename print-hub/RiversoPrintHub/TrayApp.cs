@@ -12,6 +12,7 @@ internal sealed class TrayApp : ApplicationContext
     private readonly ToolStripMenuItem _statusItem;
     private readonly ToolStripMenuItem _lastJobItem;
     private readonly ToolStripMenuItem _startupItem;
+    private readonly ToolStripMenuItem _usbItem;
     private readonly Dictionary<HubState, Icon> _icons = new();
     private HubConfig _config;
     private HubService _service;
@@ -25,6 +26,10 @@ internal sealed class TrayApp : ApplicationContext
         _statusItem = new ToolStripMenuItem("Iniciando…") { Enabled = false };
         _lastJobItem = new ToolStripMenuItem("Sin trabajos todavía") { Enabled = false };
         _startupItem = new ToolStripMenuItem("Iniciar con Windows", null, (_, _) => ToggleStartup()) { Checked = Startup.IsEnabled };
+        _usbItem = new ToolStripMenuItem("Avisar si la impresora USB está desconectada", null, (_, _) => ToggleUsbCheck())
+        {
+            Checked = _config.UsbPresenceCheck,
+        };
         var menu = new ContextMenuStrip();
         menu.Items.Add(_statusItem);
         menu.Items.Add(_lastJobItem);
@@ -32,6 +37,8 @@ internal sealed class TrayApp : ApplicationContext
         menu.Items.Add("Configurar…", null, (_, _) => Configure());
         menu.Items.Add("Abrir panel de impresión", null, (_, _) => OpenPanel());
         menu.Items.Add("Abrir registro", null, (_, _) => OpenLog());
+        menu.Items.Add("Diagnóstico USB…", null, (_, _) => OpenUsbDiagnostic());
+        menu.Items.Add(_usbItem);
         menu.Items.Add(_startupItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Salir", null, (_, _) => ExitHub());
@@ -116,6 +123,26 @@ internal sealed class TrayApp : ApplicationContext
     {
         Startup.Set(!Startup.IsEnabled);
         _startupItem.Checked = Startup.IsEnabled;
+    }
+
+    /// <summary>
+    /// Sin este aviso, una térmica apagada se detecta igual al imprimir (el trabajo queda con
+    /// error en la cola de Windows y se cancela), solo que unos segundos más tarde.
+    /// </summary>
+    private void ToggleUsbCheck()
+    {
+        _config.UsbPresenceCheck = !_config.UsbPresenceCheck;
+        _config.Save();
+        _usbItem.Checked = _config.UsbPresenceCheck;
+        Log.Info("Aviso de impresora USB desconectada: " + (_config.UsbPresenceCheck ? "activado" : "desactivado"));
+    }
+
+    private static void OpenUsbDiagnostic()
+    {
+        Directory.CreateDirectory(Log.LogDir);
+        var file = Path.Combine(Log.LogDir, "diagnostico-usb-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".txt");
+        File.WriteAllText(file, UsbPorts.Diagnose());
+        Process.Start(new ProcessStartInfo(file) { UseShellExecute = true });
     }
 
     private void OpenPanel()

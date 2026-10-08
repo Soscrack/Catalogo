@@ -98,7 +98,7 @@ internal sealed partial class PrinterInventory
         {
             manual = new Dictionary<string, string>(_manualHosts, StringComparer.OrdinalIgnoreCase);
         }
-        var usbPresence = _config.UsbPresenceCheck ? ReadUsbPresence() : new Dictionary<string, bool>();
+        var usbPresence = _config.UsbPresenceCheck ? UsbPorts.ReadPresence() : new Dictionary<string, bool>();
 
         var reports = new List<PrinterReport>();
         var paperChanged = false;
@@ -168,7 +168,7 @@ internal sealed partial class PrinterInventory
             return state;
         }
         var port = (info.pPortName ?? "").Trim().TrimEnd(':');
-        if (_config.UsbPresenceCheck && ReadUsbPresence().TryGetValue(port, out bool present) && !present)
+        if (_config.UsbPresenceCheck && UsbPorts.ReadPresence().TryGetValue(port, out bool present) && !present)
         {
             return new PrinterState("offline", UsbMissing);
         }
@@ -283,44 +283,6 @@ internal sealed partial class PrinterInventory
 
     [GeneratedRegex(@"\bfax\b", RegexOptions.IgnoreCase)]
     private static partial Regex Fax();
-
-    /// <summary>
-    /// Puertos USBnnn con dispositivo conectado. Windows registra cada interfaz de impresora USB en
-    /// DeviceClasses\{GUID_DEVINTERFACE_USBPRINT}; la subclave volátil «#\Control» con Linked=1 solo
-    /// existe mientras el dispositivo está presente. Si no hay datos para un puerto, no se informa nada.
-    /// </summary>
-    private static Dictionary<string, bool> ReadUsbPresence()
-    {
-        var result = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-        try
-        {
-            using var root = Registry.LocalMachine.OpenSubKey(
-                @"SYSTEM\CurrentControlSet\Control\DeviceClasses\{28d78fad-5a12-11d1-ae5b-0000f803a8c2}");
-            if (root is null)
-            {
-                return result;
-            }
-            foreach (var sub in root.GetSubKeyNames())
-            {
-                using var parms = root.OpenSubKey(sub + @"\#\Device Parameters");
-                if (parms?.GetValue("Port Number") is not int number)
-                {
-                    continue;
-                }
-                var baseName = parms.GetValue("Base Name") as string ?? "USB";
-                var portName = baseName + number.ToString("000");
-                using var control = root.OpenSubKey(sub + @"\#\Control");
-                bool linked = control?.GetValue("Linked") is int l && l == 1;
-                // Puede haber varias entradas por puerto (dispositivos antiguos): basta una conectada.
-                result[portName] = (result.TryGetValue(portName, out bool prev) && prev) || linked;
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Warn("No se pudo revisar la conexión USB: " + ex.Message);
-        }
-        return result;
-    }
 
     [GeneratedRegex(@"\b((25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(25[0-5]|2[0-4]\d|1?\d?\d)\b")]
     private static partial Regex Ipv4();

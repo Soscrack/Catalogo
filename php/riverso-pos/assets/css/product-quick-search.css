@@ -346,6 +346,18 @@
     font-size: 13px;
 }
 
+.pqs-family-decision {
+    margin-top: 6px;
+    color: #1d2327;
+}
+
+.pqs-fam-decision-options {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
 .pqs-tasks {
     display: flex;
     flex-direction: column;
@@ -370,11 +382,26 @@
     margin-bottom: 8px;
 }
 
+.pqs-task-howto {
+    background: #f0f6fc;
+    border-left: 3px solid #2271b1;
+    border-radius: 2px;
+    padding: 6px 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: #1d2327;
+}
+
 .pqs-task-actions {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
     align-items: center;
+}
+
+.pqs-task-no-target {
+    font-size: 12px;
+    color: #646970;
 }
 
 .pqs-task-form {

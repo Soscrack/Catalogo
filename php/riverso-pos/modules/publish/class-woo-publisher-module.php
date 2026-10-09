@@ -433,6 +433,14 @@ class Riverso_Woo_Publisher_Module {
             ['%s', '%s'],
             ['%d']
         );
+        if (class_exists('Riverso_Task_Module')) {
+            $approved_ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM {$prefix}producto_base WHERE woocommerce_product_id = %d",
+                (int) $check['woocommerce_product_id']
+            ));
+            $approved_ids[] = absint($producto_base_id);
+            Riverso_Task_Module::close_open_tasks('autorizar_publicacion', 'producto_base', $approved_ids);
+        }
         return true;
     }
 

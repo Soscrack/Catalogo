@@ -108,6 +108,42 @@
         }
     }
 
+    /** Mensaje de un rechazo (string, jqXHR o null si el usuario canceló el modal). */
+    function failMessage(reason, fallback) {
+        if (reason === 'cancel' || reason === 'superseded') {
+            return null;
+        }
+        if (typeof reason === 'string' && reason) {
+            return reason;
+        }
+        var data = reason && reason.responseJSON && reason.responseJSON.data;
+        return (data && data.message) || fallback || 'Error de red';
+    }
+
+    /** Convierte {success:false} en rechazo con el mensaje del servidor. */
+    function requireSuccess(fallback) {
+        return function (r) {
+            if (r && r.success) {
+                return r;
+            }
+            return $.Deferred().reject((r && r.data && r.data.message) || fallback).promise();
+        };
+    }
+
+    /** Refresca la vista tras la acción; si falló (y no fue cancelada) avisa y refresca igual. */
+    function runAndRefresh(promise, fallback) {
+        return promise.then(function () {
+            refreshViewer();
+        }, function (reason) {
+            var msg = failMessage(reason, fallback);
+            if (msg === null) {
+                return;
+            }
+            alert(msg);
+            refreshViewer();
+        });
+    }
+
     function renderGridRows(items, tbodySelector) {
         var $tb = $(tbodySelector);
         if (!items || !items.length) {
@@ -437,6 +473,9 @@
         if (!data) {
             $el.addClass('empty');
             var emptyHtml = '<div>' + emptyLabel + '</div>';
+            if (type === 'family') {
+                emptyHtml += familyDecisionHtml();
+            }
             if (canEditRel) {
                 emptyHtml += relationEditControls(type, null);
             }
@@ -473,6 +512,82 @@
             html += relationEditControls(type, data);
         }
         $el.html(html);
+    }
+
+    function canAnswerFamily() {
+        return canManage || canManageFamilies;
+    }
+
+    function currentFamilyDecision() {
+        var p = (state.summary && state.summary.product) || {};
+        var d = p.familia_decision || '';
+        return d === 'pendiente' ? '' : d;
+    }
+
+    function familyDecisionLabel(decision) {
+        if (decision === 'requiere') {
+            return 'Sí, necesita familia';
+        }
+        if (decision === 'no_requiere') {
+            return 'No requiere (queda solo)';
+        }
+        return 'Sin responder';
+    }
+
+    function familyDecisionEffect(decision) {
+        if (decision === 'requiere') {
+            return 'Se creará la tarea «Asignar familia». En Procesar folios el SKU quedará bloqueado hasta asignarle una familia.';
+        }
+        if (decision === 'no_requiere') {
+            return 'Se cerrarán las tareas de familia pendientes y el SKU deja de pedir familia en Procesar folios.';
+        }
+        return 'La respuesta vuelve a «sin responder»: se cierra «Asignar familia» si estaba abierta y reaparece la pregunta «¿Necesita familia?».';
+    }
+
+    function familyDecisionButtons(actual) {
+        var opts = [
+            ['requiere', 'Sí, necesita familia'],
+            ['no_requiere', 'No requiere'],
+            ['reset', 'Volver a sin responder'],
+        ];
+        return opts.filter(function (o) {
+            return o[0] === 'reset' ? actual !== '' : o[0] !== actual;
+        }).map(function (o) {
+            return '<button type="button" class="button button-small pqs-fam-decision" data-decision="' +
+                o[0] + '">' + esc(o[1]) + '</button>';
+        }).join('');
+    }
+
+    function familyDecisionHtml() {
+        var actual = currentFamilyDecision();
+        var html = '<div class="pqs-family-decision">Decisión: <strong>' + esc(familyDecisionLabel(actual)) + '</strong>';
+        if (canAnswerFamily()) {
+            html += ' <button type="button" class="button button-small pqs-fam-decision-toggle">Cambiar decisión</button>' +
+                '<div class="pqs-fam-decision-options" style="display:none;">' + familyDecisionButtons(actual) + '</div>';
+        }
+        return html + '</div>';
+    }
+
+    function changeFamilyDecision(decision) {
+        if (!state.productId || !decision) {
+            return;
+        }
+        var actual = currentFamilyDecision();
+        var nueva = decision === 'reset' ? '' : decision;
+        runAndRefresh(pqsConfirm({
+            title: 'Cambiar decisión de familia',
+            bodyHtml:
+                '<p>SKU <code>' + esc(currentSku()) + '</code></p>' +
+                '<p>Decisión actual: <strong>' + esc(familyDecisionLabel(actual)) + '</strong><br>' +
+                'Nueva decisión: <strong>' + esc(familyDecisionLabel(nueva)) + '</strong></p>' +
+                '<p>' + esc(familyDecisionEffect(decision)) + '</p>',
+            okLabel: 'Confirmar cambio',
+        }).then(function () {
+            return post('riverso_products_answer_family_need', {
+                product_id: state.productId,
+                decision: decision,
+            });
+        }).then(requireSuccess('No se pudo guardar la decisión')), 'No se pudo guardar la decisión');
     }
 
     function relationEditControls(type, data) {
@@ -638,52 +753,71 @@
         }
         $box.html(list.map(function (t) {
             var tipo = t.tipo || '';
-            var html =
-                '<div class="pqs-task" data-task-id="' + esc(t.id) + '" data-tipo="' + esc(tipo) + '">' +
+            var inline = canManage ? taskInlineActionsHtml(t) : '';
+            var canComplete = t.completion_mode === 'manual' && !!t.allow_complete;
+            var actions = inline;
+            if (t.target_url) {
+                actions += '<a class="button button-small' + (inline ? '' : ' button-primary') +
+                    '" href="' + esc(t.target_url) + '">Ir a realizar</a>';
+            }
+            if (canComplete) {
+                actions += '<button type="button" class="button button-small pqs-task-complete">Completar</button>';
+            }
+            if (!actions) {
+                actions = '<span class="pqs-task-no-target">Sin pantalla asociada: un supervisor puede cerrarla desde Tareas.</span>';
+            }
+            return '<div class="pqs-task" data-task-id="' + esc(t.id) + '" data-tipo="' + esc(tipo) + '">' +
                 '<div class="pqs-task-title">' + esc(t.titulo || tipo) + '</div>' +
                 '<div class="pqs-task-meta">' + esc(tipo) +
                 (t.prioridad ? ' · prioridad ' + esc(t.prioridad) : '') + '</div>' +
-                '<div class="pqs-task-actions">';
-
-            if (canManage) {
-                if (tipo === 'confirmar_barcode_legacy') {
-                    html += renderLegacyTaskActions(t);
-                } else if (tipo === 'barcode_faltante') {
-                    html +=
-                        '<div class="pqs-task-form">' +
-                        '<input type="text" class="pqs-task-barcode" placeholder="Código de barras">' +
-                        '<button type="button" class="button button-small button-primary pqs-task-do-barcode">Asignar</button>' +
-                        '</div>';
-                } else if (tipo === 'codigo_faltante' || tipo === 'confirmar_codigo_proveedor' || tipo === 'relacionar_producto_proveedor') {
-                    html +=
-                        '<div class="pqs-task-form">' +
-                        '<input type="text" class="pqs-task-sup-search" placeholder="Proveedor…">' +
-                        '<input type="hidden" class="pqs-task-sup-id" value="">' +
-                        '<input type="text" class="pqs-task-sup-code" placeholder="Código proveedor">' +
-                        '<button type="button" class="button button-small button-primary pqs-task-do-supplier">Asignar</button>' +
-                        '<div class="pqs-sup-suggestions" style="display:none;width:100%;"></div>' +
-                        '</div>';
-                } else if (tipo === 'preguntar_familia') {
-                    html +=
-                        '<button type="button" class="button button-small pqs-task-family-need" data-answer="requiere">Necesita familia</button>' +
-                        '<button type="button" class="button button-small pqs-task-family-need" data-answer="no_requiere">No requiere</button>';
-                } else if (tipo === 'asignar_familia') {
-                    html += '<button type="button" class="button button-small pqs-task-open-family">Abrir editor familia</button>';
-                }
-
-                if (t.target_url) {
-                    html += '<a class="button button-small" href="' + esc(t.target_url) + '">Ir</a>';
-                }
-                if (tipo !== 'confirmar_barcode_legacy') {
-                    html += '<button type="button" class="button button-small pqs-task-complete">Completar</button>';
-                }
-            } else if (t.target_url) {
-                html += '<a class="button button-small" href="' + esc(t.target_url) + '">Ir</a>';
-            }
-
-            html += '</div></div>';
-            return html;
+                (t.como_completar
+                    ? '<div class="pqs-task-howto"><strong>Cómo completarla:</strong> ' + esc(t.como_completar) + '</div>'
+                    : '') +
+                '<div class="pqs-task-actions">' + actions + '</div></div>';
         }).join(''));
+    }
+
+    function taskInlineActionsHtml(t) {
+        var tipo = t.tipo || '';
+        if (tipo === 'confirmar_barcode_legacy') {
+            return renderLegacyTaskActions(t);
+        }
+        if (tipo === 'barcode_faltante') {
+            return '<div class="pqs-task-form">' +
+                '<input type="text" class="pqs-task-barcode" placeholder="Código de barras">' +
+                '<button type="button" class="button button-small button-primary pqs-task-do-barcode">Asignar</button>' +
+                '</div>';
+        }
+        if (tipo === 'relacionar_producto_proveedor') {
+            return '<div class="pqs-task-form">' +
+                '<input type="text" class="pqs-task-sup-search" placeholder="Proveedor…">' +
+                '<input type="hidden" class="pqs-task-sup-id" value="">' +
+                '<input type="text" class="pqs-task-sup-code" placeholder="Código proveedor">' +
+                '<button type="button" class="button button-small button-primary pqs-task-do-supplier">Asignar</button>' +
+                '<div class="pqs-sup-suggestions" style="display:none;width:100%;"></div>' +
+                '</div>';
+        }
+        if (tipo === 'preguntar_familia') {
+            return '<button type="button" class="button button-small pqs-fam-decision" data-decision="requiere">Necesita familia</button>' +
+                '<button type="button" class="button button-small pqs-fam-decision" data-decision="no_requiere">No requiere</button>';
+        }
+        if (tipo === 'asignar_familia') {
+            var html = '';
+            if (canManageFamilies) {
+                html +=
+                    '<button type="button" class="button button-small button-primary pqs-task-family-search">Buscar familia existente</button>' +
+                    '<button type="button" class="button button-small pqs-task-open-family">Crear familia</button>';
+            }
+            html +=
+                '<button type="button" class="button button-small pqs-fam-decision" data-decision="no_requiere">No necesita familia</button>' +
+                '<button type="button" class="button button-small pqs-fam-decision" data-decision="reset">Volver a sin responder</button>';
+            if (canManageFamilies) {
+                html += '<div class="pqs-task-family-search-wrap" style="display:none;width:100%;">' +
+                    relationEditControls('family', null) + '</div>';
+            }
+            return html;
+        }
+        return '';
     }
 
     function setEditing(on) {
@@ -1534,34 +1668,36 @@
         $(document).on('click', '.pqs-task-complete', function () {
             var $task = $(this).closest('.pqs-task');
             var tid = $task.data('task-id');
-            post('riverso_products_complete_task', { tarea_id: tid }).then(function (r) {
-                if (r && r.success) {
-                    refreshViewer();
-                } else {
-                    alert((r && r.data && r.data.message) || 'No se pudo completar');
-                }
-            });
+            var titulo = $task.find('.pqs-task-title').text();
+            runAndRefresh(pqsConfirm({
+                title: 'Completar tarea',
+                bodyHtml: '<p>¿Marcar como completada la tarea <strong>' + esc(titulo) + '</strong>?</p>' +
+                    '<p>Solo se cierra la tarea; no se cambia nada del SKU <code>' + esc(currentSku()) + '</code>.</p>',
+                okLabel: 'Completar',
+            }).then(function () {
+                return post('riverso_products_complete_task', { tarea_id: tid });
+            }).then(requireSuccess('No se pudo completar la tarea')), 'No se pudo completar la tarea');
         });
 
         $(document).on('click', '.pqs-task-do-barcode', function () {
             var $task = $(this).closest('.pqs-task');
             var code = ($task.find('.pqs-task-barcode').val() || '').trim();
             if (!code || !state.productId) {
+                alert('Ingresá el código de barras');
                 return;
             }
-            post('riverso_products_add_barcode', {
-                product_id: state.productId,
-                barcode: code,
-            }).then(function (r) {
-                if (!r || !r.success) {
-                    alert((r && r.data && r.data.message) || 'Error al agregar barcode');
-                    return;
-                }
-                var tid = $task.data('task-id');
-                return post('riverso_products_complete_task', { tarea_id: tid });
+            runAndRefresh(pqsConfirm({
+                title: 'Asignar código de barras',
+                bodyHtml: '<p>Se agregará el código <code>' + esc(code) + '</code> al SKU <code>' +
+                    esc(currentSku()) + '</code> y se cerrará la tarea.</p>',
+                okLabel: 'Asignar',
             }).then(function () {
-                refreshViewer();
-            });
+                return post('riverso_products_add_barcode', {
+                    product_id: state.productId,
+                    barcode: code,
+                    audit_reason: 'Asignado desde tarea en Búsqueda rápida',
+                });
+            }).then(requireSuccess('Error al agregar el código de barras')), 'Error al agregar el código de barras');
         });
 
         $(document).on('input', '.pqs-task-sup-search', function () {
@@ -1611,44 +1747,47 @@
                 alert('Seleccioná proveedor e ingresá código');
                 return;
             }
-            linkSupplier(state.productId, sid, code, false).then(function () {
-                return post('riverso_products_complete_task', {
-                    tarea_id: $task.data('task-id'),
-                });
+            var supName = $form.find('.pqs-task-sup-search').val() || '';
+            runAndRefresh(pqsConfirm({
+                title: 'Asignar código de proveedor',
+                bodyHtml: '<p>Se vinculará el código <code>' + esc(code) + '</code>' +
+                    (supName ? ' del proveedor <strong>' + esc(supName) + '</strong>' : '') +
+                    ' al SKU <code>' + esc(currentSku()) + '</code> y se cerrará la tarea.</p>',
+                okLabel: 'Asignar',
             }).then(function () {
-                refreshViewer();
-            }).fail(function (msg) {
-                if (msg && msg !== 'cancel' && msg !== 'superseded') {
-                    alert(typeof msg === 'string' ? msg : 'Error al asignar código');
-                }
-            });
+                return linkSupplier(state.productId, sid, code, false);
+            }), 'Error al asignar código');
         });
 
-        $(document).on('click', '.pqs-task-family-need', function () {
-            var answer = $(this).data('answer');
-            var tid = $(this).closest('.pqs-task').data('task-id');
-            post('riverso_products_answer_family_need', {
-                product_id: state.productId,
-                needs_family: answer === 'requiere' ? 1 : 0,
-            }).then(function (r) {
-                if (!r || !r.success) {
-                    alert((r && r.data && r.data.message) || 'Error');
-                    return;
-                }
-                if (tid) {
-                    return post('riverso_products_complete_task', { tarea_id: tid });
-                }
-            }).then(function () {
-                refreshViewer();
-            });
+        $(document).on('click', '.pqs-fam-decision', function () {
+            changeFamilyDecision(String($(this).data('decision') || ''));
+        });
+
+        $(document).on('click', '.pqs-fam-decision-toggle', function () {
+            $(this).siblings('.pqs-fam-decision-options').toggle();
+        });
+
+        $(document).on('click', '.pqs-task-family-search', function () {
+            var $wrap = $(this).closest('.pqs-task').find('.pqs-task-family-search-wrap');
+            $wrap.toggle();
+            if ($wrap.is(':visible')) {
+                $wrap.find('.pqs-rel-search').trigger('focus');
+            }
         });
 
         $(document).on('click', '.pqs-task-open-family', function () {
-            if (window.RiversoFamilyEditor && typeof window.RiversoFamilyEditor.openCreate === 'function') {
-                window.RiversoFamilyEditor.openCreate(null, { producto_base_id: state.productId });
-            } else if (state.summary && state.summary.urls) {
-                window.location.href = state.summary.urls.categories_families + '&tab=families';
+            if (!window.RiversoFamilyEditor || typeof window.RiversoFamilyEditor.openCreate !== 'function') {
+                alert('Editor de familias no disponible');
+                return;
             }
+            var seed = seedMember();
+            window.RiversoFamilyEditor.openCreate(function () {
+                refreshViewer();
+            }, {
+                nombre: seed.nombre_canonico || '',
+                pendingMembers: [seed],
+            });
+            watchEditorClose();
         });
 
         // —— Edición inline ——

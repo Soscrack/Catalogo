@@ -5693,7 +5693,7 @@ jQuery(function($){
 			return;
 		}
 
-		// 1. Guardar categorías seleccionadas
+		// Guardar categorías: el servidor cierra la tarea validar_categoria
 		const selectedCats = [];
 		$('#online-categories-tree .category-checkbox:checked').each(function() {
 			selectedCats.push(parseInt($(this).val()));
@@ -5710,31 +5710,14 @@ jQuery(function($){
 				return;
 			}
 
-			// 2. Completar tarea
-			const catNames = $('#online-categories-tree .category-checkbox:checked').map(function() {
-				return $(this).closest('label').find('span').first().text();
-			}).get().join(', ');
-
-			$.post(ajaxurl, {
-				action: 'riverso_complete_task',
-				nonce: riverso_pos_nonce,
-				task_id: taskId,
-				notas_completado: 'Categorías aceptadas desde Hub: ' + catNames
-			}, function(r2) {
-				if (!r2.success) {
-					alert('Error al completar tarea: ' + r2.data.message);
-					return;
-				}
-
-				alert('¡Categorías aceptadas y tarea completada exitosamente!');
-				$('#online-categories-task-panel').hide();
-				// Refrescar datos del producto
-				$.post(ajaxurl, { action: 'riverso_products_get', nonce, id: currentProduct.id }, function(r) {
-                    if (r.success && r.data.item) {
-                        showDetail(r.data.item);
-                    }
-                });
-			});
+			alert('¡Categorías aceptadas y tarea completada exitosamente!');
+			$('#online-categories-task-panel').hide();
+			// Refrescar datos del producto
+			$.post(ajaxurl, { action: 'riverso_products_get', nonce, id: currentProduct.id }, function(r) {
+                if (r.success && r.data.item) {
+                    showDetail(r.data.item);
+                }
+            });
 		});
 	});
 

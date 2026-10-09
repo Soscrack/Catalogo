@@ -768,12 +768,218 @@
         return dirty;
     }
 
-    function switchTab(tab) {
+    /* ===== URL / historial del navegador =====
+     * ?tab=process[&vista&estado&completitud&q&producto&orden&pag&folio_desde…]  lista
+     * ?tab=process&factura_id=N[&item_id=M]                                     folio abierto
+     * ?tab=analysis&analisis=ID                                                 análisis guardado
+     * ?tab=explorer|history|folios|alerts|add
+     */
+
+    var PH_TABS = ['process', 'explorer', 'history', 'analysis', 'folios', 'alerts', 'add'];
+    var RPF_ORDER_DEFAULT = 'fecha_folio|DESC';
+    /** Filtros de Procesar folios ↔ parámetro de URL. */
+    var RPF_LIST_URL_FIELDS = [
+        ['estado', '#rpf-filter-estado'],
+        ['completitud', '#rpf-filter-completitud'],
+        ['q', '#rpf-filter-search'],
+        ['producto', '#rpf-filter-producto'],
+        ['folio_desde', '#rpf-filter-folio-desde'],
+        ['folio_hasta', '#rpf-filter-folio-hasta'],
+        ['ingreso_desde', '#rpf-filter-ingreso-desde'],
+        ['ingreso_hasta', '#rpf-filter-ingreso-hasta']
+    ];
+    /** Id del análisis por folio mostrado (fila de folios analizados). */
+    var phAnalysisId = 0;
+    /** true mientras se aplica una URL: no escribir historial a medio camino. */
+    var phRouting = false;
+    /** Última URL confirmada (para deshacer un «Atrás» cancelado). */
+    var phLastUrl = window.location.href;
+
+    function phActiveTab() {
+        var tab = $('.riverso-price-history-app .nav-tab-active').data('tab');
+        return PH_TABS.indexOf(tab) >= 0 ? tab : 'process';
+    }
+
+    function rpfSetVista(vista) {
+        rpfVista = vista === 'archivados' ? 'archivados' : 'activos';
+        $('.rpf-vista-btn').removeClass('is-active button-primary');
+        $('.rpf-vista-btn[data-vista="' + rpfVista + '"]').addClass('is-active button-primary');
+    }
+
+    function rpfListUrlParams() {
+        var p = {};
+        if (rpfVista === 'archivados') {
+            p.vista = 'archivados';
+        }
+        RPF_LIST_URL_FIELDS.forEach(function (f) {
+            var v = String($(f[1]).val() || '').trim();
+            if (v) {
+                p[f[0]] = v;
+            }
+        });
+        var order = String($('#rpf-filter-order').val() || RPF_ORDER_DEFAULT);
+        if (order !== RPF_ORDER_DEFAULT) {
+            p.orden = order.replace('|', '-').toLowerCase();
+        }
+        if (rpfPage > 1) {
+            p.pag = rpfPage;
+        }
+        return p;
+    }
+
+    /** Filtros de lista desde la URL; valores que no calzan con el formulario se descartan. */
+    function rpfApplyListUrlParams(params) {
+        rpfSetVista(params.get('vista'));
+        RPF_LIST_URL_FIELDS.forEach(function (f) {
+            var $el = $(f[1]).val(params.get(f[0]) || '');
+            if ($el.val() === null) {
+                $el.val('');
+            }
+        });
+        var orden = String(params.get('orden') || '').split('-');
+        var $order = $('#rpf-filter-order').val(
+            orden.length === 2 ? orden[0] + '|' + orden[1].toUpperCase() : RPF_ORDER_DEFAULT
+        );
+        if ($order.val() === null) {
+            $order.val(RPF_ORDER_DEFAULT);
+        }
+        rpfPage = Math.max(1, parseInt(params.get('pag') || '1', 10) || 1);
+    }
+
+    /** Parámetros de URL que describen lo que se ve ahora. */
+    function phStateParams() {
+        var tab = phActiveTab();
+        var p = { tab: tab };
+        if (tab === 'process') {
+            if (rpfFacturaId) {
+                p.factura_id = rpfFacturaId;
+            } else {
+                $.extend(p, rpfListUrlParams());
+            }
+        } else if (tab === 'analysis' && phAnalysisId) {
+            p.analisis = phAnalysisId;
+        }
+        return p;
+    }
+
+    /** Pestaña + folio + análisis: si cambia se agrega entrada al historial; si no, se reemplaza. */
+    function phViewKey(params) {
+        return [params.get('tab') || 'process', params.get('factura_id') || '', params.get('analisis') || ''].join('|');
+    }
+
+    /**
+     * Refleja en la URL lo que se ve: pushState al cambiar de pestaña/folio/análisis
+     * (así «Atrás» vuelve a la vista anterior), replaceState si solo cambian filtros o página.
+     */
+    function phCommitUrl(forceReplace) {
+        if (phRouting || !window.history || !window.history.pushState) {
+            return;
+        }
+        try {
+            var cur = new URL(window.location.href);
+            var url = new URL(window.location.href);
+            var p = phStateParams();
+            url.search = '';
+            if (cur.searchParams.get('page')) {
+                url.searchParams.set('page', cur.searchParams.get('page'));
+            }
+            Object.keys(p).forEach(function (k) {
+                url.searchParams.set(k, String(p[k]));
+            });
+            if (url.href !== cur.href) {
+                var push = !forceReplace && phViewKey(url.searchParams) !== phViewKey(cur.searchParams);
+                window.history[push ? 'pushState' : 'replaceState']({ ph: 1 }, '', url.href);
+            }
+            phLastUrl = url.href;
+        } catch (e) {
+            // sin history API / URL: la página sigue funcionando sin sincronizar
+        }
+    }
+
+    function phReadLocation() {
+        var params = new URLSearchParams(window.location.search || '');
+        var tab = params.get('tab') || '';
+        return {
+            params: params,
+            tab: PH_TABS.indexOf(tab) >= 0 ? tab : 'process',
+            factura: parseInt(params.get('factura_id') || '0', 10) || 0,
+            item: parseInt(params.get('item_id') || '0', 10) || 0,
+            analisis: parseInt(params.get('analisis') || '0', 10) || 0
+        };
+    }
+
+    /** Muestra lo que pide la URL (carga inicial y «Atrás»/«Adelante»). */
+    function phRoute(loc) {
+        var pending = false;
+        phRouting = true;
+        try {
+            if (loc.tab === 'process' && !loc.factura) {
+                rpfApplyListUrlParams(loc.params);
+            }
+            switchTab(loc.tab, { skipList: true });
+            if (loc.tab === 'process') {
+                if (loc.factura && loc.factura !== rpfFacturaId) {
+                    pending = true;
+                    rpfOpenFromUrl(loc.factura, loc.item);
+                } else if (!loc.factura && rpfFacturaId) {
+                    backToList();
+                } else if (!loc.factura) {
+                    loadProcessList();
+                }
+            } else if (loc.tab === 'analysis') {
+                if (loc.analisis && loc.analisis !== phAnalysisId) {
+                    pending = true;
+                    openAnalyzedSnapshot(loc.analisis);
+                } else if (!loc.analisis) {
+                    phAnalysisId = 0;
+                    $('#ph-folio-results').hide();
+                }
+            }
+        } finally {
+            phRouting = false;
+        }
+        if (!pending) {
+            // Normaliza (descarta parámetros ajenos o inválidos) sin crear entrada nueva.
+            phCommitUrl(true);
+        }
+    }
+
+    /** Abre el folio pedido por URL; si no abre, vuelve a la lista sin dejar la URL rota. */
+    function rpfOpenFromUrl(facturaId, itemId) {
+        openFolioSession(facturaId).done(function (res) {
+            if (!res || !res.success) {
+                backToList({ replaceUrl: true });
+                return;
+            }
+            if (itemId > 0) {
+                var $tr = $('#rpf-lines tr[data-item="' + itemId + '"]');
+                if ($tr.length) {
+                    $tr.addClass('rpf-row-highlight');
+                    if ($tr[0].scrollIntoView) {
+                        $tr[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                    var $open = $tr.find('.rpf-pu-open');
+                    if ($open.length && canManage) {
+                        $open.trigger('click');
+                    }
+                }
+            }
+        }).fail(function () {
+            backToList({ replaceUrl: true });
+        });
+    }
+
+    function switchTab(tab, opts) {
+        opts = opts || {};
+        if (PH_TABS.indexOf(tab) < 0) {
+            tab = 'process';
+        }
         $('.riverso-price-history-app .nav-tab').removeClass('nav-tab-active');
         $('.riverso-price-history-app .nav-tab[data-tab="' + tab + '"]').addClass('nav-tab-active');
         $('.riverso-price-history-app .tab-content').hide();
         $('#tab-' + tab).show();
-        if (tab === 'process') {
+        // Con un folio abierto la lista está oculta; backToList la recarga al volver.
+        if (tab === 'process' && !rpfFacturaId && !opts.skipList) {
             loadProcessList();
         }
         if (tab === 'history') {
@@ -788,6 +994,7 @@
         if (tab === 'alerts') {
             loadAlerts();
         }
+        phCommitUrl();
     }
 
     /* ===== Procesar folios ===== */
@@ -936,6 +1143,7 @@
                     } else if (p.action === 'answer_family' && canAnswerFamily) {
                         html += '<button type="button" class="button button-small button-primary rpf-answer-family-open"' +
                             ' data-producto="' + esc(b.producto_base_id || '') + '"' +
+                            ' data-decision="' + esc(b.familia_decision || '') + '"' +
                             ' data-sku="' + esc(b.sku || '') + '"' +
                             ' data-nombre="' + esc(b.nombre || '') + '">' +
                             esc(p.label || 'Responder aquí') + '</button>';
@@ -1023,6 +1231,7 @@
     }
 
     function loadProcessList() {
+        phCommitUrl();
         var $body = $('#rpf-tbody').html('<tr><td colspan="9">Cargando…</td></tr>');
         var orderRaw = String($('#rpf-filter-order').val() || 'fecha_folio|DESC').split('|');
         var orderby = orderRaw[0] || 'fecha_folio';
@@ -1132,6 +1341,7 @@
         rpfFacturaId = nextId;
         $('#rpf-list-panel').hide();
         $('#rpf-session-panel').show();
+        phCommitUrl();
         var inv = data.invoice || {};
         var proc = data.proceso || {};
         $('#rpf-session-header').html(
@@ -1327,10 +1537,14 @@
                         ' data-nombre="' + esc(ln.nombre || ln.descripcion || '') + '">Crear local</button>';
                 }
                 if (canAnswerFamily && ln.can_answer_family && ln.producto_base_id) {
-                    saveBtn += ' <button type="button" class="button button-small button-primary rpf-answer-family-open"' +
+                    var famCorrection = (ln.familia_decision || '') === 'requiere';
+                    saveBtn += ' <button type="button" class="button button-small' +
+                        (famCorrection ? '' : ' button-primary') + ' rpf-answer-family-open"' +
                         ' data-producto="' + ln.producto_base_id + '"' +
+                        ' data-decision="' + esc(ln.familia_decision || '') + '"' +
                         ' data-sku="' + esc(ln.sku || '') + '"' +
-                        ' data-nombre="' + esc(ln.nombre || ln.descripcion || '') + '">Responder aquí</button>';
+                        ' data-nombre="' + esc(ln.nombre || ln.descripcion || '') + '">' +
+                        (famCorrection ? 'Corregir respuesta' : 'Responder aquí') + '</button>';
                 }
                 if (canManageFamilies && ln.can_assign_family && ln.producto_base_id) {
                     saveBtn += ' <button type="button" class="button button-small button-primary rpf-search-family-open"' +
@@ -2724,7 +2938,7 @@
         if (b.inactivo) {
             return '<div class="rpf-bc-actions">' +
                 '<button type="button" class="button button-small button-primary rpf-bc-activate" data-id="' + esc(String(b.id)) + '">Activar</button> ' +
-                '<button type="button" class="button button-small rpf-bc-delete" data-id="' + esc(String(b.id)) + '" style="color:#b32d2e;">Eliminar</button>' +
+                '<button type="button" class="button button-small rpf-bc-delete" data-id="' + esc(String(b.id)) + '" data-barcode="' + esc(b.codigo || '') + '" style="color:#b32d2e;">Eliminar</button>' +
                 '</div>';
         }
         if (rpfBcIsLegacy(b)) {
@@ -3772,7 +3986,8 @@
         });
     }
 
-    function backToList() {
+    /** @param {{replaceUrl?: boolean}} [opts] replaceUrl: la URL apuntaba a un folio que no abrió. */
+    function backToList(opts) {
         rpfSession = null;
         rpfFacturaId = 0;
         closeRpfFleteModal();
@@ -3780,6 +3995,9 @@
         $('#rpf-folio-dock').hide();
         $('#rpf-session-panel').hide();
         $('#rpf-list-panel').show();
+        if (opts && opts.replaceUrl) {
+            phCommitUrl(true);
+        }
         loadProcessList();
     }
 
@@ -4576,9 +4794,35 @@
         post('riverso_price_analyze_invoice', { factura_id: id }).done(function (res) {
             if (!res || !res.success) {
                 $('#ph-folio-body').html('<tr><td colspan="11">' + esc((res && res.data && res.data.message) || 'Error') + '</td></tr>');
+                phAnalysisId = 0;
+                phCommitUrl(true);
                 return;
             }
             renderFolio(res.data);
+            // El análisis queda guardado: la URL apunta a esa copia (recargar no lo vuelve a correr).
+            phAnalysisId = parseInt(res.data.analysis_id, 10) || 0;
+            phCommitUrl();
+        });
+    }
+
+    /** Reabre un análisis guardado (Folios analizados o ?tab=analysis&analisis=ID). */
+    function openAnalyzedSnapshot(id) {
+        return post('riverso_price_list_analyzed_folios', { id: id }).done(function (res) {
+            if (!res || !res.success || !res.data.payload) {
+                window.alert('No se pudo reabrir el análisis');
+                phCommitUrl(true);
+                return;
+            }
+            phAnalysisId = parseInt(id, 10) || 0;
+            if (phActiveTab() === 'analysis') {
+                phCommitUrl();
+            } else {
+                switchTab('analysis');
+            }
+            renderFolio(res.data.payload);
+            $('#ph-folio-results').show();
+        }).fail(function () {
+            phCommitUrl(true);
         });
     }
 
@@ -4711,6 +4955,9 @@
 
     $(function () {
         $('.riverso-price-history-app .nav-tab').on('click', function (e) {
+            if (e.ctrlKey || e.metaKey || e.shiftKey) {
+                return; // abrir la pestaña en otra ventana (href real)
+            }
             e.preventDefault();
             switchTab($(this).data('tab'));
         });
@@ -5152,16 +5399,7 @@
             loadAnalyzed();
         });
         $(document).on('click', '.ph-open-analyzed', function () {
-            var id = $(this).data('id');
-            post('riverso_price_list_analyzed_folios', { id: id }).done(function (res) {
-                if (!res || !res.success || !res.data.payload) {
-                    window.alert('No se pudo reabrir el análisis');
-                    return;
-                }
-                switchTab('analysis');
-                renderFolio(res.data.payload);
-                $('#ph-folio-results').show();
-            });
+            openAnalyzedSnapshot($(this).data('id'));
         });
 
         $('#ph-refresh-alerts').on('click', loadAlerts);
@@ -5205,9 +5443,7 @@
         $(document).on('click', '.rpf-vista-btn', function () {
             var vista = $(this).data('vista') || 'activos';
             if (vista === rpfVista) return;
-            rpfVista = vista;
-            $('.rpf-vista-btn').removeClass('is-active button-primary');
-            $(this).addClass('is-active button-primary');
+            rpfSetVista(vista);
             rpfPage = 1;
             loadProcessList();
         });
@@ -5237,7 +5473,9 @@
             rpfPage += 1;
             loadProcessList();
         });
-        $('#rpf-back').on('click', backToList);
+        $('#rpf-back').on('click', function () {
+            backToList();
+        });
         $('#rpf-refresh-session').on('click', refreshSession);
         $(document).on('click', '.rpf-start', function () {
             var id = $(this).data('id');
@@ -5908,6 +6146,7 @@
             }
             openAnswerFamilyModal({
                 producto_base_id: parseInt($(this).data('producto'), 10) || 0,
+                decision_actual: String($(this).data('decision') || ''),
                 sku: String($(this).data('sku') || ''),
                 nombre: String($(this).data('nombre') || '')
             });
@@ -6034,14 +6273,21 @@
             if (!rpfAnswerFamily) {
                 return;
             }
-            rpfAnswerFamily.needs_family = true;
+            rpfAnswerFamily.decision = 'requiere';
             renderAnswerFamilyConfirm();
         });
         $(document).on('click', '#rpf-answer-family-no', function () {
             if (!rpfAnswerFamily) {
                 return;
             }
-            rpfAnswerFamily.needs_family = false;
+            rpfAnswerFamily.decision = 'no_requiere';
+            renderAnswerFamilyConfirm();
+        });
+        $(document).on('click', '#rpf-answer-family-reset', function () {
+            if (!rpfAnswerFamily) {
+                return;
+            }
+            rpfAnswerFamily.decision = 'reset';
             renderAnswerFamilyConfirm();
         });
         $(document).on('click', '#rpf-answer-family-confirm', function () {
@@ -6238,7 +6484,12 @@
             if (!barcodeId) {
                 return;
             }
-            if (!window.confirm('¿Estás seguro? Borrado permanente.')) {
+            var codigo = String($(this).data('barcode') || barcodeId);
+            if (!window.confirm(
+                'Vas a eliminar permanentemente el código ' + codigo +
+                ' del SKU ' + (rpfBcCtx.sku || '') + '.\n' +
+                'También se borran sus copias inactivas duplicadas. No se puede deshacer.\n\n¿Continuar?'
+            )) {
                 return;
             }
             post('riverso_products_delete_barcode', {
@@ -6246,8 +6497,9 @@
                 barcode_id: barcodeId
             }).done(function (r) {
                 rpfBcRefreshFromResponse(r, 'No se pudo eliminar');
-            }).fail(function () {
-                window.alert('Error de red al eliminar');
+            }).fail(function (xhr) {
+                var data = (xhr && xhr.responseJSON && xhr.responseJSON.data) || {};
+                window.alert(data.message || 'Error de red al eliminar');
             });
         });
         $(document).on('click', '.rpf-bc-deactivate', function () {
@@ -6458,37 +6710,26 @@
             updateHybridContinueState();
         });
 
-        loadProcessList();
+        // Estado inicial desde la URL (enlaces de tareas, recepción, emparejamientos, recarga).
+        phRoute(phReadLocation());
 
-        // Deep-link: ?tab=process&factura_id=N&item_id=M
-        try {
-            var params = new URLSearchParams(window.location.search || '');
-            var deepTab = params.get('tab') || '';
-            var deepFactura = parseInt(params.get('factura_id') || '0', 10) || 0;
-            var deepItem = parseInt(params.get('item_id') || '0', 10) || 0;
-            if (deepTab === 'process' || deepFactura > 0) {
-                switchTab('process');
-                if (deepFactura > 0) {
-                    openFolioSession(deepFactura).done(function () {
-                        if (deepItem > 0) {
-                            var $tr = $('#rpf-lines tr[data-item="' + deepItem + '"]');
-                            if ($tr.length) {
-                                $tr.addClass('rpf-row-highlight');
-                                if ($tr[0].scrollIntoView) {
-                                    $tr[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                }
-                                var $open = $tr.find('.rpf-pu-open');
-                                if ($open.length && canManage) {
-                                    $open.trigger('click');
-                                }
-                            }
-                        }
-                    });
-                }
+        window.addEventListener('popstate', function () {
+            if (window.location.search === new URL(phLastUrl, window.location.href).search) {
+                return; // solo cambió el #hash
             }
-        } catch (err) {
-            // ignore
-        }
+            var loc = phReadLocation();
+            var leavesFolio = loc.tab === 'process' && loc.factura !== rpfFacturaId;
+            if (leavesFolio && rpfHasUnsavedFolioPrices()
+                && !window.confirm('Hay precios editados sin confirmar en este folio. Si salís se pierden. ¿Salir igual?')) {
+                try {
+                    window.history.pushState({ ph: 1 }, '', phLastUrl);
+                } catch (err) {
+                    // sin history API
+                }
+                return;
+            }
+            phRoute(loc);
+        });
     });
 
     function closeHybridWizard() {
@@ -7923,13 +8164,24 @@
         rpfAnswerFamily = {
             step: 'form',
             producto_base_id: productId,
+            decision_actual: opts.decision_actual || '',
             sku: opts.sku || '',
             nombre: opts.nombre || '',
             folio: inv.folio || '',
-            needs_family: null
+            decision: null
         };
         $('#rpf-answer-family-modal').css('display', 'flex').attr('aria-hidden', 'false');
         renderAnswerFamilyForm();
+    }
+
+    function rpfFamilyDecisionLabel(decision) {
+        if (decision === 'requiere') {
+            return 'Sí, necesita familia';
+        }
+        if (decision === 'no_requiere') {
+            return 'No, queda solo';
+        }
+        return 'Sin responder';
     }
 
     function renderAnswerFamilyForm() {
@@ -7937,14 +8189,33 @@
             return;
         }
         rpfAnswerFamily.step = 'form';
-        rpfAnswerFamily.needs_family = null;
-        $('#rpf-answer-family-title').text('¿Necesita familia?');
-        $('#rpf-answer-family-body').html(
-            '<dl class="rpf-create-local-meta">' +
+        rpfAnswerFamily.decision = null;
+        var isCorrection = rpfAnswerFamily.decision_actual === 'requiere';
+        $('#rpf-answer-family-title').text(isCorrection ? 'Corregir respuesta de familia' : '¿Necesita familia?');
+        var meta = '<dl class="rpf-create-local-meta">' +
             '<dt>Folio</dt><dd><code>' + esc(rpfAnswerFamily.folio || '—') + '</code></dd>' +
             '<dt>SKU</dt><dd><code>' + esc(rpfAnswerFamily.sku || '—') + '</code></dd>' +
             '<dt>Producto</dt><dd>' + esc(rpfAnswerFamily.nombre || '—') + '</dd>' +
-            '</dl>' +
+            (isCorrection
+                ? '<dt>Respuesta actual</dt><dd><strong>' + rpfFamilyDecisionLabel('requiere') + '</strong></dd>'
+                : '') +
+            '</dl>';
+        if (isCorrection) {
+            $('#rpf-answer-family-body').html(
+                meta +
+                '<p class="rpf-answer-family-question">¿Qué querés hacer con esta respuesta?</p>' +
+                '<p class="description"><strong>No, queda solo</strong>: cierra la tarea «Asignar familia» y el folio deja de pedir familia. ' +
+                '<strong>Volver a sin responder</strong>: vuelve a aparecer la pregunta «¿Necesita familia?».</p>'
+            );
+            $('#rpf-answer-family-footer').html(
+                '<button type="button" class="button" id="rpf-answer-family-cancel">Cancelar</button>' +
+                '<button type="button" class="button" id="rpf-answer-family-reset">Volver a sin responder</button>' +
+                '<button type="button" class="button button-primary" id="rpf-answer-family-no">No, queda solo</button>'
+            );
+            return;
+        }
+        $('#rpf-answer-family-body').html(
+            meta +
             '<p class="rpf-answer-family-question">¿Este producto necesita familia?</p>' +
             '<p class="description">Sí = packs/equivalencias. No = queda solo (no_requiere).</p>'
         );
@@ -7956,23 +8227,31 @@
     }
 
     function renderAnswerFamilyConfirm() {
-        if (!rpfAnswerFamily || rpfAnswerFamily.needs_family === null) {
+        if (!rpfAnswerFamily || !rpfAnswerFamily.decision) {
             return;
         }
         rpfAnswerFamily.step = 'confirm';
-        var yes = !!rpfAnswerFamily.needs_family;
+        var decision = rpfAnswerFamily.decision;
+        var actual = rpfAnswerFamily.decision_actual || '';
+        var sure;
+        if (decision === 'requiere') {
+            sure = '¿Estás seguro? Vas a marcar que este producto SÍ necesita familia. ' +
+                'El folio quedará bloqueado hasta asignarle una familia.';
+        } else if (decision === 'no_requiere') {
+            sure = '¿Estás seguro? Vas a marcar que este producto NO necesita familia (queda solo).' +
+                (actual === 'requiere' ? ' Se cerrará la tarea «Asignar familia».' : '');
+        } else {
+            sure = '¿Estás seguro? La respuesta vuelve a «sin responder» y se reabre la pregunta «¿Necesita familia?».';
+        }
         $('#rpf-answer-family-title').text('Confirmar respuesta');
         $('#rpf-answer-family-body').html(
             '<dl class="rpf-create-local-meta">' +
             '<dt>SKU</dt><dd><code>' + esc(rpfAnswerFamily.sku || '—') + '</code></dd>' +
             '<dt>Producto</dt><dd>' + esc(rpfAnswerFamily.nombre || '—') + '</dd>' +
-            '<dt>Respuesta</dt><dd><strong>' + (yes ? 'Sí, necesita familia' : 'No, queda solo') + '</strong></dd>' +
+            (actual ? '<dt>Antes</dt><dd>' + esc(rpfFamilyDecisionLabel(actual)) + '</dd>' : '') +
+            '<dt>Respuesta</dt><dd><strong>' + esc(rpfFamilyDecisionLabel(decision === 'reset' ? '' : decision)) + '</strong></dd>' +
             '</dl>' +
-            '<p class="rpf-create-local-sure">' +
-            (yes
-                ? '¿Estás seguro? Vas a marcar que este producto SÍ necesita familia.'
-                : '¿Estás seguro? Vas a marcar que este producto NO necesita familia (queda solo).') +
-            '</p>'
+            '<p class="rpf-create-local-sure">' + esc(sure) + '</p>'
         );
         $('#rpf-answer-family-footer').html(
             '<button type="button" class="button" id="rpf-answer-family-cancel">Cancelar</button>' +
@@ -7981,14 +8260,14 @@
     }
 
     function submitAnswerFamily() {
-        if (!rpfAnswerFamily || rpfAnswerFamily.needs_family === null) {
+        if (!rpfAnswerFamily || !rpfAnswerFamily.decision) {
             return;
         }
         var $btn = $('#rpf-answer-family-confirm').prop('disabled', true).text('Guardando…');
         $('#rpf-answer-family-cancel').prop('disabled', true);
         post('riverso_products_answer_family_need', {
             product_id: rpfAnswerFamily.producto_base_id,
-            needs_family: rpfAnswerFamily.needs_family ? 1 : 0
+            decision: rpfAnswerFamily.decision
         }).done(function (res) {
             if (!res || !res.success) {
                 window.alert((res && res.data && res.data.message) || 'No se pudo guardar la respuesta');
@@ -8000,8 +8279,9 @@
             if (rpfFacturaId) {
                 refreshSession();
             }
-        }).fail(function () {
-            window.alert('Error de red');
+        }).fail(function (xhr) {
+            var data = (xhr && xhr.responseJSON && xhr.responseJSON.data) || {};
+            window.alert(data.message || 'Error de red');
             $btn.prop('disabled', false).text('Confirmar');
             $('#rpf-answer-family-cancel').prop('disabled', false);
         });

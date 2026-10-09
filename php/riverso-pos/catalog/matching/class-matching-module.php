@@ -499,6 +499,10 @@ class Riverso_Matching_Module {
 
         $wpdb->update("{$prefix}producto_base", $payload, ['id' => $producto_base_id], $formats, ['%d']);
 
+        if ($estado !== 'PENDING_REVIEW' && class_exists('Riverso_Task_Module')) {
+            Riverso_Task_Module::close_open_tasks('confirmar_relacion_online', 'producto_base', $producto_base_id);
+        }
+
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('online_match_reviewed', 'producto_base', $producto_base_id, [
                 'actor_type' => 'human',

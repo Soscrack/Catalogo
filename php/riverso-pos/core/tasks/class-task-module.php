@@ -134,6 +134,24 @@ class Riverso_Task_Module {
     ];
 
     /**
+     * Instrucción para la UI: cómo se completa cada tarea guiada.
+     */
+    const COMPLETION_HINTS = [
+        'confirmar_barcode_legacy' => 'Acepta o rechaza el código legacy. Se cierra sola al decidir.',
+        'barcode_faltante' => 'Agrega el código de barras del producto. Se cierra sola al guardarlo.',
+        'relacionar_producto_proveedor' => 'Asigna un código de proveedor al producto. Se cierra sola al guardar el código.',
+        'crear_contraparte_online' => 'Crea el producto online o vincula uno existente en la pestaña Online del producto. Se cierra sola al quedar vinculado.',
+        'crear_contraparte_local' => 'Asigna el SKU local en la pestaña Local del producto. Se cierra sola al guardarlo.',
+        'confirmar_relacion_online' => 'Revisa el producto online sugerido en la pestaña Online y confírmalo o recházalo. Se cierra sola al decidir.',
+        'validar_categoria' => 'Revisa la categoría sugerida en la pestaña Online y guarda las categorías. Se cierra sola al guardarlas.',
+        'autorizar_publicacion' => 'Completa lo que falta para publicar y vuelve a autorizar. Se cierra sola cuando la autorización pasa.',
+        'preguntar_familia' => 'Responde si el producto necesita familia. Se cierra sola al responder.',
+        'asignar_familia' => 'Agrega el producto a una familia existente o crea una nueva; si no necesita familia, corrige la respuesta. Se cierra sola al decidir.',
+        'confirmar_unidades_compra' => 'Confirma las unidades de compra en Procesar folios. Se cierra sola al confirmar.',
+        'asignar_regla_precio' => 'Asigna una regla de precio a la familia. Se cierra sola al guardar la regla.',
+    ];
+
+    /**
      * Prioridades
      */
     const PRIORITIES = [
@@ -155,6 +173,42 @@ class Riverso_Task_Module {
      */
     public static function get_completion_mode($tipo) {
         return in_array($tipo, self::MANUAL_COMPLETION_TYPES, true) ? 'manual' : 'guided';
+    }
+
+    /**
+     * Texto "cómo completarla" para tareas guiadas ('' en manuales).
+     */
+    public static function get_completion_hint($tipo) {
+        if (isset(self::COMPLETION_HINTS[$tipo])) {
+            return self::COMPLETION_HINTS[$tipo];
+        }
+        return self::get_completion_mode($tipo) === 'guided'
+            ? 'Se cierra sola al hacer el trabajo en la pantalla correspondiente.'
+            : '';
+    }
+
+    /**
+     * Cierra las tareas abiertas de un tipo/referencia porque el trabajo ya se hizo.
+     *
+     * @param int|int[] $referencia_ids
+     * @return int Tareas cerradas.
+     */
+    public static function close_open_tasks($tipo, $referencia_tipo, $referencia_ids) {
+        global $wpdb;
+        $ids = array_values(array_unique(array_filter(array_map('absint', (array) $referencia_ids))));
+        if (!$ids) {
+            return 0;
+        }
+        $now = current_time('mysql');
+        $in = implode(',', array_fill(0, count($ids), '%d'));
+        $closed = $wpdb->query($wpdb->prepare(
+            "UPDATE {$wpdb->prefix}riverso_tareas
+             SET estado = 'completada', completado_en = %s, updated_at = %s
+             WHERE tipo = %s AND referencia_tipo = %s AND referencia_id IN ($in)
+               AND estado IN ('pendiente', 'asignado', 'en_progreso')",
+            array_merge([$now, $now, $tipo, $referencia_tipo], $ids)
+        ));
+        return (int) $closed;
     }
 
     /**
@@ -200,6 +254,7 @@ class Riverso_Task_Module {
         $task['categoria_label'] = self::TASK_CATEGORIES[$task['categoria']] ?? 'Otros';
         $task['completion_mode'] = self::get_completion_mode($task['tipo'] ?? '');
         $task['allow_complete'] = self::task_allows_manual_complete($task);
+        $task['como_completar'] = self::get_completion_hint($task['tipo'] ?? '');
     }
 
     /**

@@ -601,7 +601,9 @@ class Riverso_Price_History_Module {
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
         }
-        $this->save_folio_analysis($factura_id, $result);
+        $analysis_id = $this->save_folio_analysis($factura_id, $result);
+        // Id de la copia guardada: el JS lo usa en ?tab=analysis&analisis=ID.
+        $result['analysis_id'] = is_wp_error($analysis_id) ? 0 : (int) $analysis_id;
         wp_send_json_success($result);
     }
 

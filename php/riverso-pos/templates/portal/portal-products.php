@@ -2670,15 +2670,9 @@ $can_manage_families = current_user_can('riverso_manage_families');
                     alert('Error al guardar categorías: ' + ((r.data && r.data.message) || ''));
                     return;
                 }
-                post('riverso_products_complete_task', { tarea_id: taskId }).done(function(r2) {
-                    if (r2.success) {
-                        alert('Categorías aceptadas y tarea completada');
-                        $('#online-categories-task-panel').hide();
-                        openDetail(currentProduct.id);
-                    } else {
-                        alert('Error al completar tarea: ' + ((r2.data && r2.data.message) || ''));
-                    }
-                });
+                alert('Categorías aceptadas y tarea completada');
+                $('#online-categories-task-panel').hide();
+                openDetail(currentProduct.id);
             });
         });
 

@@ -1189,10 +1189,14 @@ class Riverso_Product_Module {
 			'%"producto_base_id":' . $product_id . '}%'
 		), ARRAY_A) ?: [];
 
-		// Agregar target_url y decodificar datos_extra para cada tarea
+		// Destino, modo de cierre y "cómo completarla" para cada tarea
 		foreach ($tasks as &$task) {
 			$task['datos_extra'] = json_decode( $task['datos_extra'] ?? '{}', true );
-			$task['target_url'] = riverso_resolve_task_target($task);
+			if (class_exists('Riverso_Task_Module')) {
+				Riverso_Task_Module::enrich_task($task);
+			} else {
+				$task['target_url'] = riverso_resolve_task_target($task);
+			}
 		}
 
         return $tasks;
@@ -3330,6 +3334,14 @@ class Riverso_Product_Module {
         }
 
         $item = $this->get_product($product_id);
+        if (class_exists('Riverso_Task_Module')) {
+            Riverso_Task_Module::close_open_tasks('barcode_faltante', 'producto_base', $product_id);
+            $woo_ids = [
+                (int) ($item['woocommerce_product_id'] ?? 0),
+                (int) ($item['woocommerce_variation_id'] ?? 0),
+            ];
+            Riverso_Task_Module::close_open_tasks('barcode_faltante', 'producto', $woo_ids);
+        }
         wp_send_json_success([
             'message' => 'Código de barra agregado',
             'barcode_id' => (int) $barcode_id,
@@ -3530,27 +3542,82 @@ class Riverso_Product_Module {
         $codigo = (string) ($barcode['codigo'] ?? '');
         $owner_id = $pb_id ?: $product_id;
 
+        // get_by_product deduplica por código: si quedan copias inactivas, la lista
+        // mostraría la siguiente y el código parecería no haberse borrado.
+        $delete_ids = [$barcode_id];
+        $remaining_active = 0;
+        if ($codigo !== '' && $owner_id) {
+            $sku = (string) $wpdb->get_var($wpdb->prepare(
+                "SELECT canonical_sku FROM {$prefix}producto_base WHERE id = %d",
+                $owner_id
+            ));
+            $siblings = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, estado, activo FROM {$prefix}codigo_barra
+                 WHERE codigo = %s AND id <> %d
+                   AND (
+                        producto_base_id = %d
+                     OR (
+                        producto_base_id IS NULL
+                        AND %s <> ''
+                        AND (sku_local = %s OR pending_sku = %s)
+                     )
+                   )",
+                $codigo,
+                $barcode_id,
+                $owner_id,
+                $sku,
+                $sku,
+                $sku
+            ), ARRAY_A) ?: [];
+            foreach ($siblings as $sibling) {
+                $sib_estado = (string) ($sibling['estado'] ?? '');
+                $sib_activo = intval($sibling['activo'] ?? 0) === 1;
+                if (!$sib_activo || in_array($sib_estado, ['rechazado', 'en_desuso'], true)) {
+                    $delete_ids[] = (int) $sibling['id'];
+                } else {
+                    $remaining_active++;
+                }
+            }
+        }
+
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('barcode_deleted', 'codigo_barra', $barcode_id, [
                 'actor_type' => 'human',
                 'producto_base_id' => $owner_id,
                 'codigo' => $codigo,
                 'estado_anterior' => $estado,
+                'ids_eliminados' => $delete_ids,
                 'razon' => 'Borrado permanente desde hub de productos',
             ]);
         }
 
-        $this->close_legacy_barcode_tasks($barcode_id, $codigo, $owner_id);
+        foreach ($delete_ids as $del_id) {
+            $this->close_legacy_barcode_tasks($del_id, $codigo, $owner_id);
+        }
         $this->purge_legacy_barcode_copies($codigo, $owner_id);
 
-        $deleted = $wpdb->delete("{$prefix}codigo_barra", ['id' => $barcode_id], ['%d']);
+        $placeholders = implode(',', array_fill(0, count($delete_ids), '%d'));
+        $deleted = $wpdb->query($wpdb->prepare(
+            "DELETE FROM {$prefix}codigo_barra WHERE id IN ({$placeholders})",
+            $delete_ids
+        ));
         if ($deleted === false) {
             wp_send_json_error(['message' => 'No se pudo eliminar el código de barra']);
         }
 
+        $message = 'Código de barra eliminado permanentemente';
+        if ($deleted > 1) {
+            $message .= sprintf(' (%d registros duplicados)', (int) $deleted);
+        }
+        if ($remaining_active > 0) {
+            $message .= sprintf('. Sigue activa %d copia del mismo código: desactívala para borrarla.', $remaining_active);
+        }
+
         $item = $owner_id ? $this->get_product($owner_id) : null;
         wp_send_json_success([
-            'message' => 'Código de barra eliminado permanentemente',
+            'message' => $message,
+            'deleted_count' => (int) $deleted,
+            'remaining_active' => $remaining_active,
             'item' => $item,
         ]);
     }
@@ -4591,7 +4658,10 @@ class Riverso_Product_Module {
     }
 
     /**
-     * AJAX: responder si el producto necesita familia.
+     * AJAX: responder o corregir si el producto necesita familia.
+     *
+     * decision: requiere | no_requiere | reset (vuelve a "sin responder").
+     * Compat: needs_family=1|0 cuando no llega decision.
      */
     public function ajax_answer_family_need() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
@@ -4600,38 +4670,78 @@ class Riverso_Product_Module {
         }
 
         $product_id = absint($_POST['product_id'] ?? 0);
-        $needs_family = !empty($_POST['needs_family']);
-
         if (!$product_id) {
             wp_send_json_error(['message' => 'ID de producto requerido'], 400);
+        }
+
+        $decision = sanitize_key($_POST['decision'] ?? '');
+        if ($decision === '') {
+            $decision = !empty($_POST['needs_family']) ? 'requiere' : 'no_requiere';
+        }
+        if (!in_array($decision, ['requiere', 'no_requiere', 'reset'], true)) {
+            wp_send_json_error(['message' => 'Decisión inválida'], 400);
         }
 
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
+        $anterior = $wpdb->get_var($wpdb->prepare(
+            "SELECT familia_decision FROM {$prefix}producto_base WHERE id = %d",
+            $product_id
+        ));
+
         if ($this->product_has_family($product_id)) {
+            if ($decision !== 'requiere') {
+                $label = '';
+                if (class_exists('Riverso_Family_Module')) {
+                    $fam = Riverso_Family_Module::get_instance()->get_exacta_family_of_product($product_id);
+                    if ($fam) {
+                        $label = trim((string) ($fam['codigo_grupo'] ?? '') . ' ' . (string) ($fam['nombre'] ?? ''));
+                    }
+                }
+                wp_send_json_error([
+                    'message' => 'El producto ya pertenece a una familia' . ($label !== '' ? ' (' . $label . ')' : '')
+                        . '. Quítalo de la familia antes de cambiar la decisión.',
+                ]);
+            }
             $this->resolve_family_assigned($product_id);
-            wp_send_json_success(['product' => $this->get_product($product_id)]);
+            wp_send_json_success([
+                'decision_anterior' => $anterior,
+                'decision' => 'requiere',
+                'product' => $this->get_product($product_id),
+            ]);
         }
 
-        $decision = $needs_family ? 'requiere' : 'no_requiere';
+        $nueva = $decision === 'reset' ? null : $decision;
         $wpdb->update(
             "{$prefix}producto_base",
-            ['familia_decision' => $decision],
+            ['familia_decision' => $nueva],
             ['id' => $product_id],
             ['%s'],
             ['%d']
         );
 
         $this->close_counterpart_task($product_id, 'preguntar_familia');
-
-        if ($needs_family) {
-            $this->ensure_family_tasks($product_id);
-        } else {
+        if ($decision !== 'requiere') {
             $this->close_counterpart_task($product_id, 'asignar_familia');
         }
+        if ($decision !== 'no_requiere') {
+            $this->ensure_family_tasks($product_id);
+        }
 
-        wp_send_json_success(['product' => $this->get_product($product_id)]);
+        if (class_exists('Riverso_POS_Audit') && $anterior !== $nueva) {
+            Riverso_POS_Audit::log('familia_decision_changed', 'producto_base', $product_id, [
+                'actor_type' => 'human',
+                'decision_anterior' => $anterior,
+                'decision' => $nueva,
+            ]);
+        }
+
+        wp_send_json_success([
+            'decision_anterior' => $anterior,
+            'decision' => $nueva,
+            'product' => $this->get_product($product_id),
+        ]);
     }
 
     public function ajax_create_online() {
@@ -5618,7 +5728,22 @@ class Riverso_Product_Module {
             ]);
         }
 
-        wp_send_json_success(['message' => 'Categorías asignadas exitosamente']);
+        $closed_tasks = 0;
+        if (class_exists('Riverso_Task_Module')) {
+            global $wpdb;
+            $base_ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM {$wpdb->prefix}riverso_producto_base
+                 WHERE woocommerce_product_id = %d OR woocommerce_variation_id = %d",
+                $woo_id,
+                $woo_id
+            ));
+            $closed_tasks = Riverso_Task_Module::close_open_tasks('validar_categoria', 'producto_base', $base_ids);
+        }
+
+        wp_send_json_success([
+            'message' => 'Categorías asignadas exitosamente',
+            'closed_tasks' => $closed_tasks,
+        ]);
     }
 
     /**
@@ -6081,16 +6206,16 @@ class Riverso_Product_Module {
 			wp_send_json_error(['message' => 'ID de tarea requerido'], 400);
 		}
 
-		global $wpdb;
-		$result = $wpdb->update(
-			$wpdb->prefix . 'riverso_tareas',
-			['estado' => 'completada', 'completada_en' => current_time('mysql')],
-			['id' => $task_id],
-			['%s', '%s'],
-			['%d']
-		);
+		if (!class_exists('Riverso_Task_Module')) {
+			wp_send_json_error(['message' => 'Módulo de tareas no disponible'], 500);
+		}
 
-		if ($result === false) {
+		$notas = sanitize_textarea_field($_POST['notas'] ?? '');
+		$result = Riverso_Task_Module::get_instance()->complete_task($task_id, $notas, 'user');
+		if (is_wp_error($result)) {
+			wp_send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()], 403);
+		}
+		if (!$result) {
 			wp_send_json_error(['message' => 'Error al completar tarea'], 500);
 		}
 

@@ -19,32 +19,36 @@ if (!isset($stats) || !is_array($stats)) {
 
 $can_manage = current_user_can('riverso_manage_prices');
 $can_approve = current_user_can('riverso_approve_prices');
+// Pestañas con URL real (Ctrl+clic / abrir en otra pestaña); el JS mantiene ?tab= al navegar.
+$ph_tab_url = function ($tab) {
+    return add_query_arg(['page' => 'riverso-pos-pricing', 'tab' => $tab], admin_url('admin.php'));
+};
 ?>
 
 <div class="riverso-price-history-app" data-can-manage="<?php echo $can_manage ? '1' : '0'; ?>" data-can-approve="<?php echo $can_approve ? '1' : '0'; ?>">
     <nav class="nav-tab-wrapper">
-        <a href="#" class="nav-tab nav-tab-active" data-tab="process">
+        <a href="<?php echo esc_url($ph_tab_url('process')); ?>" class="nav-tab nav-tab-active" data-tab="process">
             <span class="dashicons dashicons-yes-alt"></span> Procesar folios
         </a>
-        <a href="#" class="nav-tab" data-tab="explorer">
+        <a href="<?php echo esc_url($ph_tab_url('explorer')); ?>" class="nav-tab" data-tab="explorer">
             <span class="dashicons dashicons-search"></span> Buscar producto
         </a>
-        <a href="#" class="nav-tab" data-tab="history">
+        <a href="<?php echo esc_url($ph_tab_url('history')); ?>" class="nav-tab" data-tab="history">
             <span class="dashicons dashicons-list-view"></span> Historial
         </a>
-        <a href="#" class="nav-tab" data-tab="analysis">
+        <a href="<?php echo esc_url($ph_tab_url('analysis')); ?>" class="nav-tab" data-tab="analysis">
             <span class="dashicons dashicons-chart-area"></span> Análisis por folio
         </a>
-        <a href="#" class="nav-tab" data-tab="folios">
+        <a href="<?php echo esc_url($ph_tab_url('folios')); ?>" class="nav-tab" data-tab="folios">
             <span class="dashicons dashicons-archive"></span> Folios analizados
         </a>
-        <a href="#" class="nav-tab" data-tab="alerts">
+        <a href="<?php echo esc_url($ph_tab_url('alerts')); ?>" class="nav-tab" data-tab="alerts">
             <span class="dashicons dashicons-warning"></span> Alertas
             <?php if (!empty($stats['margin_alerts'])): ?>
                 <span class="alert-badge"><?php echo (int) $stats['margin_alerts']; ?></span>
             <?php endif; ?>
         </a>
-        <a href="#" class="nav-tab" data-tab="add">
+        <a href="<?php echo esc_url($ph_tab_url('add')); ?>" class="nav-tab" data-tab="add">
             <span class="dashicons dashicons-plus-alt"></span> Registrar precio
         </a>
     </nav>

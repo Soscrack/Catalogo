@@ -2931,6 +2931,18 @@
         });
     }
     if ($("bill-product-add")) $("bill-product-add").addEventListener("click", runProductSearch);
+    // Cámara: el código leído entra al buscador igual que con la pistola (código + Enter).
+    if ($("bill-product-scan")) {
+      $("bill-product-scan").addEventListener("click", function () {
+        if (!window.RiversoBarcodeScanner) return;
+        window.RiversoBarcodeScanner.open({
+          onCode: function (code) {
+            if ($("bill-product-search")) $("bill-product-search").value = code;
+            runProductSearch();
+          },
+        });
+      });
+    }
     if ($("bill-search-clear")) $("bill-search-clear").addEventListener("click", clearProductSearch);
     if ($("bill-advanced")) {
       $("bill-advanced").addEventListener("change", function () {

@@ -120,6 +120,7 @@
         profitHint: document.getElementById("cq-total-profit-neto-hint"),
         search: document.getElementById("cq-search"),
         lupa: document.getElementById("cq-lupa"),
+        scan: document.getElementById("cq-scan"),
         manualBtn: document.getElementById("cq-manual"),
         advanced: document.getElementById("cq-advanced"),
         sellerView: document.getElementById("cq-seller-view"),
@@ -251,6 +252,9 @@
     });
     if (els.lupa) {
         els.lupa.addEventListener("click", openAdvancedSearch);
+    }
+    if (els.scan) {
+        els.scan.addEventListener("click", scanBarcode);
     }
     if (els.manualBtn) {
         els.manualBtn.addEventListener("click", openManualModal);
@@ -1420,6 +1424,9 @@
         document.getElementById("cq-search-btn").disabled = !editable;
         if (els.lupa) {
             els.lupa.disabled = !editable;
+        }
+        if (els.scan) {
+            els.scan.disabled = !editable;
         }
         if (els.manualBtn) {
             els.manualBtn.disabled = !editable;
@@ -3234,6 +3241,19 @@
         badge.title = "get_local_price / familia no devolvió p_asignado usable; unit_price=0 es dato, no inventado.";
         metaEl.appendChild(document.createTextNode(" · "));
         metaEl.appendChild(badge);
+    }
+
+    // Cámara: el código leído entra al buscador igual que con la pistola (código + Enter).
+    function scanBarcode() {
+        if (!window.RiversoBarcodeScanner) {
+            return;
+        }
+        window.RiversoBarcodeScanner.open({
+            onCode: function (code) {
+                els.search.value = code;
+                searchProducts();
+            }
+        });
     }
 
     function searchProducts() {

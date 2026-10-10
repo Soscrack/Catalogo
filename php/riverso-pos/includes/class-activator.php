@@ -374,6 +374,7 @@ class Riverso_POS_Activator {
         self::create_phase72_purchase_reception($prefix, $charset_collate);
         self::create_phase73_printing($prefix, $charset_collate);
         self::create_phase74_customer_quotes_rule_total($prefix);
+        self::create_phase75_purchase_notices($prefix, $charset_collate);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -1349,6 +1350,8 @@ class Riverso_POS_Activator {
             proveedor_id BIGINT UNSIGNED NOT NULL,
             estado VARCHAR(30) NOT NULL DEFAULT 'borrador',
             cotizacion_id BIGINT UNSIGNED DEFAULT NULL,
+            fecha_emision DATE DEFAULT NULL,
+            fecha_esperada DATE DEFAULT NULL,
             total DECIMAL(12,2) DEFAULT 0,
             notas TEXT DEFAULT NULL,
             creado_por BIGINT UNSIGNED DEFAULT NULL,
@@ -6524,6 +6527,85 @@ class Riverso_POS_Activator {
             KEY idx_reclamo_linea_rx (recepcion_linea_id)
         ) $charset_collate;";
         dbDelta($sql);
+    }
+
+    /**
+     * Garantiza el schema de avisos de compra (si el deploy no corrió la migración).
+     */
+    public static function ensure_purchase_notices() {
+        global $wpdb;
+        self::create_phase75_purchase_notices($wpdb->prefix . 'riverso_', $wpdb->get_charset_collate());
+    }
+
+    /**
+     * Fase 75: avisos de compra (reemplazo del grupo de WhatsApp de encargos).
+     * - avisos_compra: alguien avisa que falta un producto. No toca stock; la cantidad es propuesta.
+     *   Sin producto_base_id = sin identificar (igual se puede ingresar al pedido mirando la foto).
+     * - aviso_compra_eventos: quién creó, quién se sumó, quién confirmó cantidad, ingresó o descartó.
+     * - ordenes_compra: columnas que el módulo de OC escribe y la tabla no tenía.
+     */
+    private static function create_phase75_purchase_notices($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE {$prefix}avisos_compra (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            estado VARCHAR(16) NOT NULL DEFAULT 'abierto',
+            producto_base_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            producto_proveedor_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            proveedor_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            codigo_leido VARCHAR(120) NULL DEFAULT NULL,
+            origen_codigo VARCHAR(12) NULL DEFAULT NULL,
+            match_fuente VARCHAR(24) NULL DEFAULT NULL,
+            texto VARCHAR(255) NULL DEFAULT NULL,
+            nota TEXT NULL,
+            sin_stock TINYINT(1) NOT NULL DEFAULT 0,
+            cantidad DECIMAL(12,3) NULL DEFAULT NULL,
+            unidad VARCHAR(20) NULL DEFAULT NULL,
+            factor DECIMAL(12,4) NULL DEFAULT NULL,
+            factor_origen VARCHAR(12) NULL DEFAULT NULL,
+            cantidad_confirmada_por BIGINT UNSIGNED NULL DEFAULT NULL,
+            cantidad_confirmada_en DATETIME NULL DEFAULT NULL,
+            apoyos INT UNSIGNED NOT NULL DEFAULT 0,
+            foto_ruta VARCHAR(255) NULL DEFAULT NULL,
+            creado_por BIGINT UNSIGNED NULL DEFAULT NULL,
+            ingresado_por BIGINT UNSIGNED NULL DEFAULT NULL,
+            ingresado_en DATETIME NULL DEFAULT NULL,
+            descartado_por BIGINT UNSIGNED NULL DEFAULT NULL,
+            descartado_en DATETIME NULL DEFAULT NULL,
+            motivo_descarte VARCHAR(20) NULL DEFAULT NULL,
+            resuelto_por BIGINT UNSIGNED NULL DEFAULT NULL,
+            resuelto_en DATETIME NULL DEFAULT NULL,
+            orden_compra_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            orden_compra_item_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_aviso_estado (estado, proveedor_id),
+            KEY idx_aviso_producto (producto_base_id, estado),
+            KEY idx_aviso_pp (producto_proveedor_id),
+            KEY idx_aviso_creador (creado_por)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}aviso_compra_eventos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            aviso_id BIGINT UNSIGNED NOT NULL,
+            tipo VARCHAR(20) NOT NULL,
+            usuario_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            detalle TEXT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_aviso_evento (aviso_id, tipo),
+            KEY idx_aviso_evento_usuario (usuario_id, tipo)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        // Riverso_Purchase_Order_Module y "cotización → OC" insertan estas columnas.
+        $oc = "{$prefix}ordenes_compra";
+        if (self::table_exists($oc)) {
+            self::add_column_if_missing($oc, 'fecha_emision', 'fecha_emision DATE NULL DEFAULT NULL');
+            self::add_column_if_missing($oc, 'fecha_esperada', 'fecha_esperada DATE NULL DEFAULT NULL');
+        }
     }
 
     /**

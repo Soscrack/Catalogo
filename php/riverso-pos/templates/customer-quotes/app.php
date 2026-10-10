@@ -21,6 +21,10 @@ $js_ver = (is_string($js_path) && is_file($js_path)) ? (string) filemtime($js_pa
 $css_ver = (is_string($css_path) && is_file($css_path)) ? (string) filemtime($css_path) : $version;
 $css_portal_ver = (is_string($css_portal_path) && is_file($css_portal_path)) ? (string) filemtime($css_portal_path) : $version;
 $css_customers_ver = (is_string($css_customers_path) && is_file($css_customers_path)) ? (string) filemtime($css_customers_path) : $version;
+$scanner_js_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/barcode-scanner.js';
+$scanner_css_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/css/barcode-scanner.css';
+$scanner_js_ver = (is_string($scanner_js_path) && is_file($scanner_js_path)) ? (string) filemtime($scanner_js_path) : $version;
+$scanner_css_ver = (is_string($scanner_css_path) && is_file($scanner_css_path)) ? (string) filemtime($scanner_css_path) : $version;
 $cq_comunas = (isset($riverso_cq['comunas']) && is_array($riverso_cq['comunas'])) ? $riverso_cq['comunas'] : [];
 
 if (!function_exists('riverso_pos_cq_json')) {
@@ -44,11 +48,13 @@ if (!function_exists('riverso_pos_cq_json')) {
     <title>Cotizaciones de venta</title>
     <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes.css?ver=<?php echo htmlspecialchars($css_ver, ENT_QUOTES, 'UTF-8'); ?>">
     <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customers.css?ver=<?php echo htmlspecialchars($css_customers_ver, ENT_QUOTES, 'UTF-8'); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/barcode-scanner.css?ver=<?php echo htmlspecialchars($scanner_css_ver, ENT_QUOTES, 'UTF-8'); ?>">
 </head>
 <body class="riverso-cq-body">
 <?php else: ?>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes.css?ver=<?php echo htmlspecialchars($css_ver, ENT_QUOTES, 'UTF-8'); ?>">
 <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customers.css?ver=<?php echo htmlspecialchars($css_customers_ver, ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/barcode-scanner.css?ver=<?php echo htmlspecialchars($scanner_css_ver, ENT_QUOTES, 'UTF-8'); ?>">
 <?php if ($surface === 'portal'): ?>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes-portal.css?ver=<?php echo htmlspecialchars($css_portal_ver, ENT_QUOTES, 'UTF-8'); ?>">
 <?php endif; ?>
@@ -336,6 +342,9 @@ if (!function_exists('riverso_pos_cq_json')) {
                         <button type="button" class="cq-btn" id="cq-search-btn">Buscar</button>
                         <button type="button" class="cq-btn cq-btn-lupa" id="cq-lupa" title="Búsqueda avanzada" aria-label="Abrir búsqueda avanzada">
                             <span aria-hidden="true">🔍</span>
+                        </button>
+                        <button type="button" class="cq-btn cq-btn-lupa" id="cq-scan" title="Escanear código de barras" aria-label="Escanear código de barras">
+                            <span aria-hidden="true">📷</span>
                         </button>
                         <button type="button" class="cq-btn cq-btn-manual" id="cq-manual" title="Agregar producto sin SKU">Manual</button>
                     </div>
@@ -734,6 +743,7 @@ if (!function_exists('riverso_pos_cq_json')) {
     </div>
 </div>
 <script>window.RIVERSO_CQ = <?php echo riverso_pos_cq_json($riverso_cq); ?>;</script>
+<script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/barcode-scanner.js?ver=<?php echo htmlspecialchars($scanner_js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/customer-quotes.js?ver=<?php echo htmlspecialchars($js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <?php if ($standalone): ?>
 </body>

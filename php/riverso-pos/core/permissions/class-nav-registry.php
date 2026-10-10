@@ -326,6 +326,21 @@ class Riverso_POS_Nav_Registry {
                 'admin_capability' => 'riverso_receive_items',
             ],
             [
+                'id' => 'avisos',
+                'group' => 'bodega',
+                'label' => 'Avisos de compra',
+                'icon' => 'megaphone',
+                'surfaces' => ['portal'],
+                'portal_slug' => 'avisos',
+                'portal_capability_any' => [
+                    'riverso_report_shortage',
+                    'riverso_do_inventory',
+                    'riverso_edit_stock',
+                    'riverso_manage_purchase_notices',
+                    'riverso_edit_purchases',
+                ],
+            ],
+            [
                 'id' => 'barcodes',
                 'group' => 'bodega',
                 'label' => 'Códigos de Barra',

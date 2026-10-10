@@ -17,6 +17,10 @@ $js_lines_ver = (is_string($js_lines_path) && is_file($js_lines_path)) ? (string
 $js_emails_ver = (is_string($js_emails_path) && is_file($js_emails_path)) ? (string) filemtime($js_emails_path) : $version;
 $css_ver = (is_string($css_path) && is_file($css_path)) ? (string) filemtime($css_path) : $version;
 $css_cq_ver = (is_string($css_cq_path) && is_file($css_cq_path)) ? (string) filemtime($css_cq_path) : $version;
+$scanner_js_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/barcode-scanner.js';
+$scanner_css_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/css/barcode-scanner.css';
+$scanner_js_ver = (is_string($scanner_js_path) && is_file($scanner_js_path)) ? (string) filemtime($scanner_js_path) : $version;
+$scanner_css_ver = (is_string($scanner_css_path) && is_file($scanner_css_path)) ? (string) filemtime($scanner_css_path) : $version;
 $issuer = isset($riverso_billing['issuer']['issuer']) && is_array($riverso_billing['issuer']['issuer'])
     ? $riverso_billing['issuer']['issuer']
     : [];
@@ -47,6 +51,7 @@ if (!function_exists('riverso_pos_billing_json')) {
 ?>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/billing.css?ver=<?php echo htmlspecialchars($css_ver, ENT_QUOTES, 'UTF-8'); ?>">
 <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes.css?ver=<?php echo htmlspecialchars($css_cq_ver, ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/barcode-scanner.css?ver=<?php echo htmlspecialchars($scanner_css_ver, ENT_QUOTES, 'UTF-8'); ?>">
 
 <div class="wrap riverso-bill-wrap riverso-bill-wrap--<?php echo htmlspecialchars($surface, ENT_QUOTES, 'UTF-8'); ?>">
     <div id="riverso-billing" class="riverso-bill" data-ready="0">
@@ -395,6 +400,7 @@ if (!function_exists('riverso_pos_billing_json')) {
                             <div class="bill-product-search-row">
                                 <input type="search" id="bill-product-search" placeholder="SKU, nombre o código de barras — Enter o + para buscar; + vacío abre lupa" autocomplete="off" enterkeyhint="search">
                                 <button type="button" class="bill-btn bill-btn-primary" id="bill-product-add" title="Agregar / búsqueda avanzada si está vacío">+</button>
+                                <button type="button" class="bill-btn bill-btn-secondary" id="bill-product-scan" title="Escanear código de barras" aria-label="Escanear código de barras"><span aria-hidden="true">📷</span></button>
                                 <button type="button" class="bill-btn bill-btn-secondary" id="bill-search-clear" title="Limpiar búsqueda">Limpiar búsqueda</button>
                                 <button type="button" class="cq-btn cq-btn-manual" id="bill-product-manual" title="Agregar producto sin SKU">Manual</button>
                                 <button type="button" class="bill-btn bill-btn-wip" disabled>Producto o servicio [WIP]</button>
@@ -1016,6 +1022,7 @@ if (!function_exists('riverso_pos_billing_json')) {
 <script>
 window.RIVERSO_BILLING = <?php echo riverso_pos_billing_json($riverso_billing); ?>;
 </script>
+<script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/barcode-scanner.js?ver=<?php echo htmlspecialchars($scanner_js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing-lines.js?ver=<?php echo htmlspecialchars($js_lines_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing-emails.js?ver=<?php echo htmlspecialchars($js_emails_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing.js?ver=<?php echo htmlspecialchars($js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>

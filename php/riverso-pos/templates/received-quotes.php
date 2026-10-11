@@ -955,6 +955,7 @@ tr.quote-por-confirmar {
 .decision-pending { color: #6b7280; }
 .decision-accepted { color: #065f46; }
 .decision-accepted_increase { color: #854d0e; }
+.decision-fix_qty { color: #9a3412; }
 .decision-claim { color: #b45309; }
 .decision-remove { color: #991b1b; }
 .decision-add { color: #1e40af; }

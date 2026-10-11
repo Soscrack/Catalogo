@@ -385,6 +385,18 @@ class Riverso_POS_Nav_Registry {
 
             // === Compras ===
             [
+                'id' => 'pedidos-compra',
+                'group' => 'compras',
+                'label' => 'Pedidos de compra',
+                'icon' => 'cart',
+                'surfaces' => ['portal'],
+                'portal_slug' => 'pedidos-compra',
+                'portal_capability_any' => [
+                    'riverso_view_purchases',
+                    'riverso_manage_purchase_notices',
+                ],
+            ],
+            [
                 'id' => 'inbox',
                 'group' => 'compras',
                 'label' => 'Bandeja',

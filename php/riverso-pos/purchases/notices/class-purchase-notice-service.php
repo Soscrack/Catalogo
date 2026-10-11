@@ -66,6 +66,15 @@ class Riverso_Purchase_Notice_Service {
     /** @var bool|null */
     private $has_families = null;
 
+    /** @var bool|null */
+    private $has_family_units = null;
+
+    /** @var bool|null */
+    private $has_pairings = null;
+
+    /** @var array<int, array> */
+    private $scopes = [];
+
     /** @var array<int, int> */
     private $local_ids = [];
 
@@ -560,13 +569,11 @@ class Riverso_Purchase_Notice_Service {
             $params[] = $matched_pp_id;
         }
         if ($producto_base_id > 0) {
-            $conditions[] = 'pp.producto_base_id = %d';
-            $params[] = $producto_base_id;
-            if ($this->has_families()) {
-                $conditions[] = "(pp.grupo_id IS NOT NULL AND pp.grupo_id IN (
-                    SELECT em.grupo_id FROM {$this->table('equivalence_members')} em
-                    WHERE em.producto_base_id = %d AND em.activo = 1))";
-                $params[] = $producto_base_id;
+            // La necesidad es del grupo: valen los vínculos de su familia y de su emparejamiento de stock.
+            $scope = $this->need_scope($producto_base_id);
+            $conditions[] = 'pp.producto_base_id IN (' . implode(',', $scope['productos']) . ')';
+            if ($scope['grupos']) {
+                $conditions[] = 'pp.grupo_id IN (' . implode(',', $scope['grupos']) . ')';
             }
         }
         $params[] = $matched_pp_id;
@@ -579,7 +586,7 @@ class Riverso_Purchase_Notice_Service {
              INNER JOIN {$this->table('proveedores')} pr ON pr.id = pp.proveedor_id
              WHERE pp.activo = 1 AND (" . implode(' OR ', $conditions) . ")
              ORDER BY (pp.id = %d) DESC, (pp.producto_base_id = %d) DESC, pp.es_preferido DESC, pp.id ASC
-             LIMIT 12",
+             LIMIT 24",
             $params
         ), ARRAY_A) ?: [];
 
@@ -596,6 +603,8 @@ class Riverso_Purchase_Notice_Service {
             $out[] = [
                 'pp_id' => (int) $row['id'],
                 'proveedor_id' => $supplier_id,
+                // Con familia o emparejamiento, el vínculo puede ser de otro miembro.
+                'producto_base_id' => (int) $row['producto_base_id'],
                 'nombre' => (string) $row['proveedor_nombre'],
                 'codigo' => (string) $row['codigo_proveedor'],
                 'nombre_en_proveedor' => (string) $row['nombre_proveedor'],
@@ -636,6 +645,132 @@ class Riverso_Purchase_Notice_Service {
             $this->has_families = $this->table_exists('equivalence_members');
         }
         return $this->has_families;
+    }
+
+    /**
+     * Con quién comparte la necesidad un producto: su familia (unitario y packs, un solo stock)
+     * y su emparejamiento de stock. Una necesidad se pide una vez, al nivel más alto que la contiene.
+     *
+     * @param int $producto_base_id
+     * @return array{clave: string, emparejamiento_id: int, grupo_id: int, productos: int[], grupos: int[]}
+     */
+    public function need_scope($producto_base_id) {
+        global $wpdb;
+        $pb = (int) $producto_base_id;
+        if (isset($this->scopes[$pb])) {
+            return $this->scopes[$pb];
+        }
+        $products = [$pb => true];
+        $groups = [];
+        $family = $this->family_of($pb);
+        if ($family > 0) {
+            $groups[$family] = true;
+            $products += array_fill_keys($this->family_members($family), true);
+        }
+
+        $pairing = 0;
+        if ($this->has_pairings()) {
+            $pairing = (int) $wpdb->get_var(
+                "SELECT m.emparejamiento_id
+                 FROM {$this->table('emparejamiento_miembros')} m
+                 INNER JOIN {$this->table('emparejamientos')} e ON e.id = m.emparejamiento_id
+                 WHERE m.producto_base_id IN (" . implode(',', array_keys($products)) . ")
+                   AND m.activo = 1 AND e.activo = 1 AND e.emparejar_stock = 1
+                 ORDER BY m.emparejamiento_id ASC LIMIT 1"
+            );
+            if ($pairing > 0) {
+                $members = $wpdb->get_col($wpdb->prepare(
+                    "SELECT producto_base_id FROM {$this->table('emparejamiento_miembros')}
+                     WHERE emparejamiento_id = %d AND activo = 1",
+                    $pairing
+                )) ?: [];
+                foreach (array_map('intval', $members) as $member) {
+                    $products[$member] = true;
+                    $member_family = $this->family_of($member);
+                    if ($member_family > 0) {
+                        $groups[$member_family] = true;
+                        $products += array_fill_keys($this->family_members($member_family), true);
+                    }
+                }
+            }
+        }
+
+        $scope = [
+            'clave' => $pairing > 0 ? 'e' . $pairing : ($family > 0 ? 'g' . $family : 'p' . $pb),
+            'emparejamiento_id' => $pairing,
+            'grupo_id' => $family,
+            'productos' => array_keys($products),
+            'grupos' => array_keys($groups),
+        ];
+        $this->scopes[$pb] = $scope;
+        return $scope;
+    }
+
+    /**
+     * @return bool
+     */
+    private function has_pairings() {
+        if ($this->has_pairings === null) {
+            $this->has_pairings = $this->table_exists('emparejamientos') && $this->table_exists('emparejamiento_miembros');
+        }
+        return $this->has_pairings;
+    }
+
+    /**
+     * @param int $producto_base_id
+     * @return int Familia del producto, sea el unitario o un pack. 0 si no tiene.
+     */
+    private function family_of($producto_base_id) {
+        global $wpdb;
+        if (!$this->has_families()) {
+            return 0;
+        }
+        $family = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT grupo_id FROM {$this->table('equivalence_members')}
+             WHERE producto_base_id = %d AND activo = 1 ORDER BY id ASC LIMIT 1",
+            (int) $producto_base_id
+        ));
+        if ($family <= 0 && $this->has_family_units()) {
+            $family = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$this->table('equivalence_groups')}
+                 WHERE unit_producto_base_id = %d AND activo = 1 ORDER BY id ASC LIMIT 1",
+                (int) $producto_base_id
+            ));
+        }
+        return $family;
+    }
+
+    /**
+     * @param int $grupo_id
+     * @return int[]
+     */
+    private function family_members($grupo_id) {
+        global $wpdb;
+        $ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT producto_base_id FROM {$this->table('equivalence_members')} WHERE grupo_id = %d AND activo = 1",
+            (int) $grupo_id
+        )) ?: [];
+        if ($this->has_family_units()) {
+            $ids[] = $wpdb->get_var($wpdb->prepare(
+                "SELECT unit_producto_base_id FROM {$this->table('equivalence_groups')} WHERE id = %d",
+                (int) $grupo_id
+            ));
+        }
+        return array_values(array_filter(array_map('intval', $ids)));
+    }
+
+    /**
+     * El unitario de una familia puede no estar entre sus miembros: cuelga del grupo.
+     *
+     * @return bool
+     */
+    private function has_family_units() {
+        global $wpdb;
+        if ($this->has_family_units === null) {
+            $this->has_family_units = $this->table_exists('equivalence_groups')
+                && (bool) $wpdb->get_var("SHOW COLUMNS FROM {$this->table('equivalence_groups')} LIKE 'unit_producto_base_id'");
+        }
+        return $this->has_family_units;
     }
 
     /**
@@ -833,16 +968,7 @@ class Riverso_Purchase_Notice_Service {
             }
         }
         if (!$pick && $supplier_id <= 0) {
-            if (count($suppliers) === 1) {
-                $pick = $suppliers[0];
-            } else {
-                foreach ($suppliers as $supplier) {
-                    if ($supplier['preferido']) {
-                        $pick = $supplier;
-                        break;
-                    }
-                }
-            }
+            $pick = $this->default_supplier($suppliers, $pb_id);
         }
         if ($pick) {
             return ['pp_id' => $pick['pp_id'], 'proveedor_id' => $pick['proveedor_id'], 'factor' => $pick['factor']];
@@ -851,6 +977,32 @@ class Riverso_Purchase_Notice_Service {
             $supplier_id = 0;
         }
         return ['pp_id' => 0, 'proveedor_id' => $supplier_id, 'factor' => null];
+    }
+
+    /**
+     * Proveedor que se propone cuando nadie eligió: el único que vende ese producto, o el
+     * único del grupo, o el preferido. Con varios y ninguno preferido, no se elige por la persona.
+     *
+     * @param array $suppliers Salida de suppliers_for().
+     * @param int   $pb_id
+     * @return array|null
+     */
+    public function default_supplier(array $suppliers, $pb_id) {
+        $own = array_values(array_filter($suppliers, function ($supplier) use ($pb_id) {
+            return $pb_id > 0 && $supplier['producto_base_id'] === (int) $pb_id;
+        }));
+        if (count($own) === 1) {
+            return $own[0];
+        }
+        if (count($suppliers) === 1) {
+            return $suppliers[0];
+        }
+        foreach ($suppliers as $supplier) {
+            if ($supplier['preferido']) {
+                return $supplier;
+            }
+        }
+        return null;
     }
 
     /* ===================== Bandeja ===================== */
@@ -891,6 +1043,12 @@ class Riverso_Purchase_Notice_Service {
                     $event = $quantity;
                 }
                 $update += ['estado' => 'ingresado', 'ingresado_por' => $user_id, 'ingresado_en' => $now];
+                // Ingresado desde Pedidos de compra: queda apuntando a la línea del pedido.
+                if (!empty($data['orden_compra_item_id'])) {
+                    $update['orden_compra_id'] = (int) ($data['orden_compra_id'] ?? 0) ?: null;
+                    $update['orden_compra_item_id'] = (int) $data['orden_compra_item_id'];
+                    $event += ['orden_compra_id' => $update['orden_compra_id'], 'orden_compra_item_id' => $update['orden_compra_item_id']];
+                }
                 break;
 
             case 'descartar':
@@ -921,8 +1079,17 @@ class Riverso_Purchase_Notice_Service {
                     'descartado_por' => null,
                     'descartado_en' => null,
                     'motivo_descarte' => null,
+                    'orden_compra_id' => null,
+                    'orden_compra_item_id' => null,
                 ];
                 $event = ['desde' => $row['estado']];
+                // El pedido no cubrió la necesidad: queda dicho por qué volvió y con qué proveedor.
+                $motivo = sanitize_key((string) ($data['motivo'] ?? ''));
+                if ($motivo !== '') {
+                    $event['motivo'] = $motivo;
+                    $event['proveedor_id'] = (int) ($data['proveedor_id'] ?? 0);
+                    $event['orden_compra_id'] = (int) ($row['orden_compra_id'] ?? 0);
+                }
                 break;
 
             case 'cantidad':
@@ -1091,6 +1258,29 @@ class Riverso_Purchase_Notice_Service {
     }
 
     /**
+     * Avisos ingresados en líneas de pedido: quién avisó y con qué foto.
+     *
+     * @param int[] $item_ids
+     * @return array<int, array> Avisos por orden_compra_item_id.
+     */
+    public function for_order_items(array $item_ids) {
+        global $wpdb;
+        $item_ids = array_values(array_filter(array_map('intval', $item_ids)));
+        if (!$item_ids) {
+            return [];
+        }
+        $ids = $wpdb->get_col(
+            "SELECT id FROM {$this->table('avisos_compra')}
+             WHERE orden_compra_item_id IN (" . implode(',', $item_ids) . ") ORDER BY id ASC"
+        ) ?: [];
+        $out = [];
+        foreach ($this->get_many(array_map('intval', $ids)) as $notice) {
+            $out[$notice['orden_compra_item_id']][] = $notice;
+        }
+        return $out;
+    }
+
+    /**
      * @param string $term
      * @return array
      */
@@ -1213,6 +1403,9 @@ class Riverso_Purchase_Notice_Service {
             'identificado' => $identificado,
             'titulo' => $titulo,
             'producto_base_id' => $identificado ? (int) $row['producto_base_id'] : 0,
+            'producto_proveedor_id' => (int) ($row['producto_proveedor_id'] ?? 0),
+            'orden_compra_id' => (int) ($row['orden_compra_id'] ?? 0),
+            'orden_compra_item_id' => (int) ($row['orden_compra_item_id'] ?? 0),
             'sku' => (string) ($row['canonical_sku'] ?? ''),
             'proveedor_id' => !empty($row['proveedor_id']) ? (int) $row['proveedor_id'] : 0,
             'proveedor_nombre' => (string) ($row['proveedor_nombre'] ?? ''),

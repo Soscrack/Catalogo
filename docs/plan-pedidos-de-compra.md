@@ -4,6 +4,18 @@ Fecha: 2026-10-10. Construcción de la interfaz. El ciclo que debe cumplir está
 
 Revisado el mismo día contra el código (plugin 1.8.61): módulo de OC, cotizaciones recibidas, avisos, recepción, estado de stock y emparejamientos.
 
+## Estado
+
+Los siete pasos están implementados y probados contra MySQL local (`tests/pedidos/run.php`) y en navegador con un servidor de prueba. Falta probarlos en el portal real. Las alertas se probaron con dobles de los módulos de Bodega, emparejamientos y familias, no con los reales.
+
+Lo que quedó distinto de lo escrito más abajo:
+
+- **Cargar la cotización.** La ficha vincula una cotización que ya está en Cotizaciones Proveedores; no la sube. Tiene un enlace para cargarla allá.
+- **Vincular un documento a mano.** Se elige entre los documentos del proveedor que no tienen pedido; no hay un buscador libre de facturas.
+- **Pedido sin cotización.** Si la factura llega sin que haya habido cotización, lo esperado es lo pedido y el pedido pasa igual a recepción.
+- **Aviso de algo ya pedido.** Se puede sumar a la línea del pedido donde ya está, aunque ese pedido ya se haya enviado: el aviso queda `ingresado` sin pedirlo dos veces.
+- **OC anteriores.** Quedan marcadas `legado`, visibles en la lista como “sin pedido previo”, y no cuentan como mercadería en camino.
+
 ## Dónde vive
 
 En el portal interno, grupo **Compras**, ítem **Pedidos de compra**.

@@ -164,11 +164,14 @@ class Riverso_Purchase_Reception_Module {
     public function ajax_receive() {
         $this->authorize();
         $this->run(function () {
-            return ['doc' => $this->service->receive(
+            $doc = $this->service->receive(
                 (int) $this->post_string('id'),
                 $this->post_json('lines'),
                 $this->post_string('cerrar') === '1'
-            )];
+            );
+            // Pedidos de compra recalcula lo recibido del pedido que este documento cierra.
+            do_action('riverso_purchase_reception_changed', (int) $this->post_string('id'));
+            return ['doc' => $doc];
         });
     }
 
@@ -177,6 +180,7 @@ class Riverso_Purchase_Reception_Module {
         $this->run(function () {
             $id = (int) $this->post_string('id');
             $this->service->cancel($id);
+            do_action('riverso_purchase_reception_changed', $id);
             return ['doc' => $this->service->get_document($id)];
         });
     }
@@ -210,7 +214,9 @@ class Riverso_Purchase_Reception_Module {
     public function ajax_claim() {
         $this->authorize();
         $this->run(function () {
-            return ['doc' => $this->service->claim((int) $this->post_string('id'), $this->post_json('claims'))];
+            $doc = $this->service->claim((int) $this->post_string('id'), $this->post_json('claims'));
+            do_action('riverso_purchase_reception_changed', (int) $this->post_string('id'));
+            return ['doc' => $doc];
         });
     }
 

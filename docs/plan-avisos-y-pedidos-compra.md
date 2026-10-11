@@ -163,6 +163,8 @@ Al armar el pedido, esa necesidad puede entrar en la cotización de **cualquiera
 1. **Aviso y bandeja por proveedor.** Hecho.
 2. **Cámara de barras** en la misma pantalla. Hecho y probada en Android; falta el iPhone (D14).
 3. **Conteo de familia** como paso extra del conteo de producto.
+Las fases 4 a 8 están implementadas (pantalla `/interno/pedidos-compra/`) y probadas en local; falta probarlas en el portal real. El detalle está en `docs/plan-pedidos-de-compra.md`.
+
 4. **Armar el pedido.** Pantalla del borrador por proveedor, desde avisos abiertos (D10, D17). La construcción de esa interfaz está en `docs/plan-pedidos-de-compra.md`: se llama Pedidos de compra y vive en Compras de `/interno/`. Escribe solo `ordenes_compra_items`.
 5. **Conciliar la cotización del proveedor** contra ese pedido, con las líneas que no calzan (D18). Aceptar, modificar o rechazar cada una, como ya permite la cotización recibida.
 6. **Enganchar la revisión de precios al proveedor** solo cuando el costo cotizado lo amerite (D19). Si no, aceptar y seguir.

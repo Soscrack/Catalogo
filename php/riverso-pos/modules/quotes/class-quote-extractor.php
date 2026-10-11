@@ -278,7 +278,8 @@ PROMPT;
 
     /**
      * Correos de reclamo (simple / complejo) según decisiones de ítem.
-     * Secciones: precios anteriores (claim), por favor quitar (remove), agregar productos (add).
+     * Secciones: precios anteriores (claim), por favor quitar (remove), agregar productos (add)
+     * y cantidades por corregir (fix_qty, desde Pedidos de compra).
      * accepted / accepted_increase / pending no entran al mensaje.
      *
      * @param array $analysis
@@ -299,6 +300,12 @@ PROMPT;
         $claims = [];
         $removes = [];
         $adds = [];
+        $quantities = [];
+        $format_qty = static function ($qty) {
+            return (fmod((float) $qty, 1.0) === 0.0)
+                ? number_format((float) $qty, 0, ',', '.')
+                : rtrim(rtrim(number_format((float) $qty, 4, ',', '.'), '0'), ',');
+        };
         foreach ($analysis['rows'] ?? [] as $row) {
             $status = trim((string) ($row['decision_status'] ?? 'pending'));
             $codigo = trim((string) ($row['codigo_proveedor'] ?? ''));
@@ -337,6 +344,18 @@ PROMPT;
                     'cantidad' => $qty,
                     'unidad' => $unidad !== '' ? $unidad : 'UN',
                 ];
+            } elseif ($status === 'fix_qty') {
+                // Cotizaron otra cantidad que la pedida. Sin saber lo pedido no hay qué corregir.
+                if (!isset($row['cantidad_pedida']) || !is_numeric($row['cantidad_pedida'])) {
+                    continue;
+                }
+                $quantities[] = [
+                    'title' => $title,
+                    'pedida' => $format_qty($row['cantidad_pedida']) . ' ' . trim((string) ($row['unidad_pedida'] ?? '')),
+                    'cotizada' => isset($row['cantidad']) && is_numeric($row['cantidad'])
+                        ? $format_qty($row['cantidad']) . ' ' . trim((string) ($row['unidad'] ?? ''))
+                        : '',
+                ];
             }
         }
 
@@ -344,7 +363,7 @@ PROMPT;
         $intro = "Junto con saludar, revisamos la {$doc_label}.\n\n";
         $closing = "\nQuedamos atentos a su confirmación.\n\nSaludos cordiales,\nCompras Riverso\n";
 
-        $total_items = count($claims) + count($removes) + count($adds);
+        $total_items = count($claims) + count($removes) + count($adds) + count($quantities);
         if ($total_items === 0) {
             $empty = $greeting . "Revisamos la {$doc_label} y no hay ítems pendientes de revisión con el proveedor.\n" . $closing;
             return [
@@ -396,6 +415,19 @@ PROMPT;
                         : rtrim(rtrim(number_format($it['cantidad'], 4, ',', '.'), '0'), ',');
                     $line .= ' - ' . $qty_txt . ' ' . $it['unidad'];
                 }
+                $simple_body .= $line . "\n";
+                $complex_body .= $line . "\n";
+            }
+            $simple_body .= "\n";
+            $complex_body .= "\n";
+        }
+
+        if ($quantities) {
+            $simple_body .= "Por favor corregir las cantidades:\n";
+            $complex_body .= "Por favor corregir las cantidades:\n";
+            foreach ($quantities as $it) {
+                $line = $it['title'] . ' - pedimos ' . trim($it['pedida'])
+                    . ($it['cotizada'] !== '' ? ' (cotizado: ' . trim($it['cotizada']) . ')' : '');
                 $simple_body .= $line . "\n";
                 $complex_body .= $line . "\n";
             }

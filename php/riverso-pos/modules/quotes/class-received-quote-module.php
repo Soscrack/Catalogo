@@ -41,6 +41,7 @@ class Riverso_POS_Received_Quote_Module {
         'claim'             => 'Reclamar',
         'remove'            => 'Quitar',
         'add'               => 'Agregar',
+        'fix_qty'           => 'Corregir cantidad', // desde Pedidos de compra: cotizan otra cantidad que la pedida
         'modified'          => 'Modificado', // legado
         'rejected'          => 'Rechazado',  // legado → migrado a remove
     ];
@@ -70,6 +71,33 @@ class Riverso_POS_Received_Quote_Module {
             self::$instance = new self();
         }
         return self::$instance;
+    }
+
+    /**
+     * Editar cotizaciones recibidas: cargar, guardar ítems y decidir. El rol Operador Compras
+     * no trae edit_posts; su permiso es riverso_edit_received_quotes.
+     *
+     * @return bool
+     */
+    private function can_edit_quotes() {
+        return current_user_can('edit_posts') || current_user_can('riverso_edit_received_quotes');
+    }
+
+    /**
+     * @return Riverso_Purchase_Order_Service|null
+     */
+    private function purchase_orders() {
+        if (!class_exists('Riverso_Purchase_Order_Service')) {
+            $file = RIVERSO_POS_PLUGIN_DIR . 'purchases/purchase_orders/class-purchase-order-service.php';
+            if (file_exists($file)) {
+                require_once $file;
+            }
+        }
+        if (!class_exists('Riverso_Purchase_Order_Service')) {
+            return null;
+        }
+        $service = Riverso_Purchase_Order_Service::get_instance();
+        return $service->ready() ? $service : null;
     }
 
     private function __construct() {
@@ -482,7 +510,7 @@ class Riverso_POS_Received_Quote_Module {
     public function ajax_save_quote() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
 
-        if (!current_user_can('edit_posts')) {
+        if (!$this->can_edit_quotes()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
 
@@ -612,7 +640,7 @@ class Riverso_POS_Received_Quote_Module {
     public function ajax_upload_file() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
 
-        if (!current_user_can('edit_posts')) {
+        if (!$this->can_edit_quotes()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
 
@@ -769,7 +797,7 @@ class Riverso_POS_Received_Quote_Module {
     public function ajax_view_quote_document() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
 
-        if (!current_user_can('edit_posts')) {
+        if (!$this->can_edit_quotes()) {
             wp_die('Sin permisos', 403);
         }
 
@@ -1300,7 +1328,7 @@ class Riverso_POS_Received_Quote_Module {
     public function ajax_save_item() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
 
-        if (!current_user_can('edit_posts')) {
+        if (!$this->can_edit_quotes()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
 
@@ -1377,7 +1405,7 @@ class Riverso_POS_Received_Quote_Module {
     public function ajax_delete_item() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
 
-        if (!current_user_can('edit_posts')) {
+        if (!$this->can_edit_quotes()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
 
@@ -1723,7 +1751,7 @@ class Riverso_POS_Received_Quote_Module {
     public function ajax_set_item_decision() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
 
-        if (!current_user_can('edit_posts')) {
+        if (!$this->can_edit_quotes()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
 
@@ -1733,7 +1761,7 @@ class Riverso_POS_Received_Quote_Module {
         $decision = isset($_POST['decision']) ? sanitize_text_field($_POST['decision']) : '';
         $notas = isset($_POST['notas']) ? sanitize_textarea_field($_POST['notas']) : '';
 
-        $writable = ['accepted', 'accepted_increase', 'claim', 'remove', 'add', 'pending', 'modified'];
+        $writable = ['accepted', 'accepted_increase', 'claim', 'remove', 'add', 'fix_qty', 'pending', 'modified'];
         if (!$item_id || !in_array($decision, $writable, true)) {
             wp_send_json_error(['message' => 'Datos inválidos']);
         }
@@ -1784,7 +1812,7 @@ class Riverso_POS_Received_Quote_Module {
      */
     public function ajax_auto_decide_items() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('edit_posts')) {
+        if (!$this->can_edit_quotes()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
@@ -1943,6 +1971,29 @@ class Riverso_POS_Received_Quote_Module {
             wp_send_json_error(['message' => 'La cotización debe estar aprobada']);
         }
 
+        // La cotización ya está en un pedido: se acepta en ese pedido; no se crea otra OC.
+        $orders = $this->purchase_orders();
+        $existing = $orders ? $orders->order_for_quote($id) : null;
+        if ($existing) {
+            $label = 'N° ' . (trim((string) $existing['numero']) !== '' ? $existing['numero'] : $existing['id']);
+            if (in_array($existing['estado'], ['en_cotizacion', 'en_revision'], true)) {
+                try {
+                    $orders->accept((int) $existing['id']);
+                } catch (Exception $e) {
+                    wp_send_json_error(['message' => 'Esta cotización está en el pedido ' . $label . '. ' . $e->getMessage()]);
+                }
+            }
+            $wpdb->update("{$prefix}cotizaciones_recibidas", [
+                'estado' => 'converted_to_expected',
+                'updated_by' => get_current_user_id()
+            ], ['id' => $id]);
+            wp_send_json_success([
+                'message' => 'La cotización ya estaba en el pedido ' . $label . ': quedó como llegada esperada.',
+                'orden_id' => (int) $existing['id'],
+                'numero' => $label,
+            ]);
+        }
+
         $po = $this->create_purchase_order_from_quote($quote);
         if (is_wp_error($po)) {
             wp_send_json_error(['message' => $po->get_error_message()]);
@@ -1970,10 +2021,15 @@ class Riverso_POS_Received_Quote_Module {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
-        if (!class_exists('Riverso_Purchase_Order_Module')) {
-            $f = RIVERSO_POS_PLUGIN_DIR . 'purchases/purchase_orders/class-purchase-order-module.php';
-            if (file_exists($f)) {
-                require_once $f;
+        // Pedidos de compra arma el pedido con sus productos Riverso: `producto_id` de la
+        // cotización es un ID de WooCommerce y no sirve como `producto_base_id`.
+        $orders = $this->purchase_orders();
+        if ($orders) {
+            try {
+                $order = $orders->create_from_quote((int) $quote->id);
+                return ['id' => (int) $order['id'], 'numero' => $order['numero']];
+            } catch (Exception $e) {
+                return new WP_Error('po_insert', $e->getMessage());
             }
         }
 
@@ -2000,7 +2056,6 @@ class Riverso_POS_Received_Quote_Module {
         foreach ($items as $item) {
             $wpdb->insert("{$prefix}ordenes_compra_items", [
                 'orden_id' => $orden_id,
-                'producto_base_id' => $item->producto_id ?: null,
                 'descripcion' => $item->descripcion,
                 'cantidad' => $item->cantidad,
                 'unidad' => $item->unidad ?: 'unidad',
@@ -2012,7 +2067,7 @@ class Riverso_POS_Received_Quote_Module {
 
     public function ajax_reject_quote() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('riverso_approve_received_quotes') && !current_user_can('edit_posts')) {
+        if (!current_user_can('riverso_approve_received_quotes') && !$this->can_edit_quotes()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
@@ -2076,6 +2131,16 @@ class Riverso_POS_Received_Quote_Module {
         if (!class_exists('Riverso_Quote_Extractor')) {
             require_once RIVERSO_POS_PLUGIN_DIR . 'modules/quotes/class-quote-extractor.php';
         }
+        $orders = $this->purchase_orders();
+        $requested = $orders ? $orders->requested_quantities($id) : [];
+        foreach ($analysis['rows'] as &$row) {
+            $pedido = $requested[(int) ($row['item_id'] ?? 0)] ?? null;
+            if ($pedido) {
+                $row['cantidad_pedida'] = $pedido['cantidad'];
+                $row['unidad_pedida'] = $pedido['unidad'];
+            }
+        }
+        unset($row);
         $emails = (new Riverso_Quote_Extractor())->build_claim_emails($analysis);
         wp_send_json_success([
             'draft' => $emails['simple'],
@@ -2089,7 +2154,7 @@ class Riverso_POS_Received_Quote_Module {
 
     public function ajax_set_tipo_doc() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('edit_posts')) {
+        if (!$this->can_edit_quotes()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
@@ -2108,7 +2173,7 @@ class Riverso_POS_Received_Quote_Module {
 
     public function ajax_confirm_tipo_doc() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('edit_posts')) {
+        if (!$this->can_edit_quotes()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
@@ -3052,7 +3117,7 @@ class Riverso_POS_Received_Quote_Module {
 
     public function ajax_search_quotes_for_version() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('edit_posts')) {
+        if (!$this->can_edit_quotes()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
         global $wpdb;
@@ -3092,7 +3157,7 @@ class Riverso_POS_Received_Quote_Module {
 
     public function ajax_link_quote_version() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('edit_posts')) {
+        if (!$this->can_edit_quotes()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
@@ -3111,7 +3176,7 @@ class Riverso_POS_Received_Quote_Module {
 
     public function ajax_unlink_quote_version() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('edit_posts')) {
+        if (!$this->can_edit_quotes()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
@@ -3138,7 +3203,7 @@ class Riverso_POS_Received_Quote_Module {
 
     public function ajax_reorder_quote_version() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!current_user_can('edit_posts')) {
+        if (!$this->can_edit_quotes()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
         global $wpdb;

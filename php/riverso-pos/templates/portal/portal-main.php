@@ -2835,6 +2835,22 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
         }
         ?>
 
+        <?php elseif ($current_page === 'pedidos-compra'): ?>
+        <!-- Pedidos de compra: armar → cotización → revisión → recepción -->
+        <?php
+        if (!class_exists('Riverso_Purchase_Order_Module')) {
+            $pcm = RIVERSO_POS_PLUGIN_DIR . 'purchases/purchase_orders/class-purchase-order-module.php';
+            if (file_exists($pcm)) {
+                require_once $pcm;
+            }
+        }
+        if (class_exists('Riverso_Purchase_Order_Module')) {
+            Riverso_Purchase_Order_Module::get_instance()->render_app();
+        } else {
+            echo '<p>No se pudo cargar Pedidos de compra.</p>';
+        }
+        ?>
+
         <?php elseif ($current_page === 'manejo-caja'): ?>
         <?php
         if (!class_exists('Riverso_Cash_Module')) {

@@ -375,6 +375,7 @@ class Riverso_POS_Activator {
         self::create_phase73_printing($prefix, $charset_collate);
         self::create_phase74_customer_quotes_rule_total($prefix);
         self::create_phase75_purchase_notices($prefix, $charset_collate);
+        self::create_phase76_purchase_orders($prefix, $charset_collate);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -6606,6 +6607,109 @@ class Riverso_POS_Activator {
             self::add_column_if_missing($oc, 'fecha_emision', 'fecha_emision DATE NULL DEFAULT NULL');
             self::add_column_if_missing($oc, 'fecha_esperada', 'fecha_esperada DATE NULL DEFAULT NULL');
         }
+    }
+
+    /**
+     * Garantiza el schema de pedidos de compra (si el deploy no corrió la migración).
+     */
+    public static function ensure_purchase_orders() {
+        global $wpdb;
+        self::create_phase76_purchase_orders($wpdb->prefix . 'riverso_', $wpdb->get_charset_collate());
+    }
+
+    /**
+     * Fase 76: pedidos de compra (portal /interno/pedidos-compra/).
+     * - ordenes_compra: una sola definición. El módulo de OC ya no crea la tabla.
+     * - ordenes_compra_items: de dónde salió la línea, con qué línea de cotización calzó
+     *   y qué se aceptó. Lo cotizado se lee de cotizacion_items; no se copia.
+     * - orden_compra_documentos: qué factura o guía cierra qué pedido. Recepción trabaja por documento.
+     */
+    private static function create_phase76_purchase_orders($prefix, $charset_collate) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $oc = "{$prefix}ordenes_compra";
+        if (self::table_exists($oc)) {
+            self::add_column_if_missing($oc, 'cotizacion_id', 'cotizacion_id BIGINT UNSIGNED NULL DEFAULT NULL');
+            self::add_column_if_missing($oc, 'fecha_emision', 'fecha_emision DATE NULL DEFAULT NULL');
+            self::add_column_if_missing($oc, 'fecha_esperada', 'fecha_esperada DATE NULL DEFAULT NULL');
+            self::add_column_if_missing($oc, 'total', 'total DECIMAL(12,2) DEFAULT 0');
+            self::add_column_if_missing($oc, 'enviado_en', 'enviado_en DATETIME NULL DEFAULT NULL');
+            self::add_column_if_missing($oc, 'revision_enviada_en', 'revision_enviada_en DATETIME NULL DEFAULT NULL');
+            self::add_column_if_missing($oc, 'created_at', 'created_at DATETIME DEFAULT CURRENT_TIMESTAMP');
+            self::add_column_if_missing($oc, 'updated_at', 'updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+            self::add_index_if_missing($oc, 'idx_oc_numero', 'KEY idx_oc_numero (numero)');
+        }
+
+        $items = "{$prefix}ordenes_compra_items";
+        $sql = "CREATE TABLE {$items} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            orden_id BIGINT UNSIGNED NOT NULL,
+            producto_base_id BIGINT UNSIGNED DEFAULT NULL,
+            producto_proveedor_id BIGINT UNSIGNED DEFAULT NULL,
+            descripcion VARCHAR(255) DEFAULT NULL,
+            cantidad DECIMAL(12,3) NOT NULL DEFAULT 0,
+            cantidad_recibida DECIMAL(12,3) NOT NULL DEFAULT 0,
+            unidad VARCHAR(30) DEFAULT 'unidad',
+            precio_unitario DECIMAL(12,4) DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY orden_id (orden_id),
+            KEY producto_base_id (producto_base_id)
+        ) $charset_collate;";
+        if (!self::table_exists($items)) {
+            dbDelta($sql);
+        }
+        if (self::table_exists($items)) {
+            self::add_column_if_missing($items, 'codigo_proveedor', 'codigo_proveedor VARCHAR(100) NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'factor', 'factor DECIMAL(12,4) NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'origen', 'origen VARCHAR(12) NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'origen_item_id', 'origen_item_id BIGINT UNSIGNED NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'emparejamiento_id', 'emparejamiento_id BIGINT UNSIGNED NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'grupo_id', 'grupo_id BIGINT UNSIGNED NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'cotizacion_item_id', 'cotizacion_item_id BIGINT UNSIGNED NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'cantidad_aceptada', 'cantidad_aceptada DECIMAL(12,3) NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'precio_aceptado', 'precio_aceptado DECIMAL(12,4) NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'estado', "estado VARCHAR(16) NOT NULL DEFAULT 'pendiente'");
+            self::add_index_if_missing($items, 'idx_oci_emparejamiento', 'KEY idx_oci_emparejamiento (emparejamiento_id)');
+            self::add_index_if_missing($items, 'idx_oci_grupo', 'KEY idx_oci_grupo (grupo_id)');
+            self::add_index_if_missing($items, 'idx_oci_cotizacion_item', 'KEY idx_oci_cotizacion_item (cotizacion_item_id)');
+        }
+
+        // Las OC anteriores a esta fase no tienen origen. Las que nacieron de "cotización → OC"
+        // traen en producto_base_id el producto_id de la cotización, que es un ID de WooCommerce:
+        // se traduce por el SKU de esa línea de cotización (o queda sin producto). Marcadas
+        // `legado`, no cuentan como mercadería en camino.
+        $cot_items = "{$prefix}cotizacion_items";
+        if (self::table_exists($items) && self::table_exists($oc)) {
+            if (self::table_exists($cot_items) && self::table_exists("{$prefix}producto_base")) {
+                $wpdb->query(
+                    "UPDATE {$items} i
+                     INNER JOIN {$oc} o ON o.id = i.orden_id AND o.cotizacion_id IS NOT NULL
+                     SET i.producto_base_id = (
+                             SELECT pb.id FROM {$cot_items} ci
+                             INNER JOIN {$prefix}producto_base pb ON pb.canonical_sku = ci.sku_match
+                             WHERE ci.cotizacion_id = o.cotizacion_id AND ci.producto_id = i.producto_base_id
+                               AND ci.sku_match IS NOT NULL AND ci.sku_match <> ''
+                             ORDER BY ci.id ASC LIMIT 1)
+                     WHERE i.origen IS NULL"
+                );
+            }
+            $wpdb->query("UPDATE {$items} SET origen = 'legado' WHERE origen IS NULL");
+        }
+
+        $sql = "CREATE TABLE {$prefix}orden_compra_documentos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            orden_id BIGINT UNSIGNED NOT NULL,
+            factura_id BIGINT UNSIGNED NOT NULL,
+            origen VARCHAR(12) NOT NULL DEFAULT 'manual',
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_ocd_orden_factura (orden_id, factura_id),
+            KEY idx_ocd_factura (factura_id)
+        ) $charset_collate;";
+        dbDelta($sql);
     }
 
     /**

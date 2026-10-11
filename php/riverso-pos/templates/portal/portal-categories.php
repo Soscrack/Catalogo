@@ -379,5 +379,14 @@ $can_manage_families = current_user_can('riverso_manage_families');
             RiversoFamilyEditor.openCreate(function() { loadFamilies(); });
         }
     });
+
+    const catParams = new URLSearchParams(window.location.search);
+    if (catParams.get('tab') === 'families') {
+        $('.cat-tabs button[data-tab="families"]').trigger('click');
+        const grupoId = parseInt(catParams.get('grupo_id') || '0', 10);
+        if (grupoId && window.portalCat && typeof window.portalCat.editFamily === 'function') {
+            window.portalCat.editFamily(grupoId);
+        }
+    }
 });
 </script>

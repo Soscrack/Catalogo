@@ -23,7 +23,9 @@
         { sel: ".bill-search-table", hide: ["Neto", "Impuestos"] },
         { sel: "#po-portal-table" },
         { sel: "#po-portal-editor .portal-table", title: "SKU" },
-        { sel: ".portal-warehouse-section .wh-table" }
+        { sel: ".portal-warehouse-section .wh-table" },
+        { sel: ".portal-products-section table.products-table", title: "Nombre", hide: ["ID"] },
+        { sel: ".pqs-grid", title: "Nombre" }
     ];
     var TITLE_RE = /^(Producto|Nombre|Título|Detalle|Documento|Receptor|Número)/i;
     var ACTIONS_RE = /^(Acciones|Ver cotización)$/i;

@@ -66,7 +66,7 @@ class Riverso_POS_Assets {
         }
 
         if (strpos($hook, 'riverso-pos-products') !== false) {
-            $this->enqueue_product_quick_search_assets();
+            $this->enqueue_product_quick_search_assets('admin');
         }
 
         // Historial de costos: Chart.js + explorador
@@ -85,8 +85,10 @@ class Riverso_POS_Assets {
 
     /**
      * Encola CSS/JS de búsqueda rápida del Hub de Productos.
+     *
+     * @param string $context 'admin' o 'portal'.
      */
-    private function enqueue_product_quick_search_assets() {
+    private function enqueue_product_quick_search_assets($context = 'admin') {
         $css_path = RIVERSO_POS_PLUGIN_DIR . 'assets/css/product-quick-search.css';
         $css_ver = file_exists($css_path) ? (string) filemtime($css_path) : RIVERSO_POS_VERSION;
         wp_enqueue_style(
@@ -108,9 +110,11 @@ class Riverso_POS_Assets {
             $js_ver,
             true
         );
+        $is_portal = $context === 'portal';
         wp_localize_script('riverso-product-quick-search', 'riversoProductQuickSearch', [
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('riverso_pos_nonce'),
+            'surface' => $is_portal ? 'portal' : 'admin',
             'can_manage' => current_user_can('riverso_manage_products'),
             'can_manage_prices' => current_user_can('riverso_manage_prices') || current_user_can('manage_options'),
             'can_manage_families' => current_user_can('riverso_manage_families') || current_user_can('manage_options'),
@@ -119,7 +123,12 @@ class Riverso_POS_Assets {
                 || current_user_can('riverso_edit_stock')
                 || current_user_can('manage_options'),
             'iva_factor' => 1.19,
-            'categories_url' => admin_url('admin.php?page=riverso-pos-categories'),
+            'categories_url' => $is_portal
+                ? home_url('/interno/categories/')
+                : admin_url('admin.php?page=riverso-pos-categories'),
+            'hub_url' => $is_portal
+                ? home_url('/interno/products/')
+                : admin_url('admin.php?page=riverso-pos-products'),
         ]);
     }
 
@@ -314,6 +323,12 @@ class Riverso_POS_Assets {
                 wp_scripts()->add_data('jquery-migrate', 'group', 0);
             }
             wp_enqueue_style('dashicons');
+
+            if ($portal_page === 'products') {
+                $this->enqueue_family_editor_assets();
+                $this->enqueue_emparejamiento_editor_assets();
+                $this->enqueue_product_quick_search_assets('portal');
+            }
 
             if ($portal_page === 'categories') {
                 $family_editor_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/family-editor.js';

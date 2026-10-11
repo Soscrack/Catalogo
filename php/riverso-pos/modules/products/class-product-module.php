@@ -810,6 +810,12 @@ class Riverso_Product_Module {
         $product['barcode_remap_context'] = $ctx['barcode_remap_context'];
         $product['code_remap_context'] = $ctx['code_remap_context'];
 
+        $emp_map = $this->batch_list_emparejamientos([['id' => $id]]);
+        $emp = $emp_map[$id] ?? null;
+        $product['emparejamiento_id'] = $emp ? (int) ($emp['emparejamiento_id'] ?? 0) : 0;
+        $product['emparejamiento_nombre'] = $emp ? (string) ($emp['nombre'] ?? '') : '';
+        $product['emparejamiento_codigo'] = $emp ? (string) ($emp['codigo'] ?? '') : '';
+
         return $product;
     }
 

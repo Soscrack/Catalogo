@@ -1276,6 +1276,35 @@
         });
     }
 
+    function isPortal() {
+        return cfg.surface === 'portal';
+    }
+
+    function urlWith(base, params) {
+        if (!base) {
+            return '#';
+        }
+        try {
+            var u = new URL(base, window.location.href);
+            Object.keys(params || {}).forEach(function (key) {
+                if (params[key] != null && params[key] !== '') {
+                    u.searchParams.set(key, params[key]);
+                }
+            });
+            return u.toString();
+        } catch (e) {
+            return base;
+        }
+    }
+
+    function categoriesBaseUrl() {
+        if (isPortal() && cfg.categories_url) {
+            return cfg.categories_url;
+        }
+        return (state.summary && state.summary.urls && state.summary.urls.categories_families) ||
+            (cfg.categories_url || '');
+    }
+
     function showMembersPopover(type, id, anchor) {
         var $pop = $('#pqs-members-popover');
         $('#pqs-members-body').html('<p style="color:#666;">Cargando…</p>');
@@ -1288,15 +1317,16 @@
 
         var action = type === 'family' ? 'riverso_families_get' : 'riverso_emparejamientos_get';
         var payload = type === 'family' ? { grupo_id: id } : { id: id };
-        var catsUrl = (state.summary && state.summary.urls && state.summary.urls.categories_families) ||
-            (cfg.categories_url || '');
+        var $link = $('#pqs-members-link').data('type', type).data('id', id);
 
         if (type === 'family') {
             $('#pqs-members-title').text('Miembros de familia');
-            $('#pqs-members-link').attr('href', catsUrl + '&tab=families&grupo_id=' + id);
+            $link.attr('href', urlWith(categoriesBaseUrl(), { tab: 'families', grupo_id: id }))
+                .text('Abrir en Categorías/Familias');
         } else {
             $('#pqs-members-title').text('Miembros emparejados');
-            $('#pqs-members-link').attr('href', catsUrl + '&tab=emparejamientos&emparejamiento_id=' + id);
+            $link.attr('href', urlWith(categoriesBaseUrl(), { tab: 'emparejamientos', emparejamiento_id: id }))
+                .text(isPortal() ? 'Editar emparejamiento' : 'Abrir en Categorías/Familias');
         }
 
         post(action, payload).then(function (r) {
@@ -1521,6 +1551,13 @@
             }
             if (window.RiversoProductsHub && typeof window.RiversoProductsHub.openDetail === 'function') {
                 window.RiversoProductsHub.openDetail(state.productId, { tab: 'local', edit: true });
+            } else if (isPortal() && cfg.hub_url) {
+                window.location.href = urlWith(cfg.hub_url, {
+                    vista: 'busqueda',
+                    id: state.productId,
+                    tab: 'local',
+                    edit: '1'
+                });
             } else {
                 window.location.href = 'admin.php?page=riverso-pos-products&tab=busqueda&action=detail&id=' +
                     state.productId + '&edit=1';
@@ -1555,6 +1592,19 @@
             state.costMode = $(this).data('cost') || 'referencia';
             localStorage.setItem('pqs_cost_mode', state.costMode);
             updatePricingUi();
+        });
+
+        $('#pqs-members-link').on('click', function (e) {
+            if (!isPortal() || $(this).data('type') !== 'emp') {
+                return;
+            }
+            var empId = parseInt($(this).data('id'), 10) || 0;
+            if (!empId || !window.RiversoEmparejamientoEditor || typeof window.RiversoEmparejamientoEditor.open !== 'function') {
+                return;
+            }
+            e.preventDefault();
+            $('#pqs-members-popover').hide();
+            window.RiversoEmparejamientoEditor.open(empId);
         });
 
         $(document).on('click', '.pqs-btn-members', function (e) {

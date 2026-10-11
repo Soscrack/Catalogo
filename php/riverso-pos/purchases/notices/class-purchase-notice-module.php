@@ -88,6 +88,7 @@ class Riverso_Purchase_Notice_Module {
         return [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce(self::NONCE),
+            'posNonce' => wp_create_nonce('riverso_pos_nonce'),
             'baseUrl' => home_url('/interno/avisos/'),
             'userId' => get_current_user_id(),
             'canManage' => $this->can_manage(),

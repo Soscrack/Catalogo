@@ -554,6 +554,17 @@
   gap: 10px;
 }
 
+.av-supplier-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.av-supplier-row select {
+  flex: 1;
+  min-width: 0;
+}
+
 @media (max-width: 480px) {
   .av-search-actions { grid-template-columns: 1fr; }
   .av-card-actions .av-btn { flex: 1 1 auto; }

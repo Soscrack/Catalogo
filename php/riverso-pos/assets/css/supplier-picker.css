@@ -1,0 +1,107 @@
+.rsp-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 8vh 16px 16px;
+}
+
+.rsp-overlay[hidden] {
+    display: none;
+}
+
+.rsp-modal {
+    width: min(480px, 100%);
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+    padding: 16px;
+    display: grid;
+    gap: 10px;
+}
+
+.rsp-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.rsp-head h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.rsp-close {
+    border: 0;
+    background: transparent;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.rsp-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+}
+
+.rsp-results {
+    max-height: 280px;
+    overflow: auto;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+}
+
+.rsp-item,
+.rsp-create {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: #fff;
+    padding: 8px 10px;
+    cursor: pointer;
+}
+
+.rsp-item {
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.rsp-item:hover,
+.rsp-create:hover {
+    background: #f6f7f7;
+}
+
+.rsp-item strong {
+    display: block;
+}
+
+.rsp-rut,
+.rsp-apodo,
+.rsp-badge,
+.rsp-empty,
+.rsp-status {
+    color: #646970;
+    font-size: 12px;
+}
+
+.rsp-badge {
+    color: #9a6700;
+}
+
+.rsp-empty {
+    margin: 0;
+    padding: 10px;
+}
+
+.rsp-create {
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    font-weight: 600;
+}

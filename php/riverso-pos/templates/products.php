@@ -82,6 +82,9 @@ $can_manage_codes = current_user_can('riverso_manage_codes');
             <input type="text" id="products-search" class="regular-text" placeholder="SKU Local, Online, código proveedor/catálogo, nombre o barcode" autocomplete="off">
             <div id="products-search-suggestions" style="display:none; position:absolute; left:0; top:100%; z-index:100; background:#fff; border:1px solid #c3c4c7; box-shadow:0 2px 8px rgba(0,0,0,.1); max-height:220px; overflow-y:auto; min-width:100%; width:max-content;"></div>
         </span>
+        <button type="button" class="button" id="products-scan" title="Escanear código de barras" aria-label="Escanear código de barras">
+            <span class="dashicons dashicons-camera" style="margin-top:3px;"></span>
+        </button>
         <button class="button" id="products-reload">Actualizar</button>
         <?php if ($can_manage): ?>
             <button class="button button-primary" id="products-new">Nuevo producto local</button>
@@ -504,7 +507,7 @@ $can_manage_codes = current_user_can('riverso_manage_codes');
 
         <!-- TAB: CÓDIGOS PROVEEDOR -->
         <div class="detail-tab-content" id="tab-suppliers" style="display:none;">
-            <p>Para asignar un código hay que elegir primero el proveedor y después el código de ese proveedor.</p>
+            <p>Elige el proveedor y, si todavía no hay código, asígnalo solo. El código se agrega cuando aparezca en un folio.</p>
 
             <div class="supplier-link-form">
                 <div class="supplier-link-step">
@@ -512,7 +515,8 @@ $can_manage_codes = current_user_can('riverso_manage_codes');
                         <span class="supplier-step-num">1</span> Proveedor <span class="supplier-step-req">*</span>
                     </label>
                     <input type="text" id="supplier-provider-search" class="regular-text"
-                           placeholder="Buscar proveedor por nombre o RUT..." autocomplete="off">
+                           placeholder="Buscar proveedor por nombre, apodo o RUT..." autocomplete="off">
+                    <button type="button" class="button" id="supplier-provider-lupa" title="Buscar por nombre o apodo">🔍</button>
                     <div id="supplier-provider-results" class="supplier-picker-results"></div>
                     <div id="supplier-provider-selected" class="supplier-picked"></div>
                     <input type="hidden" id="supplier-id-select">
@@ -539,6 +543,7 @@ $can_manage_codes = current_user_can('riverso_manage_codes');
 
                 <p>
                     <button class="button button-primary" id="supplier-link-btn" disabled>Asignar código proveedor</button>
+                    <button type="button" class="button" id="supplier-known-btn" disabled>Asignar solo el proveedor</button>
                     <button type="button" class="button" id="supplier-link-reset">Limpiar</button>
                     <span id="supplier-link-state" class="description"></span>
                 </p>
@@ -1820,6 +1825,7 @@ jQuery(function($){
         const ready = !!(code && code.length >= 2 && supplierId);
 
         $('#supplier-link-btn').prop('disabled', !ready).css('opacity', ready ? '1' : '0.5');
+        $('#supplier-known-btn').prop('disabled', !supplierId);
 
         let state = '';
         if (!supplierId) {
@@ -1913,6 +1919,17 @@ jQuery(function($){
                         ${purchaseUnitsHtml}
                     </div>
                 </div>`;
+            });
+        }
+        const known = (currentProduct && currentProduct.proveedores_conocidos) || [];
+        if (known.length) {
+            html += '<h4>Proveedor, sin código</h4>';
+            known.forEach(function(k) {
+                const badge = parseInt(k.provisional, 10) ? ' <span style="color:#9a6700;">apodo, sin factura</span>' : '';
+                html += `<div class="supplier-code-item"><div><strong>${esc(k.nombre)}</strong>${badge}<br>
+                    <small>Sin código de proveedor</small>
+                    <div style="margin-top:6px;"><button type="button" class="button button-small btn-known-remove" data-id="${k.id}">Quitar</button></div>
+                    </div></div>`;
             });
         }
         $('#suppliers-list').html(html || '<p style="color:#666;">Sin códigos asignados.</p>');
@@ -2781,6 +2798,72 @@ jQuery(function($){
     }
 
     $('#supplier-link-reset').on('click', resetSupplierLinkForm);
+
+    $('#supplier-provider-lupa').on('click', function() {
+        if (!window.RiversoSupplierPicker || !currentProduct) {
+            return;
+        }
+        window.RiversoSupplierPicker.open({
+            ajaxUrl: ajaxurl,
+            nonce: nonce,
+            title: 'Buscar proveedor',
+            query: $('#supplier-provider-search').val(),
+            onSelect: function(supplier) {
+                $('#supplier-id-select').val(supplier.id);
+                $('#supplier-provider-search').val(supplier.nombre || '');
+                $('#supplier-provider-selected').text('Proveedor: ' + (supplier.nombre || ''));
+                $('#supplier-provider-results').empty().hide();
+                setSupplierCodeStepEnabled(true);
+                updateSupplierLinkBtnState();
+            }
+        });
+    });
+
+    $('#supplier-known-btn').on('click', function() {
+        const supplierId = $('#supplier-id-select').val();
+        if (!currentProduct || !supplierId) {
+            alert('Selecciona primero el proveedor');
+            return;
+        }
+        $.post(ajaxurl, {
+            action: 'riverso_assign_known_supplier',
+            nonce: nonce,
+            producto_base_id: currentProduct.id,
+            proveedor_id: supplierId
+        }, function(r) {
+            if (!r.success) {
+                alert(r.data?.message || 'No se pudo asignar el proveedor');
+                return;
+            }
+            $.post(ajaxurl, { action: 'riverso_products_get', nonce: nonce, id: currentProduct.id }, function(resp) {
+                if (resp.success) {
+                    showDetail(resp.data.item || resp.data);
+                }
+            });
+        });
+    });
+
+    $(document).on('click', '.btn-known-remove', function() {
+        const id = $(this).data('id');
+        if (!id || !currentProduct) {
+            return;
+        }
+        $.post(ajaxurl, {
+            action: 'riverso_remove_known_supplier',
+            nonce: nonce,
+            id: id
+        }, function(r) {
+            if (!r.success) {
+                alert(r.data?.message || 'No se pudo quitar');
+                return;
+            }
+            $.post(ajaxurl, { action: 'riverso_products_get', nonce: nonce, id: currentProduct.id }, function(resp) {
+                if (resp.success) {
+                    showDetail(resp.data.item || resp.data);
+                }
+            });
+        });
+    });
 
     // Paso 1: proveedor
     $(document).on('input', '#supplier-provider-search', function(){
@@ -5190,6 +5273,20 @@ jQuery(function($){
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(load, 1300);
         loadCatalogSearchSuggestions();
+    });
+
+    $('#products-scan').on('click', function(){
+        if (!window.RiversoBarcodeScanner) {
+            return;
+        }
+        window.RiversoBarcodeScanner.open({
+            onCode: function(code) {
+                $('#products-search').val(code);
+                currentOffset = 0;
+                clearTimeout(searchTimeout);
+                load();
+            }
+        });
     });
 
     $('#products-prev').on('click', function(){

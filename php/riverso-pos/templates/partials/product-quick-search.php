@@ -18,6 +18,9 @@ $can_manage_pqs = !empty($can_manage);
         <button type="button" class="button" id="pqs-btn-lupa" title="Búsqueda por nombre, proveedor, código…">
             <span class="dashicons dashicons-search" style="margin-top:3px;"></span>
         </button>
+        <button type="button" class="button" id="pqs-btn-scan" title="Escanear código de barras" aria-label="Escanear código de barras">
+            <span class="dashicons dashicons-camera" style="margin-top:3px;"></span>
+        </button>
     </div>
 
     <div id="pqs-status" class="pqs-status" style="display:none;"></div>
@@ -113,7 +116,9 @@ $can_manage_pqs = !empty($can_manage);
                             <input type="text" id="pqs-sup-search" placeholder="Proveedor…">
                             <input type="hidden" id="pqs-sup-id" value="">
                             <input type="text" id="pqs-sup-code" placeholder="Código proveedor">
-                            <button type="button" class="button button-small button-primary" id="pqs-btn-add-supplier">Vincular</button>
+                            <button type="button" class="button button-small" id="pqs-btn-supplier-lupa" title="Buscar por nombre o apodo">🔍</button>
+                            <button type="button" class="button button-small button-primary" id="pqs-btn-add-supplier">Vincular código</button>
+                            <button type="button" class="button button-small" id="pqs-btn-known-supplier">Solo el proveedor</button>
                             <div id="pqs-sup-suggestions" class="pqs-sup-suggestions" style="display:none;width:100%;"></div>
                         </div>
                     </div>

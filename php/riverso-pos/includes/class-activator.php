@@ -507,9 +507,65 @@ class Riverso_POS_Activator {
      */
     public static function update_database() {
         self::create_tables();
+        self::ensure_known_supplier_schema();
         // Refrescar roles/capacidades para incorporar capabilities nuevas
         // (precios, matching, embolsado, órdenes POS) en actualizaciones.
         self::create_roles();
+    }
+
+    /**
+     * Proveedor conocido sin código, y proveedor provisional (apodo, sin RUT todavía).
+     * Idempotente: la primera corrida crea la tabla y deja el RUT nulo.
+     */
+    public static function ensure_known_supplier_schema() {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        if (get_option('riverso_known_supplier_schema') === '1') {
+            $done = true;
+            return;
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE {$prefix}producto_proveedor_conocido (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            proveedor_id BIGINT UNSIGNED NOT NULL,
+            es_preferido TINYINT(1) NOT NULL DEFAULT 0,
+            origen VARCHAR(30) DEFAULT 'manual',
+            created_by BIGINT UNSIGNED DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_producto_proveedor (producto_base_id, proveedor_id),
+            KEY idx_proveedor (proveedor_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        self::add_column_if_missing(
+            "{$prefix}proveedores",
+            'provisional',
+            'provisional TINYINT(1) NOT NULL DEFAULT 0'
+        );
+        if (self::table_exists("{$prefix}proveedores")) {
+            $wpdb->query("ALTER TABLE `{$prefix}proveedores` MODIFY COLUMN rut VARCHAR(20) NULL");
+        }
+
+        $ready = self::table_exists("{$prefix}producto_proveedor_conocido");
+        $col = $wpdb->get_var($wpdb->prepare(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = 'provisional'",
+            DB_NAME,
+            $prefix . 'proveedores'
+        ));
+        if ($ready && $col) {
+            update_option('riverso_known_supplier_schema', '1', false);
+            $done = true;
+        }
     }
 
     /**

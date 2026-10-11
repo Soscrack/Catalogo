@@ -3335,6 +3335,12 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                 <label style="font-size:13px;font-weight:600;">Proveedor</label>
                 <input type="text" id="portal-prov-nombre" placeholder="Razón social" style="width:100%;margin:6px 0;padding:8px;border:1px solid var(--border);border-radius:4px;">
                 <input type="text" id="portal-prov-rut" placeholder="RUT" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:4px;" readonly>
+                <div id="portal-prov-apodo-wrap" style="display:none;margin-top:8px;">
+                    <label for="portal-prov-apodo">¿Este folio es un proveedor que ya anotamos por apodo?</label>
+                    <select id="portal-prov-apodo" style="width:100%;margin-top:6px;padding:8px;border:1px solid var(--border);border-radius:4px;">
+                        <option value="">No: usar la razón social del folio</option>
+                    </select>
+                </div>
             </div>
             <div id="portal-upload-result" style="margin-top:12px;font-size:14px;"></div>
         </div>
@@ -3625,6 +3631,16 @@ function portalShowConfirm(d) {
     });
     document.getElementById('portal-prov-nombre').value = d.proveedor_existente?.nombre || d.emisor?.razon_social || '';
     document.getElementById('portal-prov-rut').value = d.emisor?.rut || '';
+    const apodoWrap = document.getElementById('portal-prov-apodo-wrap');
+    const apodoSel = document.getElementById('portal-prov-apodo');
+    if (apodoWrap && apodoSel) {
+        apodoSel.innerHTML = '<option value="">No: usar la razón social del folio</option>';
+        const provisionales = (!d.proveedor_existente && d.provisionales) || [];
+        provisionales.forEach(function(p) {
+            apodoSel.innerHTML += '<option value="' + p.id + '">' + (p.nombre || 'Apodo') + '</option>';
+        });
+        apodoWrap.style.display = provisionales.length ? 'block' : 'none';
+    }
 
     const gapsEl = document.getElementById('portal-intake-gaps');
     const gaps = d.missing_gaps || [];
@@ -3663,7 +3679,8 @@ function procesarSubirFactura() {
         modo_ingreso: document.querySelector('input[name="portal-modo"]:checked')?.value || portalDefaultModo,
         proveedor_modo: 'xml',
         proveedor_nombre: document.getElementById('portal-prov-nombre')?.value || '',
-        proveedor_rut: document.getElementById('portal-prov-rut')?.value || ''
+        proveedor_rut: document.getElementById('portal-prov-rut')?.value || '',
+        reclamar_provisional_id: document.getElementById('portal-prov-apodo')?.value || ''
     }).then(data => {
         if (data.success) {
             const extra = data.data?.resumen?.documento_tipo === 'envio' && !data.data?.resumen?.vinculado_a_factura

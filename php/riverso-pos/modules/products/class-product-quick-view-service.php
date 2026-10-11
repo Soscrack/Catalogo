@@ -1051,8 +1051,29 @@ class Riverso_Product_Quick_View_Service {
             $row['vinculo'] = function_exists('riverso_pp_vinculo_info')
                 ? riverso_pp_vinculo_info($row)
                 : null;
+            $row['sin_codigo'] = false;
         }
         unset($row);
+
+        if (class_exists('Riverso_POS_Supplier_Module')) {
+            $coded = array_map(function ($row) {
+                return (int) ($row['proveedor_id'] ?? 0);
+            }, $rows);
+            foreach (Riverso_POS_Supplier_Module::list_known(absint($producto_base_id), $coded) as $known) {
+                $rows[] = [
+                    'id' => 0,
+                    'conocido_id' => (int) $known['id'],
+                    'proveedor_id' => (int) $known['proveedor_id'],
+                    'proveedor_nombre' => (string) $known['nombre'],
+                    'codigo_proveedor' => '',
+                    'display_name' => (string) $known['nombre'],
+                    'apodos' => $known['apodos'],
+                    'sin_codigo' => true,
+                    'provisional' => (int) $known['provisional'],
+                    'vinculo' => null,
+                ];
+            }
+        }
 
         return $rows;
     }
@@ -1126,7 +1147,10 @@ class Riverso_Product_Quick_View_Service {
             ];
         }
 
-        if (!$suppliers) {
+        $with_code = array_filter((array) $suppliers, function ($supplier) {
+            return empty($supplier['sin_codigo']);
+        });
+        if (!$with_code) {
             $alerts[] = [
                 'level' => 'warning',
                 'code' => 'sin_codigo_proveedor',

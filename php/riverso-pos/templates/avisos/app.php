@@ -11,6 +11,10 @@ if (!defined('ABSPATH')) {
 $asset_base = rtrim(RIVERSO_POS_PLUGIN_URL, '/') . '/assets';
 $version = defined('RIVERSO_POS_VERSION') ? RIVERSO_POS_VERSION : '0.1.0';
 $js_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/avisos.js';
+$picker_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/supplier-picker.js';
+$picker_css = RIVERSO_POS_PLUGIN_DIR . 'assets/css/supplier-picker.css';
+$picker_ver = is_file($picker_path) ? (string) filemtime($picker_path) : $version;
+$picker_css_ver = is_file($picker_css) ? (string) filemtime($picker_css) : $version;
 $css_path = RIVERSO_POS_PLUGIN_DIR . 'assets/css/avisos.css';
 $js_ver = is_file($js_path) ? (string) filemtime($js_path) : $version;
 $scanner_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/barcode-scanner.js';
@@ -20,6 +24,7 @@ $json_flags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_AP
 $can_manage = !empty($riverso_av['canManage']);
 ?>
 <link rel="stylesheet" href="<?php echo esc_url($asset_base . '/css/avisos.css?ver=' . $css_ver); ?>">
+<link rel="stylesheet" href="<?php echo esc_url($asset_base . '/css/supplier-picker.css?ver=' . $picker_css_ver); ?>">
 
 <div class="wrap riverso-av-wrap">
     <div id="riverso-av" class="riverso-av">
@@ -67,7 +72,10 @@ $can_manage = !empty($riverso_av['canManage']);
 
                 <div class="av-field">
                     <label for="av-supplier">Proveedor</label>
-                    <select id="av-supplier"></select>
+                    <div class="av-supplier-row">
+                        <select id="av-supplier"></select>
+                        <button type="button" class="av-btn av-btn-ghost" id="av-supplier-search" title="Buscar por nombre o apodo">🔍</button>
+                    </div>
                 </div>
 
                 <label class="av-check">
@@ -143,5 +151,6 @@ $can_manage = !empty($riverso_av['canManage']);
 <script>
 window.riversoAvisos = <?php echo wp_json_encode($riverso_av, $json_flags); ?>;
 </script>
+<script src="<?php echo esc_url($asset_base . '/js/supplier-picker.js?ver=' . $picker_ver); ?>"></script>
 <script src="<?php echo esc_url($asset_base . '/js/barcode-scanner.js?ver=' . $scanner_ver); ?>"></script>
 <script src="<?php echo esc_url($asset_base . '/js/avisos.js?ver=' . $js_ver); ?>"></script>

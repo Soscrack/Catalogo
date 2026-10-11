@@ -613,7 +613,41 @@ class Riverso_Purchase_Notice_Service {
                 'factor' => $factor > 1.0001 ? $factor : null,
                 'preferido' => (int) $row['es_preferido'] === 1,
                 'calzo' => (int) $row['id'] === $matched_pp_id,
+                'sin_codigo' => false,
             ];
+        }
+        if ($producto_base_id > 0 && $this->table_exists('producto_proveedor_conocido')) {
+            $scope = $this->need_scope($producto_base_id);
+            $ids = array_values(array_filter(array_map('intval', $scope['productos'] ?? [])));
+            if ($ids) {
+                $known = $wpdb->get_results(
+                    "SELECT k.proveedor_id, k.producto_base_id, k.es_preferido, pr.nombre AS proveedor_nombre
+                     FROM {$this->table('producto_proveedor_conocido')} k
+                     INNER JOIN {$this->table('proveedores')} pr ON pr.id = k.proveedor_id AND pr.activo = 1
+                     WHERE k.producto_base_id IN (" . implode(',', $ids) . ")",
+                    ARRAY_A
+                ) ?: [];
+                foreach ($known as $row) {
+                    $supplier_id = (int) $row['proveedor_id'];
+                    if (isset($seen[$supplier_id])) {
+                        continue;
+                    }
+                    $seen[$supplier_id] = true;
+                    $out[] = [
+                        'pp_id' => 0,
+                        'proveedor_id' => $supplier_id,
+                        'producto_base_id' => (int) $row['producto_base_id'],
+                        'nombre' => (string) $row['proveedor_nombre'],
+                        'codigo' => '',
+                        'nombre_en_proveedor' => '',
+                        'unidad' => '',
+                        'factor' => null,
+                        'preferido' => (int) $row['es_preferido'] === 1,
+                        'calzo' => false,
+                        'sin_codigo' => true,
+                    ];
+                }
+            }
         }
         return $out;
     }
@@ -884,6 +918,7 @@ class Riverso_Purchase_Notice_Service {
             'unidad' => $quantity['unidad'],
             'sin_stock' => !empty($data['sin_stock']),
         ]);
+        $this->remember_known_supplier($pb_id, (int) ($link['proveedor_id'] ?? 0));
         return $this->get($id);
     }
 
@@ -977,6 +1012,19 @@ class Riverso_Purchase_Notice_Service {
             $supplier_id = 0;
         }
         return ['pp_id' => 0, 'proveedor_id' => $supplier_id, 'factor' => null];
+    }
+
+    /**
+     * El aviso deja anotado el proveedor en el producto cuando todavía no hay código.
+     *
+     * @param int $producto_base_id
+     * @param int $proveedor_id
+     */
+    private function remember_known_supplier($producto_base_id, $proveedor_id) {
+        if ($producto_base_id <= 0 || $proveedor_id <= 0 || !class_exists('Riverso_POS_Supplier_Module')) {
+            return;
+        }
+        Riverso_POS_Supplier_Module::remember_if_uncoded($producto_base_id, $proveedor_id);
     }
 
     /**
@@ -1112,6 +1160,7 @@ class Riverso_Purchase_Notice_Service {
                     'producto_proveedor_id' => ($supplier_id > 0 && $link['proveedor_id'] === $supplier_id && $link['pp_id']) ? $link['pp_id'] : null,
                 ];
                 $event = ['proveedor_id' => $supplier_id];
+                $this->remember_known_supplier((int) ($row['producto_base_id'] ?? 0), $supplier_id);
                 break;
 
             case 'identificar':

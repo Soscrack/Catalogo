@@ -704,9 +704,16 @@
                 remove = ' <button type="button" class="button-link pqs-sup-remove" data-pp-id="' +
                     esc(s.id) + '" style="color:#b32d2e;" title="Rechazar vínculo">×</button>';
             }
+            var codeLabel = s.sin_codigo
+                ? '<span style="color:#9a6700;">sin código</span>'
+                : '<code>' + esc(s.codigo_proveedor || '—') + '</code>';
+            if (s.sin_codigo && state.editing && canManage && s.conocido_id) {
+                remove = ' <button type="button" class="button-link pqs-known-remove" data-conocido-id="' +
+                    esc(s.conocido_id) + '" style="color:#b32d2e;" title="Quitar proveedor">×</button>';
+            }
             return '<div class="pqs-supplier-row">' +
                 esc(s.display_name || s.proveedor_nombre || '') +
-                ' · <code>' + esc(s.codigo_proveedor || '—') + '</code>' +
+                ' · ' + codeLabel +
                 badgeHtml + helpHtml + remove +
                 '</div>';
         }).join('');
@@ -1463,6 +1470,17 @@
         });
 
         $('#pqs-btn-lupa').on('click', openLupa);
+        $('#pqs-btn-scan').on('click', function () {
+            if (!window.RiversoBarcodeScanner) {
+                return;
+            }
+            window.RiversoBarcodeScanner.open({
+                onCode: function (code) {
+                    $('#pqs-input').val(code);
+                    doLookup();
+                }
+            });
+        });
         $('#pqs-lupa-close').on('click', closeLupa);
         $('#pqs-lupa-modal').on('click', function (e) {
             if (e.target === this) {
@@ -1969,6 +1987,60 @@
                     }).join('')).show();
                 });
             }, 300));
+        });
+
+        function assignKnownSupplier(supplierId) {
+            if (!supplierId || !state.productId) {
+                alert('Seleccioná un proveedor');
+                return;
+            }
+            post('riverso_assign_known_supplier', {
+                producto_base_id: state.productId,
+                proveedor_id: supplierId
+            }).then(function (r) {
+                if (!r || !r.success) {
+                    alert((r && r.data && r.data.message) || 'No se pudo asignar el proveedor');
+                    return;
+                }
+                $('#pqs-sup-id').val('');
+                $('#pqs-sup-search').val('');
+                refreshViewer();
+            });
+        }
+
+        $('#pqs-btn-supplier-lupa').on('click', function () {
+            if (!window.RiversoSupplierPicker) {
+                return;
+            }
+            window.RiversoSupplierPicker.open({
+                ajaxUrl: ajaxurl,
+                nonce: nonce,
+                title: 'Buscar proveedor',
+                query: $('#pqs-sup-search').val(),
+                onSelect: function (supplier) {
+                    $('#pqs-sup-id').val(supplier.id || '');
+                    $('#pqs-sup-search').val(supplier.nombre || '');
+                    assignKnownSupplier(supplier.id);
+                }
+            });
+        });
+
+        $('#pqs-btn-known-supplier').on('click', function () {
+            assignKnownSupplier($('#pqs-sup-id').val());
+        });
+
+        $(document).on('click', '.pqs-known-remove', function () {
+            var id = $(this).data('conocido-id');
+            if (!id) {
+                return;
+            }
+            post('riverso_remove_known_supplier', { id: id }).then(function (r) {
+                if (!r || !r.success) {
+                    alert((r && r.data && r.data.message) || 'No se pudo quitar');
+                    return;
+                }
+                refreshViewer();
+            });
         });
 
         $('#pqs-btn-add-supplier').on('click', function () {

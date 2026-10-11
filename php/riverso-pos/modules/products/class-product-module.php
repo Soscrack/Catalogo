@@ -728,6 +728,12 @@ class Riverso_Product_Module {
         $product['tasks'] = $this->get_product_tasks($id);
         $product['completeness_category'] = $this->get_completeness_category($product);
         $product['proveedores_count'] = count($product['proveedores']);
+        $coded_ids = array_map(function ($prov) {
+            return (int) ($prov['proveedor_id'] ?? 0);
+        }, $product['proveedores']);
+        $product['proveedores_conocidos'] = class_exists('Riverso_POS_Supplier_Module')
+            ? Riverso_POS_Supplier_Module::list_known($id, $coded_ids)
+            : [];
 
         // Normalizar IDs Woo: 0 / "0" → null (evita ocultar botones Vincular en JS)
         $woo_pid = (int) ($product['woocommerce_product_id'] ?? 0);

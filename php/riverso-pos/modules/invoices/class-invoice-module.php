@@ -2002,6 +2002,29 @@ class Riverso_Invoice_Module {
             ]);
         }
 
+        $claim = absint($options['reclamar_provisional_id'] ?? 0);
+        if ($claim > 0 && class_exists('Riverso_POS_Supplier_Module')) {
+            $by_rut_id = 0;
+            if ($proveedor_data['rut'] !== '') {
+                $by_rut_id = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM {$prefix}proveedores WHERE rut = %s",
+                    $proveedor_data['rut']
+                ));
+            }
+            if ($by_rut_id && $by_rut_id !== $claim) {
+                $merged = Riverso_POS_Supplier_Module::merge_provisional_into($claim, $by_rut_id);
+                if (is_wp_error($merged)) {
+                    return $merged;
+                }
+                return $by_rut_id;
+            }
+            $claimed = Riverso_POS_Supplier_Module::claim_provisional($claim, $proveedor_data);
+            if (is_wp_error($claimed)) {
+                return $claimed;
+            }
+            return (int) $claimed;
+        }
+
         $existing = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$prefix}proveedores WHERE rut = %s",
             $rut
@@ -2183,6 +2206,7 @@ class Riverso_Invoice_Module {
             'proveedor_telefono' => sanitize_text_field($_POST['proveedor_telefono'] ?? ''),
             'proveedor_email' => sanitize_email($_POST['proveedor_email'] ?? ''),
             'proveedor_contacto' => sanitize_text_field($_POST['proveedor_contacto'] ?? ''),
+            'reclamar_provisional_id' => absint($_POST['reclamar_provisional_id'] ?? 0),
         ];
 
         $file = $_FILES['xml_file'];
@@ -2490,6 +2514,9 @@ class Riverso_Invoice_Module {
             'items_preview' => $detection['items_preview'],
             'proveedor_existente' => $existing,
             'proveedores' => $suppliers,
+            'provisionales' => (!$existing && class_exists('Riverso_POS_Supplier_Module'))
+                ? Riverso_POS_Supplier_Module::list_provisionals()
+                : [],
             'facturas_productos' => $facturas_productos,
             'referencias' => $referencias,
             'credit_note_resolution' => $credit_note_resolution,

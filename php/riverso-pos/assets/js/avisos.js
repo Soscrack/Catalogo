@@ -276,7 +276,8 @@
     var seen = {};
     (own || []).forEach(function (s) {
       seen[s.proveedor_id] = true;
-      html += '<option value="' + s.proveedor_id + '">' + esc(s.nombre + (s.codigo ? " · " + s.codigo : "")) + "</option>";
+      var extra = s.codigo ? " · " + s.codigo : (s.sin_codigo ? " · sin código" : "");
+      html += '<option value="' + s.proveedor_id + '">' + esc(s.nombre + extra) + "</option>";
     });
     var others = (state.suppliers || []).filter(function (s) {
       return !seen[s.id];
@@ -1121,6 +1122,38 @@
   $("av-cantidad").addEventListener("input", updateEquivalence);
   $("av-unidad").addEventListener("change", updateEquivalence);
   $("av-supplier").addEventListener("change", applySupplierUnit);
+  $("av-supplier-search").addEventListener("click", function () {
+    if (!window.RiversoSupplierPicker) return;
+    window.RiversoSupplierPicker.open({
+      ajaxUrl: cfg.ajaxUrl,
+      nonce: cfg.posNonce,
+      title: "Buscar proveedor",
+      onSelect: function (supplier) {
+        var select = $("av-supplier");
+        var id = String(supplier.id || "");
+        var exists = Array.prototype.some.call(select.options, function (option) {
+          return option.value === id;
+        });
+        if (!exists) {
+          var option = document.createElement("option");
+          option.value = id;
+          option.textContent = (supplier.nombre || "Proveedor") + (parseInt(supplier.provisional, 10) ? " · apodo" : "");
+          select.appendChild(option);
+        }
+        select.value = id;
+        applySupplierUnit();
+        var productId = state.candidate && state.candidate.producto_base_id;
+        if (productId && id) {
+          var body = new FormData();
+          body.append("action", "riverso_assign_known_supplier");
+          body.append("nonce", cfg.posNonce);
+          body.append("producto_base_id", String(productId));
+          body.append("proveedor_id", id);
+          fetch(cfg.ajaxUrl, { method: "POST", body: body, credentials: "same-origin" });
+        }
+      },
+    });
+  });
   $("av-modal-cancel").addEventListener("click", closeModal);
   $("av-modal-ok").addEventListener("click", function () {
     if (state.modalOk) state.modalOk();

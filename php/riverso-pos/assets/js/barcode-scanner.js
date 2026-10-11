@@ -1,5 +1,5 @@
 /**
- * Lector de códigos de barras con la cámara, compartido por Avisos, Cotizaciones y Facturación.
+ * Lector de códigos de barras con la cámara, compartido por Avisos, Cotizaciones, Facturación y Productos.
  *
  * Usa BarcodeDetector cuando el navegador lo trae; si no (Safari / iPhone), zxing-cpp en
  * WebAssembly servido desde assets/vendor/zxing-wasm.

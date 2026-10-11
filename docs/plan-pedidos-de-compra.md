@@ -122,7 +122,7 @@ Lo aceptado es lo que se espera recibir, con la cantidad y el costo aceptados. U
 Es el correo al proveedor que Cotizaciones Proveedores ya arma con “Preparar revisión”. Tiene tres partes: usar el precio anterior (`claim`), quitar (`remove`) y agregar (`add`). La ficha abre ese mismo borrador (`riverso_quote_claim_draft`). No se construye otro.
 
 - **Cuándo corresponde.** Cuando alguna línea quedó en `claim`, `remove`, `add` o corregir cantidad. Si todas quedaron aceptadas, no se manda nada y la cotización se aprueba.
-- **Umbral.** Ya existe: un alza mayor a $0,01 (`DELTA_SIGNIFICATIVO`) deja la línea en `claim`. La persona puede pasarla a `accepted_increase`. Subir ese umbral es decisión de compras.
+- **Umbral.** Ya existe: un alza mayor a $0,01 (`DELTA_SIGNIFICATIVO`) deja la línea en `claim`. La persona puede pasarla a `accepted_increase`. El umbral se mantiene.
 - **Cantidades.** El correo no tiene hoy una parte para pedir que corrijan una cantidad. Se agrega.
 - **Envío.** El correo se copia; el sistema no lo manda. Por eso **Marcar revisión enviada** guarda la fecha y pasa el pedido a “en revisión”.
 - **Respuesta.** Si el proveedor manda una cotización nueva, entra como versión del mismo grupo y el pedido vuelve a “en cotización” contra ella. Si contesta sin documento, la persona corrige el costo de la línea o cambia la decisión.
@@ -165,7 +165,7 @@ Ya se calculan; esta pantalla las lee, no las vuelve a calcular.
 - **Un solo nivel.** Una necesidad aparece en el nivel más alto que la contiene: emparejamiento, si no familia, si no producto. No aparece dos veces.
 - **Dudosa.** Si `estado_confianza` no es `confiable`, la alerta se muestra dudosa y no trae cantidad (D11). En familia y emparejamiento basta que un miembro no sea confiable.
 - **En camino.** No se ofrece mientras haya una línea abierta de pedido para ese producto, familia o emparejamiento, desde borrador hasta recepción parcial. Vuelve si la línea se cancela o no se compra, o si se recibe y el stock sigue bajo el mínimo. No se guarda nada por alerta.
-- **Cantidad.** Solo existen mínimo y crítico; no hay un stock objetivo. Se propone la última cantidad comprada a ese proveedor, en su unidad de compra. Sin historia, va vacía. Siempre la confirma una persona.
+- **Cantidad.** Solo existen mínimo y crítico; no se agrega un stock objetivo. Se propone la última cantidad comprada a ese proveedor, en su unidad de compra. Sin historia, va vacía. Siempre la confirma una persona.
 
 ### Emparejados y familias, en Armar y en la ficha
 
@@ -244,12 +244,6 @@ El orden es el de construcción: 1–3 dejan de usar “Copiar lista” en Aviso
 - Revisar el precio de venta. Se hace al procesar el folio de la factura.
 - Mandar el pedido o la revisión desde el sistema, por correo o al portal del proveedor. Se copian.
 - Elegir solo, sin una persona, qué se compra o a quién.
-
-## Por definir con compras
-
-- Si el umbral de alza sigue en $0,01 o sube.
-- Si la cantidad de una alerta sale de la última compra, o se quiere un stock objetivo por producto.
-- Si la familia usa el mínimo de su producto unitario, o se le da uno propio.
 
 ## Aceptación
 

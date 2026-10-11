@@ -176,7 +176,7 @@ Al armar el pedido, esa necesidad puede entrar en la cotización de **cualquiera
 
 **D18. La cotización del proveedor no pisa el pedido.** Se guarda el diff: igual, cantidad distinta, precio distinto, línea solo en el pedido, línea solo en la cotización. La persona decide cada diferencia. Lo que se acepta es lo que se espera recibir.
 
-**D19. La revisión de precios se manda por excepción.** Es el correo al proveedor que ya existe, no una revisión del precio de venta. El umbral ya está en el código: un alza mayor a $0,01 deja la línea para reclamar; subirlo es decisión de compras. Sin alza, o sin costo anterior, no se manda. Con alza, se manda la revisión o se acepta el alza; mientras se espera la respuesta, el pedido no queda aceptado.
+**D19. La revisión de precios se manda por excepción.** Es el correo al proveedor que ya existe, no una revisión del precio de venta. El umbral ya está en el código: un alza mayor a $0,01 deja la línea para reclamar, y se mantiene. Sin alza, o sin costo anterior, no se manda. Con alza, se manda la revisión o se acepta el alza; mientras se espera la respuesta, el pedido no queda aceptado.
 
 **D20. Recepción no tiene una segunda entrada de stock.** Sigue siendo la recepción de la factura. El vínculo nuevo es “esta factura cierra estas líneas aceptadas”. Ventas siguen siendo la salida.
 

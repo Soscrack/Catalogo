@@ -16,6 +16,9 @@ class Riverso_Customer_Module {
     /** @var Riverso_Customer_Repository */
     private $repo;
 
+    /** @var Riverso_Cliente_Contact_Repository */
+    private $contacts;
+
     public static function get_instance() {
         if (null === self::$instance) {
             self::$instance = new self();
@@ -29,7 +32,12 @@ class Riverso_Customer_Module {
         if (file_exists($repo_file)) {
             require_once $repo_file;
         }
+        $contact_file = dirname(__FILE__) . '/class-cliente-contact-repository.php';
+        if (file_exists($contact_file)) {
+            require_once $contact_file;
+        }
         $this->repo = new Riverso_Customer_Repository();
+        $this->contacts = new Riverso_Cliente_Contact_Repository();
         $this->init_hooks();
     }
 
@@ -44,6 +52,13 @@ class Riverso_Customer_Module {
         if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_clientes_schema')) {
             Riverso_POS_Activator::ensure_clientes_schema();
         }
+        $contact_file = dirname(__FILE__) . '/class-cliente-contact-repository.php';
+        if (file_exists($contact_file)) {
+            require_once $contact_file;
+        }
+        if (class_exists('Riverso_Cliente_Contact_Repository')) {
+            Riverso_Cliente_Contact_Repository::ensure_schema();
+        }
     }
 
     private function ensure_schema() {
@@ -54,6 +69,10 @@ class Riverso_Customer_Module {
         add_action('wp_ajax_riverso_customers_list', [$this, 'ajax_list']);
         add_action('wp_ajax_riverso_customers_get', [$this, 'ajax_get']);
         add_action('wp_ajax_riverso_customers_save', [$this, 'ajax_save']);
+        add_action('wp_ajax_riverso_customer_contacts_search', [$this, 'ajax_contacts_search']);
+        add_action('wp_ajax_riverso_customer_contacts_get', [$this, 'ajax_contacts_get']);
+        add_action('wp_ajax_riverso_customer_contacts_save', [$this, 'ajax_contacts_save']);
+        add_action('wp_ajax_riverso_customer_contacts_delete', [$this, 'ajax_contacts_delete']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_assets']);
     }
 
@@ -96,6 +115,10 @@ class Riverso_Customer_Module {
                 'list' => 'riverso_customers_list',
                 'get' => 'riverso_customers_get',
                 'save' => 'riverso_customers_save',
+                'contactsSearch' => 'riverso_customer_contacts_search',
+                'contactsGet' => 'riverso_customer_contacts_get',
+                'contactsSave' => 'riverso_customer_contacts_save',
+                'contactsDelete' => 'riverso_customer_contacts_delete',
             ],
         ];
     }
@@ -199,6 +222,20 @@ class Riverso_Customer_Module {
         $this->authorize_edit();
 
         $input = $this->input_from_request();
+        $email = strtolower(trim((string) $input['contacto_email']));
+        $skip_contact_sync = false;
+        if ($input['id'] > 0 && !empty($input['has_contacto']) && $email !== '' && is_email($email)) {
+            $current = $this->repo->get((int) $input['id']);
+            $already = $current && strtolower(trim((string) ($current['contacto_email'] ?? ''))) === $email;
+            if ($this->contacts->inactive_email((int) $input['id'], $email)) {
+                if (!$already) {
+                    wp_send_json_error([
+                        'message' => $email . ' está inhabilitado. Elimínalo en Contactos (desmarca Activo y pulsa Eliminar) antes de volver a guardarlo.',
+                    ]);
+                }
+                $skip_contact_sync = true;
+            }
+        }
 
         $result = $this->repo->save($input);
         if (empty($result['ok'])) {
@@ -212,11 +249,109 @@ class Riverso_Customer_Module {
             ]);
         }
 
+        $message = (string) ($result['message'] ?? 'Guardado');
+        $customer = $result['customer'] ?? null;
+        if (!$skip_contact_sync && is_array($customer)) {
+            $sync = $this->contacts->sync_primary($customer);
+            if (!empty($sync['status']) && $sync['status'] === 'blocked' && !empty($sync['message'])) {
+                $message .= ' ' . $sync['message'];
+            }
+        }
+
+        wp_send_json_success([
+            'message' => $message,
+            'id' => $result['id'],
+            'customer' => $customer,
+        ]);
+    }
+
+    public function ajax_contacts_search() {
+        $this->authorize_view();
+        $solo = !isset($_POST['solo_activos']) || !in_array((string) wp_unslash($_POST['solo_activos']), ['0', 'false'], true);
+        $contacts = $this->contacts->search([
+            'cliente_id' => isset($_POST['cliente_id']) ? (int) $_POST['cliente_id'] : 0,
+            'primer_nombre' => $this->post_string('primer_nombre'),
+            'segundo_nombre' => $this->post_string('segundo_nombre'),
+            'apellido_paterno' => $this->post_string('apellido_paterno'),
+            'apellido_materno' => $this->post_string('apellido_materno'),
+            'email' => $this->post_string('email'),
+            'solo_activos' => $solo,
+        ]);
+        wp_send_json_success(['contacts' => $contacts]);
+    }
+
+    public function ajax_contacts_get() {
+        $this->authorize_view();
+        $contact = $this->contacts->get(isset($_POST['id']) ? (int) $_POST['id'] : 0);
+        if (!$contact) {
+            wp_send_json_error(['message' => 'Contacto no encontrado']);
+        }
+        wp_send_json_success(['contact' => $contact]);
+    }
+
+    public function ajax_contacts_save() {
+        $this->authorize_edit();
+        $result = $this->contacts->save($this->contact_input_from_request());
+        if (empty($result['ok'])) {
+            wp_send_json_error([
+                'message' => $result['message'] ?? 'No se pudo guardar el contacto',
+                'status' => $result['status'] ?? '',
+            ]);
+        }
         wp_send_json_success([
             'message' => $result['message'],
             'id' => $result['id'],
-            'customer' => $result['customer'] ?? null,
+            'contact' => $result['contact'] ?? null,
         ]);
+    }
+
+    public function ajax_contacts_delete() {
+        $this->authorize_edit();
+        $result = $this->contacts->delete(isset($_POST['id']) ? (int) $_POST['id'] : 0);
+        if (empty($result['ok'])) {
+            wp_send_json_error(['message' => $result['message'] ?? 'No se pudo eliminar']);
+        }
+        wp_send_json_success(['message' => $result['message']]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function contact_input_from_request() {
+        $activo_raw = isset($_POST['activo']) ? (string) wp_unslash($_POST['activo']) : '1';
+        return [
+            'id' => isset($_POST['id']) ? (int) $_POST['id'] : 0,
+            'cliente_id' => isset($_POST['cliente_id']) ? (int) $_POST['cliente_id'] : 0,
+            'primer_nombre' => $this->post_string('primer_nombre'),
+            'segundo_nombre' => $this->post_string('segundo_nombre'),
+            'apellido_paterno' => $this->post_string('apellido_paterno'),
+            'apellido_materno' => $this->post_string('apellido_materno'),
+            'email' => $this->post_string('email'),
+            'fono_oficina' => $this->post_string('fono_oficina'),
+            'fono_movil' => $this->post_string('fono_movil'),
+            'observaciones' => isset($_POST['observaciones'])
+                ? sanitize_textarea_field(wp_unslash((string) $_POST['observaciones']))
+                : '',
+            'nacimiento_dia' => isset($_POST['nacimiento_dia']) ? (int) $_POST['nacimiento_dia'] : 0,
+            'nacimiento_mes' => isset($_POST['nacimiento_mes']) ? (int) $_POST['nacimiento_mes'] : 0,
+            'nacimiento_anio' => isset($_POST['nacimiento_anio']) ? (int) $_POST['nacimiento_anio'] : 0,
+            'lab_calle' => $this->post_string('lab_calle'),
+            'lab_numero' => $this->post_string('lab_numero'),
+            'lab_depto' => $this->post_string('lab_depto'),
+            'lab_ciudad' => $this->post_string('lab_ciudad'),
+            'lab_comuna' => $this->post_string('lab_comuna'),
+            'lab_pais' => $this->post_string('lab_pais'),
+            'lab_codigo_postal' => $this->post_string('lab_codigo_postal'),
+            'part_calle' => $this->post_string('part_calle'),
+            'part_numero' => $this->post_string('part_numero'),
+            'part_depto' => $this->post_string('part_depto'),
+            'part_ciudad' => $this->post_string('part_ciudad'),
+            'part_comuna' => $this->post_string('part_comuna'),
+            'part_pais' => $this->post_string('part_pais'),
+            'part_codigo_postal' => $this->post_string('part_codigo_postal'),
+            'activo' => !in_array($activo_raw, ['0', 'false'], true),
+            'origen' => 'manual',
+        ];
     }
 
     private function authorize_view() {

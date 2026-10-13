@@ -982,6 +982,22 @@ class Riverso_Billing_Module {
                 }
             }
 
+            $contact_rut = isset($_POST['receiver_rut'])
+                ? sanitize_text_field(wp_unslash($_POST['receiver_rut']))
+                : (string) ($receiver['tax_id_code'] ?? '');
+            $contact_phone = isset($_POST['receiver_phone'])
+                ? sanitize_text_field(wp_unslash($_POST['receiver_phone']))
+                : '';
+            foreach ($this->remember_billing_contacts(
+                (int) ($built['customer_id'] ?? 0),
+                $contact_rut,
+                $this->posted_address_list(['email_to', 'email_extra']),
+                ((int) $built['document_type_id'] === 2) ? 'factura' : 'boleta',
+                $contact_phone
+            ) as $contact_warning) {
+                $warnings[] = $contact_warning;
+            }
+
             $msg = 'Documento emitido.';
             if ($status === 2) {
                 $msg = 'Documento creado pero no enviado al SII' . ($error_msg !== '' ? ': ' . $error_msg : '.');
@@ -1998,10 +2014,95 @@ class Riverso_Billing_Module {
         if (empty($result['ok'])) {
             wp_send_json_error(['message' => $result['message'] ?? 'No se pudo agregar el correo.']);
         }
+        $contact_warnings = $this->remember_billing_contacts(0, $rut, [$email], 'facturacion');
         wp_send_json_success([
             'email' => $result['email'],
             'emails' => $this->emails->list_by_rut($rut),
+            'contact_warning' => $contact_warnings ? implode(' ', $contact_warnings) : '',
         ]);
+    }
+
+    /**
+     * El correo del DTE queda como contacto del cliente comercial.
+     * Un contacto inhabilitado no se reactiva.
+     *
+     * @param int           $cliente_id
+     * @param string        $rut
+     * @param array<int,string> $emails
+     * @param string        $origen
+     * @param string        $phone
+     * @return array<int, string>
+     */
+    private function remember_billing_contacts($cliente_id, $rut, $emails, $origen, $phone = '') {
+        $clean = [];
+        foreach ($emails as $email) {
+            $email = sanitize_email(trim((string) $email));
+            if ($email !== '' && is_email($email)) {
+                $clean[$email] = $email;
+            }
+        }
+        if (!$clean) {
+            return [];
+        }
+
+        $contact_file = RIVERSO_POS_PLUGIN_DIR . 'sales/customers/class-cliente-contact-repository.php';
+        $customer_file = RIVERSO_POS_PLUGIN_DIR . 'sales/customers/class-customer-repository.php';
+        if (!is_file($contact_file)) {
+            return [];
+        }
+        require_once $contact_file;
+        if (is_file($customer_file)) {
+            require_once $customer_file;
+        }
+        if (!class_exists('Riverso_Cliente_Contact_Repository') || !class_exists('Riverso_Customer_Repository')) {
+            return [];
+        }
+
+        $customers = new Riverso_Customer_Repository();
+        $cliente_id = (int) $cliente_id;
+        if ($cliente_id > 0 && !$customers->get($cliente_id)) {
+            $cliente_id = 0;
+        }
+        if ($cliente_id <= 0 && $rut !== '') {
+            $customer = $customers->find_by_rut($rut);
+            if ($customer) {
+                $cliente_id = (int) $customer['id'];
+            }
+        }
+        if ($cliente_id <= 0) {
+            return [];
+        }
+
+        $repo = new Riverso_Cliente_Contact_Repository();
+        $warnings = [];
+        foreach ($clean as $email) {
+            $saved = $repo->remember($cliente_id, $email, $origen, $phone);
+            if (!empty($saved['status']) && $saved['status'] === 'blocked' && !empty($saved['message'])) {
+                $warnings[] = (string) $saved['message'];
+            }
+        }
+        return $warnings;
+    }
+
+    /**
+     * @param array<int, string> $keys
+     * @return array<int, string>
+     */
+    private function posted_address_list($keys) {
+        $out = [];
+        foreach ($keys as $key) {
+            if (!isset($_POST[$key])) {
+                continue;
+            }
+            $raw = sanitize_text_field(wp_unslash((string) $_POST[$key]));
+            foreach (preg_split('/[,\s;]+/', $raw) ?: [] as $part) {
+                $part = trim((string) $part);
+                if ($part !== '') {
+                    $out[] = $part;
+                }
+            }
+        }
+        return $out;
     }
 
     public function ajax_email_toggle() {

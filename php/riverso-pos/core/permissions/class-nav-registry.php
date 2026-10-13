@@ -71,15 +71,6 @@ class Riverso_POS_Nav_Registry {
                 'capability' => 'riverso_use_pos',
             ],
             [
-                'id' => 'customers',
-                'group' => 'ventas',
-                'label' => 'Clientes',
-                'icon' => 'admin-users',
-                'surfaces' => ['portal'],
-                'portal_slug' => 'customers',
-                'capability' => 'riverso_view_customers',
-            ],
-            [
                 'id' => 'customer-quotes',
                 'group' => 'ventas',
                 'label' => 'Cotizaciones',

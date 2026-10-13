@@ -48,6 +48,11 @@ $can_edit = !isset($can_edit) || !empty($can_edit);
                 <input type="email" id="cust-contacto-email" name="contacto_email" autocomplete="email">
             </label>
         </div>
+        <?php if ($show_footer): ?>
+        <p class="cust-hint" id="cust-open-contacts-wrap" hidden>
+            <button type="button" class="cust-btn cust-btn-link" id="cust-open-contacts">Ver contactos de este cliente</button>
+        </p>
+        <?php endif; ?>
     </div>
 </div>
 

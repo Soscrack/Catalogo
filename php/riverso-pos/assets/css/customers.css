@@ -317,8 +317,132 @@
   font-size: 1.45rem;
 }
 
+.cust-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.cust-tab {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cust-tab.is-active {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+.cust-search-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.cust-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.cust-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  padding-top: 22px;
+}
+
+.cust-check-inline {
+  padding-top: 28px;
+}
+
+.cust-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.cust-picks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px;
+}
+
+.cust-picks button {
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.cust-picks button:hover {
+  background: #f3f4f6;
+}
+
+.cust-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cust-badge-off {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.cust-btn-danger {
+  color: #b91c1c;
+}
+
+.cust-form-msg.is-ok {
+  color: #047857;
+}
+
+.cust-form-msg.is-error {
+  color: #b91c1c;
+}
+
+#ct-observaciones,
+.cust-field textarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: inherit;
+}
+
 @media (max-width: 780px) {
   .cust-grid-2,
+  .cust-grid-3,
+  .cust-search-grid,
   .cust-id-pair {
     grid-template-columns: 1fr;
   }

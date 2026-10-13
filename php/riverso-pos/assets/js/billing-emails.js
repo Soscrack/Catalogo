@@ -170,6 +170,7 @@
         .then(function (data) {
           setEmails((data && data.emails) || []);
           if (inputEl) inputEl.value = "";
+          if (data && data.contact_warning) setError(data.contact_warning);
         })
         .catch(function (err) {
           setError((err && err.message) || "No se pudo agregar.");
@@ -190,7 +191,10 @@
         if (persist && item.suggested && selected) {
           busy = true;
           post(action("emailAdd") || "riverso_billing_email_add", { rut: rut, email: item.email })
-            .then(function (data) { setEmails((data && data.emails) || []); })
+            .then(function (data) {
+              setEmails((data && data.emails) || []);
+              if (data && data.contact_warning) setError(data.contact_warning);
+            })
             .catch(function (err) { setError((err && err.message) || "No se pudo guardar."); })
             .finally(function () { busy = false; render(); });
         }

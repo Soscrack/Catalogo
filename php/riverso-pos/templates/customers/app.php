@@ -37,6 +37,12 @@ if (!function_exists('riverso_pos_customers_json')) {
 <div class="wrap riverso-cust-wrap<?php echo $surface === 'portal' ? ' riverso-cust-wrap--portal' : ''; ?>">
     <div id="riverso-customers" class="riverso-cust" data-surface="<?php echo htmlspecialchars($surface, ENT_QUOTES, 'UTF-8'); ?>" data-ready="0">
 
+        <div class="cust-tabs" role="tablist">
+            <button type="button" class="cust-tab is-active" id="cust-tab-clientes" data-tab="clientes" role="tab" aria-selected="true">Clientes</button>
+            <button type="button" class="cust-tab" id="cust-tab-contactos" data-tab="contactos" role="tab" aria-selected="false">Contactos</button>
+        </div>
+
+        <div id="cust-panel-clientes">
         <section id="cust-list-view" class="cust-view" aria-labelledby="cust-list-title">
             <header class="cust-top">
                 <div>
@@ -108,6 +114,11 @@ if (!function_exists('riverso_pos_customers_json')) {
                 ?>
             </form>
         </section>
+        </div>
+
+        <div id="cust-panel-contactos" hidden>
+            <?php include RIVERSO_POS_PLUGIN_DIR . 'templates/customers/contacts-panel.php'; ?>
+        </div>
     </div>
 </div>
 

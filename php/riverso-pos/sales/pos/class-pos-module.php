@@ -975,6 +975,13 @@ class Riverso_POS_Module {
         wp_update_user(['ID' => $user_id, 'display_name' => $name]);
         update_user_meta($user_id, 'billing_phone', $phone);
         update_user_meta($user_id, 'billing_rut', $rut);
+        if ($email && is_email($email) && class_exists('Riverso_Customer_Contact_Module')) {
+            Riverso_Customer_Contact_Module::remember_billing_email($user_id, $email, [
+                'nombre' => $name,
+                'telefono' => $phone,
+                'origen' => 'manual',
+            ]);
+        }
         update_user_meta($user_id, 'first_name', explode(' ', $name)[0]);
         update_user_meta($user_id, 'billing_first_name', explode(' ', $name)[0]);
         
@@ -1068,6 +1075,11 @@ class Riverso_POS_Module {
         $items = isset($_POST['items']) ? json_decode(stripslashes($_POST['items']), true) : [];
         $customer_id = isset($_POST['customer_id']) ? intval($_POST['customer_id']) : 0;
         $customer_name = isset($_POST['customer_name']) ? sanitize_text_field($_POST['customer_name']) : 'Cliente Anónimo';
+        $billing_email = isset($_POST['billing_email']) ? sanitize_email(wp_unslash($_POST['billing_email'])) : '';
+        $doc_tipo = isset($_POST['doc_tipo']) ? sanitize_key(wp_unslash($_POST['doc_tipo'])) : 'boleta';
+        if (!in_array($doc_tipo, ['boleta', 'factura'], true)) {
+            $doc_tipo = 'boleta';
+        }
         $payment_method = isset($_POST['payment_method']) ? sanitize_text_field($_POST['payment_method']) : 'cash';
         $payment_reference = isset($_POST['payment_reference']) ? sanitize_text_field($_POST['payment_reference']) : '';
         $discount_type = isset($_POST['discount_type']) ? sanitize_text_field($_POST['discount_type']) : '';
@@ -1160,17 +1172,25 @@ class Riverso_POS_Module {
             }
             
             // Configurar datos de facturación
+            $email_for_doc = $billing_email;
+            $phone_for_doc = '';
             if ($customer_id) {
                 $customer = get_user_by('id', $customer_id);
                 if ($customer) {
                     $order->set_billing_first_name(get_user_meta($customer_id, 'billing_first_name', true) ?: $customer->display_name);
                     $order->set_billing_last_name(get_user_meta($customer_id, 'billing_last_name', true));
-                    $order->set_billing_email($customer->user_email);
-                    $order->set_billing_phone(get_user_meta($customer_id, 'billing_phone', true));
+                    if ($email_for_doc === '') {
+                        $email_for_doc = $customer->user_email;
+                    }
+                    $phone_for_doc = (string) get_user_meta($customer_id, 'billing_phone', true);
+                    $order->set_billing_phone($phone_for_doc);
                     $order->set_billing_company(get_user_meta($customer_id, 'billing_company', true));
                 }
             } else {
                 $order->set_billing_first_name($customer_name);
+            }
+            if ($email_for_doc !== '' && is_email($email_for_doc)) {
+                $order->set_billing_email($email_for_doc);
             }
             
             // Configurar método de pago
@@ -1197,11 +1217,27 @@ class Riverso_POS_Module {
             $order->update_meta_data('_riverso_pos_session', $session_id);
             $order->update_meta_data('_riverso_pos_payment_method', $payment_method);
             $order->update_meta_data('_riverso_pos_payment_reference', $payment_reference);
+            $order->update_meta_data('_riverso_doc_tipo', $doc_tipo);
             
             // Calcular totales y completar
             $order->calculate_totals();
             $order->set_status('completed', 'Venta POS completada');
             $order->save();
+
+            $contact_warning = '';
+            $email_usable = $email_for_doc !== ''
+                && is_email($email_for_doc)
+                && !preg_match('/@cliente\.local$/i', $email_for_doc);
+            if ($email_usable && class_exists('Riverso_Customer_Contact_Module')) {
+                $saved_contact = Riverso_Customer_Contact_Module::remember_billing_email($customer_id, $email_for_doc, [
+                    'nombre' => $customer_name,
+                    'telefono' => $phone_for_doc,
+                    'origen' => $doc_tipo,
+                ]);
+                if (($saved_contact['status'] ?? '') === 'blocked') {
+                    $contact_warning = $saved_contact['message'];
+                }
+            }
             
             // Registrar pago en tabla POS
             if ($session_id) {
@@ -1240,6 +1276,7 @@ class Riverso_POS_Module {
                 'order_number' => $order->get_order_number(),
                 'total' => $order->get_total(),
                 'status' => $order->get_status(),
+                'contact_warning' => $contact_warning,
                 'message' => 'Orden #' . $order->get_order_number() . ' creada exitosamente'
             ]);
             

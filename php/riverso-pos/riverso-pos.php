@@ -452,6 +452,17 @@ final class Riverso_POS {
             }
         }
 
+        if (class_exists('Riverso_Customer_View')) {
+            Riverso_Customer_View::get_instance()->init();
+        }
+        $contact_file = RIVERSO_POS_PLUGIN_DIR . 'sales/customers/class-customer-contact-module.php';
+        if (file_exists($contact_file)) {
+            require_once $contact_file;
+            if (class_exists('Riverso_Customer_Contact_Module')) {
+                Riverso_Customer_Contact_Module::get_instance()->init();
+            }
+        }
+
         // Auth audit en runtime (además de activator)
         if (class_exists('Riverso_Auth_Service')) {
             Riverso_Auth_Service::get_instance()->init();

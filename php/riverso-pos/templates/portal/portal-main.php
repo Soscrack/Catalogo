@@ -2975,6 +2975,9 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
             </div>
         </div>
 
+        <?php elseif ($current_page === 'customers'): ?>
+        <?php include RIVERSO_POS_PLUGIN_DIR . 'templates/portal/portal-customers.php'; ?>
+
         <?php else: ?>
         <!-- Página no encontrada -->
         <div class="content-section">

@@ -512,6 +512,7 @@ class Riverso_POS_Activator {
             ['path' => 'modules/manufacturing/class-manufacturing-module.php', 'class' => 'Riverso_Manufacturing_Module'],
             ['path' => 'modules/print-orders/class-print-order-module.php', 'class' => 'Riverso_Print_Order_Module'],
             ['path' => 'modules/inventory/class-inventory-module.php', 'class' => 'Riverso_Inventory_Count_Module'],
+            ['path' => 'sales/customers/class-customer-contact-module.php', 'class' => 'Riverso_Customer_Contact_Module'],
         ];
 
         foreach ($module_defs as $def) {

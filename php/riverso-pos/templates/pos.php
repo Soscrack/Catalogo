@@ -136,6 +136,15 @@ $active_session = $wpdb->get_row($wpdb->prepare(
                         </div>
                         <input type="hidden" id="pos-customer-id" value="0">
                         <input type="hidden" id="pos-customer-name" value="Cliente Anónimo">
+                        <div class="pos-doc-box" style="margin-top:10px;">
+                            <label for="pos-doc-tipo" style="display:block; margin-bottom:4px;"><?php _e('Documento', 'riverso-pos'); ?></label>
+                            <select id="pos-doc-tipo" style="width:100%; margin-bottom:8px;">
+                                <option value="boleta"><?php _e('Boleta', 'riverso-pos'); ?></option>
+                                <option value="factura"><?php _e('Factura', 'riverso-pos'); ?></option>
+                            </select>
+                            <label for="pos-billing-email" style="display:block; margin-bottom:4px;"><?php _e('Correo del documento', 'riverso-pos'); ?></label>
+                            <input type="email" id="pos-billing-email" placeholder="<?php esc_attr_e('Se guarda como contacto del cliente', 'riverso-pos'); ?>" style="width:100%;">
+                        </div>
                     </div>
                     
                     <!-- Descuento -->
@@ -428,6 +437,7 @@ $active_session = $wpdb->get_row($wpdb->prepare(
         <h2><?php _e('¡Venta Completada!', 'riverso-pos'); ?></h2>
         <p class="order-number">Orden #<span id="success-order-number"></span></p>
         <p class="order-total">Total: <span id="success-order-total"></span></p>
+        <p id="success-contact-warning" style="display:none; color:#92400e; margin:8px 16px;"></p>
         <div class="success-actions">
             <button type="button" class="button" onclick="document.getElementById('modal-sale-success').style.display='none'">
                 <?php _e('Cerrar', 'riverso-pos'); ?>
@@ -1652,7 +1662,7 @@ jQuery(document).ready(function($) {
                     let html = '';
                     response.data.customers.forEach(function(customer) {
                         html += `
-                            <div class="customer-item" data-id="${customer.id}" data-name="${customer.name}">
+                            <div class="customer-item" data-id="${customer.id}" data-name="${String(customer.name || '').replace(/"/g, '&quot;')}" data-email="${String(customer.email || '').replace(/"/g, '&quot;')}">
                                 <strong>${customer.name}</strong><br>
                                 <small>${customer.email || ''} ${customer.phone || ''}</small>
                             </div>
@@ -1669,9 +1679,10 @@ jQuery(document).ready(function($) {
     // Seleccionar cliente
     $(document).on('click', '.customer-item', function() {
         selectedCustomerId = $(this).data('id');
-        selectedCustomerName = $(this).data('name');
+        selectedCustomerName = $(this).attr('data-name');
         $('#pos-customer-id').val(selectedCustomerId);
         $('#pos-customer-name').val(selectedCustomerName);
+        $('#pos-billing-email').val($(this).attr('data-email') || '');
         $('#pos-customer-search').hide();
         $('#pos-selected-customer').show().find('.customer-name').text(selectedCustomerName);
         $('#pos-customer-results').removeClass('show');
@@ -1683,6 +1694,7 @@ jQuery(document).ready(function($) {
         selectedCustomerName = 'Cliente Anónimo';
         $('#pos-customer-id').val(0);
         $('#pos-customer-name').val(selectedCustomerName);
+        $('#pos-billing-email').val('');
         $('#pos-customer-search').val('').show();
         $('#pos-selected-customer').hide();
     });
@@ -1715,6 +1727,9 @@ jQuery(document).ready(function($) {
                 $('#pos-customer-name').val(selectedCustomerName);
                 $('#pos-customer-search').hide();
                 $('#pos-selected-customer').show().find('.customer-name').text(selectedCustomerName);
+                if (response.data.customer.email) {
+                    $('#pos-billing-email').val(response.data.customer.email);
+                }
                 $('#modal-new-customer').hide();
             } else {
                 alert(response.data.message);
@@ -1763,6 +1778,13 @@ jQuery(document).ready(function($) {
             return;
         }
         
+        const docTipo = $('#pos-doc-tipo').val() || 'boleta';
+        const billingEmail = ($('#pos-billing-email').val() || '').trim();
+        if (docTipo === 'factura' && !billingEmail) {
+            alert('Para facturar indica el correo. Quedará guardado como contacto del cliente.');
+            return;
+        }
+
         const btn = $(this);
         btn.prop('disabled', true).html('<span class="dashicons dashicons-update spin"></span> Procesando...');
         
@@ -1772,6 +1794,8 @@ jQuery(document).ready(function($) {
             items: JSON.stringify(cart),
             customer_id: selectedCustomerId,
             customer_name: selectedCustomerName,
+            billing_email: billingEmail,
+            doc_tipo: docTipo,
             payment_method: $('input[name="payment_method"]:checked').val(),
             payment_reference: $('#pos-payment-reference').val(),
             discount_type: $('#pos-discount-type').val(),
@@ -1784,6 +1808,11 @@ jQuery(document).ready(function($) {
             if (response.success) {
                 $('#success-order-number').text(response.data.order_number);
                 $('#success-order-total').text('$' + formatNumber(response.data.total));
+                if (response.data.contact_warning) {
+                    $('#success-contact-warning').text(response.data.contact_warning).show();
+                } else {
+                    $('#success-contact-warning').hide().text('');
+                }
                 $('#modal-sale-success').show();
                 
                 // Reset
@@ -1795,6 +1824,8 @@ jQuery(document).ready(function($) {
                 $('#pos-customer-id').val(0);
                 $('#pos-selected-customer').hide();
                 $('#pos-customer-search').val('').show();
+                $('#pos-billing-email').val('');
+                $('#pos-doc-tipo').val('boleta');
                 $('#pos-discount-type').val('');
                 $('#pos-discount-value').val(0).prop('disabled', true);
                 $('#pos-notes').val('');

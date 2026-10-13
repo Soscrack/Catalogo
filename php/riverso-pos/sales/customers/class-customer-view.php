@@ -14,6 +14,7 @@ if (!defined('ABSPATH')) {
 class Riverso_Customer_View {
 
     private static $instance = null;
+    private static $booted = false;
 
     public static function get_instance() {
         if (null === self::$instance) {
@@ -23,6 +24,10 @@ class Riverso_Customer_View {
     }
 
     public function init() {
+        if (self::$booted) {
+            return;
+        }
+        self::$booted = true;
         add_action('wp_ajax_riverso_search_customers', [$this, 'ajax_search']);
         add_action('wp_ajax_riverso_get_customer', [$this, 'ajax_get']);
     }

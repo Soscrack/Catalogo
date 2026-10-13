@@ -85,7 +85,7 @@
           (item.suggested ? '<span class="bill-email-badge">sugerido</span>' : "") +
           "</label>" +
           '<button type="button" class="bill-email-x" data-email-del="' + esc(item.id) +
-          '" title="Eliminar correo" aria-label="Eliminar ' + esc(item.email) + '"' +
+          '" title="Inhabilitar correo" aria-label="Inhabilitar ' + esc(item.email) + '"' +
           (busy ? " disabled" : "") + ">×</button>";
         listEl.appendChild(li);
       });
@@ -212,7 +212,7 @@
     function deleteEmail(id) {
       var item = emails.find(function (e) { return String(e.id) === String(id); });
       if (!item) return;
-      if (!window.confirm("¿Eliminar el correo " + item.email + " de este cliente?")) {
+      if (!window.confirm("¿Inhabilitar " + item.email + "? Dejará de aparecer al facturar. Para volver a usarlo hay que eliminarlo en Contactos.")) {
         return;
       }
       if (!persist || !(item.id > 0) || item.suggested) {

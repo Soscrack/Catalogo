@@ -155,6 +155,7 @@ $comuna_options = riverso_cust_comuna_options($comunas);
                     <span>Activo</span>
                 </label>
             </div>
+            <p class="cust-hint">Si lo dejas inactivo, el correo deja de usarse al facturar o boletear. Para volver a usarlo hay que eliminarlo.</p>
             <label class="cust-field">
                 <span>Observaciones</span>
                 <textarea id="ct-observaciones" rows="3"></textarea>

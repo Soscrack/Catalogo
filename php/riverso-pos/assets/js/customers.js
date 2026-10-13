@@ -784,6 +784,10 @@
         if (canEdit()) {
           actions +=
             '<button type="button" class="cust-btn cust-btn-link" data-ct-open="' + escapeHtml(c.id) + '" data-ct-mode="edit">Editar</button>';
+          if (c.activo) {
+            actions +=
+              '<button type="button" class="cust-btn cust-btn-link" data-ct-disable="' + escapeHtml(c.id) + '" data-ct-email="' + escapeHtml(c.email || c.nombre) + '">Inhabilitar</button>';
+          }
         }
         actions +=
           '<a class="cust-btn cust-btn-link" href="' + escapeHtml(clienteUrl) + '" data-ct-cliente="' +
@@ -1053,10 +1057,26 @@
           openContact(openBtn.getAttribute('data-ct-open'), openBtn.getAttribute('data-ct-mode'));
           return;
         }
+        var off = e.target.closest('[data-ct-disable]');
+        if (off) {
+          var offLabel = off.getAttribute('data-ct-email') || 'este contacto';
+          if (!window.confirm('¿Inhabilitar ' + offLabel + '? Dejará de usarse al facturar o boletear. Para volver a usarlo hay que eliminarlo en Contactos.')) return;
+          post(cfg.actions.contactsDisable, { id: off.getAttribute('data-ct-disable') }).then(function (res) {
+            if (!res || !res.success) {
+              setMsg(listMsg, (res && res.data && res.data.message) || 'No se pudo inhabilitar', false);
+              return;
+            }
+            setMsg(listMsg, res.data.message || 'Contacto inhabilitado', true);
+            searchContacts();
+          }).catch(function () {
+            setMsg(listMsg, 'Error de conexión', false);
+          });
+          return;
+        }
         var del = e.target.closest('[data-ct-delete]');
         if (!del) return;
         var label = del.getAttribute('data-ct-email') || 'este contacto';
-        if (!window.confirm('¿Eliminar ' + label + '? Después de eliminarlo, el correo se puede volver a guardar.')) return;
+        if (!window.confirm('¿Eliminar ' + label + '? También se quita de la facturación y el correo se puede volver a guardar.')) return;
         post(cfg.actions.contactsDelete, { id: del.getAttribute('data-ct-delete') }).then(function (res) {
           if (!res || !res.success) {
             setMsg(listMsg, (res && res.data && res.data.message) || 'No se pudo eliminar', false);

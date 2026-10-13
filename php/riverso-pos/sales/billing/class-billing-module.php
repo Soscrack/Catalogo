@@ -977,7 +977,10 @@ class Riverso_Billing_Module {
                         }
                     }
                     if ($recv_rut !== '' && $used) {
-                        $this->emails->mark_used($recv_rut, $used);
+                        $used = $this->without_disabled_contacts($recv_rut, $used);
+                        if ($used) {
+                            $this->emails->mark_used($recv_rut, $used);
+                        }
                     }
                 }
             }
@@ -1982,14 +1985,15 @@ class Riverso_Billing_Module {
     public function ajax_emails_list() {
         $this->authorize();
         $rut = isset($_POST['rut']) ? sanitize_text_field(wp_unslash($_POST['rut'])) : '';
-        $list = $this->emails->list_by_rut($rut);
+        $list = $this->billing_emails_for_rut($rut);
         $suggestion = null;
         if (!$list) {
             $repo = $this->customer_repo();
             $customer = $repo ? $repo->find_by_rut($rut) : null;
             if ($customer) {
                 $email = sanitize_email((string) ($customer['contacto_email'] ?? ''));
-                if ($email !== '' && is_email($email)) {
+                $blocked = $email !== '' && $this->email_is_disabled_contact($rut, $email);
+                if ($email !== '' && is_email($email) && !$blocked) {
                     $suggestion = [
                         'id' => 0,
                         'rut' => $this->emails->normalize_rut($rut),
@@ -2010,6 +2014,11 @@ class Riverso_Billing_Module {
         $this->authorize();
         $rut = isset($_POST['rut']) ? sanitize_text_field(wp_unslash($_POST['rut'])) : '';
         $email = isset($_POST['email']) ? sanitize_text_field(wp_unslash($_POST['email'])) : '';
+        if ($this->email_is_disabled_contact($rut, $email)) {
+            wp_send_json_error([
+                'message' => $email . ' está inhabilitado. Elimínalo en Contactos antes de volver a usarlo al facturar.',
+            ]);
+        }
         $result = $this->emails->add($rut, $email, true);
         if (empty($result['ok'])) {
             wp_send_json_error(['message' => $result['message'] ?? 'No se pudo agregar el correo.']);
@@ -2017,7 +2026,7 @@ class Riverso_Billing_Module {
         $contact_warnings = $this->remember_billing_contacts(0, $rut, [$email], 'facturacion');
         wp_send_json_success([
             'email' => $result['email'],
-            'emails' => $this->emails->list_by_rut($rut),
+            'emails' => $this->billing_emails_for_rut($rut),
             'contact_warning' => $contact_warnings ? implode(' ', $contact_warnings) : '',
         ]);
     }
@@ -2116,7 +2125,7 @@ class Riverso_Billing_Module {
         $rut = (string) ($result['email']['rut'] ?? '');
         wp_send_json_success([
             'email' => $result['email'],
-            'emails' => $rut !== '' ? $this->emails->list_by_rut($rut) : [],
+            'emails' => $rut !== '' ? $this->billing_emails_for_rut($rut) : [],
         ]);
     }
 
@@ -2126,13 +2135,92 @@ class Riverso_Billing_Module {
         $existing = $this->emails->get($id);
         $result = $this->emails->delete($id);
         if (empty($result['ok'])) {
-            wp_send_json_error(['message' => $result['message'] ?? 'No se pudo eliminar.']);
+            wp_send_json_error(['message' => $result['message'] ?? 'No se pudo quitar el correo.']);
         }
         $rut = (string) ($existing['rut'] ?? '');
+        $email = (string) ($existing['email'] ?? '');
+        $cliente_id = $this->cliente_id_for_rut($rut);
+        if ($cliente_id > 0 && $email !== '') {
+            $this->contact_repo()->disable_email($cliente_id, $email);
+        }
         wp_send_json_success([
             'deleted_id' => $id,
-            'emails' => $rut !== '' ? $this->emails->list_by_rut($rut) : [],
+            'message' => 'Correo inhabilitado. Ya no se usa al facturar. Para volver a usarlo hay que eliminarlo en Contactos.',
+            'emails' => $rut !== '' ? $this->billing_emails_for_rut($rut) : [],
         ]);
+    }
+
+    /**
+     * @param string $rut
+     * @return array<int, array<string, mixed>>
+     */
+    private function billing_emails_for_rut($rut) {
+        $list = $this->emails->list_by_rut($rut);
+        $cliente_id = $this->cliente_id_for_rut($rut);
+        if ($cliente_id <= 0) {
+            return $list;
+        }
+        $contacts = $this->contact_repo();
+        $out = [];
+        foreach ($list as $item) {
+            if ($contacts->inactive_email($cliente_id, (string) ($item['email'] ?? ''))) {
+                continue;
+            }
+            $out[] = $item;
+        }
+        return $out;
+    }
+
+    /**
+     * @param string $rut
+     * @param string $email
+     * @return bool
+     */
+    private function email_is_disabled_contact($rut, $email) {
+        $cliente_id = $this->cliente_id_for_rut($rut);
+        if ($cliente_id <= 0) {
+            return false;
+        }
+        return $this->contact_repo()->inactive_email($cliente_id, $email);
+    }
+
+    /**
+     * @param string             $rut
+     * @param array<int, string> $emails
+     * @return array<int, string>
+     */
+    private function without_disabled_contacts($rut, array $emails) {
+        $out = [];
+        foreach ($emails as $email) {
+            if (!$this->email_is_disabled_contact($rut, (string) $email)) {
+                $out[] = $email;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * @param string $rut
+     * @return int
+     */
+    private function cliente_id_for_rut($rut) {
+        $repo = $this->customer_repo();
+        if (!$repo || $rut === '') {
+            return 0;
+        }
+        $customer = $repo->find_by_rut($rut);
+        return $customer ? (int) ($customer['id'] ?? 0) : 0;
+    }
+
+    /**
+     * @return Riverso_Cliente_Contact_Repository
+     */
+    private function contact_repo() {
+        $file = RIVERSO_POS_PLUGIN_DIR . 'sales/customers/class-cliente-contact-repository.php';
+        if (is_file($file)) {
+            require_once $file;
+        }
+        return new Riverso_Cliente_Contact_Repository();
     }
 
     public function ajax_document_email() {

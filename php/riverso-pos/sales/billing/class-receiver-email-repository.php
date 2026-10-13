@@ -154,6 +154,27 @@ class Riverso_Receiver_Email_Repository {
     }
 
     /**
+     * Quita un correo de la lista de envío de un RUT.
+     *
+     * @param string $rut
+     * @param string $email
+     * @return bool
+     */
+    public function delete_by_rut_email($rut, $email) {
+        global $wpdb;
+        $rut = $this->normalize_rut($rut);
+        $email = $this->normalize_email($email);
+        if ($rut === '' || $email === '') {
+            return false;
+        }
+        $deleted = $wpdb->delete($this->table(), [
+            'rut' => $rut,
+            'email' => $email,
+        ]);
+        return $deleted !== false && $deleted > 0;
+    }
+
+    /**
      * Marca como seleccionados los correos usados y desmarca el resto del RUT.
      * Agrega los que aún no existan.
      *

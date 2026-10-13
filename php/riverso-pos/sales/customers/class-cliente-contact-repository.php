@@ -277,7 +277,74 @@ class Riverso_Cliente_Contact_Repository {
         if (!$deleted) {
             return ['ok' => false, 'message' => 'No se pudo eliminar el contacto'];
         }
-        return ['ok' => true, 'message' => 'Contacto eliminado'];
+        return [
+            'ok' => true,
+            'message' => 'Contacto eliminado. Su correo ya no se usa al facturar.',
+            'email' => (string) ($row['email'] ?? ''),
+            'cliente_id' => (int) ($row['cliente_id'] ?? 0),
+        ];
+    }
+
+    /**
+     * Deja el contacto fuera del envío automático. No borra la ficha.
+     *
+     * @param int $id
+     * @return array{ok: bool, message?: string, contact?: array<string, mixed>}
+     */
+    public function disable($id) {
+        global $wpdb;
+        $this->ensure_ready();
+        $id = (int) $id;
+        $row = $this->get_raw($id);
+        if (!$row) {
+            return ['ok' => false, 'message' => 'Contacto no encontrado'];
+        }
+        if (!(int) $row['activo']) {
+            return [
+                'ok' => true,
+                'message' => 'El contacto ya estaba inhabilitado',
+                'contact' => $this->present($row),
+            ];
+        }
+        $updated = $wpdb->update($this->table, ['activo' => 0], ['id' => $id]);
+        if ($updated === false) {
+            return ['ok' => false, 'message' => 'No se pudo inhabilitar el contacto'];
+        }
+        $contact = $this->get($id);
+        return [
+            'ok' => true,
+            'message' => 'Contacto inhabilitado. Su correo ya no se usa al facturar. Para volver a usarlo hay que eliminarlo en Contactos.',
+            'contact' => $contact,
+        ];
+    }
+
+    /**
+     * Inhabilita el contacto de un cliente que usa este correo, si existe.
+     *
+     * @param int    $cliente_id
+     * @param string $email
+     * @return array{ok: bool, status: string, id?: int}
+     */
+    public function disable_email($cliente_id, $email) {
+        global $wpdb;
+        $this->ensure_ready();
+        $cliente_id = (int) $cliente_id;
+        $email = $this->normalize_email($email);
+        if ($cliente_id <= 0 || $email === false || $email === '') {
+            return ['ok' => true, 'status' => 'skipped'];
+        }
+        $row = $this->find_by_email($cliente_id, $email);
+        if (!$row) {
+            return ['ok' => true, 'status' => 'missing'];
+        }
+        if (!(int) $row['activo']) {
+            return ['ok' => true, 'status' => 'already', 'id' => (int) $row['id']];
+        }
+        $updated = $wpdb->update($this->table, ['activo' => 0], ['id' => (int) $row['id']]);
+        if ($updated === false) {
+            return ['ok' => false, 'status' => 'error'];
+        }
+        return ['ok' => true, 'status' => 'disabled', 'id' => (int) $row['id']];
     }
 
     /**

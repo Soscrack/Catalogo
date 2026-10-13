@@ -74,6 +74,7 @@ class Riverso_Customer_Module {
         add_action('wp_ajax_riverso_customer_contacts_get', [$this, 'ajax_contacts_get']);
         add_action('wp_ajax_riverso_customer_contacts_save', [$this, 'ajax_contacts_save']);
         add_action('wp_ajax_riverso_customer_contacts_delete', [$this, 'ajax_contacts_delete']);
+        add_action('wp_ajax_riverso_customer_contacts_disable', [$this, 'ajax_contacts_disable']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_assets']);
     }
 
@@ -120,6 +121,7 @@ class Riverso_Customer_Module {
                 'contactsGet' => 'riverso_customer_contacts_get',
                 'contactsSave' => 'riverso_customer_contacts_save',
                 'contactsDelete' => 'riverso_customer_contacts_delete',
+                'contactsDisable' => 'riverso_customer_contacts_disable',
             ],
         ];
     }
@@ -299,20 +301,74 @@ class Riverso_Customer_Module {
                 'status' => $result['status'] ?? '',
             ]);
         }
+        $contact = $result['contact'] ?? null;
+        if (is_array($contact) && empty($contact['activo'])) {
+            $this->forget_billing_email((int) ($contact['cliente_id'] ?? 0), (string) ($contact['email'] ?? ''));
+        }
+
         wp_send_json_success([
             'message' => $result['message'],
             'id' => $result['id'],
-            'contact' => $result['contact'] ?? null,
+            'contact' => $contact,
         ]);
     }
 
     public function ajax_contacts_delete() {
         $this->authorize_edit();
-        $result = $this->contacts->delete(isset($_POST['id']) ? (int) $_POST['id'] : 0);
+        $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+        $contact = $this->contacts->get($id);
+        $result = $this->contacts->delete($id);
         if (empty($result['ok'])) {
             wp_send_json_error(['message' => $result['message'] ?? 'No se pudo eliminar']);
         }
+        $cliente_id = $contact ? (int) ($contact['cliente_id'] ?? 0) : (int) ($result['cliente_id'] ?? 0);
+        $email = $contact ? (string) ($contact['email'] ?? '') : (string) ($result['email'] ?? '');
+        $this->forget_billing_email($cliente_id, $email);
         wp_send_json_success(['message' => $result['message']]);
+    }
+
+    public function ajax_contacts_disable() {
+        $this->authorize_edit();
+        $result = $this->contacts->disable(isset($_POST['id']) ? (int) $_POST['id'] : 0);
+        if (empty($result['ok'])) {
+            wp_send_json_error(['message' => $result['message'] ?? 'No se pudo inhabilitar']);
+        }
+        $contact = $result['contact'] ?? null;
+        if (is_array($contact)) {
+            $this->forget_billing_email((int) ($contact['cliente_id'] ?? 0), (string) ($contact['email'] ?? ''));
+        }
+        wp_send_json_success([
+            'message' => $result['message'] ?? 'Contacto inhabilitado',
+            'contact' => $contact,
+        ]);
+    }
+
+    /**
+     * Saca el correo de la lista «Enviar por correo» de facturación.
+     *
+     * @param int    $cliente_id
+     * @param string $email
+     */
+    private function forget_billing_email($cliente_id, $email) {
+        $cliente_id = (int) $cliente_id;
+        $email = strtolower(trim($email));
+        if ($cliente_id <= 0 || $email === '' || !is_email($email)) {
+            return;
+        }
+        $customer = $this->repo->get($cliente_id);
+        $rut = is_array($customer) ? (string) ($customer['rut'] ?? '') : '';
+        if ($rut === '') {
+            return;
+        }
+        $file = dirname(__FILE__) . '/../billing/class-receiver-email-repository.php';
+        if (!is_file($file)) {
+            return;
+        }
+        require_once $file;
+        if (!class_exists('Riverso_Receiver_Email_Repository')) {
+            return;
+        }
+        (new Riverso_Receiver_Email_Repository())->delete_by_rut_email($rut, $email);
     }
 
     /**

@@ -402,6 +402,10 @@
   justify-content: center;
 }
 
+.riverso-bill .bill-btn[hidden] {
+  display: none;
+}
+
 .riverso-bill .bill-btn:disabled {
   opacity: .55;
   cursor: not-allowed;

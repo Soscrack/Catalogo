@@ -371,6 +371,79 @@ class Riverso_Cliente_Contact_Repository {
         return $row && !(int) $row['activo'];
     }
 
+    /**
+     * Correos inhabilitados de un cliente, en una sola lectura.
+     * No revisa el esquema: esa tabla ya existe al facturar.
+     *
+     * @param int $cliente_id
+     * @return array<string, true>
+     */
+    public function inactive_emails($cliente_id) {
+        global $wpdb;
+        $cliente_id = (int) $cliente_id;
+        if ($cliente_id <= 0) {
+            return [];
+        }
+        $rows = $wpdb->get_col($wpdb->prepare(
+            "SELECT email FROM {$this->table}
+             WHERE cliente_id = %d AND activo = 0 AND email <> ''",
+            $cliente_id
+        ));
+        if (!is_array($rows)) {
+            return [];
+        }
+        $out = [];
+        foreach ($rows as $email) {
+            $email = $this->normalize_email((string) $email);
+            if ($email === false || $email === '') {
+                continue;
+            }
+            $out[$email] = true;
+        }
+        return $out;
+    }
+
+    /**
+     * Correos activos de la libreta, para ofrecerlos al emitir un DTE.
+     * El primario va primero.
+     *
+     * @param int $cliente_id
+     * @return array<int, array{id:int,email:string}>
+     */
+    public function billing_emails($cliente_id) {
+        global $wpdb;
+        $cliente_id = (int) $cliente_id;
+        if ($cliente_id <= 0) {
+            return [];
+        }
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, email FROM {$this->table}
+                 WHERE cliente_id = %d AND activo = 1 AND email <> ''
+                 ORDER BY es_primario DESC, apellido_paterno ASC, primer_nombre ASC, id ASC",
+                $cliente_id
+            ),
+            ARRAY_A
+        );
+        if (!is_array($rows)) {
+            return [];
+        }
+        $out = [];
+        $seen = [];
+        foreach ($rows as $row) {
+            $email = $this->normalize_email((string) ($row['email'] ?? ''));
+            if ($email === false || $email === '' || isset($seen[$email])) {
+                continue;
+            }
+            $seen[$email] = true;
+            $out[] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'email' => $email,
+            ];
+        }
+        return $out;
+    }
+
     public function remember($cliente_id, $email, $origen = 'facturacion', $phone = '') {
         $this->ensure_ready();
         $cliente_id = (int) $cliente_id;

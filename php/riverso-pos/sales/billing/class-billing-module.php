@@ -2144,8 +2144,23 @@ class Riverso_Billing_Module {
 
     public function ajax_email_toggle() {
         $this->authorize();
-        $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
+        $id = isset($_POST['id']) ? (int) wp_unslash($_POST['id']) : 0;
         $selected = !empty($_POST['selected']);
+        if ($id < 0) {
+            $target = $this->contact_email_target(-$id);
+            if (empty($target['ok'])) {
+                wp_send_json_error(['message' => $target['message'] ?? 'No se pudo actualizar.']);
+            }
+            $result = $this->emails->add($target['rut'], $target['email'], $selected);
+            if (empty($result['ok'])) {
+                wp_send_json_error(['message' => $result['message'] ?? 'No se pudo actualizar.']);
+            }
+            wp_send_json_success([
+                'email' => $result['email'],
+                'emails' => $this->billing_emails_for_rut($target['rut']),
+            ]);
+            return;
+        }
         $result = $this->emails->set_selected($id, $selected);
         if (empty($result['ok'])) {
             wp_send_json_error(['message' => $result['message'] ?? 'No se pudo actualizar.']);
@@ -2159,7 +2174,24 @@ class Riverso_Billing_Module {
 
     public function ajax_email_delete() {
         $this->authorize();
-        $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
+        $id = isset($_POST['id']) ? (int) wp_unslash($_POST['id']) : 0;
+        if ($id < 0) {
+            $target = $this->contact_email_target(-$id);
+            if (empty($target['ok'])) {
+                wp_send_json_error(['message' => $target['message'] ?? 'No se pudo quitar el correo.']);
+            }
+            $disabled = $this->contact_repo()->disable(-$id);
+            if (empty($disabled['ok'])) {
+                wp_send_json_error(['message' => $disabled['message'] ?? 'No se pudo quitar el correo.']);
+            }
+            $this->emails->delete_by_rut_email($target['rut'], $target['email']);
+            wp_send_json_success([
+                'deleted_id' => $id,
+                'message' => 'Correo inhabilitado. Ya no se usa al facturar. Para volver a usarlo hay que eliminarlo en Contactos.',
+                'emails' => $this->billing_emails_for_rut($target['rut']),
+            ]);
+            return;
+        }
         $existing = $this->emails->get($id);
         $result = $this->emails->delete($id);
         if (empty($result['ok'])) {
@@ -2179,6 +2211,12 @@ class Riverso_Billing_Module {
     }
 
     /**
+     * Correos para emitir: primero la libreta activa del cliente, después los
+     * que ya se habían usado en facturación y no están en esa libreta.
+     * Un contacto inhabilitado no entra.
+     *
+     * El id negativo es el contacto todavía no guardado en la lista de envío.
+     *
      * @param string $rut
      * @return array<int, array<string, mixed>>
      */
@@ -2189,14 +2227,66 @@ class Riverso_Billing_Module {
             return $list;
         }
         $contacts = $this->contact_repo();
-        $out = [];
+        $blocked = $contacts->inactive_emails($cliente_id);
+        $saved = [];
         foreach ($list as $item) {
-            if ($contacts->inactive_email($cliente_id, (string) ($item['email'] ?? ''))) {
+            $email = strtolower(trim((string) ($item['email'] ?? '')));
+            if ($email === '' || isset($blocked[$email])) {
                 continue;
             }
-            $out[] = $item;
+            $saved[$email] = $item;
         }
-        return $out;
+
+        $from_book = [];
+        $seen = [];
+        foreach ($contacts->billing_emails($cliente_id) as $contact) {
+            $email = strtolower(trim((string) ($contact['email'] ?? '')));
+            $contact_id = (int) ($contact['id'] ?? 0);
+            if ($email === '' || $contact_id <= 0 || isset($seen[$email])) {
+                continue;
+            }
+            $seen[$email] = true;
+            if (isset($saved[$email])) {
+                $from_book[] = $saved[$email];
+                unset($saved[$email]);
+                continue;
+            }
+            $from_book[] = [
+                'id' => -$contact_id,
+                'rut' => $this->emails->normalize_rut($rut),
+                'email' => $email,
+                'is_selected' => true,
+                'from_contact' => true,
+            ];
+        }
+
+        return array_merge($from_book, array_values($saved));
+    }
+
+    /**
+     * @param int $contact_id
+     * @return array{ok:bool,message?:string,rut?:string,email?:string}
+     */
+    private function contact_email_target($contact_id) {
+        $contact = $this->contact_repo()->get((int) $contact_id);
+        if (!$contact) {
+            return ['ok' => false, 'message' => 'Contacto no encontrado.'];
+        }
+        $email = strtolower(trim((string) ($contact['email'] ?? '')));
+        if ($email === '' || !is_email($email)) {
+            return ['ok' => false, 'message' => 'El contacto no tiene un correo válido.'];
+        }
+        $repo = $this->customer_repo();
+        $customer = $repo ? $repo->get((int) ($contact['cliente_id'] ?? 0)) : null;
+        $rut = (string) ($customer['rut'] ?? '');
+        if ($rut === '') {
+            return ['ok' => false, 'message' => 'No se encontró el cliente de este contacto.'];
+        }
+        return [
+            'ok' => true,
+            'rut' => $rut,
+            'email' => $email,
+        ];
     }
 
     /**

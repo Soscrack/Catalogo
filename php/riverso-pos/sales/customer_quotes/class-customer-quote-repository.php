@@ -196,9 +196,13 @@ class Riverso_Customer_Quote_Repository {
 
         $id = isset($input['id']) && $input['id'] !== '' && $input['id'] !== null ? (int) $input['id'] : 0;
         $existing = $id > 0 ? $this->find($id) : null;
-        if ($id > 0 && $existing === null) {
-            throw new Riverso_Quote_Exception('Cotización no encontrada.');
+        if ($id > 0 && $existing === null && $wpdb->last_error !== '') {
+            // find() también devuelve null ante un error de lectura: ahí no se crea nada.
+            throw new Riverso_Quote_Exception('No se pudo leer la cotización.' . $this->db_error_suffix());
         }
+        // Si $id ya no existe, la cotización se borró con el editor aún abierto (borrador vacío
+        // descartado, barrido u otra sesión). Lo que trae el editor es la única copia: se guarda
+        // como cotización nueva en vez de rechazarlo. Quien llama lo nota porque cambia el id.
         if ($existing !== null && !Riverso_Quote_Status::is_editable($existing['status'])) {
             throw new Riverso_Quote_Exception(
                 'La cotización está ' . $existing['status_label'] . ' y no se puede editar. Vuelva a Borrador para modificarla.'
@@ -1150,21 +1154,33 @@ class Riverso_Customer_Quote_Repository {
             throw new Riverso_Quote_Exception('No se pudo borrar la cotización.' . $this->db_error_suffix());
         }
         $this->release_stock($id);
+        $this->log_deletion('customer_quote.deleted', $id, array(
+            'quote_number' => $quote['quote_number'],
+            'status' => $quote['status'],
+            'customer_name' => $quote['customer_name'],
+            'net_total' => $quote['net_total'],
+            'lines' => count($quote['lines']),
+        ), 'Cotización borrada desde Opciones.');
     }
 
     /**
      * Borra la cotización solo si es un borrador sin líneas ni documentos asociados.
      * La condición va en el mismo DELETE para no borrar algo que se llenó entre medio.
      *
-     * @param int $id
+     * @param int    $id
+     * @param string $reason Qué lo gatilló (queda en auditoría).
      * @return bool true si se borró.
      */
-    public function discard_if_empty($id) {
+    public function discard_if_empty($id, $reason = '') {
         global $wpdb;
         $id = (int) $id;
         if ($id <= 0 || $this->has_associated_document($id)) {
             return false;
         }
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT quote_number, created_by, created_at, updated_at FROM {$this->table_quotes} WHERE id = %d",
+            $id
+        ), ARRAY_A);
         $deleted = $wpdb->query($wpdb->prepare(
             "DELETE FROM {$this->table_quotes}
              WHERE id = %d
@@ -1174,7 +1190,31 @@ class Riverso_Customer_Quote_Repository {
             Riverso_Quote_Status::DRAFT,
             $id
         ));
-        return is_int($deleted) && $deleted > 0;
+        if (!is_int($deleted) || $deleted <= 0) {
+            return false;
+        }
+        $this->log_deletion(
+            'customer_quote.discarded_empty',
+            $id,
+            is_array($row) ? $row : array(),
+            'Borrador vacío descartado' . ($reason !== '' ? ' (' . $reason . ')' : '') . '.'
+        );
+        return true;
+    }
+
+    /**
+     * Deja rastro de un borrado: sin él no se puede saber quién ni cuándo hizo desaparecer una cotización.
+     *
+     * @param string $action
+     * @param int    $id
+     * @param array  $old
+     * @param string $details
+     */
+    private function log_deletion($action, $id, array $old, $details) {
+        if (!class_exists('Riverso_Audit_Module')) {
+            return;
+        }
+        Riverso_Audit_Module::get_instance()->log($action, 'customer_quote', (int) $id, $old, array(), $details);
     }
 
     /**
@@ -1198,7 +1238,7 @@ class Riverso_Customer_Quote_Repository {
         ));
         $count = 0;
         foreach ((array) $ids as $id) {
-            if ($this->discard_if_empty((int) $id)) {
+            if ($this->discard_if_empty((int) $id, 'barrido de borradores sin cambios hace más de ' . (int) $max_age_hours . ' h')) {
                 $count++;
             }
         }

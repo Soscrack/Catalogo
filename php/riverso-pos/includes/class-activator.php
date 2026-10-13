@@ -952,7 +952,7 @@ class Riverso_POS_Activator {
         self::add_column_if_missing($codigos, 'estado_at', "estado_at DATETIME DEFAULT NULL");
         self::add_column_if_missing($codigos, 'origen_datos', "origen_datos VARCHAR(50) NOT NULL DEFAULT 'legacy'");
         self::add_column_if_missing($codigos, 'requires_human_review', "requires_human_review TINYINT(1) NOT NULL DEFAULT 0");
-        self::add_index_if_missing($codigos, 'idx_codigo_estado', "KEY idx_codigo_estado (estado, activo)");
+        self::add_index_if_missing($codigos, 'idx_barra_estado_activo', "KEY idx_barra_estado_activo (estado, activo)");
 
         $sql = "CREATE TABLE {$prefix}ean_aliases (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -1051,6 +1051,41 @@ class Riverso_POS_Activator {
         if ((int) $exists === 0) {
             $wpdb->query("ALTER TABLE `{$table}` ADD {$definition}");
         }
+    }
+
+    /**
+     * Crea el índice o lo reemplaza si las columnas no coinciden.
+     * dbDelta no puede renombrar columnas de un índice que ya existe: intenta
+     * un ADD con el mismo nombre y MySQL lo rechaza.
+     *
+     * @param string            $table
+     * @param string            $index
+     * @param array<int,string> $columns
+     * @param string            $definition
+     */
+    private static function ensure_index_columns($table, $index, array $columns, $definition) {
+        global $wpdb;
+        if (!self::table_exists($table)) {
+            return;
+        }
+
+        $rows = $wpdb->get_col($wpdb->prepare(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.STATISTICS
+             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND INDEX_NAME = %s
+             ORDER BY SEQ_IN_INDEX ASC",
+            DB_NAME,
+            $table,
+            $index
+        ));
+        $current = array_map('strtolower', array_map('strval', is_array($rows) ? $rows : []));
+        $wanted = array_map('strtolower', array_values($columns));
+        if ($current === $wanted) {
+            return;
+        }
+        if ($current) {
+            self::drop_index_if_exists($table, $index);
+        }
+        $wpdb->query("ALTER TABLE `{$table}` ADD {$definition}");
     }
 
     private static function table_exists($table) {
@@ -1337,7 +1372,6 @@ class Riverso_POS_Activator {
             KEY idx_producto (producto_base_id),
             KEY idx_proveedor (proveedor_id),
             KEY idx_activo (activo),
-            KEY idx_codigo_estado (codigo, estado),
             KEY idx_sku_local (sku_local),
             KEY idx_pending_sku (pending_sku),
             KEY idx_conflicto (conflicto)
@@ -2963,7 +2997,7 @@ class Riverso_POS_Activator {
         self::drop_index_if_exists($table, 'ux_codigo');
         self::drop_index_if_exists($table, 'codigo');
         self::add_index_if_missing($table, 'idx_codigo', 'KEY idx_codigo (codigo)');
-        self::add_index_if_missing($table, 'idx_codigo_estado', 'KEY idx_codigo_estado (codigo, estado)');
+        self::ensure_index_columns($table, 'idx_codigo_estado', ['codigo', 'estado'], 'KEY idx_codigo_estado (codigo, estado)');
         self::add_index_if_missing($table, 'idx_codigo_origen', 'KEY idx_codigo_origen (codigo, origen_datos)');
         self::add_index_if_missing($table, 'idx_sku_local', 'KEY idx_sku_local (sku_local)');
         self::add_index_if_missing($table, 'idx_pending_sku', 'KEY idx_pending_sku (pending_sku)');
@@ -3242,7 +3276,7 @@ class Riverso_POS_Activator {
         $sql = "CREATE TABLE {$prefix}facto_producto_map (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             producto_base_id BIGINT UNSIGNED NOT NULL,
-            facto_product_id BIGINT UNSIGNED NOT NULL,
+            facto_product_id BIGINT UNSIGNED DEFAULT NULL,
             facto_sku VARCHAR(100) DEFAULT NULL,
             last_payload_hash CHAR(40) DEFAULT NULL,
             sync_state VARCHAR(20) NOT NULL DEFAULT 'linked',

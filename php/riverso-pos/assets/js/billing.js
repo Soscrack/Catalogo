@@ -2052,6 +2052,7 @@
     if (applyLocks !== false) {
       applyLocksAfterFill();
     }
+    prefetchEmitEmails(c.rut || (($("bill-recv-rut") || {}).value || ""));
   }
 
   function fillReceiverFromDraft(draft) {
@@ -2575,6 +2576,38 @@
     }
   }
 
+  var emitEmailCache = { key: "", data: null, promise: null };
+  var emitEmailTimer = 0;
+
+  function emailRutKey(rut) {
+    return String(rut || "").replace(/[^0-9kK]/g, "").toUpperCase();
+  }
+
+  function prefetchEmitEmails(rut) {
+    var key = emailRutKey(rut);
+    if (!isValidRut(rut)) return;
+    if (emitEmailCache.key === key && (emitEmailCache.data || emitEmailCache.promise)) return;
+    var actionName = (cfg.actions && cfg.actions.emailsList) || "riverso_billing_emails_list";
+    emitEmailCache = { key: key, data: null, promise: null };
+    emitEmailCache.promise = post(actionName, { rut: String(rut || "").trim() }).then(function (data) {
+      if (emitEmailCache.key !== key) return data;
+      emitEmailCache.data = data || { emails: [] };
+      emitEmailCache.promise = null;
+      return emitEmailCache.data;
+    }).catch(function (err) {
+      if (emitEmailCache.key === key) emitEmailCache.promise = null;
+      return { emails: [], error: (err && err.message) || "No se pudieron cargar los correos." };
+    });
+  }
+
+  function scheduleEmitEmailPrefetch() {
+    if (emitEmailTimer) clearTimeout(emitEmailTimer);
+    emitEmailTimer = setTimeout(function () {
+      emitEmailTimer = 0;
+      prefetchEmitEmails((($("bill-recv-rut") || {}).value || "").trim());
+    }, 400);
+  }
+
   function mountEmitEmails() {
     var box = $("bill-emit-emails");
     if (!box || !window.RiversoBillingEmails) return;
@@ -2583,11 +2616,21 @@
     }
     var type = currentTypeId();
     var rut = type === 2 ? ((($("bill-recv-rut") || {}).value) || "").trim() : "";
+    var key = emailRutKey(rut);
+    if (type === 2 && rut) prefetchEmitEmails(rut);
+    var cached = emitEmailCache.key === key ? emitEmailCache : null;
     state.emitEmailsApi = window.RiversoBillingEmails.mount(box, {
       rut: rut,
       persist: type === 2 && !!rut,
       cfg: cfg,
       post: post,
+      ready: cached && cached.data ? cached.data : null,
+      pending: cached && !cached.data ? cached.promise : null,
+      onList: function (data) {
+        if (emitEmailCache.key !== key) return;
+        emitEmailCache.data = data || { emails: [] };
+        emitEmailCache.promise = null;
+      },
     });
   }
 
@@ -2847,6 +2890,7 @@
         syncQuoteReference();
         renderRefs();
         estimateFolio();
+        prefetchEmitEmails((($("bill-recv-rut") || {}).value || "").trim());
       });
     }
     if ($("bill-payment")) {
@@ -2896,6 +2940,7 @@
         syncRutDisplay();
         if ($("bill-customer-id")) $("bill-customer-id").value = "0";
         syncReceiverEditButton();
+        scheduleEmitEmailPrefetch();
       });
     }
     if ($("bill-name-search-btn")) {

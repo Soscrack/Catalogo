@@ -89,7 +89,24 @@
           (busy ? " disabled" : "") + ">×</button>";
         listEl.appendChild(li);
       });
-      if (emptyEl) emptyEl.hidden = emails.length > 0;
+      if (emptyEl) {
+        emptyEl.hidden = emails.length > 0;
+        emptyEl.textContent = busy
+          ? "Cargando correos…"
+          : "Sin correos. Escribe uno y pulsa Enter.";
+      }
+    }
+
+    function listFromPayload(data) {
+      var list = (data && data.emails) || [];
+      if ((!list || !list.length) && data && data.suggestion && data.suggestion.email) {
+        list = [data.suggestion];
+      }
+      return list;
+    }
+
+    function remember(data) {
+      if (typeof opts.onList === "function") opts.onList(data || { emails: [] });
     }
 
     function setEmails(list) {
@@ -110,15 +127,22 @@
         setEmails([]);
         return Promise.resolve();
       }
+      if (opts.ready) {
+        setEmails(listFromPayload(opts.ready));
+        return Promise.resolve();
+      }
       busy = true;
       render();
-      return post(action("emailsList") || "riverso_billing_emails_list", { rut: rut })
+      var request = opts.pending || post(action("emailsList") || "riverso_billing_emails_list", { rut: rut });
+      return Promise.resolve(request)
         .then(function (data) {
-          var list = (data && data.emails) || [];
-          if ((!list || !list.length) && data && data.suggestion && data.suggestion.email) {
-            list = [data.suggestion];
+          if (data && data.error) {
+            setError(data.error);
+            setEmails([]);
+            return;
           }
-          setEmails(list);
+          setEmails(listFromPayload(data));
+          remember(data);
         })
         .catch(function (err) {
           setError((err && err.message) || "No se pudieron cargar los correos.");
@@ -169,6 +193,7 @@
       post(action("emailAdd") || "riverso_billing_email_add", { rut: rut, email: value })
         .then(function (data) {
           setEmails((data && data.emails) || []);
+          remember(data);
           if (inputEl) inputEl.value = "";
           if (data && data.contact_warning) setError(data.contact_warning);
         })
@@ -187,12 +212,13 @@
       if (!item) return;
       item.is_selected = !!selected;
       render();
-      if (!persist || !(item.id > 0) || item.suggested) {
+      if (!persist || !item.id || item.suggested) {
         if (persist && item.suggested && selected) {
           busy = true;
           post(action("emailAdd") || "riverso_billing_email_add", { rut: rut, email: item.email })
             .then(function (data) {
               setEmails((data && data.emails) || []);
+              remember(data);
               if (data && data.contact_warning) setError(data.contact_warning);
             })
             .catch(function (err) { setError((err && err.message) || "No se pudo guardar."); })
@@ -203,6 +229,11 @@
       post(action("emailToggle") || "riverso_billing_email_toggle", {
         id: item.id,
         selected: selected ? 1 : 0,
+      }).then(function (data) {
+        if (data && data.emails) {
+          setEmails(data.emails);
+          remember(data);
+        }
       }).catch(function (err) {
         setError((err && err.message) || "No se pudo actualizar.");
         load();
@@ -215,7 +246,7 @@
       if (!window.confirm("¿Inhabilitar " + item.email + "? Dejará de aparecer al facturar. Para volver a usarlo hay que eliminarlo en Contactos.")) {
         return;
       }
-      if (!persist || !(item.id > 0) || item.suggested) {
+      if (!persist || !item.id || item.suggested) {
         emails = emails.filter(function (e) { return String(e.id) !== String(id); });
         render();
         return;
@@ -225,6 +256,7 @@
       post(action("emailDelete") || "riverso_billing_email_delete", { id: item.id })
         .then(function (data) {
           setEmails((data && data.emails) || []);
+          remember(data);
         })
         .catch(function (err) {
           setError((err && err.message) || "No se pudo eliminar.");

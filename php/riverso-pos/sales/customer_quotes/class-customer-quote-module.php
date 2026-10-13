@@ -389,10 +389,26 @@ class Riverso_Customer_Quote_Module {
         } catch (Riverso_Quote_Exception $error) {
             $this->fail($error->getMessage());
         }
+        // El editor guardó sobre una cotización que ya no existía: quedó como cotización nueva.
+        $sent_id = isset($data['id']) && is_scalar($data['id']) ? (int) $data['id'] : 0;
+        $recreated = $sent_id > 0 && (int) $quote['id'] !== $sent_id;
+        if ($recreated && class_exists('Riverso_Audit_Module')) {
+            Riverso_Audit_Module::get_instance()->log(
+                'customer_quote.recreated',
+                'customer_quote',
+                (int) $quote['id'],
+                array('missing_id' => $sent_id),
+                array('quote_number' => $quote['quote_number'], 'lines' => count($quote['lines'])),
+                'El editor guardó la cotización #' . $sent_id . ', que ya no existía; se guardó como nueva.'
+            );
+        }
         $quote = $this->present_quote_with_docs($quote);
         $this->ok(array(
             'quote' => $quote,
-            'message' => 'Cotización ' . $quote['quote_number'] . ' guardada.',
+            'recreated' => $recreated,
+            'message' => $recreated
+                ? 'La cotización ya no existía en el servidor. Lo que tenías en pantalla se guardó como ' . $quote['quote_number'] . '.'
+                : 'Cotización ' . $quote['quote_number'] . ' guardada.',
         ));
     }
 
@@ -439,7 +455,12 @@ class Riverso_Customer_Quote_Module {
     public function ajax_discard_empty() {
         $this->authorize();
         $id = (int) $this->post_string('id');
-        $deleted = $this->quotes->discard_if_empty($id);
+        $reasons = array(
+            'leave' => 'salida del editor',
+            'pagehide' => 'cierre o recarga de la página',
+        );
+        $source = $this->post_string('source');
+        $deleted = $this->quotes->discard_if_empty($id, isset($reasons[$source]) ? $reasons[$source] : 'editor');
         $this->ok(array(
             'deleted' => $deleted,
             'deleted_id' => $id,

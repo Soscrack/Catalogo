@@ -31,7 +31,9 @@
             timer: null,
             saving: false,
             pending: false,
-            inflight: null
+            inflight: null,
+            failed: false,
+            retries: 0
         },
         discardedId: null,
         lineModal: {
@@ -748,7 +750,8 @@
     }
 
     window.addEventListener("beforeunload", function (event) {
-        if (state.autosave.saving || state.autosave.pending || (state.autosave.timer && isDirty())) {
+        var unsaved = state.autosave.failed && state.view === "editor" && state.quote.editable !== false;
+        if (state.autosave.saving || state.autosave.pending || ((state.autosave.timer || unsaved) && isDirty())) {
             event.preventDefault();
             event.returnValue = "";
         }
@@ -906,7 +909,8 @@
                     return null;
                 }
                 if (isEmptyDraft(quote)) {
-                    return post(cfg.actions.discardEmpty, { id: String(quote.id) }).catch(function () { return null; });
+                    return post(cfg.actions.discardEmpty, { id: String(quote.id), source: "leave" })
+                        .catch(function () { return null; });
                 }
                 if (quote.id || (quote.lines || []).length) {
                     return performSave({ silent: true }).catch(function () { return null; });
@@ -925,6 +929,7 @@
             body.append("nonce", cfg.nonce);
         }
         body.append("id", String(id));
+        body.append("source", "pagehide");
         try {
             if (navigator.sendBeacon && navigator.sendBeacon(cfg.ajaxUrl, body)) {
                 return;
@@ -998,6 +1003,8 @@
             state.autosave.timer = null;
         }
         state.autosave.pending = false;
+        state.autosave.failed = false;
+        state.autosave.retries = 0;
         setSaveStatus("");
         state.quote = quote;
         state.view = "editor";
@@ -3598,23 +3605,48 @@
             els.save.disabled = true;
         }
         var target = state.quote;
-        var request = post(cfg.actions.save, { payload: JSON.stringify(buildSavePayload()) }).then(function (data) {
+        var payload = buildSavePayload();
+        // Lo que tendrá el servidor si el guardado resulta; permite notar ediciones hechas mientras viaja.
+        var sentSnapshot = serialize(state.quote);
+        var retryMs = 0;
+        var request = post(cfg.actions.save, { payload: JSON.stringify(payload) }).then(function (data) {
             if (state.quote !== target) {
                 // El editor cambió de cotización mientras se guardaba.
                 return data.quote;
             }
-            if (silent) {
+            state.autosave.failed = false;
+            state.autosave.retries = 0;
+            syncHeader();
+            var editedMeanwhile = serialize(state.quote) !== sentSnapshot;
+            if (silent || editedMeanwhile) {
                 applySavedMeta(data.quote);
+                if (editedMeanwhile) {
+                    // Se editó durante el guardado: el servidor tiene lo enviado, no lo de pantalla.
+                    state.snapshot = sentSnapshot;
+                }
             } else {
                 state.quote = data.quote;
                 paintEditor();
                 state.snapshot = serialize(state.quote);
+            }
+            // data.recreated: la cotización ya no existía en el servidor y se guardó como nueva.
+            if (!silent || data.recreated) {
                 setMessage(data.message || "Cotización guardada.", false);
             }
             setSaveStatus(reserve ? "" : "Guardado", reserve ? "" : "saved");
             return data.quote;
         }).catch(function (error) {
-            setSaveStatus(reserve ? "No se pudo reservar número" : "Error al guardar", "error");
+            if (state.quote === target) {
+                state.autosave.failed = true;
+                // Sin respuesta del servidor (típico en red móvil): se reintenta solo.
+                if (!reserve && !error.status && state.autosave.retries < 4) {
+                    state.autosave.retries += 1;
+                    retryMs = 2000 * state.autosave.retries;
+                }
+            }
+            setSaveStatus(reserve
+                ? "No se pudo reservar número"
+                : (retryMs ? "Sin conexión, reintentando…" : "Error al guardar"), "error");
             setMessage(error.message, true);
             throw error;
         }).finally(function () {
@@ -3626,6 +3658,8 @@
             if (state.autosave.pending) {
                 state.autosave.pending = false;
                 scheduleAutosave(150);
+            } else if (retryMs) {
+                scheduleAutosave(retryMs);
             }
         });
         state.autosave.inflight = request.catch(function () { return null; });
@@ -3790,11 +3824,28 @@
             .then(function () { return state.autosave.inflight; })
             .catch(function () { return null; })
             .then(function () {
-                if (state.quote.editable !== false && state.quote.id && isDirty()) {
+                var savable = state.quote.id || (state.quote.lines || []).length;
+                if (state.quote.editable !== false && savable && isDirty()) {
                     return performSave({ silent: true });
                 }
                 return null;
             });
+    }
+
+    /**
+     * Deja en el servidor lo que hay en pantalla antes de salir del editor hacia otro flujo.
+     * Rechaza si el servidor no confirmó el guardado: quien llama no debe navegar, porque
+     * lo no guardado solo existe en esta página.
+     */
+    function ensureSaved(round) {
+        round = round || 0;
+        return flushPendingSave().then(function () {
+            if (state.quote.editable === false || !isDirty() || round >= 2) {
+                return null;
+            }
+            // Se editó mientras se guardaba: otra vuelta.
+            return ensureSaved(round + 1);
+        });
     }
 
     function transitionQuote(target) {
@@ -3990,36 +4041,37 @@
             setMessage("No tienes permiso para facturar.", true);
             return;
         }
+        // Un borrador vacío se descarta al salir de la página: Facturación no lo encontraría.
+        if (state.quote.editable !== false && !(state.quote.lines || []).length) {
+            setMessage("Agrega al menos un producto antes de facturar.", true);
+            return;
+        }
         if ((state.quote.status || "draft") === "draft" && !window.confirm(
             "Al facturar, la cotización pasa a Aprobada: queda bloqueada para edición y reserva el stock.\n\n¿Continuar a Facturación?"
         )) {
             return;
         }
-        function go(id) {
-            if (!id) {
+        if (els.invoice) {
+            els.invoice.disabled = true;
+        }
+        setMessage("Guardando cotización…", false);
+        // Solo se navega con el guardado confirmado: al salir, lo no guardado se pierde.
+        ensureSaved().then(function () {
+            if (!state.quote.id) {
                 setMessage("Guarda la cotización antes de facturar.", true);
                 if (els.invoice) {
                     els.invoice.disabled = false;
                 }
                 return;
             }
-            window.location.href = billingUrlForQuote(id);
-        }
-        if (isDirty() || !state.quote.id) {
+            window.location.href = billingUrlForQuote(state.quote.id);
+        }).catch(function (error) {
+            setMessage("No se abrió Facturación porque la cotización no se pudo guardar: "
+                + (error && error.message ? error.message : "error desconocido."), true);
             if (els.invoice) {
-                els.invoice.disabled = true;
+                els.invoice.disabled = false;
             }
-            setMessage("Guardando cotización…", false);
-            saveQuote(false).then(function (quote) {
-                go(quote && quote.id ? quote.id : state.quote.id);
-            }).catch(function () {
-                if (els.invoice) {
-                    els.invoice.disabled = false;
-                }
-            });
-            return;
-        }
-        go(state.quote.id);
+        });
     }
 
     function openImportModal() {

@@ -50,9 +50,26 @@ class Riverso_Customer_Repository {
 
         $search = isset($filters['search']) ? trim((string) $filters['search']) : '';
         if ($search !== '') {
-            $where[] = '(nombre_fantasia LIKE %s OR rut LIKE %s OR razon_social LIKE %s OR contacto_email LIKE %s OR primer_nombre LIKE %s OR apellido_paterno LIKE %s)';
+            $clauses = [
+                'nombre_fantasia LIKE %s',
+                'rut LIKE %s',
+                'razon_social LIKE %s',
+                'contacto_email LIKE %s',
+                'primer_nombre LIKE %s',
+                'apellido_paterno LIKE %s',
+            ];
             $like = '%' . $wpdb->esc_like($search) . '%';
-            $params = array_merge($params, [$like, $like, $like, $like, $like, $like]);
+            $search_params = [$like, $like, $like, $like, $like, $like];
+
+            // 12.345.678-9, 12345678-9 y 123456789 coinciden si el RUT guardado es solo dígitos.
+            $rut_digits = $this->rut_digits_if_numeric($search);
+            if ($rut_digits !== '') {
+                $clauses[] = "REPLACE(REPLACE(UPPER(IFNULL(rut, '')), '.', ''), '-', '') LIKE %s";
+                $search_params[] = '%' . $wpdb->esc_like($rut_digits) . '%';
+            }
+
+            $where[] = '(' . implode(' OR ', $clauses) . ')';
+            $params = array_merge($params, $search_params);
         }
 
         $nombre = isset($filters['nombre']) ? trim((string) $filters['nombre']) : '';
@@ -375,6 +392,25 @@ class Riverso_Customer_Repository {
             $out[] = ['nombre' => $nombre, 'valor' => $valor];
         }
         return $out;
+    }
+
+    /**
+     * Dígitos del RUT solo si la búsqueda, sin puntos ni guion, es numérica.
+     * Acepta 12.345.678-9, 12345678-9 y 123456789. El verificador puede ser K.
+     *
+     * @param string $search
+     * @return string
+     */
+    private function rut_digits_if_numeric($search) {
+        $search = trim((string) $search);
+        if ($search === '' || !preg_match('/^[0-9.\-]+[0-9kK]?$/', $search)) {
+            return '';
+        }
+        $digits = preg_replace('/[^0-9kK]/', '', $search);
+        if (!is_string($digits) || !preg_match('/^[0-9]+[kK]?$/', $digits)) {
+            return '';
+        }
+        return strtoupper($digits);
     }
 
     /**

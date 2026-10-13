@@ -264,6 +264,49 @@ class Riverso_Customer_Repository {
     }
 
     /**
+     * Reemplaza solo los datos de facturación. No toca contacto ni nombre de fantasía ya cargado.
+     *
+     * @param int                  $id
+     * @param array<string, mixed> $input
+     * @return array{ok: bool, id?: int, message?: string}
+     */
+    public function update_billing($id, array $input) {
+        global $wpdb;
+
+        $id = (int) $id;
+        $current = $this->get($id);
+        if (!$current) {
+            return ['ok' => false, 'message' => 'Cliente no encontrado'];
+        }
+
+        $razon = $this->clip((string) ($input['razon_social'] ?? ''), 255);
+        $data = [
+            'has_facturacion' => 1,
+            'pais' => $this->clip((string) ($current['pais'] ?? 'CHILE'), 50) ?: 'CHILE',
+            'tipo_identificacion' => 'RUT_CLIENTE',
+            'razon_social' => $razon !== '' ? $razon : null,
+            'giro' => $this->nullable_clip($input['giro'] ?? '', 255),
+            'direccion' => $this->nullable_clip($input['direccion'] ?? '', 255),
+            'comuna' => $this->nullable_clip($input['comuna'] ?? '', 100),
+            'ciudad' => $this->nullable_clip($input['ciudad'] ?? '', 100),
+            'facturacion_telefono' => $this->nullable_clip($input['facturacion_telefono'] ?? '', 50),
+            'codigo_postal' => $this->clip(
+                (string) (($input['codigo_postal'] ?? '') !== '' ? $input['codigo_postal'] : '0'),
+                20
+            ),
+        ];
+        if (trim((string) ($current['nombre_fantasia'] ?? '')) === '' && $razon !== '') {
+            $data['nombre_fantasia'] = $razon;
+        }
+
+        $result = $wpdb->update($this->table, $data, ['id' => $id]);
+        if ($result === false) {
+            return ['ok' => false, 'message' => 'Error al actualizar: ' . $wpdb->last_error];
+        }
+        return ['ok' => true, 'id' => $id, 'message' => 'Datos de facturación actualizados'];
+    }
+
+    /**
      * @param array<string, mixed> $row
      * @return array<string, mixed>
      */

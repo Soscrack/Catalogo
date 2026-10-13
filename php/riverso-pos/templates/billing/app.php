@@ -152,7 +152,14 @@ if (!function_exists('riverso_pos_billing_json')) {
             </div>
 
             <div class="bill-card" id="bill-receiver-card" hidden>
-                <h2>RECEPTOR</h2>
+                <div class="bill-card-head bill-receiver-head">
+                    <h2>RECEPTOR</h2>
+                    <div class="bill-receiver-actions">
+                        <button type="button" class="bill-btn bill-btn-secondary" id="bill-recv-edit" hidden>Editar</button>
+                        <button type="button" class="bill-btn bill-btn-danger" id="bill-recv-cancel" hidden>Cancelar</button>
+                        <button type="button" class="bill-btn bill-btn-primary" id="bill-recv-save" hidden>Guardar</button>
+                    </div>
+                </div>
                 <p class="bill-note-red">El RUT 55.555.555-5 es solo para casos especiales; para empresa extranjera emite un documento de exportación.</p>
                 <p class="bill-hint">Ingrese una opción para buscar datos de facturación</p>
 
@@ -205,9 +212,10 @@ if (!function_exists('riverso_pos_billing_json')) {
                         <span>Razón social</span>
                         <input type="text" id="bill-recv-name" class="bill-locked" readonly autocomplete="organization">
                     </label>
-                    <label class="bill-field">
+                    <label class="bill-field" id="bill-giro-field">
                         <span>Giro</span>
                         <input type="text" id="bill-recv-giro" class="bill-locked" readonly>
+                        <span class="bill-giro-stale-note" hidden>Este giro no está entre las actividades vigentes del SII. Elige una de la lista.</span>
                     </label>
                 </div>
                 <div class="bill-grid bill-grid-3">
@@ -241,7 +249,7 @@ if (!function_exists('riverso_pos_billing_json')) {
                 </div>
                 <div class="bill-grid bill-grid-2">
                     <label class="bill-field">
-                        <span>Teléfono</span>
+                        <span>Teléfono (opcional)</span>
                         <input type="text" id="bill-recv-phone" class="bill-locked" readonly>
                     </label>
                     <label class="bill-field">
@@ -367,9 +375,10 @@ if (!function_exists('riverso_pos_billing_json')) {
                             <span>Ciudad</span>
                             <div class="bill-static-value" id="bill-s2-recv-city">—</div>
                         </div>
-                        <div class="bill-field">
+                        <div class="bill-field" id="bill-s2-giro-field">
                             <span>Giro</span>
                             <div class="bill-static-value" id="bill-s2-recv-giro">—</div>
+                            <span class="bill-giro-stale-note" hidden>Este giro no está entre las actividades vigentes del SII.</span>
                         </div>
                         <div class="bill-field">
                             <span>Teléfono</span>
@@ -599,15 +608,23 @@ if (!function_exists('riverso_pos_billing_json')) {
         </section>
     </div>
 
-    <div id="bill-missing-modal" class="bill-modal-overlay" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="bill-missing-title">
-        <div class="bill-modal" role="document">
-            <div class="bill-modal-header">
-                <h3 id="bill-missing-title">Datos incompletos</h3>
+    <div id="bill-missing-modal" class="riverso-bill bill-modal-overlay bill-missing-overlay" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="bill-missing-title">
+        <div class="bill-modal bill-missing-dialog" role="document">
+            <div class="bill-missing-hero">
+                <span class="bill-missing-icon" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/>
+                        <path d="M12 7.5v5.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        <circle cx="12" cy="16.2" r="1" fill="currentColor"/>
+                    </svg>
+                </span>
+                <div class="bill-missing-copy">
+                    <h3 id="bill-missing-title">Datos incompletos</h3>
+                    <p id="bill-missing-msg"></p>
+                </div>
             </div>
-            <div class="bill-modal-body">
-                <p id="bill-missing-msg"></p>
-                <ul id="bill-missing-list" class="bill-missing-list" hidden></ul>
-            </div>
+            <p id="bill-missing-count" class="bill-missing-count" hidden></p>
+            <ul id="bill-missing-list" class="bill-missing-list" hidden></ul>
             <div class="bill-modal-footer">
                 <button type="button" class="bill-btn bill-btn-primary" id="bill-missing-ok">Entendido</button>
             </div>

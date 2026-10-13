@@ -34,6 +34,7 @@
       actividades: [],
       designs: [],
       selectedCode: "",
+      lookup: "idle",
     },
   };
 
@@ -144,24 +145,41 @@
       window.alert((title ? title + "\n\n" : "") + (message || ""));
       return;
     }
+    var items = missing || [];
     var titleEl = $("bill-missing-title");
     var msgEl = $("bill-missing-msg");
     var listEl = $("bill-missing-list");
+    var countEl = $("bill-missing-count");
+    var dialog = overlay.querySelector(".bill-missing-dialog");
     if (titleEl) titleEl.textContent = title || "Datos incompletos";
     if (msgEl) msgEl.textContent = message || "";
+    if (countEl) {
+      countEl.hidden = !items.length;
+      countEl.textContent = items.length === 1
+        ? "1 dato por completar"
+        : (items.length ? items.length + " datos por completar" : "");
+    }
     if (listEl) {
       listEl.innerHTML = "";
-      (missing || []).forEach(function (item) {
+      items.forEach(function (item) {
         var li = document.createElement("li");
-        li.textContent = item;
+        var mark = document.createElement("span");
+        mark.className = "bill-missing-mark";
+        mark.setAttribute("aria-hidden", "true");
+        var label = document.createElement("span");
+        label.textContent = item;
+        li.appendChild(mark);
+        li.appendChild(label);
         listEl.appendChild(li);
       });
-      listEl.hidden = !(missing && missing.length);
+      listEl.hidden = !items.length;
     }
+    if (dialog) dialog.classList.toggle("has-missing", !!items.length);
     overlay.hidden = false;
     overlay.setAttribute("aria-hidden", "false");
     var ok = $("bill-missing-ok");
     if (ok) {
+      ok.textContent = items.length ? "Completar datos" : "Entendido";
       try { ok.focus(); } catch (e) { /* ignore */ }
     }
   }
@@ -489,6 +507,7 @@
       setFieldLocked(id, true);
     });
     state.receiverMode = "locked";
+    syncReceiverEditButton();
   }
 
   function unlockAllDetails() {
@@ -496,6 +515,7 @@
       setFieldLocked(id, false);
     });
     state.receiverMode = "manual";
+    syncReceiverEditButton();
   }
 
   function applyLocksAfterFill() {
@@ -504,6 +524,104 @@
       setFieldLocked(id, fieldHasValue(id));
     });
     state.receiverMode = "found";
+    syncReceiverEditButton();
+  }
+
+  function syncReceiverEditButton() {
+    var edit = $("bill-recv-edit");
+    var save = $("bill-recv-save");
+    var cancel = $("bill-recv-cancel");
+    var id = parseInt(($("bill-customer-id") || {}).value || "0", 10) || 0;
+    var editing = id > 0 && state.receiverMode === "manual";
+    if (edit) {
+      edit.hidden = id <= 0 || editing;
+      edit.disabled = false;
+      edit.textContent = "Editar";
+    }
+    if (save) {
+      save.hidden = !editing;
+      save.disabled = false;
+    }
+    if (cancel) {
+      cancel.hidden = !editing;
+      cancel.disabled = false;
+    }
+    if (!editing) state.receiverSnapshot = null;
+  }
+
+  function snapshotReceiver() {
+    state.receiverSnapshot = {
+      name: ($("bill-recv-name") || {}).value || "",
+      giro: ($("bill-recv-giro") || {}).value || "",
+      activityCode: ($("bill-recv-activity-code") || {}).value || "",
+      address: ($("bill-recv-address") || {}).value || "",
+      comuna: ($("bill-recv-comuna") || {}).value || "",
+      city: ($("bill-recv-city") || {}).value || "",
+      phone: ($("bill-recv-phone") || {}).value || "",
+      postal: ($("bill-recv-postal") || {}).value || "",
+    };
+  }
+
+  function beginReceiverEdit() {
+    snapshotReceiver();
+    unlockAllDetails();
+    showAlert("Puedes corregir los datos. Cancelar vuelve a dejarlos como estaban.");
+  }
+
+  function cancelReceiverEdit() {
+    var snap = state.receiverSnapshot;
+    if (snap) {
+      if ($("bill-recv-name")) $("bill-recv-name").value = snap.name;
+      if ($("bill-recv-giro")) $("bill-recv-giro").value = snap.giro;
+      if ($("bill-recv-activity-code")) $("bill-recv-activity-code").value = snap.activityCode;
+      if ($("bill-recv-address")) $("bill-recv-address").value = snap.address;
+      setComunaValue(snap.comuna);
+      if ($("bill-recv-city")) $("bill-recv-city").value = snap.city;
+      if ($("bill-recv-phone")) $("bill-recv-phone").value = snap.phone;
+      if ($("bill-recv-postal")) $("bill-recv-postal").value = snap.postal === "0" ? "" : snap.postal;
+    }
+    state.receiverSnapshot = null;
+    applyLocksAfterFill();
+    refreshGiroVigencia();
+    showAlert("");
+  }
+
+  function formatRutLive(raw) {
+    var clean = String(raw || "").toUpperCase().replace(/[^0-9K]/g, "");
+    var kAt = clean.indexOf("K");
+    if (kAt !== -1 && kAt !== clean.length - 1) {
+      clean = clean.replace(/K/g, "");
+    }
+    if (clean.length > 9) clean = clean.slice(0, 9);
+    if (clean.length <= 1) return clean;
+    var dv = clean.slice(-1);
+    var body = clean.slice(0, -1);
+    var parts = [];
+    while (body.length > 3) {
+      parts.unshift(body.slice(-3));
+      body = body.slice(0, -3);
+    }
+    if (body) parts.unshift(body);
+    return parts.join(".") + "-" + dv;
+  }
+
+  function applyRutMask(input) {
+    if (!input) return;
+    var start = input.selectionStart == null ? input.value.length : input.selectionStart;
+    var sigBefore = input.value.slice(0, start).replace(/[^0-9kK]/gi, "").length;
+    var formatted = formatRutLive(input.value);
+    if (input.value === formatted) return;
+    input.value = formatted;
+    var seen = 0;
+    var pos = formatted.length;
+    for (var i = 0; i < formatted.length; i++) {
+      if (/[0-9K]/i.test(formatted.charAt(i))) seen++;
+      if (seen >= sigBefore) {
+        pos = i + 1;
+        break;
+      }
+    }
+    if (input.setSelectionRange) input.setSelectionRange(pos, pos);
   }
 
   function clearReceiverDetails(keepRut) {
@@ -519,14 +637,62 @@
     lockAllDetails();
   }
 
+  function normGiro(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  /** Igualdad o recorte (el giro guardado suele venir cortado respecto de la glosa SII). */
+  function giroTextsMatch(saved, official) {
+    if (!saved || !official) return false;
+    if (saved === official) return true;
+    var short = saved.length <= official.length ? saved : official;
+    var long = saved.length <= official.length ? official : saved;
+    return short.length >= 20 && long.indexOf(short) === 0;
+  }
+
+  function giroMatchesVigente(giro, code, actividades) {
+    var text = normGiro(giro);
+    var savedCode = String(code || "").trim();
+    return (actividades || []).some(function (act) {
+      var actCode = String((act && act.codigo) || "").trim();
+      if (savedCode && actCode && savedCode === actCode) return true;
+      return giroTextsMatch(text, normGiro(act && act.glosa));
+    });
+  }
+
+  function setGiroStale(stale) {
+    ["bill-giro-field", "bill-s2-giro-field"].forEach(function (id) {
+      var field = $(id);
+      if (!field) return;
+      field.classList.toggle("is-giro-stale", !!stale);
+      var note = field.querySelector(".bill-giro-stale-note");
+      if (note) note.hidden = !stale;
+    });
+  }
+
+  function refreshGiroVigencia() {
+    var giro = (($("bill-recv-giro") || {}).value || "").trim();
+    var code = (($("bill-recv-activity-code") || {}).value || "").trim();
+    var known = state.sii.lookup === "ok";
+    var stale = known && giro !== "" && !giroMatchesVigente(giro, code, state.sii.actividades || []);
+    setGiroStale(stale);
+  }
+
   function clearSiiPanel() {
-    state.sii = { rut: "", razon_social: "", actividades: [], designs: [], selectedCode: "" };
+    state.sii = { rut: "", razon_social: "", actividades: [], designs: [], selectedCode: "", lookup: "idle" };
     var panel = $("bill-sii-panel");
     var box = $("bill-sii-activities");
     var status = $("bill-sii-status");
     if (panel) panel.hidden = true;
     if (box) box.innerHTML = "";
     if (status) status.textContent = "";
+    setGiroStale(false);
   }
 
   function applyDesign(design, opts) {
@@ -572,6 +738,7 @@
     }
     renderSiiActivities();
     applyLocksAfterFill();
+    refreshGiroVigencia();
   }
 
   function renderSiiActivities() {
@@ -610,6 +777,8 @@
     if (!cfg.actions || !cfg.actions.lookupSii) {
       return Promise.resolve(null);
     }
+    state.sii.lookup = "idle";
+    setGiroStale(false);
     var status = $("bill-sii-status");
     var panel = $("bill-sii-panel");
     if (panel) panel.hidden = false;
@@ -620,6 +789,7 @@
         state.sii.razon_social = data.razon_social || "";
         state.sii.actividades = data.actividades || [];
         state.sii.designs = data.designs || [];
+        state.sii.lookup = "ok";
         if (status) {
           status.textContent = (data.from_cache ? "Caché SII · " : "SII · ") +
             (state.sii.actividades.length ? state.sii.actividades.length + " actividad(es)" : "sin actividades");
@@ -640,6 +810,7 @@
         } else {
           renderSiiActivities();
           applyLocksAfterFill();
+          refreshGiroVigencia();
         }
         if (!opts.silent && state.sii.razon_social && !opts.hadLocal) {
           showAlert("Datos SII: " + state.sii.razon_social + ". Elige una actividad económica.");
@@ -647,6 +818,8 @@
         return data;
       })
       .catch(function (err) {
+        state.sii.lookup = "error";
+        setGiroStale(false);
         if (status) status.textContent = "SII no disponible";
         if (panel && !(state.sii.actividades || []).length) {
           panel.hidden = true;
@@ -695,6 +868,18 @@
     );
   }
 
+  function missingReceiverFields() {
+    var r = collectReceiver();
+    var missing = [];
+    if (!String(r.receiver_rut || "").trim()) missing.push("RUT");
+    if (!String(r.receiver_legal_name || "").trim()) missing.push("Razón social");
+    if (!String(r.receiver_activity || "").trim()) missing.push("Giro / actividad");
+    if (!String(r.receiver_address || "").trim()) missing.push("Dirección");
+    if (!String(r.receiver_district || "").trim()) missing.push("Comuna");
+    if (!String(r.receiver_city || "").trim()) missing.push("Ciudad");
+    return missing;
+  }
+
   function validateStep1() {
     var type = currentTypeId();
     if (!type) {
@@ -709,24 +894,16 @@
     }
 
     if (type === 2) {
-      var r = collectReceiver();
-      var missing = [];
-      if (!String(r.receiver_rut || "").trim()) missing.push("RUT");
-      if (!String(r.receiver_legal_name || "").trim()) missing.push("Razón social");
-      if (!String(r.receiver_activity || "").trim()) missing.push("Giro / actividad");
-      if (!String(r.receiver_address || "").trim()) missing.push("Dirección");
-      if (!String(r.receiver_district || "").trim()) missing.push("Comuna");
-      if (!String(r.receiver_city || "").trim()) missing.push("Ciudad");
-      if (!String(r.receiver_phone || "").trim()) missing.push("Teléfono");
+      var missing = missingReceiverFields();
       if (missing.length) {
         return {
           ok: false,
           title: "Faltan datos del receptor",
-          message: "Para emitir una factura electrónica debes completar todos los datos obligatorios de facturación.",
+          message: "Revisa estos datos del receptor antes de continuar.",
           missing: missing,
         };
       }
-      if (!isValidRut(r.receiver_rut)) {
+      if (!isValidRut((($("bill-recv-rut") || {}).value) || "")) {
         return {
           ok: false,
           title: "RUT no válido",
@@ -914,6 +1091,7 @@
     put("bill-s2-recv-city", r.receiver_city);
     put("bill-s2-recv-giro", r.receiver_activity);
     put("bill-s2-recv-phone", r.receiver_phone);
+    refreshGiroVigencia();
     var map = $("bill-s2-recv-map");
     if (map) {
       var q = [r.receiver_address, r.receiver_district, r.receiver_city].filter(function (s) {
@@ -1677,6 +1855,48 @@
     showAlert("Detalle manual agregado.", false);
   }
 
+  function saveReceiverEdits() {
+    var missing = missingReceiverFields();
+    if (missing.length) {
+      showMissingPopup(
+        "Faltan datos del receptor",
+        "Revisa estos datos del receptor antes de guardar.",
+        missing
+      );
+      return;
+    }
+    var rut = (($("bill-recv-rut") || {}).value || "").trim();
+    if (!isValidRut(rut)) {
+      showInvalidRutPopup();
+      return;
+    }
+    ["bill-recv-save", "bill-recv-cancel"].forEach(function (id) {
+      var el = $(id);
+      if (el) el.disabled = true;
+    });
+    showAlert("Guardando datos del receptor…");
+    post(cfg.actions.ensureCustomer, Object.assign({}, collectReceiver(), { document_type_id: 2 }))
+      .then(function (data) {
+        if (data.customer && data.customer.id && $("bill-customer-id")) {
+          $("bill-customer-id").value = String(data.customer.id);
+        }
+        state.receiverSnapshot = null;
+        applyLocksAfterFill();
+        showAlert("Datos del receptor actualizados. Reemplazan los anteriores.");
+      })
+      .catch(function (e) {
+        ["bill-recv-save", "bill-recv-cancel"].forEach(function (id) {
+          var el = $(id);
+          if (el) el.disabled = false;
+        });
+        showMissingPopup(
+          "No se pudo guardar",
+          (e && e.message) || "No se pudo actualizar el receptor",
+          []
+        );
+      });
+  }
+
   function ensureCustomerThenContinue() {
     var check = validateStep1();
     if (!check.ok) {
@@ -1789,7 +2009,7 @@
           if (!opts.silent) showAlert("Cliente encontrado en Riverso. Consultando actividades SII…");
         } else {
           if ($("bill-customer-id")) $("bill-customer-id").value = "0";
-          if (data.rut && $("bill-recv-rut")) $("bill-recv-rut").value = data.rut;
+          if (data.rut && $("bill-recv-rut")) $("bill-recv-rut").value = formatRutLive(data.rut);
           syncRutDisplay();
           ["bill-recv-name", "bill-recv-giro", "bill-recv-address", "bill-recv-city", "bill-recv-phone", "bill-recv-postal"].forEach(function (id) {
             if ($(id)) $(id).value = "";
@@ -1817,7 +2037,7 @@
 
   function fillReceiver(c, applyLocks) {
     if ($("bill-customer-id")) $("bill-customer-id").value = String(c.id || 0);
-    if ($("bill-recv-rut")) $("bill-recv-rut").value = c.rut || "";
+    if ($("bill-recv-rut")) $("bill-recv-rut").value = formatRutLive(c.rut || "");
     syncRutDisplay();
     if ($("bill-recv-name")) $("bill-recv-name").value = c.razon_social || c.nombre_fantasia || "";
     if ($("bill-recv-giro")) $("bill-recv-giro").value = c.giro || "";
@@ -2643,6 +2863,19 @@
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") hideMissingPopup();
     });
+    if ($("bill-recv-giro")) {
+      $("bill-recv-giro").addEventListener("input", refreshGiroVigencia);
+      $("bill-recv-giro").addEventListener("change", refreshGiroVigencia);
+    }
+    if ($("bill-recv-edit")) {
+      $("bill-recv-edit").addEventListener("click", beginReceiverEdit);
+    }
+    if ($("bill-recv-save")) {
+      $("bill-recv-save").addEventListener("click", saveReceiverEdits);
+    }
+    if ($("bill-recv-cancel")) {
+      $("bill-recv-cancel").addEventListener("click", cancelReceiverEdit);
+    }
     if ($("bill-rut-search-btn")) {
       $("bill-rut-search-btn").addEventListener("click", function () {
         lookupRut();
@@ -2659,8 +2892,10 @@
         }
       });
       $("bill-recv-rut").addEventListener("input", function () {
+        applyRutMask(this);
         syncRutDisplay();
         if ($("bill-customer-id")) $("bill-customer-id").value = "0";
+        syncReceiverEditButton();
       });
     }
     if ($("bill-name-search-btn")) {

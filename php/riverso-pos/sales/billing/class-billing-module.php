@@ -449,7 +449,7 @@ class Riverso_Billing_Module {
         $telefono = isset($_POST['receiver_phone']) ? sanitize_text_field(wp_unslash($_POST['receiver_phone'])) : '';
         $postal = isset($_POST['receiver_postal']) ? sanitize_text_field(wp_unslash($_POST['receiver_postal'])) : '0';
 
-        // Factura electrónica: todos los datos de facturación del receptor son obligatorios.
+        // Factura electrónica: datos del receptor. El teléfono puede ir vacío.
         if ($doc_type === 2) {
             $missing = [];
             if (trim($rut) === '') {
@@ -469,9 +469,6 @@ class Riverso_Billing_Module {
             }
             if (trim($ciudad) === '') {
                 $missing[] = 'ciudad';
-            }
-            if (trim($telefono) === '') {
-                $missing[] = 'teléfono';
             }
             if ($missing) {
                 wp_send_json_error([
@@ -500,22 +497,26 @@ class Riverso_Billing_Module {
             'codigo_postal' => $postal,
         ]);
 
+        $billing = [
+            'razon_social' => $razon,
+            'giro' => $giro,
+            'direccion' => $direccion,
+            'comuna' => $comuna,
+            'ciudad' => $ciudad,
+            'facturacion_telefono' => $telefono,
+            'codigo_postal' => ($postal !== '' ? $postal : '0'),
+        ];
+
         if ($customer_id > 0) {
             $existing = $repo->get($customer_id);
             if ($existing) {
-                wp_send_json_success([
-                    'created' => false,
-                    'customer' => $this->present_customer($existing),
-                ]);
+                $this->respond_replaced_customer($repo, $existing, $billing, $razon);
             }
         }
 
         $by_rut = $repo->find_by_rut($rut);
         if ($by_rut) {
-            wp_send_json_success([
-                'created' => false,
-                'customer' => $this->present_customer($by_rut),
-            ]);
+            $this->respond_replaced_customer($repo, $by_rut, $billing, $razon);
         }
 
         if ($razon === '') {
@@ -1580,7 +1581,7 @@ class Riverso_Billing_Module {
         $recv_act = isset($_POST['receiver_activity']) ? sanitize_text_field(wp_unslash($_POST['receiver_activity'])) : '';
 
         if ($needs_receiver) {
-            if ($recv_rut === '' || $recv_name === '' || $recv_addr === '' || $recv_dist === '' || $recv_city === '' || $recv_phone === '' || $recv_act === '') {
+            if ($recv_rut === '' || $recv_name === '' || $recv_addr === '' || $recv_dist === '' || $recv_city === '' || $recv_act === '') {
                 return new WP_Error('receiver_required', 'Completa todos los datos del receptor (factura).');
             }
             if (function_exists('riverso_validate_rut') && !riverso_validate_rut($recv_rut)) {
@@ -1674,6 +1675,33 @@ class Riverso_Billing_Module {
             }
         }
         return class_exists('Riverso_Customer_Repository') ? new Riverso_Customer_Repository() : null;
+    }
+
+    /**
+     * Guarda los datos de facturación encima del cliente ya existente y responde.
+     *
+     * @param Riverso_Customer_Repository $repo
+     * @param array<string, mixed>       $existing
+     * @param array<string, string>      $billing
+     * @param string                     $razon
+     */
+    private function respond_replaced_customer($repo, array $existing, array $billing, $razon) {
+        $saved = $repo->update_billing((int) $existing['id'], $billing);
+        if (empty($saved['ok'])) {
+            wp_send_json_error(['message' => $saved['message'] ?? 'No se pudo actualizar el receptor.']);
+        }
+        $fresh = $repo->get((int) $existing['id']);
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('customer_updated', 'customer', (int) $existing['id'], [
+                'entity_name' => $razon,
+                'source' => 'billing_receptor',
+            ]);
+        }
+        wp_send_json_success([
+            'created' => false,
+            'updated' => true,
+            'customer' => $this->present_customer($fresh ?: $existing),
+        ]);
     }
 
     /**

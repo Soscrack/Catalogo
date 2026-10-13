@@ -58,6 +58,7 @@ class Riverso_Customer_Module {
         }
         if (class_exists('Riverso_Cliente_Contact_Repository')) {
             Riverso_Cliente_Contact_Repository::ensure_schema();
+            (new Riverso_Cliente_Contact_Repository())->import_saved_emails();
         }
     }
 

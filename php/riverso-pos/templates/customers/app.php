@@ -38,8 +38,8 @@ if (!function_exists('riverso_pos_customers_json')) {
     <div id="riverso-customers" class="riverso-cust" data-surface="<?php echo htmlspecialchars($surface, ENT_QUOTES, 'UTF-8'); ?>" data-ready="0">
 
         <div class="cust-tabs" role="tablist">
-            <button type="button" class="cust-tab is-active" id="cust-tab-clientes" data-tab="clientes" role="tab" aria-selected="true">Clientes</button>
-            <button type="button" class="cust-tab" id="cust-tab-contactos" data-tab="contactos" role="tab" aria-selected="false">Contactos</button>
+            <a class="cust-tab is-active" id="cust-tab-clientes" data-tab="clientes" role="tab" aria-selected="true" href="?tab=clientes">Clientes</a>
+            <a class="cust-tab" id="cust-tab-contactos" data-tab="contactos" role="tab" aria-selected="false" href="?tab=contactos">Contactos</a>
         </div>
 
         <div id="cust-panel-clientes">

@@ -105,7 +105,10 @@ $comuna_options = riverso_cust_comuna_options($comunas);
             <h1 id="ct-form-title">Editar contacto</h1>
             <p class="cust-lead" id="ct-form-lead"></p>
         </div>
-        <button type="button" class="cust-btn cust-btn-secondary" id="ct-back">Volver al buscador</button>
+        <div class="cust-top-actions">
+            <a class="cust-btn cust-btn-secondary" id="ct-go-cliente" href="?tab=clientes" hidden>Ver cliente</a>
+            <button type="button" class="cust-btn cust-btn-secondary" id="ct-back">Volver al buscador</button>
+        </div>
     </header>
 
     <form id="ct-form" novalidate>

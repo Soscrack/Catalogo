@@ -94,15 +94,121 @@
       .replace(/'/g, '&#39;');
   }
 
+  var ROUTE_KEYS = ['tab', 'cliente', 'contacto', 'modo', 'nuevo', 'q', 'estado', 'pagina', 'cn', 'cs', 'cp', 'cm', 'ce', 'activos'];
+  var suppressRoute = 0;
+  var nav = {
+    tab: 'clientes',
+    contactForm: false,
+    contactId: 0,
+    contactView: false,
+    nuevoContacto: false,
+    clienteId: 0,
+    contactFilters: function () {
+      return { cn: '', cs: '', cp: '', cm: '', ce: '', activos: true };
+    },
+  };
+
+  function readRoute() {
+    var params = new URLSearchParams(window.location.search);
+    var estado = params.get('estado') || 'active';
+    if (estado !== 'inactive' && estado !== 'all') estado = 'active';
+    return {
+      tab: params.get('tab') === 'contactos' ? 'contactos' : 'clientes',
+      cliente: parseInt(params.get('cliente') || '0', 10) || 0,
+      contacto: parseInt(params.get('contacto') || '0', 10) || 0,
+      modo: params.get('modo') === 'ver' ? 'ver' : '',
+      nuevo: params.get('nuevo') === '1',
+      q: params.get('q') || '',
+      estado: estado,
+      pagina: Math.max(1, parseInt(params.get('pagina') || '1', 10) || 1),
+      cn: params.get('cn') || '',
+      cs: params.get('cs') || '',
+      cp: params.get('cp') || '',
+      cm: params.get('cm') || '',
+      ce: params.get('ce') || '',
+      activos: params.get('activos') !== '0',
+      hasActivos: params.has('activos'),
+    };
+  }
+
+  function buildSearch(patch) {
+    var params = new URLSearchParams(window.location.search);
+    ROUTE_KEYS.forEach(function (key) {
+      params.delete(key);
+    });
+    Object.keys(patch || {}).forEach(function (key) {
+      var val = patch[key];
+      if (val === undefined || val === null || val === '' || val === false || val === 0) return;
+      params.set(key, String(val));
+    });
+    return params;
+  }
+
+  function urlFromPatch(patch) {
+    var qs = buildSearch(patch).toString();
+    return window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+  }
+
+  function currentRoutePatch() {
+    var patch = { tab: nav.tab === 'contactos' ? 'contactos' : 'clientes' };
+    if (patch.tab === 'clientes') {
+      var editing = els.formView && !els.formView.hidden;
+      var id = parseInt(els.id && els.id.value, 10) || 0;
+      if (editing && id > 0) patch.cliente = id;
+      else if (editing) patch.nuevo = '1';
+      if (state.search) patch.q = state.search;
+      if (state.status && state.status !== 'active') patch.estado = state.status;
+      if (state.page > 1) patch.pagina = state.page;
+      return patch;
+    }
+    var filters = nav.contactFilters();
+    if (filters.cn) patch.cn = filters.cn;
+    if (filters.cs) patch.cs = filters.cs;
+    if (filters.cp) patch.cp = filters.cp;
+    if (filters.cm) patch.cm = filters.cm;
+    if (filters.ce) patch.ce = filters.ce;
+    if (!filters.activos) patch.activos = '0';
+    if (nav.contactForm && nav.contactId > 0) {
+      patch.contacto = nav.contactId;
+      if (nav.contactView) patch.modo = 'ver';
+    } else if (nav.contactForm && nav.nuevoContacto) {
+      patch.nuevo = '1';
+    }
+    if (nav.clienteId > 0) patch.cliente = nav.clienteId;
+    return patch;
+  }
+
+  function refreshTabHrefs() {
+    var clientes = document.getElementById('cust-tab-clientes');
+    var contactos = document.getElementById('cust-tab-contactos');
+    if (clientes) clientes.setAttribute('href', urlFromPatch({ tab: 'clientes' }));
+    if (contactos) contactos.setAttribute('href', urlFromPatch({ tab: 'contactos' }));
+  }
+
+  function syncRoute(replace) {
+    if (suppressRoute) return;
+    var next = urlFromPatch(currentRoutePatch());
+    var current = window.location.pathname + window.location.search + window.location.hash;
+    if (next === current) return;
+    var data = { riversoCustomers: 1 };
+    if (replace) window.history.replaceState(data, '', next);
+    else window.history.pushState(data, '', next);
+    refreshTabHrefs();
+  }
+
   function showList() {
     els.listView.hidden = false;
     els.formView.hidden = true;
+    nav.tab = 'clientes';
+    syncRoute(false);
   }
 
   function showForm() {
     els.listView.hidden = true;
     els.formView.hidden = false;
+    nav.tab = 'clientes';
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    syncRoute(false);
   }
 
   function setFormMsg(text, ok) {
@@ -339,11 +445,12 @@
     showForm();
   }
 
-  function openEdit(id) {
+  function openEdit(id, done) {
     post(cfg.actions.get, { id: id })
       .then(function (res) {
         if (!res || !res.success || !res.data.customer) {
           window.alert((res && res.data && res.data.message) || 'Cliente no encontrado');
+          if (done) done();
           return;
         }
         fillForm(res.data.customer);
@@ -355,9 +462,11 @@
           if (els.cancel) els.cancel.disabled = false;
         }
         showForm();
+        if (done) done();
       })
       .catch(function () {
         window.alert('Error de conexión');
+        if (done) done();
       });
   }
 
@@ -423,6 +532,7 @@
       state.status = (els.status && els.status.value) || 'active';
       state.page = 1;
       loadList();
+      syncRoute(false);
     });
   }
   if (els.clear) {
@@ -433,6 +543,7 @@
       state.status = 'active';
       state.page = 1;
       loadList();
+      syncRoute(false);
     });
   }
   if (els.search) {
@@ -482,11 +593,11 @@
       if (!btn) return;
       state.page = parseInt(btn.getAttribute('data-page'), 10) || 1;
       loadList();
+      syncRoute(false);
     });
   }
 
   syncSections();
-  loadList();
   initContacts();
   root.setAttribute('data-ready', '1');
 
@@ -527,17 +638,45 @@
       el.textContent = text;
       el.className = 'cust-form-msg ' + (ok ? 'is-ok' : 'is-error');
     }
-    function showSearch() {
+    nav.contactFilters = function () {
+      var activo = document.getElementById('ct-filter-activo');
+      return {
+        cn: String(val('ct-filter-nombre') || '').trim(),
+        cs: String(val('ct-filter-segundo') || '').trim(),
+        cp: String(val('ct-filter-paterno') || '').trim(),
+        cm: String(val('ct-filter-materno') || '').trim(),
+        ce: String(val('ct-filter-email') || '').trim(),
+        activos: !activo || activo.checked,
+      };
+    };
+
+    function showSearch(opts) {
       if (searchView) searchView.hidden = false;
       if (formView) formView.hidden = true;
       ctState.readonly = false;
+      nav.tab = 'contactos';
+      nav.contactForm = false;
+      nav.contactId = 0;
+      nav.contactView = false;
+      nav.nuevoContacto = false;
+      nav.clienteId = ctState.clienteId || 0;
+      if (!opts || !opts.silent) syncRoute(!!(opts && opts.replace));
     }
-    function showContactForm() {
+    function showContactForm(opts) {
       if (searchView) searchView.hidden = true;
       if (formView) formView.hidden = false;
+      nav.tab = 'contactos';
+      nav.contactForm = true;
+      nav.contactId = parseInt(val('ct-id'), 10) || 0;
+      nav.nuevoContacto = nav.contactId <= 0;
+      nav.contactView = !!ctState.readonly;
+      nav.clienteId = parseInt(val('ct-cliente-id'), 10) || ctState.clienteId || 0;
+      paintGoCliente();
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (!opts || !opts.silent) syncRoute(!!(opts && opts.replace));
     }
-    function showTab(name) {
+    function showTab(name, opts) {
+      opts = opts || {};
       var clientes = document.getElementById('cust-panel-clientes');
       var tabClientes = document.getElementById('cust-tab-clientes');
       var tabContactos = document.getElementById('cust-tab-contactos');
@@ -552,15 +691,43 @@
         tabContactos.classList.toggle('is-active', !onClientes);
         tabContactos.setAttribute('aria-selected', !onClientes ? 'true' : 'false');
       }
-      if (!onClientes) showSearch();
+      nav.tab = onClientes ? 'clientes' : 'contactos';
+      if (!onClientes && !opts.keep) showSearch({ silent: true });
+      if (!opts.silent) syncRoute(!!opts.replace);
     }
     function paintClientBanner() {
       var locked = ctState.clienteId > 0;
+      nav.clienteId = ctState.clienteId || 0;
       if (banner) banner.hidden = !locked;
       if (bannerText) {
         bannerText.textContent = locked ? 'Contactos de ' + ctState.clienteName : '';
       }
       if (newBtn) newBtn.hidden = !canEdit();
+    }
+    function paintGoCliente() {
+      var link = document.getElementById('ct-go-cliente');
+      if (!link) return;
+      var id = parseInt(val('ct-cliente-id'), 10) || 0;
+      var name = ctState.clienteName || '';
+      var chosen = document.getElementById('ct-cliente-chosen');
+      if (!name && chosen) name = String(chosen.textContent || '').replace(/^Cliente:\s*/, '');
+      link.hidden = id <= 0;
+      if (id <= 0) return;
+      link.setAttribute('href', urlFromPatch({ tab: 'clientes', cliente: id, q: name, estado: 'all' }));
+      link.setAttribute('data-ct-cliente', String(id));
+      link.setAttribute('data-ct-cliente-name', name);
+    }
+    function goToCliente(id, name) {
+      id = parseInt(id, 10) || 0;
+      if (!id) return;
+      showTab('clientes', { silent: true, keep: true });
+      if (els.search) els.search.value = name || '';
+      if (els.status) els.status.value = 'all';
+      state.search = name || '';
+      state.status = 'all';
+      state.page = 1;
+      loadList();
+      openEdit(id);
     }
     function ensureOption(selectId, value) {
       var select = document.getElementById(selectId);
@@ -606,11 +773,24 @@
         return;
       }
       tbody.innerHTML = rows.map(function (c) {
+        var clienteUrl = urlFromPatch({
+          tab: 'clientes',
+          cliente: c.cliente_id,
+          q: c.cliente_nombre || '',
+          estado: 'all',
+        });
         var actions =
           '<button type="button" class="cust-btn cust-btn-link" data-ct-open="' + escapeHtml(c.id) + '" data-ct-mode="view">Detalles</button>';
         if (canEdit()) {
           actions +=
-            '<button type="button" class="cust-btn cust-btn-link" data-ct-open="' + escapeHtml(c.id) + '" data-ct-mode="edit">Editar</button>' +
+            '<button type="button" class="cust-btn cust-btn-link" data-ct-open="' + escapeHtml(c.id) + '" data-ct-mode="edit">Editar</button>';
+        }
+        actions +=
+          '<a class="cust-btn cust-btn-link" href="' + escapeHtml(clienteUrl) + '" data-ct-cliente="' +
+          escapeHtml(c.cliente_id) + '" data-ct-cliente-name="' + escapeHtml(c.cliente_nombre || '') +
+          '">Ver cliente</a>';
+        if (canEdit()) {
+          actions +=
             '<button type="button" class="cust-btn cust-btn-link cust-btn-danger" data-ct-delete="' + escapeHtml(c.id) + '" data-ct-email="' + escapeHtml(c.email || c.nombre) + '">Eliminar</button>';
         }
         return (
@@ -652,6 +832,7 @@
       setContactMode(false);
       var buscar = document.getElementById('ct-cliente-buscar');
       if (buscar) buscar.disabled = !!clienteId;
+      paintGoCliente();
     }
     function setContactMode(readonly) {
       ctState.readonly = !!readonly;
@@ -702,6 +883,10 @@
       setContactMode(readonly || !canEdit());
       var buscar = document.getElementById('ct-cliente-buscar');
       if (buscar) buscar.disabled = true;
+      ctState.clienteId = parseInt(c.cliente_id, 10) || ctState.clienteId || 0;
+      if (c.cliente_nombre) ctState.clienteName = c.cliente_nombre;
+      paintClientBanner();
+      paintGoCliente();
       if ((c.nacimiento_dia || c.lab_calle || c.part_calle)) {
         var advanced = document.getElementById('ct-advanced');
         var toggle = document.getElementById('ct-toggle-advanced');
@@ -709,16 +894,19 @@
         if (toggle) toggle.textContent = 'Ocultar opciones avanzadas';
       }
     }
-    function openContact(id, mode) {
+    function openContact(id, mode, done) {
       post(cfg.actions.contactsGet, { id: id }).then(function (res) {
         if (!res || !res.success || !res.data.contact) {
           setMsg(listMsg, (res && res.data && res.data.message) || 'Contacto no encontrado', false);
+          if (done) done();
           return;
         }
         fillContact(res.data.contact, mode === 'view');
         showContactForm();
+        if (done) done();
       }).catch(function () {
         setMsg(listMsg, 'Error de conexión', false);
+        if (done) done();
       });
     }
     function saveContact(e) {
@@ -782,18 +970,29 @@
     };
 
     document.querySelectorAll('.cust-tab').forEach(function (tab) {
-      tab.addEventListener('click', function () {
+      tab.addEventListener('click', function (e) {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
         var name = tab.getAttribute('data-tab');
-        if (name === 'clientes') {
-          ctState.clienteId = 0;
-          ctState.clienteName = '';
-          paintClientBanner();
+        ctState.clienteId = 0;
+        ctState.clienteName = '';
+        nav.clienteId = 0;
+        if (name === 'contactos') {
+          var activo = document.getElementById('ct-filter-activo');
+          if (activo) activo.checked = true;
         }
+        paintClientBanner();
         showTab(name);
+        if (name === 'contactos') searchContacts();
       });
     });
     var searchBtn = document.getElementById('ct-search');
-    if (searchBtn) searchBtn.addEventListener('click', searchContacts);
+    if (searchBtn) {
+      searchBtn.addEventListener('click', function () {
+        searchContacts();
+        syncRoute(false);
+      });
+    }
     var clearClient = document.getElementById('ct-clear-client');
     if (clearClient) {
       clearClient.addEventListener('click', function () {
@@ -803,6 +1002,7 @@
         if (activo) activo.checked = true;
         paintClientBanner();
         searchContacts();
+        syncRoute(false);
       });
     }
     if (newBtn) {
@@ -813,9 +1013,21 @@
         showContactForm();
       });
     }
+    var goCliente = document.getElementById('ct-go-cliente');
+    if (goCliente) {
+      goCliente.addEventListener('click', function (e) {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        goToCliente(goCliente.getAttribute('data-ct-cliente'), goCliente.getAttribute('data-ct-cliente-name'));
+      });
+    }
     ['ct-back', 'ct-cancel'].forEach(function (id) {
       var el = document.getElementById(id);
-      if (el) el.addEventListener('click', showSearch);
+      if (!el) return;
+      el.addEventListener('click', function () {
+        showSearch();
+        searchContacts();
+      });
     });
     if (form) form.addEventListener('submit', saveContact);
     var toggle = document.getElementById('ct-toggle-advanced');
@@ -829,6 +1041,13 @@
     }
     if (tbody) {
       tbody.addEventListener('click', function (e) {
+        var go = e.target.closest('[data-ct-cliente]');
+        if (go) {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+          e.preventDefault();
+          goToCliente(go.getAttribute('data-ct-cliente'), go.getAttribute('data-ct-cliente-name'));
+          return;
+        }
         var openBtn = e.target.closest('[data-ct-open]');
         if (openBtn) {
           openContact(openBtn.getAttribute('data-ct-open'), openBtn.getAttribute('data-ct-mode'));
@@ -895,5 +1114,93 @@
         window.openClientContacts(id, els.nombreFantasia ? els.nombreFantasia.value : '');
       });
     }
+
+    function applyContactFilters(r) {
+      setVal('ct-filter-nombre', r.cn);
+      setVal('ct-filter-segundo', r.cs);
+      setVal('ct-filter-paterno', r.cp);
+      setVal('ct-filter-materno', r.cm);
+      setVal('ct-filter-email', r.ce);
+      var activo = document.getElementById('ct-filter-activo');
+      if (!activo) return;
+      if (r.cliente && !r.hasActivos) activo.checked = false;
+      else activo.checked = r.activos;
+    }
+
+    function applyRoute() {
+      suppressRoute += 1;
+      var r = readRoute();
+      state.search = r.q;
+      state.status = r.estado;
+      state.page = r.pagina;
+      if (els.search) els.search.value = r.q;
+      if (els.status) els.status.value = r.estado;
+      loadList();
+      applyContactFilters(r);
+
+      function done() {
+        suppressRoute = Math.max(0, suppressRoute - 1);
+        syncRoute(true);
+        refreshTabHrefs();
+      }
+
+      if (r.tab === 'contactos') {
+        showTab('contactos', { silent: true, keep: true });
+        ctState.clienteId = r.cliente || 0;
+        nav.clienteId = ctState.clienteId;
+        var afterName = function () {
+          paintClientBanner();
+          if (r.contacto) {
+            openContact(r.contacto, r.modo === 'ver' ? 'view' : 'edit', done);
+            return;
+          }
+          if (r.nuevo) {
+            resetContact(ctState.clienteId, ctState.clienteName);
+            var title = document.getElementById('ct-form-title');
+            if (title) title.textContent = 'Crear contacto';
+            showContactForm({ silent: true });
+            done();
+            return;
+          }
+          showSearch({ silent: true });
+          searchContacts();
+          done();
+        };
+        if (r.cliente) {
+          post(cfg.actions.get, { id: r.cliente }).then(function (res) {
+            ctState.clienteName = (res && res.success && res.data.customer && res.data.customer.nombre_fantasia) || '';
+            afterName();
+          }).catch(function () {
+            ctState.clienteName = '';
+            afterName();
+          });
+        } else {
+          ctState.clienteName = '';
+          afterName();
+        }
+        return;
+      }
+
+      showTab('clientes', { silent: true, keep: true });
+      if (r.nuevo) {
+        resetForm();
+        showForm();
+        done();
+        return;
+      }
+      if (r.cliente) {
+        openEdit(r.cliente, done);
+        return;
+      }
+      if (els.listView) els.listView.hidden = false;
+      if (els.formView) els.formView.hidden = true;
+      nav.tab = 'clientes';
+      done();
+    }
+
+    window.riversoCustomersApplyRoute = applyRoute;
+    window.addEventListener('popstate', applyRoute);
+    refreshTabHrefs();
+    applyRoute();
   }
 })();

@@ -332,12 +332,13 @@ class Riverso_Cliente_Contact_Repository {
             return ['ok' => true, 'status' => 'exists', 'id' => (int) $existing['id']];
         }
 
-        $local = strstr($email, '@', true);
-        $name = $local !== false ? ucfirst((string) $local) : 'Contacto';
+        $name = $this->name_from_email($email);
         return $this->save([
             'cliente_id' => $cliente_id,
-            'primer_nombre' => $this->clip($name, 100),
-            'apellido_paterno' => 'Contacto',
+            'primer_nombre' => $name['primer_nombre'],
+            'segundo_nombre' => $name['segundo_nombre'],
+            'apellido_paterno' => $name['apellido_paterno'],
+            'apellido_materno' => $name['apellido_materno'],
             'email' => $email,
             'fono_movil' => $phone,
             'activo' => 1,
@@ -345,6 +346,62 @@ class Riverso_Cliente_Contact_Repository {
             'lab_pais' => 'CHILE',
             'part_pais' => 'CHILE',
         ]);
+    }
+
+    /**
+     * Copia a contactos los correos que ya estaban guardados para facturar.
+     * Se ejecuta una vez. No reactiva un contacto inhabilitado.
+     */
+    public function import_saved_emails() {
+        if (get_option('riverso_cliente_contactos_import_v1') === '1') {
+            return;
+        }
+        $this->ensure_ready();
+        global $wpdb;
+        $emails_table = $wpdb->prefix . 'riverso_billing_receiver_emails';
+        $found = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $emails_table));
+        if ($found !== $emails_table) {
+            return;
+        }
+
+        $rows = $wpdb->get_results("SELECT rut, email FROM {$emails_table}", ARRAY_A);
+        if (!is_array($rows)) {
+            return;
+        }
+        foreach ($rows as $row) {
+            $cliente_id = $this->cliente_id_by_rut((string) ($row['rut'] ?? ''));
+            if ($cliente_id <= 0) {
+                continue;
+            }
+            $this->remember($cliente_id, (string) ($row['email'] ?? ''), 'facturacion');
+        }
+
+        $primaries = $wpdb->get_results(
+            "SELECT id, has_contacto, primer_nombre, apellido_paterno, contacto_telefono, contacto_email
+             FROM {$this->clientes}
+             WHERE contacto_email IS NOT NULL AND contacto_email <> ''",
+            ARRAY_A
+        );
+        if (is_array($primaries)) {
+            foreach ($primaries as $row) {
+                $cliente_id = (int) $row['id'];
+                $email = (string) $row['contacto_email'];
+                if ($row['primer_nombre'] !== '' && $row['apellido_paterno'] !== '') {
+                    $this->sync_primary([
+                        'id' => $cliente_id,
+                        'has_contacto' => true,
+                        'primer_nombre' => (string) $row['primer_nombre'],
+                        'apellido_paterno' => (string) $row['apellido_paterno'],
+                        'contacto_telefono' => (string) $row['contacto_telefono'],
+                        'contacto_email' => $email,
+                    ]);
+                    continue;
+                }
+                $this->remember($cliente_id, $email, 'primario', (string) $row['contacto_telefono']);
+            }
+        }
+
+        update_option('riverso_cliente_contactos_import_v1', '1', false);
     }
 
     /**
@@ -475,6 +532,73 @@ class Riverso_Cliente_Contact_Repository {
      * @param int $cliente_id
      * @return bool
      */
+    /**
+     * @param string $rut
+     * @return int
+     */
+    private function cliente_id_by_rut($rut) {
+        global $wpdb;
+        $clean = strtoupper((string) preg_replace('/[^0-9kK]/', '', (string) $rut));
+        if (strlen($clean) < 2) {
+            return 0;
+        }
+        $id = $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT id FROM {$this->clientes}
+                 WHERE REPLACE(REPLACE(UPPER(rut), '.', ''), '-', '') = %s
+                 ORDER BY activo DESC, id ASC
+                 LIMIT 1",
+                $clean
+            )
+        );
+        return (int) $id;
+    }
+
+    /**
+     * @param string $email
+     * @return array{primer_nombre: string, segundo_nombre: string, apellido_paterno: string, apellido_materno: string}
+     */
+    private function name_from_email($email) {
+        $empty = [
+            'primer_nombre' => 'Contacto',
+            'segundo_nombre' => '',
+            'apellido_paterno' => 'Contacto',
+            'apellido_materno' => '',
+        ];
+        $local = strstr($email, '@', true);
+        if (!is_string($local) || $local === '') {
+            return $empty;
+        }
+        $local = str_replace(['.', '_', '-'], ' ', $local);
+        $parts = preg_split('/\s+/', trim($local));
+        if (!is_array($parts)) {
+            return $empty;
+        }
+        $parts = array_values(array_filter($parts, 'strlen'));
+        if (!$parts) {
+            return $empty;
+        }
+        $parts = array_map(function ($part) {
+            $part = strtolower($part);
+            if (function_exists('mb_convert_case')) {
+                return mb_convert_case($part, MB_CASE_TITLE, 'UTF-8');
+            }
+            return ucfirst($part);
+        }, $parts);
+        if (count($parts) === 1) {
+            $empty['primer_nombre'] = $parts[0];
+            return $empty;
+        }
+        $materno = count($parts) >= 3 ? $parts[count($parts) - 1] : '';
+        $paterno = $parts[count($parts) - (count($parts) >= 3 ? 2 : 1)];
+        return [
+            'primer_nombre' => $parts[0],
+            'segundo_nombre' => count($parts) > 3 ? $parts[1] : '',
+            'apellido_paterno' => $paterno,
+            'apellido_materno' => $materno,
+        ];
+    }
+
     private function cliente_exists($cliente_id) {
         global $wpdb;
         $found = $wpdb->get_var(

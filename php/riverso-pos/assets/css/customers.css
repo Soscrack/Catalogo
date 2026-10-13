@@ -5,6 +5,10 @@
   margin: 0 auto 40px;
 }
 
+.riverso-cust [hidden] {
+  display: none !important;
+}
+
 .riverso-cust {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
   color: #1f2937;
@@ -289,7 +293,14 @@
 }
 
 .cust-th-actions {
-  width: 140px;
+  width: 240px;
+}
+
+.cust-top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .cust-empty {
@@ -332,9 +343,16 @@
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
+  text-decoration: none;
 }
 
-.cust-tab.is-active {
+a.cust-tab:hover {
+  text-decoration: none;
+  color: #111827;
+}
+
+.cust-tab.is-active,
+a.cust-tab.is-active:hover {
   background: #111827;
   border-color: #111827;
   color: #fff;

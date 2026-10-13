@@ -775,7 +775,8 @@ class Riverso_Inventory_Count_Module {
         global $wpdb;
         $prefix = $this->prefix();
 
-        $where = ['1=1'];
+        // "Sin ubicar" es virtual (cuadratura de ventas): no se edita ni se cuenta como lugar.
+        $where = ['1=1', "COALESCE(u.tipo, '') <> 'virtual'"];
         $params = [];
         if (isset($_POST['activo']) && $_POST['activo'] !== '') {
             $where[] = 'u.activo = %d';
@@ -2014,6 +2015,11 @@ class Riverso_Inventory_Count_Module {
             'referencia_id' => intval($conteo_id),
             'notas' => 'Corrección por inventario de ' . $label . ' #' . intval($conteo_id),
         ]);
+        // Unidades encontradas: explican primero lo vendido "sin ubicar". En conteo de producto
+        // no hace falta: al cerrar, Sin ubicar vuelve a 0.
+        if ($diff > 0 && $tipo_conteo !== 'producto' && class_exists('Riverso_Sale_Stock_Service')) {
+            Riverso_Sale_Stock_Service::get_instance()->reconcile_count_gain($producto_base_id, $ubicacion_id, $diff, $conteo_id);
+        }
     }
 
     private function apply_count_stock_corrections($count, $now) {
@@ -2026,6 +2032,17 @@ class Riverso_Inventory_Count_Module {
                 $this->insert_count_historial($pid, $uid, $conteo_id, $counted, $now);
                 $current = $this->location_qty($pid, $uid);
                 $this->create_count_correction($pid, $uid, $counted, $current, $conteo_id, $tipo);
+            }
+        }
+
+        // Conteo de producto: quedó contado en todos sus lugares, Sin ubicar vuelve a 0.
+        if ($tipo === 'producto' && class_exists('Riverso_Sale_Stock_Service')) {
+            $product_ids = array_keys($map);
+            if (!empty($count['producto_base_id'])) {
+                $product_ids[] = intval($count['producto_base_id']);
+            }
+            foreach (array_unique(array_map('intval', $product_ids)) as $pid) {
+                Riverso_Sale_Stock_Service::get_instance()->reset_unlocated($pid, $conteo_id);
             }
         }
 

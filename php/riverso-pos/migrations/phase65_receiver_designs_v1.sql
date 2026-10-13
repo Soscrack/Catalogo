@@ -1,0 +1,4 @@
+-- Fase 65: diseños de receptor (RUT + actividad) y caché SII stc
+-- Tablas creadas por dbDelta en Riverso_POS_Activator::create_phase65_receiver_designs()
+-- {prefix}riverso_billing_receiver_designs
+-- {prefix}riverso_billing_sii_cache

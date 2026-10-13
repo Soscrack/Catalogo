@@ -21,6 +21,8 @@
         lastQuery: '',
         related: [],
         lupaWords: [],
+        browsePage: 1,
+        lupaPage: 1,
         viewMode: localStorage.getItem('pqs_view_mode') || 'neto',
         costMode: localStorage.getItem('pqs_cost_mode') || 'referencia',
     };
@@ -106,6 +108,42 @@
         }
     }
 
+    /** Mensaje de un rechazo (string, jqXHR o null si el usuario canceló el modal). */
+    function failMessage(reason, fallback) {
+        if (reason === 'cancel' || reason === 'superseded') {
+            return null;
+        }
+        if (typeof reason === 'string' && reason) {
+            return reason;
+        }
+        var data = reason && reason.responseJSON && reason.responseJSON.data;
+        return (data && data.message) || fallback || 'Error de red';
+    }
+
+    /** Convierte {success:false} en rechazo con el mensaje del servidor. */
+    function requireSuccess(fallback) {
+        return function (r) {
+            if (r && r.success) {
+                return r;
+            }
+            return $.Deferred().reject((r && r.data && r.data.message) || fallback).promise();
+        };
+    }
+
+    /** Refresca la vista tras la acción; si falló (y no fue cancelada) avisa y refresca igual. */
+    function runAndRefresh(promise, fallback) {
+        return promise.then(function () {
+            refreshViewer();
+        }, function (reason) {
+            var msg = failMessage(reason, fallback);
+            if (msg === null) {
+                return;
+            }
+            alert(msg);
+            refreshViewer();
+        });
+    }
+
     function renderGridRows(items, tbodySelector) {
         var $tb = $(tbodySelector);
         if (!items || !items.length) {
@@ -152,6 +190,9 @@
             return 'Sin origen registrado';
         }
         var parts = [origin.label || origin.key];
+        if (origin.detalle) {
+            parts.push(String(origin.detalle));
+        }
         if (origin.fecha) {
             parts.push('Fecha: ' + origin.fecha);
         }
@@ -203,6 +244,53 @@
             : pricing.p_asignado;
     }
 
+    function pickPresentacionPrice(block, viewMode) {
+        if (!block) {
+            return null;
+        }
+        return viewMode === 'neto'
+            ? (block.p_neto != null ? block.p_neto : block.p_bruto)
+            : block.p_bruto;
+    }
+
+    function pickPresentacionCost(block, costMode, viewMode) {
+        if (!block) {
+            return null;
+        }
+        var bases = block.c_ref_bases || null;
+        var base = bases && bases[costMode] ? bases[costMode] : null;
+        if (base) {
+            return viewMode === 'neto' ? base.neto : base.bruto;
+        }
+        return viewMode === 'neto'
+            ? (block.c_ref_neto != null ? block.c_ref_neto : null)
+            : (block.c_ref_bruto != null ? block.c_ref_bruto : null);
+    }
+
+    function formatMarginHtml(m) {
+        if (!m || m.factor == null) {
+            return '—';
+        }
+        return esc(m.factor.toFixed(2)) + '× · ' +
+            fmtMoney(m.unitario) + ' · ' +
+            esc(String(m.pct)) + '%';
+    }
+
+    function setOriginBadge($el, origin) {
+        if (!$el || !$el.length) {
+            return;
+        }
+        var label = origin && origin.label ? String(origin.label) : '';
+        var key = origin && origin.key ? String(origin.key) : '';
+        if (!label || !key) {
+            $el.attr('hidden', true).text('').attr('title', '');
+            return;
+        }
+        $el.removeAttr('hidden')
+            .text(label)
+            .attr('title', originTitle(origin));
+    }
+
     function calcMargin(price, cost) {
         if (price == null || cost == null || !(Number(cost) > 0)) {
             return { factor: null, unitario: null, pct: null };
@@ -234,39 +322,52 @@
 
     function updatePricingUi() {
         var pricing = state.summary && state.summary.pricing;
+        var presentacion = pricing && pricing.presentacion ? pricing.presentacion : null;
         $('.pqs-view-mode').removeClass('is-active');
         $('.pqs-view-mode[data-mode="' + state.viewMode + '"]').addClass('is-active');
         $('.pqs-cost-mode').removeClass('is-active');
         $('.pqs-cost-mode[data-cost="' + state.costMode + '"]').addClass('is-active');
 
-        var price = pickPrice(pricing, state.viewMode);
-        var cost = pickCost(pricing, state.costMode, state.viewMode);
+        var priceOrigin = presentacion && presentacion.origen_precio
+            ? presentacion.origen_precio
+            : (pricing && pricing.origen_precio);
+
+        var price;
+        var cost;
+        var bruto;
+        if (presentacion && presentacion.unitario) {
+            price = pickPresentacionPrice(presentacion.unitario, state.viewMode);
+            cost = pickPresentacionCost(presentacion.unitario, state.costMode, state.viewMode);
+            bruto = presentacion.envase && presentacion.envase.p_bruto != null
+                ? presentacion.envase.p_bruto
+                : null;
+        } else {
+            price = pickPrice(pricing, state.viewMode);
+            cost = pickCost(pricing, state.costMode, state.viewMode);
+            bruto = pricing ? pricing.p_asignado : null;
+        }
         var m = calcMargin(price, cost);
 
-        var bruto = pricing ? pricing.p_asignado : null;
         $('#pqs-v-precio-bruto .pqs-hero-price-value').text(
             bruto != null ? '$' + fmtMoney(bruto) : 'Sin precio'
         );
         $('#pqs-v-precio-bruto').toggleClass('is-empty', !(Number(bruto) > 0));
+        setOriginBadge($('#pqs-hero-origen'), priceOrigin);
 
         $('#pqs-v-precio').text(fmtMoney(price));
         if (state.editing) {
-            $('#pqs-edit-precio').val(price != null ? price : '');
+            // Editor manual: precio propio del SKU, no el total de regla.
+            var editPrice = pickPrice(pricing, state.viewMode);
+            $('#pqs-edit-precio').val(editPrice != null ? editPrice : '');
             $('#pqs-edit-precio-mode').text(state.viewMode === 'bruto' ? 'bruto' : 'neto');
         }
         $('#pqs-v-costo').text(fmtMoney(cost));
-        if (m.factor != null) {
-            $('#pqs-v-margen').html(
-                esc(m.factor.toFixed(2)) + '× · ' +
-                fmtMoney(m.unitario) + ' · ' +
-                esc(String(m.pct)) + '%'
-            );
-        } else {
-            $('#pqs-v-margen').text('—');
-        }
+        $('#pqs-v-margen').html(formatMarginHtml(m));
 
-        $('#pqs-help-precio').attr('title', originTitle(pricing && pricing.origen_precio));
-        setFolioLink($('#pqs-folio-precio'), pricing && pricing.origen_precio);
+        $('#pqs-help-precio').attr('title', originTitle(priceOrigin));
+        setFolioLink($('#pqs-folio-precio'), presentacion ? null : (pricing && pricing.origen_precio));
+        setOriginBadge($('#pqs-origen-precio-badge'), priceOrigin);
+
         var costOrigin = originTitle(
             pricing && pricing.origen_costo,
             pricing && pricing.costo_bases_meta
@@ -276,6 +377,29 @@
         }
         $('#pqs-help-costo').attr('title', costOrigin);
         setFolioLink($('#pqs-folio-costo'), pricing && pricing.origen_costo);
+
+        var $envaseBlock = $('#pqs-pricing-envase');
+        if (presentacion && presentacion.envase) {
+            var qty = Number(presentacion.cantidad_unidades) || 0;
+            var qtyLabel = qty > 0
+                ? String(qty).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1')
+                : '';
+            $('#pqs-pricing-envase-label').text(
+                qtyLabel ? ('Venta envase de ' + qtyLabel + ' u') : 'Venta envase'
+            );
+            var priceE = pickPresentacionPrice(presentacion.envase, state.viewMode);
+            var costE = pickPresentacionCost(presentacion.envase, state.costMode, state.viewMode);
+            var mE = calcMargin(priceE, costE);
+            $('#pqs-v-precio-envase').text(fmtMoney(priceE));
+            $('#pqs-v-costo-envase').text(fmtMoney(costE));
+            $('#pqs-v-margen-envase').html(formatMarginHtml(mE));
+            $('#pqs-help-precio-envase').attr('title', originTitle(priceOrigin));
+            setOriginBadge($('#pqs-origen-precio-envase-badge'), priceOrigin);
+            $envaseBlock.removeAttr('hidden');
+        } else {
+            $envaseBlock.attr('hidden', true);
+            setOriginBadge($('#pqs-origen-precio-envase-badge'), null);
+        }
     }
 
     function stockHelpText(stock) {
@@ -349,6 +473,9 @@
         if (!data) {
             $el.addClass('empty');
             var emptyHtml = '<div>' + emptyLabel + '</div>';
+            if (type === 'family') {
+                emptyHtml += familyDecisionHtml();
+            }
             if (canEditRel) {
                 emptyHtml += relationEditControls(type, null);
             }
@@ -385,6 +512,82 @@
             html += relationEditControls(type, data);
         }
         $el.html(html);
+    }
+
+    function canAnswerFamily() {
+        return canManage || canManageFamilies;
+    }
+
+    function currentFamilyDecision() {
+        var p = (state.summary && state.summary.product) || {};
+        var d = p.familia_decision || '';
+        return d === 'pendiente' ? '' : d;
+    }
+
+    function familyDecisionLabel(decision) {
+        if (decision === 'requiere') {
+            return 'Sí, necesita familia';
+        }
+        if (decision === 'no_requiere') {
+            return 'No requiere (queda solo)';
+        }
+        return 'Sin responder';
+    }
+
+    function familyDecisionEffect(decision) {
+        if (decision === 'requiere') {
+            return 'Se creará la tarea «Asignar familia». En Procesar folios el SKU quedará bloqueado hasta asignarle una familia.';
+        }
+        if (decision === 'no_requiere') {
+            return 'Se cerrarán las tareas de familia pendientes y el SKU deja de pedir familia en Procesar folios.';
+        }
+        return 'La respuesta vuelve a «sin responder»: se cierra «Asignar familia» si estaba abierta y reaparece la pregunta «¿Necesita familia?».';
+    }
+
+    function familyDecisionButtons(actual) {
+        var opts = [
+            ['requiere', 'Sí, necesita familia'],
+            ['no_requiere', 'No requiere'],
+            ['reset', 'Volver a sin responder'],
+        ];
+        return opts.filter(function (o) {
+            return o[0] === 'reset' ? actual !== '' : o[0] !== actual;
+        }).map(function (o) {
+            return '<button type="button" class="button button-small pqs-fam-decision" data-decision="' +
+                o[0] + '">' + esc(o[1]) + '</button>';
+        }).join('');
+    }
+
+    function familyDecisionHtml() {
+        var actual = currentFamilyDecision();
+        var html = '<div class="pqs-family-decision">Decisión: <strong>' + esc(familyDecisionLabel(actual)) + '</strong>';
+        if (canAnswerFamily()) {
+            html += ' <button type="button" class="button button-small pqs-fam-decision-toggle">Cambiar decisión</button>' +
+                '<div class="pqs-fam-decision-options" style="display:none;">' + familyDecisionButtons(actual) + '</div>';
+        }
+        return html + '</div>';
+    }
+
+    function changeFamilyDecision(decision) {
+        if (!state.productId || !decision) {
+            return;
+        }
+        var actual = currentFamilyDecision();
+        var nueva = decision === 'reset' ? '' : decision;
+        runAndRefresh(pqsConfirm({
+            title: 'Cambiar decisión de familia',
+            bodyHtml:
+                '<p>SKU <code>' + esc(currentSku()) + '</code></p>' +
+                '<p>Decisión actual: <strong>' + esc(familyDecisionLabel(actual)) + '</strong><br>' +
+                'Nueva decisión: <strong>' + esc(familyDecisionLabel(nueva)) + '</strong></p>' +
+                '<p>' + esc(familyDecisionEffect(decision)) + '</p>',
+            okLabel: 'Confirmar cambio',
+        }).then(function () {
+            return post('riverso_products_answer_family_need', {
+                product_id: state.productId,
+                decision: decision,
+            });
+        }).then(requireSuccess('No se pudo guardar la decisión')), 'No se pudo guardar la decisión');
     }
 
     function relationEditControls(type, data) {
@@ -501,9 +704,16 @@
                 remove = ' <button type="button" class="button-link pqs-sup-remove" data-pp-id="' +
                     esc(s.id) + '" style="color:#b32d2e;" title="Rechazar vínculo">×</button>';
             }
+            var codeLabel = s.sin_codigo
+                ? '<span style="color:#9a6700;">sin código</span>'
+                : '<code>' + esc(s.codigo_proveedor || '—') + '</code>';
+            if (s.sin_codigo && state.editing && canManage && s.conocido_id) {
+                remove = ' <button type="button" class="button-link pqs-known-remove" data-conocido-id="' +
+                    esc(s.conocido_id) + '" style="color:#b32d2e;" title="Quitar proveedor">×</button>';
+            }
             return '<div class="pqs-supplier-row">' +
                 esc(s.display_name || s.proveedor_nombre || '') +
-                ' · <code>' + esc(s.codigo_proveedor || '—') + '</code>' +
+                ' · ' + codeLabel +
                 badgeHtml + helpHtml + remove +
                 '</div>';
         }).join('');
@@ -550,52 +760,71 @@
         }
         $box.html(list.map(function (t) {
             var tipo = t.tipo || '';
-            var html =
-                '<div class="pqs-task" data-task-id="' + esc(t.id) + '" data-tipo="' + esc(tipo) + '">' +
+            var inline = canManage ? taskInlineActionsHtml(t) : '';
+            var canComplete = t.completion_mode === 'manual' && !!t.allow_complete;
+            var actions = inline;
+            if (t.target_url) {
+                actions += '<a class="button button-small' + (inline ? '' : ' button-primary') +
+                    '" href="' + esc(t.target_url) + '">Ir a realizar</a>';
+            }
+            if (canComplete) {
+                actions += '<button type="button" class="button button-small pqs-task-complete">Completar</button>';
+            }
+            if (!actions) {
+                actions = '<span class="pqs-task-no-target">Sin pantalla asociada: un supervisor puede cerrarla desde Tareas.</span>';
+            }
+            return '<div class="pqs-task" data-task-id="' + esc(t.id) + '" data-tipo="' + esc(tipo) + '">' +
                 '<div class="pqs-task-title">' + esc(t.titulo || tipo) + '</div>' +
                 '<div class="pqs-task-meta">' + esc(tipo) +
                 (t.prioridad ? ' · prioridad ' + esc(t.prioridad) : '') + '</div>' +
-                '<div class="pqs-task-actions">';
-
-            if (canManage) {
-                if (tipo === 'confirmar_barcode_legacy') {
-                    html += renderLegacyTaskActions(t);
-                } else if (tipo === 'barcode_faltante') {
-                    html +=
-                        '<div class="pqs-task-form">' +
-                        '<input type="text" class="pqs-task-barcode" placeholder="Código de barras">' +
-                        '<button type="button" class="button button-small button-primary pqs-task-do-barcode">Asignar</button>' +
-                        '</div>';
-                } else if (tipo === 'codigo_faltante' || tipo === 'confirmar_codigo_proveedor' || tipo === 'relacionar_producto_proveedor') {
-                    html +=
-                        '<div class="pqs-task-form">' +
-                        '<input type="text" class="pqs-task-sup-search" placeholder="Proveedor…">' +
-                        '<input type="hidden" class="pqs-task-sup-id" value="">' +
-                        '<input type="text" class="pqs-task-sup-code" placeholder="Código proveedor">' +
-                        '<button type="button" class="button button-small button-primary pqs-task-do-supplier">Asignar</button>' +
-                        '<div class="pqs-sup-suggestions" style="display:none;width:100%;"></div>' +
-                        '</div>';
-                } else if (tipo === 'preguntar_familia') {
-                    html +=
-                        '<button type="button" class="button button-small pqs-task-family-need" data-answer="requiere">Necesita familia</button>' +
-                        '<button type="button" class="button button-small pqs-task-family-need" data-answer="no_requiere">No requiere</button>';
-                } else if (tipo === 'asignar_familia') {
-                    html += '<button type="button" class="button button-small pqs-task-open-family">Abrir editor familia</button>';
-                }
-
-                if (t.target_url) {
-                    html += '<a class="button button-small" href="' + esc(t.target_url) + '">Ir</a>';
-                }
-                if (tipo !== 'confirmar_barcode_legacy') {
-                    html += '<button type="button" class="button button-small pqs-task-complete">Completar</button>';
-                }
-            } else if (t.target_url) {
-                html += '<a class="button button-small" href="' + esc(t.target_url) + '">Ir</a>';
-            }
-
-            html += '</div></div>';
-            return html;
+                (t.como_completar
+                    ? '<div class="pqs-task-howto"><strong>Cómo completarla:</strong> ' + esc(t.como_completar) + '</div>'
+                    : '') +
+                '<div class="pqs-task-actions">' + actions + '</div></div>';
         }).join(''));
+    }
+
+    function taskInlineActionsHtml(t) {
+        var tipo = t.tipo || '';
+        if (tipo === 'confirmar_barcode_legacy') {
+            return renderLegacyTaskActions(t);
+        }
+        if (tipo === 'barcode_faltante') {
+            return '<div class="pqs-task-form">' +
+                '<input type="text" class="pqs-task-barcode" placeholder="Código de barras">' +
+                '<button type="button" class="button button-small button-primary pqs-task-do-barcode">Asignar</button>' +
+                '</div>';
+        }
+        if (tipo === 'relacionar_producto_proveedor') {
+            return '<div class="pqs-task-form">' +
+                '<input type="text" class="pqs-task-sup-search" placeholder="Proveedor…">' +
+                '<input type="hidden" class="pqs-task-sup-id" value="">' +
+                '<input type="text" class="pqs-task-sup-code" placeholder="Código proveedor">' +
+                '<button type="button" class="button button-small button-primary pqs-task-do-supplier">Asignar</button>' +
+                '<div class="pqs-sup-suggestions" style="display:none;width:100%;"></div>' +
+                '</div>';
+        }
+        if (tipo === 'preguntar_familia') {
+            return '<button type="button" class="button button-small pqs-fam-decision" data-decision="requiere">Necesita familia</button>' +
+                '<button type="button" class="button button-small pqs-fam-decision" data-decision="no_requiere">No requiere</button>';
+        }
+        if (tipo === 'asignar_familia') {
+            var html = '';
+            if (canManageFamilies) {
+                html +=
+                    '<button type="button" class="button button-small button-primary pqs-task-family-search">Buscar familia existente</button>' +
+                    '<button type="button" class="button button-small pqs-task-open-family">Crear familia</button>';
+            }
+            html +=
+                '<button type="button" class="button button-small pqs-fam-decision" data-decision="no_requiere">No necesita familia</button>' +
+                '<button type="button" class="button button-small pqs-fam-decision" data-decision="reset">Volver a sin responder</button>';
+            if (canManageFamilies) {
+                html += '<div class="pqs-task-family-search-wrap" style="display:none;width:100%;">' +
+                    relationEditControls('family', null) + '</div>';
+            }
+            return html;
+        }
+        return '';
     }
 
     function setEditing(on) {
@@ -792,6 +1021,7 @@
     }
 
     function loadSummary(id) {
+        hideBrowse();
         setStatus($('#pqs-status'), 'Cargando…');
         return post('riverso_products_quick_summary', { producto_base_id: id }).then(function (r) {
             if (!r || !r.success) {
@@ -803,13 +1033,124 @@
         });
     }
 
+    function paintPager(opts) {
+        var pages = opts.pages || 1;
+        var current = opts.page || 1;
+        if (!opts.pager || !opts.pager.length) {
+            return;
+        }
+        if (pages <= 1) {
+            opts.pager.hide();
+            if (opts.numbers) {
+                opts.numbers.empty();
+            }
+            return;
+        }
+        opts.pager.css('display', 'flex');
+        if (opts.prev) {
+            opts.prev.prop('disabled', current <= 1);
+        }
+        if (opts.next) {
+            opts.next.prop('disabled', current >= pages);
+        }
+        if (opts.info) {
+            var label = 'Página ' + current + ' de ' + pages;
+            if (opts.total) {
+                label += ' · ' + opts.total + ' productos';
+            }
+            opts.info.text(label);
+        }
+        if (!opts.numbers) {
+            return;
+        }
+        opts.numbers.empty();
+        var windowSize = 5;
+        var start = Math.max(1, current - Math.floor(windowSize / 2));
+        var end = Math.min(pages, start + windowSize - 1);
+        start = Math.max(1, end - windowSize + 1);
+        for (var i = start; i <= end; i += 1) {
+            (function (page) {
+                var $btn = $('<button type="button" class="button"></button>').text(String(page));
+                if (page === current) {
+                    $btn.addClass('button-primary').attr('aria-current', 'page');
+                }
+                $btn.on('click', function () {
+                    opts.onPage(page);
+                });
+                opts.numbers.append($btn);
+            })(i);
+        }
+    }
+
+    function showBrowse() {
+        $('#pqs-browse').show();
+    }
+
+    function hideBrowse() {
+        $('#pqs-browse').hide();
+    }
+
+    function loadBrowse(page) {
+        if (!$('#pqs-browse').length) {
+            return;
+        }
+        var requested = (typeof page === 'number' && isFinite(page) && page > 0) ? Math.floor(page) : 1;
+        var per = 30;
+        $('#pqs-browse-tbody').html('<tr><td colspan="4">Cargando…</td></tr>');
+        post('riverso_products_list', {
+            status: 'active',
+            search: '',
+            completeness: 'todos',
+            catalog_id: '',
+            offset: (requested - 1) * per,
+            limit: per
+        }).then(function (r) {
+            if (!r || !r.success) {
+                $('#pqs-browse-tbody').html('<tr><td colspan="4">No se pudo cargar el listado.</td></tr>');
+                return;
+            }
+            var data = r.data || {};
+            var items = data.items || [];
+            var total = data.total || 0;
+            var pages = data.pages || 1;
+            var current = Math.floor((data.offset || 0) / per) + 1;
+            state.browsePage = current;
+            if (!items.length) {
+                $('#pqs-browse-tbody').html('<tr><td colspan="4">Sin productos.</td></tr>');
+            } else {
+                $('#pqs-browse-tbody').html(items.map(function (it) {
+                    var sku = it.sku_local || it.canonical_sku || '';
+                    return '<tr class="pqs-browse-row" data-id="' + esc(it.id) + '" style="cursor:pointer;">' +
+                        '<td><code>' + esc(sku || '—') + '</code></td>' +
+                        '<td>' + esc(it.nombre_canonico || '—') + '</td>' +
+                        '<td><code>' + esc(it.codigos_proveedor || '—') + '</code></td>' +
+                        '<td><code>' + esc(it.barcode_sample || '—') + '</code></td>' +
+                        '</tr>';
+                }).join(''));
+            }
+            paintPager({
+                pager: $('#pqs-browse-pager'),
+                numbers: $('#pqs-browse-pages'),
+                info: $('#pqs-browse-info'),
+                prev: $('#pqs-browse-prev'),
+                next: $('#pqs-browse-next'),
+                page: current,
+                pages: pages,
+                total: total,
+                onPage: loadBrowse
+            });
+        });
+    }
+
     function doLookup() {
         var code = ($('#pqs-input').val() || '').trim();
         if (!code) {
             setStatus($('#pqs-status'), 'Ingresá un código', 'empty');
+            showBrowse();
             return;
         }
         setStatus($('#pqs-status'), 'Buscando…');
+        hideBrowse();
         $('#pqs-viewer').hide();
         state.editing = false;
         stopWatchEditorClose();
@@ -817,6 +1158,7 @@
             if (!r || !r.success) {
                 setStatus($('#pqs-status'), (r && r.data && r.data.message) || 'Error', 'error');
                 hideRelated();
+                showBrowse();
                 return;
             }
             var items = r.data.items || [];
@@ -825,6 +1167,7 @@
                 setStatus($('#pqs-status'), 'Sin coincidencias para «' + code + '»', 'empty');
                 $('#pqs-results').hide();
                 hideRelated();
+                showBrowse();
                 return;
             }
             if (items.length === 1) {
@@ -891,11 +1234,13 @@
         $('#pqs-lupa-word').val('').focus();
     }
 
-    function doLupaSearch() {
+    function doLupaSearch(page) {
+        var requested = (typeof page === 'number' && isFinite(page) && page > 0) ? Math.floor(page) : 1;
         var term = ($('#pqs-lupa-input').val() || '').trim();
         var field = $('#pqs-lupa-field').val() || 'todos';
         if (term.length < 2 && !state.lupaWords.length) {
             setStatus($('#pqs-lupa-status'), 'Escribí al menos 2 caracteres o agregá una palabra', 'empty');
+            $('#pqs-lupa-pager').hide();
             return;
         }
         setStatus($('#pqs-lupa-status'), 'Buscando…');
@@ -903,15 +1248,68 @@
             term: term,
             field: field,
             palabras: state.lupaWords.slice(),
+            page: requested
         }).then(function (r) {
             if (!r || !r.success) {
                 setStatus($('#pqs-lupa-status'), (r && r.data && r.data.message) || 'Error', 'error');
                 return;
             }
-            var items = r.data.items || [];
-            setStatus($('#pqs-lupa-status'), items.length ? (items.length + ' resultados') : 'Sin resultados', items.length ? '' : 'empty');
+            var data = r.data || {};
+            var items = data.items || [];
+            var total = data.total != null ? data.total : items.length;
+            var pages = data.pages || 1;
+            var current = data.page || requested;
+            state.lupaPage = current;
+            var hint = items.length ? (total + ' resultados') : 'Sin resultados';
+            if (pages > 1) {
+                hint += '. Página ' + current + ' de ' + pages;
+            }
+            if (data.capped) {
+                hint += '. Hay más coincidencias; afina la búsqueda.';
+            }
+            setStatus($('#pqs-lupa-status'), hint, items.length ? '' : 'empty');
             renderLupaRows(items);
+            paintPager({
+                pager: $('#pqs-lupa-pager'),
+                numbers: $('#pqs-lupa-pages'),
+                info: $('#pqs-lupa-info'),
+                prev: $('#pqs-lupa-prev'),
+                next: $('#pqs-lupa-next'),
+                page: current,
+                pages: pages,
+                total: total,
+                onPage: doLupaSearch
+            });
         });
+    }
+
+    function isPortal() {
+        return cfg.surface === 'portal';
+    }
+
+    function urlWith(base, params) {
+        if (!base) {
+            return '#';
+        }
+        try {
+            var u = new URL(base, window.location.href);
+            Object.keys(params || {}).forEach(function (key) {
+                if (params[key] != null && params[key] !== '') {
+                    u.searchParams.set(key, params[key]);
+                }
+            });
+            return u.toString();
+        } catch (e) {
+            return base;
+        }
+    }
+
+    function categoriesBaseUrl() {
+        if (isPortal() && cfg.categories_url) {
+            return cfg.categories_url;
+        }
+        return (state.summary && state.summary.urls && state.summary.urls.categories_families) ||
+            (cfg.categories_url || '');
     }
 
     function showMembersPopover(type, id, anchor) {
@@ -926,15 +1324,16 @@
 
         var action = type === 'family' ? 'riverso_families_get' : 'riverso_emparejamientos_get';
         var payload = type === 'family' ? { grupo_id: id } : { id: id };
-        var catsUrl = (state.summary && state.summary.urls && state.summary.urls.categories_families) ||
-            (cfg.categories_url || '');
+        var $link = $('#pqs-members-link').data('type', type).data('id', id);
 
         if (type === 'family') {
             $('#pqs-members-title').text('Miembros de familia');
-            $('#pqs-members-link').attr('href', catsUrl + '&tab=families&grupo_id=' + id);
+            $link.attr('href', urlWith(categoriesBaseUrl(), { tab: 'families', grupo_id: id }))
+                .text('Abrir en Categorías/Familias');
         } else {
             $('#pqs-members-title').text('Miembros emparejados');
-            $('#pqs-members-link').attr('href', catsUrl + '&tab=emparejamientos&emparejamiento_id=' + id);
+            $link.attr('href', urlWith(categoriesBaseUrl(), { tab: 'emparejamientos', emparejamiento_id: id }))
+                .text(isPortal() ? 'Editar emparejamiento' : 'Abrir en Categorías/Familias');
         }
 
         post(action, payload).then(function (r) {
@@ -1071,13 +1470,44 @@
         });
 
         $('#pqs-btn-lupa').on('click', openLupa);
+        $('#pqs-btn-scan').on('click', function () {
+            if (!window.RiversoBarcodeScanner) {
+                return;
+            }
+            window.RiversoBarcodeScanner.open({
+                onCode: function (code) {
+                    $('#pqs-input').val(code);
+                    doLookup();
+                }
+            });
+        });
         $('#pqs-lupa-close').on('click', closeLupa);
         $('#pqs-lupa-modal').on('click', function (e) {
             if (e.target === this) {
                 closeLupa();
             }
         });
-        $('#pqs-lupa-search').on('click', doLupaSearch);
+        $('#pqs-lupa-search').on('click', function () { doLupaSearch(1); });
+        $('#pqs-lupa-prev').on('click', function () {
+            if (state.lupaPage > 1) {
+                doLupaSearch(state.lupaPage - 1);
+            }
+        });
+        $('#pqs-lupa-next').on('click', function () {
+            doLupaSearch(state.lupaPage + 1);
+        });
+        $('#pqs-browse-prev').on('click', function () {
+            if (state.browsePage > 1) {
+                loadBrowse(state.browsePage - 1);
+            }
+        });
+        $('#pqs-browse-next').on('click', function () {
+            loadBrowse(state.browsePage + 1);
+        });
+        $('#pqs-browse-tbody').on('click', '.pqs-browse-row', function () {
+            hideBrowse();
+            loadSummary($(this).data('id'));
+        });
         $('#pqs-lupa-input').on('keydown', function (e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -1118,6 +1548,9 @@
             state.summary = null;
             state.editing = false;
             $('#pqs-viewer').removeClass('pqs-editing');
+            if (!$('#pqs-results').is(':visible')) {
+                showBrowse();
+            }
         });
 
         $('#pqs-btn-edit').on('click', function () {
@@ -1136,6 +1569,13 @@
             }
             if (window.RiversoProductsHub && typeof window.RiversoProductsHub.openDetail === 'function') {
                 window.RiversoProductsHub.openDetail(state.productId, { tab: 'local', edit: true });
+            } else if (isPortal() && cfg.hub_url) {
+                window.location.href = urlWith(cfg.hub_url, {
+                    vista: 'busqueda',
+                    id: state.productId,
+                    tab: 'local',
+                    edit: '1'
+                });
             } else {
                 window.location.href = 'admin.php?page=riverso-pos-products&tab=busqueda&action=detail&id=' +
                     state.productId + '&edit=1';
@@ -1170,6 +1610,19 @@
             state.costMode = $(this).data('cost') || 'referencia';
             localStorage.setItem('pqs_cost_mode', state.costMode);
             updatePricingUi();
+        });
+
+        $('#pqs-members-link').on('click', function (e) {
+            if (!isPortal() || $(this).data('type') !== 'emp') {
+                return;
+            }
+            var empId = parseInt($(this).data('id'), 10) || 0;
+            if (!empId || !window.RiversoEmparejamientoEditor || typeof window.RiversoEmparejamientoEditor.open !== 'function') {
+                return;
+            }
+            e.preventDefault();
+            $('#pqs-members-popover').hide();
+            window.RiversoEmparejamientoEditor.open(empId);
         });
 
         $(document).on('click', '.pqs-btn-members', function (e) {
@@ -1283,34 +1736,36 @@
         $(document).on('click', '.pqs-task-complete', function () {
             var $task = $(this).closest('.pqs-task');
             var tid = $task.data('task-id');
-            post('riverso_products_complete_task', { tarea_id: tid }).then(function (r) {
-                if (r && r.success) {
-                    refreshViewer();
-                } else {
-                    alert((r && r.data && r.data.message) || 'No se pudo completar');
-                }
-            });
+            var titulo = $task.find('.pqs-task-title').text();
+            runAndRefresh(pqsConfirm({
+                title: 'Completar tarea',
+                bodyHtml: '<p>¿Marcar como completada la tarea <strong>' + esc(titulo) + '</strong>?</p>' +
+                    '<p>Solo se cierra la tarea; no se cambia nada del SKU <code>' + esc(currentSku()) + '</code>.</p>',
+                okLabel: 'Completar',
+            }).then(function () {
+                return post('riverso_products_complete_task', { tarea_id: tid });
+            }).then(requireSuccess('No se pudo completar la tarea')), 'No se pudo completar la tarea');
         });
 
         $(document).on('click', '.pqs-task-do-barcode', function () {
             var $task = $(this).closest('.pqs-task');
             var code = ($task.find('.pqs-task-barcode').val() || '').trim();
             if (!code || !state.productId) {
+                alert('Ingresá el código de barras');
                 return;
             }
-            post('riverso_products_add_barcode', {
-                product_id: state.productId,
-                barcode: code,
-            }).then(function (r) {
-                if (!r || !r.success) {
-                    alert((r && r.data && r.data.message) || 'Error al agregar barcode');
-                    return;
-                }
-                var tid = $task.data('task-id');
-                return post('riverso_products_complete_task', { tarea_id: tid });
+            runAndRefresh(pqsConfirm({
+                title: 'Asignar código de barras',
+                bodyHtml: '<p>Se agregará el código <code>' + esc(code) + '</code> al SKU <code>' +
+                    esc(currentSku()) + '</code> y se cerrará la tarea.</p>',
+                okLabel: 'Asignar',
             }).then(function () {
-                refreshViewer();
-            });
+                return post('riverso_products_add_barcode', {
+                    product_id: state.productId,
+                    barcode: code,
+                    audit_reason: 'Asignado desde tarea en Búsqueda rápida',
+                });
+            }).then(requireSuccess('Error al agregar el código de barras')), 'Error al agregar el código de barras');
         });
 
         $(document).on('input', '.pqs-task-sup-search', function () {
@@ -1360,44 +1815,47 @@
                 alert('Seleccioná proveedor e ingresá código');
                 return;
             }
-            linkSupplier(state.productId, sid, code, false).then(function () {
-                return post('riverso_products_complete_task', {
-                    tarea_id: $task.data('task-id'),
-                });
+            var supName = $form.find('.pqs-task-sup-search').val() || '';
+            runAndRefresh(pqsConfirm({
+                title: 'Asignar código de proveedor',
+                bodyHtml: '<p>Se vinculará el código <code>' + esc(code) + '</code>' +
+                    (supName ? ' del proveedor <strong>' + esc(supName) + '</strong>' : '') +
+                    ' al SKU <code>' + esc(currentSku()) + '</code> y se cerrará la tarea.</p>',
+                okLabel: 'Asignar',
             }).then(function () {
-                refreshViewer();
-            }).fail(function (msg) {
-                if (msg && msg !== 'cancel' && msg !== 'superseded') {
-                    alert(typeof msg === 'string' ? msg : 'Error al asignar código');
-                }
-            });
+                return linkSupplier(state.productId, sid, code, false);
+            }), 'Error al asignar código');
         });
 
-        $(document).on('click', '.pqs-task-family-need', function () {
-            var answer = $(this).data('answer');
-            var tid = $(this).closest('.pqs-task').data('task-id');
-            post('riverso_products_answer_family_need', {
-                product_id: state.productId,
-                needs_family: answer === 'requiere' ? 1 : 0,
-            }).then(function (r) {
-                if (!r || !r.success) {
-                    alert((r && r.data && r.data.message) || 'Error');
-                    return;
-                }
-                if (tid) {
-                    return post('riverso_products_complete_task', { tarea_id: tid });
-                }
-            }).then(function () {
-                refreshViewer();
-            });
+        $(document).on('click', '.pqs-fam-decision', function () {
+            changeFamilyDecision(String($(this).data('decision') || ''));
+        });
+
+        $(document).on('click', '.pqs-fam-decision-toggle', function () {
+            $(this).siblings('.pqs-fam-decision-options').toggle();
+        });
+
+        $(document).on('click', '.pqs-task-family-search', function () {
+            var $wrap = $(this).closest('.pqs-task').find('.pqs-task-family-search-wrap');
+            $wrap.toggle();
+            if ($wrap.is(':visible')) {
+                $wrap.find('.pqs-rel-search').trigger('focus');
+            }
         });
 
         $(document).on('click', '.pqs-task-open-family', function () {
-            if (window.RiversoFamilyEditor && typeof window.RiversoFamilyEditor.openCreate === 'function') {
-                window.RiversoFamilyEditor.openCreate(null, { producto_base_id: state.productId });
-            } else if (state.summary && state.summary.urls) {
-                window.location.href = state.summary.urls.categories_families + '&tab=families';
+            if (!window.RiversoFamilyEditor || typeof window.RiversoFamilyEditor.openCreate !== 'function') {
+                alert('Editor de familias no disponible');
+                return;
             }
+            var seed = seedMember();
+            window.RiversoFamilyEditor.openCreate(function () {
+                refreshViewer();
+            }, {
+                nombre: seed.nombre_canonico || '',
+                pendingMembers: [seed],
+            });
+            watchEditorClose();
         });
 
         // —— Edición inline ——
@@ -1529,6 +1987,60 @@
                     }).join('')).show();
                 });
             }, 300));
+        });
+
+        function assignKnownSupplier(supplierId) {
+            if (!supplierId || !state.productId) {
+                alert('Seleccioná un proveedor');
+                return;
+            }
+            post('riverso_assign_known_supplier', {
+                producto_base_id: state.productId,
+                proveedor_id: supplierId
+            }).then(function (r) {
+                if (!r || !r.success) {
+                    alert((r && r.data && r.data.message) || 'No se pudo asignar el proveedor');
+                    return;
+                }
+                $('#pqs-sup-id').val('');
+                $('#pqs-sup-search').val('');
+                refreshViewer();
+            });
+        }
+
+        $('#pqs-btn-supplier-lupa').on('click', function () {
+            if (!window.RiversoSupplierPicker) {
+                return;
+            }
+            window.RiversoSupplierPicker.open({
+                ajaxUrl: ajaxurl,
+                nonce: nonce,
+                title: 'Buscar proveedor',
+                query: $('#pqs-sup-search').val(),
+                onSelect: function (supplier) {
+                    $('#pqs-sup-id').val(supplier.id || '');
+                    $('#pqs-sup-search').val(supplier.nombre || '');
+                    assignKnownSupplier(supplier.id);
+                }
+            });
+        });
+
+        $('#pqs-btn-known-supplier').on('click', function () {
+            assignKnownSupplier($('#pqs-sup-id').val());
+        });
+
+        $(document).on('click', '.pqs-known-remove', function () {
+            var id = $(this).data('conocido-id');
+            if (!id) {
+                return;
+            }
+            post('riverso_remove_known_supplier', { id: id }).then(function (r) {
+                if (!r || !r.success) {
+                    alert((r && r.data && r.data.message) || 'No se pudo quitar');
+                    return;
+                }
+                refreshViewer();
+            });
         });
 
         $('#pqs-btn-add-supplier').on('click', function () {
@@ -1924,6 +2436,7 @@
             }
             bindEvents();
             updatePricingUi();
+            loadBrowse(1);
             try {
                 var params = new URLSearchParams(window.location.search);
                 var quickId = parseInt(params.get('quick_id') || '', 10) || 0;

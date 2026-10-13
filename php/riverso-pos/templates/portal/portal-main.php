@@ -65,6 +65,7 @@
             color: white;
             position: fixed;
             height: 100vh;
+            height: 100dvh;
             display: flex;
             flex-direction: column;
             z-index: 100;
@@ -184,6 +185,53 @@
             width: 20px;
             height: 20px;
         }
+
+        .nav-block {
+            margin: 2px 0 8px;
+        }
+
+        .nav-block-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 20px 10px 28px;
+            color: rgba(255,255,255,0.95);
+            font-weight: 600;
+            background: rgba(255,255,255,0.06);
+        }
+
+        .nav-block-header .dashicons {
+            font-size: 20px;
+            width: 20px;
+            height: 20px;
+        }
+
+        .nav-block-items .nav-item {
+            padding-left: 40px;
+        }
+
+        .nav-block-items .nav-item.active {
+            background: rgba(0, 0, 0, 0.28);
+        }
+
+        .nav-item.nav-item-wip {
+            cursor: default;
+            opacity: 0.55;
+            color: rgba(255,255,255,0.55);
+        }
+
+        .nav-item.nav-item-wip:hover {
+            background: transparent;
+            color: rgba(255,255,255,0.55);
+        }
+
+        .nav-item-wip-badge {
+            margin-left: auto;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            opacity: 0.9;
+        }
         
         .sidebar-footer {
             position: relative;
@@ -257,6 +305,8 @@
         /* Main Content */
         .portal-main {
             flex: 1;
+            /* Sin esto, una tabla ancha estira todo el main y la página entera hace scroll lateral. */
+            min-width: 0;
             margin-left: var(--sidebar-width);
             padding: 30px;
         }
@@ -489,6 +539,7 @@
             background: var(--bg-light);
             border-radius: 8px;
             text-decoration: none;
+            text-align: center;
             color: var(--text-primary);
             transition: all 0.2s;
         }
@@ -526,8 +577,8 @@
             padding: 60px;
         }
         
-        /* Responsive */
-        @media (max-width: 768px) {
+        /* Responsive: menú lateral como cajón también en tablets en vertical (iPad 820–1024px). */
+        @media (max-width: 1024px) {
             .portal-menu-toggle { display: inline-flex; }
             .portal-sidebar {
                 width: min(280px, 86vw);
@@ -661,6 +712,7 @@
             width: 100%;
             max-width: 620px;
             max-height: 90vh;
+            max-height: 90dvh;
             overflow: auto;
             box-shadow: 0 10px 40px rgba(0,0,0,.25);
         }
@@ -818,7 +870,18 @@
             flex-wrap: wrap;
         }
         .bulk-queue-item.run .bulk-status { color: var(--primary); }
+
+        .dash-columns {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 800px) {
+            .dash-columns { grid-template-columns: 1fr; }
+        }
     </style>
+    <?php $portal_mobile_css = RIVERSO_POS_PLUGIN_DIR . 'assets/css/portal-mobile.css'; ?>
+    <link rel="stylesheet" href="<?php echo esc_url(RIVERSO_POS_PLUGIN_URL . 'assets/css/portal-mobile.css?ver=' . (is_file($portal_mobile_css) ? filemtime($portal_mobile_css) : RIVERSO_POS_VERSION)); ?>">
 </head>
 <body>
 <?php
@@ -903,6 +966,14 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                         $active_group = $group_id;
                         break 2;
                     }
+                    $children = (!empty($item['children']) && is_array($item['children'])) ? $item['children'] : [];
+                    foreach ($children as $child) {
+                        $child_slug = $child['portal_slug'] ?? null;
+                        if ($child_slug && $child_slug === $current_page) {
+                            $active_group = $group_id;
+                            break 3;
+                        }
+                    }
                 }
             }
             foreach ($module_groups as $group_id => $group):
@@ -917,13 +988,70 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                     <?php foreach ($group['items'] as $item):
                         $slug = $item['portal_slug'] ?? $item['id'];
                         $icon = $item['icon'] ?? 'admin-generic';
+                        $children = (!empty($item['children']) && is_array($item['children'])) ? $item['children'] : [];
+                        if ($children):
+                            $query_nueva = isset($_GET['nueva']) && (string) $_GET['nueva'] === '1';
                     ?>
+                    <div class="nav-block">
+                        <div class="nav-block-header">
+                            <span class="dashicons dashicons-<?php echo esc_attr($icon); ?>"></span>
+                            <?php echo esc_html($item['label']); ?>
+                        </div>
+                        <div class="nav-block-items">
+                            <?php
+                            $query_vista = isset($_GET['vista']) ? sanitize_key((string) $_GET['vista']) : '';
+                            foreach ($children as $child):
+                                $child_slug = $child['portal_slug'] ?? $slug;
+                                $child_icon = $child['icon'] ?? 'admin-generic';
+                                $child_query = isset($child['portal_query']) ? (string) $child['portal_query'] : '';
+                                $is_wip = !empty($child['wip']);
+                                if ($is_wip):
+                            ?>
+                            <span class="nav-item nav-item-wip" title="En desarrollo" aria-disabled="true">
+                                <span class="dashicons dashicons-<?php echo esc_attr($child_icon); ?>"></span>
+                                <?php echo esc_html($child['label']); ?>
+                                <span class="nav-item-wip-badge">[WIP]</span>
+                            </span>
+                            <?php
+                                    continue;
+                                endif;
+                                $child_url = home_url('/interno/' . $child_slug . '/');
+                                if ($child_query !== '') {
+                                    $child_url .= (strpos($child_url, '?') === false ? '?' : '&') . $child_query;
+                                }
+                                $child_active = false;
+                                if ($current_page === $child_slug) {
+                                    if ($child_query === 'nueva=1') {
+                                        $child_active = $query_nueva;
+                                    } elseif (strpos($child_query, 'vista=') === 0) {
+                                        $child_active = ($query_vista === substr($child_query, 6));
+                                    } elseif ($child_query === '') {
+                                        // En facturación: Emitir activo solo sin vista; cotizaciones sin "nueva".
+                                        if ($child_slug === 'customer-quotes') {
+                                            $child_active = !$query_nueva;
+                                        } elseif ($child_slug === 'facturacion') {
+                                            $child_active = ($query_vista === '');
+                                        } else {
+                                            $child_active = true;
+                                        }
+                                    }
+                                }
+                            ?>
+                            <a href="<?php echo esc_url($child_url); ?>"
+                               class="nav-item <?php echo $child_active ? 'active' : ''; ?>">
+                                <span class="dashicons dashicons-<?php echo esc_attr($child_icon); ?>"></span>
+                                <?php echo esc_html($child['label']); ?>
+                            </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <?php else: ?>
                     <a href="<?php echo esc_url(home_url('/interno/' . $slug . '/')); ?>"
                        class="nav-item <?php echo $current_page === $slug ? 'active' : ''; ?>">
                         <span class="dashicons dashicons-<?php echo esc_attr($icon); ?>"></span>
                         <?php echo esc_html($item['label']); ?>
                     </a>
-                    <?php endforeach; ?>
+                    <?php endif; endforeach; ?>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -959,6 +1087,21 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
             <h1 class="page-title">
                 <?php
                 $page_title = $modules[$current_page]['label'] ?? null;
+                // Vistas del menú que comparten ruta (?nueva=1, ?vista=buscar…): título de la vista abierta.
+                foreach (($modules[$current_page]['views'] ?? []) as $view_query => $view_label) {
+                    parse_str($view_query, $view_params);
+                    $view_match = !empty($view_params);
+                    foreach ($view_params as $view_key => $view_value) {
+                        if (!isset($_GET[$view_key]) || sanitize_text_field(wp_unslash((string) $_GET[$view_key])) !== (string) $view_value) {
+                            $view_match = false;
+                            break;
+                        }
+                    }
+                    if ($view_match) {
+                        $page_title = $view_label;
+                        break;
+                    }
+                }
                 echo esc_html($page_title ?: ($current_page === 'dashboard' ? 'Dashboard' : ucfirst(str_replace('-', ' ', (string) $current_page))));
                 ?>
             </h1>
@@ -1009,7 +1152,7 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
             <?php endif; ?>
         </div>
         
-        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+        <div class="dash-columns">
             <!-- Tareas Pendientes -->
             <div class="content-section">
                 <div class="section-header">
@@ -1067,7 +1210,25 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                             <span>Nueva Venta</span>
                         </a>
                         <?php endif; ?>
-                        
+
+                        <?php if (!empty($modules['customer-quotes'])): ?>
+                        <a href="<?php echo esc_url(home_url('/interno/customer-quotes/?nueva=1')); ?>" class="quick-action">
+                            <span class="dashicons dashicons-edit-page"></span>
+                            <span>Hacer cotización</span>
+                        </a>
+                        <?php endif; ?>
+
+                        <?php if (!empty($modules['facturacion'])): ?>
+                        <a href="<?php echo esc_url(home_url('/interno/facturacion/?tipo=boleta')); ?>" class="quick-action">
+                            <span class="dashicons dashicons-tickets-alt"></span>
+                            <span>Emitir boleta</span>
+                        </a>
+                        <a href="<?php echo esc_url(home_url('/interno/facturacion/?tipo=factura')); ?>" class="quick-action">
+                            <span class="dashicons dashicons-media-document"></span>
+                            <span>Emitir factura</span>
+                        </a>
+                        <?php endif; ?>
+
                         <?php if (current_user_can('riverso_create_tasks')): ?>
                         <a href="<?php echo esc_url(admin_url('admin.php?page=riverso-pos-tasks&action=new')); ?>" class="quick-action">
                             <span class="dashicons dashicons-plus-alt"></span>
@@ -1269,7 +1430,7 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                 <h2 class="section-title">Punto de Venta</h2>
             </div>
             <div class="section-body">
-                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+                <div class="dash-columns">
                     <div>
                         <div class="search-box" style="margin-bottom: 20px;">
                             <input type="text" id="pos-search" placeholder="Buscar producto por SKU o nombre..." 
@@ -2594,26 +2755,132 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                 <?php endif; ?>
             </div>
         </div>
-        
         <?php elseif ($current_page === 'customer-quotes'): ?>
-        <!-- Cotizaciones a Clientes -->
-        <div class="content-section">
-            <div class="section-header">
-                <h2 class="section-title">Cotizaciones a Clientes</h2>
-                <?php if (current_user_can('riverso_create_quotes')): ?>
-                <button class="btn btn-primary" onclick="nuevaCotizacion()">
-                    <span class="dashicons dashicons-plus-alt"></span> Nueva Cotización
-                </button>
-                <?php endif; ?>
-            </div>
-            <div class="section-body">
-                <p style="color: var(--text-secondary);">Gestiona las cotizaciones enviadas a clientes.</p>
-                <a href="<?php echo admin_url('admin.php?page=riverso-customer-quotes'); ?>" class="btn btn-secondary" style="margin-top: 15px;">
-                    Ver en WP Admin
-                </a>
-            </div>
-        </div>
-        
+        <!-- Cotizaciones de venta — layout propio (sin content-section) -->
+        <?php
+        if (!class_exists('Riverso_Customer_Quote_Module')) {
+            $cq = RIVERSO_POS_PLUGIN_DIR . 'sales/customer_quotes/class-customer-quote-module.php';
+            if (file_exists($cq)) {
+                require_once $cq;
+            }
+        }
+        if (class_exists('Riverso_Customer_Quote_Module')) {
+            Riverso_Customer_Quote_Module::get_instance()->render_app('portal');
+        } else {
+            echo '<p>No se pudo cargar cotizaciones de venta.</p>';
+        }
+        ?>
+
+        <?php elseif ($current_page === 'customers'): ?>
+        <!-- Clientes comerciales -->
+        <?php
+        if (!class_exists('Riverso_Customer_Module')) {
+            $cm = RIVERSO_POS_PLUGIN_DIR . 'sales/customers/class-customer-module.php';
+            if (file_exists($cm)) {
+                require_once $cm;
+            }
+        }
+        if (class_exists('Riverso_Customer_Module')) {
+            Riverso_Customer_Module::get_instance()->render_app('portal');
+        } else {
+            echo '<p>No se pudo cargar clientes.</p>';
+        }
+        ?>
+
+        <?php elseif ($current_page === 'facturacion'): ?>
+        <!-- Facturación · Emitir DTE -->
+        <?php
+        if (!class_exists('Riverso_Billing_Module')) {
+            $bm = RIVERSO_POS_PLUGIN_DIR . 'sales/billing/class-billing-module.php';
+            if (file_exists($bm)) {
+                require_once $bm;
+            }
+        }
+        if (class_exists('Riverso_Billing_Module')) {
+            Riverso_Billing_Module::get_instance()->render_app('portal');
+        } else {
+            echo '<p>No se pudo cargar Facturación.</p>';
+        }
+        ?>
+
+        <?php elseif ($current_page === 'recepcion'): ?>
+        <!-- Recepción de compras: recibir → ordenar → reclamar -->
+        <?php
+        if (!class_exists('Riverso_Purchase_Reception_Module')) {
+            $rxm = RIVERSO_POS_PLUGIN_DIR . 'purchases/reception/class-purchase-reception-module.php';
+            if (file_exists($rxm)) {
+                require_once $rxm;
+            }
+        }
+        if (class_exists('Riverso_Purchase_Reception_Module')) {
+            Riverso_Purchase_Reception_Module::get_instance()->render_app('portal');
+        } else {
+            echo '<p>No se pudo cargar Recepción.</p>';
+        }
+        ?>
+
+        <?php elseif ($current_page === 'avisos'): ?>
+        <!-- Avisos de compra: avisar que falta → bandeja por proveedor -->
+        <?php
+        if (!class_exists('Riverso_Purchase_Notice_Module')) {
+            $avm = RIVERSO_POS_PLUGIN_DIR . 'purchases/notices/class-purchase-notice-module.php';
+            if (file_exists($avm)) {
+                require_once $avm;
+            }
+        }
+        if (class_exists('Riverso_Purchase_Notice_Module')) {
+            Riverso_Purchase_Notice_Module::get_instance()->render_app();
+        } else {
+            echo '<p>No se pudo cargar Avisos de compra.</p>';
+        }
+        ?>
+
+        <?php elseif ($current_page === 'pedidos-compra'): ?>
+        <!-- Pedidos de compra: armar → cotización → revisión → recepción -->
+        <?php
+        if (!class_exists('Riverso_Purchase_Order_Module')) {
+            $pcm = RIVERSO_POS_PLUGIN_DIR . 'purchases/purchase_orders/class-purchase-order-module.php';
+            if (file_exists($pcm)) {
+                require_once $pcm;
+            }
+        }
+        if (class_exists('Riverso_Purchase_Order_Module')) {
+            Riverso_Purchase_Order_Module::get_instance()->render_app();
+        } else {
+            echo '<p>No se pudo cargar Pedidos de compra.</p>';
+        }
+        ?>
+
+        <?php elseif ($current_page === 'manejo-caja'): ?>
+        <?php
+        if (!class_exists('Riverso_Cash_Module')) {
+            $cm = RIVERSO_POS_PLUGIN_DIR . 'sales/cash/class-cash-module.php';
+            if (file_exists($cm)) {
+                require_once $cm;
+            }
+        }
+        if (class_exists('Riverso_Cash_Module')) {
+            Riverso_Cash_Module::get_instance()->render_app('portal');
+        } else {
+            echo '<p>No se pudo cargar Manejo de Caja.</p>';
+        }
+        ?>
+
+        <?php elseif ($current_page === 'cuentas-caja'): ?>
+        <?php
+        if (!class_exists('Riverso_Cash_Module')) {
+            $cm = RIVERSO_POS_PLUGIN_DIR . 'sales/cash/class-cash-module.php';
+            if (file_exists($cm)) {
+                require_once $cm;
+            }
+        }
+        if (class_exists('Riverso_Cash_Module')) {
+            Riverso_Cash_Module::get_instance()->render_accounts('portal');
+        } else {
+            echo '<p>No se pudo cargar Cuentas bancarias y efectivo.</p>';
+        }
+        ?>
+
         <?php elseif ($current_page === 'inbox'): ?>
         <div class="content-section">
             <div class="section-body">
@@ -2923,7 +3190,7 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                 </div>
                 <p style="margin-top:8px;font-size:13px;color:var(--text-secondary);">Los cambios de nombre, copias, modo, color y EAN aplican solo a esta impresión. El SKU no se modifica. El precio se muestra con 2 decimales; usa <strong>Redondear</strong> o <strong>Desredondear</strong> en esta impresión. Cambiar el precio a otro valor requiere permiso.</p>
 
-                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;align-items:center;">
+                <div class="po-editor-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;align-items:center;">
                     <button type="button" class="btn btn-secondary po-close-order">Cerrar</button>
                     <?php if ($po_can_create): ?>
                     <button type="button" class="btn btn-primary po-workflow-btn" id="po-portal-save">Guardar borrador</button>
@@ -3071,6 +3338,12 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
                 <label style="font-size:13px;font-weight:600;">Proveedor</label>
                 <input type="text" id="portal-prov-nombre" placeholder="Razón social" style="width:100%;margin:6px 0;padding:8px;border:1px solid var(--border);border-radius:4px;">
                 <input type="text" id="portal-prov-rut" placeholder="RUT" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:4px;" readonly>
+                <div id="portal-prov-apodo-wrap" style="display:none;margin-top:8px;">
+                    <label for="portal-prov-apodo">¿Este folio es un proveedor que ya anotamos por apodo?</label>
+                    <select id="portal-prov-apodo" style="width:100%;margin-top:6px;padding:8px;border:1px solid var(--border);border-radius:4px;">
+                        <option value="">No: usar la razón social del folio</option>
+                    </select>
+                </div>
             </div>
             <div id="portal-upload-result" style="margin-top:12px;font-size:14px;"></div>
         </div>
@@ -3361,6 +3634,16 @@ function portalShowConfirm(d) {
     });
     document.getElementById('portal-prov-nombre').value = d.proveedor_existente?.nombre || d.emisor?.razon_social || '';
     document.getElementById('portal-prov-rut').value = d.emisor?.rut || '';
+    const apodoWrap = document.getElementById('portal-prov-apodo-wrap');
+    const apodoSel = document.getElementById('portal-prov-apodo');
+    if (apodoWrap && apodoSel) {
+        apodoSel.innerHTML = '<option value="">No: usar la razón social del folio</option>';
+        const provisionales = (!d.proveedor_existente && d.provisionales) || [];
+        provisionales.forEach(function(p) {
+            apodoSel.innerHTML += '<option value="' + p.id + '">' + (p.nombre || 'Apodo') + '</option>';
+        });
+        apodoWrap.style.display = provisionales.length ? 'block' : 'none';
+    }
 
     const gapsEl = document.getElementById('portal-intake-gaps');
     const gaps = d.missing_gaps || [];
@@ -3399,7 +3682,8 @@ function procesarSubirFactura() {
         modo_ingreso: document.querySelector('input[name="portal-modo"]:checked')?.value || portalDefaultModo,
         proveedor_modo: 'xml',
         proveedor_nombre: document.getElementById('portal-prov-nombre')?.value || '',
-        proveedor_rut: document.getElementById('portal-prov-rut')?.value || ''
+        proveedor_rut: document.getElementById('portal-prov-rut')?.value || '',
+        reclamar_provisional_id: document.getElementById('portal-prov-apodo')?.value || ''
     }).then(data => {
         if (data.success) {
             const extra = data.data?.resumen?.documento_tipo === 'envio' && !data.data?.resumen?.vinculado_a_factura
@@ -5920,6 +6204,8 @@ function portalEliminarFactura(id, folio) {
 })();
 </script>
 
+<?php $portal_mobile_js = RIVERSO_POS_PLUGIN_DIR . 'assets/js/portal-mobile.js'; ?>
+<script src="<?php echo esc_url(RIVERSO_POS_PLUGIN_URL . 'assets/js/portal-mobile.js?ver=' . (is_file($portal_mobile_js) ? filemtime($portal_mobile_js) : RIVERSO_POS_VERSION)); ?>"></script>
 <?php wp_footer(); ?>
 </body>
 </html>

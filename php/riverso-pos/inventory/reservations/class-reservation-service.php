@@ -87,7 +87,8 @@ class Riverso_Reservation_Service {
      *
      * @param int   $producto_base_id
      * @param float $cantidad
-     * @param array $meta
+     * @param array $meta ubicacion_id, origen, referencia_tipo, referencia_id, expires_at,
+     *                    allow_negative (true: reserva aunque el disponible quede negativo).
      * @return int|false
      */
     public function reserve($producto_base_id, $cantidad, $meta = []) {
@@ -106,12 +107,14 @@ class Riverso_Reservation_Service {
             self::create_tables();
         }
 
-        $available = class_exists('Riverso_Stock_Service')
-            ? Riverso_Stock_Service::get_instance()->get_available($producto_base_id, $meta['ubicacion_id'] ?? null)
-            : $cantidad;
+        if (empty($meta['allow_negative'])) {
+            $available = class_exists('Riverso_Stock_Service')
+                ? Riverso_Stock_Service::get_instance()->get_available($producto_base_id, $meta['ubicacion_id'] ?? null)
+                : $cantidad;
 
-        if ($available < $cantidad) {
-            return false;
+            if ($available < $cantidad) {
+                return false;
+            }
         }
 
         $row = [
@@ -164,7 +167,7 @@ class Riverso_Reservation_Service {
     }
 
     /**
-     * Cantidad reservada activa.
+     * Cantidad reservada activa y no vencida.
      *
      * @param int      $producto_base_id
      * @param int|null $ubicacion_id
@@ -180,21 +183,26 @@ class Riverso_Reservation_Service {
             return 0.0;
         }
 
+        $now = current_time('mysql');
         if ($ubicacion_id) {
             $qty = $wpdb->get_var(
                 $wpdb->prepare(
                     "SELECT SUM(cantidad) FROM {$table}
-                     WHERE producto_base_id = %d AND estado = 'activa' AND ubicacion_id = %d",
+                     WHERE producto_base_id = %d AND estado = 'activa' AND ubicacion_id = %d
+                       AND (expires_at IS NULL OR expires_at > %s)",
                     $producto_base_id,
-                    intval($ubicacion_id)
+                    intval($ubicacion_id),
+                    $now
                 )
             );
         } else {
             $qty = $wpdb->get_var(
                 $wpdb->prepare(
                     "SELECT SUM(cantidad) FROM {$table}
-                     WHERE producto_base_id = %d AND estado = 'activa'",
-                    $producto_base_id
+                     WHERE producto_base_id = %d AND estado = 'activa'
+                       AND (expires_at IS NULL OR expires_at > %s)",
+                    $producto_base_id,
+                    $now
                 )
             );
         }

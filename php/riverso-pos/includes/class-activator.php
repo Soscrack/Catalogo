@@ -356,6 +356,26 @@ class Riverso_POS_Activator {
         self::create_phase54_emparejamientos($prefix, $charset_collate);
         self::create_phase55_pp_vinculo($prefix);
         self::create_phase56_folio_zero_norm($prefix);
+        self::create_phase57_customer_quotes_sale_fields($prefix);
+        self::create_phase58_customer_quotes_advanced_discounts($prefix);
+        self::create_phase59_customer_quotes_channel($prefix);
+        self::create_phase60_customer_quotes_price_mode($prefix);
+        self::create_phase61_approve_folio_confirmed_pending();
+        self::create_phase62_customer_quotes_issue_date($prefix);
+        self::create_phase63_clientes($prefix, $charset_collate);
+        self::create_phase64_dte_issued($prefix, $charset_collate);
+        self::create_phase65_receiver_designs($prefix, $charset_collate);
+        self::create_phase70_receiver_emails($prefix, $charset_collate);
+        self::create_phase66_billing_drafts($prefix, $charset_collate);
+        self::create_phase67_billing_draft_line_context($prefix, $charset_collate);
+        self::create_phase68_cajas($prefix, $charset_collate);
+        self::create_phase69_billing_payments($prefix, $charset_collate);
+        self::create_phase71_sale_stock_exit($prefix, $charset_collate);
+        self::create_phase72_purchase_reception($prefix, $charset_collate);
+        self::create_phase73_printing($prefix, $charset_collate);
+        self::create_phase74_customer_quotes_rule_total($prefix);
+        self::create_phase75_purchase_notices($prefix, $charset_collate);
+        self::create_phase76_purchase_orders($prefix, $charset_collate);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -487,9 +507,65 @@ class Riverso_POS_Activator {
      */
     public static function update_database() {
         self::create_tables();
+        self::ensure_known_supplier_schema();
         // Refrescar roles/capacidades para incorporar capabilities nuevas
         // (precios, matching, embolsado, órdenes POS) en actualizaciones.
         self::create_roles();
+    }
+
+    /**
+     * Proveedor conocido sin código, y proveedor provisional (apodo, sin RUT todavía).
+     * Idempotente: la primera corrida crea la tabla y deja el RUT nulo.
+     */
+    public static function ensure_known_supplier_schema() {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        if (get_option('riverso_known_supplier_schema') === '1') {
+            $done = true;
+            return;
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE {$prefix}producto_proveedor_conocido (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            proveedor_id BIGINT UNSIGNED NOT NULL,
+            es_preferido TINYINT(1) NOT NULL DEFAULT 0,
+            origen VARCHAR(30) DEFAULT 'manual',
+            created_by BIGINT UNSIGNED DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_producto_proveedor (producto_base_id, proveedor_id),
+            KEY idx_proveedor (proveedor_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        self::add_column_if_missing(
+            "{$prefix}proveedores",
+            'provisional',
+            'provisional TINYINT(1) NOT NULL DEFAULT 0'
+        );
+        if (self::table_exists("{$prefix}proveedores")) {
+            $wpdb->query("ALTER TABLE `{$prefix}proveedores` MODIFY COLUMN rut VARCHAR(20) NULL");
+        }
+
+        $ready = self::table_exists("{$prefix}producto_proveedor_conocido");
+        $col = $wpdb->get_var($wpdb->prepare(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = 'provisional'",
+            DB_NAME,
+            $prefix . 'proveedores'
+        ));
+        if ($ready && $col) {
+            update_option('riverso_known_supplier_schema', '1', false);
+            $done = true;
+        }
     }
 
     /**
@@ -504,7 +580,9 @@ class Riverso_POS_Activator {
             ['path' => 'modules/costs/class-cost-history-module.php', 'class' => 'Riverso_Cost_History_Module'],
             ['path' => 'modules/pos/class-pos-module.php', 'class' => 'Riverso_POS_Module'],
             ['path' => 'modules/quotes/class-received-quote-module.php', 'class' => 'Riverso_POS_Received_Quote_Module'],
-            ['path' => 'modules/customer-quotes/class-customer-quote-module.php', 'class' => 'Riverso_Customer_Quote_Module'],
+            ['path' => 'sales/customer_quotes/class-customer-quote-module.php', 'class' => 'Riverso_Customer_Quote_Module'],
+            ['path' => 'sales/customers/class-customer-module.php', 'class' => 'Riverso_Customer_Module'],
+            ['path' => 'sales/billing/class-billing-module.php', 'class' => 'Riverso_Billing_Module'],
             ['path' => 'modules/pricing/class-pricing-module.php', 'class' => 'Riverso_Pricing_Module'],
             ['path' => 'modules/pricing/class-price-history-module.php', 'class' => 'Riverso_Price_History_Module'],
             ['path' => 'modules/publish/class-woo-publisher-module.php', 'class' => 'Riverso_Woo_Publisher_Module'],
@@ -1330,6 +1408,8 @@ class Riverso_POS_Activator {
             proveedor_id BIGINT UNSIGNED NOT NULL,
             estado VARCHAR(30) NOT NULL DEFAULT 'borrador',
             cotizacion_id BIGINT UNSIGNED DEFAULT NULL,
+            fecha_emision DATE DEFAULT NULL,
+            fecha_esperada DATE DEFAULT NULL,
             total DECIMAL(12,2) DEFAULT 0,
             notas TEXT DEFAULT NULL,
             creado_por BIGINT UNSIGNED DEFAULT NULL,
@@ -2212,9 +2292,26 @@ class Riverso_POS_Activator {
      * Fase 19: El código de catálogo/proveedor no es SKU Local.
      * Vacía canonical_sku cuando coincide con codigo_proveedor (import Mamut histórico)
      * y genera tareas crear_contraparte_local.
+     * Una sola vez: re-ejecutarla vacía SKUs asignados después y deja líneas de folio «Sin SKU».
      */
     private static function create_phase19_clear_catalog_as_local_sku($prefix) {
+        if (get_option('riverso_pos_phase19_clear_catalog_sku') === '1') {
+            return;
+        }
+
         global $wpdb;
+
+        $audit_table = "{$prefix}audit_log";
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $audit_table)) === $audit_table) {
+            $already_ran = (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM `{$audit_table}`
+                 WHERE action = 'schema.phase19_clear_catalog_as_local_sku'"
+            );
+            if ($already_ran > 0) {
+                update_option('riverso_pos_phase19_clear_catalog_sku', '1');
+                return;
+            }
+        }
 
         $cleared = (int) $wpdb->query(
             "UPDATE {$prefix}producto_base pb
@@ -2275,13 +2372,17 @@ class Riverso_POS_Activator {
             }
         }
 
+        update_option('riverso_pos_phase19_clear_catalog_sku', '1');
+
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log(
                 'schema.phase19_clear_catalog_as_local_sku',
                 'producto_base',
                 0,
-                'info',
-                "Fase 19: cleared≈{$cleared} candidates=" . count($candidates ?: []) . " tasks={$tasks_created}"
+                [
+                    'actor_type' => 'migration',
+                    'details' => "Fase 19: cleared≈{$cleared} candidates=" . count($candidates ?: []) . " tasks={$tasks_created}",
+                ]
             );
         }
     }
@@ -5390,6 +5491,130 @@ class Riverso_POS_Activator {
     }
 
     /**
+     * Garantiza columnas P0+P1 de cotizaciones de venta (deploy sin bump).
+     */
+    public static function ensure_customer_quotes_sale_fields() {
+        global $wpdb;
+        self::create_phase57_customer_quotes_sale_fields($wpdb->prefix . 'riverso_');
+    }
+
+    /**
+     * Garantiza columnas P2 de dsctos avanzados (deploy sin bump).
+     */
+    public static function ensure_customer_quotes_advanced_discounts() {
+        global $wpdb;
+        self::create_phase58_customer_quotes_advanced_discounts($wpdb->prefix . 'riverso_');
+    }
+
+    /**
+     * Garantiza channel + meta de presentacion en cotizaciones (P1.5).
+     */
+    public static function ensure_customer_quotes_channel() {
+        global $wpdb;
+        self::create_phase59_customer_quotes_channel($wpdb->prefix . 'riverso_');
+    }
+
+    /**
+     * Garantiza price_mode / price_ref / price_total en líneas de cotización.
+     */
+    public static function ensure_customer_quotes_price_mode() {
+        global $wpdb;
+        self::create_phase60_customer_quotes_price_mode($wpdb->prefix . 'riverso_');
+    }
+
+    /**
+     * Garantiza issue_date editable en cotizaciones de venta.
+     */
+    public static function ensure_customer_quotes_issue_date() {
+        global $wpdb;
+        self::create_phase62_customer_quotes_issue_date($wpdb->prefix . 'riverso_');
+    }
+
+    /**
+     * Garantiza rule_total / rule_adjusted y unit_price de 4 decimales en líneas de cotización.
+     */
+    public static function ensure_customer_quotes_rule_total() {
+        global $wpdb;
+        // Corre en cada carga del módulo: una vez aplicada, no repetir las consultas de schema.
+        if (get_option('riverso_pos_phase74_customer_quotes_rule_total') === '1') {
+            return;
+        }
+        self::create_phase74_customer_quotes_rule_total($wpdb->prefix . 'riverso_');
+    }
+
+    /**
+     * Garantiza tabla de clientes comerciales (deploy sin bump de versión).
+     */
+    public static function ensure_clientes_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::create_phase63_clientes($prefix, $charset_collate);
+    }
+
+    /**
+     * Garantiza tabla de DTE emitidos (deploy sin bump de versión).
+     */
+    public static function ensure_dte_issued_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::create_phase64_dte_issued($prefix, $charset_collate);
+    }
+
+    /**
+     * Garantiza tablas de diseños receptor + caché SII (deploy sin bump).
+     */
+    public static function ensure_receiver_designs_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::create_phase65_receiver_designs($prefix, $charset_collate);
+    }
+
+    /**
+     * Garantiza tabla de correos de receptor por RUT (deploy sin bump).
+     */
+    public static function ensure_receiver_emails_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::create_phase70_receiver_emails($prefix, $charset_collate);
+    }
+
+    /**
+     * Garantiza tablas de borradores de boleta (deploy sin bump).
+     */
+    public static function ensure_billing_drafts_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::create_phase66_billing_drafts($prefix, $charset_collate);
+        self::create_phase67_billing_draft_line_context($prefix, $charset_collate);
+    }
+
+    /**
+     * Garantiza tablas de cajas / cobranza (deploy sin bump).
+     */
+    public static function ensure_cajas_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::create_phase68_cajas($prefix, $charset_collate);
+        self::create_phase69_billing_payments($prefix, $charset_collate);
+    }
+
+    /**
+     * Garantiza métodos de pago + columnas FACTO en cajas/borradores (deploy sin bump).
+     */
+    public static function ensure_billing_payments_schema() {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $charset_collate = $wpdb->get_charset_collate();
+        self::create_phase69_billing_payments($prefix, $charset_collate);
+    }
+
+    /**
      * Fase 56: recalcular doc_hash de escaneos cuyo folio tenía ceros a la izquierda.
      * No renombra folios de facturas ni toca tablas de precios.
      */
@@ -5462,4 +5687,1459 @@ class Riverso_POS_Activator {
             ]);
         }
     }
+
+    /**
+     * Fase 57: campos de cotización de venta (tipo, validez, totales, códigos línea)
+     * + remapeo de estados legado → draft|listed|invoiced
+     * + order_id (P5a Facturar) para tablas ya existentes sin la columna.
+     */
+    private static function create_phase57_customer_quotes_sale_fields($prefix) {
+        $quotes = "{$prefix}customer_quotes";
+        $items = "{$prefix}customer_quote_items";
+
+        self::add_column_if_missing($quotes, 'quote_type', "quote_type VARCHAR(20) NOT NULL DEFAULT 'venta'");
+        self::add_column_if_missing($quotes, 'validity_days', 'validity_days INT UNSIGNED NULL DEFAULT NULL');
+        self::add_column_if_missing($quotes, 'validity_terms', 'validity_terms TEXT NULL');
+        self::add_column_if_missing($quotes, 'net_total', 'net_total DECIMAL(14,2) NOT NULL DEFAULT 0');
+        self::add_column_if_missing($quotes, 'margin_percent', 'margin_percent DECIMAL(8,2) NULL DEFAULT NULL');
+        self::add_column_if_missing($quotes, 'profit_total', 'profit_total DECIMAL(14,2) NULL DEFAULT NULL');
+        // P5a Facturar: order_id must exist on live tables created before CREATE IF NOT EXISTS had it.
+        self::add_column_if_missing($quotes, 'order_id', 'order_id BIGINT UNSIGNED NULL DEFAULT NULL');
+        self::add_index_if_missing($quotes, 'idx_cq_order_id', 'KEY idx_cq_order_id (order_id)');
+
+        self::add_column_if_missing($items, 'supplier_code', 'supplier_code VARCHAR(64) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'barcode', 'barcode VARCHAR(64) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'unit_cost', 'unit_cost DECIMAL(14,2) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'line_total', 'line_total DECIMAL(14,2) NOT NULL DEFAULT 0');
+        self::add_column_if_missing($items, 'description', 'description TEXT NULL');
+        self::add_column_if_missing($items, 'name', "name VARCHAR(500) NOT NULL DEFAULT ''");
+
+        self::add_index_if_missing($quotes, 'idx_quote_type', 'KEY idx_quote_type (quote_type)');
+
+        if (get_option('riverso_pos_phase57_customer_quotes_sale') === '1') {
+            return;
+        }
+
+        global $wpdb;
+        $wpdb->query(
+            "UPDATE `{$quotes}` SET status = CASE
+                WHEN LOWER(status) IN ('invoiced','billed','facturada') THEN 'invoiced'
+                WHEN LOWER(status) IN ('sent','viewed','accepted','approved','listed','lista','converted') THEN 'listed'
+                WHEN LOWER(status) IN ('draft','listed','invoiced') THEN status
+                ELSE 'draft'
+             END"
+        );
+        $wpdb->query(
+            "UPDATE `{$quotes}` SET net_total = total
+             WHERE (net_total IS NULL OR net_total = 0) AND total <> 0"
+        );
+        $wpdb->query(
+            "UPDATE `{$quotes}` SET validity_days = valid_days
+             WHERE validity_days IS NULL AND valid_days IS NOT NULL"
+        );
+        $wpdb->query(
+            "UPDATE `{$items}` SET line_total = total
+             WHERE (line_total IS NULL OR line_total = 0) AND total <> 0"
+        );
+
+        update_option('riverso_pos_phase57_customer_quotes_sale', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase57_customer_quotes_sale', 'customer_quotes', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 57: campos P0+P1 cotizaciones venta + estados draft/listed/invoiced',
+            ));
+        }
+    }
+
+    /**
+     * Fase 58: price_discount / margin_discount en lineas (modo avanzado P2).
+     * Idempotente: add_column_if_missing.
+     */
+    private static function create_phase58_customer_quotes_advanced_discounts($prefix) {
+        $items = "{$prefix}customer_quote_items";
+        self::add_column_if_missing($items, 'price_discount', 'price_discount DECIMAL(8,2) NOT NULL DEFAULT 0');
+        self::add_column_if_missing($items, 'margin_discount', 'margin_discount DECIMAL(8,2) NOT NULL DEFAULT 0');
+
+        if (get_option('riverso_pos_phase58_customer_quotes_advanced') === '1') {
+            return;
+        }
+        update_option('riverso_pos_phase58_customer_quotes_advanced', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase58_customer_quotes_advanced', 'customer_quote_items', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 58: price_discount/margin_discount modo avanzado cotizaciones',
+            ));
+        }
+    }
+
+    /**
+     * Fase 59 (P1.5): channel Local|Online en cabecera + meta presentacion en lineas.
+     * Idempotente: add_column_if_missing.
+     */
+    private static function create_phase59_customer_quotes_channel($prefix) {
+        $quotes = "{$prefix}customer_quotes";
+        $items = "{$prefix}customer_quote_items";
+
+        self::add_column_if_missing($quotes, 'channel', "channel VARCHAR(16) NOT NULL DEFAULT 'local'");
+        self::add_index_if_missing($quotes, 'idx_cq_channel', 'KEY idx_cq_channel (channel)');
+
+        self::add_column_if_missing($items, 'producto_base_id', 'producto_base_id BIGINT UNSIGNED NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'family_mode', 'family_mode VARCHAR(32) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'packaging', 'packaging VARCHAR(64) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'units_per_pack', 'units_per_pack DECIMAL(14,4) NULL DEFAULT NULL');
+
+        if (get_option('riverso_pos_phase59_customer_quotes_channel') === '1') {
+            return;
+        }
+        update_option('riverso_pos_phase59_customer_quotes_channel', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase59_customer_quotes_channel', 'customer_quotes', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 59: channel local|online + family_mode/packaging en lineas',
+            ));
+        }
+    }
+
+    /**
+     * Fase 60: modos de precio por línea (auto / manual / ref) en cotizaciones.
+     * Idempotente: add_column_if_missing.
+     */
+    private static function create_phase60_customer_quotes_price_mode($prefix) {
+        $items = "{$prefix}customer_quote_items";
+        self::add_column_if_missing($items, 'price_mode', 'price_mode VARCHAR(16) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'price_ref', 'price_ref DECIMAL(14,4) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'price_total', 'price_total DECIMAL(14,2) NULL DEFAULT NULL');
+
+        if (get_option('riverso_pos_phase60_customer_quotes_price_mode') === '1') {
+            return;
+        }
+        update_option('riverso_pos_phase60_customer_quotes_price_mode', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase60_customer_quotes_price_mode', 'customer_quote_items', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 60: price_mode/price_ref/price_total en lineas de cotizacion',
+            ));
+        }
+    }
+
+    /**
+     * Fase 74: total de regla en líneas de cotización.
+     * - rule_total / rule_adjusted: T_final del motor de reglas. Sin esto el total se
+     *   rearma desde un unitario redondeado (R-1 $500 en 6 u. → 83,33 × 6 = $499,98).
+     * - unit_price DECIMAL(14,4): el unitario de una regla ajustada lleva 4 decimales.
+     * Idempotente: add_column_if_missing + MODIFY solo si la escala es menor a 4.
+     */
+    private static function create_phase74_customer_quotes_rule_total($prefix) {
+        global $wpdb;
+        $items = "{$prefix}customer_quote_items";
+        if (!self::table_exists($items)) {
+            return;
+        }
+        self::add_column_if_missing($items, 'rule_total', 'rule_total DECIMAL(14,2) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'rule_adjusted', 'rule_adjusted TINYINT(1) NOT NULL DEFAULT 0');
+
+        $scale = $wpdb->get_var($wpdb->prepare(
+            "SELECT NUMERIC_SCALE FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = 'unit_price'",
+            DB_NAME,
+            $items
+        ));
+        if ($scale !== null && (int) $scale < 4) {
+            $wpdb->query("ALTER TABLE `{$items}` MODIFY COLUMN unit_price DECIMAL(14,4) NOT NULL DEFAULT 0");
+        }
+
+        if (get_option('riverso_pos_phase74_customer_quotes_rule_total') === '1') {
+            return;
+        }
+        update_option('riverso_pos_phase74_customer_quotes_rule_total', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase74_customer_quotes_rule_total', 'customer_quote_items', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 74: rule_total/rule_adjusted y unit_price DECIMAL(14,4) en lineas de cotizacion',
+            ));
+        }
+    }
+
+    /**
+     * Fase 62: fecha de emisión editable (independiente de created_at).
+     * Idempotente: add_column_if_missing + backfill DATE(created_at).
+     */
+    private static function create_phase62_customer_quotes_issue_date($prefix) {
+        $quotes = "{$prefix}customer_quotes";
+        self::add_column_if_missing($quotes, 'issue_date', 'issue_date DATE NULL DEFAULT NULL');
+        self::add_index_if_missing($quotes, 'idx_cq_issue_date', 'KEY idx_cq_issue_date (issue_date)');
+
+        // Rellenar filas existentes una sola vez (created_at no se modifica).
+        if (get_option('riverso_pos_phase62_customer_quotes_issue_date') !== '1') {
+            global $wpdb;
+            if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $quotes)) === $quotes) {
+                $wpdb->query(
+                    "UPDATE `{$quotes}`
+                     SET issue_date = DATE(created_at)
+                     WHERE issue_date IS NULL AND created_at IS NOT NULL"
+                );
+            }
+            update_option('riverso_pos_phase62_customer_quotes_issue_date', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase62_customer_quotes_issue_date', 'customer_quotes', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 62: issue_date editable + backfill DATE(created_at)',
+                ));
+            }
+        }
+    }
+
+    /**
+     * Fase 63: clientes comerciales (solo clientes, no proveedores).
+     */
+    private static function create_phase63_clientes($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE {$prefix}clientes (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            nombre_fantasia VARCHAR(255) NOT NULL,
+            has_contacto TINYINT(1) NOT NULL DEFAULT 1,
+            primer_nombre VARCHAR(100) DEFAULT NULL,
+            apellido_paterno VARCHAR(100) DEFAULT NULL,
+            contacto_telefono VARCHAR(50) DEFAULT NULL,
+            contacto_email VARCHAR(191) DEFAULT NULL,
+            has_facturacion TINYINT(1) NOT NULL DEFAULT 1,
+            pais VARCHAR(50) NOT NULL DEFAULT 'CHILE',
+            tipo_identificacion VARCHAR(50) NOT NULL DEFAULT 'RUT_CLIENTE',
+            rut VARCHAR(20) DEFAULT NULL,
+            razon_social VARCHAR(255) DEFAULT NULL,
+            direccion VARCHAR(255) DEFAULT NULL,
+            comuna VARCHAR(100) DEFAULT NULL,
+            ciudad VARCHAR(100) DEFAULT NULL,
+            giro VARCHAR(255) DEFAULT NULL,
+            facturacion_telefono VARCHAR(50) DEFAULT NULL,
+            codigo_postal VARCHAR(20) DEFAULT '0',
+            has_datos_extra TINYINT(1) NOT NULL DEFAULT 1,
+            datos_extra LONGTEXT DEFAULT NULL,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_clientes_fantasia (nombre_fantasia),
+            KEY idx_clientes_rut (rut),
+            KEY idx_clientes_email (contacto_email),
+            KEY idx_clientes_activo (activo)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        if (get_option('riverso_pos_phase63_clientes') !== '1') {
+            update_option('riverso_pos_phase63_clientes', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase63_clientes', 'clientes', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 63: tabla riverso_clientes',
+                ));
+            }
+        }
+    }
+
+    /**
+     * Fase 64: DTE emitidos vía FACTO (factura/boleta desde Riverso).
+     */
+    private static function create_phase64_dte_issued($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE {$prefix}dte_issued (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            quote_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            customer_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            document_type_id INT UNSIGNED NOT NULL,
+            document_type_label VARCHAR(64) NOT NULL DEFAULT '',
+            facto_document_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            folio VARCHAR(32) NULL DEFAULT NULL,
+            issue_date DATE NULL DEFAULT NULL,
+            payment_conditions VARCHAR(32) NOT NULL DEFAULT '0',
+            receiver_rut VARCHAR(20) NULL DEFAULT NULL,
+            receiver_legal_name VARCHAR(255) NULL DEFAULT NULL,
+            net_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            taxes_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            total_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            facto_status TINYINT NULL DEFAULT NULL,
+            facto_error TEXT NULL,
+            response_json LONGTEXT NULL,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_dte_quote (quote_id),
+            KEY idx_dte_customer (customer_id),
+            KEY idx_dte_facto_doc (facto_document_id),
+            KEY idx_dte_folio (document_type_id, folio),
+            KEY idx_dte_issue_date (issue_date)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        if (get_option('riverso_pos_phase64_dte_issued') !== '1') {
+            update_option('riverso_pos_phase64_dte_issued', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase64_dte_issued', 'dte_issued', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 64: tabla riverso_dte_issued',
+                ));
+            }
+        }
+    }
+
+    /**
+     * Fase 65: diseños de autollenado receptor + caché consulta SII stc.
+     */
+    private static function create_phase65_receiver_designs($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql_designs = "CREATE TABLE {$prefix}billing_receiver_designs (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            rut VARCHAR(20) NOT NULL,
+            activity_code VARCHAR(32) NOT NULL,
+            activity_glosa VARCHAR(255) NOT NULL DEFAULT '',
+            razon_social VARCHAR(255) NOT NULL DEFAULT '',
+            direccion VARCHAR(255) NOT NULL DEFAULT '',
+            comuna VARCHAR(100) NOT NULL DEFAULT '',
+            ciudad VARCHAR(100) NOT NULL DEFAULT '',
+            telefono VARCHAR(50) NOT NULL DEFAULT '',
+            codigo_postal VARCHAR(20) NOT NULL DEFAULT '0',
+            updated_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_recv_design_rut_act (rut, activity_code),
+            KEY idx_recv_design_rut (rut)
+        ) $charset_collate;";
+        dbDelta($sql_designs);
+
+        $sql_cache = "CREATE TABLE {$prefix}billing_sii_cache (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            rut VARCHAR(20) NOT NULL,
+            payload_json LONGTEXT NOT NULL,
+            fetched_at DATETIME NOT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_sii_cache_rut (rut)
+        ) $charset_collate;";
+        dbDelta($sql_cache);
+
+        if (get_option('riverso_pos_phase65_receiver_designs') !== '1') {
+            update_option('riverso_pos_phase65_receiver_designs', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase65_receiver_designs', 'billing_receiver_designs', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 65: diseños receptor + caché SII stc',
+                ));
+            }
+        }
+    }
+
+    /**
+     * Fase 70: correos de envío DTE asociados a RUT de receptor.
+     */
+    private static function create_phase70_receiver_emails($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE {$prefix}billing_receiver_emails (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            rut VARCHAR(20) NOT NULL,
+            email VARCHAR(190) NOT NULL,
+            is_selected TINYINT(1) NOT NULL DEFAULT 1,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_recv_email_rut_email (rut, email),
+            KEY idx_recv_email_rut (rut)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        if (get_option('riverso_pos_phase70_receiver_emails') !== '1') {
+            update_option('riverso_pos_phase70_receiver_emails', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase70_receiver_emails', 'billing_receiver_emails', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 70: correos de receptor por RUT',
+                ));
+            }
+        }
+    }
+
+    /**
+     * Fase 66: borradores de boleta electrónica (cabecera, líneas, referencias, pagos).
+     */
+    private static function create_phase66_billing_drafts($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql_drafts = "CREATE TABLE {$prefix}billing_drafts (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            document_type_id INT UNSIGNED NOT NULL DEFAULT 37,
+            status VARCHAR(16) NOT NULL DEFAULT 'draft',
+            issue_date DATE NULL DEFAULT NULL,
+            due_date DATE NULL DEFAULT NULL,
+            payment_conditions VARCHAR(32) NOT NULL DEFAULT '0',
+            sale_state VARCHAR(64) NOT NULL DEFAULT 'VENTA: Concretada',
+            quote_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            net_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            exempt_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            tax_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            total_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            updated_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_status (status),
+            KEY idx_bill_draft_quote (quote_id)
+        ) $charset_collate;";
+        dbDelta($sql_drafts);
+
+        $sql_lines = "CREATE TABLE {$prefix}billing_draft_lines (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            draft_id BIGINT UNSIGNED NOT NULL,
+            position INT UNSIGNED NOT NULL DEFAULT 1,
+            sku VARCHAR(64) NOT NULL DEFAULT '',
+            description VARCHAR(255) NOT NULL DEFAULT '',
+            quantity DECIMAL(14,3) NOT NULL DEFAULT 1,
+            unit_price_bruto DECIMAL(14,6) NOT NULL DEFAULT 0,
+            afecto TINYINT(1) NOT NULL DEFAULT 1,
+            line_total_bruto DECIMAL(14,2) NOT NULL DEFAULT 0,
+            product_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            producto_base_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            units_per_pack DECIMAL(14,4) NOT NULL DEFAULT 1,
+            family_mode VARCHAR(32) NOT NULL DEFAULT '',
+            packaging VARCHAR(64) NOT NULL DEFAULT '',
+            grupo_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            unit_cost DECIMAL(14,4) NULL DEFAULT NULL,
+            price_mode VARCHAR(16) NOT NULL DEFAULT 'auto',
+            price_ref DECIMAL(14,6) NULL DEFAULT NULL,
+            price_total DECIMAL(14,2) NULL DEFAULT NULL,
+            price_discount DECIMAL(8,4) NOT NULL DEFAULT 0,
+            margin_discount DECIMAL(8,4) NOT NULL DEFAULT 0,
+            discount_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            rule_total DECIMAL(14,2) NULL DEFAULT NULL,
+            rule_adjusted TINYINT(1) NOT NULL DEFAULT 0,
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_line_draft (draft_id)
+        ) $charset_collate;";
+        dbDelta($sql_lines);
+
+        $sql_refs = "CREATE TABLE {$prefix}billing_draft_refs (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            draft_id BIGINT UNSIGNED NOT NULL,
+            ref_type VARCHAR(32) NOT NULL DEFAULT 'other',
+            quote_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            ref_doc_type VARCHAR(64) NOT NULL DEFAULT '',
+            ref_folio VARCHAR(64) NOT NULL DEFAULT '',
+            ref_label VARCHAR(255) NOT NULL DEFAULT '',
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_ref_draft (draft_id)
+        ) $charset_collate;";
+        dbDelta($sql_refs);
+
+        $sql_payments = "CREATE TABLE {$prefix}billing_draft_payments (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            draft_id BIGINT UNSIGNED NOT NULL,
+            pay_date DATE NULL DEFAULT NULL,
+            caja VARCHAR(64) NOT NULL DEFAULT '',
+            method VARCHAR(64) NOT NULL DEFAULT '',
+            amount_due DECIMAL(14,2) NOT NULL DEFAULT 0,
+            amount_paid DECIMAL(14,2) NOT NULL DEFAULT 0,
+            change_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            notes VARCHAR(500) NOT NULL DEFAULT '',
+            charge_code VARCHAR(32) NOT NULL DEFAULT '',
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_pay_draft (draft_id)
+        ) $charset_collate;";
+        dbDelta($sql_payments);
+
+        if (get_option('riverso_pos_phase66_billing_drafts') !== '1') {
+            update_option('riverso_pos_phase66_billing_drafts', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase66_billing_drafts', 'billing_drafts', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 66: borradores de boleta electrónica',
+                ));
+            }
+        }
+    }
+
+    /**
+     * Fase 67: contexto de familia / regla / descuento en líneas de borrador boleta.
+     * dbDelta agrega columnas a instalaciones que ya tienen fase 66.
+     */
+    private static function create_phase67_billing_draft_line_context($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql_lines = "CREATE TABLE {$prefix}billing_draft_lines (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            draft_id BIGINT UNSIGNED NOT NULL,
+            position INT UNSIGNED NOT NULL DEFAULT 1,
+            sku VARCHAR(64) NOT NULL DEFAULT '',
+            description VARCHAR(255) NOT NULL DEFAULT '',
+            quantity DECIMAL(14,3) NOT NULL DEFAULT 1,
+            unit_price_bruto DECIMAL(14,6) NOT NULL DEFAULT 0,
+            afecto TINYINT(1) NOT NULL DEFAULT 1,
+            line_total_bruto DECIMAL(14,2) NOT NULL DEFAULT 0,
+            product_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            producto_base_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            units_per_pack DECIMAL(14,4) NOT NULL DEFAULT 1,
+            family_mode VARCHAR(32) NOT NULL DEFAULT '',
+            packaging VARCHAR(64) NOT NULL DEFAULT '',
+            grupo_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            unit_cost DECIMAL(14,4) NULL DEFAULT NULL,
+            price_mode VARCHAR(16) NOT NULL DEFAULT 'auto',
+            price_ref DECIMAL(14,6) NULL DEFAULT NULL,
+            price_total DECIMAL(14,2) NULL DEFAULT NULL,
+            price_discount DECIMAL(8,4) NOT NULL DEFAULT 0,
+            margin_discount DECIMAL(8,4) NOT NULL DEFAULT 0,
+            discount_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            rule_total DECIMAL(14,2) NULL DEFAULT NULL,
+            rule_adjusted TINYINT(1) NOT NULL DEFAULT 0,
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_line_draft (draft_id)
+        ) $charset_collate;";
+        dbDelta($sql_lines);
+
+        if (get_option('riverso_pos_phase67_billing_draft_line_context') !== '1') {
+            update_option('riverso_pos_phase67_billing_draft_line_context', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase67_billing_draft_line_context', 'billing_drafts', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 67: contexto familia/regla en líneas de borrador boleta',
+                ));
+            }
+        }
+    }
+
+    /**
+     * Fase 68: cajas / cuentas bancarias, permisos, arqueos y movimientos.
+     * También agrega caja_id a billing_draft_payments.
+     */
+    private static function create_phase68_cajas($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        global $wpdb;
+
+        $sql_cajas = "CREATE TABLE {$prefix}cajas (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            nombre VARCHAR(128) NOT NULL,
+            tipo VARCHAR(32) NOT NULL DEFAULT 'fisica',
+            estado VARCHAR(16) NOT NULL DEFAULT 'cerrada',
+            saldo_efectivo DECIMAL(14,2) NOT NULL DEFAULT 0,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_cajas_activo (activo),
+            KEY idx_cajas_estado (estado)
+        ) $charset_collate;";
+        dbDelta($sql_cajas);
+
+        $sql_permisos = "CREATE TABLE {$prefix}caja_permisos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            caja_id BIGINT UNSIGNED NOT NULL,
+            user_id BIGINT UNSIGNED NOT NULL,
+            ver_saldo TINYINT(1) NOT NULL DEFAULT 0,
+            pagar TINYINT(1) NOT NULL DEFAULT 0,
+            borrar_pago TINYINT(1) NOT NULL DEFAULT 0,
+            transferir TINYINT(1) NOT NULL DEFAULT 0,
+            abrir_cerrar TINYINT(1) NOT NULL DEFAULT 0,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_caja_user (caja_id, user_id),
+            KEY idx_caja_perm_user (user_id)
+        ) $charset_collate;";
+        dbDelta($sql_permisos);
+
+        $sql_arqueos = "CREATE TABLE {$prefix}caja_arqueos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            caja_id BIGINT UNSIGNED NOT NULL,
+            tipo VARCHAR(16) NOT NULL DEFAULT 'apertura',
+            fecha DATETIME NOT NULL,
+            monto_efectivo DECIMAL(14,2) NOT NULL DEFAULT 0,
+            docs_recibidos DECIMAL(14,2) NOT NULL DEFAULT 0,
+            docs_emitidos DECIMAL(14,2) NOT NULL DEFAULT 0,
+            total DECIMAL(14,2) NOT NULL DEFAULT 0,
+            saldo_sistema DECIMAL(14,2) NOT NULL DEFAULT 0,
+            diferencia DECIMAL(14,2) NOT NULL DEFAULT 0,
+            usuario_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            certificador_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            estado VARCHAR(16) NOT NULL DEFAULT 'aprobado',
+            aprobado_por BIGINT UNSIGNED NULL DEFAULT NULL,
+            aprobado_at DATETIME NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_arqueo_caja (caja_id),
+            KEY idx_arqueo_estado (estado),
+            KEY idx_arqueo_cert (certificador_id)
+        ) $charset_collate;";
+        dbDelta($sql_arqueos);
+
+        $sql_movs = "CREATE TABLE {$prefix}caja_movimientos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            caja_id BIGINT UNSIGNED NOT NULL,
+            tipo VARCHAR(32) NOT NULL DEFAULT 'ajuste_arqueo',
+            monto DECIMAL(14,2) NOT NULL DEFAULT 0,
+            origen VARCHAR(32) NOT NULL DEFAULT '',
+            origen_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            detalle VARCHAR(255) NOT NULL DEFAULT '',
+            fecha DATETIME NOT NULL,
+            usuario_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_caja_mov_caja (caja_id),
+            KEY idx_caja_mov_fecha (fecha),
+            KEY idx_caja_mov_origen (origen, origen_id)
+        ) $charset_collate;";
+        dbDelta($sql_movs);
+
+        // Agregar caja_id a pagos de borrador (dbDelta agrega columna si falta).
+        $sql_payments = "CREATE TABLE {$prefix}billing_draft_payments (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            draft_id BIGINT UNSIGNED NOT NULL,
+            pay_date DATE NULL DEFAULT NULL,
+            caja VARCHAR(64) NOT NULL DEFAULT '',
+            caja_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            method VARCHAR(64) NOT NULL DEFAULT '',
+            amount_due DECIMAL(14,2) NOT NULL DEFAULT 0,
+            amount_paid DECIMAL(14,2) NOT NULL DEFAULT 0,
+            change_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            notes VARCHAR(500) NOT NULL DEFAULT '',
+            charge_code VARCHAR(32) NOT NULL DEFAULT '',
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_pay_draft (draft_id),
+            KEY idx_bill_draft_pay_caja (caja_id)
+        ) $charset_collate;";
+        dbDelta($sql_payments);
+
+        // Seed inicial si la tabla está vacía.
+        $count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$prefix}cajas");
+        if ($count === 0) {
+            $now = current_time('mysql');
+            $seeds = [
+                ['Efectivo', 'fisica'],
+                ['Tarjeta', 'bancaria_manual'],
+                ['Arca de Riverso', 'fisica'],
+                ['Arca Virtual', 'bancaria_manual'],
+                ['Transferencias', 'bancaria_manual'],
+                ['CHEQUE AL DIA', 'bancaria_manual'],
+            ];
+            $caja_ids = [];
+            foreach ($seeds as $seed) {
+                $wpdb->insert("{$prefix}cajas", [
+                    'nombre' => $seed[0],
+                    'tipo' => $seed[1],
+                    'estado' => 'cerrada',
+                    'saldo_efectivo' => 0,
+                    'activo' => 1,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+                if ($wpdb->insert_id) {
+                    $caja_ids[] = (int) $wpdb->insert_id;
+                }
+            }
+            // Permisos completos a administradores sobre cajas sembradas.
+            $admin_ids = get_users([
+                'role__in' => ['administrator', 'riverso_admin'],
+                'fields' => 'ID',
+            ]);
+            foreach ($caja_ids as $cid) {
+                foreach ($admin_ids as $uid) {
+                    $exists = $wpdb->get_var($wpdb->prepare(
+                        "SELECT id FROM {$prefix}caja_permisos WHERE caja_id = %d AND user_id = %d LIMIT 1",
+                        $cid,
+                        (int) $uid
+                    ));
+                    if ($exists) {
+                        continue;
+                    }
+                    $wpdb->insert("{$prefix}caja_permisos", [
+                        'caja_id' => $cid,
+                        'user_id' => (int) $uid,
+                        'ver_saldo' => 1,
+                        'pagar' => 1,
+                        'borrar_pago' => 1,
+                        'transferir' => 1,
+                        'abrir_cerrar' => 1,
+                    ]);
+                }
+            }
+        }
+
+        if (get_option('riverso_pos_phase68_cajas') !== '1') {
+            update_option('riverso_pos_phase68_cajas', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase68_cajas', 'cajas', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 68: cajas, permisos, arqueos y movimientos',
+                ));
+            }
+        }
+    }
+
+    /**
+     * Fase 69: métodos de pago FACTO, IDs de caja y pagos de documento.
+     */
+    /**
+     * Garantiza el schema de salida de stock por venta (si el deploy no corrió la migración).
+     */
+    public static function ensure_sale_stock_exit() {
+        global $wpdb;
+        self::create_phase71_sale_stock_exit($wpdb->prefix . 'riverso_', $wpdb->get_charset_collate());
+    }
+
+    /**
+     * Fase 71: salida de stock por venta.
+     * - producto_ubicacion.cantidad a decimal (metros, kilos) + marca contado/estimado.
+     * - Ubicación virtual SIN-UBICAR: recibe lo vendido sin lugar con saldo; se cuadra con conteos.
+     * - Detalle de entrega por línea (bolsas / sueltas) en cotizaciones y documentos.
+     * - Registro de lo descontado por documento (para revertir exacto) y bolsas vendidas.
+     */
+    private static function create_phase71_sale_stock_exit($prefix, $charset_collate) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $pu = "{$prefix}producto_ubicacion";
+        if (self::table_exists($pu)) {
+            $type = (string) $wpdb->get_var($wpdb->prepare(
+                "SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = 'cantidad'",
+                DB_NAME,
+                $pu
+            ));
+            if ($type !== '' && strtolower($type) !== 'decimal') {
+                $wpdb->query("ALTER TABLE `{$pu}` MODIFY cantidad DECIMAL(12,4) DEFAULT 0");
+            }
+            self::add_column_if_missing($pu, 'origen_cantidad', "origen_cantidad VARCHAR(10) NOT NULL DEFAULT 'contado'");
+            self::add_column_if_missing($pu, 'contado_en', 'contado_en DATETIME NULL DEFAULT NULL');
+        }
+
+        $ub = "{$prefix}ubicaciones";
+        if (self::table_exists($ub)) {
+            $exists = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM `{$ub}` WHERE codigo = %s", 'SIN-UBICAR'));
+            if ($exists <= 0) {
+                // Inactiva para que no aparezca en escaneos ni como lugar por defecto; sí suma al stock total.
+                $wpdb->insert($ub, array(
+                    'codigo' => 'SIN-UBICAR',
+                    'nombre' => 'Sin ubicar',
+                    'tipo' => 'virtual',
+                    'descripcion' => 'Ubicación virtual: ventas sin lugar con saldo. Se cuadra con los conteos.',
+                    'capacidad' => 0,
+                    'activo' => 0,
+                ));
+            }
+        }
+
+        foreach (array("{$prefix}customer_quote_items", "{$prefix}billing_draft_lines") as $lines_table) {
+            if (self::table_exists($lines_table)) {
+                self::add_column_if_missing($lines_table, 'stock_breakdown', 'stock_breakdown TEXT NULL');
+            }
+        }
+
+        $bolsas = "{$prefix}bolsas";
+        if (self::table_exists($bolsas)) {
+            self::add_column_if_missing($bolsas, 'venta_draft_id', 'venta_draft_id BIGINT UNSIGNED NULL DEFAULT NULL');
+            self::add_column_if_missing($bolsas, 'vendida_en', 'vendida_en DATETIME NULL DEFAULT NULL');
+            self::add_index_if_missing($bolsas, 'idx_bolsa_disponible', 'KEY idx_bolsa_disponible (producto_base_id, estado, cantidad)');
+        }
+
+        $sql = "CREATE TABLE {$prefix}venta_stock (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            draft_id BIGINT UNSIGNED NOT NULL,
+            draft_line_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            componente VARCHAR(10) NOT NULL DEFAULT 'suelto',
+            ubicacion_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            cantidad DECIMAL(12,4) NOT NULL DEFAULT 0,
+            movimiento_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            bolsa_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            abierto_descontado DECIMAL(12,4) NOT NULL DEFAULT 0,
+            supuesto TINYINT(1) NOT NULL DEFAULT 0,
+            estado VARCHAR(12) NOT NULL DEFAULT 'aplicado',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            revertido_en DATETIME NULL DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_venta_stock_draft (draft_id, estado),
+            KEY idx_venta_stock_producto (producto_base_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+    }
+
+    /**
+     * Garantiza el schema de recepción de compras (si el deploy no corrió la migración).
+     */
+    public static function ensure_purchase_reception() {
+        global $wpdb;
+        self::create_phase72_purchase_reception($wpdb->prefix . 'riverso_', $wpdb->get_charset_collate());
+    }
+
+    /**
+     * Fase 72: recepción de compras.
+     * - Ubicación física RECEPCION (zona de llegada): lo recibido entra ahí y luego se ordena.
+     * - recepciones: estado de recepción por documento (factura o guía), aparte del flujo de costos.
+     * - recepcion_lineas: esperado / recibido / ordenado / reclamado en unidades de stock.
+     * - reclamos_proveedor + reclamo_lineas: faltantes y mal estado que esperan nota de crédito.
+     */
+    private static function create_phase72_purchase_reception($prefix, $charset_collate) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $ub = "{$prefix}ubicaciones";
+        if (self::table_exists($ub)) {
+            $exists = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM `{$ub}` WHERE codigo = %s", 'RECEPCION'));
+            if ($exists <= 0) {
+                $wpdb->insert($ub, array(
+                    'codigo' => 'RECEPCION',
+                    'nombre' => 'Recepción',
+                    'tipo' => 'recepcion',
+                    'descripcion' => 'Zona de llegada: la mercadería recibida queda aquí hasta ordenarla.',
+                    'capacidad' => 0,
+                    'activo' => 1,
+                    'barcode' => 'RECEPCION',
+                ));
+            }
+        }
+
+        $sql = "CREATE TABLE {$prefix}recepciones (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            factura_id BIGINT UNSIGNED NOT NULL,
+            proveedor_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            estado VARCHAR(12) NOT NULL DEFAULT 'parcial',
+            ubicacion_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            cubierta_por BIGINT UNSIGNED NULL DEFAULT NULL,
+            motivo TEXT NULL,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            completada_en DATETIME NULL DEFAULT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_recepcion_factura (factura_id),
+            KEY idx_recepcion_estado (estado),
+            KEY idx_recepcion_cubierta (cubierta_por)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}recepcion_lineas (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            recepcion_id BIGINT UNSIGNED NOT NULL,
+            factura_item_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            producto_base_id BIGINT UNSIGNED NOT NULL,
+            asignado_manual TINYINT(1) NOT NULL DEFAULT 0,
+            nombre VARCHAR(255) NULL DEFAULT NULL,
+            codigo_proveedor VARCHAR(100) NULL DEFAULT NULL,
+            factor DECIMAL(12,4) NOT NULL DEFAULT 1,
+            cantidad_esperada DECIMAL(12,4) NOT NULL DEFAULT 0,
+            cantidad_recibida DECIMAL(12,4) NOT NULL DEFAULT 0,
+            cantidad_ordenada DECIMAL(12,4) NOT NULL DEFAULT 0,
+            cantidad_reclamada DECIMAL(12,4) NOT NULL DEFAULT 0,
+            costo_unitario DECIMAL(12,4) NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_rx_linea_recepcion (recepcion_id),
+            KEY idx_rx_linea_item (factura_item_id),
+            KEY idx_rx_linea_producto (producto_base_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}reclamos_proveedor (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            factura_id BIGINT UNSIGNED NOT NULL,
+            recepcion_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            proveedor_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            estado VARCHAR(12) NOT NULL DEFAULT 'por_enviar',
+            tarea_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            nota_credito_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            notas TEXT NULL,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            enviado_en DATETIME NULL DEFAULT NULL,
+            resuelto_en DATETIME NULL DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_reclamo_factura (factura_id),
+            KEY idx_reclamo_estado (estado),
+            KEY idx_reclamo_proveedor (proveedor_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}reclamo_lineas (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            reclamo_id BIGINT UNSIGNED NOT NULL,
+            recepcion_linea_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            factura_item_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            producto_base_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            nombre VARCHAR(255) NULL DEFAULT NULL,
+            motivo VARCHAR(20) NOT NULL DEFAULT 'faltante',
+            cantidad DECIMAL(12,4) NOT NULL DEFAULT 0,
+            costo_unitario DECIMAL(12,4) NULL DEFAULT NULL,
+            movimiento_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            notas TEXT NULL,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_reclamo_linea_reclamo (reclamo_id),
+            KEY idx_reclamo_linea_rx (recepcion_linea_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+    }
+
+    /**
+     * Garantiza el schema de avisos de compra (si el deploy no corrió la migración).
+     */
+    public static function ensure_purchase_notices() {
+        global $wpdb;
+        self::create_phase75_purchase_notices($wpdb->prefix . 'riverso_', $wpdb->get_charset_collate());
+    }
+
+    /**
+     * Fase 75: avisos de compra (reemplazo del grupo de WhatsApp de encargos).
+     * - avisos_compra: alguien avisa que falta un producto. No toca stock; la cantidad es propuesta.
+     *   Sin producto_base_id = sin identificar (igual se puede ingresar al pedido mirando la foto).
+     * - aviso_compra_eventos: quién creó, quién se sumó, quién confirmó cantidad, ingresó o descartó.
+     * - ordenes_compra: columnas que el módulo de OC escribe y la tabla no tenía.
+     */
+    private static function create_phase75_purchase_notices($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE {$prefix}avisos_compra (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            estado VARCHAR(16) NOT NULL DEFAULT 'abierto',
+            producto_base_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            producto_proveedor_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            proveedor_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            codigo_leido VARCHAR(120) NULL DEFAULT NULL,
+            origen_codigo VARCHAR(12) NULL DEFAULT NULL,
+            match_fuente VARCHAR(24) NULL DEFAULT NULL,
+            texto VARCHAR(255) NULL DEFAULT NULL,
+            nota TEXT NULL,
+            sin_stock TINYINT(1) NOT NULL DEFAULT 0,
+            cantidad DECIMAL(12,3) NULL DEFAULT NULL,
+            unidad VARCHAR(20) NULL DEFAULT NULL,
+            factor DECIMAL(12,4) NULL DEFAULT NULL,
+            factor_origen VARCHAR(12) NULL DEFAULT NULL,
+            cantidad_confirmada_por BIGINT UNSIGNED NULL DEFAULT NULL,
+            cantidad_confirmada_en DATETIME NULL DEFAULT NULL,
+            apoyos INT UNSIGNED NOT NULL DEFAULT 0,
+            foto_ruta VARCHAR(255) NULL DEFAULT NULL,
+            creado_por BIGINT UNSIGNED NULL DEFAULT NULL,
+            ingresado_por BIGINT UNSIGNED NULL DEFAULT NULL,
+            ingresado_en DATETIME NULL DEFAULT NULL,
+            descartado_por BIGINT UNSIGNED NULL DEFAULT NULL,
+            descartado_en DATETIME NULL DEFAULT NULL,
+            motivo_descarte VARCHAR(20) NULL DEFAULT NULL,
+            resuelto_por BIGINT UNSIGNED NULL DEFAULT NULL,
+            resuelto_en DATETIME NULL DEFAULT NULL,
+            orden_compra_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            orden_compra_item_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_aviso_estado (estado, proveedor_id),
+            KEY idx_aviso_producto (producto_base_id, estado),
+            KEY idx_aviso_pp (producto_proveedor_id),
+            KEY idx_aviso_creador (creado_por)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}aviso_compra_eventos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            aviso_id BIGINT UNSIGNED NOT NULL,
+            tipo VARCHAR(20) NOT NULL,
+            usuario_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            detalle TEXT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_aviso_evento (aviso_id, tipo),
+            KEY idx_aviso_evento_usuario (usuario_id, tipo)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        // Riverso_Purchase_Order_Module y "cotización → OC" insertan estas columnas.
+        $oc = "{$prefix}ordenes_compra";
+        if (self::table_exists($oc)) {
+            self::add_column_if_missing($oc, 'fecha_emision', 'fecha_emision DATE NULL DEFAULT NULL');
+            self::add_column_if_missing($oc, 'fecha_esperada', 'fecha_esperada DATE NULL DEFAULT NULL');
+        }
+    }
+
+    /**
+     * Garantiza el schema de pedidos de compra (si el deploy no corrió la migración).
+     */
+    public static function ensure_purchase_orders() {
+        global $wpdb;
+        self::create_phase76_purchase_orders($wpdb->prefix . 'riverso_', $wpdb->get_charset_collate());
+    }
+
+    /**
+     * Fase 76: pedidos de compra (portal /interno/pedidos-compra/).
+     * - ordenes_compra: una sola definición. El módulo de OC ya no crea la tabla.
+     * - ordenes_compra_items: de dónde salió la línea, con qué línea de cotización calzó
+     *   y qué se aceptó. Lo cotizado se lee de cotizacion_items; no se copia.
+     * - orden_compra_documentos: qué factura o guía cierra qué pedido. Recepción trabaja por documento.
+     */
+    private static function create_phase76_purchase_orders($prefix, $charset_collate) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $oc = "{$prefix}ordenes_compra";
+        if (self::table_exists($oc)) {
+            self::add_column_if_missing($oc, 'cotizacion_id', 'cotizacion_id BIGINT UNSIGNED NULL DEFAULT NULL');
+            self::add_column_if_missing($oc, 'fecha_emision', 'fecha_emision DATE NULL DEFAULT NULL');
+            self::add_column_if_missing($oc, 'fecha_esperada', 'fecha_esperada DATE NULL DEFAULT NULL');
+            self::add_column_if_missing($oc, 'total', 'total DECIMAL(12,2) DEFAULT 0');
+            self::add_column_if_missing($oc, 'enviado_en', 'enviado_en DATETIME NULL DEFAULT NULL');
+            self::add_column_if_missing($oc, 'revision_enviada_en', 'revision_enviada_en DATETIME NULL DEFAULT NULL');
+            self::add_column_if_missing($oc, 'created_at', 'created_at DATETIME DEFAULT CURRENT_TIMESTAMP');
+            self::add_column_if_missing($oc, 'updated_at', 'updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+            self::add_index_if_missing($oc, 'idx_oc_numero', 'KEY idx_oc_numero (numero)');
+        }
+
+        $items = "{$prefix}ordenes_compra_items";
+        $sql = "CREATE TABLE {$items} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            orden_id BIGINT UNSIGNED NOT NULL,
+            producto_base_id BIGINT UNSIGNED DEFAULT NULL,
+            producto_proveedor_id BIGINT UNSIGNED DEFAULT NULL,
+            descripcion VARCHAR(255) DEFAULT NULL,
+            cantidad DECIMAL(12,3) NOT NULL DEFAULT 0,
+            cantidad_recibida DECIMAL(12,3) NOT NULL DEFAULT 0,
+            unidad VARCHAR(30) DEFAULT 'unidad',
+            precio_unitario DECIMAL(12,4) DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY orden_id (orden_id),
+            KEY producto_base_id (producto_base_id)
+        ) $charset_collate;";
+        if (!self::table_exists($items)) {
+            dbDelta($sql);
+        }
+        if (self::table_exists($items)) {
+            self::add_column_if_missing($items, 'codigo_proveedor', 'codigo_proveedor VARCHAR(100) NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'factor', 'factor DECIMAL(12,4) NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'origen', 'origen VARCHAR(12) NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'origen_item_id', 'origen_item_id BIGINT UNSIGNED NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'emparejamiento_id', 'emparejamiento_id BIGINT UNSIGNED NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'grupo_id', 'grupo_id BIGINT UNSIGNED NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'cotizacion_item_id', 'cotizacion_item_id BIGINT UNSIGNED NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'cantidad_aceptada', 'cantidad_aceptada DECIMAL(12,3) NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'precio_aceptado', 'precio_aceptado DECIMAL(12,4) NULL DEFAULT NULL');
+            self::add_column_if_missing($items, 'estado', "estado VARCHAR(16) NOT NULL DEFAULT 'pendiente'");
+            self::add_index_if_missing($items, 'idx_oci_emparejamiento', 'KEY idx_oci_emparejamiento (emparejamiento_id)');
+            self::add_index_if_missing($items, 'idx_oci_grupo', 'KEY idx_oci_grupo (grupo_id)');
+            self::add_index_if_missing($items, 'idx_oci_cotizacion_item', 'KEY idx_oci_cotizacion_item (cotizacion_item_id)');
+        }
+
+        // Las OC anteriores a esta fase no tienen origen. Las que nacieron de "cotización → OC"
+        // traen en producto_base_id el producto_id de la cotización, que es un ID de WooCommerce:
+        // se traduce por el SKU de esa línea de cotización (o queda sin producto). Marcadas
+        // `legado`, no cuentan como mercadería en camino.
+        $cot_items = "{$prefix}cotizacion_items";
+        if (self::table_exists($items) && self::table_exists($oc)) {
+            if (self::table_exists($cot_items) && self::table_exists("{$prefix}producto_base")) {
+                $wpdb->query(
+                    "UPDATE {$items} i
+                     INNER JOIN {$oc} o ON o.id = i.orden_id AND o.cotizacion_id IS NOT NULL
+                     SET i.producto_base_id = (
+                             SELECT pb.id FROM {$cot_items} ci
+                             INNER JOIN {$prefix}producto_base pb ON pb.canonical_sku = ci.sku_match
+                             WHERE ci.cotizacion_id = o.cotizacion_id AND ci.producto_id = i.producto_base_id
+                               AND ci.sku_match IS NOT NULL AND ci.sku_match <> ''
+                             ORDER BY ci.id ASC LIMIT 1)
+                     WHERE i.origen IS NULL"
+                );
+            }
+            $wpdb->query("UPDATE {$items} SET origen = 'legado' WHERE origen IS NULL");
+        }
+
+        $sql = "CREATE TABLE {$prefix}orden_compra_documentos (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            orden_id BIGINT UNSIGNED NOT NULL,
+            factura_id BIGINT UNSIGNED NOT NULL,
+            origen VARCHAR(12) NOT NULL DEFAULT 'manual',
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_ocd_orden_factura (orden_id, factura_id),
+            KEY idx_ocd_factura (factura_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+    }
+
+    /**
+     * Garantiza el schema de impresión directa (si el deploy no corrió la migración).
+     */
+    public static function ensure_printing_schema() {
+        global $wpdb;
+        self::create_phase73_printing($wpdb->prefix . 'riverso_', $wpdb->get_charset_collate());
+    }
+
+    /**
+     * Fase 73: impresión directa ("Imprimir Ya!").
+     * - print_agents: hubs locales (PC con impresoras) que consultan la cola por HTTPS con token.
+     * - print_printers: impresoras reportadas por cada hub (estado, papeles, IP para chequeo).
+     * - print_presets: impresora + papel + escala + copias + color + dúplex.
+     * - print_stations / print_routes: tipo de documento (y estación opcional) → preset + alternativa.
+     * - print_jobs: cola de trabajos. Fechas en UTC escritas desde PHP.
+     */
+    private static function create_phase73_printing($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE {$prefix}print_agents (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            nombre VARCHAR(100) NOT NULL,
+            token_hash CHAR(64) NOT NULL,
+            token_hint VARCHAR(8) NOT NULL DEFAULT '',
+            estado VARCHAR(12) NOT NULL DEFAULT 'activo',
+            hostname VARCHAR(100) NULL DEFAULT NULL,
+            version VARCHAR(20) NULL DEFAULT NULL,
+            last_ip VARCHAR(45) NULL DEFAULT NULL,
+            last_seen_at DATETIME NULL DEFAULT NULL,
+            printers_at DATETIME NULL DEFAULT NULL,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME NULL DEFAULT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_print_agent_token (token_hash)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}print_printers (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            agent_id BIGINT UNSIGNED NOT NULL,
+            system_name VARCHAR(191) NOT NULL,
+            alias VARCHAR(100) NULL DEFAULT NULL,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            es_virtual TINYINT(1) NOT NULL DEFAULT 0,
+            presente TINYINT(1) NOT NULL DEFAULT 1,
+            es_predeterminada TINYINT(1) NOT NULL DEFAULT 0,
+            driver_name VARCHAR(191) NULL DEFAULT NULL,
+            port_name VARCHAR(191) NULL DEFAULT NULL,
+            host VARCHAR(100) NULL DEFAULT NULL,
+            host_detectado VARCHAR(100) NULL DEFAULT NULL,
+            estado VARCHAR(16) NOT NULL DEFAULT 'desconocido',
+            estado_detalle VARCHAR(255) NULL DEFAULT NULL,
+            papeles TEXT NULL,
+            estado_at DATETIME NULL DEFAULT NULL,
+            created_at DATETIME NULL DEFAULT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_print_printer (agent_id, system_name)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}print_presets (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            nombre VARCHAR(100) NOT NULL,
+            printer_id BIGINT UNSIGNED NOT NULL,
+            modo VARCHAR(10) NOT NULL DEFAULT 'driver',
+            papel VARCHAR(191) NULL DEFAULT NULL,
+            escala_modo VARCHAR(12) NOT NULL DEFAULT 'ajustar',
+            escala_pct SMALLINT UNSIGNED NOT NULL DEFAULT 100,
+            copias TINYINT UNSIGNED NOT NULL DEFAULT 1,
+            color TINYINT(1) NOT NULL DEFAULT 1,
+            duplex VARCHAR(6) NOT NULL DEFAULT 'no',
+            orientacion VARCHAR(12) NOT NULL DEFAULT 'auto',
+            ancho_puntos SMALLINT UNSIGNED NOT NULL DEFAULT 384,
+            avance_mm SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME NULL DEFAULT NULL,
+            updated_at DATETIME NULL DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_print_preset_printer (printer_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}print_stations (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            nombre VARCHAR(100) NOT NULL,
+            created_at DATETIME NULL DEFAULT NULL,
+            PRIMARY KEY (id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}print_routes (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            document_type_id INT NOT NULL,
+            station_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            preset_id BIGINT UNSIGNED NOT NULL,
+            fallback_preset_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME NULL DEFAULT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY ux_print_route (document_type_id, station_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        $sql = "CREATE TABLE {$prefix}print_jobs (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            agent_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            printer_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            preset_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            fallback_preset_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            origen VARCHAR(12) NOT NULL DEFAULT 'boton',
+            source_type VARCHAR(12) NOT NULL DEFAULT 'dte',
+            source_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            document_type_id INT NOT NULL DEFAULT 0,
+            titulo VARCHAR(150) NULL DEFAULT NULL,
+            station_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            ajustes TEXT NULL,
+            estado VARCHAR(12) NOT NULL DEFAULT 'pendiente',
+            detalle VARCHAR(255) NULL DEFAULT NULL,
+            error_code VARCHAR(32) NULL DEFAULT NULL,
+            error_msg VARCHAR(255) NULL DEFAULT NULL,
+            requested_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME NULL DEFAULT NULL,
+            expires_at DATETIME NULL DEFAULT NULL,
+            claimed_at DATETIME NULL DEFAULT NULL,
+            touched_at DATETIME NULL DEFAULT NULL,
+            finished_at DATETIME NULL DEFAULT NULL,
+            PRIMARY KEY (id),
+            KEY idx_print_job_claim (agent_id, estado),
+            KEY idx_print_job_estado (estado),
+            KEY idx_print_job_source (source_type, source_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        update_option('riverso_pos_phase73_printing', '1');
+    }
+
+    private static function create_phase69_billing_payments($prefix, $charset_collate) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        global $wpdb;
+
+        $sql_methods = "CREATE TABLE {$prefix}payment_methods (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            nombre VARCHAR(128) NOT NULL,
+            facto_payment_type_id VARCHAR(16) NOT NULL DEFAULT '',
+            visible TINYINT(1) NOT NULL DEFAULT 1,
+            requiere_cheque TINYINT(1) NOT NULL DEFAULT 0,
+            permite_vuelto TINYINT(1) NOT NULL DEFAULT 0,
+            orden INT UNSIGNED NOT NULL DEFAULT 0,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            PRIMARY KEY (id),
+            KEY idx_pay_method_activo (activo)
+        ) $charset_collate;";
+        dbDelta($sql_methods);
+
+        $sql_cajas = "CREATE TABLE {$prefix}cajas (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            nombre VARCHAR(128) NOT NULL,
+            tipo VARCHAR(32) NOT NULL DEFAULT 'fisica',
+            estado VARCHAR(16) NOT NULL DEFAULT 'cerrada',
+            saldo_efectivo DECIMAL(14,2) NOT NULL DEFAULT 0,
+            activo TINYINT(1) NOT NULL DEFAULT 1,
+            facto_cash_account_id VARCHAR(16) NULL DEFAULT NULL,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_cajas_activo (activo),
+            KEY idx_cajas_estado (estado)
+        ) $charset_collate;";
+        dbDelta($sql_cajas);
+
+        $sql_drafts = "CREATE TABLE {$prefix}billing_drafts (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            document_type_id INT UNSIGNED NOT NULL DEFAULT 37,
+            status VARCHAR(16) NOT NULL DEFAULT 'draft',
+            issue_date DATE NULL DEFAULT NULL,
+            due_date DATE NULL DEFAULT NULL,
+            payment_conditions VARCHAR(32) NOT NULL DEFAULT '0',
+            sale_state VARCHAR(64) NOT NULL DEFAULT 'VENTA: Concretada',
+            quote_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            dte_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            net_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            exempt_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            tax_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            total_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            updated_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_status (status),
+            KEY idx_bill_draft_quote (quote_id),
+            KEY idx_bill_draft_dte (dte_id)
+        ) $charset_collate;";
+        dbDelta($sql_drafts);
+
+        $sql_payments = "CREATE TABLE {$prefix}billing_draft_payments (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            draft_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            dte_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            pay_date DATE NULL DEFAULT NULL,
+            caja VARCHAR(64) NOT NULL DEFAULT '',
+            caja_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            method VARCHAR(64) NOT NULL DEFAULT '',
+            method_id BIGINT UNSIGNED NULL DEFAULT NULL,
+            amount_due DECIMAL(14,2) NOT NULL DEFAULT 0,
+            amount_paid DECIMAL(14,2) NOT NULL DEFAULT 0,
+            change_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+            amount_applied DECIMAL(14,2) NOT NULL DEFAULT 0,
+            notes VARCHAR(500) NOT NULL DEFAULT '',
+            charge_code VARCHAR(32) NOT NULL DEFAULT '',
+            cheque_numero VARCHAR(64) NOT NULL DEFAULT '',
+            cheque_titular VARCHAR(128) NOT NULL DEFAULT '',
+            cheque_banco VARCHAR(128) NOT NULL DEFAULT '',
+            facto_payment_id VARCHAR(32) NULL DEFAULT NULL,
+            facto_sync_status VARCHAR(16) NOT NULL DEFAULT 'off',
+            facto_sync_error TEXT NULL,
+            facto_synced_at DATETIME NULL DEFAULT NULL,
+            created_by BIGINT UNSIGNED NULL DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_bill_draft_pay_draft (draft_id),
+            KEY idx_bill_draft_pay_caja (caja_id),
+            KEY idx_bill_draft_pay_dte (dte_id)
+        ) $charset_collate;";
+        dbDelta($sql_payments);
+
+        self::maybe_add_table_column($prefix . 'cajas', 'facto_cash_account_id', 'VARCHAR(16) NULL DEFAULT NULL');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'dte_id', 'BIGINT UNSIGNED NULL DEFAULT NULL');
+        // Receptor del borrador (factura electrónica 33/2); vacío en boleta.
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'customer_id', 'BIGINT UNSIGNED NULL DEFAULT NULL');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_rut', 'VARCHAR(16) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_legal_name', 'VARCHAR(255) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_activity', 'VARCHAR(255) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_activity_code', 'VARCHAR(16) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_address', 'VARCHAR(255) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_district', 'VARCHAR(128) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_city', 'VARCHAR(128) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_phone', 'VARCHAR(64) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_drafts', 'receiver_postal', 'VARCHAR(16) NOT NULL DEFAULT \'0\'');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'dte_id', 'BIGINT UNSIGNED NULL DEFAULT NULL');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'method_id', 'BIGINT UNSIGNED NULL DEFAULT NULL');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'amount_applied', 'DECIMAL(14,2) NOT NULL DEFAULT 0');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'cheque_numero', 'VARCHAR(64) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'cheque_titular', 'VARCHAR(128) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'cheque_banco', 'VARCHAR(128) NOT NULL DEFAULT \'\'');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'facto_payment_id', 'VARCHAR(32) NULL DEFAULT NULL');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'facto_sync_status', 'VARCHAR(16) NOT NULL DEFAULT \'off\'');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'facto_sync_error', 'TEXT NULL');
+        self::maybe_add_table_column($prefix . 'billing_draft_payments', 'facto_synced_at', 'DATETIME NULL DEFAULT NULL');
+        $wpdb->query("ALTER TABLE {$prefix}billing_draft_payments MODIFY draft_id BIGINT UNSIGNED NULL DEFAULT NULL");
+        $wpdb->query("UPDATE {$prefix}billing_draft_payments SET amount_applied = GREATEST(0, amount_paid - change_amount) WHERE amount_applied = 0 AND amount_paid > 0");
+
+        $count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$prefix}payment_methods");
+        if ($count === 0) {
+            $seeds = [
+                ['Amipass', '13', 1, 0, 0, 10],
+                ['Cheque a plazo', '3', 1, 1, 0, 20],
+                ['Cheque al día', '2', 1, 1, 0, 30],
+                ['Depósito bancario', '9', 1, 0, 0, 40],
+                ['Edenred', '14', 1, 0, 0, 50],
+                ['Efectivo', '1', 1, 0, 1, 60],
+                ['Factura contra nota de crédito', '7', 0, 0, 0, 70],
+                ['GetNet', '19', 1, 0, 0, 80],
+                ['Mercado Pago', '17', 1, 0, 0, 90],
+                ['Nota de crédito', '6', 0, 0, 0, 100],
+                ['Otros documentos', '8', 1, 0, 0, 110],
+                ['Pago automático API', '15', 0, 0, 0, 120],
+                ['Redelcom', '16', 1, 0, 0, 130],
+                ['Sodexo', '12', 1, 0, 0, 140],
+                ['Tarjeta de crédito', '4', 1, 0, 0, 150],
+                ['Tarjeta de débito', '5', 1, 0, 0, 160],
+                ['Transferencia electrónica bancaria', '10', 1, 0, 0, 170],
+                ['WebPay', '18', 1, 0, 0, 180],
+            ];
+            foreach ($seeds as $seed) {
+                $wpdb->insert("{$prefix}payment_methods", [
+                    'nombre' => $seed[0],
+                    'facto_payment_type_id' => $seed[1],
+                    'visible' => $seed[2],
+                    'requiere_cheque' => $seed[3],
+                    'permite_vuelto' => $seed[4],
+                    'orden' => $seed[5],
+                    'activo' => 1,
+                ]);
+            }
+        }
+
+        $caja_map = [
+            'Efectivo' => '1',
+            'Tarjeta' => '2',
+            'Arca de Riverso' => '3',
+            'Arca Virtual' => '4',
+            'Transferencias' => '5',
+            'CHEQUE AL DIA' => '7',
+        ];
+        foreach ($caja_map as $nombre => $facto_id) {
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$prefix}cajas SET facto_cash_account_id = %s
+                 WHERE nombre = %s AND (facto_cash_account_id IS NULL OR facto_cash_account_id = '')",
+                $facto_id,
+                $nombre
+            ));
+        }
+
+        if (get_option('riverso_facto_payments_sync') === false) {
+            update_option('riverso_facto_payments_sync', '1');
+        }
+
+        if (get_option('riverso_pos_phase69_billing_payments') !== '1') {
+            update_option('riverso_pos_phase69_billing_payments', '1');
+            if (class_exists('Riverso_POS_Audit')) {
+                Riverso_POS_Audit::log('schema.phase69_billing_payments', 'payment_methods', 0, array(
+                    'actor_type' => 'computer',
+                    'details' => 'Fase 69: métodos de pago y sincronización FACTO',
+                ));
+            }
+        }
+    }
+
+    /**
+     * @param string $table
+     * @param string $column
+     * @param string $definition
+     */
+    private static function maybe_add_table_column($table, $column, $definition) {
+        global $wpdb;
+        $cols = $wpdb->get_col("DESC {$table}", 0);
+        if (!is_array($cols) || in_array($column, $cols, true)) {
+            return;
+        }
+        $wpdb->query("ALTER TABLE {$table} ADD {$column} {$definition}");
+    }
+
+    /**
+     * Fase 61: aprueba precios locales pendientes confirmados por folio
+     * (antes del cambio que aprueba al confirmar la línea).
+     * Pase único vía opción; no vuelve a correr.
+     */
+    private static function create_phase61_approve_folio_confirmed_pending() {
+        if (get_option('riverso_pos_phase61_approve_folio_confirmed') === '1') {
+            return;
+        }
+
+        if (!class_exists('Riverso_Pricing_Module')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'modules/pricing/class-pricing-module.php';
+            if (defined('RIVERSO_POS_PLUGIN_DIR') && is_readable($path)) {
+                require_once $path;
+            }
+            if (!class_exists('Riverso_Pricing_Module')) {
+                $alt = RIVERSO_POS_PLUGIN_DIR . 'pricing/price_lists/class-pricing-module.php';
+                if (is_readable($alt)) {
+                    require_once $alt;
+                }
+            }
+        }
+        if (!class_exists('Riverso_Pricing_Module')) {
+            return;
+        }
+
+        $result = Riverso_Pricing_Module::get_instance()->backfill_approve_folio_confirmed_pending();
+        update_option('riverso_pos_phase61_approve_folio_confirmed', '1');
+        update_option('riverso_pos_phase61_approve_folio_confirmed_report', $result);
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('migration.phase61_approve_folio_confirmed', 'precios', 0, array(
+                'actor_type' => 'migration',
+                'details' => 'Fase 61: aprobación retroactiva de precios confirmados en folio',
+                'new_value' => $result,
+            ));
+        }
+    }
+
 }
+

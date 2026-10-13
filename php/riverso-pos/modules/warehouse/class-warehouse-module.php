@@ -22,6 +22,7 @@ class Riverso_Warehouse_Module {
         'meson' => 'Mesón',
         'vitrina' => 'Vitrina',
         'bodega_ext' => 'Bodega Externa',
+        'recepcion' => 'Recepción',
     ];
 
     /**
@@ -92,7 +93,7 @@ class Riverso_Warehouse_Module {
     private function generate_location_code($tipo, $nombre) {
         $prefix_map = [
             'pasillo' => 'P', 'estante' => 'E', 'rack' => 'R', 'piso' => 'F',
-            'meson' => 'M', 'vitrina' => 'V', 'bodega_ext' => 'B',
+            'meson' => 'M', 'vitrina' => 'V', 'bodega_ext' => 'B', 'recepcion' => 'RX',
         ];
         $prefix = $prefix_map[$tipo] ?? 'X';
         $slug = strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $nombre), 0, 3));
@@ -103,7 +104,8 @@ class Riverso_Warehouse_Module {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
-        $where = ['1=1'];
+        // "Sin ubicar" es virtual (cuadratura de ventas): no se lista como lugar.
+        $where = ['1=1', "COALESCE(u.tipo, '') <> 'virtual'"];
         $params = [];
 
         if (array_key_exists('activo', $filters) && $filters['activo'] !== null && $filters['activo'] !== '') {

@@ -1,0 +1,3 @@
+-- Fase 64: DTE emitidos (factura/boleta FACTO)
+-- Tabla creada por dbDelta en Riverso_POS_Activator::create_phase64_dte_issued()
+-- {prefix}riverso_dte_issued

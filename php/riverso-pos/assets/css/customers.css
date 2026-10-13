@@ -1,0 +1,334 @@
+/* Clientes — admin + portal */
+
+.riverso-cust-wrap {
+  max-width: 1100px;
+  margin: 0 auto 40px;
+}
+
+.riverso-cust {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+  color: #1f2937;
+}
+
+.cust-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.cust-top h1 {
+  margin: 0 0 4px;
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+
+.cust-lead {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.cust-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  line-height: 1.2;
+  text-decoration: none;
+  background: #fff;
+}
+
+.cust-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cust-btn-primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.cust-btn-primary:hover {
+  background: #1d4ed8;
+}
+
+.cust-btn-secondary {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.cust-btn-search {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+.cust-btn-link {
+  background: transparent;
+  border: none;
+  color: #2563eb;
+  padding: 4px 6px;
+}
+
+.cust-btn-link:hover {
+  text-decoration: underline;
+}
+
+.cust-search-card,
+.cust-card,
+.cust-table-wrap {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.cust-search-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.cust-search-actions {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 2px;
+}
+
+.cust-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cust-field > span {
+  font-size: 13px;
+  color: #4b5563;
+  font-weight: 500;
+}
+
+.cust-field-grow {
+  flex: 1 1 280px;
+}
+
+.cust-field input,
+.cust-field select,
+.cust-extra-row input {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 9px 11px;
+  font-size: 14px;
+  background: #fff;
+  color: #111827;
+  box-sizing: border-box;
+}
+
+.cust-field input:focus,
+.cust-field select:focus,
+.cust-extra-row input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.cust-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.cust-card-title {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #111827;
+}
+
+.cust-section-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+
+.cust-section-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+}
+
+.cust-section-body {
+  margin-top: 14px;
+}
+
+.cust-section-body.is-collapsed {
+  display: none;
+}
+
+.cust-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+}
+
+.cust-id-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.cust-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #9ca3af;
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.cust-extra-row {
+  margin-bottom: 16px;
+}
+
+.cust-extra-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.cust-form-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.cust-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cust-check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.cust-form-msg {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.cust-form-msg.is-error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.cust-form-msg.is-ok {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.cust-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cust-table th,
+.cust-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.cust-table th {
+  color: #6b7280;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cust-th-actions {
+  width: 140px;
+}
+
+.cust-empty {
+  text-align: center;
+  color: #9ca3af;
+  padding: 28px 12px !important;
+}
+
+.cust-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.cust-pagination-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.riverso-cust-wrap--portal .cust-top h1 {
+  font-size: 1.45rem;
+}
+
+@media (max-width: 780px) {
+  .cust-grid-2,
+  .cust-id-pair {
+    grid-template-columns: 1fr;
+  }
+
+  .cust-top {
+    flex-direction: column;
+  }
+
+  .cust-form-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

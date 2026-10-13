@@ -27,7 +27,7 @@ $can_history = current_user_can('riverso_view_inventory_history') || $can_count 
 $can_stock_status = $can_count || $can_history;
 $location_types = class_exists('Riverso_Warehouse_Module') ? Riverso_Warehouse_Module::LOCATION_TYPES : [
     'pasillo' => 'Pasillo', 'estante' => 'Estante', 'rack' => 'Rack', 'piso' => 'Piso',
-    'meson' => 'Mesón', 'vitrina' => 'Vitrina', 'bodega_ext' => 'Bodega Externa',
+    'meson' => 'Mesón', 'vitrina' => 'Vitrina', 'bodega_ext' => 'Bodega Externa', 'recepcion' => 'Recepción',
 ];
 ?>
 
@@ -206,12 +206,14 @@ $location_types = class_exists('Riverso_Warehouse_Module') ? Riverso_Warehouse_M
             </select>
             <button type="button" class="btn btn-secondary" id="wh-hist-reload">Actualizar</button>
         </div>
-        <table class="wh-table">
-            <thead>
-                <tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>Estado</th><th>Lugar</th><th>Inicio</th><th></th></tr>
-            </thead>
-            <tbody id="wh-hist-body"><tr><td colspan="7">Cargando...</td></tr></tbody>
-        </table>
+        <div style="overflow-x:auto;">
+            <table class="wh-table">
+                <thead>
+                    <tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>Estado</th><th>Lugar</th><th>Inicio</th><th></th></tr>
+                </thead>
+                <tbody id="wh-hist-body"><tr><td colspan="7">Cargando...</td></tr></tbody>
+            </table>
+        </div>
     </div>
     <?php endif; ?>
 
@@ -2112,6 +2114,31 @@ $location_types = class_exists('Riverso_Warehouse_Module') ? Riverso_Warehouse_M
         clearTimeout(movTimer);
         movTimer = setTimeout(loadMovements, 300);
     });
+
+
+    // Deep-link desde Cotizaciones P4: /interno/warehouse/?start=producto&producto_base_id=X
+    (function bootstrapInventariarDeepLink() {
+        try {
+            var params = new URLSearchParams(window.location.search || "");
+            var start = params.get("start") || "";
+            var pid = parseInt(params.get("producto_base_id") || "0", 10);
+            if (start !== "producto" || !pid) return;
+            if (!canCount) {
+                alert("Sin permiso para inventariar");
+                return;
+            }
+            showPanel("inventario");
+            state.orderTarget = {
+                location: null,
+                product: {
+                    id: pid,
+                    sku: params.get("sku") || "",
+                    nombre: params.get("nombre") || ("#" + pid)
+                }
+            };
+            showCountSetup("producto");
+        } catch (e) {}
+    })();
 
     loadLocations();
     if (whEmbed) loadOpenCounts();

@@ -735,6 +735,19 @@ function riverso_task_portal_module_url($module, array $args = []) {
 function riverso_resolve_task_target_by_reference($task_tipo, $referencia_tipo, $referencia_id, array $extra = [], $context = 'admin') {
     global $wpdb;
 
+    // Recepción de compras y reclamos: pantalla Recepción (portal o admin).
+    if (($task_tipo === 'recepcion' && $referencia_tipo === 'factura') || $referencia_tipo === 'reclamo_proveedor') {
+        $doc_id = $referencia_tipo === 'factura' ? (int) $referencia_id : absint($extra['factura_id'] ?? 0);
+        $args = $doc_id ? ['doc' => $doc_id] : ['vista' => 'reclamos'];
+        if ($referencia_tipo === 'reclamo_proveedor' && $doc_id) {
+            $args['tab'] = 'reclamos';
+        }
+        if ($context === 'portal') {
+            return riverso_task_portal_module_url('recepcion', $args);
+        }
+        return add_query_arg(array_merge(['page' => 'riverso-pos-reception'], $args), admin_url('admin.php'));
+    }
+
     switch ($referencia_tipo) {
         case 'producto_base':
             return riverso_build_task_product_hub_url((int) $referencia_id, $task_tipo, $context);

@@ -3271,6 +3271,10 @@ class Riverso_Invoice_Intake_Service {
      * Registra entrada de inventario en WooCommerce si está habilitado.
      */
     public function auto_inventory_entry($factura, $item, $lote_id = null) {
+        // El stock de compras entra por Recepción (zona Recepción del stock Riverso), no directo a WooCommerce.
+        if (class_exists('Riverso_Purchase_Reception_Service')) {
+            return null;
+        }
         if (!$this->should_update_warehouse($factura)) {
             return null;
         }

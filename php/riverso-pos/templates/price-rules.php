@@ -42,12 +42,16 @@ $can_approve = current_user_can('riverso_approve_prices');
                     <li><strong>Fórmula P</strong> → precio unitario inicial (ej. <code>T10(P*3)</code>).</li>
                     <li><strong>Piso u.</strong> → mínimo de precio unitario tras la fórmula P.</li>
                     <li>Se calcula <code>T = unitario × cantidad</code> (total de línea).</li>
+                    <li><strong>Máx ΔT</strong> → lo máximo que el total puede subir sobre el precio sin cambios (<code>P × cantidad</code>). Acepta número (<code>1000</code>) o fórmula en P (<code>MAX(1000, P*3)</code>).</li>
                     <li><strong>Fórmula T</strong> → ajusta el total (ej. <code>T50(T)</code> redondea el total al techo de 50).</li>
                     <li><strong>Piso T</strong> → mínimo del total tras la fórmula T.</li>
                     <li>Se recalcula <strong>unitario = T final ÷ cantidad</strong> para que cuadre.</li>
                 </ol>
                 <p>Ejemplo: P=10, fórmula P=<code>T10(P*3)</code>→30, Q=7 → T=210 → fórmula T=<code>T50(T)</code>→250 → piso T=300 → <strong>Total 300</strong> (42,86 c/u).</p>
-                <p>Dejar vacío fórmula T / piso T = sin ajuste sobre el total.</p>
+                <p>Ejemplo máx ΔT: P=200, fórmula P=<code>T50(P*4)</code>→800, máx ΔT=<code>1000</code>, Q=5 → T=4.000 → tope 1.000+1.000 → <code>T50(T)</code> → <strong>Total 2.000</strong> (400 c/u).</p>
+                <p>Dejar vacío fórmula T / máx ΔT / piso T = sin ajuste sobre el total.</p>
+                <p><strong>Simular por monto:</strong> ingresa un total deseado (ej. 1000 o 3000) y pulsa <em>¿Cuánto entregar?</em>.
+                    Muestra la mayor cantidad entera que no pasa el monto y, si no calza exacto, la siguiente opción por arriba.</p>
             </div>
             <div id="rule-editor" class="rpr-editor">
                 <p>Selecciona o crea una regla.</p>
@@ -181,16 +185,28 @@ jQuery(function($){
             .replace(/\bP\b/g, 'precio');
     }
 
+    function totalBeforeFloor(b){
+        if (b.t_after_formula !== null && b.t_after_formula !== undefined) return b.t_after_formula;
+        return b.topado ? b.t_tope : b.t0;
+    }
+
+    function totalBeforeFormula(b){
+        return b.topado ? b.t_tope : b.t0;
+    }
+
     function formatBreakdownPreview(b){
         if (!b) return '—';
         const parts = [fmt(b.unitario0) + ' c/u'];
         if (b.adjusted || b.t_after_formula !== null) {
             parts.push('→ T ' + fmt(b.t0));
         }
-        if (b.t_after_formula !== null && Math.abs(b.t_after_formula - b.t0) > 0.001) {
+        if (b.topado) {
+            parts.push('→ tope ΔT ' + fmt(b.t_tope));
+        }
+        if (b.t_after_formula !== null && Math.abs(b.t_after_formula - totalBeforeFormula(b)) > 0.001) {
             parts.push('→ ' + fmt(b.t_after_formula));
         }
-        if (Math.abs(b.t_final - (b.t_after_formula !== null ? b.t_after_formula : b.t0)) > 0.001) {
+        if (Math.abs(b.t_final - totalBeforeFloor(b)) > 0.001) {
             parts.push('→ piso ' + fmt(b.t_final));
         }
         if (b.adjusted && Math.abs(b.unitario - b.unitario0) > 0.0001) {
@@ -205,10 +221,13 @@ jQuery(function($){
         if (!bd) return '';
         const q = fmt(qty);
         let html = '<span class="rpr-sim-unit">' + fmt(bd.unitario0) + ' c/u</span> × ' + q + ' = T ' + fmt(bd.t0);
-        if (bd.t_after_formula !== null && Math.abs(bd.t_after_formula - bd.t0) > 0.001) {
+        if (bd.topado) {
+            html += ' → tope ΔT (' + fmt(bd.base_sin_cambios) + ' + ' + fmt(bd.delta_max) + ') ' + fmt(bd.t_tope);
+        }
+        if (bd.t_after_formula !== null && Math.abs(bd.t_after_formula - totalBeforeFormula(bd)) > 0.001) {
             html += ' → ' + fmt(bd.t_after_formula);
         }
-        if (Math.abs(bd.t_final - (bd.t_after_formula !== null ? bd.t_after_formula : bd.t0)) > 0.001) {
+        if (Math.abs(bd.t_final - totalBeforeFloor(bd)) > 0.001) {
             html += ' → piso T ' + fmt(bd.t_final);
         }
         html += ' = <strong class="rpr-sim-total">Total ' + fmt(bd.t_final) + '</strong>';
@@ -516,9 +535,10 @@ jQuery(function($){
     }
 
     function tierRow(t){
-        t = t || {qty_min:'', qty_max:'', formula:'P', total_minimo:'', formula_total:'', piso_total:''};
+        t = t || {qty_min:'', qty_max:'', formula:'P', total_minimo:'', formula_total:'', max_delta_t:'', piso_total:''};
         const formula = t.formula || 'P';
         const formulaTotal = t.formula_total || '';
+        const maxDelta = t.max_delta_t || '';
         return `<tr class="tier-row">
             <td><input type="number" class="t-min small-text" value="${esc(t.qty_min ?? '')}" min="0"></td>
             <td><input type="number" class="t-max small-text" value="${esc(t.qty_max ?? '')}" placeholder="∞" min="0"></td>
@@ -530,6 +550,10 @@ jQuery(function($){
             <td>
                 <input type="text" class="t-formula-total-input" value="${esc(formulaTotal)}" spellcheck="false" autocomplete="off" placeholder="T50(T)">
                 <div class="rpr-formula-hint rpr-hint-t">${esc(describeFormulaT(formulaTotal))}</div>
+            </td>
+            <td>
+                <input type="text" class="t-max-delta-input" value="${esc(maxDelta)}" spellcheck="false" autocomplete="off" placeholder="—" title="Máximo que el total puede subir sobre P × cantidad">
+                <div class="rpr-formula-hint rpr-hint-d">${esc(describeFormulaP(maxDelta))}</div>
             </td>
             <td><input type="number" step="0.01" class="t-piso-total small-text" value="${esc(t.piso_total ?? '')}" placeholder="—" title="Piso total"></td>
             <td class="rpr-preview" data-empty="—">—</td>
@@ -554,6 +578,7 @@ jQuery(function($){
                             <th>Fórmula P</th>
                             <th>Piso u.</th>
                             <th>Fórmula T</th>
+                            <th title="Alza máxima del total sobre P × cantidad">Máx ΔT</th>
                             <th>Piso T</th>
                             <th>Vista previa</th>
                             <th></th>
@@ -580,8 +605,16 @@ jQuery(function($){
                 p_asignado <input type="number" id="sim-p" class="small-text" value="10" step="0.01">
                 qty <input type="number" id="sim-q" class="small-text" value="1" min="0.0001" step="any">
                 <button type="button" class="button" id="rule-sim">Calcular</button>
+                <button type="button" class="button" id="rule-sim-curve" title="Total y ΔT para varias cantidades">Curva por cantidad</button>
                 <span id="sim-result"></span>
             </p>
+            <p class="rpr-sim rpr-sim-by-total">
+                <strong>Por monto:</strong>
+                Monto $ <input type="number" id="sim-monto" class="small-text" value="1000" min="1" step="1">
+                <button type="button" class="button" id="rule-sim-by-total" title="Cantidad a entregar para ese total">¿Cuánto entregar?</button>
+                <span id="sim-by-total-result"></span>
+            </p>
+            <div id="sim-curve"></div>
         `);
         const first = document.querySelector('.t-formula-input');
         if (first) {
@@ -619,6 +652,7 @@ jQuery(function($){
                 formula_tipo: 'formula',
                 total_minimo: $(this).find('.t-minp').val(),
                 formula_total: $(this).find('.t-formula-total-input').val(),
+                max_delta_t: $(this).find('.t-max-delta-input').val(),
                 piso_total: $(this).find('.t-piso-total').val(),
             });
         });
@@ -643,6 +677,8 @@ jQuery(function($){
         }
         if (formulaFocusKind === 't') {
             formulaFocus = document.querySelector('.t-formula-total-input');
+        } else if (formulaFocusKind === 'd') {
+            formulaFocus = document.querySelector('.t-max-delta-input');
         } else {
             formulaFocus = document.querySelector('.t-formula-input');
         }
@@ -714,7 +750,7 @@ jQuery(function($){
         }
         const insert = $btn.data('insert');
         if (insert != null) {
-            if (insert === 'T' && el.classList.contains('t-formula-input')) {
+            if (insert === 'T' && (el.classList.contains('t-formula-input') || el.classList.contains('t-max-delta-input'))) {
                 alert('T (total de línea) solo se usa en la columna Fórmula T');
                 return;
             }
@@ -739,6 +775,7 @@ jQuery(function($){
             const t = tiers[i] || {};
             $(this).find('.rpr-hint-p').text(describeFormulaP(t.formula));
             $(this).find('.rpr-hint-t').text(describeFormulaT(t.formula_total));
+            $(this).find('.rpr-hint-d').text(describeFormulaP(t.max_delta_t));
         });
         $.post(ajaxurl, {
             action: 'riverso_price_rule_eval_formulas',
@@ -751,10 +788,10 @@ jQuery(function($){
             $rows.each(function(i){
                 const res = r.data.results[i] || r.data.results[String(i)];
                 const $cell = $(this).find('.rpr-preview');
-                $(this).find('.t-formula-input, .t-formula-total-input').removeClass('is-invalid');
+                $(this).find('.t-formula-input, .t-formula-total-input, .t-max-delta-input').removeClass('is-invalid');
                 if (!res) { $cell.text('—'); return; }
                 if (!res.ok) {
-                    $(this).find('.t-formula-input, .t-formula-total-input').addClass('is-invalid');
+                    $(this).find('.t-formula-input, .t-formula-total-input, .t-max-delta-input').addClass('is-invalid');
                     $cell.html('<span class="rpr-err">' + esc(res.hint || 'error') + '</span>');
                     return;
                 }
@@ -810,6 +847,23 @@ jQuery(function($){
     $(document).on('input', '.t-formula-total-input', function(){
         $(this).closest('.tier-row').find('.rpr-hint-t').text(describeFormulaT(this.value));
         schedulePreview();
+    });
+    $(document).on('focus', '.t-max-delta-input', function(){
+        formulaFocus = this;
+        formulaFocusKind = 'd';
+        $('.tier-row').removeClass('is-active');
+        $(this).closest('.tier-row').addClass('is-active');
+    });
+    $(document).on('input', '.t-max-delta-input', function(){
+        $(this).closest('.tier-row').find('.rpr-hint-d').text(describeFormulaP(this.value));
+        schedulePreview();
+    });
+    // Con tope de alza el total debe seguir terminando en múltiplo de 50.
+    $(document).on('change', '.t-max-delta-input', function(){
+        if (!String(this.value || '').trim()) return;
+        const $total = $(this).closest('.tier-row').find('.t-formula-total-input');
+        if (String($total.val() || '').trim()) return;
+        $total.val('T50(T)').trigger('input');
     });
     $(document).on('input', '#sim-p, #sim-q, .t-minp, .t-piso-total', schedulePreview);
 
@@ -966,7 +1020,7 @@ jQuery(function($){
         applyAssignTarget($(this).data('tipo'), $(this).data('id'));
     });
 
-    $(document).on('click', '#rule-sim', function(){
+    function runSimCalc(){
         const payload = {
             action:'riverso_price_rule_preview', nonce,
             p_asignado:$('#sim-p').val(),
@@ -991,6 +1045,103 @@ jQuery(function($){
                 ' &rarr; <span class="rpr-sim-unit">' + fmt(unit) + ' c/u</span> × ' + fmt(qty) +
                 ' = <strong class="rpr-sim-total">Total ' + fmt(total) + '</strong>'
             );
+        });
+    }
+
+    function qtyOptionBtn(opt, label, exact){
+        if (!opt) return '';
+        const exactTxt = exact ? ' · exacto' : '';
+        return `<button type="button" class="button button-small rpr-qty-opt" data-qty="${esc(String(opt.qty))}" title="Usar qty ${esc(String(opt.qty))} y calcular">
+            ${esc(label)} <strong>${fmt(opt.qty)} u.</strong> → Total ${fmt(opt.total)} (${fmt(opt.unitario)} c/u)${exactTxt}
+        </button>`;
+    }
+
+    function formatByTotal(bt){
+        if (!bt) return '';
+        if (!bt.debajo) {
+            if (bt.minimo) {
+                return `<span class="rpr-by-total-msg">El monto no alcanza para 1 u. (mínimo ${fmt(bt.minimo.total)} con ${fmt(bt.minimo.qty)} u.)</span>`
+                    + (bt.arriba ? ' ' + qtyOptionBtn(bt.arriba, 'Opción:') : '');
+            }
+            return '<span class="rpr-by-total-msg">Sin tramo aplicable</span>';
+        }
+        let html = qtyOptionBtn(bt.debajo, 'Entregar', !!bt.exacto);
+        if (!bt.exacto && bt.arriba) {
+            html += ' ' + qtyOptionBtn(bt.arriba, 'o');
+        }
+        return html;
+    }
+
+    $(document).on('click', '#rule-sim', runSimCalc);
+
+    $(document).on('click', '#rule-sim-by-total', function(){
+        const monto = Number($('#sim-monto').val());
+        const $out = $('#sim-by-total-result');
+        if (!monto || monto <= 0) {
+            $out.html('<span class="rpr-by-total-msg">Ingresa un monto válido</span>');
+            return;
+        }
+        $out.html('<span class="description">Calculando…</span>');
+        const payload = {
+            action:'riverso_price_rule_preview', nonce,
+            p_asignado:$('#sim-p').val(),
+            qty:$('#sim-q').val() || 1,
+            target_total: monto,
+            tiers: JSON.stringify(collectTiers()),
+        };
+        if (current && current.id) payload.rule_id = current.id;
+        $.post(ajaxurl, payload, function(r){
+            if (!r.success){
+                $out.html('<span class="rpr-by-total-msg">' + esc((r.data && r.data.message) || 'Error') + '</span>');
+                return;
+            }
+            $out.html(formatByTotal(r.data.by_total));
+        }).fail(function(){
+            $out.html('<span class="rpr-by-total-msg">Error de red</span>');
+        });
+    });
+
+    $(document).on('keydown', '#sim-monto', function(e){
+        if (e.key === 'Enter') { e.preventDefault(); $('#rule-sim-by-total').click(); }
+    });
+
+    $(document).on('click', '.rpr-qty-opt', function(){
+        const q = $(this).data('qty');
+        if (q == null || q === '') return;
+        $('#sim-q').val(q);
+        runSimCalc();
+        schedulePreview();
+    });
+
+    const CURVE_QTYS = [1, 2, 3, 4, 5, 10, 20, 21, 50, 51, 100, 101, 300];
+
+    $(document).on('click', '#rule-sim-curve', function(){
+        const $box = $('#sim-curve');
+        $box.html('<p class="description">Calculando…</p>');
+        const payload = {
+            action:'riverso_price_rule_preview', nonce,
+            p_asignado:$('#sim-p').val(),
+            qty:$('#sim-q').val() || 1,
+            tiers: JSON.stringify(collectTiers()),
+            curve_qtys: CURVE_QTYS.join(','),
+        };
+        if (current && current.id) payload.rule_id = current.id;
+        $.post(ajaxurl, payload, function(r){
+            if (!r.success){ $box.html('<p class="description">' + esc((r.data && r.data.message) || 'Error') + '</p>'); return; }
+            const rows = (r.data.curve || []).map(c => `<tr${c.topado ? ' class="rpr-curve-capped"' : ''}>
+                <td>${fmt(c.qty)}</td>
+                <td>${fmt(c.base)}</td>
+                <td><strong>${c.total === null ? 'sin tramo' : fmt(c.total)}</strong></td>
+                <td>${fmt(c.delta)}</td>
+                <td>${c.unitario === null ? '—' : fmt(c.unitario)}</td>
+                <td>${c.topado ? 'Sí' : ''}</td>
+            </tr>`).join('');
+            $box.html(`<table class="widefat striped rpr-curve-table">
+                <thead><tr><th>Qty</th><th>Sin cambios (P×Q)</th><th>Total</th><th>ΔT</th><th>Unitario</th><th>Tope ΔT</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`);
+        }).fail(function(){
+            $box.html('<p class="description">Error de red.</p>');
         });
     });
 

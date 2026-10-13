@@ -36,6 +36,8 @@ class Riverso_POS_Assets {
         
         $this->enqueue_label_print_client('riverso_label_print_config');
         
+        $this->enqueue_supplier_picker();
+
         // JS
         wp_enqueue_script(
             'riverso-pos-admin',
@@ -66,7 +68,7 @@ class Riverso_POS_Assets {
         }
 
         if (strpos($hook, 'riverso-pos-products') !== false) {
-            $this->enqueue_product_quick_search_assets();
+            $this->enqueue_product_quick_search_assets('admin');
         }
 
         // Historial de costos: Chart.js + explorador
@@ -85,8 +87,12 @@ class Riverso_POS_Assets {
 
     /**
      * Encola CSS/JS de búsqueda rápida del Hub de Productos.
+     *
+     * @param string $context 'admin' o 'portal'.
      */
-    private function enqueue_product_quick_search_assets() {
+    private function enqueue_product_quick_search_assets($context = 'admin') {
+        $this->enqueue_barcode_scanner_assets();
+
         $css_path = RIVERSO_POS_PLUGIN_DIR . 'assets/css/product-quick-search.css';
         $css_ver = file_exists($css_path) ? (string) filemtime($css_path) : RIVERSO_POS_VERSION;
         wp_enqueue_style(
@@ -104,13 +110,15 @@ class Riverso_POS_Assets {
         wp_enqueue_script(
             'riverso-product-quick-search',
             RIVERSO_POS_PLUGIN_URL . 'assets/js/product-quick-search.js',
-            ['jquery'],
+            ['jquery', 'riverso-barcode-scanner'],
             $js_ver,
             true
         );
+        $is_portal = $context === 'portal';
         wp_localize_script('riverso-product-quick-search', 'riversoProductQuickSearch', [
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('riverso_pos_nonce'),
+            'surface' => $is_portal ? 'portal' : 'admin',
             'can_manage' => current_user_can('riverso_manage_products'),
             'can_manage_prices' => current_user_can('riverso_manage_prices') || current_user_can('manage_options'),
             'can_manage_families' => current_user_can('riverso_manage_families') || current_user_can('manage_options'),
@@ -119,8 +127,37 @@ class Riverso_POS_Assets {
                 || current_user_can('riverso_edit_stock')
                 || current_user_can('manage_options'),
             'iva_factor' => 1.19,
-            'categories_url' => admin_url('admin.php?page=riverso-pos-categories'),
+            'categories_url' => $is_portal
+                ? home_url('/interno/categories/')
+                : admin_url('admin.php?page=riverso-pos-categories'),
+            'hub_url' => $is_portal
+                ? home_url('/interno/products/')
+                : admin_url('admin.php?page=riverso-pos-products'),
         ]);
+    }
+
+    /**
+     * Lector de códigos de barras con la cámara (Hub de Productos, Cotizaciones, Facturación, Avisos).
+     */
+    private function enqueue_barcode_scanner_assets() {
+        $css_path = RIVERSO_POS_PLUGIN_DIR . 'assets/css/barcode-scanner.css';
+        $css_ver = file_exists($css_path) ? (string) filemtime($css_path) : RIVERSO_POS_VERSION;
+        wp_enqueue_style(
+            'riverso-barcode-scanner',
+            RIVERSO_POS_PLUGIN_URL . 'assets/css/barcode-scanner.css',
+            [],
+            $css_ver
+        );
+
+        $js_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/barcode-scanner.js';
+        $js_ver = file_exists($js_path) ? (string) filemtime($js_path) : RIVERSO_POS_VERSION;
+        wp_enqueue_script(
+            'riverso-barcode-scanner',
+            RIVERSO_POS_PLUGIN_URL . 'assets/js/barcode-scanner.js',
+            [],
+            $js_ver,
+            true
+        );
     }
 
     /**
@@ -314,6 +351,13 @@ class Riverso_POS_Assets {
                 wp_scripts()->add_data('jquery-migrate', 'group', 0);
             }
             wp_enqueue_style('dashicons');
+            $this->enqueue_supplier_picker();
+
+            if ($portal_page === 'products') {
+                $this->enqueue_family_editor_assets();
+                $this->enqueue_emparejamiento_editor_assets();
+                $this->enqueue_product_quick_search_assets('portal');
+            }
 
             if ($portal_page === 'categories') {
                 $family_editor_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/family-editor.js';
@@ -372,6 +416,29 @@ class Riverso_POS_Assets {
             'agentUrl' => $agent_url,
             'authToken' => $agent_token,
         ]);
+    }
+
+    /**
+     * Lupa compartida para buscar proveedor por nombre o apodo.
+     */
+    private function enqueue_supplier_picker() {
+        $css_path = RIVERSO_POS_PLUGIN_DIR . 'assets/css/supplier-picker.css';
+        $js_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/supplier-picker.js';
+        $css_ver = file_exists($css_path) ? (string) filemtime($css_path) : RIVERSO_POS_VERSION;
+        $js_ver = file_exists($js_path) ? (string) filemtime($js_path) : RIVERSO_POS_VERSION;
+        wp_enqueue_style(
+            'riverso-supplier-picker',
+            RIVERSO_POS_PLUGIN_URL . 'assets/css/supplier-picker.css',
+            [],
+            $css_ver
+        );
+        wp_enqueue_script(
+            'riverso-supplier-picker',
+            RIVERSO_POS_PLUGIN_URL . 'assets/js/supplier-picker.js',
+            [],
+            $js_ver,
+            true
+        );
     }
 }
 

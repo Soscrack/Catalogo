@@ -18,9 +18,33 @@ $can_manage_pqs = !empty($can_manage);
         <button type="button" class="button" id="pqs-btn-lupa" title="Búsqueda por nombre, proveedor, código…">
             <span class="dashicons dashicons-search" style="margin-top:3px;"></span>
         </button>
+        <button type="button" class="button" id="pqs-btn-scan" title="Escanear código de barras" aria-label="Escanear código de barras">
+            <span class="dashicons dashicons-camera" style="margin-top:3px;"></span>
+        </button>
     </div>
 
     <div id="pqs-status" class="pqs-status" style="display:none;"></div>
+
+    <div id="pqs-browse" class="pqs-results">
+        <p class="pqs-intro" style="margin-top:14px;">Productos con SKU local primero. 30 por página.</p>
+        <table class="wp-list-table widefat fixed striped pqs-grid">
+            <thead>
+                <tr>
+                    <th style="width:14%">SKU local</th>
+                    <th style="width:36%">Nombre</th>
+                    <th style="width:25%">Código proveedor</th>
+                    <th style="width:25%">Barcode</th>
+                </tr>
+            </thead>
+            <tbody id="pqs-browse-tbody"><tr><td colspan="4">Cargando…</td></tr></tbody>
+        </table>
+        <div id="pqs-browse-pager" style="margin-top:10px; display:none; gap:6px; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="button" id="pqs-browse-prev">← Anterior</button>
+            <span id="pqs-browse-pages" style="display:inline-flex; gap:4px; flex-wrap:wrap;"></span>
+            <span id="pqs-browse-info" style="color:#666;"></span>
+            <button type="button" class="button" id="pqs-browse-next">Siguiente →</button>
+        </div>
+    </div>
 
     <div id="pqs-results" class="pqs-results" style="display:none;">
         <table class="wp-list-table widefat fixed striped pqs-grid">
@@ -51,6 +75,7 @@ $can_manage_pqs = !empty($can_manage);
                 <div id="pqs-v-precio-bruto" class="pqs-hero-price">
                     <span class="pqs-hero-price-value">—</span>
                     <span class="pqs-hero-price-label">bruto</span>
+                    <span id="pqs-hero-origen" class="pqs-origen-badge" hidden></span>
                 </div>
             </div>
             <div class="pqs-viewer-actions">
@@ -91,7 +116,9 @@ $can_manage_pqs = !empty($can_manage);
                             <input type="text" id="pqs-sup-search" placeholder="Proveedor…">
                             <input type="hidden" id="pqs-sup-id" value="">
                             <input type="text" id="pqs-sup-code" placeholder="Código proveedor">
-                            <button type="button" class="button button-small button-primary" id="pqs-btn-add-supplier">Vincular</button>
+                            <button type="button" class="button button-small" id="pqs-btn-supplier-lupa" title="Buscar por nombre o apodo">🔍</button>
+                            <button type="button" class="button button-small button-primary" id="pqs-btn-add-supplier">Vincular código</button>
+                            <button type="button" class="button button-small" id="pqs-btn-known-supplier">Solo el proveedor</button>
                             <div id="pqs-sup-suggestions" class="pqs-sup-suggestions" style="display:none;width:100%;"></div>
                         </div>
                     </div>
@@ -114,7 +141,7 @@ $can_manage_pqs = !empty($can_manage);
                 </div>
                 <div class="pqs-pricing-grid">
                     <div class="pqs-field">
-                        <span class="pqs-label">Precio <span class="pqs-help" id="pqs-help-precio" title="">?</span> <a class="pqs-folio-link" id="pqs-folio-precio" href="#" hidden></a></span>
+                        <span class="pqs-label">Precio <span class="pqs-help" id="pqs-help-precio" title="">?</span> <a class="pqs-folio-link" id="pqs-folio-precio" href="#" hidden></a> <span id="pqs-origen-precio-badge" class="pqs-origen-badge" hidden></span></span>
                         <div id="pqs-v-precio" class="pqs-value pqs-num pqs-view-only"></div>
                         <div class="pqs-edit-only" id="pqs-edit-precio-wrap" style="display:none;">
                             <label class="pqs-edit-precio-label" for="pqs-edit-precio">
@@ -134,6 +161,26 @@ $can_manage_pqs = !empty($can_manage);
                     <div class="pqs-field">
                         <span class="pqs-label">Margen</span>
                         <div id="pqs-v-margen" class="pqs-value pqs-num"></div>
+                    </div>
+                </div>
+                <div id="pqs-pricing-envase" class="pqs-pricing-envase" hidden>
+                    <h4 class="pqs-pricing-envase-title">
+                        Precio / Coste / Margen
+                        <span id="pqs-pricing-envase-label" class="pqs-pricing-envase-label">Venta envase</span>
+                    </h4>
+                    <div class="pqs-pricing-grid">
+                        <div class="pqs-field">
+                            <span class="pqs-label">Precio <span class="pqs-help" id="pqs-help-precio-envase" title="">?</span> <span id="pqs-origen-precio-envase-badge" class="pqs-origen-badge" hidden></span></span>
+                            <div id="pqs-v-precio-envase" class="pqs-value pqs-num"></div>
+                        </div>
+                        <div class="pqs-field">
+                            <span class="pqs-label">Coste</span>
+                            <div id="pqs-v-costo-envase" class="pqs-value pqs-num"></div>
+                        </div>
+                        <div class="pqs-field">
+                            <span class="pqs-label">Margen</span>
+                            <div id="pqs-v-margen-envase" class="pqs-value pqs-num"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -251,6 +298,12 @@ $can_manage_pqs = !empty($can_manage);
                 </thead>
                 <tbody id="pqs-lupa-tbody"><tr><td colspan="6" style="color:#666;">Escribí y buscá…</td></tr></tbody>
             </table>
+            <div id="pqs-lupa-pager" style="margin-top:10px; display:none; gap:6px; align-items:center; flex-wrap:wrap;">
+                <button type="button" class="button" id="pqs-lupa-prev">← Anterior</button>
+                <span id="pqs-lupa-pages" style="display:inline-flex; gap:4px; flex-wrap:wrap;"></span>
+                <span id="pqs-lupa-info" style="color:#666;"></span>
+                <button type="button" class="button" id="pqs-lupa-next">Siguiente →</button>
+            </div>
         </div>
     </div>
 </div>

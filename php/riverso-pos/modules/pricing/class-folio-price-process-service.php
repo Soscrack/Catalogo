@@ -131,6 +131,38 @@ class Riverso_Folio_Price_Process_Service {
     }
 
     /**
+     * IDs de producto_base presentes en el folio (línea y target de precio).
+     * Solo lectura: no evalúa gates ni crea tareas.
+     *
+     * @param int $factura_id
+     * @return array<int, true>
+     */
+    public function price_product_ids($factura_id) {
+        $loaded = $this->load_factura_product_items($factura_id);
+        if (is_wp_error($loaded)) {
+            return [];
+        }
+        $proveedor_id = (int) ($loaded['factura']['proveedor_id'] ?? 0);
+        $ids = [];
+        foreach ($loaded['items'] as $item) {
+            $resolved = $this->resolve_item_product($item, $proveedor_id);
+            if (!$resolved) {
+                continue;
+            }
+            $pb = (int) $resolved['producto_base_id'];
+            if ($pb > 0) {
+                $ids[$pb] = true;
+            }
+            $target = $this->resolve_price_target($pb);
+            $target_id = (int) ($target['target_id'] ?? 0);
+            if ($target_id > 0) {
+                $ids[$target_id] = true;
+            }
+        }
+        return $ids;
+    }
+
+    /**
      * Todas las líneas del folio (producto, flete, gasto) para el panel Ver Info.
      *
      * @return array<int,array<string,mixed>>
@@ -375,7 +407,8 @@ class Riverso_Folio_Price_Process_Service {
         $sku = (string) ($resolved['sku'] ?? '');
         $nombre = (string) ($resolved['nombre'] ?? '');
         $task_tipo = (string) ($task['tipo'] ?? 'preguntar_familia');
-        $can_answer = ($task_tipo !== 'asignar_familia');
+        $decision = (string) ($resolved['familia_decision'] ?? '');
+        $is_correction = ($task_tipo === 'asignar_familia' || $decision === 'requiere');
 
         $hub_url = function_exists('riverso_build_task_product_hub_url')
             ? riverso_build_task_product_hub_url($pb_id, $task_tipo, 'admin')
@@ -402,7 +435,7 @@ class Riverso_Folio_Price_Process_Service {
 
         $pasos = [];
         $step_n = 1;
-        if ($can_answer) {
+        if (!$is_correction) {
             $pasos[] = $this->playbook_step(
                 $step_n++ . '. Responder aquí',
                 '',
@@ -422,12 +455,20 @@ class Riverso_Folio_Price_Process_Service {
             'Creá la familia, asigná este producto y aplicá la regla R-1 por defecto.',
             'create_family'
         );
+        if ($is_correction) {
+            $pasos[] = $this->playbook_step(
+                $step_n++ . '. Corregir respuesta',
+                '',
+                'Si se marcó «Sí necesita familia» por error: cambiala a «No requiere» o volvé a «sin responder».',
+                'answer_family'
+            );
+        }
         $pasos[] = $this->playbook_step(
             $step_n++ . '. Abrir ficha del producto (tab Local)',
             $hub_url,
-            $can_answer
-                ? 'Atajo al Hub si preferís responder allá o gestionar packs/unitario.'
-                : 'Atajo al Hub si preferís asignar familia allá o gestionar packs/unitario.'
+            $is_correction
+                ? 'Atajo al Hub si preferís asignar o corregir la familia allá (vista rápida → Cambiar decisión).'
+                : 'Atajo al Hub si preferís responder allá o gestionar packs/unitario.'
         );
         $pasos[] = $this->playbook_step(
             $step_n++ . '. Ver tarea en la bandeja',
@@ -436,7 +477,10 @@ class Riverso_Folio_Price_Process_Service {
         );
         $pasos[] = $this->playbook_step(
             $step_n++ . '. Volver a Procesar folios y actualizar',
-            $this->folio_guide_url('riverso-pos-pricing', []),
+            $this->folio_guide_url('riverso-pos-pricing', [
+                'tab' => 'process',
+                'factura_id' => absint($factura_id),
+            ]),
             'Pulsá «Ya resolví — actualizar» para que salga el ticket de error.'
         );
 
@@ -446,7 +490,8 @@ class Riverso_Folio_Price_Process_Service {
             'producto_base_id' => $pb_id,
             'sku' => $sku,
             'nombre' => $nombre,
-            'can_answer_family' => $can_answer,
+            'can_answer_family' => true,
+            'familia_decision' => $decision,
             'can_assign_family' => true,
             'message' => $message,
             'url' => $hub_url,
@@ -3214,6 +3259,7 @@ class Riverso_Folio_Price_Process_Service {
                 }
                 if (!empty($b['can_answer_family'])) {
                     $line['can_answer_family'] = true;
+                    $line['familia_decision'] = (string) ($b['familia_decision'] ?? '');
                 }
                 if (!empty($b['can_assign_family'])) {
                     $line['can_assign_family'] = true;
@@ -3642,6 +3688,16 @@ class Riverso_Folio_Price_Process_Service {
             $result = $pricing->upsert_assigned_price($target_id, 'local', $p_asignado, 0, $meta);
             if (is_wp_error($result)) {
                 return $result;
+            }
+            // Confirmar en folio = precio usable en cotizaciones / TPV (aprobado).
+            // upsert deja pendiente; approve_price también propaga a emparejados del mismo folio.
+            $precio_id = is_array($result) ? (int) ($result['id'] ?? 0) : 0;
+            if ($precio_id > 0 && method_exists($pricing, 'approve_price')) {
+                $approved = $pricing->approve_price($precio_id);
+                if (is_wp_error($approved)) {
+                    return $approved;
+                }
+                $result = $pricing->get_local_price($target_id) ?: $result;
             }
             $applied = true;
         }

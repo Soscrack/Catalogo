@@ -253,6 +253,47 @@
     gap: 8px;
 }
 
+.pqs-pricing-envase {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #dcdcde;
+}
+
+.pqs-pricing-envase-title {
+    margin: 0 0 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1d2327;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.pqs-pricing-envase-label {
+    font-weight: 500;
+    color: #646970;
+    font-size: 12px;
+}
+
+.pqs-origen-badge {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    background: #2271b1;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+    vertical-align: middle;
+}
+
+.pqs-hero-price .pqs-origen-badge {
+    margin-left: 8px;
+    align-self: center;
+}
+
 .pqs-badge {
     display: inline-block;
     background: #e67e22;
@@ -305,6 +346,18 @@
     font-size: 13px;
 }
 
+.pqs-family-decision {
+    margin-top: 6px;
+    color: #1d2327;
+}
+
+.pqs-fam-decision-options {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
 .pqs-tasks {
     display: flex;
     flex-direction: column;
@@ -329,11 +382,26 @@
     margin-bottom: 8px;
 }
 
+.pqs-task-howto {
+    background: #f0f6fc;
+    border-left: 3px solid #2271b1;
+    border-radius: 2px;
+    padding: 6px 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: #1d2327;
+}
+
 .pqs-task-actions {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
     align-items: center;
+}
+
+.pqs-task-no-target {
+    font-size: 12px;
+    color: #646970;
 }
 
 .pqs-task-form {
@@ -621,4 +689,90 @@
 
 .pqs-sup-suggestions {
     margin-top: 4px;
+}
+
+/* Portal interno: los botones de wp-admin no existen ahí. */
+.portal-main .pqs-wrap .button,
+.portal-main .pqs-modal .button,
+.portal-main .pqs-popover .button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 6px 12px;
+    border: 1px solid #c5c5c5;
+    border-radius: 4px;
+    background: #f6f7f7;
+    color: #1d2327;
+    font-size: 14px;
+    line-height: 1.2;
+    cursor: pointer;
+    text-decoration: none;
+}
+.portal-main .pqs-wrap .button-primary,
+.portal-main .pqs-modal .button-primary {
+    background: #1976d2;
+    border-color: #1565c0;
+    color: #fff;
+}
+.portal-main .pqs-wrap .button-small,
+.portal-main .pqs-modal .button-small {
+    min-height: 32px;
+    padding: 4px 8px;
+    font-size: 13px;
+}
+.portal-main .pqs-grid {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+}
+.portal-main .pqs-grid th,
+.portal-main .pqs-grid td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #eee;
+    text-align: left;
+    font-size: 13px;
+}
+.portal-main .pqs-grid thead { background: #f5f5f5; }
+
+@media (max-width: 640px) {
+    .pqs-popover {
+        left: 4vw !important;
+        right: 4vw;
+        width: auto;
+    }
+    .portal-main .pqs-search-bar,
+    .portal-main .pqs-lupa-bar,
+    .portal-main .pqs-viewer-header,
+    .portal-main .pqs-viewer-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .portal-main .pqs-wrap .button,
+    .portal-main .pqs-modal .button {
+        min-height: 40px;
+    }
+    .portal-main .pqs-search-bar .button,
+    .portal-main .pqs-lupa-bar .button,
+    .portal-main .pqs-viewer-actions .button {
+        width: 100%;
+    }
+    .portal-main .pqs-input,
+    .portal-main .pqs-lupa-bar input,
+    .portal-main .pqs-lupa-bar select {
+        min-width: 0;
+        width: 100%;
+        max-width: none;
+    }
+    .portal-main .pqs-modal {
+        align-items: stretch;
+        padding: 0;
+    }
+    .portal-main .pqs-modal-dialog {
+        width: 100%;
+        max-width: none;
+        height: 100%;
+        max-height: none;
+        border-radius: 0;
+    }
 }

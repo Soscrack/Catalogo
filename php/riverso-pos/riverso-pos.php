@@ -3,7 +3,7 @@
  * Plugin Name: Riverso POS
  * Plugin URI: https://riverso.cl
  * Description: Sistema POS/mini-ERP integrado con WooCommerce para gestión de productos, facturas, inventario y tareas operativas.
- * Version: 1.8.15
+ * Version: 1.8.56
  * Author: Riverso
  * Author URI: https://riverso.cl
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constantes del plugin
-define('RIVERSO_POS_VERSION', '1.8.17');
+define('RIVERSO_POS_VERSION', '1.8.61');
 define('RIVERSO_POS_PLUGIN_FILE', __FILE__);
 define('RIVERSO_POS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RIVERSO_POS_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -100,6 +100,7 @@ final class Riverso_POS {
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-facto.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-factura-adjuntos.php';
         require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-messaging.php';
+        require_once RIVERSO_POS_PLUGIN_DIR . 'includes/helpers-smtp.php';
         
         // Aliases de compatibilidad: cargar clases movidas a core/
         // (permiten que código antiguo siga usando el path antiguo)
@@ -271,6 +272,13 @@ final class Riverso_POS {
                     RIVERSO_POS_PLUGIN_DIR . 'core/rest/class-rest-module.php',
                 ],
             ],
+            'printing' => [
+                'file' => 'class-print-module.php',
+                'class' => 'Riverso_Print_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'core/printing/class-print-module.php',
+                ],
+            ],
             'quotes'    => ['file' => 'class-received-quote-module.php', 'class' => 'Riverso_POS_Received_Quote_Module'],
             'costs'     => ['file' => 'class-cost-history-module.php', 'class' => 'Riverso_Cost_History_Module'],
             'codes'     => ['file' => 'class-supplier-links-module.php', 'class' => 'Riverso_Supplier_Links_Module'],
@@ -330,7 +338,49 @@ final class Riverso_POS {
                 ],
             ],
             'import'    => ['file' => 'class-mamut-import-module.php', 'class' => 'Riverso_Mamut_Import_Module'],
-            'customer-quotes' => ['file' => 'class-customer-quote-module.php', 'class' => 'Riverso_Customer_Quote_Module'],
+            'customer-quotes' => [
+                'file' => 'class-customer-quote-module.php',
+                'class' => 'Riverso_Customer_Quote_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'sales/customer_quotes/class-customer-quote-module.php',
+                    RIVERSO_POS_PLUGIN_DIR . 'modules/customer-quotes/class-customer-quote-module.php',
+                ],
+            ],
+            'customers' => [
+                'file' => 'class-customer-module.php',
+                'class' => 'Riverso_Customer_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'sales/customers/class-customer-module.php',
+                ],
+            ],
+            'billing' => [
+                'file' => 'class-billing-module.php',
+                'class' => 'Riverso_Billing_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'sales/billing/class-billing-module.php',
+                ],
+            ],
+            'cash' => [
+                'file' => 'class-cash-module.php',
+                'class' => 'Riverso_Cash_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'sales/cash/class-cash-module.php',
+                ],
+            ],
+            'reception' => [
+                'file' => 'class-purchase-reception-module.php',
+                'class' => 'Riverso_Purchase_Reception_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'purchases/reception/class-purchase-reception-module.php',
+                ],
+            ],
+            'notices' => [
+                'file' => 'class-purchase-notice-module.php',
+                'class' => 'Riverso_Purchase_Notice_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'purchases/notices/class-purchase-notice-module.php',
+                ],
+            ],
             'pos'             => [
                 'file' => 'class-pos-module.php',
                 'class' => 'Riverso_POS_Module',
@@ -404,6 +454,7 @@ final class Riverso_POS {
             RIVERSO_POS_PLUGIN_DIR . 'inventory/stock/class-stock-service.php',
             RIVERSO_POS_PLUGIN_DIR . 'inventory/reservations/class-reservation-service.php',
             RIVERSO_POS_PLUGIN_DIR . 'inventory/stock_count/class-stock-count-service.php',
+            RIVERSO_POS_PLUGIN_DIR . 'inventory/sales/class-sale-stock-service.php',
             RIVERSO_POS_PLUGIN_DIR . 'woocommerce/woocommerce-module.php',
             RIVERSO_POS_PLUGIN_DIR . 'purchases/purchase_orders/class-purchase-order-module.php',
             RIVERSO_POS_PLUGIN_DIR . 'purchases/reception/class-reception-service.php',

@@ -82,6 +82,9 @@ $can_manage_codes = current_user_can('riverso_manage_codes');
             <input type="text" id="products-search" class="regular-text" placeholder="SKU Local, Online, código proveedor/catálogo, nombre o barcode" autocomplete="off">
             <div id="products-search-suggestions" style="display:none; position:absolute; left:0; top:100%; z-index:100; background:#fff; border:1px solid #c3c4c7; box-shadow:0 2px 8px rgba(0,0,0,.1); max-height:220px; overflow-y:auto; min-width:100%; width:max-content;"></div>
         </span>
+        <button type="button" class="button" id="products-scan" title="Escanear código de barras" aria-label="Escanear código de barras">
+            <span class="dashicons dashicons-camera" style="margin-top:3px;"></span>
+        </button>
         <button class="button" id="products-reload">Actualizar</button>
         <?php if ($can_manage): ?>
             <button class="button button-primary" id="products-new">Nuevo producto local</button>
@@ -114,10 +117,11 @@ $can_manage_codes = current_user_can('riverso_manage_codes');
         <tbody id="products-tbody"><tr><td colspan="9">Cargando...</td></tr></tbody>
     </table>
 
-    <div style="margin-top:12px; display:flex; gap:8px; justify-content:center;">
-        <button class="button" id="products-prev" style="display:none;">← Anterior</button>
+    <div id="products-pager" style="margin-top:12px; display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap;">
+        <button type="button" class="button" id="products-prev" style="display:none;">← Anterior</button>
+        <span id="products-page-numbers" style="display:inline-flex; gap:4px; flex-wrap:wrap;"></span>
         <span id="products-page-info" style="align-self:center; color:#666;"></span>
-        <button class="button" id="products-next" style="display:none;">Siguiente →</button>
+        <button type="button" class="button" id="products-next" style="display:none;">Siguiente →</button>
     </div>
 
     <?php if ($can_manage): ?>
@@ -503,7 +507,7 @@ $can_manage_codes = current_user_can('riverso_manage_codes');
 
         <!-- TAB: CÓDIGOS PROVEEDOR -->
         <div class="detail-tab-content" id="tab-suppliers" style="display:none;">
-            <p>Para asignar un código hay que elegir primero el proveedor y después el código de ese proveedor.</p>
+            <p>Elige el proveedor y, si todavía no hay código, asígnalo solo. El código se agrega cuando aparezca en un folio.</p>
 
             <div class="supplier-link-form">
                 <div class="supplier-link-step">
@@ -511,7 +515,8 @@ $can_manage_codes = current_user_can('riverso_manage_codes');
                         <span class="supplier-step-num">1</span> Proveedor <span class="supplier-step-req">*</span>
                     </label>
                     <input type="text" id="supplier-provider-search" class="regular-text"
-                           placeholder="Buscar proveedor por nombre o RUT..." autocomplete="off">
+                           placeholder="Buscar proveedor por nombre, apodo o RUT..." autocomplete="off">
+                    <button type="button" class="button" id="supplier-provider-lupa" title="Buscar por nombre o apodo">🔍</button>
                     <div id="supplier-provider-results" class="supplier-picker-results"></div>
                     <div id="supplier-provider-selected" class="supplier-picked"></div>
                     <input type="hidden" id="supplier-id-select">
@@ -538,6 +543,7 @@ $can_manage_codes = current_user_can('riverso_manage_codes');
 
                 <p>
                     <button class="button button-primary" id="supplier-link-btn" disabled>Asignar código proveedor</button>
+                    <button type="button" class="button" id="supplier-known-btn" disabled>Asignar solo el proveedor</button>
                     <button type="button" class="button" id="supplier-link-reset">Limpiar</button>
                     <span id="supplier-link-state" class="description"></span>
                 </p>
@@ -1261,7 +1267,7 @@ jQuery(function($){
     }
     let searchTimeout = null;
     let currentOffset = 0;
-    let currentLimit = 20;
+    let currentLimit = 30;
     let currentTotal = 0;
     let currentPages = 0;
 
@@ -1478,7 +1484,9 @@ jQuery(function($){
         $('#products-counter').text(`Mostrando ${startItem} a ${endItem} de ${currentTotal}`);
 
         const currentPage = Math.floor(currentOffset / currentLimit) + 1;
-        $('#products-page-info').text(`Página ${currentPage} de ${currentPages || 1}`);
+        const totalPages = currentPages || 1;
+        $('#products-page-info').text(`Página ${currentPage} de ${totalPages}`);
+        renderProductPageNumbers(currentPage, totalPages);
 
         if (currentOffset > 0) {
             $('#products-prev').show();
@@ -1513,6 +1521,28 @@ jQuery(function($){
             currentPages = r.data.pages || 0;
             render(r.data.items || []);
         });
+    }
+
+    function renderProductPageNumbers(currentPage, totalPages) {
+        const $box = $('#products-page-numbers');
+        $box.empty();
+        if (totalPages <= 1) {
+            return;
+        }
+        const windowSize = 5;
+        let start = Math.max(1, currentPage - Math.floor(windowSize / 2));
+        let end = Math.min(totalPages, start + windowSize - 1);
+        start = Math.max(1, end - windowSize + 1);
+        for (let page = start; page <= end; page += 1) {
+            const $btn = $('<button type="button" class="button"></button>').text(String(page));
+            if (page === currentPage) {
+                $btn.addClass('button-primary').attr('aria-current', 'page');
+            }
+            $btn.on('click', function () {
+                loadPage((page - 1) * currentLimit);
+            });
+            $box.append($btn);
+        }
     }
 
     function loadPage(offset) {
@@ -1795,6 +1825,7 @@ jQuery(function($){
         const ready = !!(code && code.length >= 2 && supplierId);
 
         $('#supplier-link-btn').prop('disabled', !ready).css('opacity', ready ? '1' : '0.5');
+        $('#supplier-known-btn').prop('disabled', !supplierId);
 
         let state = '';
         if (!supplierId) {
@@ -1888,6 +1919,17 @@ jQuery(function($){
                         ${purchaseUnitsHtml}
                     </div>
                 </div>`;
+            });
+        }
+        const known = (currentProduct && currentProduct.proveedores_conocidos) || [];
+        if (known.length) {
+            html += '<h4>Proveedor, sin código</h4>';
+            known.forEach(function(k) {
+                const badge = parseInt(k.provisional, 10) ? ' <span style="color:#9a6700;">apodo, sin factura</span>' : '';
+                html += `<div class="supplier-code-item"><div><strong>${esc(k.nombre)}</strong>${badge}<br>
+                    <small>Sin código de proveedor</small>
+                    <div style="margin-top:6px;"><button type="button" class="button button-small btn-known-remove" data-id="${k.id}">Quitar</button></div>
+                    </div></div>`;
             });
         }
         $('#suppliers-list').html(html || '<p style="color:#666;">Sin códigos asignados.</p>');
@@ -2756,6 +2798,72 @@ jQuery(function($){
     }
 
     $('#supplier-link-reset').on('click', resetSupplierLinkForm);
+
+    $('#supplier-provider-lupa').on('click', function() {
+        if (!window.RiversoSupplierPicker || !currentProduct) {
+            return;
+        }
+        window.RiversoSupplierPicker.open({
+            ajaxUrl: ajaxurl,
+            nonce: nonce,
+            title: 'Buscar proveedor',
+            query: $('#supplier-provider-search').val(),
+            onSelect: function(supplier) {
+                $('#supplier-id-select').val(supplier.id);
+                $('#supplier-provider-search').val(supplier.nombre || '');
+                $('#supplier-provider-selected').text('Proveedor: ' + (supplier.nombre || ''));
+                $('#supplier-provider-results').empty().hide();
+                setSupplierCodeStepEnabled(true);
+                updateSupplierLinkBtnState();
+            }
+        });
+    });
+
+    $('#supplier-known-btn').on('click', function() {
+        const supplierId = $('#supplier-id-select').val();
+        if (!currentProduct || !supplierId) {
+            alert('Selecciona primero el proveedor');
+            return;
+        }
+        $.post(ajaxurl, {
+            action: 'riverso_assign_known_supplier',
+            nonce: nonce,
+            producto_base_id: currentProduct.id,
+            proveedor_id: supplierId
+        }, function(r) {
+            if (!r.success) {
+                alert(r.data?.message || 'No se pudo asignar el proveedor');
+                return;
+            }
+            $.post(ajaxurl, { action: 'riverso_products_get', nonce: nonce, id: currentProduct.id }, function(resp) {
+                if (resp.success) {
+                    showDetail(resp.data.item || resp.data);
+                }
+            });
+        });
+    });
+
+    $(document).on('click', '.btn-known-remove', function() {
+        const id = $(this).data('id');
+        if (!id || !currentProduct) {
+            return;
+        }
+        $.post(ajaxurl, {
+            action: 'riverso_remove_known_supplier',
+            nonce: nonce,
+            id: id
+        }, function(r) {
+            if (!r.success) {
+                alert(r.data?.message || 'No se pudo quitar');
+                return;
+            }
+            $.post(ajaxurl, { action: 'riverso_products_get', nonce: nonce, id: currentProduct.id }, function(resp) {
+                if (resp.success) {
+                    showDetail(resp.data.item || resp.data);
+                }
+            });
+        });
+    });
 
     // Paso 1: proveedor
     $(document).on('input', '#supplier-provider-search', function(){
@@ -5167,6 +5275,20 @@ jQuery(function($){
         loadCatalogSearchSuggestions();
     });
 
+    $('#products-scan').on('click', function(){
+        if (!window.RiversoBarcodeScanner) {
+            return;
+        }
+        window.RiversoBarcodeScanner.open({
+            onCode: function(code) {
+                $('#products-search').val(code);
+                currentOffset = 0;
+                clearTimeout(searchTimeout);
+                load();
+            }
+        });
+    });
+
     $('#products-prev').on('click', function(){
         loadPage(currentOffset - currentLimit);
     });
@@ -5668,7 +5790,7 @@ jQuery(function($){
 			return;
 		}
 
-		// 1. Guardar categorías seleccionadas
+		// Guardar categorías: el servidor cierra la tarea validar_categoria
 		const selectedCats = [];
 		$('#online-categories-tree .category-checkbox:checked').each(function() {
 			selectedCats.push(parseInt($(this).val()));
@@ -5685,31 +5807,14 @@ jQuery(function($){
 				return;
 			}
 
-			// 2. Completar tarea
-			const catNames = $('#online-categories-tree .category-checkbox:checked').map(function() {
-				return $(this).closest('label').find('span').first().text();
-			}).get().join(', ');
-
-			$.post(ajaxurl, {
-				action: 'riverso_complete_task',
-				nonce: riverso_pos_nonce,
-				task_id: taskId,
-				notas_completado: 'Categorías aceptadas desde Hub: ' + catNames
-			}, function(r2) {
-				if (!r2.success) {
-					alert('Error al completar tarea: ' + r2.data.message);
-					return;
-				}
-
-				alert('¡Categorías aceptadas y tarea completada exitosamente!');
-				$('#online-categories-task-panel').hide();
-				// Refrescar datos del producto
-				$.post(ajaxurl, { action: 'riverso_products_get', nonce, id: currentProduct.id }, function(r) {
-                    if (r.success && r.data.item) {
-                        showDetail(r.data.item);
-                    }
-                });
-			});
+			alert('¡Categorías aceptadas y tarea completada exitosamente!');
+			$('#online-categories-task-panel').hide();
+			// Refrescar datos del producto
+			$.post(ajaxurl, { action: 'riverso_products_get', nonce, id: currentProduct.id }, function(r) {
+                if (r.success && r.data.item) {
+                    showDetail(r.data.item);
+                }
+            });
 		});
 	});
 

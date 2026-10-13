@@ -53,6 +53,13 @@ class Riverso_Scan_Module {
     }
 
     /**
+     * Subir y confirmar: también quien recibe mercadería (documento que llega con el pedido).
+     */
+    private function user_can_ingest() {
+        return $this->user_can_process() || current_user_can('riverso_receive_items');
+    }
+
+    /**
      * URL del visor (siempre proxy WP autenticado; sirve copia local).
      */
     private function file_view_url($archivo_id, $page = 1) {
@@ -95,7 +102,7 @@ class Riverso_Scan_Module {
      */
     public function ajax_upload() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!$this->user_can_process()) {
+        if (!$this->user_can_ingest()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
 
@@ -149,7 +156,7 @@ class Riverso_Scan_Module {
      */
     public function ajax_archivo_status() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!$this->user_can_view()) {
+        if (!$this->user_can_view() && !$this->user_can_ingest()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
 
@@ -1112,7 +1119,7 @@ class Riverso_Scan_Module {
 
     public function ajax_confirm() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
-        if (!$this->user_can_process()) {
+        if (!$this->user_can_ingest()) {
             wp_send_json_error(['message' => 'Sin permisos']);
         }
 

@@ -7,8 +7,11 @@
  * - SALIDA: venta POS
  * - AJUSTE: corrección manual
  * - CORRECCION: cierre de inventario de lugar/producto
- * - VENTA: (proyectado) descuenta preferido y luego "?"
- * - RECEPCIÓN: recepción parcial
+ * - VENTA: salida por documento de venta (ver Riverso_Sale_Stock_Service)
+ * - REVERSA_VENTA: devuelve lo descontado por un documento eliminado
+ * - RECEPCIÓN: entrada por recepción de compra (zona Recepción)
+ * - REVERSA_RECEPCION: anula una recepción no ordenada
+ * - RECLAMO: faltante o mal estado detectado al ordenar (espera nota de crédito)
  * - DEVOLUCIÓN: devolución de cliente
  * - APERTURA: apertura de envase
  * - BOLSA: generación de bolsa
@@ -27,13 +30,19 @@ class Riverso_Movement {
         'salida' => 'Salida (venta)',
         'ajuste' => 'Ajuste de stock',
         'correccion' => 'Corrección por inventario',
-        'recepcion' => 'Recepción parcial',
+        'recepcion' => 'Recepción de compra',
         'venta' => 'Venta finalizada',
         'devolcion' => 'Devolución cliente',
         'apertura' => 'Apertura de envase',
         'bolsa' => 'Generación de bolsa',
         'traslado' => 'Traslado entre ubicaciones',
+        'reversa_venta' => 'Reversa de venta',
+        'reversa_recepcion' => 'Reversa de recepción',
+        'reclamo' => 'Reclamo a proveedor',
     ];
+
+    /** @var bool|null Columnas origen_cantidad/contado_en presentes (fase 71). */
+    private static $has_origin_columns = null;
 
     /**
      * Crea un movimiento de stock
@@ -62,12 +71,20 @@ class Riverso_Movement {
             self::_update_location_balance($producto_base_id, $origen_id, $stock_origen_nuevo);
         }
 
-        // Obtener saldo anterior (destino si hay, sino total)
-        $balance_ubicacion = $destino_id > 0 ? $destino_id : null;
+        // Ubicación cuyo saldo cambia: destino; en salida/venta sin destino, el origen
+        // (antes la salida con solo origen no tocaba ningún saldo).
+        $es_salida = in_array($tipo, ['salida', 'venta', 'reclamo', 'reversa_recepcion'], true);
+        $saldo_ubicacion_id = $destino_id;
+        if ($es_salida && $destino_id <= 0 && $origen_id > 0) {
+            $saldo_ubicacion_id = $origen_id;
+        }
+
+        // Obtener saldo anterior (ubicación si hay, sino total)
+        $balance_ubicacion = $saldo_ubicacion_id > 0 ? $saldo_ubicacion_id : null;
         $stock_anterior = self::get_current_balance($producto_base_id, $balance_ubicacion);
 
         // Calcular saldo nuevo
-        $cantidad_neta = ($tipo === 'salida' || $tipo === 'venta') ? -abs($cantidad) : $cantidad;
+        $cantidad_neta = $es_salida ? -abs($cantidad) : $cantidad;
         if ($tipo === 'traslado' && $origen_id > 0 && $destino_id > 0) {
             $cantidad_neta = $cantidad;
         }
@@ -124,8 +141,8 @@ class Riverso_Movement {
         $movement_id = $wpdb->insert_id;
 
         // Actualizar saldo en producto_ubicacion
-        if ($destino_id > 0) {
-            self::_update_location_balance($producto_base_id, $destino_id, $stock_nuevo);
+        if ($saldo_ubicacion_id > 0) {
+            self::_update_location_balance($producto_base_id, $saldo_ubicacion_id, $stock_nuevo, $tipo);
         } elseif (!isset($metadata['ubicacion_destino'])) {
             self::_update_total_balance($producto_base_id, $stock_nuevo);
         }
@@ -175,11 +192,13 @@ class Riverso_Movement {
     }
 
     /**
-     * Actualiza saldo en ubicación específica
+     * Actualiza saldo en ubicación específica.
+     * Corrección (conteo) deja el saldo "contado"; venta y su reversa lo dejan "estimado".
      */
-    private static function _update_location_balance($producto_base_id, $ubicacion_id, $new_balance) {
+    private static function _update_location_balance($producto_base_id, $ubicacion_id, $new_balance, $tipo = '') {
         global $wpdb;
         $prefix = $wpdb->prefix;
+        $extra = self::origin_fields($tipo);
 
         $exists = $wpdb->get_var(
             $wpdb->prepare(
@@ -193,22 +212,41 @@ class Riverso_Movement {
         if ($exists) {
             $wpdb->update(
                 "{$prefix}riverso_producto_ubicacion",
-                ['cantidad' => $new_balance],
-                ['product_id' => $producto_base_id, 'ubicacion_id' => $ubicacion_id],
-                ['%f'],
-                ['%d', '%d']
+                array_merge(['cantidad' => $new_balance], $extra),
+                ['product_id' => $producto_base_id, 'ubicacion_id' => $ubicacion_id]
             );
         } else {
             $wpdb->insert(
                 "{$prefix}riverso_producto_ubicacion",
-                [
+                array_merge([
                     'product_id' => $producto_base_id,
                     'ubicacion_id' => $ubicacion_id,
                     'cantidad' => $new_balance,
-                ],
-                ['%d', '%d', '%f']
+                ], $extra)
             );
         }
+    }
+
+    /**
+     * @param string $tipo
+     * @return array<string, mixed>
+     */
+    private static function origin_fields($tipo) {
+        if (self::$has_origin_columns === null) {
+            global $wpdb;
+            $cols = $wpdb->get_col("SHOW COLUMNS FROM {$wpdb->prefix}riverso_producto_ubicacion", 0);
+            self::$has_origin_columns = is_array($cols) && in_array('origen_cantidad', $cols, true);
+        }
+        if (!self::$has_origin_columns) {
+            return [];
+        }
+        if ($tipo === 'correccion') {
+            return ['origen_cantidad' => 'contado', 'contado_en' => current_time('mysql')];
+        }
+        if (in_array($tipo, ['venta', 'reversa_venta', 'recepcion'], true)) {
+            return ['origen_cantidad' => 'estimado'];
+        }
+        return [];
     }
 
     /**

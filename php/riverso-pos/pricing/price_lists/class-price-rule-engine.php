@@ -5,9 +5,10 @@
  * Pipeline por tramo:
  *   1. unitario0 = fórmula(P) + piso unitario (total_minimo)
  *   2. T0 = unitario0 × Q
- *   3. T1 = fórmula_total(T) si existe (T = total de línea antes del ajuste)
- *   4. T_final = max(T1, piso_total) si hay piso de total
- *   5. unitario = T_final / Q (hasta 4 decimales si hubo ajuste de total)
+ *   3. T0 = min(T0, P × Q + máx ΔT) si hay tope de alza (máx ΔT = fórmula en P)
+ *   4. T1 = fórmula_total(T) si existe (T = total de línea antes del ajuste)
+ *   5. T_final = max(T1, piso_total) si hay piso de total
+ *   6. unitario = T_final / Q (hasta 4 decimales si hubo ajuste de total)
  *
  * @package Riverso_POS
  */
@@ -212,6 +213,263 @@ class Riverso_Price_Rule_Engine {
     }
 
     /**
+     * Cantidad entera (o múltiplos de $step) para un monto total deseado.
+     *
+     * Dentro de cada tramo el total es no decreciente, así que se busca
+     * por binaria. Entre tramos puede bajar: se evalúa cada tramo aparte.
+     * Con $step > 1 solo se consideran cantidades múltiplo de step (paquetes).
+     *
+     * @param int $step Unidades por paquete (>= 1). Resultado qty = k * step.
+     * @return array{
+     *   debajo: array{qty:int,packs:int,total:float,unitario:float}|null,
+     *   arriba: array{qty:int,packs:int,total:float,unitario:float}|null,
+     *   exacto: bool,
+     *   minimo: array{qty:int,packs:int,total:float,unitario:float}|null
+     * }
+     */
+    public static function qty_for_total(array $tiers, $p_asignado, $monto, $step = 1) {
+        $p_asignado = (float) $p_asignado;
+        $monto = (float) $monto;
+        $step = max(1, (int) $step);
+        $empty = [
+            'debajo' => null,
+            'arriba' => null,
+            'exacto' => false,
+            'minimo' => null,
+        ];
+        if ($monto <= 0 || empty($tiers)) {
+            return $empty;
+        }
+
+        $debajo = null;
+        $arriba = null;
+        $minimo = null;
+
+        foreach ($tiers as $tier) {
+            $tier_lo = max(1, (int) ceil(isset($tier['qty_min']) ? (float) $tier['qty_min'] : 1));
+            $has_max = isset($tier['qty_max']) && $tier['qty_max'] !== null && $tier['qty_max'] !== '';
+            if ($has_max) {
+                $tier_hi = (int) floor((float) $tier['qty_max']);
+            } else {
+                $tier_hi = self::qty_upper_bound_for_tier($tier, $p_asignado, $monto);
+            }
+            if ($tier_hi < $tier_lo) {
+                continue;
+            }
+
+            // Alinear a múltiplos de step dentro del tramo.
+            $k_lo = (int) ceil($tier_lo / $step);
+            $k_hi = (int) floor($tier_hi / $step);
+            if ($k_hi < $k_lo) {
+                continue;
+            }
+
+            $lo = $k_lo * $step;
+            $eval_lo = self::compute_tier($tier, $p_asignado, (float) $lo);
+            $cand_min = self::qty_pack_row($lo, $step, (float) $eval_lo['t_final'], (float) $eval_lo['unitario']);
+            if ($minimo === null || $cand_min['total'] < $minimo['total']
+                || (abs($cand_min['total'] - $minimo['total']) < 0.001 && $cand_min['qty'] < $minimo['qty'])) {
+                $minimo = $cand_min;
+            }
+
+            // Mayor k en el tramo con total <= monto.
+            $best_leq = null;
+            $left = $k_lo;
+            $right = $k_hi;
+            while ($left <= $right) {
+                $mid_k = (int) floor(($left + $right) / 2);
+                $qty = $mid_k * $step;
+                $eval = self::compute_tier($tier, $p_asignado, (float) $qty);
+                $total = (float) $eval['t_final'];
+                if ($total <= $monto + 0.001) {
+                    $best_leq = self::qty_pack_row($qty, $step, $total, (float) $eval['unitario']);
+                    $left = $mid_k + 1;
+                } else {
+                    $right = $mid_k - 1;
+                }
+            }
+            if ($best_leq !== null) {
+                if ($debajo === null || $best_leq['qty'] > $debajo['qty']) {
+                    $debajo = $best_leq;
+                }
+            }
+
+            // Menor k en el tramo con total > monto.
+            $best_gt = null;
+            $left = $k_lo;
+            $right = $k_hi;
+            while ($left <= $right) {
+                $mid_k = (int) floor(($left + $right) / 2);
+                $qty = $mid_k * $step;
+                $eval = self::compute_tier($tier, $p_asignado, (float) $qty);
+                $total = (float) $eval['t_final'];
+                if ($total > $monto + 0.001) {
+                    $best_gt = self::qty_pack_row($qty, $step, $total, (float) $eval['unitario']);
+                    $right = $mid_k - 1;
+                } else {
+                    $left = $mid_k + 1;
+                }
+            }
+            if ($best_gt !== null) {
+                if ($arriba === null
+                    || $best_gt['total'] < $arriba['total'] - 0.001
+                    || (abs($best_gt['total'] - $arriba['total']) < 0.001 && $best_gt['qty'] < $arriba['qty'])) {
+                    $arriba = $best_gt;
+                }
+            }
+        }
+
+        if ($debajo !== null) {
+            $exacto = abs($debajo['total'] - $monto) < 0.01;
+            if (!$exacto) {
+                $next_q = $debajo['qty'] + $step;
+                $eval_next = self::evaluate_with_total($tiers, $p_asignado, (float) $next_q);
+                if ($eval_next['total'] !== null && (float) $eval_next['total'] > $monto + 0.001) {
+                    $cand = self::qty_pack_row($next_q, $step, (float) $eval_next['total'], (float) $eval_next['price']);
+                    if ($arriba === null
+                        || $cand['total'] < $arriba['total'] - 0.001
+                        || (abs($cand['total'] - $arriba['total']) < 0.001 && $cand['qty'] < $arriba['qty'])) {
+                        $arriba = $cand;
+                    }
+                }
+            } else {
+                $arriba = null;
+            }
+            return [
+                'debajo' => $debajo,
+                'arriba' => $exacto ? null : $arriba,
+                'exacto' => $exacto,
+                'minimo' => $minimo,
+            ];
+        }
+
+        return [
+            'debajo' => null,
+            'arriba' => $arriba,
+            'exacto' => false,
+            'minimo' => $minimo,
+        ];
+    }
+
+    /**
+     * Cantidad de paquetes para que la participación de esta línea ≈ monto.
+     * T_linea = T(others + k·step) × (k·step) / (others + k·step).
+     *
+     * @return array{debajo:?array,arriba:?array,exacto:bool,minimo:?array}
+     */
+    public static function qty_for_line_share(array $tiers, $p_asignado, $monto, $step = 1, $others_units = 0) {
+        $p_asignado = (float) $p_asignado;
+        $monto = (float) $monto;
+        $step = max(1, (int) $step);
+        $others = max(0.0, (float) $others_units);
+        $empty = [
+            'debajo' => null,
+            'arriba' => null,
+            'exacto' => false,
+            'minimo' => null,
+        ];
+        if ($monto <= 0 || empty($tiers)) {
+            return $empty;
+        }
+        if ($others <= 0.0001) {
+            return self::qty_for_total($tiers, $p_asignado, $monto, $step);
+        }
+
+        $debajo = null;
+        $arriba = null;
+        $minimo = null;
+        $max_k = 20000;
+
+        for ($k = 1; $k <= $max_k; $k++) {
+            $line_units = $k * $step;
+            $family_qty = $others + $line_units;
+            $eval = self::evaluate_with_total($tiers, $p_asignado, $family_qty);
+            if ($eval['total'] === null) {
+                continue;
+            }
+            $t_family = (float) $eval['total'];
+            $t_line = round($t_family * $line_units / $family_qty, 2);
+            $unitario = $line_units > 0 ? round($t_line / $line_units, 4) : 0.0;
+            $row = self::qty_pack_row($line_units, $step, $t_line, $unitario);
+
+            if ($minimo === null) {
+                $minimo = $row;
+            }
+
+            if ($t_line <= $monto + 0.001) {
+                $debajo = $row;
+                continue;
+            }
+            if ($arriba === null) {
+                $arriba = $row;
+            }
+            // Una vez que se pasó el monto, seguir un poco por si hay tramos que bajen.
+            if ($debajo !== null && $k > $debajo['packs'] + 500) {
+                break;
+            }
+        }
+
+        if ($debajo !== null) {
+            $exacto = abs($debajo['total'] - $monto) < 0.01;
+            return [
+                'debajo' => $debajo,
+                'arriba' => $exacto ? null : $arriba,
+                'exacto' => $exacto,
+                'minimo' => $minimo,
+            ];
+        }
+
+        return [
+            'debajo' => null,
+            'arriba' => $arriba,
+            'exacto' => false,
+            'minimo' => $minimo,
+        ];
+    }
+
+    private static function qty_pack_row($qty_units, $step, $total, $unitario) {
+        $qty = (int) $qty_units;
+        $step = max(1, (int) $step);
+        return [
+            'qty' => $qty,
+            'packs' => (int) floor($qty / $step),
+            'total' => (float) $total,
+            'unitario' => (float) $unitario,
+        ];
+    }
+
+    /**
+     * Límite superior de búsqueda para tramos abiertos (sin qty_max).
+     */
+    private static function qty_upper_bound_for_tier(array $tier, $p_asignado, $monto) {
+        $p_asignado = (float) $p_asignado;
+        $monto = (float) $monto;
+        $lo = max(1, (int) ceil(isset($tier['qty_min']) ? (float) $tier['qty_min'] : 1));
+
+        // Estimación: unitario mínimo plausible ≈ max(0.01, P) o resultado a Q=lo.
+        $eval_lo = self::compute_tier($tier, $p_asignado, (float) $lo);
+        $unit = max(0.01, (float) $eval_lo['unitario']);
+        $est = (int) ceil($monto / $unit) + 50;
+        $hi = min(1000000, max($lo, $est));
+
+        // Ampliar si aún cabe en el monto (tope / redondeos pueden bajar el unitario).
+        $guard = 0;
+        while ($guard < 20) {
+            $guard++;
+            $eval = self::compute_tier($tier, $p_asignado, (float) $hi);
+            if ((float) $eval['t_final'] > $monto + 0.001) {
+                break;
+            }
+            $next = min(1000000, $hi * 2);
+            if ($next <= $hi) {
+                break;
+            }
+            $hi = $next;
+        }
+        return $hi;
+    }
+
+    /**
      * @param string $formula
      * @param float  $p_asignado
      * @param float|null $t_total
@@ -264,14 +522,19 @@ class Riverso_Price_Rule_Engine {
         $formula_total = isset($tier['formula_total']) ? self::sanitize_formula($tier['formula_total']) : '';
         $piso_total = (isset($tier['piso_total']) && $tier['piso_total'] !== null && $tier['piso_total'] !== '')
             ? (float) $tier['piso_total'] : null;
+        $delta_max = self::compute_delta_max($tier, $p_asignado);
 
-        $has_total_stage = ($formula_total !== '') || ($piso_total !== null);
+        $has_total_stage = ($formula_total !== '') || ($piso_total !== null) || ($delta_max !== null);
 
         if (!$has_total_stage) {
             $unitario = round($unitario0, 2);
             return [
                 'unitario0' => round($unitario0, 4),
                 't0' => round($unitario * $qty, 2),
+                'base_sin_cambios' => null,
+                'delta_max' => null,
+                't_tope' => null,
+                'topado' => false,
                 't_after_formula' => null,
                 't_final' => round($unitario * $qty, 2),
                 'unitario' => $unitario,
@@ -281,13 +544,25 @@ class Riverso_Price_Rule_Engine {
         }
 
         $t_work = $t0;
+        $base_sin_cambios = null;
+        $t_tope = null;
+        $topado = false;
+        if ($delta_max !== null) {
+            $base_sin_cambios = round($p_asignado * $qty, 2);
+            $t_tope = round($base_sin_cambios + $delta_max, 2);
+            if ($t0 > $t_tope) {
+                $t_work = $t_tope;
+                $topado = true;
+            }
+        }
+
         $t_after_formula = null;
         if ($formula_total !== '') {
             try {
-                $t_after_formula = self::evaluate_formula($formula_total, $p_asignado, $t0, true);
+                $t_after_formula = self::evaluate_formula($formula_total, $p_asignado, $t_work, true);
                 $t_work = round($t_after_formula, 2);
             } catch (Exception $e) {
-                $t_work = $t0;
+                $t_after_formula = null;
             }
         }
 
@@ -302,12 +577,33 @@ class Riverso_Price_Rule_Engine {
         return [
             'unitario0' => round($unitario0, 4),
             't0' => $t0,
+            'base_sin_cambios' => $base_sin_cambios,
+            'delta_max' => $delta_max !== null ? round($delta_max, 2) : null,
+            't_tope' => $t_tope,
+            'topado' => $topado,
             't_after_formula' => $t_after_formula !== null ? round($t_after_formula, 2) : null,
             't_final' => $t_final,
             'unitario' => $unitario,
             'qty' => $qty,
             'adjusted' => true,
         ];
+    }
+
+    /**
+     * Alza máxima permitida del total sobre P × Q (fórmula en P o número fijo).
+     *
+     * @return float|null null si el tramo no tiene tope
+     */
+    private static function compute_delta_max(array $tier, $p_asignado) {
+        $txt = isset($tier['max_delta_t']) ? self::sanitize_formula($tier['max_delta_t']) : '';
+        if ($txt === '') {
+            return null;
+        }
+        try {
+            return max(0.0, (float) self::evaluate_formula($txt, $p_asignado, null, false));
+        } catch (Exception $e) {
+            return null;
+        }
     }
 
     private static function compute_unitario0(array $tier, $p_asignado) {

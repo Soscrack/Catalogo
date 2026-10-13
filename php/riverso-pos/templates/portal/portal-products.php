@@ -168,9 +168,46 @@ $can_manage_families = current_user_can('riverso_manage_families');
         #help-completeness h3 { margin-top: 0; }
         #help-completeness dt { font-weight: bold; margin-top: 8px; }
         #help-completeness dd { margin: 4px 0 8px 0; }
+
+        .hub-tabs { display: flex; gap: 0; border-bottom: 2px solid #ddd; margin: 0 0 16px; }
+        .hub-tab {
+            appearance: none; background: transparent; border: 0; border-bottom: 3px solid transparent;
+            margin-bottom: -2px; padding: 10px 16px; font-size: 15px; color: #555; cursor: pointer;
+        }
+        .hub-tab.is-active { color: #1565c0; border-bottom-color: #1976d2; font-weight: 700; }
+        .pp-price-toggles { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+        .pp-price-toggles .btn-small { background: #eee; color: #333; }
+        .pp-price-toggles .btn-small.is-on { background: #1976d2; color: #fff; }
+        .pp-price-toggles .btn-small:hover { background: #d7e6f8; color: #1565c0; }
+        .pp-price-toggles .btn-small.is-on:hover { background: #1565c0; color: #fff; }
+
+        @media (max-width: 640px) {
+            .portal-products-section .products-toolbar { flex-direction: column; align-items: stretch; }
+            .portal-products-section .products-toolbar select,
+            .portal-products-section .products-toolbar input,
+            .portal-products-section .products-toolbar .btn-small { width: 100%; }
+            .portal-products-section .detail-header,
+            .portal-products-section .detail-title { align-items: flex-start; }
+            .portal-products-section .form-table,
+            .portal-products-section .form-table tbody,
+            .portal-products-section .form-table tr,
+            .portal-products-section .form-table th,
+            .portal-products-section .form-table td { display: block; width: 100%; box-sizing: border-box; }
+            .portal-products-section .form-table th { width: auto; border-bottom: 0; padding-bottom: 0; }
+            .hub-tab { flex: 1; text-align: center; padding: 12px 8px; }
+        }
     </style>
 
-    <div>
+    <div class="hub-tabs" role="tablist">
+        <button type="button" class="hub-tab is-active" id="tab-rapida-btn" data-hub="rapida">Búsqueda rápida</button>
+        <button type="button" class="hub-tab" id="tab-busqueda-btn" data-hub="busqueda">Búsqueda</button>
+    </div>
+
+    <div id="tab-rapida-content">
+        <?php require RIVERSO_POS_PLUGIN_DIR . 'templates/partials/product-quick-search.php'; ?>
+    </div>
+
+    <div id="tab-busqueda-content" style="display:none;">
         <h2 style="margin: 0 0 10px 0;">Productos</h2>
         <p style="color: #666; margin: 0 0 15px 0;">Listado de productos locales. Asigna un código de barra en la fila o ábrelo para ver el detalle.</p>
         
@@ -197,9 +234,11 @@ $can_manage_families = current_user_can('riverso_manage_families');
                 <input type="text" id="products-search" placeholder="SKU Local, Online, código proveedor/catálogo, nombre o barcode" autocomplete="off">
                 <div id="products-search-suggestions"></div>
             </div>
+            <button type="button" class="btn-small secondary" id="products-scan" title="Escanear código de barras" aria-label="Escanear código de barras">📷</button>
             <button class="btn-small secondary" id="products-reload">🔄 Actualizar</button>
             <?php if ($can_manage): ?>
                 <button class="btn-small success" id="products-new">+ Nuevo producto</button>
+                <button class="btn-small" id="products-new-online">Crear/Vincular online</button>
             <?php endif; ?>
         </div>
 
@@ -233,7 +272,6 @@ $can_manage_families = current_user_can('riverso_manage_families');
             <span id="products-page-info" style="align-self: center; color: #666; font-size: 13px;"></span>
             <button id="products-next" style="display: none;">Siguiente →</button>
         </div>
-    </div>
 
     <!-- Detail Panel -->
     <div id="product-detail-panel">
@@ -353,6 +391,64 @@ $can_manage_families = current_user_can('riverso_manage_families');
                     </td>
                 </tr>
                 <tr>
+                    <th>Unidad mínima</th>
+                    <td>
+                        <span id="local-unidad-minima-view">-</span>
+                        <label id="local-unidad-minima-edit-wrap" style="display: none;">
+                            <input type="checkbox" id="local-unidad-minima-edit"> Marcar como unidad mínima
+                        </label>
+                        <p id="local-unidad-minima-lock" style="display:none; margin:6px 0 0; font-size:12px; color:#856404; background:#fff3cd; padding:6px 8px; border-radius:4px;"></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th colspan="2" style="background:#f0f6ff;">Datos FACTO (export Excel)</th>
+                </tr>
+                <tr>
+                    <th>IVA venta</th>
+                    <td>
+                        <span id="local-facto-iva-view">-</span>
+                        <select id="local-facto-iva-edit" style="display: none;">
+                            <option value="afecto">Afecto</option>
+                            <option value="exento">Exento</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Marca</th>
+                    <td>
+                        <span id="local-marca-view">-</span>
+                        <input type="text" id="local-marca-edit" style="display: none;">
+                    </td>
+                </tr>
+                <tr>
+                    <th>Modelo</th>
+                    <td>
+                        <span id="local-modelo-view">-</span>
+                        <input type="text" id="local-modelo-edit" style="display: none;">
+                    </td>
+                </tr>
+                <tr>
+                    <th>Categoría FACTO</th>
+                    <td>
+                        <span id="local-facto-cat-view">-</span>
+                        <input type="text" id="local-facto-cat-edit" style="display: none;" placeholder="Ej: Ferreteria Varios">
+                    </td>
+                </tr>
+                <tr>
+                    <th>Stock mínimo</th>
+                    <td>
+                        <span id="local-stock-min-view">-</span>
+                        <input type="number" id="local-stock-min-edit" min="0" step="0.001" style="display: none;">
+                    </td>
+                </tr>
+                <tr>
+                    <th>Descripción FACTO</th>
+                    <td>
+                        <span id="local-desc-facto-view">-</span>
+                        <textarea id="local-desc-facto-edit" rows="2" style="display: none;"></textarea>
+                    </td>
+                </tr>
+                <tr>
                     <th>Origen</th>
                     <td id="local-origen">-</td>
                 </tr>
@@ -368,7 +464,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
                         <div id="local-precio-edit" style="display: none; background: #f9f9f9; padding: 10px; border-radius: 4px;">
                             <table style="width: 100%; margin-bottom: 8px;">
                                 <tr>
-                                    <td style="width: 30%;"><strong>Costo Ref (neto):</strong></td>
+                                    <td style="width: 30%;"><strong id="precio-c-ref-label">Costo (neto):</strong></td>
                                     <td><span id="precio-c-ref">-</span></td>
                                 </tr>
                                 <tr>
@@ -421,6 +517,10 @@ $can_manage_families = current_user_can('riverso_manage_families');
                             <button class="btn-small" id="familia-cancel-btn">Cancelar</button>
                         </div>
                     </td>
+                </tr>
+                <tr>
+                    <th>Emparejamiento</th>
+                    <td id="local-emp-view">-</td>
                 </tr>
                 <tr>
                     <th>Imagen Local</th>
@@ -544,7 +644,11 @@ $can_manage_families = current_user_can('riverso_manage_families');
                 <strong>⚠️ Falta código proveedor</strong>
                 <p style="margin: 6px 0 0 0;">Asigna al menos un código proveedor para completar el producto.</p>
             </div>
-            <p>Buscar y asignar códigos proveedor.</p>
+            <p>Puedes dejar solo el proveedor. El código se agrega cuando aparezca en un folio.</p>
+            <div style="margin: 12px 0;">
+                <button type="button" class="btn-small" id="supplier-known-open">🔍 Buscar proveedor</button>
+                <p class="description" id="supplier-known-picked" style="margin:6px 0 0;"></p>
+            </div>
             <div style="margin: 12px 0;">
                 <input type="text" id="supplier-code-search" placeholder="Código proveedor (p.ej. 123456)">
                 <div id="supplier-search-results" style="display: none; border: 1px solid #ddd; max-height: 180px; overflow: auto; margin-top: 6px;"></div>
@@ -732,6 +836,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
         </dl>
         <button class="btn-small" id="help-close" style="margin-top: 8px;">Cerrar</button>
     </div>
+    </div>
 </div>
 
 <script>
@@ -743,8 +848,11 @@ $can_manage_families = current_user_can('riverso_manage_families');
     const canManageCategories = <?php echo $can_manage_categories ? 'true' : 'false'; ?>;
     const canManageFamilies = <?php echo $can_manage_families ? 'true' : 'false'; ?>;
     const canEditWarehouse = <?php echo (current_user_can('riverso_edit_warehouse') || current_user_can('manage_options')) ? 'true' : 'false'; ?>;
-    
+    const categoriesUrl = <?php echo wp_json_encode(home_url('/interno/categories/')); ?>;
+
     let currentProduct = null;
+    let productViewMode = 'neto';
+    let productCostMode = 'tras_dr';
     let currentOffset = 0;
     let totalCount = 0;
     const LIMIT = 20;
@@ -771,6 +879,45 @@ $can_manage_families = current_user_can('riverso_manage_families');
         const neto = Math.round((b / IVA_FACTOR) * 1000) / 1000;
         return { bruto: b, neto, iva: Math.round((b - neto) * 1000) / 1000, afecto };
     }
+    function pickProductCostPair(precio, mode) {
+        mode = mode || productCostMode;
+        if (!precio) return { neto: null, bruto: null };
+        const bases = precio.costo_bases;
+        if (bases && typeof bases === 'object') {
+            const key = mode === 'referencia' ? 'referencia'
+                : (mode === 'tras_dr_flete' ? 'tras_dr_flete'
+                : (mode === 'tras_dr_folio' ? 'tras_dr_folio' : 'tras_dr'));
+            let pair = bases[key];
+            if (!pair && key === 'referencia') pair = bases.tras_dr;
+            if (!pair && key === 'tras_dr_folio') pair = bases.tras_dr;
+            if (!pair && key === 'tras_dr_flete') pair = bases.tras_dr_folio || bases.tras_dr;
+            if (pair) {
+                const neto = (pair.neto != null && !isNaN(Number(pair.neto))) ? Number(pair.neto) : null;
+                let bruto = (pair.bruto != null && !isNaN(Number(pair.bruto))) ? Number(pair.bruto) : null;
+                if (bruto === null && neto !== null) {
+                    bruto = isIvaAfecto(currentProduct)
+                        ? Math.round(neto * IVA_FACTOR * 10000) / 10000
+                        : neto;
+                }
+                return { neto, bruto };
+            }
+        }
+        const c = parseFloat(precio.c_ref || precio.costo_ref || 0);
+        if (!c) return { neto: null, bruto: null };
+        const bruto = isIvaAfecto(currentProduct)
+            ? Math.round(c * IVA_FACTOR * 10000) / 10000
+            : c;
+        return { neto: c, bruto };
+    }
+
+    function productCostModeLabel(mode) {
+        mode = mode || productCostMode;
+        if (mode === 'referencia') return 'Costo referencia';
+        if (mode === 'tras_dr_folio') return 'Costo tras D/R folio';
+        if (mode === 'tras_dr_flete') return 'Costo más flete';
+        return 'Costo con descuento/recargo';
+    }
+
     function margenNetoRatio(precioNeto, costeNeto, factorMin) {
         const p = parseFloat(precioNeto);
         const c = parseFloat(costeNeto);
@@ -789,7 +936,8 @@ $can_manage_families = current_user_can('riverso_manage_families');
     function updatePrecioNetoPreview() {
         const split = splitVenta($('#precio-p-asignado').val(), currentProduct);
         const precio = currentProduct && (currentProduct.precio_local || currentProduct.precio);
-        const cRef = precio ? parseFloat(precio.c_ref || precio.costo_ref || 0) : 0;
+        const costPair = pickProductCostPair(precio);
+        const cRef = costPair.neto != null ? costPair.neto : 0;
         const factorMin = precio ? parseFloat(precio.factor_minimo || precio.factor_min || 1.30) : 1.30;
         if (!split.bruto) {
             $('#precio-neto-preview').text('—');
@@ -880,6 +1028,18 @@ $can_manage_families = current_user_can('riverso_manage_families');
         });
     }
 
+    function empActions(p) {
+        const empId = parseInt(p.emparejamiento_id || 0, 10);
+        if (!empId) return '';
+        const nombre = p.emparejamiento_nombre || p.emparejamiento_codigo || '';
+        let html = `<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;">
+            <button type="button" class="btn-small product-emp-price" data-emp-id="${empId}" data-emp-nombre="${esc(nombre)}">Precio emparejado</button>`;
+        if (canManage) {
+            html += `<button type="button" class="btn-small product-emp-edit" data-emp-id="${empId}">Editar</button>`;
+        }
+        return html + '</div>';
+    }
+
     function loadProducts(offset = 0) {
         const status = $('#products-status').val();
         const catalogId = $('#products-catalog').val() || 0;
@@ -947,7 +1107,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
                         <td>${codigoCat}</td>
                         <td><code style="font-size:12px;">${esc(wooId)}</code></td>
                         <td>${barcodeCell}</td>
-                        <td><button type="button" class="btn-small" onclick="window.portalProducts.openDetail(${p.id})">Ver</button></td>
+                        <td><button type="button" class="btn-small" onclick="window.portalProducts.openDetail(${p.id})">Ver</button>${empActions(p)}</td>
                     </tr>`;
                 });
             }
@@ -1029,38 +1189,37 @@ $can_manage_families = current_user_can('riverso_manage_families');
         $('#local-ean-edit').prop('checked', !!(p.permite_ean13_personalizado || p.permite_ean13));
         $('#local-stock-view').text((p.stock_abierto_habilitado || p.stock_abierto) ? 'Sí' : 'No');
         $('#local-stock-edit').prop('checked', !!(p.stock_abierto_habilitado || p.stock_abierto));
+        const unitFamiliaLock = parseInt(p.unit_of_grupo_id || 0, 10) > 0;
+        $('#local-unidad-minima-view').text(p.es_unidad_minima ? 'Sí' : 'No');
+        $('#local-unidad-minima-edit').prop('checked', !!p.es_unidad_minima).prop('disabled', unitFamiliaLock);
+        if (unitFamiliaLock) {
+            const famLabel = p.unit_familia
+                ? esc(p.unit_familia.nombre || p.unit_familia.codigo_grupo || '')
+                : ('familia #' + p.unit_of_grupo_id);
+            $('#local-unidad-minima-lock').html(
+                'Unidad mínima de la familia <strong>' + famLabel + '</strong>. Cámbialo en ' +
+                '<a href="' + esc(categoriesUrl) + '?tab=families">Categorías y Familias</a>.'
+            ).show();
+        } else {
+            $('#local-unidad-minima-lock').hide().empty();
+        }
+        const ivaTipo = (p.facto_iva_tipo || 'afecto').toLowerCase();
+        $('#local-facto-iva-view').text(ivaTipo === 'exento' ? 'Exento' : 'Afecto');
+        $('#local-facto-iva-edit').val(ivaTipo === 'exento' ? 'exento' : 'afecto');
+        $('#local-marca-view').text(p.marca || '—');
+        $('#local-marca-edit').val(p.marca || '');
+        $('#local-modelo-view').text(p.modelo || '—');
+        $('#local-modelo-edit').val(p.modelo || '');
+        $('#local-facto-cat-view').text(p.facto_categoria || '—');
+        $('#local-facto-cat-edit').val(p.facto_categoria || '');
+        $('#local-stock-min-view').text(p.stock_minimo != null && p.stock_minimo !== '' ? p.stock_minimo : '—');
+        $('#local-stock-min-edit').val(p.stock_minimo != null && p.stock_minimo !== '' ? p.stock_minimo : '');
+        $('#local-desc-facto-view').text(p.descripcion_facto || '—');
+        $('#local-desc-facto-edit').val(p.descripcion_facto || '');
         $('#local-origen').text(p.origen_datos || p.origen || 'manual');
         $('#local-estado').text(p.estado || '-');
 
-        // Precio Local (campo API: precio_local)
-        const precio = p.precio_local || p.precio || null;
-        if (precio) {
-            const c_ref = parseFloat(precio.c_ref || precio.costo_ref || 0);
-            const p_ref = parseFloat(precio.p_ref || precio.precio_ref || 0);
-            const p_asignado = parseFloat(precio.p_asignado || precio.precio_asignado || 0);
-            const factor_min = parseFloat(precio.factor_minimo || precio.factor_min || 1.30);
-            const split = splitVenta(p_asignado, p);
-            const ratio = margenNetoRatio(split.neto, c_ref, factor_min);
-            const alerta = ratio.alerta;
-            const netoTxt = split.afecto
-                ? formatMoney(split.neto) + ' · IVA ' + formatMoney(split.iva)
-                : formatMoney(split.neto) + ' (exento)';
-            $('#local-precio-view').html(`
-                <div>
-                    <span style="display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:8px;background:#fef3c7;color:#92400e;">bruto</span>
-                    <span style="display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;padding:1px 7px;border-radius:8px;background:#e7f5ef;color:#007017;margin-left:4px;">neto</span>
-                </div>
-                <div>Costo (neto): ${formatMoney(c_ref)} | Venta (neto): ${netoTxt} | Asignado (bruto): <strong style="${alerta ? 'color:red;' : ''}">${formatMoney(p_asignado)}</strong></div>
-                <div style="${alerta ? 'color:red;font-weight:bold;' : ''}">Margen (neto / costo): ${ratio.label} · mín. ${factor_min.toFixed(2)}×${alerta ? ' ⚠️ bajo mínimo' : ''}</div>
-            `);
-            $('#precio-c-ref').text(formatMoney(c_ref));
-            $('#precio-p-ref').text(formatMoney(p_ref));
-            $('#precio-factor-min').text(factor_min.toFixed(2));
-            $('#precio-p-asignado').val(p_asignado || 0);
-            updatePrecioNetoPreview();
-        } else {
-            $('#local-precio-view').html('<span style="color:#999;">Sin precio asignado</span>');
-        }
+        paintLocalPrice();
 
         // Regla de Precio
         if (p.regla_precio && (p.regla_precio.nombre || p.regla_precio.id)) {
@@ -1075,8 +1234,9 @@ $can_manage_families = current_user_can('riverso_manage_families');
             $('#regla-origen').hide();
         }
 
-        // Familia
+        // Familia y emparejamiento
         renderFamiliaHub(p);
+        renderEmparejamiento(p);
         loadFamiliesDropdown();
 
         // Imagen Local
@@ -1233,6 +1393,60 @@ $can_manage_families = current_user_can('riverso_manage_families');
         }).fail(function() {
             $box.html('<p style="margin:0;font-size:12px;color:#c62828;">Error de red al cargar familia</p>').show();
         });
+    }
+
+    function paintLocalPrice() {
+        const p = currentProduct;
+        const precio = p && (p.precio_local || p.precio);
+        if (!precio) {
+            $('#local-precio-view').html('<span style="color:#999;">Sin precio asignado</span>');
+            return;
+        }
+        const pair = pickProductCostPair(precio);
+        const cShow = productViewMode === 'bruto'
+            ? (pair.bruto != null ? pair.bruto : pair.neto)
+            : pair.neto;
+        const cNeto = pair.neto != null ? pair.neto : 0;
+        const pAsignado = parseFloat(precio.p_asignado || precio.precio_asignado || 0);
+        const pRef = parseFloat(precio.p_ref || precio.precio_ref || 0);
+        const split = splitVenta(pAsignado, p);
+        const pShow = productViewMode === 'bruto' ? split.bruto : split.neto;
+        const factorMin = parseFloat(precio.factor_minimo || precio.factor_min || 1.30);
+        const ratio = margenNetoRatio(split.neto, cNeto, factorMin);
+        const vm = productViewMode === 'bruto' ? 'bruto' : 'neto';
+        const modeBtn = (mode, label) =>
+            `<button type="button" class="btn-small pp-view-mode${productViewMode === mode ? ' is-on' : ''}" data-view-mode="${mode}">${label}</button>`;
+        const costBtn = (mode, label) =>
+            `<button type="button" class="btn-small pp-cost-mode${productCostMode === mode ? ' is-on' : ''}" data-cost-mode="${mode}">${label}</button>`;
+        $('#local-precio-view').html(
+            `<div class="pp-price-toggles">
+                <span>${modeBtn('neto', 'Neto')}${modeBtn('bruto', 'Bruto')}</span>
+                <span>${costBtn('referencia', 'Referencia')}${costBtn('tras_dr', 'Tras D/R')}${costBtn('tras_dr_folio', 'Tras D/R folio')}${costBtn('tras_dr_flete', 'Con flete')}</span>
+            </div>
+            <div>Costo (${vm}): ${cShow != null ? formatMoney(cShow) : '—'} · Venta (${vm}): <strong style="${ratio.alerta ? 'color:red;' : ''}">${formatMoney(pShow)}</strong></div>
+            <div style="${ratio.alerta ? 'color:red;font-weight:bold;' : ''}">Margen (neto / costo): ${ratio.label} · mín. ${factorMin.toFixed(2)}×${ratio.alerta ? ' ⚠️ bajo mínimo' : ''}</div>`
+        );
+        $('#precio-c-ref-label').text(productCostModeLabel() + ' (' + vm + '):');
+        $('#precio-c-ref').text(cShow != null ? formatMoney(cShow) : '—');
+        $('#precio-p-ref').text(formatMoney(productViewMode === 'bruto' ? splitVenta(pRef, p).bruto : splitVenta(pRef, p).neto));
+        $('#precio-factor-min').text(factorMin.toFixed(2));
+        $('#precio-p-asignado').val(pAsignado || 0);
+        updatePrecioNetoPreview();
+    }
+
+    function renderEmparejamiento(product) {
+        const id = parseInt(product.emparejamiento_id || 0, 10);
+        if (!id) {
+            $('#local-emp-view').html('<span style="color:#999;">Sin emparejamiento</span>');
+            return;
+        }
+        const nombre = product.emparejamiento_nombre || product.emparejamiento_codigo || ('#' + id);
+        let html = `<strong>${esc(nombre)}</strong> `;
+        html += `<button type="button" class="btn-small product-emp-price" data-emp-id="${id}" data-emp-nombre="${esc(nombre)}">Precio emparejado</button>`;
+        if (canManage) {
+            html += ` <button type="button" class="btn-small product-emp-edit" data-emp-id="${id}">Editar</button>`;
+        }
+        $('#local-emp-view').html(html);
     }
 
     function renderFamiliaHub(product) {
@@ -1763,7 +1977,7 @@ $can_manage_families = current_user_can('riverso_manage_families');
     function renderSupplierCodes(p) {
         const codes = p.proveedores || p.supplier_codes || [];
         if (!codes.length) {
-            $('#suppliers-list').html('<p style="color: #999;">Sin códigos proveedor asignados</p>');
+            $('#suppliers-list').html('<p style="color: #999;">Sin código de proveedor. Sigue faltando hasta que llegue en un folio.</p>' + knownSuppliersHtml(p));
             return;
         }
         const remapCtx = p.code_remap_context || p.barcode_remap_context || {};
@@ -1813,7 +2027,29 @@ $can_manage_families = current_user_can('riverso_manage_families');
             </tr>${purchaseRow}`;
         });
         html += '</table>';
+        html += knownSuppliersHtml(p);
         $('#suppliers-list').html(html);
+    }
+
+    function knownSuppliersHtml(p) {
+        const known = p.proveedores_conocidos || [];
+        if (!known.length) {
+            return '';
+        }
+        let html = '<h4 style="margin-top:14px;">Proveedor, sin código</h4><ul style="margin:0;padding-left:18px;">';
+        known.forEach(function(k) {
+            const apodos = (k.apodos || []).filter(function(a) {
+                return a && a !== k.nombre;
+            });
+            const extra = apodos.length ? ' (' + apodos.join(', ') + ')' : '';
+            const badge = parseInt(k.provisional, 10) ? ' <span style="color:#9a6700;">apodo, sin factura</span>' : '';
+            html += '<li style="margin:6px 0;">' + esc(k.nombre) + esc(extra) + badge;
+            if (canManage) {
+                html += ' <button type="button" class="btn-small btn-known-remove" data-id="' + k.id + '">Quitar</button>';
+            }
+            html += '</li>';
+        });
+        return html + '</ul>';
     }
 
     function renderBarcodes(p) {
@@ -2030,6 +2266,10 @@ $can_manage_families = current_user_can('riverso_manage_families');
         $('#local-ean-edit').prop('checked', originalValues.ean).show();
         $('#local-stock-view').hide();
         $('#local-stock-edit').prop('checked', originalValues.stock).show();
+        $('#local-unidad-minima-view').hide();
+        $('#local-unidad-minima-edit-wrap').show();
+        $('#local-facto-iva-view, #local-marca-view, #local-modelo-view, #local-facto-cat-view, #local-stock-min-view, #local-desc-facto-view').hide();
+        $('#local-facto-iva-edit, #local-marca-edit, #local-modelo-edit, #local-facto-cat-edit, #local-stock-min-edit, #local-desc-facto-edit').show();
 
         // Toggle buttons
         $('#btn-detail-edit').hide();
@@ -2059,6 +2299,10 @@ $can_manage_families = current_user_can('riverso_manage_families');
         $('#local-ean-edit').hide();
         $('#local-stock-view').show();
         $('#local-stock-edit').hide();
+        $('#local-unidad-minima-view').show();
+        $('#local-unidad-minima-edit-wrap').hide();
+        $('#local-facto-iva-view, #local-marca-view, #local-modelo-view, #local-facto-cat-view, #local-stock-min-view, #local-desc-facto-view').show();
+        $('#local-facto-iva-edit, #local-marca-edit, #local-modelo-edit, #local-facto-cat-edit, #local-stock-min-edit, #local-desc-facto-edit').hide();
 
         if (canManage) {
             $('#btn-detail-edit').show();
@@ -2068,6 +2312,16 @@ $can_manage_families = current_user_can('riverso_manage_families');
 
         $('#local-precio-view').show();
         $('#local-precio-edit').hide();
+        if (currentProduct) {
+            $('#local-unidad-minima-edit').prop('checked', !!currentProduct.es_unidad_minima);
+            const ivaBack = (currentProduct.facto_iva_tipo || 'afecto').toLowerCase();
+            $('#local-facto-iva-edit').val(ivaBack === 'exento' ? 'exento' : 'afecto');
+            $('#local-marca-edit').val(currentProduct.marca || '');
+            $('#local-modelo-edit').val(currentProduct.modelo || '');
+            $('#local-facto-cat-edit').val(currentProduct.facto_categoria || '');
+            $('#local-stock-min-edit').val(currentProduct.stock_minimo != null && currentProduct.stock_minimo !== '' ? currentProduct.stock_minimo : '');
+            $('#local-desc-facto-edit').val(currentProduct.descripcion_facto || '');
+        }
         $('#local-familia-view').show();
         $('#local-familia-edit').hide();
         $('#local-image-view').show();
@@ -2076,6 +2330,41 @@ $can_manage_families = current_user_can('riverso_manage_families');
 
     // Supplier codes
     let supplierSearchTimeout;
+    $('#supplier-known-open').on('click', function() {
+        if (!currentProduct || !window.RiversoSupplierPicker) {
+            return;
+        }
+        window.RiversoSupplierPicker.open({
+            ajaxUrl: ajaxUrl,
+            nonce: nonce,
+            title: 'Buscar proveedor',
+            onSelect: function(supplier) {
+                post('riverso_assign_known_supplier', {
+                    producto_base_id: currentProduct.id,
+                    proveedor_id: supplier.id
+                }).done(function(r) {
+                    if (!r.success) {
+                        alert(r.data?.message || 'No se pudo asignar el proveedor');
+                        return;
+                    }
+                    openDetail(currentProduct.id);
+                });
+            }
+        });
+    });
+    $(document).on('click', '.btn-known-remove', function() {
+        const id = $(this).data('id');
+        if (!id || !currentProduct) {
+            return;
+        }
+        post('riverso_remove_known_supplier', { id: id }).done(function(r) {
+            if (!r.success) {
+                alert(r.data?.message || 'No se pudo quitar');
+                return;
+            }
+            openDetail(currentProduct.id);
+        });
+    });
     $('#supplier-code-search').on('input', function() {
         clearTimeout(supplierSearchTimeout);
         const query = $(this).val().trim();
@@ -2334,6 +2623,11 @@ $can_manage_families = current_user_can('riverso_manage_families');
                     closeModal();
                     alert(resp.data.message || 'Listo');
                     openDetail(currentProduct.id);
+                    if (typeof window._pqsAfterBarcodeRemap === 'function') {
+                        const done = window._pqsAfterBarcodeRemap;
+                        window._pqsAfterBarcodeRemap = null;
+                        done();
+                    }
                 }).fail(function() {
                     alert('Error de red');
                     $('#bc-remap-confirm').prop('disabled', false).text('Confirmar');
@@ -2670,15 +2964,9 @@ $can_manage_families = current_user_can('riverso_manage_families');
                     alert('Error al guardar categorías: ' + ((r.data && r.data.message) || ''));
                     return;
                 }
-                post('riverso_products_complete_task', { tarea_id: taskId }).done(function(r2) {
-                    if (r2.success) {
-                        alert('Categorías aceptadas y tarea completada');
-                        $('#online-categories-task-panel').hide();
-                        openDetail(currentProduct.id);
-                    } else {
-                        alert('Error al completar tarea: ' + ((r2.data && r2.data.message) || ''));
-                    }
-                });
+                alert('Categorías aceptadas y tarea completada');
+                $('#online-categories-task-panel').hide();
+                openDetail(currentProduct.id);
             });
         });
 
@@ -2727,6 +3015,19 @@ $can_manage_families = current_user_can('riverso_manage_families');
     $('#products-search').on('input', function() {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => loadProducts(0), 1300);
+    });
+
+    $('#products-scan').on('click', function() {
+        if (!window.RiversoBarcodeScanner) {
+            return;
+        }
+        window.RiversoBarcodeScanner.open({
+            onCode: function(code) {
+                $('#products-search').val(code);
+                clearTimeout(searchTimeout);
+                loadProducts(0);
+            }
+        });
     });
     
     $('#products-reload').click(() => loadProducts(0));
@@ -3312,14 +3613,24 @@ $can_manage_families = current_user_can('riverso_manage_families');
         $('#btn-detail-edit').click(() => enterEditMode());
         $('#btn-detail-cancel').click(() => exitEditMode());
         $('#btn-detail-save').click(function() {
-            post('riverso_products_update', {
-                producto_id: currentProduct.id,
+            post('riverso_products_save', {
+                id: currentProduct.id,
                 canonical_sku: $('#local-sku-edit').val(),
                 nombre_canonico: $('#local-name-edit').val(),
                 unidad_base: $('#local-unit-edit').val(),
                 permite_decimal: $('#local-decimal-edit').is(':checked') ? 1 : 0,
-                permite_ean13: $('#local-ean-edit').is(':checked') ? 1 : 0,
-                stock_abierto: $('#local-stock-edit').is(':checked') ? 1 : 0
+                permite_ean13_personalizado: $('#local-ean-edit').is(':checked') ? 1 : 0,
+                stock_abierto_habilitado: $('#local-stock-edit').is(':checked') ? 1 : 0,
+                es_unidad_minima: $('#local-unidad-minima-edit').is(':checked') ? 1 : 0,
+                facto_iva_tipo: $('#local-facto-iva-edit').val(),
+                marca: $('#local-marca-edit').val(),
+                modelo: $('#local-modelo-edit').val(),
+                facto_categoria: $('#local-facto-cat-edit').val(),
+                stock_minimo: $('#local-stock-min-edit').val(),
+                descripcion_facto: $('#local-desc-facto-edit').val(),
+                estado: currentProduct.estado || 'activo',
+                codigo_abierto: currentProduct.codigo_abierto || '',
+                requires_human_review: currentProduct.requires_human_review ? 1 : 0
             }).done(function(r) {
                 if (r.success) {
                     alert('Producto actualizado');
@@ -3771,17 +4082,114 @@ $can_manage_families = current_user_can('riverso_manage_families');
         }).done(function() { loadProductLocations(currentProduct.id); });
     };
 
+    const DETAIL_TABS = ['local', 'online', 'suppliers', 'barcodes', 'tasks', 'families', 'locations'];
+
+    function showHubTab(name) {
+        const rapida = name !== 'busqueda';
+        $('#tab-rapida-btn').toggleClass('is-active', rapida);
+        $('#tab-busqueda-btn').toggleClass('is-active', !rapida);
+        $('#tab-rapida-content').toggle(rapida);
+        $('#tab-busqueda-content').toggle(!rapida);
+        try {
+            const u = new URL(window.location.href);
+            u.searchParams.set('vista', rapida ? 'rapida' : 'busqueda');
+            history.replaceState(null, '', u.toString());
+        } catch (e) { /* ignore */ }
+        if (rapida) {
+            setTimeout(function() { $('#pqs-input').trigger('focus'); }, 50);
+        }
+    }
+
+    $('#tab-rapida-btn, #tab-busqueda-btn').on('click', function() {
+        showHubTab($(this).data('hub'));
+    });
+
+    $('#products-new-online').on('click', function() {
+        showHubTab('busqueda');
+        if (!currentProduct || !currentProduct.id) {
+            alert('Abrí un producto para crear o vincular su contraparte online.');
+            $('#products-search').trigger('focus');
+            return;
+        }
+        switchDetailTab('online');
+    });
+
+    $(document).on('click', '.pp-view-mode', function() {
+        productViewMode = $(this).data('view-mode') === 'bruto' ? 'bruto' : 'neto';
+        paintLocalPrice();
+    });
+    $(document).on('click', '.pp-cost-mode', function() {
+        productCostMode = $(this).data('cost-mode') || 'tras_dr';
+        paintLocalPrice();
+    });
+    $(document).on('click', '.product-emp-price', function(e) {
+        e.preventDefault();
+        const empId = parseInt($(this).data('emp-id'), 10) || 0;
+        const empNombre = $(this).data('emp-nombre') || '';
+        if (!empId || !window.RiversoEmparejamientoEditor || typeof RiversoEmparejamientoEditor.openMarginPreview !== 'function') {
+            alert('Editor de emparejamientos no disponible');
+            return;
+        }
+        RiversoEmparejamientoEditor.openMarginPreview(empId, {
+            title: empNombre ? ('Precio emparejado — ' + empNombre) : 'Precio emparejado',
+            showEdit: canManage
+        });
+    });
+    $(document).on('click', '.product-emp-edit', function(e) {
+        e.preventDefault();
+        const empId = parseInt($(this).data('emp-id'), 10) || 0;
+        if (!empId || !window.RiversoEmparejamientoEditor || typeof RiversoEmparejamientoEditor.open !== 'function') {
+            alert('Editor de emparejamientos no disponible');
+            return;
+        }
+        RiversoEmparejamientoEditor.open(empId);
+    });
+
+    window.RiversoProductsHub = {
+        showTab: showHubTab,
+        openDetail: function(id, opts) {
+            opts = opts || {};
+            showHubTab('busqueda');
+            openDetail(id, function() {
+                const targetTab = opts.tab || 'local';
+                if (DETAIL_TABS.indexOf(targetTab) >= 0) {
+                    switchDetailTab(targetTab);
+                }
+                if (opts.edit && canManage) {
+                    enterEditMode();
+                    setTimeout(function() { $('#local-sku-edit').focus().select(); }, 100);
+                }
+            });
+        },
+        openBarcodeRemap: function(productId, barcodeId, onDone) {
+            showHubTab('busqueda');
+            window._pqsAfterBarcodeRemap = typeof onDone === 'function' ? onDone : null;
+            openDetail(productId, function() {
+                window.portalProducts.openBarcodeRemapWizard(barcodeId);
+            });
+        }
+    };
+
     // Initial load
     loadCatalogs();
     const deepLinkParams = new URLSearchParams(window.location.search);
     const deepProductId = parseInt(deepLinkParams.get('id') || '0', 10);
-    if (deepProductId) {
-        const deepTab = deepLinkParams.get('tab') || 'local';
+    const deepTab = deepLinkParams.get('tab') || '';
+    const vista = deepLinkParams.get('vista') || '';
+    const openBusqueda = vista !== 'rapida' && (
+        vista === 'busqueda' || deepProductId > 0 || DETAIL_TABS.indexOf(deepTab) >= 0
+    );
+    if (openBusqueda) {
+        showHubTab('busqueda');
+        $('#pqs-input').blur();
+    }
+    if (deepProductId && openBusqueda) {
+        const detailTab = DETAIL_TABS.indexOf(deepTab) >= 0 ? deepTab : 'local';
         const deepEdit = deepLinkParams.get('edit') === '1';
         loadProducts(0);
         openDetail(deepProductId, function() {
-            switchDetailTab(deepTab);
-            if (deepEdit && deepTab === 'local' && canManage) {
+            switchDetailTab(detailTab);
+            if (deepEdit && detailTab === 'local' && canManage) {
                 enterEditMode();
                 setTimeout(function() { $('#local-sku-edit').focus().select(); }, 100);
             }

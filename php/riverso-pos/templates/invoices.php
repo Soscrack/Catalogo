@@ -368,6 +368,13 @@ $default_intake_mode = 'solo_costos';
                         <div><label>Comuna</label><input type="text" id="prov-comuna" class="regular-text" style="width:100%"></div>
                         <div style="grid-column:1/-1;"><label>Dirección</label><input type="text" id="prov-direccion" class="regular-text" style="width:100%"></div>
                     </div>
+                    <div id="prov-apodo-wrap" style="display:none;margin-top:10px;max-width:640px;">
+                        <label for="prov-reclamar-provisional">¿Este folio es un proveedor que ya anotamos por apodo?</label>
+                        <select id="prov-reclamar-provisional" style="width:100%;max-width:400px;margin-top:4px;">
+                            <option value="">No: usar la razón social del folio</option>
+                        </select>
+                        <p class="description">El apodo queda en el proveedor oficial. El RUT del folio sigue identificándolo.</p>
+                    </div>
                     <p id="proveedor-status" class="description" style="margin-top:8px;"></p>
                 </div>
 
@@ -1835,6 +1842,13 @@ jQuery(function($) {
         if (d.proveedor_existente) $sel.val(d.proveedor_existente.id);
 
         fillProveedorForm(d.emisor, d.proveedor_existente);
+        const $apodo = $('#prov-reclamar-provisional').empty()
+            .append('<option value="">No: usar la razón social del folio</option>');
+        const provisionales = (!d.proveedor_existente && d.provisionales) || [];
+        provisionales.forEach(function(p) {
+            $apodo.append($('<option>').val(p.id).text(p.nombre || 'Apodo'));
+        });
+        $('#prov-apodo-wrap').toggle(provisionales.length > 0);
         setProveedorUiMode();
 
         if ((d.missing_gaps || []).some(g => g.field === 'nombre' && !d.proveedor_existente)) {
@@ -1899,6 +1913,7 @@ jQuery(function($) {
             formData.append('proveedor_direccion', $('#prov-direccion').val());
             formData.append('proveedor_comuna', $('#prov-comuna').val());
             formData.append('proveedor_rut', $('#prov-rut').val());
+            formData.append('reclamar_provisional_id', $('#prov-reclamar-provisional').val() || '');
         }
     }
 

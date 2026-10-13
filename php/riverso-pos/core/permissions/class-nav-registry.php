@@ -13,12 +13,15 @@ class Riverso_POS_Nav_Registry {
      * Grupos de menú (orden de aparición).
      */
     const GROUPS = [
-        'inicio'   => ['label' => 'Inicio', 'order' => 10],
-        'ventas'   => ['label' => 'Ventas', 'order' => 20],
-        'catalogo' => ['label' => 'Catálogo', 'order' => 30],
-        'bodega'   => ['label' => 'Bodega', 'order' => 40],
-        'compras'  => ['label' => 'Compras', 'order' => 50],
-        'gestion'  => ['label' => 'Gestión', 'order' => 60],
+        'inicio'         => ['label' => 'Inicio', 'order' => 10],
+        'ventas'         => ['label' => 'Ventas', 'order' => 20],
+        'facturacion'    => ['label' => 'Facturación', 'order' => 25],
+        'cobranza'       => ['label' => 'Cobranza', 'order' => 27],
+        'catalogo'       => ['label' => 'Catálogo', 'order' => 30],
+        'bodega'         => ['label' => 'Bodega', 'order' => 40],
+        'compras'        => ['label' => 'Compras', 'order' => 50],
+        'gestion'        => ['label' => 'Gestión', 'order' => 60],
+        'administracion' => ['label' => 'Administración', 'order' => 70],
     ];
 
     /**
@@ -79,14 +82,41 @@ class Riverso_POS_Nav_Registry {
             [
                 'id' => 'customer-quotes',
                 'group' => 'ventas',
-                'label' => 'Cotizaciones Clientes',
-                'menu_label' => 'Cotizaciones a Clientes',
-                'icon' => 'media-document',
+                'label' => 'Cotizaciones',
+                'menu_label' => 'Cotizaciones de venta',
+                'icon' => 'cart',
                 'surfaces' => ['portal', 'admin'],
                 'portal_slug' => 'customer-quotes',
                 'admin_page' => 'riverso-pos-customer-quotes',
                 'admin_callback' => 'render_customer_quotes',
                 'capability' => 'riverso_view_quotes',
+                'children' => [
+                    [
+                        'id' => 'customer-quotes-search',
+                        'label' => 'Buscar Cotizaciones',
+                        'icon' => 'search',
+                        'portal_slug' => 'customer-quotes',
+                        'portal_query' => '',
+                    ],
+                    [
+                        'id' => 'customer-quotes-create',
+                        'label' => 'Crear Cotización',
+                        'icon' => 'plus-alt',
+                        'portal_slug' => 'customer-quotes',
+                        'portal_query' => 'nueva=1',
+                    ],
+                ],
+            ],
+            [
+                'id' => 'customers',
+                'group' => 'ventas',
+                'label' => 'Clientes',
+                'icon' => 'groups',
+                'surfaces' => ['portal', 'admin'],
+                'portal_slug' => 'customers',
+                'admin_page' => 'riverso-pos-customers',
+                'admin_callback' => 'render_customers',
+                'capability' => 'riverso_view_customers',
             ],
             [
                 'id' => 'reports',
@@ -99,6 +129,104 @@ class Riverso_POS_Nav_Registry {
                 'admin_page' => 'riverso-pos-reports',
                 'admin_callback' => 'render_reports',
                 'capability' => 'riverso_view_reports',
+            ],
+
+            // === Facturación ===
+            [
+                'id' => 'facturacion',
+                'group' => 'facturacion',
+                'label' => 'Facturación',
+                'icon' => 'media-document',
+                'surfaces' => ['portal'],
+                'portal_slug' => 'facturacion',
+                'capability' => 'riverso_emit_dte',
+                'children' => [
+                    [
+                        'id' => 'facturacion-emitir',
+                        'label' => 'Emitir',
+                        'icon' => 'migrate',
+                        'portal_slug' => 'facturacion',
+                        'portal_query' => '',
+                    ],
+                    [
+                        'id' => 'facturacion-buscar',
+                        'label' => 'Buscar documentos tributarios',
+                        'icon' => 'search',
+                        'portal_slug' => 'facturacion',
+                        'portal_query' => 'vista=buscar',
+                    ],
+                    [
+                        'id' => 'facturacion-impresion',
+                        'label' => 'Impresión',
+                        'icon' => 'printer',
+                        'portal_slug' => 'facturacion',
+                        'portal_query' => 'vista=impresion',
+                    ],
+                    [
+                        'id' => 'facturacion-cotizaciones-aprobadas',
+                        'label' => 'Cotizaciones Aprobadas',
+                        'icon' => 'portfolio',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'facturacion-recibir',
+                        'label' => 'Recibir',
+                        'icon' => 'randomize',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'facturacion-guias',
+                        'label' => 'Centralizacion Guias de Despacho',
+                        'icon' => 'media-document',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'facturacion-libros',
+                        'label' => 'Libros contables',
+                        'icon' => 'book',
+                        'wip' => true,
+                    ],
+                ],
+            ],
+
+            // === Cobranza ===
+            [
+                'id' => 'cobranza',
+                'group' => 'cobranza',
+                'label' => 'Cobranza',
+                'icon' => 'money-alt',
+                'surfaces' => ['portal', 'admin'],
+                'portal_slug' => 'manejo-caja',
+                'capability' => 'riverso_view_cash',
+                'children' => [
+                    [
+                        'id' => 'cobranza-buscar-cobros',
+                        'label' => 'Buscar Cobros',
+                        'icon' => 'list-view',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'cobranza-buscar-pagos',
+                        'label' => 'Buscar Pagos',
+                        'icon' => 'money',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'cobranza-documentos-impagos',
+                        'label' => 'Documentos Impagos',
+                        'icon' => 'portfolio',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'cobranza-manejo-caja',
+                        'label' => 'Manejo Caja',
+                        'icon' => 'money-alt',
+                        'portal_slug' => 'manejo-caja',
+                        'admin_page' => 'riverso-pos-cash',
+                        'admin_callback' => 'render_cash',
+                        'capability' => 'riverso_view_cash',
+                    ],
+                ],
             ],
 
             // === Catálogo ===
@@ -198,10 +326,28 @@ class Riverso_POS_Nav_Registry {
                 'id' => 'reception',
                 'group' => 'bodega',
                 'label' => 'Recepción',
-                'surfaces' => ['admin'],
+                'icon' => 'download',
+                'surfaces' => ['portal', 'admin'],
+                'portal_slug' => 'recepcion',
                 'admin_page' => 'riverso-pos-reception',
                 'admin_callback' => 'render_reception',
+                'portal_capability_any' => ['riverso_receive_items', 'riverso_approve_reception'],
                 'admin_capability' => 'riverso_receive_items',
+            ],
+            [
+                'id' => 'avisos',
+                'group' => 'bodega',
+                'label' => 'Avisos de compra',
+                'icon' => 'megaphone',
+                'surfaces' => ['portal'],
+                'portal_slug' => 'avisos',
+                'portal_capability_any' => [
+                    'riverso_report_shortage',
+                    'riverso_do_inventory',
+                    'riverso_edit_stock',
+                    'riverso_manage_purchase_notices',
+                    'riverso_edit_purchases',
+                ],
             ],
             [
                 'id' => 'barcodes',
@@ -247,6 +393,18 @@ class Riverso_POS_Nav_Registry {
             ],
 
             // === Compras ===
+            [
+                'id' => 'pedidos-compra',
+                'group' => 'compras',
+                'label' => 'Pedidos de compra',
+                'icon' => 'cart',
+                'surfaces' => ['portal'],
+                'portal_slug' => 'pedidos-compra',
+                'portal_capability_any' => [
+                    'riverso_view_purchases',
+                    'riverso_manage_purchase_notices',
+                ],
+            ],
             [
                 'id' => 'inbox',
                 'group' => 'compras',
@@ -409,6 +567,94 @@ class Riverso_POS_Nav_Registry {
                 'admin_callback' => 'render_audit',
                 'admin_capability' => 'riverso_view_audit',
             ],
+
+            // === Administración ===
+            [
+                'id' => 'administracion',
+                'group' => 'administracion',
+                'label' => 'Administración',
+                'icon' => 'admin-settings',
+                'surfaces' => ['portal', 'admin'],
+                'portal_slug' => 'cuentas-caja',
+                'capability' => 'riverso_manage_cash_accounts',
+                'children' => [
+                    [
+                        'id' => 'admin-usuarios',
+                        'label' => 'Usuarios',
+                        'icon' => 'groups',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-cuentas-caja',
+                        'label' => 'Cuentas bancarias y efectivo',
+                        'icon' => 'money',
+                        'portal_slug' => 'cuentas-caja',
+                        'admin_page' => 'riverso-pos-cash-accounts',
+                        'admin_callback' => 'render_cash_accounts',
+                        'capability' => 'riverso_manage_cash_accounts',
+                    ],
+                    [
+                        'id' => 'admin-timbraje-caf',
+                        'label' => 'Timbraje CAF',
+                        'icon' => 'yes-alt',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-certificados',
+                        'label' => 'Certificados digitales',
+                        'icon' => 'awards',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-tipos-documentos',
+                        'label' => 'Tipos de documentos',
+                        'icon' => 'media-text',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-datos-empresa',
+                        'label' => 'Datos de la empresa',
+                        'icon' => 'admin-generic',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-areas-negocio',
+                        'label' => 'Áreas de negocio / Centros de costo',
+                        'icon' => 'portfolio',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-importar-exportar',
+                        'label' => 'Importar / Exportar',
+                        'icon' => 'randomize',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-api',
+                        'label' => 'API',
+                        'icon' => 'rest-api',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-sucursales',
+                        'label' => 'Sucursales',
+                        'icon' => 'building',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-notif-cobranza',
+                        'label' => 'Notificaciones cobranza',
+                        'icon' => 'bell',
+                        'wip' => true,
+                    ],
+                    [
+                        'id' => 'admin-planes',
+                        'label' => 'Planes y servicio contratados',
+                        'icon' => 'tickets-alt',
+                        'wip' => true,
+                    ],
+                ],
+            ],
         ];
     }
 
@@ -473,8 +719,13 @@ class Riverso_POS_Nav_Registry {
     /**
      * Módulos accesibles en portal (formato legacy de get_accessible_modules).
      *
+     * Si varios hijos comparten portal_slug (p. ej. Cotizaciones: buscar / crear), el
+     * slug conserva la etiqueta del ítem padre y cada hijo con portal_query queda en
+     * 'views' (query => etiqueta) para que el título siga a la vista abierta.
+     * Un hijo único con el mismo slug sigue reemplazando la etiqueta, como antes.
+     *
      * @param int|null $user_id
-     * @return array<string, array{icon: string, label: string, group: string}>
+     * @return array<string, array{icon: string, label: string, group: string, views?: array<string, string>}>
      */
     public static function get_portal_modules($user_id = null) {
         $modules = [];
@@ -488,6 +739,38 @@ class Riverso_POS_Nav_Registry {
                 'label' => $item['label'],
                 'group' => $item['group'],
             ];
+            $children = [];
+            $per_slug = [];
+            foreach ((!empty($item['children']) && is_array($item['children'])) ? $item['children'] : [] as $child) {
+                $child_slug = $child['portal_slug'] ?? null;
+                if (!empty($child['wip']) || !$child_slug) {
+                    continue;
+                }
+                $children[] = $child;
+                $per_slug[$child_slug] = ($per_slug[$child_slug] ?? 0) + 1;
+            }
+            foreach ($children as $child) {
+                $child_slug = $child['portal_slug'];
+                if ($per_slug[$child_slug] > 1) {
+                    if (!isset($modules[$child_slug])) {
+                        $modules[$child_slug] = [
+                            'icon'  => $item['icon'] ?? 'admin-generic',
+                            'label' => $item['label'],
+                            'group' => $item['group'],
+                        ];
+                    }
+                    $query = (string) ($child['portal_query'] ?? '');
+                    if ($query !== '') {
+                        $modules[$child_slug]['views'][$query] = $child['label'];
+                    }
+                    continue;
+                }
+                $modules[$child_slug] = [
+                    'icon'  => $child['icon'] ?? ($item['icon'] ?? 'admin-generic'),
+                    'label' => $child['label'],
+                    'group' => $item['group'],
+                ];
+            }
         }
         return $modules;
     }

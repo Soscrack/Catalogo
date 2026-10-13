@@ -19,6 +19,9 @@ class Riverso_POS_Supplier_Module {
     }
     
     public function init() {
+        if (class_exists('Riverso_POS_Activator')) {
+            Riverso_POS_Activator::ensure_known_supplier_schema();
+        }
         // AJAX handlers
         add_action('wp_ajax_riverso_get_suppliers', [$this, 'ajax_get_suppliers']);
         add_action('wp_ajax_riverso_get_supplier', [$this, 'ajax_get_supplier']);
@@ -29,6 +32,9 @@ class Riverso_POS_Supplier_Module {
         add_action('wp_ajax_riverso_get_supplier_stats', [$this, 'ajax_get_supplier_stats']);
         add_action('wp_ajax_riverso_add_provider_alias', [$this, 'ajax_add_provider_alias']);
         add_action('wp_ajax_riverso_remove_provider_alias', [$this, 'ajax_remove_provider_alias']);
+        add_action('wp_ajax_riverso_create_provisional_supplier', [$this, 'ajax_create_provisional']);
+        add_action('wp_ajax_riverso_assign_known_supplier', [$this, 'ajax_assign_known']);
+        add_action('wp_ajax_riverso_remove_known_supplier', [$this, 'ajax_remove_known']);
     }
     
     /**
@@ -351,9 +357,7 @@ class Riverso_POS_Supplier_Module {
     public function ajax_search_suppliers() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         
-        if (!current_user_can('riverso_view_suppliers')
-            && !current_user_can('riverso_manage_codes')
-            && !current_user_can('riverso_view_products')) {
+        if (!$this->can_pick_supplier()) {
             wp_send_json_error(['message' => 'Sin permisos'], 403);
         }
         
@@ -389,7 +393,7 @@ class Riverso_POS_Supplier_Module {
             : "NULL AS matched_apodo";
         
         $suppliers = $wpdb->get_results($wpdb->prepare(
-            "SELECT p.id, p.rut, p.nombre, {$matched_select}
+            "SELECT p.id, p.rut, p.nombre, p.provisional, {$matched_select}
              FROM {$this->table_name} p
              WHERE $where_sql
              ORDER BY p.nombre ASC
@@ -576,6 +580,476 @@ class Riverso_POS_Supplier_Module {
         ]);
     }
     
+    /**
+     * Quién puede abrir la lupa de proveedores.
+     */
+    private function can_pick_supplier() {
+        return current_user_can('riverso_view_suppliers')
+            || current_user_can('riverso_manage_codes')
+            || current_user_can('riverso_view_products')
+            || current_user_can('riverso_manage_products')
+            || current_user_can('riverso_edit_suppliers')
+            || current_user_can('riverso_manage_purchase_notices')
+            || current_user_can('riverso_report_shortage')
+            || current_user_can('riverso_do_inventory')
+            || current_user_can('riverso_edit_stock')
+            || current_user_can('manage_options');
+    }
+
+    /**
+     * Quién puede anotar un proveedor sin código o crear un apodo provisional.
+     */
+    private function can_edit_known_supplier() {
+        return current_user_can('riverso_manage_products')
+            || current_user_can('riverso_edit_suppliers')
+            || current_user_can('riverso_manage_purchase_notices')
+            || current_user_can('riverso_report_shortage')
+            || current_user_can('riverso_do_inventory')
+            || current_user_can('riverso_edit_stock')
+            || current_user_can('manage_options');
+    }
+
+    public function ajax_create_provisional() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!$this->can_edit_known_supplier()) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+        $result = self::create_provisional(wp_unslash($_POST['apodo'] ?? ''));
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['supplier' => $result]);
+    }
+
+    public function ajax_assign_known() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!$this->can_edit_known_supplier()) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+        $result = self::assign_known(
+            absint($_POST['producto_base_id'] ?? 0),
+            absint($_POST['proveedor_id'] ?? 0),
+            !empty($_POST['es_preferido'])
+        );
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success(['id' => (int) $result]);
+    }
+
+    public function ajax_remove_known() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!$this->can_edit_known_supplier()) {
+            wp_send_json_error(['message' => 'Sin permisos'], 403);
+        }
+        $ok = self::remove_known(absint($_POST['id'] ?? 0));
+        if (!$ok) {
+            wp_send_json_error(['message' => 'No se pudo quitar el proveedor']);
+        }
+        wp_send_json_success(['message' => 'Proveedor quitado']);
+    }
+
+    /**
+     * Proveedores anotados por apodo, todavía sin factura.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public static function list_provisionals() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'riverso_proveedores';
+        $rows = $wpdb->get_results(
+            "SELECT id, nombre, rut FROM {$table}
+             WHERE activo = 1 AND provisional = 1
+             ORDER BY nombre ASC
+             LIMIT 40",
+            ARRAY_A
+        );
+        $out = [];
+        foreach ($rows ?: [] as $row) {
+            $out[] = [
+                'id' => (int) $row['id'],
+                'nombre' => (string) $row['nombre'],
+                'rut' => (string) ($row['rut'] ?? ''),
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Crea un proveedor solo con el apodo. Si ese nombre ya existe, devuelve el existente.
+     *
+     * @param string $apodo
+     * @return array|WP_Error
+     */
+    public static function create_provisional($apodo) {
+        global $wpdb;
+        if (class_exists('Riverso_POS_Activator')) {
+            Riverso_POS_Activator::ensure_known_supplier_schema();
+        }
+        $apodo = self::normalize_apodo_static($apodo);
+        if ($apodo === '') {
+            return new WP_Error('invalid_apodo', 'Escribe el apodo del proveedor');
+        }
+        if (mb_strlen($apodo) > 100) {
+            return new WP_Error('invalid_apodo', 'El apodo no puede superar 100 caracteres');
+        }
+
+        $table = $wpdb->prefix . 'riverso_proveedores';
+        $apodos = $wpdb->prefix . 'riverso_proveedor_apodos';
+        $existing = $wpdb->get_row($wpdb->prepare(
+            "SELECT p.id, p.nombre, p.rut, p.provisional
+             FROM {$table} p
+             LEFT JOIN {$apodos} a ON a.proveedor_id = p.id
+             WHERE p.activo = 1 AND (LOWER(p.nombre) = LOWER(%s) OR LOWER(a.apodo) = LOWER(%s))
+             LIMIT 1",
+            $apodo,
+            $apodo
+        ), ARRAY_A);
+        if ($existing) {
+            return [
+                'id' => (int) $existing['id'],
+                'nombre' => (string) $existing['nombre'],
+                'rut' => (string) ($existing['rut'] ?? ''),
+                'provisional' => (int) $existing['provisional'],
+                'existing' => true,
+            ];
+        }
+
+        $inserted = $wpdb->query($wpdb->prepare(
+            "INSERT INTO {$table} (rut, nombre, provisional, activo) VALUES (NULL, %s, 1, 1)",
+            $apodo
+        ));
+        if (!$inserted) {
+            return new WP_Error('db_error', 'No se pudo crear el proveedor');
+        }
+        $id = (int) $wpdb->insert_id;
+        self::store_apodo($id, $apodo);
+        return [
+            'id' => $id,
+            'nombre' => $apodo,
+            'rut' => '',
+            'provisional' => 1,
+            'existing' => false,
+        ];
+    }
+
+    /**
+     * El folio confirma el proveedor provisional: mismo id, nombre oficial, apodo conservado.
+     *
+     * @param int   $id
+     * @param array $data
+     * @return int|WP_Error
+     */
+    public static function claim_provisional($id, array $data) {
+        global $wpdb;
+        $id = absint($id);
+        $table = $wpdb->prefix . 'riverso_proveedores';
+        $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id));
+        if (!$row) {
+            return new WP_Error('not_found', 'Ese proveedor provisional ya no existe');
+        }
+
+        $rut = preg_replace('/[^0-9kK]/', '', strtoupper((string) ($data['rut'] ?? '')));
+        if ($rut !== '') {
+            $other = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$table} WHERE rut = %s AND id != %d",
+                $rut,
+                $id
+            ));
+            if ($other) {
+                return new WP_Error('rut_taken', 'Ese RUT ya pertenece a otro proveedor');
+            }
+        }
+
+        $old_name = (string) $row->nombre;
+        $new_name = sanitize_text_field($data['nombre'] ?? '');
+        if ($new_name === '') {
+            $new_name = $old_name;
+        }
+        $update = [
+            'nombre' => $new_name,
+            'provisional' => 0,
+            'activo' => 1,
+        ];
+        $format = ['%s', '%d', '%d'];
+        if ($rut !== '') {
+            $update['rut'] = $rut;
+            $format[] = '%s';
+        }
+        foreach (['giro', 'direccion', 'comuna', 'ciudad', 'telefono', 'email', 'contacto'] as $field) {
+            $value = sanitize_text_field($data[$field] ?? '');
+            if ($value !== '') {
+                $update[$field] = $value;
+                $format[] = '%s';
+            }
+        }
+        $wpdb->update($table, $update, ['id' => $id], $format, ['%d']);
+        if (mb_strtolower($old_name) !== mb_strtolower($new_name)) {
+            self::store_apodo($id, $old_name);
+        }
+        self::store_apodo($id, $old_name);
+        return $id;
+    }
+
+    /**
+     * El RUT del folio ya existía: el apodo pasa al proveedor oficial y los vínculos lo siguen.
+     *
+     * @param int $provisional_id
+     * @param int $official_id
+     * @return int|WP_Error
+     */
+    public static function merge_provisional_into($provisional_id, $official_id) {
+        global $wpdb;
+        $provisional_id = absint($provisional_id);
+        $official_id = absint($official_id);
+        if ($provisional_id === $official_id) {
+            return $official_id;
+        }
+        $table = $wpdb->prefix . 'riverso_proveedores';
+        $prefix = $wpdb->prefix . 'riverso_';
+        $prov = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $provisional_id));
+        $official = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $official_id));
+        if (!$prov || !$official) {
+            return new WP_Error('not_found', 'No se pudo unir el apodo con el proveedor del folio');
+        }
+
+        self::store_apodo($official_id, (string) $prov->nombre);
+        $apodos = $wpdb->get_col($wpdb->prepare(
+            "SELECT apodo FROM {$prefix}proveedor_apodos WHERE proveedor_id = %d",
+            $provisional_id
+        ));
+        foreach ($apodos ?: [] as $apodo) {
+            self::store_apodo($official_id, (string) $apodo);
+        }
+
+        $known = "{$prefix}producto_proveedor_conocido";
+        if (self::table_ready($known)) {
+            $wpdb->query($wpdb->prepare(
+                "DELETE k FROM {$known} k
+                 INNER JOIN {$known} o
+                    ON o.producto_base_id = k.producto_base_id AND o.proveedor_id = %d
+                 WHERE k.proveedor_id = %d",
+                $official_id,
+                $provisional_id
+            ));
+            $wpdb->update($known, ['proveedor_id' => $official_id], ['proveedor_id' => $provisional_id], ['%d'], ['%d']);
+        }
+
+        foreach (['avisos_compra', 'ordenes_compra'] as $name) {
+            $rel = $prefix . $name;
+            if (self::table_ready($rel)) {
+                $wpdb->update($rel, ['proveedor_id' => $official_id], ['proveedor_id' => $provisional_id], ['%d'], ['%d']);
+            }
+        }
+
+        $wpdb->update(
+            $table,
+            ['activo' => 0, 'provisional' => 0],
+            ['id' => $provisional_id],
+            ['%d', '%d'],
+            ['%d']
+        );
+        return $official_id;
+    }
+
+    /**
+     * Marca el proveedor en el producto sin inventar un código.
+     *
+     * @param int  $producto_base_id
+     * @param int  $proveedor_id
+     * @param bool $preferido
+     * @return int|WP_Error
+     */
+    public static function assign_known($producto_base_id, $proveedor_id, $preferido = false) {
+        global $wpdb;
+        if (class_exists('Riverso_POS_Activator')) {
+            Riverso_POS_Activator::ensure_known_supplier_schema();
+        }
+        $producto_base_id = absint($producto_base_id);
+        $proveedor_id = absint($proveedor_id);
+        if (!$producto_base_id || !$proveedor_id) {
+            return new WP_Error('invalid', 'Producto y proveedor son obligatorios');
+        }
+        $prefix = $wpdb->prefix . 'riverso_';
+        $product = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}producto_base WHERE id = %d",
+            $producto_base_id
+        ));
+        $supplier = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}proveedores WHERE id = %d AND activo = 1",
+            $proveedor_id
+        ));
+        if (!$product || !$supplier) {
+            return new WP_Error('not_found', 'Producto o proveedor no encontrado');
+        }
+
+        $table = "{$prefix}producto_proveedor_conocido";
+        if ($preferido) {
+            $wpdb->update($table, ['es_preferido' => 0], ['producto_base_id' => $producto_base_id], ['%d'], ['%d']);
+        }
+        $existing = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$table} WHERE producto_base_id = %d AND proveedor_id = %d",
+            $producto_base_id,
+            $proveedor_id
+        ));
+        if ($existing) {
+            if ($preferido) {
+                $wpdb->update($table, ['es_preferido' => 1], ['id' => $existing], ['%d'], ['%d']);
+            }
+            return $existing;
+        }
+        $wpdb->insert($table, [
+            'producto_base_id' => $producto_base_id,
+            'proveedor_id' => $proveedor_id,
+            'es_preferido' => $preferido ? 1 : 0,
+            'origen' => 'manual',
+            'created_by' => get_current_user_id(),
+        ], ['%d', '%d', '%d', '%s', '%d']);
+        return (int) $wpdb->insert_id;
+    }
+
+    /**
+     * Si el producto ya tiene código de ese proveedor, no hace falta la marca.
+     *
+     * @param int $producto_base_id
+     * @param int $proveedor_id
+     */
+    public static function remember_if_uncoded($producto_base_id, $proveedor_id) {
+        global $wpdb;
+        $producto_base_id = absint($producto_base_id);
+        $proveedor_id = absint($proveedor_id);
+        if (!$producto_base_id || !$proveedor_id) {
+            return;
+        }
+        $prefix = $wpdb->prefix . 'riverso_';
+        $has_code = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}producto_proveedor
+             WHERE producto_base_id = %d AND proveedor_id = %d AND activo = 1
+             LIMIT 1",
+            $producto_base_id,
+            $proveedor_id
+        ));
+        if ($has_code) {
+            return;
+        }
+        self::assign_known($producto_base_id, $proveedor_id, false);
+    }
+
+    /**
+     * Proveedores conocidos que todavía no tienen código en el producto.
+     *
+     * @param int        $producto_base_id
+     * @param int[]|null $skip_supplier_ids Proveedores que ya tienen código.
+     * @return array<int,array<string,mixed>>
+     */
+    public static function list_known($producto_base_id, $skip_supplier_ids = null) {
+        global $wpdb;
+        $producto_base_id = absint($producto_base_id);
+        if (!$producto_base_id) {
+            return [];
+        }
+        $prefix = $wpdb->prefix . 'riverso_';
+        $table = "{$prefix}producto_proveedor_conocido";
+        if (!self::table_ready($table)) {
+            return [];
+        }
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT k.id, k.proveedor_id, k.es_preferido, p.nombre, p.rut, p.provisional
+             FROM {$table} k
+             INNER JOIN {$prefix}proveedores p ON p.id = k.proveedor_id AND p.activo = 1
+             WHERE k.producto_base_id = %d
+             ORDER BY k.es_preferido DESC, p.nombre ASC",
+            $producto_base_id
+        ), ARRAY_A);
+        $skip = array_map('intval', $skip_supplier_ids ?: []);
+        $out = [];
+        foreach ($rows ?: [] as $row) {
+            $sid = (int) $row['proveedor_id'];
+            if (in_array($sid, $skip, true)) {
+                continue;
+            }
+            $apodos = $wpdb->get_col($wpdb->prepare(
+                "SELECT apodo FROM {$prefix}proveedor_apodos WHERE proveedor_id = %d ORDER BY apodo ASC",
+                $sid
+            )) ?: [];
+            $out[] = [
+                'id' => (int) $row['id'],
+                'proveedor_id' => $sid,
+                'nombre' => (string) $row['nombre'],
+                'rut' => (string) ($row['rut'] ?? ''),
+                'provisional' => (int) $row['provisional'],
+                'es_preferido' => (int) $row['es_preferido'],
+                'apodos' => $apodos,
+                'sin_codigo' => true,
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * @param int $id
+     * @return bool
+     */
+    public static function remove_known($id) {
+        global $wpdb;
+        $id = absint($id);
+        if (!$id) {
+            return false;
+        }
+        $deleted = $wpdb->delete(
+            $wpdb->prefix . 'riverso_producto_proveedor_conocido',
+            ['id' => $id],
+            ['%d']
+        );
+        return $deleted !== false && $deleted > 0;
+    }
+
+    /**
+     * @param string $apodo
+     * @return string
+     */
+    private static function normalize_apodo_static($apodo) {
+        $apodo = sanitize_text_field((string) $apodo);
+        $apodo = preg_replace('/\s+/u', ' ', trim($apodo));
+        return (string) $apodo;
+    }
+
+    /**
+     * @param int    $proveedor_id
+     * @param string $apodo
+     */
+    private static function store_apodo($proveedor_id, $apodo) {
+        global $wpdb;
+        $proveedor_id = absint($proveedor_id);
+        $apodo = self::normalize_apodo_static($apodo);
+        if (!$proveedor_id || $apodo === '' || mb_strlen($apodo) > 100) {
+            return;
+        }
+        $table = $wpdb->prefix . 'riverso_proveedor_apodos';
+        $clash = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$table} WHERE proveedor_id = %d AND LOWER(apodo) = LOWER(%s) LIMIT 1",
+            $proveedor_id,
+            $apodo
+        ));
+        if ($clash) {
+            return;
+        }
+        $wpdb->insert($table, [
+            'proveedor_id' => $proveedor_id,
+            'apodo' => $apodo,
+        ], ['%d', '%s']);
+    }
+
+    /**
+     * @param string $table
+     * @return bool
+     */
+    private static function table_ready($table) {
+        global $wpdb;
+        $like = $wpdb->esc_like($table);
+        return (string) $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $like)) === $table;
+    }
+
     /**
      * Limpia un RUT (solo números y K)
      */

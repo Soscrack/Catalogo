@@ -50,8 +50,16 @@ class Riverso_POS_Permissions {
         'riverso_view_quotes'        => 'Ver cotizaciones clientes',
         'riverso_create_quotes'      => 'Crear cotizaciones clientes',
         'riverso_approve_quotes'     => 'Aprobar cotizaciones clientes',
+        'riverso_emit_dte'           => 'Emitir DTE (factura/boleta FACTO)',
+        'riverso_manage_printing'    => 'Configurar impresión directa (hubs, presets, ruteo)',
+
+        // === CLIENTES COMERCIALES ===
         'riverso_view_customers'     => 'Ver clientes y contactos',
         'riverso_edit_customers'     => 'Editar clientes y contactos',
+
+        // === COBRANZA / CAJA ===
+        'riverso_view_cash'              => 'Ver manejo de caja',
+        'riverso_manage_cash_accounts'   => 'Administrar cuentas bancarias y efectivo',
         
         // === VENTAS / POS ===
         'riverso_use_pos'            => 'Usar POS interno',
@@ -82,7 +90,13 @@ class Riverso_POS_Permissions {
         // === RECEPCIÓN FÍSICA ===
         'riverso_receive_items'      => 'Registrar recepción física',
         'riverso_approve_reception'  => 'Aprobar recepción',
-        
+
+        // === AVISOS Y PEDIDOS DE COMPRA ===
+        'riverso_report_shortage'         => 'Avisar productos que faltan',
+        'riverso_manage_purchase_notices' => 'Gestionar bandeja de avisos de compra',
+        'riverso_view_purchases'          => 'Ver órdenes de compra',
+        'riverso_edit_purchases'          => 'Crear órdenes de compra y entradas directas de stock',
+
         // === TAREAS ===
         'riverso_view_tasks'         => 'Ver tareas',
         'riverso_create_tasks'       => 'Crear tareas',
@@ -174,6 +188,16 @@ class Riverso_POS_Permissions {
             'riverso_view_quotes',
             'riverso_create_quotes',
             'riverso_approve_quotes',
+            'riverso_emit_dte',
+            'riverso_manage_printing',
+        ],
+        'Clientes' => [
+            'riverso_view_customers',
+            'riverso_edit_customers',
+        ],
+        'Cobranza / Caja' => [
+            'riverso_view_cash',
+            'riverso_manage_cash_accounts',
         ],
         'Clientes' => [
             'riverso_view_customers',
@@ -207,6 +231,12 @@ class Riverso_POS_Permissions {
         'Recepción' => [
             'riverso_receive_items',
             'riverso_approve_reception',
+        ],
+        'Avisos y pedidos de compra' => [
+            'riverso_report_shortage',
+            'riverso_manage_purchase_notices',
+            'riverso_view_purchases',
+            'riverso_edit_purchases',
         ],
         'Tareas' => [
             'riverso_view_tasks',
@@ -293,16 +323,19 @@ class Riverso_POS_Permissions {
                 'riverso_view_prices',
                 'riverso_view_quotes',
                 'riverso_create_quotes',
+                'riverso_emit_dte',
+                'riverso_view_cash',
                 'riverso_view_customers',
                 'riverso_edit_customers',
                 'riverso_view_tasks',
                 'riverso_complete_tasks',
                 'riverso_scan_barcodes',
+                'riverso_report_shortage',
                 'riverso_view_print_orders',
                 'riverso_create_print_orders',
             ]
         ],
-        
+
         // Bodega - operaciones físicas
         'riverso_bodega' => [
             'name' => 'Operador Bodega',
@@ -320,6 +353,7 @@ class Riverso_POS_Permissions {
                 'riverso_manage_sort_orders',
                 'riverso_view_inventory_history',
                 'riverso_receive_items',
+                'riverso_report_shortage',
                 'riverso_view_tasks',
                 'riverso_complete_tasks',
                 'riverso_scan_barcodes',
@@ -363,6 +397,9 @@ class Riverso_POS_Permissions {
                 'riverso_view_prices',
                 'riverso_manage_matching',
                 'riverso_manage_competencia',
+                'riverso_report_shortage',
+                'riverso_manage_purchase_notices',
+                'riverso_view_purchases',
                 'riverso_view_tasks',
                 'riverso_create_tasks',
                 'riverso_complete_tasks',
@@ -370,7 +407,7 @@ class Riverso_POS_Permissions {
                 'riverso_create_print_orders',
             ]
         ],
-        
+
         // Recepciones - validación física
         'riverso_recepciones' => [
             'name' => 'Recepcionista',
@@ -382,6 +419,7 @@ class Riverso_POS_Permissions {
                 'riverso_view_invoices',
                 'riverso_receive_items',
                 'riverso_approve_reception',
+                'riverso_report_shortage',
                 'riverso_view_warehouse',
                 'riverso_do_inventory',
                 'riverso_manage_sort_orders',
@@ -417,6 +455,7 @@ class Riverso_POS_Permissions {
                 'riverso_manage_inventory_orders',
                 'riverso_manage_sort_orders',
                 'riverso_view_inventory_history',
+                'riverso_report_shortage',
                 'riverso_manage_codes',
                 'riverso_view_suppliers',
                 'riverso_assign_barcodes',
@@ -452,6 +491,9 @@ class Riverso_POS_Permissions {
                 'riverso_view_stock',
                 'riverso_view_quotes',
                 'riverso_create_quotes',
+                'riverso_emit_dte',
+                'riverso_view_customers',
+                'riverso_edit_customers',
             ]
         ],
     ];

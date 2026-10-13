@@ -64,26 +64,70 @@ class Riverso_POS_Admin_Menu {
             foreach ($group['items'] as $item) {
                 $page = $item['admin_page'] ?? null;
                 $callback_name = $item['admin_callback'] ?? null;
-                if (!$page || !$callback_name || !method_exists($this, $callback_name)) {
-                    continue;
+                if ($page && $callback_name && method_exists($this, $callback_name)) {
+                    $cap = $item['admin_capability']
+                        ?? $item['capability']
+                        ?? $top_cap;
+
+                    $menu_label = $item['menu_label'] ?? $item['label'];
+
+                    add_submenu_page(
+                        'riverso-pos',
+                        $item['label'],
+                        $menu_label,
+                        $cap,
+                        $page,
+                        [$this, $callback_name]
+                    );
                 }
 
-                $cap = $item['admin_capability']
-                    ?? $item['capability']
-                    ?? $top_cap;
-
-                $menu_label = $item['menu_label'] ?? $item['label'];
-
-                add_submenu_page(
-                    'riverso-pos',
-                    $item['label'],
-                    $menu_label,
-                    $cap,
-                    $page,
-                    [$this, $callback_name]
-                );
+                // Sub-ítems con página admin (omitir [WIP]).
+                $children = (!empty($item['children']) && is_array($item['children'])) ? $item['children'] : [];
+                foreach ($children as $child) {
+                    if (!empty($child['wip'])) {
+                        continue;
+                    }
+                    $child_page = $child['admin_page'] ?? null;
+                    $child_cb = $child['admin_callback'] ?? null;
+                    if (!$child_page || !$child_cb || !method_exists($this, $child_cb)) {
+                        continue;
+                    }
+                    $child_cap = $child['admin_capability']
+                        ?? $child['capability']
+                        ?? $item['admin_capability']
+                        ?? $item['capability']
+                        ?? $top_cap;
+                    $child_label = $child['menu_label'] ?? $child['label'];
+                    add_submenu_page(
+                        'riverso-pos',
+                        $child['label'],
+                        $child_label,
+                        $child_cap,
+                        $child_page,
+                        [$this, $child_cb]
+                    );
+                }
             }
         }
+
+        $this->register_portal_shortcut($top_cap);
+    }
+
+    /**
+     * Acceso directo al portal /interno, primero en el menú de Riverso POS.
+     */
+    private function register_portal_shortcut($capability) {
+        global $submenu;
+
+        if (!isset($submenu['riverso-pos']) || !is_array($submenu['riverso-pos'])) {
+            return;
+        }
+
+        array_unshift($submenu['riverso-pos'], [
+            __('Portal interno', 'riverso-pos'),
+            $capability,
+            home_url('/interno/'),
+        ]);
     }
 
     /**
@@ -93,6 +137,12 @@ class Riverso_POS_Admin_Menu {
         ?>
         <script>
         (function () {
+            var portalUrl = <?php echo wp_json_encode(home_url('/interno/')); ?>;
+            document.querySelectorAll('#toplevel_page_riverso-pos .wp-submenu a').forEach(function (link) {
+                if ((link.textContent || '').trim() === 'Portal interno') {
+                    link.setAttribute('href', portalUrl);
+                }
+            });
             document.querySelectorAll('#adminmenu .riverso-nav-label').forEach(function (label) {
                 var link = label.closest('a');
                 if (!link) return;
@@ -129,6 +179,14 @@ class Riverso_POS_Admin_Menu {
      * Renderiza la página de recepción
      */
     public function render_reception() {
+        // Recepción nueva (zona Recepción → ordenar → reclamos); ?legacy=1 abre la antigua.
+        if (empty($_GET['legacy']) && class_exists('Riverso_Purchase_Reception_Module')) {
+            echo '<div class="wrap">';
+            Riverso_Purchase_Reception_Module::get_instance()->render_app('admin');
+            echo '<p style="margin-top:24px"><a href="' . esc_url(admin_url('admin.php?page=riverso-pos-reception&legacy=1')) . '">Recepción antigua (aprobación de facturas en modo recepción)</a></p>';
+            echo '</div>';
+            return;
+        }
         $this->render_page('reception');
     }
     
@@ -368,6 +426,45 @@ class Riverso_POS_Admin_Menu {
      */
     public function render_customer_quotes() {
         $this->render_page('customer-quotes');
+    }
+
+    /**
+     * Renderiza la página de clientes comerciales
+     */
+    public function render_customers() {
+        if (!class_exists('Riverso_Customer_Module')) {
+            $file = RIVERSO_POS_PLUGIN_DIR . 'sales/customers/class-customer-module.php';
+            if (file_exists($file)) {
+                require_once $file;
+            }
+        }
+        $this->render_page('customers');
+    }
+
+    /**
+     * Manejo de Caja (Cobranza).
+     */
+    public function render_cash() {
+        if (!class_exists('Riverso_Cash_Module')) {
+            $file = RIVERSO_POS_PLUGIN_DIR . 'sales/cash/class-cash-module.php';
+            if (file_exists($file)) {
+                require_once $file;
+            }
+        }
+        $this->render_page('cash');
+    }
+
+    /**
+     * Cuentas bancarias y efectivo (Administración).
+     */
+    public function render_cash_accounts() {
+        if (!class_exists('Riverso_Cash_Module')) {
+            $file = RIVERSO_POS_PLUGIN_DIR . 'sales/cash/class-cash-module.php';
+            if (file_exists($file)) {
+                require_once $file;
+            }
+        }
+        $this->render_page('cash-accounts');
     }
     
     /**

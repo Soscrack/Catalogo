@@ -1619,6 +1619,145 @@ jQuery(document).ready(function($) {
         return html;
     }
 
+    // ---- Navegación en la URL ----
+    // ?quote=ID (detalle), ?nueva=1 (formulario vacío) o los filtros de la lista
+    // (q, estado, tipo, fuente, proveedor, desde, hasta, final). Los demás parámetros
+    // (page= en wp-admin, v= del portal) se conservan. Atrás/adelante y recargar
+    // reconstruyen la pantalla desde la URL.
+    const URL_FILTROS = {
+        q: '#filtro-buscar',
+        estado: '#filtro-estado',
+        tipo: '#filtro-tipo-doc',
+        fuente: '#filtro-fuente',
+        proveedor: '#filtro-proveedor',
+        desde: '#filtro-desde',
+        hasta: '#filtro-hasta'
+    };
+    const URL_PROPIOS = ['quote', 'nueva', 'final'].concat(Object.keys(URL_FILTROS));
+    const TIPO_DOC_DEFECTO = 'cotizacion';
+    // El selector de proveedor se llena al llegar la lista: guarda el valor de la URL hasta entonces.
+    let filtroProveedorPendiente = '';
+    // Ruta + query que refleja la pantalla; un popstate que solo cambia el #hash no navega.
+    let urlMostrada = window.location.pathname + window.location.search;
+
+    function filtrosDelFormulario() {
+        const f = {};
+        Object.keys(URL_FILTROS).forEach(k => {
+            let v = $(URL_FILTROS[k]).val() || '';
+            if (k === 'proveedor' && !v) v = filtroProveedorPendiente;
+            if (k === 'tipo' && v === TIPO_DOC_DEFECTO) v = '';
+            if (v) f[k] = String(v).trim();
+        });
+        if ($('#filtro-solo-final').is(':checked')) f.final = '1';
+        return f;
+    }
+
+    function aplicarFiltrosAlFormulario(f) {
+        Object.keys(URL_FILTROS).forEach(k => {
+            const v = f[k] || (k === 'tipo' ? TIPO_DOC_DEFECTO : '');
+            if (k === 'proveedor') {
+                filtroProveedorPendiente = v;
+                if (v && !$('#filtro-proveedor option[value="' + v + '"]').length) return;
+            }
+            $(URL_FILTROS[k]).val(v);
+        });
+        $('#filtro-solo-final').prop('checked', f.final === '1');
+    }
+
+    function leerEstadoUrl() {
+        const sp = new URLSearchParams(window.location.search);
+        const filtros = {};
+        Object.keys(URL_FILTROS).forEach(k => {
+            const v = (sp.get(k) || '').trim();
+            if (v) filtros[k] = v;
+        });
+        if (sp.get('final') === '1') filtros.final = '1';
+        return {
+            quote: parseInt(sp.get('quote') || '0', 10) || 0,
+            nueva: sp.get('nueva') === '1',
+            filtros: filtros
+        };
+    }
+
+    // estado: { quote } | { nueva: true } | { filtros }. modo: 'push' | 'replace'.
+    function escribirUrl(estado, modo) {
+        if (!window.history || !window.history.pushState) return;
+        const url = new URL(window.location.href);
+        URL_PROPIOS.forEach(k => url.searchParams.delete(k));
+        if (estado.quote) {
+            url.searchParams.set('quote', String(estado.quote));
+        } else if (estado.nueva) {
+            url.searchParams.set('nueva', '1');
+        } else {
+            Object.keys(estado.filtros || {}).forEach(k => url.searchParams.set(k, estado.filtros[k]));
+        }
+        const destino = url.pathname + url.search + url.hash;
+        const actual = window.location.pathname + window.location.search + window.location.hash;
+        const state = { rq: true, desdeLista: !!(estado.desdeLista) };
+        if (modo === 'push' && destino !== actual) {
+            window.history.pushState(state, '', destino);
+        } else {
+            window.history.replaceState(state, '', destino);
+        }
+        urlMostrada = url.pathname + url.search;
+    }
+
+    // Lista: aplica filtros nuevos (agrega una entrada al historial si cambiaron).
+    function buscarCotizaciones() {
+        escribirUrl({ filtros: filtrosDelFormulario() }, 'push');
+        cargarCotizaciones();
+    }
+
+    function mostrarLista(opts) {
+        opts = opts || {};
+        $('#vista-detalle').hide();
+        $('#vista-lista').show();
+        // Evitar que "Subir Archivo" reemplace la cotización abierta
+        $('#cotizacion-id').val(0);
+        cotizacionActual = null;
+        itemsActuales = [];
+        origenActual = null;
+        versionSiblingsActual = [];
+        if (opts.url !== false) {
+            escribirUrl({ filtros: filtrosDelFormulario() }, opts.url || 'push');
+        }
+        cargarCotizaciones();
+    }
+
+    function abrirNuevaCotizacion(opts) {
+        opts = opts || {};
+        const veniaDeLista = $('#vista-lista').is(':visible');
+        cotizacionActual = null;
+        itemsActuales = [];
+        origenActual = null;
+        versionSiblingsActual = [];
+        mostrarDetalle();
+        if (opts.url !== false) {
+            escribirUrl({ nueva: true, desdeLista: veniaDeLista }, 'push');
+        }
+    }
+
+    // Lleva la pantalla al estado que dice la URL (al cargar y con atrás/adelante).
+    function irAEstadoUrl() {
+        urlMostrada = window.location.pathname + window.location.search;
+        const e = leerEstadoUrl();
+        $('.riverso-modal').hide();
+        if (e.quote) {
+            verCotizacion(e.quote, { url: false, desdeUrl: true });
+        } else if (e.nueva) {
+            abrirNuevaCotizacion({ url: false });
+        } else {
+            // Solo la URL de la lista trae filtros; el detalle conserva los del formulario.
+            aplicarFiltrosAlFormulario(e.filtros);
+            mostrarLista({ url: false });
+        }
+    }
+
+    window.addEventListener('popstate', function() {
+        if (window.location.pathname + window.location.search === urlMostrada) return;
+        irAEstadoUrl();
+    });
+
     // Cargar lista de cotizaciones
     function cargarCotizaciones() {
         $.post(ajaxurl, {
@@ -1627,7 +1766,7 @@ jQuery(document).ready(function($) {
             estado: $('#filtro-estado').val(),
             tipo_fuente: $('#filtro-fuente').val(),
             tipo_doc: $('#filtro-tipo-doc').val() || 'cotizacion',
-            proveedor_id: $('#filtro-proveedor').val(),
+            proveedor_id: $('#filtro-proveedor').val() || filtroProveedorPendiente,
             buscar: $('#filtro-buscar').val(),
             fecha_desde: $('#filtro-desde').val(),
             fecha_hasta: $('#filtro-hasta').val(),
@@ -1726,11 +1865,16 @@ jQuery(document).ready(function($) {
     }
 
     function renderProveedoresSelect() {
+        const proveedorFiltro = $('#filtro-proveedor').val() || filtroProveedorPendiente;
         let opts = '<option value="">Todos los proveedores</option>';
         proveedoresCache.forEach(p => {
             opts += `<option value="${p.id}">${p.nombre}</option>`;
         });
         $('#filtro-proveedor').html(opts);
+        if (proveedorFiltro && $('#filtro-proveedor option[value="' + proveedorFiltro + '"]').length) {
+            $('#filtro-proveedor').val(proveedorFiltro);
+            filtroProveedorPendiente = '';
+        }
 
         opts = '<option value="">Seleccionar proveedor...</option>';
         proveedoresCache.forEach(p => {
@@ -1740,12 +1884,30 @@ jQuery(document).ready(function($) {
     }
 
     // Ver/editar cotización
-    function verCotizacion(id) {
+    // opts.url: false = no tocar la URL (viene de la URL). Si no, abrir otra cotización
+    // agrega una entrada al historial y recargar la misma no.
+    function verCotizacion(id, opts) {
+        opts = opts || {};
+        const veniaDeLista = $('#vista-lista').is(':visible');
         $.post(ajaxurl, {
             action: 'riverso_get_received_quote',
             nonce: nonce,
             id: id
         }, function(r) {
+            if (!r.success) {
+                if (opts.desdeUrl) {
+                    alert((r.data && r.data.message) ? r.data.message : 'No se encontró la cotización #' + id);
+                    mostrarLista({ url: 'replace' });
+                }
+                return;
+            }
+            if (opts.url !== false) {
+                const actual = leerEstadoUrl().quote;
+                escribirUrl(
+                    { quote: id, desdeLista: veniaDeLista || (actual === Number(id) && !!(history.state && history.state.desdeLista)) },
+                    actual === Number(id) ? 'replace' : 'push'
+                );
+            }
             if (r.success) {
                 cotizacionActual = r.data.quote;
                 itemsActuales = r.data.items;
@@ -2161,32 +2323,32 @@ jQuery(document).ready(function($) {
 
     // Eventos de navegación
     $('#btn-volver-lista').on('click', function() {
-        $('#vista-detalle').hide();
-        $('#vista-lista').show();
-        // Evitar que "Subir Archivo" reemplace la cotización abierta
-        $('#cotizacion-id').val(0);
-        cotizacionActual = null;
-        itemsActuales = [];
-        origenActual = null;
-        versionSiblingsActual = [];
-        cargarCotizaciones();
+        if (history.state && history.state.rq && history.state.desdeLista) {
+            history.back();
+            return;
+        }
+        mostrarLista();
     });
 
     $('#btn-nueva-cotizacion').on('click', function() {
-        cotizacionActual = null;
-        itemsActuales = [];
-        origenActual = null;
-        versionSiblingsActual = [];
-        mostrarDetalle();
+        abrirNuevaCotizacion();
     });
 
-    $('#btn-filtrar').on('click', cargarCotizaciones);
-    $('#filtro-solo-final').on('change', cargarCotizaciones);
+    $('#btn-filtrar').on('click', buscarCotizaciones);
+    $('#filtro-solo-final').on('change', buscarCotizaciones);
+    // Enter en el buscador = Filtrar
+    $('#filtro-buscar').on('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            buscarCotizaciones();
+        }
+    });
     $('#btn-limpiar-filtros').on('click', function() {
         $('#filtro-buscar, #filtro-estado, #filtro-fuente, #filtro-proveedor, #filtro-desde, #filtro-hasta').val('');
+        filtroProveedorPendiente = '';
         $('#filtro-tipo-doc').val('cotizacion');
         $('#filtro-solo-final').prop('checked', false);
-        cargarCotizaciones();
+        buscarCotizaciones();
     });
 
     // Click en tabla
@@ -2209,12 +2371,12 @@ jQuery(document).ready(function($) {
 
     $('#stat-card-confirmar').on('click', function() {
         $('#filtro-tipo-doc').val('posible_cotizacion');
-        cargarCotizaciones();
+        buscarCotizaciones();
     });
     $(document).on('click', '#link-ver-posibles', function(e) {
         e.preventDefault();
         $('#filtro-tipo-doc').val('posible_cotizacion');
-        cargarCotizaciones();
+        buscarCotizaciones();
     });
 
     $('#lista-cotizaciones').on('click', '.btn-ver', function() {
@@ -2263,6 +2425,7 @@ jQuery(document).ready(function($) {
                 $('#cotizacion-id').val(r.data.id);
                 cotizacionActual = cotizacionActual || {};
                 cotizacionActual.id = r.data.id;
+                escribirUrl({ quote: r.data.id, desdeLista: !!(history.state && history.state.desdeLista) }, 'replace');
                 $('#titulo-cotizacion').text(`Cotización #${r.data.id}`);
                 alert(r.data.message);
             } else {
@@ -3532,12 +3695,7 @@ jQuery(document).ready(function($) {
     // Spinner CSS
     $('<style>.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }</style>').appendTo('head');
 
-    // Init
-    const quoteFromUrl = parseInt(new URLSearchParams(window.location.search).get('quote') || '0', 10);
-    if (quoteFromUrl > 0) {
-        verCotizacion(quoteFromUrl);
-    } else {
-        cargarCotizaciones();
-    }
+    // Init: la URL manda (detalle, nueva o lista con sus filtros).
+    irAEstadoUrl();
 });
 </script>

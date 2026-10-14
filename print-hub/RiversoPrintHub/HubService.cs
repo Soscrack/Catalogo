@@ -190,11 +190,13 @@ internal sealed class HubService
     private async Task RunJobSerializedAsync(HubApi api, HubJob job, CancellationToken ct)
     {
         var printer = job.Settings?.Printer ?? "";
-        var gate = _printerLocks.GetOrAdd(printer, _ => new SemaphoreSlim(1, 1));
+        bool scan = job.Kind == "scan";
+        // El escáner tiene su propia fila: la multifuncional puede imprimir mientras escanea.
+        var gate = _printerLocks.GetOrAdd(scan ? "scan:" + printer : printer, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(ct);
         try
         {
-            await RunJobAsync(api, job, ct);
+            await (scan ? RunScanJobAsync(api, job, ct) : RunJobAsync(api, job, ct));
         }
         catch (Exception ex)
         {
@@ -293,6 +295,98 @@ internal sealed class HubService
     {
     }
 
+    /// <summary>Escanea en la multifuncional (alimentador o vidrio), arma el PDF y lo sube al servidor.</summary>
+    private async Task RunScanJobAsync(HubApi api, HubJob job, CancellationToken ct)
+    {
+        var s = job.Settings;
+        if (s is null || string.IsNullOrWhiteSpace(s.Printer))
+        {
+            await Fail(api, job, "scan_failed", "El trabajo no trae escáner");
+            return;
+        }
+        var label = string.IsNullOrWhiteSpace(s.PrinterLabel) ? s.Printer : s.PrinterLabel;
+        Log.Info($"Escaneo #{job.Id} en {s.Printer} ({(s.DosCaras ? "dos caras" : "una cara")}, {s.Papel}, {s.Dpi} ppp)");
+        try
+        {
+            await api.ReportAsync(job.Id, "tomado", "Preparando " + label);
+            var host = _inventory.HostFor(s.Printer);
+            if (host.Length == 0)
+            {
+                await Fail(api, job, "scanner_offline", "falta su IP en Facturación → Impresión");
+                return;
+            }
+            using var scanner = new EsclScanner(host);
+            await api.ReportAsync(job.Id, "imprimiendo", "Escaneando");
+            var result = await scanner.ScanAsync(s, n => api.ReportAsync(job.Id, "imprimiendo", "Escaneando página " + n), ct);
+            int pages = result.Pages.Count;
+            Log.Info($"Escaneo #{job.Id}: {pages} página(s) desde {(result.FromFeeder ? "el alimentador" : "el vidrio")}, {result.Pages.Sum(p => (long)p.Length) / 1024} KB");
+
+            string uploading = "Subiendo " + pages + (pages == 1 ? " página" : " páginas");
+            await api.ReportAsync(job.Id, "imprimiendo", uploading);
+            var pdf = await Task.Run(() => ScanPdf.Build(result.Pages, s.Dpi, s.MaxBytes), ct);
+
+            // Mientras sube, se sigue avisando para que el servidor no dé el trabajo por perdido.
+            using var uploadDone = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var heartbeat = Task.Run(async () =>
+            {
+                try
+                {
+                    while (true)
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(20), uploadDone.Token);
+                        await api.ReportAsync(job.Id, "imprimiendo", uploading);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            });
+            (string Code, string Message) upload;
+            try
+            {
+                upload = await api.UploadScanAsync(job.Id, pdf, pages, result.Truncated, ct);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+            {
+                upload = ("upload_failed", ex.Message);
+            }
+            finally
+            {
+                uploadDone.Cancel();
+                await heartbeat;
+            }
+            if (upload.Code == "job_closed")
+            {
+                Log.Info($"Escaneo #{job.Id}: el servidor lo cerró (vencido); el PDF no se usó.");
+                return;
+            }
+            if (upload.Code != "ok")
+            {
+                await Fail(api, job, upload.Code, upload.Message);
+                return;
+            }
+            Log.Info($"Escaneo #{job.Id} subido: {pages} página(s), {pdf.Length / 1024} KB");
+            JobFinished?.Invoke(new JobResult(job.Id, job.Titulo, true, $"Escaneo enviado ({pages} {(pages == 1 ? "página" : "páginas")})"));
+        }
+        catch (ScanException ex)
+        {
+            await Fail(api, job, ex.Code, ex.Detail);
+        }
+        catch (HubAuthException ex)
+        {
+            Log.Error($"Escaneo #{job.Id}: {ex.Message}");
+        }
+        catch (OperationCanceledException)
+        {
+            await Fail(api, job, "hub_lost", "El hub se cerró mientras escaneaba");
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Escaneo #{job.Id}: {ex}");
+            await Fail(api, job, "scan_failed", ex.Message);
+        }
+    }
+
     /// <summary>Descarga el PDF; si FACTO aún no lo genera (recién emitido) reintenta hasta 30 s.</summary>
     private static async Task<byte[]> FetchPdfAsync(HubApi api, HubJob job, CancellationToken ct)
     {
@@ -338,6 +432,12 @@ internal sealed class HubService
         "paper_missing" => "El papel «" + detail + "» no existe en la impresora",
         "print_timeout" => "La impresora no respondió; trabajo cancelado",
         "pdf_unavailable" => "No se pudo obtener el PDF de FACTO",
+        "scanner_offline" => "Escáner apagado o sin red" + (detail.Length > 0 ? " (" + detail + ")" : ""),
+        "scanner_busy" => "El escáner está ocupado",
+        "scanner_error" => "Problema en el escáner" + (detail.Length > 0 ? ": " + detail : ""),
+        "scan_empty" => "El escáner no entregó ninguna página",
+        "too_large" => "El escaneo pesa demasiado; escanea menos hojas por vez",
+        "upload_failed" => "No se pudo subir el escaneo" + (detail.Length > 0 ? ": " + detail : ""),
         _ => detail.Length > 0 ? detail : code,
     };
 }

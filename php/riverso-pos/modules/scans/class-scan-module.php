@@ -199,10 +199,39 @@ class Riverso_Scan_Module {
     }
 
     /**
+     * Archivo que no llega por el formulario (escaneo enviado por el hub de impresión).
+     * Queda a nombre del usuario actual. Sin llamar a Gemini todavía.
+     *
+     * @return array|WP_Error
+     */
+    public function prepare_external_upload($tmp_path, $original_name) {
+        if (!riverso_scan_gemini_configured()) {
+            return new WP_Error('gemini_not_configured', 'Gemini API no configurada.');
+        }
+        return $this->prepare_upload($tmp_path, $original_name);
+    }
+
+    /**
+     * Responde $response como JSON y sigue con la lectura de IA sin que el cliente espere.
+     */
+    public function respond_and_extract(array $prepared, array $response) {
+        $this->flush_json($response);
+        ignore_user_abort(true);
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(300);
+        }
+        $this->run_extraction($prepared);
+    }
+
+    /**
      * Cierra la respuesta JSON al cliente y deja PHP seguir ejecutando.
      */
     private function flush_json_success(array $data) {
-        $payload = wp_json_encode(['success' => true, 'data' => $data]);
+        $this->flush_json(['success' => true, 'data' => $data]);
+    }
+
+    private function flush_json(array $body) {
+        $payload = wp_json_encode($body);
         if (!headers_sent()) {
             status_header(200);
             header('Content-Type: application/json; charset=' . get_option('blog_charset', 'UTF-8'));

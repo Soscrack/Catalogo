@@ -649,23 +649,125 @@
         return data;
       })
       .then(function (data) {
-        var docs = (data.documentos || []).filter(Boolean).map(normScan);
-        if (!docs.length) throw new Error("No se encontró ningún documento en el archivo.");
-        docs.forEach(function (d) {
-          state.scanDocs[d.id] = d;
-        });
-        var note = data.reutilizado ? '<div class="rx-sub">Este archivo ya se había procesado: sin costo de IA.</div>' : "";
-        cardBody(card, note + docs.map(scanDocHtml).join(""), "is-ok");
-        loadInbox();
-        // Un solo documento y ya ingresado: abrir su recepción directo.
-        var ready = docs.filter(function (d) {
-          return d.factura_id && !d.needs_ingreso && d.tipo_dte !== 61;
-        });
-        if (single && docs.length === 1 && ready.length === 1) {
-          openDoc(ready[0].factura_id, "recibir");
-        }
+        showScanDocs(card, data, single);
       });
   }
+
+  /** Documentos que la IA encontró en un archivo (subido o escaneado). */
+  function showScanDocs(card, data, single) {
+    var docs = (data.documentos || []).filter(Boolean).map(normScan);
+    if (!docs.length) throw new Error("No se encontró ningún documento en el archivo.");
+    docs.forEach(function (d) {
+      state.scanDocs[d.id] = d;
+    });
+    var note = data.reutilizado ? '<div class="rx-sub">Este archivo ya se había procesado: sin costo de IA.</div>' : "";
+    cardBody(card, note + docs.map(scanDocHtml).join(""), "is-ok");
+    loadInbox();
+    // Un solo documento y ya ingresado: abrir su recepción directo.
+    var ready = docs.filter(function (d) {
+      return d.factura_id && !d.needs_ingreso && d.tipo_dte !== 61;
+    });
+    if (single && docs.length === 1 && ready.length === 1) {
+      openDoc(ready[0].factura_id, "recibir");
+    }
+  }
+
+  /* ===================== Escanear desde la multifuncional ===================== */
+
+  var DEVICE_POLL_MS = 1500;
+  var DEVICE_POLL_MAX = 400; // ~10 min: un alimentador lleno a dos caras
+  var SCAN_OPTS_KEY = "riverso-rx-scan-opts";
+
+  function setupScanner() {
+    var sc = cfg.scanner;
+    if (!sc || !sc.available || !cfg.actions.scanDevice) return;
+    var opts = storageGet(SCAN_OPTS_KEY) || {};
+    $("rx-scanbox").hidden = false;
+    $("rx-scanbox").classList.toggle("is-off", !sc.ready);
+    $("rx-scan-btn").title = sc.ready ? "Escanear en " + sc.label : sc.message;
+    $("rx-scan-duplex-row").hidden = !sc.duplex;
+    $("rx-scan-duplex").checked = !!sc.duplex && !!opts.dosCaras;
+    $("rx-scan-oficio").checked = !!opts.oficio;
+    $("rx-scan-hint").textContent =
+      "Usa el alimentador si tiene hojas; si no, el vidrio. Máximo " + sc.maxPages + " páginas por escaneo.";
+    $("rx-scan-btn").addEventListener("click", scanFromDevice);
+    ["rx-scan-duplex", "rx-scan-oficio"].forEach(function (id) {
+      $(id).addEventListener("change", function () {
+        storageSet(SCAN_OPTS_KEY, { dosCaras: $("rx-scan-duplex").checked, oficio: $("rx-scan-oficio").checked });
+      });
+    });
+  }
+
+  function scanFromDevice() {
+    var btn = $("rx-scan-btn");
+    $("rx-scan-opts").open = false;
+    var card = ingestCard("Escaneo · " + cfg.scanner.label);
+    cardBody(card, busyHtml("Enviando la orden al escáner…"), "is-busy");
+    btn.disabled = true;
+    post(cfg.actions.scanDevice, {
+      op: "start",
+      dos_caras: $("rx-scan-duplex").checked,
+      papel: $("rx-scan-oficio").checked ? "oficio" : "carta",
+    })
+      .then(function (data) {
+        return pollDevice(data.job, card);
+      })
+      .then(function (job) {
+        // El escáner ya quedó libre: se puede lanzar otro mientras la IA lee este.
+        btn.disabled = false;
+        cardBody(
+          card,
+          busyHtml((job.detalle ? job.detalle + ". " : "") + "Leyendo con IA… puede tardar un par de minutos."),
+          "is-busy"
+        );
+        return pollScan(job.archivo_id);
+      })
+      .then(function (data) {
+        showScanDocs(card, data, true);
+      })
+      .catch(function (err) {
+        cardBody(card, '<div class="rx-warn">' + esc(err && err.message ? err.message : String(err)) + "</div>", "is-error");
+      })
+      .finally(function () {
+        btn.disabled = false;
+      });
+  }
+
+  function pollDevice(job, card) {
+    var texts = { cola: "Esperando al PC de las impresoras…", preparando: "Preparando el escáner…", escaneando: "Escaneando…" };
+    return new Promise(function (resolve, reject) {
+      var attempts = 0;
+      var misses = 0;
+      function step(j) {
+        if (j.final) {
+          if (j.ok && j.archivo_id) resolve(j);
+          else reject(new Error(j.message || "No se pudo escanear."));
+          return;
+        }
+        cardBody(card, busyHtml(j.fase === "escaneando" && j.detalle ? j.detalle + "…" : texts[j.fase] || "Escaneando…"), "is-busy");
+        if (++attempts >= DEVICE_POLL_MAX) {
+          reject(new Error("El escaneo está tardando demasiado. Revisa la impresora y vuelve a intentar."));
+          return;
+        }
+        setTimeout(function () {
+          post(cfg.actions.scanDevice, { op: "job", job_id: j.id }).then(
+            function (data) {
+              misses = 0;
+              step(data.job);
+            },
+            function (err) {
+              // Un corte breve de red no cancela el escaneo: se sigue consultando.
+              if (++misses >= 5) reject(err);
+              else step(j);
+            }
+          );
+        }, DEVICE_POLL_MS);
+      }
+      step(job);
+    });
+  }
+
+  setupScanner();
 
   function pollScan(archivoId) {
     return new Promise(function (resolve, reject) {

@@ -31,6 +31,18 @@ class Riverso_Print_Module {
     /** Intervalo de consulta que se indica al hub. */
     const POLL_MS = 2000;
 
+    /** Primera versión del hub que sabe escanear. */
+    const SCAN_MIN_HUB = '1.1.0';
+    /** Tope de páginas por escaneo: la lectura con IA procesa el archivo completo por página. */
+    const SCAN_MAX_PAGES = 15;
+    /** Tamaño máximo del PDF que acepta la lectura con IA. */
+    const SCAN_MAX_BYTES = 15728640;
+    /** El hub recomprime para no pasar de este tamaño (margen bajo SCAN_MAX_BYTES). */
+    const SCAN_TARGET_BYTES = 12582912;
+    const SCAN_DPI = 200;
+    /** Escáneres de red que reporta cada hub: agent_id => [{name, adf, duplex}]. */
+    const SCANNERS_OPTION = 'riverso_print_scanners';
+
     const MODES = ['driver', 'escpos'];
     const SCALE_MODES = ['ajustar', 'porcentaje', 'real'];
     const DUPLEX = ['no', 'largo', 'corto'];
@@ -877,6 +889,303 @@ class Riverso_Print_Module {
         ];
     }
 
+    // ───────────────────────── Escaneo ─────────────────────────
+    // El hub ordena el escaneo a la multifuncional por la red local (eSCL), arma un PDF y lo
+    // sube; desde ahí sigue el flujo de Escaneos (lectura con IA). Usa la misma cola que la
+    // impresión: source_type «escaneo», y al terminar source_id queda con el archivo subido.
+
+    private function hub_can_scan($version) {
+        return version_compare((string) $version, self::SCAN_MIN_HUB, '>=');
+    }
+
+    /**
+     * Guarda qué impresoras del hub son también escáner. Una que ya se conocía se mantiene
+     * mientras siga instalada, aunque ahora esté apagada y el hub no pueda consultarla.
+     */
+    private function store_scanners($agent_id, array $reported) {
+        $all = get_option(self::SCANNERS_OPTION, []);
+        $all = is_array($all) ? $all : [];
+        $known = [];
+        foreach ((array) ($all[$agent_id] ?? []) as $s) {
+            if (is_array($s) && !empty($s['name'])) {
+                $known[(string) $s['name']] = $s;
+            }
+        }
+        $list = [];
+        foreach ($reported as $p) {
+            $name = is_array($p) ? mb_substr(trim((string) ($p['name'] ?? '')), 0, 191) : '';
+            if ($name === '') {
+                continue;
+            }
+            if (isset($p['scanner']) && is_array($p['scanner'])) {
+                $list[] = [
+                    'name' => $name,
+                    'adf' => !empty($p['scanner']['adf']),
+                    'duplex' => !empty($p['scanner']['duplex']),
+                ];
+            } elseif (isset($known[$name])) {
+                $list[] = $known[$name];
+            }
+        }
+        if ($list === array_values($known)) {
+            return;
+        }
+        if ($list) {
+            $all[$agent_id] = $list;
+        } else {
+            unset($all[$agent_id]);
+        }
+        update_option(self::SCANNERS_OPTION, $all, false);
+    }
+
+    /**
+     * Escáner a usar y si está disponible ahora.
+     *
+     * @return array{ok: bool, code: string, detail: string, agent: ?array, printer: ?array, scanner: ?array}
+     */
+    private function scan_target() {
+        $out = ['ok' => false, 'code' => 'no_scanner', 'detail' => '', 'agent' => null, 'printer' => null, 'scanner' => null];
+        $all = get_option(self::SCANNERS_OPTION, []);
+        $all = is_array($all) ? $all : [];
+        $old_hub = false;
+        foreach ($this->repo->list_agents() as $agent) {
+            if (!$this->hub_can_scan($agent['version'])) {
+                $old_hub = true;
+                continue;
+            }
+            foreach ((array) ($all[(int) $agent['id']] ?? []) as $scanner) {
+                $printer = is_array($scanner) ? $this->repo->find_printer($agent['id'], $scanner['name'] ?? '') : null;
+                if (!$printer || (int) $printer['activo'] !== 1) {
+                    continue;
+                }
+                $cand = ['ok' => false, 'code' => '', 'detail' => '', 'agent' => $agent, 'printer' => $printer, 'scanner' => $scanner];
+                $fresh = Riverso_Print_Repository::age($agent['printers_at']);
+                if (!$this->agent_online($agent)) {
+                    $cand['code'] = 'hub_offline';
+                } elseif ($fresh !== null && $fresh <= self::PRINTERS_STALE_AFTER
+                    && ((int) $printer['presente'] !== 1 || $printer['estado'] === 'offline')) {
+                    $cand['code'] = 'scanner_offline';
+                    $cand['detail'] = (string) $printer['estado_detalle'];
+                } else {
+                    $cand['ok'] = true;
+                    return $cand;
+                }
+                if ($out['agent'] === null) {
+                    $out = $cand;
+                }
+            }
+        }
+        if ($out['agent'] === null && $old_hub) {
+            $out['code'] = 'hub_old';
+        }
+        return $out;
+    }
+
+    /**
+     * Estado del escáner para el botón «Escanear».
+     */
+    public function scan_overview() {
+        $t = $this->scan_target();
+        return [
+            'available' => $t['printer'] !== null,
+            'ready' => $t['ok'],
+            'label' => $t['printer'] ? $this->printer_label($t['printer']) : '',
+            'duplex' => $t['scanner'] ? !empty($t['scanner']['duplex']) : false,
+            'maxPages' => self::SCAN_MAX_PAGES,
+            'message' => $t['ok'] ? '' : $this->scan_error_message($t['code'], $t),
+        ];
+    }
+
+    /**
+     * Encola un escaneo. Nunca lanza: si no se puede, devuelve el trabajo en error con el motivo.
+     *
+     * @param array $opts dos_caras (bool), papel (carta | oficio).
+     * @return array|null Trabajo presentado para la UI.
+     */
+    public function enqueue_scan(array $opts = []) {
+        $t = $this->scan_target();
+        $code = $t['ok'] ? '' : $t['code'];
+        if ($code === '' && function_exists('riverso_scan_gemini_configured') && !riverso_scan_gemini_configured()) {
+            $code = 'ia_missing';
+        }
+        if ($code === '' && $this->repo->active_scan_job((int) $t['agent']['id'])) {
+            $code = 'scanner_busy';
+        }
+        $data = [
+            'origen' => 'recepcion',
+            'source_type' => 'escaneo',
+            'source_id' => 0,
+            'document_type_id' => 0,
+            'titulo' => 'Escaneo',
+            'station_id' => 0,
+            'agent_id' => $t['agent'] ? (int) $t['agent']['id'] : null,
+            'printer_id' => $t['printer'] ? (int) $t['printer']['id'] : null,
+            'requested_by' => get_current_user_id() ?: null,
+        ];
+        if ($code === '') {
+            $data['ajustes'] = wp_json_encode([
+                'printer' => (string) $t['printer']['system_name'],
+                'printer_label' => $this->printer_label($t['printer']),
+                'fuente' => 'auto',
+                'dos_caras' => !empty($opts['dos_caras']) && !empty($t['scanner']['duplex']),
+                'papel' => ($opts['papel'] ?? '') === 'oficio' ? 'oficio' : 'carta',
+                'dpi' => self::SCAN_DPI,
+                'color' => false,
+                'max_paginas' => self::SCAN_MAX_PAGES,
+                'max_bytes' => self::SCAN_TARGET_BYTES,
+            ]);
+            $data['estado'] = 'pendiente';
+            $data['expires_at'] = Riverso_Print_Repository::at(self::CLAIM_TIMEOUT);
+        } else {
+            $data['estado'] = 'error';
+            $data['error_code'] = $code;
+            $data['error_msg'] = mb_substr((string) $t['detail'], 0, 255);
+            $data['finished_at'] = Riverso_Print_Repository::now();
+        }
+        $id = $this->repo->create_job($data);
+        $job = $id ? $this->repo->get_job($id) : null;
+        return $job ? $this->present_scan_job($job) : null;
+    }
+
+    /**
+     * @return array|null Escaneo presentado para la UI (solo de quien lo pidió).
+     */
+    public function scan_job($job_id) {
+        $this->repo->expire_jobs(self::STUCK_AFTER);
+        $job = $this->repo->get_job($job_id);
+        if (!$job || $job['source_type'] !== 'escaneo' || (int) $job['requested_by'] !== get_current_user_id()) {
+            return null;
+        }
+        return $this->present_scan_job($job);
+    }
+
+    private function present_scan_job(array $job) {
+        $estado = (string) $job['estado'];
+        $fases = ['pendiente' => 'cola', 'tomado' => 'preparando', 'imprimiendo' => 'escaneando', 'impreso' => 'listo'];
+        $out = [
+            'id' => (int) $job['id'],
+            'fase' => $fases[$estado] ?? 'error',
+            'final' => !in_array($estado, ['pendiente', 'tomado', 'imprimiendo'], true),
+            'ok' => $estado === 'impreso',
+            'detalle' => (string) ($job['detalle'] ?? ''),
+            'archivo_id' => $estado === 'impreso' ? (int) $job['source_id'] : 0,
+            'message' => '',
+        ];
+        if ($out['final'] && !$out['ok']) {
+            $out['message'] = $this->scan_error_message((string) ($job['error_code'] ?? ''), [
+                'agent' => $job['agent_id'] ? $this->repo->get_agent($job['agent_id']) : null,
+                'printer' => $job['printer_id'] ? $this->repo->get_printer($job['printer_id']) : null,
+                'detail' => (string) ($job['error_msg'] ?? ''),
+            ]);
+        }
+        return $out;
+    }
+
+    private function scan_error_message($code, array $c) {
+        $scanner = !empty($c['printer']) ? '«' . $this->printer_label($c['printer']) . '»' : 'el escáner';
+        $hub = !empty($c['agent']) ? '«' . $c['agent']['nombre'] . '»' : 'de impresión';
+        $detail = trim((string) ($c['detail'] ?? ''));
+        switch ($code) {
+            case 'no_scanner':
+                return 'No hay un escáner de red disponible. En Facturación → Impresión, revisa que la multifuncional esté activa y tenga su IP.';
+            case 'hub_old':
+                return 'El hub de impresión es antiguo y no sabe escanear. Instala Riverso Print Hub ' . self::SCAN_MIN_HUB . ' o superior en el PC de las impresoras.';
+            case 'hub_offline':
+            case 'claim_timeout':
+                return 'El hub ' . $hub . ' no responde. Revisa que el PC esté encendido, con internet y con Riverso Print Hub abierto (ícono junto al reloj).';
+            case 'hub_lost':
+                return 'El hub ' . $hub . ' dejó de responder mientras escaneaba. Retira las hojas del alimentador y vuelve a intentar.';
+            case 'scanner_offline':
+                return 'El escáner ' . $scanner . ' está apagado o sin red' . ($detail !== '' ? ' (' . $detail . ')' : '') . '.';
+            case 'scanner_busy':
+                return 'El escáner ' . $scanner . ' está ocupado. Espera a que termine y vuelve a intentar.';
+            case 'scanner_error':
+                return 'El escáner ' . $scanner . ' tiene un problema' . ($detail !== '' ? ': ' . $detail : '') . '. Revisa que no haya hojas atascadas ni tapas abiertas.';
+            case 'scan_empty':
+                return 'El escáner no entregó ninguna página. Pon las hojas en el alimentador o una hoja en el vidrio.';
+            case 'too_large':
+                return 'El escaneo pesa demasiado para leerlo con IA. Escanea menos hojas por vez.';
+            case 'ia_missing':
+                return 'La lectura con IA no está configurada (Gemini API Key en Configuración).';
+            case 'upload_failed':
+                return 'No se pudo subir el escaneo' . ($detail !== '' ? ': ' . $detail : '') . '. Vuelve a intentar.';
+            default:
+                return 'No se pudo escanear' . ($detail !== '' ? ': ' . $detail : '.');
+        }
+    }
+
+    /**
+     * El hub sube el PDF escaneado (cuerpo application/pdf). Responde apenas queda guardado y
+     * sigue con la lectura de IA en segundo plano, igual que una carga manual en Escaneos.
+     */
+    public function rest_scan_upload(WP_REST_Request $request) {
+        $agent = $this->rest_agent($request);
+        if ($agent instanceof WP_REST_Response) {
+            return $agent;
+        }
+        $job = $this->rest_job($request, $agent);
+        if ($job instanceof WP_REST_Response) {
+            return $job;
+        }
+        $active = ['tomado', 'imprimiendo'];
+        if ($job['source_type'] !== 'escaneo' || !in_array($job['estado'], $active, true)) {
+            return new WP_REST_Response(['ok' => false, 'code' => 'job_closed', 'message' => 'El escaneo ya no está activo.'], 410);
+        }
+        $job_id = (int) $job['id'];
+        $reject = function ($code, $message, $status) use ($job_id, $active) {
+            $this->repo->transition_job($job_id, $active, [
+                'estado' => 'error',
+                'error_code' => $code,
+                'error_msg' => mb_substr($message, 0, 255),
+                'finished_at' => Riverso_Print_Repository::now(),
+            ]);
+            return new WP_REST_Response(['ok' => false, 'code' => $code, 'message' => $message], $status);
+        };
+        $pdf = (string) $request->get_body();
+        if (strncmp($pdf, '%PDF-', 5) !== 0) {
+            return $reject('upload_failed', 'el archivo no llegó completo', 400);
+        }
+        if (strlen($pdf) > self::SCAN_MAX_BYTES) {
+            return $reject('too_large', '', 413);
+        }
+        if (!class_exists('Riverso_Scan_Module')) {
+            return $reject('scan_failed', 'el módulo de Escaneos no está disponible', 500);
+        }
+        $name = 'escaneo-' . get_date_from_gmt(Riverso_Print_Repository::now(), 'Ymd-His') . '.pdf';
+        $tmp = wp_tempnam($name);
+        if (!$tmp || file_put_contents($tmp, $pdf) === false) {
+            return $reject('upload_failed', 'no se pudo guardar el archivo en el servidor', 500);
+        }
+        unset($pdf);
+        // El escaneo queda a nombre de quien presionó «Escanear», no del hub.
+        wp_set_current_user((int) $job['requested_by']);
+        $scans = Riverso_Scan_Module::get_instance();
+        $prepared = $scans->prepare_external_upload($tmp, $name);
+        if (is_wp_error($prepared)) {
+            @unlink($tmp);
+            return $reject('scan_failed', $prepared->get_error_message(), 422);
+        }
+        $pages = max(0, (int) $request->get_header('x-riverso-scan-pages'));
+        $this->repo->transition_job($job_id, $active, [
+            'estado' => 'impreso',
+            'source_id' => (int) $prepared['archivo_id'],
+            'detalle' => ($pages > 0 ? $pages . ($pages === 1 ? ' página escaneada' : ' páginas escaneadas') : 'Escaneo recibido')
+                . ($request->get_header('x-riverso-scan-truncated') ? ' (tope alcanzado: quedaron hojas sin escanear)' : ''),
+            'error_code' => null,
+            'finished_at' => Riverso_Print_Repository::now(),
+        ]);
+        $response = ['ok' => true, 'archivo_id' => (int) $prepared['archivo_id']];
+        // La lectura usa la copia persistente; el temporal solo se conserva si esa copia falló.
+        if (($prepared['local_path'] ?? '') !== $tmp) {
+            @unlink($tmp);
+        }
+        if (!empty($prepared['reutilizado']) || !empty($prepared['already_running'])) {
+            return new WP_REST_Response($response, 200);
+        }
+        $scans->respond_and_extract($prepared, $response);
+        exit;
+    }
+
     // ───────────────────────── REST (hub) ─────────────────────────
 
     public function register_routes() {
@@ -893,6 +1202,11 @@ class Riverso_Print_Module {
         register_rest_route(self::REST_NS, '/print-hub/jobs/(?P<id>\d+)/status', [
             'methods' => 'POST',
             'callback' => [$this, 'rest_status'],
+            'permission_callback' => '__return_true',
+        ]);
+        register_rest_route(self::REST_NS, '/print-hub/jobs/(?P<id>\d+)/scan', [
+            'methods' => 'POST',
+            'callback' => [$this, 'rest_scan_upload'],
             'permission_callback' => '__return_true',
         ]);
     }
@@ -934,18 +1248,23 @@ class Riverso_Print_Module {
         if (isset($body['printers']) && is_array($body['printers'])) {
             $this->repo->sync_printers((int) $agent['id'], $body['printers'], !empty($body['printers_full']));
             $fields['printers_at'] = Riverso_Print_Repository::now();
+            if (!empty($body['printers_full'])) {
+                $this->store_scanners((int) $agent['id'], $body['printers']);
+            }
         }
         $this->repo->touch_agent((int) $agent['id'], $fields);
         $this->repo->expire_jobs(self::STUCK_AFTER);
 
         // probe: el hub solo prueba la conexión (pantalla Configurar) y no debe tomar trabajos.
-        $job = empty($body['probe']) ? $this->repo->claim_next((int) $agent['id']) : null;
+        $can_scan = $this->hub_can_scan($fields['version']);
+        $job = empty($body['probe']) ? $this->repo->claim_next((int) $agent['id'], $can_scan) : null;
         $payload = null;
         if ($job) {
             $settings = json_decode((string) $job['ajustes'], true);
+            $kinds = ['prueba' => 'prueba', 'escaneo' => 'scan'];
             $payload = [
                 'id' => (int) $job['id'],
-                'kind' => $job['source_type'] === 'prueba' ? 'prueba' : 'pdf',
+                'kind' => $kinds[$job['source_type']] ?? 'pdf',
                 'titulo' => (string) $job['titulo'],
                 'settings' => is_array($settings) ? $settings : null,
             ];

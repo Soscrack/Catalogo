@@ -302,6 +302,44 @@
 
 .rx-check { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
 
+/* Escanear desde la multifuncional: botón + opciones */
+.rx-scanbox { display: inline-flex; position: relative; }
+.rx-scanbox > .rx-btn { border-radius: 4px 0 0 4px; }
+.rx-scanbox.is-off > .rx-btn { background: #90a4ae; }
+
+.rx-scan-opts > summary {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 9px;
+  border-left: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 0 4px 4px 0;
+  background: var(--rx-green);
+  color: #fff;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.rx-scan-opts > summary::-webkit-details-marker { display: none; }
+.rx-scan-opts > summary:hover { background: var(--rx-green-dark); }
+.rx-scanbox.is-off .rx-scan-opts > summary { background: #90a4ae; }
+
+.rx-scan-opts-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 230px;
+  padding: 10px 12px;
+  border: 1px solid var(--rx-border);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
 .rx-spinner {
   display: inline-block;
   width: 12px;

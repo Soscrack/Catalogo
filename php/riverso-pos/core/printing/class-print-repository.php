@@ -466,12 +466,14 @@ class Riverso_Print_Repository {
     /**
      * Toma el trabajo pendiente más antiguo del hub (atómico entre consultas concurrentes).
      */
-    public function claim_next($agent_id) {
+    public function claim_next($agent_id, $allow_scan = true) {
         global $wpdb;
         $agent_id = absint($agent_id);
+        // Un hub antiguo imprimiría un escaneo como si fuera un documento: no se le entregan.
+        $only = $allow_scan ? '' : " AND source_type <> 'escaneo'";
         for ($i = 0; $i < 3; $i++) {
             $id = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT id FROM {$this->jobs} WHERE agent_id = %d AND estado = 'pendiente' ORDER BY id ASC LIMIT 1",
+                "SELECT id FROM {$this->jobs} WHERE agent_id = %d AND estado = 'pendiente'{$only} ORDER BY id ASC LIMIT 1",
                 $agent_id
             ));
             if ($id <= 0) {
@@ -488,8 +490,35 @@ class Riverso_Print_Repository {
     public function list_recent_jobs($limit = 25) {
         global $wpdb;
         return $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$this->jobs} ORDER BY id DESC LIMIT %d",
+            "SELECT * FROM {$this->jobs} WHERE source_type <> 'escaneo' ORDER BY id DESC LIMIT %d",
             max(1, min(200, (int) $limit))
         ), ARRAY_A) ?: [];
+    }
+
+    /**
+     * Escaneo en curso de un hub (el escáner atiende de a uno).
+     */
+    public function active_scan_job($agent_id) {
+        global $wpdb;
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$this->jobs}
+             WHERE agent_id = %d AND source_type = 'escaneo' AND estado IN ('pendiente', 'tomado', 'imprimiendo')
+             ORDER BY id DESC LIMIT 1",
+            absint($agent_id)
+        ), ARRAY_A);
+        return is_array($row) ? $row : null;
+    }
+
+    /**
+     * Impresora de un hub por su nombre en Windows.
+     */
+    public function find_printer($agent_id, $system_name) {
+        global $wpdb;
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$this->printers} WHERE agent_id = %d AND system_name = %s",
+            absint($agent_id),
+            (string) $system_name
+        ), ARRAY_A);
+        return is_array($row) ? $row : null;
     }
 }

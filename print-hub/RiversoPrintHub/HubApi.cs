@@ -17,7 +17,12 @@ internal sealed class PrinterReport
     public bool IsDefault { get; set; }
     public bool IsVirtual { get; set; }
     public string Host { get; set; } = "";
+    /// <summary>Solo si la impresora también escanea por red (eSCL).</summary>
+    public ScannerCaps? Scanner { get; set; }
 }
+
+/// <summary>Lo que ofrece el escáner de una multifuncional: alimentador y doble cara.</summary>
+internal sealed record ScannerCaps(bool Adf, bool Duplex);
 
 internal sealed class PollRequest
 {
@@ -49,12 +54,20 @@ internal sealed class JobSettings
     public int AnchoPuntos { get; set; } = 384;
     public int AvanceMm { get; set; }
     public int TimeoutS { get; set; } = 60;
+
+    // Escaneo (kind = scan). Papel es carta | oficio y Color indica color o gris.
+    /// <summary>auto | alimentador | vidrio</summary>
+    public string Fuente { get; set; } = "auto";
+    public bool DosCaras { get; set; }
+    public int Dpi { get; set; } = 200;
+    public int MaxPaginas { get; set; } = 15;
+    public int MaxBytes { get; set; } = 12 * 1024 * 1024;
 }
 
 internal sealed class HubJob
 {
     public long Id { get; set; }
-    /// <summary>pdf | prueba</summary>
+    /// <summary>pdf | prueba | scan</summary>
     public string Kind { get; set; } = "pdf";
     public string Titulo { get; set; } = "";
     public JobSettings? Settings { get; set; }
@@ -105,6 +118,7 @@ internal sealed class HubApi : IDisposable
     };
 
     private readonly HttpClient _http;
+    private readonly HttpClient _upload;
     private readonly string _base;
 
     public HubApi(string serverUrl, string token)
@@ -113,6 +127,9 @@ internal sealed class HubApi : IDisposable
         _http.DefaultRequestHeaders.Add("X-Riverso-Hub-Token", token.Trim());
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("RiversoPrintHub/" + Version);
         _base = serverUrl.Trim().TrimEnd('/') + "/wp-json/riverso/v1/print-hub/";
+        _upload = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+        _upload.DefaultRequestHeaders.Add("X-Riverso-Hub-Token", token.Trim());
+        _upload.DefaultRequestHeaders.UserAgent.ParseAdd("RiversoPrintHub/" + Version);
     }
 
     public async Task<PollResponse> PollAsync(PollRequest req, CancellationToken ct)
@@ -168,6 +185,39 @@ internal sealed class HubApi : IDisposable
         }
     }
 
+    /// <summary>Sube el PDF escaneado. Devuelve el código de error del servidor, o «ok».</summary>
+    public async Task<(string Code, string Message)> UploadScanAsync(long jobId, byte[] pdf, int pages, bool truncated, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, _base + "jobs/" + jobId + "/scan");
+        req.Content = new ByteArrayContent(pdf);
+        req.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+        req.Headers.Add("X-Riverso-Scan-Pages", pages.ToString());
+        if (truncated)
+        {
+            req.Headers.Add("X-Riverso-Scan-Truncated", "1");
+        }
+        // Un PDF de varios MB por una conexión lenta no cabe en los 40 s del cliente normal.
+        using var resp = await _upload.SendAsync(req, ct);
+        await EnsureAuth(resp);
+        FileResponse? body = null;
+        try
+        {
+            body = await resp.Content.ReadFromJsonAsync<FileResponse>(Json, ct);
+        }
+        catch (JsonException)
+        {
+        }
+        if (resp.IsSuccessStatusCode && body?.Ok == true)
+        {
+            return ("ok", "");
+        }
+        if (resp.StatusCode == HttpStatusCode.RequestEntityTooLarge)
+        {
+            return ("too_large", "");
+        }
+        return (body?.Code ?? "upload_failed", body?.Message ?? "HTTP " + (int)resp.StatusCode);
+    }
+
     private static async Task EnsureAuth(HttpResponseMessage resp)
     {
         if (resp.StatusCode == HttpStatusCode.Unauthorized)
@@ -188,5 +238,9 @@ internal sealed class HubApi : IDisposable
         }
     }
 
-    public void Dispose() => _http.Dispose();
+    public void Dispose()
+    {
+        _http.Dispose();
+        _upload.Dispose();
+    }
 }

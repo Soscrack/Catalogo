@@ -93,7 +93,29 @@ estación tiene prioridad sobre la general.
 | La impresora no termina el trabajo | Plazo de 30 s (ESC/POS) o 60 s (driver) | Se cancela para que no salga después |
 | Nadie toma el trabajo | Plazo de 20 s | Se descarta y no sale después |
 
-## 5. Problemas comunes
+## 5. Escanear desde Recepción (hub 1.1.0 o superior)
+
+El botón **Escanear** de `/interno/recepcion/` hace que la multifuncional tome las hojas del
+alimentador, o la hoja del vidrio si el alimentador está vacío. El hub arma un PDF y lo sube;
+desde ahí sigue igual que «Ingresar documento» (lectura con IA, «Ingresar y recibir»).
+
+```
+Recepción ──«Escanear»──►  riverso.cl (cola)  ◄──consulta──  Hub (PC1) ──red local (eSCL)──► Canon GX7000
+                                  ▲                               │
+                                  └──────────── PDF ──────────────┘
+```
+
+- No necesita el driver de escáner de Canon: el hub habla directo con la impresora por su IP.
+  El botón aparece cuando el hub detecta que una impresora de red también escanea. Si no aparece,
+  escribe la IP de la Canon en **Facturación → Impresión → Editar** (se ve en el panel de la
+  impresora: *Configuración de LAN → Wi-Fi*) y conviene reservarla en el router para que no cambie.
+- Opciones (flecha ▾): **Dos caras** y **Hoja oficio (larga)**. Se escanea a 200 ppp en gris.
+- Máximo 15 páginas por escaneo. Si quedan hojas en el alimentador, el aviso lo dice y se vuelve
+  a presionar **Escanear** para el resto.
+- Si hay un atasco a mitad de camino, el escaneo completo se descarta: se vuelven a poner todas las hojas.
+- Guías delgadas, corcheteadas o arrugadas y boletas térmicas van mejor por el vidrio, de a una.
+
+## 6. Problemas comunes
 
 - **Registro:** menú del ícono → *Abrir registro* (`%LOCALAPPDATA%\RiversoPrintHub\logs`, se guardan 14 días).
 - **Token rechazado** (ícono rojo): genera un token nuevo en *Facturación → Impresión → Nuevo token* y pégalo en *Configurar…*.

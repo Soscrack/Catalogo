@@ -54,6 +54,7 @@ class Riverso_Purchase_Reception_Module {
         add_action('wp_ajax_riverso_rx_credit_notes', [$this, 'ajax_credit_notes']);
         add_action('wp_ajax_riverso_rx_destinations', [$this, 'ajax_destinations']);
         add_action('wp_ajax_riverso_rx_scan_inbox', [$this, 'ajax_scan_inbox']);
+        add_action('wp_ajax_riverso_rx_scan_device', [$this, 'ajax_scan_device']);
     }
 
     /**
@@ -85,6 +86,8 @@ class Riverso_Purchase_Reception_Module {
             'canProcessFolio' => current_user_can('riverso_view_prices') || current_user_can('manage_options'),
             'procesarFolioUrl' => admin_url('admin.php?page=riverso-pos-pricing&tab=process&factura_id='),
             'scansUrl' => admin_url('admin.php?page=riverso-pos-invoices'),
+            // Botón «Escanear»: la multifuncional conectada al hub de impresión.
+            'scanner' => class_exists('Riverso_Print_Module') ? Riverso_Print_Module::get_instance()->scan_overview() : null,
             'motivos' => Riverso_Purchase_Reception_Service::MOTIVOS,
             'claimStates' => Riverso_Purchase_Reception_Service::CLAIM_STATES,
             'actions' => [
@@ -103,6 +106,7 @@ class Riverso_Purchase_Reception_Module {
                 'creditNotes' => 'riverso_rx_credit_notes',
                 'destinations' => 'riverso_rx_destinations',
                 'scanInbox' => 'riverso_rx_scan_inbox',
+                'scanDevice' => 'riverso_rx_scan_device',
                 'scanUpload' => 'riverso_scan_upload',
                 'scanStatus' => 'riverso_scan_archivo_status',
                 'scanConfirm' => 'riverso_scan_confirm',
@@ -252,6 +256,29 @@ class Riverso_Purchase_Reception_Module {
     public function ajax_scan_inbox() {
         $this->authorize();
         $this->ok($this->service->scan_inbox($this->post_string('buscar')));
+    }
+
+    /**
+     * Botón «Escanear»: op start (encola el escaneo en el hub) o job (avance del escaneo).
+     */
+    public function ajax_scan_device() {
+        $this->authorize();
+        if (!class_exists('Riverso_Print_Module')) {
+            $this->fail('El escaneo desde la impresora no está disponible.');
+        }
+        $print = Riverso_Print_Module::get_instance();
+        if ($this->post_string('op') === 'start') {
+            $job = $print->enqueue_scan([
+                'dos_caras' => $this->post_string('dos_caras') === '1',
+                'papel' => $this->post_string('papel'),
+            ]);
+        } else {
+            $job = $print->scan_job((int) $this->post_string('job_id'));
+        }
+        if (!$job) {
+            $this->fail('Escaneo no encontrado.', 404);
+        }
+        $this->ok(['job' => $job]);
     }
 
     public function ajax_destinations() {

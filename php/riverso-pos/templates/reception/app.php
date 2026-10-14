@@ -29,6 +29,17 @@ $json_flags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_AP
                 <button type="button" class="rx-btn rx-btn-ghost" id="rx-claims-btn">
                     Reclamos a proveedores <span class="rx-badge" id="rx-claims-count" hidden></span>
                 </button>
+                <span class="rx-scanbox" id="rx-scanbox" hidden>
+                    <button type="button" class="rx-btn" id="rx-scan-btn">Escanear</button>
+                    <details class="rx-scan-opts" id="rx-scan-opts">
+                        <summary aria-label="Opciones de escaneo" title="Opciones de escaneo">▾</summary>
+                        <div class="rx-scan-opts-menu">
+                            <label class="rx-check" id="rx-scan-duplex-row"><input type="checkbox" id="rx-scan-duplex"> Dos caras</label>
+                            <label class="rx-check"><input type="checkbox" id="rx-scan-oficio"> Hoja oficio (larga)</label>
+                            <span class="rx-sub" id="rx-scan-hint"></span>
+                        </div>
+                    </details>
+                </span>
                 <button type="button" class="rx-btn" id="rx-ingest-btn">Ingresar documento</button>
                 <input type="file" id="rx-ingest-file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.xml,application/pdf,image/*,text/xml" multiple hidden>
             </div>

@@ -24,6 +24,8 @@ internal sealed partial class PrinterInventory
     private readonly Dictionary<string, (DateTime at, List<string> papers)> _papers = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string> _manualHosts = new(StringComparer.OrdinalIgnoreCase);
     private bool _papersPending = true;
+    private static readonly TimeSpan ScannerRetry = TimeSpan.FromMinutes(2);
+    private readonly Dictionary<string, (DateTime at, ScannerCaps? caps)> _scanners = new(StringComparer.OrdinalIgnoreCase);
 
     public PrinterInventory(HubConfig config)
     {
@@ -56,9 +58,48 @@ internal sealed partial class PrinterInventory
                 IsDefault = p.IsDefault,
                 IsVirtual = p.IsVirtual,
                 Host = p.Host,
+                Scanner = p.Scanner,
                 Papers = withPapers ? p.Papers : null,
             }).ToList();
         }
+    }
+
+    /// <summary>IP o nombre de red de una impresora según el último refresco («» si no se conoce).</summary>
+    public string HostFor(string printerName)
+    {
+        lock (_gate)
+        {
+            if (_manualHosts.TryGetValue(printerName, out var manual) && manual.Length > 0)
+            {
+                return manual;
+            }
+            return _current.FirstOrDefault(p => string.Equals(p.Name, printerName, StringComparison.OrdinalIgnoreCase))?.Host ?? "";
+        }
+    }
+
+    /// <summary>
+    /// ¿La impresora de red también escanea? Un sí se recuerda (no deja de ser escáner por estar
+    /// apagada un rato); un no se vuelve a consultar cada tanto, por si estaba apagada.
+    /// </summary>
+    private async Task<ScannerCaps?> ScannerForAsync(string host, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            if (_scanners.TryGetValue(host, out var cached) && (cached.caps is not null || DateTime.Now - cached.at < ScannerRetry))
+            {
+                return cached.caps;
+            }
+        }
+        var caps = await EsclScanner.ProbeAsync(host, ct);
+        lock (_gate)
+        {
+            _scanners[host] = (DateTime.Now, caps);
+        }
+        if (caps is not null)
+        {
+            Log.Info($"Escáner de red en {host}: alimentador {(caps.Adf ? "sí" : "no")}, doble cara {(caps.Duplex ? "sí" : "no")}");
+        }
+        return caps;
     }
 
     /// <summary>El envío con papeles falló: se reenvían en el próximo reporte.</summary>
@@ -141,6 +182,7 @@ internal sealed partial class PrinterInventory
                 IsDefault = string.Equals(name, defaultName, StringComparison.OrdinalIgnoreCase),
                 IsVirtual = isVirtual,
                 Host = host,
+                Scanner = !isVirtual && host.Length > 0 ? await ScannerForAsync(host, ct) : null,
                 Papers = papers,
             });
         }

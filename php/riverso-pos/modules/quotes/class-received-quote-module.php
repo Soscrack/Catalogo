@@ -114,6 +114,7 @@ class Riverso_POS_Received_Quote_Module {
         add_action('wp_ajax_riverso_match_all_items', [$this, 'ajax_match_all_items']);
         add_action('wp_ajax_riverso_set_item_decision', [$this, 'ajax_set_item_decision']);
         add_action('wp_ajax_riverso_auto_decide_quote_items', [$this, 'ajax_auto_decide_items']);
+        add_action('wp_ajax_riverso_approve_all_quote_items', [$this, 'ajax_approve_all_items']);
         add_action('wp_ajax_riverso_approve_received_quote', [$this, 'ajax_approve_quote']);
         add_action('wp_ajax_riverso_reject_received_quote', [$this, 'ajax_reject_quote']);
         add_action('wp_ajax_riverso_set_received_quote_status', [$this, 'ajax_set_status']);
@@ -339,7 +340,7 @@ class Riverso_POS_Received_Quote_Module {
 
         // Proveedores para filtro
         $proveedores = $wpdb->get_results("
-            SELECT id, nombre FROM {$prefix}proveedores WHERE estado = 'activo' ORDER BY nombre
+            SELECT id, nombre FROM {$prefix}proveedores WHERE activo = 1 ORDER BY nombre
         ");
 
         wp_send_json_success([
@@ -477,9 +478,12 @@ class Riverso_POS_Received_Quote_Module {
         }
 
         // Proveedores para selector
-        $proveedores = $wpdb->get_results("
-            SELECT id, nombre, rut FROM {$prefix}proveedores WHERE estado = 'activo' ORDER BY nombre
-        ");
+        // Activos más el ya asignado (aunque esté inactivo), para que Guardar no lo borre.
+        $proveedores = $wpdb->get_results($wpdb->prepare("
+            SELECT id, nombre, rut FROM {$prefix}proveedores
+            WHERE activo = 1 OR id = %d
+            ORDER BY nombre
+        ", (int) $quote->proveedor_id));
 
         $siblings = $this->get_version_siblings($id);
         $quote_arr = (array) $quote;
@@ -1834,6 +1838,207 @@ class Riverso_POS_Received_Quote_Module {
             ),
             'stats' => $stats,
         ]);
+    }
+
+    /**
+     * AJAX: Aprobar todos los ítems de una cotización.
+     *
+     * dry_run=1 devuelve el plan (qué ítems cambian, alzas, reclamos que se anulan)
+     * sin guardar. Sin dry_run aplica el plan, solo sobre los item_ids[] que el
+     * usuario vio en la confirmación y que siguen calificando.
+     */
+    public function ajax_approve_all_items() {
+        check_ajax_referer('riverso_pos_nonce', 'nonce');
+        if (!$this->can_edit_quotes()) {
+            wp_send_json_error(['message' => 'Sin permisos']);
+        }
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if (!$id) {
+            wp_send_json_error(['message' => 'ID requerido']);
+        }
+        $blocked = $this->block_if_not_confirmed_cotizacion($id);
+        if ($blocked) {
+            wp_send_json_error(['message' => $blocked]);
+        }
+
+        $plan = $this->plan_approve_all_items($id);
+        if (!empty($_POST['dry_run'])) {
+            wp_send_json_success($plan);
+        }
+
+        $allowed = isset($_POST['item_ids']) ? array_map('intval', (array) $_POST['item_ids']) : [];
+        $allowed = array_flip(array_filter($allowed));
+        if (!$allowed) {
+            wp_send_json_error(['message' => 'No hay ítems confirmados para aprobar.']);
+        }
+
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $applied = ['accepted' => 0, 'accepted_increase' => 0];
+        foreach ($plan['changes'] as $change) {
+            if (!isset($allowed[$change['item_id']])) {
+                continue;
+            }
+            $update = [
+                'decision_status' => $change['decision_nueva'],
+                'updated_by'      => get_current_user_id() ?: null,
+            ];
+            if ($change['reference_cost'] !== null) {
+                $update['costo_anterior'] = $change['reference_cost'];
+            }
+            if ($change['delta'] !== null) {
+                $update['diferencia_costo'] = $change['delta'];
+            }
+            $wpdb->update("{$prefix}cotizacion_items", $update, ['id' => $change['item_id']]);
+            $applied[$change['decision_nueva']]++;
+        }
+
+        $total = $applied['accepted'] + $applied['accepted_increase'];
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('received_quote.approve_all_items', 'received_quote', $id, $applied);
+        }
+        wp_send_json_success([
+            'message' => sprintf(
+                'Se aprobaron %d ítem(s): %d sin alza y %d con alza (Aprobado aumento).',
+                $total,
+                $applied['accepted'],
+                $applied['accepted_increase']
+            ),
+            'applied' => $applied,
+        ]);
+    }
+
+    /**
+     * Qué haría «Aprobar todo»: pasa a Aprobado los ítems Pendiente / Reclamar;
+     * con alza significativa quedan como Aprobado aumento. Quitar, Agregar y
+     * Corregir cantidad son decisiones explícitas y no se tocan.
+     *
+     * @param int $quote_id
+     * @return array{changes:array,kept:array,summary:array}
+     */
+    private function plan_approve_all_items($quote_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $this->ensure_decision_column();
+
+        $items = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, linea, codigo_proveedor, descripcion, cantidad, costo_neto,
+                    costo_anterior, diferencia_costo, decision_status
+             FROM {$prefix}cotizacion_items WHERE cotizacion_id = %d ORDER BY linea",
+            (int) $quote_id
+        ), ARRAY_A) ?: [];
+
+        // Misma referencia de costo que Auto-decidir (base auto = mayor alza).
+        $refs = [];
+        if (!class_exists('Riverso_Cost_Lookup_Service')) {
+            $p = RIVERSO_POS_PLUGIN_DIR . 'modules/costs/class-cost-lookup-service.php';
+            if (file_exists($p)) {
+                require_once $p;
+            }
+        }
+        if (class_exists('Riverso_Cost_Lookup_Service')) {
+            $analysis = Riverso_Cost_Lookup_Service::get_instance()->analyze_quote((int) $quote_id, 'auto');
+            if (!is_wp_error($analysis)) {
+                foreach ($analysis['rows'] ?? [] as $row) {
+                    $refs[(int) ($row['item_id'] ?? 0)] = $row;
+                }
+            }
+        }
+
+        $to_change = ['pending', 'claim', 'modified'];
+        $already = ['accepted', 'accepted_increase'];
+        $changes = [];
+        $kept = [];
+        $summary = [
+            'items' => count($items),
+            'to_approve' => 0,
+            'increases' => 0,
+            'increase_amount' => 0.0,
+            'decreases' => 0,
+            'same' => 0,
+            'no_reference' => 0,
+            'claims_overridden' => 0,
+            'already_approved' => 0,
+            'kept' => 0,
+        ];
+
+        foreach ($items as $item) {
+            $item_id = (int) $item['id'];
+            $status = trim((string) ($item['decision_status'] ?? '')) ?: 'pending';
+            $base = [
+                'item_id' => $item_id,
+                'linea' => (int) $item['linea'],
+                'codigo' => (string) ($item['codigo_proveedor'] ?? ''),
+                'descripcion' => (string) ($item['descripcion'] ?? ''),
+                'cantidad' => (float) $item['cantidad'],
+                'decision_actual' => $status,
+                'decision_actual_label' => self::DECISION_STATUS[$status] ?? $status,
+            ];
+            if (in_array($status, $already, true)) {
+                $summary['already_approved']++;
+                continue;
+            }
+            if (!in_array($status, $to_change, true)) {
+                $kept[] = $base;
+                $summary['kept']++;
+                continue;
+            }
+
+            $row = $refs[$item_id] ?? null;
+            $ref = ($row && isset($row['reference_cost']) && is_numeric($row['reference_cost']))
+                ? (float) $row['reference_cost'] : null;
+            $delta = ($row && isset($row['delta']) && is_numeric($row['delta'])) ? (float) $row['delta'] : null;
+            if ($delta === null && $ref === null && $item['diferencia_costo'] !== null && $item['diferencia_costo'] !== '') {
+                // Sin análisis: usa el Δ que ya muestra la tabla.
+                $delta = (float) $item['diferencia_costo'];
+                $ref = ($item['costo_anterior'] !== null && $item['costo_anterior'] !== '')
+                    ? (float) $item['costo_anterior'] : null;
+            }
+            $pct = ($row && isset($row['delta_pct']) && is_numeric($row['delta_pct'])) ? (float) $row['delta_pct']
+                : (($delta !== null && $ref) ? ($delta / $ref) * 100 : null);
+
+            $sube = $delta !== null && $delta > self::DELTA_SIGNIFICATIVO;
+            $baja = $delta !== null && $delta < -self::DELTA_SIGNIFICATIVO;
+            $nueva = $sube ? 'accepted_increase' : 'accepted';
+            if ($ref === null && $delta === null) {
+                $trend = 'sin_referencia';
+            } elseif ($sube) {
+                $trend = 'sube';
+            } elseif ($baja) {
+                $trend = 'baja';
+            } else {
+                $trend = 'igual';
+            }
+            $changes[] = $base + [
+                'decision_nueva' => $nueva,
+                'decision_nueva_label' => self::DECISION_STATUS[$nueva],
+                'costo_actual' => ($row && is_numeric($row['costo_actual'] ?? null))
+                    ? (float) $row['costo_actual'] : (float) $item['costo_neto'],
+                'reference_cost' => $ref,
+                'reference_source' => $row['reference_source'] ?? null,
+                'delta' => $delta,
+                'delta_pct' => $pct,
+                'trend' => $trend,
+            ];
+
+            $summary['to_approve']++;
+            if ($status === 'claim') {
+                $summary['claims_overridden']++;
+            }
+            if ($trend === 'sin_referencia') {
+                $summary['no_reference']++;
+            } elseif ($trend === 'sube') {
+                $summary['increases']++;
+                $summary['increase_amount'] += $delta * (float) $item['cantidad'];
+            } elseif ($trend === 'baja') {
+                $summary['decreases']++;
+            } else {
+                $summary['same']++;
+            }
+        }
+        $summary['increase_amount'] = round($summary['increase_amount'], 2);
+
+        return ['changes' => $changes, 'kept' => $kept, 'summary' => $summary];
     }
 
     /**

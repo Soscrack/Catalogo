@@ -109,6 +109,41 @@
     color: #1e293b;
 }
 
+/* Lupa / "+" del cliente y botones del modal "Buscar cliente": el `.cq-btn` blanco
+   de arriba les gana por especificidad y el "+" queda blanco sobre blanco. */
+.riverso-cq--portal .cq-btn-customer-action,
+.riverso-cq--portal .cq-btn-customer-search,
+.riverso-cq--portal .cq-btn-customer-select {
+    background: #8bc34a;
+    border-color: #7cb342;
+    color: #fff;
+}
+
+.riverso-cq--portal .cq-btn-customer-action {
+    padding: 0;
+    border-radius: 4px;
+}
+
+.riverso-cq--portal .cq-btn-customer-action:hover:not(:disabled),
+.riverso-cq--portal .cq-btn-customer-search:hover:not(:disabled),
+.riverso-cq--portal .cq-btn-customer-select:hover:not(:disabled) {
+    background: #7cb342;
+    border-color: #689f38;
+    color: #fff;
+}
+
+.riverso-cq--portal .cq-btn-associated {
+    background: #16a34a;
+    border-color: #16a34a;
+    color: #fff;
+}
+
+.riverso-cq--portal .cq-btn-associated:hover {
+    background: #15803d;
+    border-color: #15803d;
+    color: #fff;
+}
+
 .riverso-cq--portal .cq-search-card {
     margin-top: 16px;
     padding: 18px;

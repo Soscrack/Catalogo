@@ -2895,18 +2895,16 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
         </div>
 
         <?php elseif ($current_page === 'received-quotes'): ?>
-        <div class="content-section">
-            <div class="section-body">
-                <?php
-                if (!class_exists('Riverso_POS_Received_Quote_Module')) {
-                    require_once RIVERSO_POS_PLUGIN_DIR . 'modules/quotes/class-received-quote-module.php';
-                }
-                Riverso_POS_Received_Quote_Module::get_instance();
-                include RIVERSO_POS_PLUGIN_DIR . 'templates/received-quotes.php';
-                ?>
-            </div>
-        </div>
-        
+        <!-- Cotizaciones de proveedores — layout propio (sin content-section) -->
+        <?php
+        if (!class_exists('Riverso_POS_Received_Quote_Module')) {
+            require_once RIVERSO_POS_PLUGIN_DIR . 'modules/quotes/class-received-quote-module.php';
+        }
+        Riverso_POS_Received_Quote_Module::get_instance();
+        $riverso_rq_surface = 'portal';
+        include RIVERSO_POS_PLUGIN_DIR . 'templates/received-quotes.php';
+        ?>
+
         <?php elseif ($current_page === 'cost-history'): ?>
         <!-- Historial de Costos -->
         <div class="content-section">

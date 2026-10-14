@@ -3927,11 +3927,27 @@
         return "";
     }
 
+    var associatedPageshowBound = false;
+
     function renderAssociatedDocs(list, sale) {
         if (!els.associatedCard || !els.associatedList) {
             return;
         }
         var docs = Array.isArray(list) ? list : [];
+        if (!associatedPageshowBound) {
+            associatedPageshowBound = true;
+            // Al volver con "Atrás" (bfcache) el botón no debe quedar en "Cargando…".
+            window.addEventListener("pageshow", function () {
+                Array.prototype.forEach.call(
+                    document.querySelectorAll(".cq-btn-associated.is-loading"),
+                    function (node) {
+                        node.classList.remove("is-loading");
+                        node.removeAttribute("aria-busy");
+                        node.textContent = "Ver documento";
+                    }
+                );
+            });
+        }
         els.associatedList.innerHTML = "";
         Array.prototype.forEach.call(
             els.associatedCard.querySelectorAll(".cq-sale-summary, .cq-sale-compare"),
@@ -3966,6 +3982,15 @@
             btn.textContent = "Ver documento";
             if (url) {
                 btn.href = url;
+                btn.addEventListener("click", function (ev) {
+                    // Abrir en otra pestaña no deja esta página esperando.
+                    if (ev.button !== 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) {
+                        return;
+                    }
+                    btn.classList.add("is-loading");
+                    btn.setAttribute("aria-busy", "true");
+                    btn.textContent = "Cargando…";
+                });
             }
             var label = document.createElement("span");
             label.className = "cq-associated-label";

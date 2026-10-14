@@ -1437,6 +1437,29 @@ button.cq-breakdown-chip {
     color: #fff;
 }
 
+.cq-btn-associated.is-loading {
+    gap: 8px;
+    opacity: 0.85;
+    cursor: progress;
+    pointer-events: none;
+}
+
+.cq-btn-associated.is-loading::before {
+    content: "";
+    width: 0.9em;
+    height: 0.9em;
+    border: 2px solid rgba(255, 255, 255, 0.45);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: cq-associated-spin 0.7s linear infinite;
+}
+
+@keyframes cq-associated-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .cq-associated-label {
     font-size: 0.95rem;
     color: #334155;

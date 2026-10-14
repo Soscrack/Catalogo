@@ -25,6 +25,8 @@
         { sel: "#po-portal-editor .portal-table", title: "SKU" },
         { sel: ".portal-warehouse-section .wh-table" },
         { sel: ".portal-products-section table.products-table", title: "Nombre", hide: ["ID"] },
+        { sel: ".riverso-rq--portal #tabla-cotizaciones", title: "Proveedor" },
+        { sel: ".riverso-rq--portal #tabla-items", title: "Descripción", hide: ["#"] },
         { sel: ".pqs-grid", title: "Nombre" }
     ];
     var TITLE_RE = /^(Producto|Nombre|Título|Detalle|Documento|Receptor|Número)/i;

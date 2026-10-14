@@ -1,0 +1,1018 @@
+/**
+ * Cotizaciones recibidas — portal interno (/interno/received-quotes).
+ *
+ * La plantilla es la misma de wp-admin (templates/received-quotes.php). Aquí se
+ * le da el lenguaje visual de Cotizaciones de venta (customer-quotes.css): tarjetas
+ * crema, botones blancos con borde, primario #9a3412, tablas de encabezado oscuro.
+ * Todo va bajo .riverso-rq--portal para ganarle a Astra (que pinta .button como
+ * píldora amarilla y h1 a 64px) y para no tocar wp-admin.
+ */
+
+.riverso-rq--portal {
+    --rq-ink: #1c1915;
+    --rq-muted: #5c5348;
+    --rq-label: #64748b;
+    --rq-card: #fffdf8;
+    --rq-card-border: #e4d9c8;
+    --rq-line: #efe6da;
+    --rq-input-border: #d9cbb8;
+    --rq-btn-border: #c8b8a4;
+    --rq-primary: #9a3412;
+    --rq-primary-dark: #7c2d12;
+    --rq-teal: #0f766e;
+    --rq-danger: #b91c1c;
+    --rq-tile: #f7f1e7;
+    --rq-head: #1e293b;
+
+    max-width: none;
+    margin: 0;
+    padding: 0 0 32px;
+    color: var(--rq-ink);
+    font-size: 15px;
+    line-height: 1.45;
+}
+
+/* ---------- Tipografía (el portal resetea márgenes con * { margin:0 }) ---------- */
+.riverso-rq--portal h1,
+.riverso-rq--portal h2,
+.riverso-rq--portal h3,
+.riverso-rq--portal h4 {
+    font-family: inherit;
+    color: var(--rq-ink);
+    letter-spacing: -0.01em;
+}
+
+.riverso-rq--portal p {
+    margin: 0 0 8px;
+}
+
+.riverso-rq--portal .description {
+    color: var(--rq-muted);
+    font-size: 0.88rem;
+}
+
+.riverso-rq--portal .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    line-height: 1;
+    vertical-align: -3px;
+}
+
+/* ---------- Cabecera ---------- */
+.riverso-rq--portal .rq-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.riverso-rq--portal .rq-top h1 {
+    margin: 0 0 4px;
+    font-size: 1.5rem;
+    font-weight: 650;
+    line-height: 1.3;
+}
+
+.riverso-rq--portal .rq-lead {
+    margin: 0;
+    color: var(--rq-muted);
+}
+
+/* En el detalle (#vista-lista oculta por jQuery) la cabecera de la lista sobra. */
+.riverso-rq--portal:has(> #vista-lista[style*="none"]) > .rq-top {
+    display: none;
+}
+
+.riverso-rq--portal .rq-top-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* ---------- Botones (anula .button de Astra) ---------- */
+.riverso-rq--portal .button,
+.riverso-rq--portal a.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 0;
+    margin: 0;
+    padding: 7px 12px;
+    border: 1px solid var(--rq-btn-border);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: none;
+    color: var(--rq-ink);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 500;
+    line-height: 1.2;
+    text-decoration: none;
+    text-transform: none;
+    letter-spacing: 0;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+}
+
+.riverso-rq--portal .button:hover:not(:disabled),
+.riverso-rq--portal a.button:hover {
+    background: #faf5ee;
+    border-color: #b3a08a;
+    color: var(--rq-ink);
+}
+
+.riverso-rq--portal .button:focus-visible {
+    outline: 2px solid var(--rq-primary);
+    outline-offset: 1px;
+}
+
+.riverso-rq--portal .button:disabled,
+.riverso-rq--portal .button[disabled] {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.riverso-rq--portal .button-primary {
+    background: var(--rq-primary);
+    border-color: var(--rq-primary);
+    color: #fff;
+    font-weight: 600;
+}
+
+.riverso-rq--portal .button-primary:hover:not(:disabled) {
+    background: var(--rq-primary-dark);
+    border-color: var(--rq-primary-dark);
+    color: #fff;
+}
+
+.riverso-rq--portal .button-link-delete {
+    border-color: var(--rq-danger);
+    color: var(--rq-danger);
+}
+
+.riverso-rq--portal .button-link-delete:hover:not(:disabled) {
+    background: #fef2f2;
+    border-color: var(--rq-danger);
+    color: var(--rq-danger);
+}
+
+.riverso-rq--portal .button-small {
+    padding: 4px 8px;
+    font-size: 0.82rem;
+}
+
+/* Botones solo-ícono de las tablas */
+.riverso-rq--portal td .button-small:has(> .dashicons:only-child) {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+}
+
+.riverso-rq--portal .btn-ver,
+.riverso-rq--portal .btn-editar-item {
+    background: #16a34a;
+    border-color: #15803d;
+    color: #fff;
+}
+
+.riverso-rq--portal .btn-ver:hover:not(:disabled),
+.riverso-rq--portal .btn-editar-item:hover:not(:disabled) {
+    background: #15803d;
+    border-color: #15803d;
+    color: #fff;
+}
+
+.riverso-rq--portal .btn-eliminar,
+.riverso-rq--portal .btn-eliminar-item {
+    border-color: #fca5a5;
+    color: var(--rq-danger);
+}
+
+.riverso-rq--portal .btn-eliminar:hover:not(:disabled),
+.riverso-rq--portal .btn-eliminar-item:hover:not(:disabled) {
+    background: #fef2f2;
+    border-color: var(--rq-danger);
+    color: var(--rq-danger);
+}
+
+.riverso-rq--portal .rq-btn-search {
+    background: #84cc16;
+    border-color: #65a30d;
+    color: #fff;
+    font-weight: 650;
+    min-width: 110px;
+}
+
+.riverso-rq--portal .rq-btn-search:hover:not(:disabled) {
+    background: #65a30d;
+    border-color: #65a30d;
+    color: #fff;
+}
+
+/* ---------- Campos ---------- */
+.riverso-rq--portal input[type="text"],
+.riverso-rq--portal input[type="number"],
+.riverso-rq--portal input[type="date"],
+.riverso-rq--portal input[type="email"],
+.riverso-rq--portal input[type="search"],
+.riverso-rq--portal select,
+.riverso-rq--portal textarea {
+    box-sizing: border-box;
+    min-height: 38px;
+    margin: 0;
+    padding: 7px 10px;
+    border: 1px solid var(--rq-input-border);
+    border-radius: 8px;
+    background-color: #fff;
+    box-shadow: none;
+    color: var(--rq-ink);
+    font: inherit;
+    font-size: 0.92rem;
+    line-height: 1.35;
+}
+
+.riverso-rq--portal select {
+    padding-right: 30px;
+}
+
+.riverso-rq--portal textarea {
+    min-height: 0;
+}
+
+.riverso-rq--portal input:focus,
+.riverso-rq--portal select:focus,
+.riverso-rq--portal textarea:focus {
+    outline: 2px solid var(--rq-primary);
+    outline-offset: 0;
+    border-color: var(--rq-primary);
+}
+
+.riverso-rq--portal input[readonly] {
+    background: #f6f1e9;
+}
+
+.riverso-rq--portal input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--rq-primary);
+}
+
+.riverso-rq--portal input[type="file"] {
+    max-width: 100%;
+    font-size: 0.85rem;
+}
+
+.riverso-rq--portal .form-group {
+    margin-bottom: 12px;
+}
+
+.riverso-rq--portal .form-group label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--rq-ink);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.riverso-rq--portal .form-grid {
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.riverso-rq--portal .form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 14px;
+    border-top: 1px solid var(--rq-line);
+}
+
+.riverso-rq--portal .form-actions #btn-eliminar-cotizacion {
+    float: none !important;
+    margin-left: auto;
+}
+
+.riverso-rq--portal #btn-parsear-texto {
+    margin-top: 8px;
+}
+
+/* ---------- Indicadores ---------- */
+.riverso-rq--portal .riverso-stats-grid {
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.riverso-rq--portal .stat-card {
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--rq-card-border);
+    border-radius: 12px;
+    background: var(--rq-card);
+    box-shadow: none;
+}
+
+.riverso-rq--portal .stat-card-clickable:hover {
+    border-color: #d97706;
+}
+
+.riverso-rq--portal .stat-icon {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+}
+
+.riverso-rq--portal .stat-icon .dashicons {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+}
+
+.riverso-rq--portal .stat-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
+.riverso-rq--portal .stat-label {
+    margin-top: 2px;
+    color: var(--rq-label);
+    font-size: 0.8rem;
+}
+
+.riverso-rq--portal .notice {
+    margin: 0 0 16px;
+    padding: 10px 14px;
+    border: 1px solid #f5d48a;
+    border-left: 4px solid #d97706;
+    border-radius: 8px;
+    background: #fffbeb;
+}
+
+.riverso-rq--portal .notice p {
+    margin: 0;
+}
+
+/* ---------- Tarjeta de búsqueda ---------- */
+.riverso-rq--portal .riverso-filters,
+.riverso-rq--portal .rq-results-panel {
+    margin: 0 0 20px;
+    padding: 18px;
+    border: 1px solid #d8dee6;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.riverso-rq--portal .rq-card-title {
+    margin: 0 0 14px;
+    color: #334155;
+    font-size: 0.95rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.riverso-rq--portal .filter-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px 12px;
+    align-items: end;
+}
+
+.riverso-rq--portal .rq-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    margin: 0;
+}
+
+.riverso-rq--portal .rq-filter-wide {
+    grid-column: span 2;
+}
+
+.riverso-rq--portal .rq-filter-label {
+    color: var(--rq-label);
+    font-size: 0.78rem;
+    line-height: 1.2;
+}
+
+.riverso-rq--portal .filter-row input[type="text"],
+.riverso-rq--portal .filter-row input[type="date"],
+.riverso-rq--portal .filter-row select {
+    width: 100%;
+    max-width: none;
+    border-color: #cbd5e1;
+    border-radius: 4px;
+}
+
+.riverso-rq--portal .rq-filter-check {
+    order: 1;
+    grid-column: 1 / span 2;
+    margin: 4px 0 0 !important;
+    gap: 8px !important;
+    color: #334155;
+    font-size: 0.9rem;
+}
+
+.riverso-rq--portal .rq-filter-buttons {
+    order: 2;
+    grid-column: 3 / -1;
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-start;
+    gap: 8px;
+}
+
+/* ---------- Tablas ---------- */
+.riverso-rq--portal .rq-table-wrap,
+.riverso-rq--portal .items-table-wrap {
+    overflow-x: auto;
+}
+
+.riverso-rq--portal table.wp-list-table {
+    width: 100%;
+    border: 0;
+    border-collapse: collapse;
+    background: transparent;
+    box-shadow: none;
+    font-size: 0.88rem;
+}
+
+.riverso-rq--portal table.wp-list-table th,
+.riverso-rq--portal table.wp-list-table td {
+    padding: 9px 8px;
+    border: 0;
+    border-bottom: 1px solid #e2e8f0;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.riverso-rq--portal table.wp-list-table thead th {
+    background: var(--rq-head);
+    color: #f8fafc;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.riverso-rq--portal table.wp-list-table tbody tr:hover > td {
+    background: #f8fafc;
+}
+
+.riverso-rq--portal table.striped > tbody > :nth-child(odd) {
+    background: transparent;
+}
+
+.riverso-rq--portal .loading,
+.riverso-rq--portal .empty {
+    padding: 28px 12px !important;
+    color: var(--rq-label) !important;
+    text-align: center !important;
+}
+
+/* Lista: columnas a lo ancho disponible y acciones en una sola línea */
+.riverso-rq--portal #tabla-cotizaciones {
+    table-layout: auto;
+}
+
+.riverso-rq--portal #tabla-cotizaciones th:nth-child(1),
+.riverso-rq--portal #tabla-cotizaciones td:nth-child(1) {
+    width: 48px;
+    color: var(--rq-label);
+}
+
+.riverso-rq--portal #tabla-cotizaciones th,
+.riverso-rq--portal #tabla-cotizaciones td:nth-child(n+3) {
+    width: auto !important;
+}
+
+.riverso-rq--portal #tabla-cotizaciones td:nth-child(2) {
+    min-width: 150px;
+    font-weight: 600;
+}
+
+.riverso-rq--portal #tabla-cotizaciones td:nth-child(5),
+.riverso-rq--portal #tabla-cotizaciones td:nth-child(9) {
+    white-space: nowrap;
+}
+
+.riverso-rq--portal #tabla-cotizaciones td:nth-child(9) {
+    font-weight: 600;
+}
+
+.riverso-rq--portal #tabla-cotizaciones td:nth-child(3) {
+    max-width: 200px;
+    overflow-wrap: anywhere;
+}
+
+/* Versión, tipo y estado pueden partirse en dos líneas para que la tabla quepa. */
+.riverso-rq--portal #tabla-cotizaciones .version-badge,
+.riverso-rq--portal #tabla-cotizaciones .estado-badge,
+.riverso-rq--portal #tabla-cotizaciones .tipo-doc-badge {
+    white-space: normal;
+    border-radius: 8px;
+}
+
+/* Acciones: ancho fijo (los íconos en una línea, «Confirmar tipo» arriba) y pegadas
+   a la derecha por si la pantalla es angosta. */
+.riverso-rq--portal #tabla-cotizaciones th:last-child,
+.riverso-rq--portal #tabla-cotizaciones td:last-child {
+    position: sticky;
+    right: 0;
+    width: 118px !important;
+    min-width: 118px;
+    white-space: normal;
+    text-align: right;
+    box-shadow: -6px 0 8px -6px rgba(15, 23, 42, 0.18);
+}
+
+.riverso-rq--portal #tabla-cotizaciones td:last-child {
+    background: #fff;
+}
+
+.riverso-rq--portal #tabla-cotizaciones tbody tr:hover > td:last-child {
+    background: #f8fafc;
+}
+
+.riverso-rq--portal #tabla-cotizaciones tr.quote-por-confirmar > td:last-child {
+    background: #fffbeb;
+}
+
+.riverso-rq--portal #tabla-cotizaciones td[colspan] {
+    position: static;
+    box-shadow: none;
+    text-align: center;
+}
+
+.riverso-rq--portal #tabla-cotizaciones td:last-child .button {
+    margin: 2px 0 2px 4px;
+}
+
+.riverso-rq--portal #tabla-cotizaciones tr.quote-por-confirmar > td {
+    background: #fffbeb;
+}
+
+/* Detalle: ítems — la columna de acciones queda fija a la derecha */
+.riverso-rq--portal #tabla-items {
+    min-width: 860px;
+}
+
+.riverso-rq--portal #tabla-items th,
+.riverso-rq--portal #tabla-items td {
+    padding: 9px 8px;
+    vertical-align: top;
+}
+
+.riverso-rq--portal #tabla-items td:nth-child(3) {
+    min-width: 200px;
+    max-width: 360px;
+}
+
+.riverso-rq--portal #tabla-items .item-iva-rate {
+    display: table;
+    margin: 3px 0 0 auto;
+}
+
+.riverso-rq--portal #tabla-items .col-acciones,
+.riverso-rq--portal #tabla-items td:nth-child(10) {
+    position: sticky;
+    right: 0;
+    width: auto;
+    box-shadow: -6px 0 8px -6px rgba(15, 23, 42, 0.18);
+}
+
+.riverso-rq--portal #tabla-items td:nth-child(10) {
+    background: #fff;
+}
+
+.riverso-rq--portal #tabla-items tbody tr:hover > td:nth-child(10) {
+    background: #f8fafc;
+}
+
+.riverso-rq--portal #tabla-items td:nth-child(10) .button {
+    margin: 0 2px 0 0;
+}
+
+.riverso-rq--portal #tabla-items td[colspan] {
+    position: static;
+    box-shadow: none;
+}
+
+.riverso-rq--portal .text-muted {
+    color: var(--rq-label);
+}
+
+/* ---------- Etiquetas de estado ---------- */
+.riverso-rq--portal .estado-badge,
+.riverso-rq--portal .tipo-doc-badge,
+.riverso-rq--portal .tipo-confirm-aviso {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 650;
+    line-height: 1.3;
+    text-transform: none;
+    white-space: nowrap;
+}
+
+.riverso-rq--portal .match-badge,
+.riverso-rq--portal .item-iva-rate,
+.riverso-rq--portal .version-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.riverso-rq--portal [class^="decision-"],
+.riverso-rq--portal [class*=" decision-"] {
+    font-weight: 600;
+}
+
+.riverso-rq--portal .decision-btn {
+    font-weight: 500;
+}
+
+/* ---------- Detalle ---------- */
+.riverso-rq--portal .riverso-detail-header {
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    margin-bottom: 16px;
+}
+
+.riverso-rq--portal #btn-volver-lista {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--rq-primary);
+    font-size: 0.95rem;
+}
+
+.riverso-rq--portal #btn-volver-lista:hover {
+    background: transparent;
+    color: var(--rq-primary-dark);
+    text-decoration: underline;
+}
+
+.riverso-rq--portal .riverso-detail-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 650;
+    line-height: 1.25;
+}
+
+.riverso-rq--portal .header-actions {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.riverso-rq--portal .header-actions select {
+    width: auto;
+}
+
+.riverso-rq--portal .quote-tipo-banner {
+    margin: 0 0 16px;
+    border-radius: 8px;
+}
+
+.riverso-rq--portal .riverso-card {
+    margin: 0 0 16px;
+    padding: 16px;
+    border: 1px solid var(--rq-card-border);
+    border-radius: 12px;
+    background: var(--rq-card);
+}
+
+.riverso-rq--portal .riverso-card h3 {
+    margin: 0 0 14px;
+    font-size: 1.05rem;
+    font-weight: 650;
+}
+
+.riverso-rq--portal .riverso-card h3 .dashicons {
+    color: var(--rq-primary);
+}
+
+.riverso-rq--portal .card-header {
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.riverso-rq--portal .card-header h3 {
+    margin: 0;
+}
+
+/* Barra de versiones */
+.riverso-rq--portal #quote-versions-bar {
+    padding: 10px 16px !important;
+}
+
+.riverso-rq--portal .quote-version-chip {
+    padding: 4px 10px;
+    border: 1px solid var(--rq-input-border);
+    border-radius: 999px;
+    background: #fff;
+    font-size: 0.8rem;
+}
+
+.riverso-rq--portal .quote-version-chip.is-current {
+    border-color: var(--rq-primary);
+    background: #fff4ed;
+    color: var(--rq-primary);
+}
+
+.riverso-rq--portal .quote-version-chip.is-final {
+    border-color: #16a34a;
+}
+
+/* Totales: mosaicos como en Cotizaciones de venta */
+.riverso-rq--portal .riverso-totals-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 16px;
+    padding: 12px;
+    border: 1px solid var(--rq-card-border);
+    border-radius: 12px;
+    background: var(--rq-card);
+}
+
+.riverso-rq--portal .total-item {
+    min-width: 120px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--rq-tile);
+}
+
+.riverso-rq--portal .total-item .label {
+    color: #6b6258;
+    font-size: 0.8rem;
+}
+
+.riverso-rq--portal .total-item .value {
+    margin-top: 2px;
+    font-size: 1.05rem;
+    font-weight: 650;
+}
+
+.riverso-rq--portal .total-main .value {
+    color: var(--rq-teal);
+    font-size: 1.25rem;
+}
+
+.riverso-rq--portal .total-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.riverso-rq--portal #btn-ver-comparacion {
+    background: var(--rq-teal);
+    border-color: var(--rq-teal);
+    color: #fff;
+    font-weight: 600;
+}
+
+.riverso-rq--portal #btn-ver-comparacion:hover:not(:disabled) {
+    background: #115e59;
+    border-color: #115e59;
+    color: #fff;
+}
+
+.riverso-rq--portal .match-info-box {
+    border-radius: 8px;
+}
+
+.riverso-rq--portal .match-info-box h4 {
+    margin: 0 0 8px;
+}
+
+/* ---------- Modales ---------- */
+.riverso-rq--portal .riverso-modal {
+    padding: 16px;
+    background: rgba(28, 22, 16, 0.45);
+}
+
+.riverso-rq--portal .modal-content {
+    border: 1px solid var(--rq-card-border);
+    border-radius: 12px;
+    background: #fffaf3;
+    box-shadow: 0 18px 48px rgba(28, 22, 16, 0.28);
+}
+
+.riverso-rq--portal .modal-header {
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--rq-line);
+}
+
+.riverso-rq--portal .modal-header h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 650;
+}
+
+.riverso-rq--portal .modal-body {
+    padding: 14px 16px 18px;
+}
+
+.riverso-rq--portal .modal-footer {
+    gap: 8px;
+    padding: 12px 16px 14px;
+    border-top: 1px solid var(--rq-line);
+    background: #faf6f0;
+    border-radius: 0 0 12px 12px;
+}
+
+/* La × del encabezado no es un botón con borde */
+.riverso-rq--portal .modal-header .modal-close {
+    padding: 0 4px;
+    border: 0;
+    background: transparent;
+    color: var(--rq-muted);
+    font-size: 1.6rem;
+    line-height: 1;
+}
+
+.riverso-rq--portal .modal-header .modal-close:hover {
+    background: transparent;
+    color: var(--rq-ink);
+}
+
+.riverso-rq--portal .modal-content table.wp-list-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.riverso-rq--portal .comparison-summary .summary-item {
+    border: 1px solid var(--rq-line);
+    border-radius: 8px;
+    background: var(--rq-tile);
+}
+
+.riverso-rq--portal .upload-zone {
+    border-color: var(--rq-input-border);
+    border-radius: 12px;
+    background: #fff;
+}
+
+.riverso-rq--portal .upload-zone:hover,
+.riverso-rq--portal .upload-zone.dragover {
+    border-color: var(--rq-primary);
+    background: #fff4ed;
+}
+
+.riverso-rq--portal .upload-zone p {
+    margin: 6px 0 0;
+}
+
+.riverso-rq--portal #lista-adjuntos-origen li {
+    margin: 4px 0;
+}
+
+/* Interruptores (Neto/Bruto, base de costo…): segmentado como Local/Online */
+.riverso-rq--portal .rce-view-toggle {
+    overflow: hidden;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.riverso-rq--portal .rce-view-toggle .button {
+    border: 0;
+    border-radius: 0 !important;
+    background: transparent;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.riverso-rq--portal .rce-view-toggle .button + .button {
+    border-left: 1px solid #e2e8f0;
+}
+
+.riverso-rq--portal .rce-view-toggle .button:hover:not(.is-active) {
+    background: #eef2f6;
+    color: #334155;
+}
+
+.riverso-rq--portal .rce-view-toggle .button.is-active {
+    background: var(--rq-teal);
+    color: #fff;
+}
+
+.riverso-rq--portal .decision-btn.selected {
+    background: var(--rq-teal);
+    border-color: var(--rq-teal);
+    color: #fff;
+}
+
+/* ---------- Responsivo ---------- */
+@media (max-width: 1200px) {
+    .riverso-rq--portal .riverso-stats-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 960px) {
+    .riverso-rq--portal .filter-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .riverso-rq--portal .rq-filter-check,
+    .riverso-rq--portal .rq-filter-buttons {
+        grid-column: 1 / -1;
+    }
+
+    .riverso-rq--portal .total-actions {
+        margin-left: 0;
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 640px) {
+    .riverso-rq--portal .rq-top {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .riverso-rq--portal .riverso-stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .riverso-rq--portal .filter-row,
+    .riverso-rq--portal .form-grid.cols-2,
+    .riverso-rq--portal .form-grid.cols-3,
+    .riverso-rq--portal .form-grid.cols-4 {
+        grid-template-columns: 1fr;
+    }
+
+    .riverso-rq--portal .rq-filter-wide {
+        grid-column: auto;
+    }
+
+    .riverso-rq--portal .comparison-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    /* En celular los ítems son tarjetas (portal-mobile.js): sin columna fija */
+    .riverso-rq--portal #tabla-items {
+        min-width: 0;
+    }
+
+    .riverso-rq--portal #tabla-items td:nth-child(10),
+    .riverso-rq--portal #tabla-cotizaciones td:last-child {
+        position: static;
+        box-shadow: none;
+        background: transparent;
+    }
+}
+
+/* ---------- Aprobar todo ---------- */
+.riverso-rq--portal #btn-aprobar-todo {
+    border-color: #16a34a;
+    color: #15803d;
+    font-weight: 600;
+}
+
+.riverso-rq--portal #btn-aprobar-todo:hover:not(:disabled) {
+    background: #f0fdf4;
+    border-color: #15803d;
+    color: #166534;
+}
+
+.riverso-rq--portal #modal-aprobar-todo .comparison-summary {
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.riverso-rq--portal #modal-aprobar-todo .summary-item {
+    padding: 10px 12px;
+}
+
+.riverso-rq--portal #modal-aprobar-todo .summary-value {
+    font-size: 1.4rem;
+}
+
+.riverso-rq--portal #tabla-aprobar-todo tr.aprobar-todo-sube > td {
+    background: #fcf0f1;
+}
+
+.riverso-rq--portal #modal-aprobar-todo #aprobar-todo-mantienen p {
+    margin: 8px 0 0;
+}

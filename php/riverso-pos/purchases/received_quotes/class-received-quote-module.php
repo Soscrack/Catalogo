@@ -232,7 +232,7 @@ class Riverso_POS_Received_Quote_Module {
 
         // Proveedores para filtro
         $proveedores = $wpdb->get_results("
-            SELECT id, nombre FROM {$prefix}proveedores WHERE estado = 'activo' ORDER BY nombre
+            SELECT id, nombre FROM {$prefix}proveedores WHERE activo = 1 ORDER BY nombre
         ");
 
         wp_send_json_success([
@@ -296,9 +296,12 @@ class Riverso_POS_Received_Quote_Module {
         }
 
         // Proveedores para selector
-        $proveedores = $wpdb->get_results("
-            SELECT id, nombre, rut FROM {$prefix}proveedores WHERE estado = 'activo' ORDER BY nombre
-        ");
+        // Activos más el ya asignado (aunque esté inactivo), para que Guardar no lo borre.
+        $proveedores = $wpdb->get_results($wpdb->prepare("
+            SELECT id, nombre, rut FROM {$prefix}proveedores
+            WHERE activo = 1 OR id = %d
+            ORDER BY nombre
+        ", (int) $quote->proveedor_id));
 
         wp_send_json_success([
             'quote' => $quote,

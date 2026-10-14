@@ -13,9 +13,37 @@ $match_status = Riverso_POS_Received_Quote_Module::MATCH_STATUS;
 $decision_status = Riverso_POS_Received_Quote_Module::DECISION_STATUS;
 $source_types = Riverso_POS_Received_Quote_Module::SOURCE_TYPES;
 $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
+
+// El portal (/interno) pasa 'portal'; wp-admin no define la variable.
+$rq_portal = isset($riverso_rq_surface) && $riverso_rq_surface === 'portal';
+// Etiqueta visible de cada filtro: solo en el portal (en wp-admin el filtro es una fila compacta).
+$rq_filter_label = function ($text) use ($rq_portal) {
+    return $rq_portal ? '<span class="rq-filter-label">' . esc_html($text) . '</span>' : '';
+};
+if ($rq_portal) {
+    $rq_css_path = RIVERSO_POS_PLUGIN_DIR . 'assets/css/received-quotes-portal.css';
+    $rq_css_ver = is_file($rq_css_path) ? (string) filemtime($rq_css_path) : RIVERSO_POS_VERSION;
+    echo '<link rel="stylesheet" href="' . esc_url(RIVERSO_POS_PLUGIN_URL . 'assets/css/received-quotes-portal.css?ver=' . $rq_css_ver) . '">';
+}
 ?>
 
-<div class="wrap riverso-pos-wrap">
+<div class="wrap riverso-pos-wrap<?php echo $rq_portal ? ' riverso-rq--portal' : ''; ?>">
+    <?php if ($rq_portal): ?>
+    <header class="rq-top">
+        <div>
+            <h1>Cotizaciones recibidas</h1>
+            <p class="rq-lead">Cotizaciones de proveedores: revisa ítems, compara costos y decide qué aprobar.</p>
+        </div>
+        <div class="rq-top-actions">
+            <button type="button" class="button" id="btn-subir-archivo">
+                <span class="dashicons dashicons-upload"></span> Subir archivo
+            </button>
+            <button type="button" class="button button-primary" id="btn-nueva-cotizacion">
+                <span class="dashicons dashicons-plus-alt2"></span> Nueva cotización
+            </button>
+        </div>
+    </header>
+    <?php else: ?>
     <h1 class="wp-heading-inline">
         <span class="dashicons dashicons-media-document"></span>
         Cotizaciones Recibidas
@@ -27,6 +55,7 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
         <span class="dashicons dashicons-upload"></span> Subir Archivo
     </button>
     <hr class="wp-header-end">
+    <?php endif; ?>
 
     <!-- Vista Lista -->
     <div id="vista-lista">
@@ -74,41 +103,72 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
 
         <!-- Filtros -->
         <div class="riverso-filters">
+            <?php if ($rq_portal): ?>
+            <h2 class="rq-card-title">Buscar cotizaciones</h2>
+            <?php endif; ?>
             <div class="filter-row">
-                <input type="text" id="filtro-buscar" placeholder="Buscar por número o proveedor..." class="regular-text">
-                <select id="filtro-estado">
-                    <option value="">Todos los estados</option>
-                    <?php foreach ($estados as $key => $label): ?>
-                        <option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <select id="filtro-tipo-doc">
-                    <option value="todo">Todo</option>
-                    <option value="cotizacion" selected>Cotizaciones</option>
-                    <option value="posible_cotizacion">Posibles cotizaciones</option>
-                </select>
-                <select id="filtro-fuente">
-                    <option value="">Todas las fuentes</option>
-                    <?php foreach ($source_types as $key => $label): ?>
-                        <option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <select id="filtro-proveedor">
-                    <option value="">Todos los proveedores</option>
-                </select>
-                <input type="date" id="filtro-desde" placeholder="Desde">
-                <input type="date" id="filtro-hasta" placeholder="Hasta">
-                <button type="button" class="button" id="btn-filtrar">
-                    <span class="dashicons dashicons-filter"></span> Filtrar
-                </button>
-                <button type="button" class="button" id="btn-limpiar-filtros">Limpiar</button>
-                <label style="margin-left:8px;display:inline-flex;align-items:center;gap:4px;">
+                <label class="rq-filter rq-filter-wide">
+                    <?php echo $rq_filter_label('Número o proveedor'); ?>
+                    <input type="text" id="filtro-buscar" placeholder="Buscar por número o proveedor..." class="regular-text">
+                </label>
+                <label class="rq-filter">
+                    <?php echo $rq_filter_label('Estado'); ?>
+                    <select id="filtro-estado">
+                        <option value="">Todos los estados</option>
+                        <?php foreach ($estados as $key => $label): ?>
+                            <option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label class="rq-filter">
+                    <?php echo $rq_filter_label('Tipo de documento'); ?>
+                    <select id="filtro-tipo-doc">
+                        <option value="todo">Todo</option>
+                        <option value="cotizacion" selected>Cotizaciones</option>
+                        <option value="posible_cotizacion">Posibles cotizaciones</option>
+                    </select>
+                </label>
+                <label class="rq-filter">
+                    <?php echo $rq_filter_label('Fuente'); ?>
+                    <select id="filtro-fuente">
+                        <option value="">Todas las fuentes</option>
+                        <?php foreach ($source_types as $key => $label): ?>
+                            <option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label class="rq-filter rq-filter-wide">
+                    <?php echo $rq_filter_label('Proveedor'); ?>
+                    <select id="filtro-proveedor">
+                        <option value="">Todos los proveedores</option>
+                    </select>
+                </label>
+                <label class="rq-filter">
+                    <?php echo $rq_filter_label('Fecha desde'); ?>
+                    <input type="date" id="filtro-desde" placeholder="Desde">
+                </label>
+                <label class="rq-filter">
+                    <?php echo $rq_filter_label('Fecha hasta'); ?>
+                    <input type="date" id="filtro-hasta" placeholder="Hasta">
+                </label>
+                <div class="rq-filter-buttons">
+                    <button type="button" class="button<?php echo $rq_portal ? ' rq-btn-search' : ''; ?>" id="btn-filtrar">
+                        <span class="dashicons dashicons-filter"></span> Filtrar
+                    </button>
+                    <button type="button" class="button" id="btn-limpiar-filtros">Limpiar</button>
+                </div>
+                <label class="rq-filter-check" style="margin-left:8px;display:inline-flex;align-items:center;gap:4px;">
                     <input type="checkbox" id="filtro-solo-final" value="1"> Solo versión final
                 </label>
             </div>
         </div>
 
         <!-- Tabla de Cotizaciones -->
+        <?php if ($rq_portal): ?>
+        <div class="rq-results-panel">
+            <h2 class="rq-card-title">Resultado de la búsqueda</h2>
+            <div class="rq-table-wrap">
+        <?php endif; ?>
         <table class="wp-list-table widefat fixed striped" id="tabla-cotizaciones">
             <thead>
                 <tr>
@@ -129,6 +189,10 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
                 <tr><td colspan="11" class="loading">Cargando cotizaciones...</td></tr>
             </tbody>
         </table>
+        <?php if ($rq_portal): ?>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
 
     <!-- Vista Detalle/Editor -->
@@ -296,6 +360,9 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
                     <button type="button" class="button" id="btn-auto-decidir" title="Aprobar sin alza significativa; reclamar alzas">
                         <span class="dashicons dashicons-yes-alt"></span> Auto-decidir
+                    </button>
+                    <button type="button" class="button" id="btn-aprobar-todo" title="Aprobar todos los ítems Pendiente o Reclamar, incluidas las alzas">
+                        <span class="dashicons dashicons-saved"></span> Aprobar todo
                     </button>
                     <button type="button" class="button" id="btn-preparar-revision-items" title="Requiere que ningún ítem esté Pendiente" disabled>
                         <span class="dashicons dashicons-email-alt"></span> Preparar revisión
@@ -548,6 +615,45 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
         </div>
     </div>
 
+    <!-- Modal Aprobar todo: muestra qué se aprueba (alzas incluidas) antes de guardar -->
+    <div id="modal-aprobar-todo" class="riverso-modal" style="display:none;">
+        <div class="modal-content" style="max-width:900px;">
+            <div class="modal-header">
+                <h3>¿Aprobar todos los ítems?</h3>
+                <button type="button" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="aprobar-todo-cargando" class="loading">Revisando ítems y costos…</div>
+                <div id="aprobar-todo-contenido" style="display:none;">
+                    <p id="aprobar-todo-intro" style="margin-top:0;"></p>
+                    <div class="comparison-summary" id="aprobar-todo-resumen"></div>
+                    <div id="aprobar-todo-avisos"></div>
+                    <div class="quote-eval-table-wrap aprobar-todo-tabla-wrap" id="aprobar-todo-tabla-wrap">
+                        <table class="wp-list-table widefat striped" id="tabla-aprobar-todo">
+                            <thead>
+                                <tr>
+                                    <th style="width:36px;">#</th>
+                                    <th style="width:100px;">Código</th>
+                                    <th>Descripción</th>
+                                    <th style="width:150px;">Decisión</th>
+                                    <th style="width:100px;text-align:right;">Costo anterior</th>
+                                    <th style="width:100px;text-align:right;">Costo cotización</th>
+                                    <th style="width:110px;text-align:right;">Δ Costo</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div id="aprobar-todo-mantienen"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="button modal-close">Cancelar</button>
+                <button type="button" class="button button-primary" id="btn-confirmar-aprobar-todo" disabled>Aprobar ítems</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Upload modal -->
     <div id="modal-upload" class="riverso-modal" style="display:none;">
         <div class="modal-content" style="max-width:520px;">
@@ -711,6 +817,11 @@ $doc_types = Riverso_POS_Received_Quote_Module::DOC_TYPES;
 .filter-row input[type="date"],
 .filter-row select {
     max-width: 200px;
+}
+/* Envoltorios de los filtros: en wp-admin no alteran la fila (el portal los usa como celdas). */
+.rq-filter,
+.rq-filter-buttons {
+    display: contents;
 }
 
 .riverso-card {
@@ -1222,6 +1333,21 @@ tr.quote-por-confirmar {
 #modal-reclamo {
     z-index: 100050;
 }
+.aprobar-todo-tabla-wrap {
+    max-height: 340px;
+    margin: 12px 0;
+}
+#tabla-aprobar-todo tr.aprobar-todo-sube td {
+    background: #fcf0f1;
+}
+#modal-aprobar-todo .quote-tipo-banner {
+    margin: 0 0 8px;
+}
+#aprobar-todo-resumen .summary-item small {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+}
 
 .loading, .empty {
     text-align: center;
@@ -1239,6 +1365,7 @@ tr.quote-por-confirmar {
 jQuery(document).ready(function($) {
     const ajaxurl = window.ajaxurl || '<?php echo esc_js(admin_url('admin-ajax.php')); ?>';
     const nonce = '<?php echo wp_create_nonce('riverso_pos_nonce'); ?>';
+    const enPortal = <?php echo $rq_portal ? 'true' : 'false'; ?>;
     let cotizacionActual = null;
     let itemsActuales = [];
     let proveedoresCache = [];
@@ -1688,11 +1815,14 @@ jQuery(document).ready(function($) {
             }
 
             const origenEmail = origenActual && (origenActual.canal === 'email' || q.origen_canal === 'email');
-            if (origenActual && origenActual.inbox_url) {
+            const inboxUrl = origenActual
+                ? ((enPortal && origenActual.inbox_portal_url) || origenActual.inbox_url)
+                : '';
+            if (inboxUrl) {
                 const label = origenEmail
                     ? '<span class="dashicons dashicons-email-alt"></span> Ver correo'
                     : '<span class="dashicons dashicons-email-alt"></span> Ver mensaje';
-                $('#btn-ver-correo').attr('href', origenActual.inbox_url).html(label).show();
+                $('#btn-ver-correo').attr('href', inboxUrl).html(label).show();
             } else {
                 $('#btn-ver-correo').hide().attr('href', '#');
             }
@@ -1950,6 +2080,7 @@ jQuery(document).ready(function($) {
         const hasItems = !!(itemsActuales && itemsActuales.length);
         const ok = hasItems && pending === 0;
         const $btn = $('#btn-preparar-revision-items');
+        $('#btn-aprobar-todo').prop('disabled', !hasItems);
         $btn.prop('disabled', !ok);
         $btn.attr(
             'title',
@@ -2823,6 +2954,149 @@ jQuery(document).ready(function($) {
         }).fail(function() {
             $btn.prop('disabled', false);
             alert('Error de red al auto-decidir');
+        });
+    });
+
+    // Aprobar todo: primero muestra el plan (dry_run) y solo aplica lo que el usuario vio.
+    let aprobarTodoItemIds = [];
+
+    function formatDeltaCosto(delta, pct) {
+        if (delta === null || delta === undefined || !isFinite(Number(delta))) return '—';
+        const d = Number(delta);
+        let txt = (d > 0 ? '+' : (d < 0 ? '-' : '')) + formatItemCost(Math.abs(d));
+        if (pct !== null && pct !== undefined && isFinite(Number(pct))) {
+            const p = Number(pct);
+            txt += '<br><small>' + (p > 0 ? '+' : '') + p.toLocaleString('es-CL', { maximumFractionDigits: 1 }) + '%</small>';
+        }
+        return txt;
+    }
+
+    function renderAprobarTodo(plan) {
+        const s = plan.summary || {};
+        const changes = (plan.changes || []).slice();
+        const kept = plan.kept || [];
+        aprobarTodoItemIds = changes.map(c => c.item_id);
+
+        const intro = changes.length
+            ? 'Se aprobarán <strong>' + changes.length + '</strong> de ' + s.items + ' ítem(s) que hoy están <em>Pendiente</em> o <em>Reclamar</em>, al precio de esta cotización.'
+            : 'No hay ítems Pendiente ni Reclamar: no hay nada que aprobar.';
+        $('#aprobar-todo-intro').html(intro);
+
+        const tile = (valor, etiqueta, cls) =>
+            '<div class="summary-item"><div class="summary-value ' + (cls || '') + '">' + valor + '</div><div>' + etiqueta + '</div></div>';
+        $('#aprobar-todo-resumen').html(
+            tile(s.to_approve || 0, 'Se aprueban') +
+            tile(s.increases || 0, 'Con alza' + (s.increases ? '<br><small>+' + formatMoney(s.increase_amount) + ' en total</small>' : ''), s.increases ? 'cost-up' : '') +
+            tile((s.decreases || 0) + (s.same || 0), 'Bajan o se mantienen', (s.decreases || s.same) ? 'cost-down' : '') +
+            tile(s.no_reference || 0, 'Sin costo anterior')
+        ).toggle(changes.length > 0);
+
+        const avisos = [];
+        if (s.increases) {
+            avisos.push('<div class="quote-tipo-banner quote-parse-error-banner"><strong>' + s.increases + ' ítem(s) suben de costo.</strong> ' +
+                'Quedarán como <em>Aprobado aumento</em>: se acepta el precio nuevo y no se reclamará. ' +
+                'Mayor costo estimado de esta cotización: <strong>+' + formatMoney(s.increase_amount) + '</strong> (neto).</div>');
+        }
+        if (s.claims_overridden) {
+            avisos.push('<div class="quote-tipo-banner"><strong>' + s.claims_overridden + ' ítem(s) marcados «Reclamar»</strong> pasarán a aprobados: se descarta el reclamo al proveedor.</div>');
+        }
+        if (s.no_reference) {
+            avisos.push('<div class="quote-tipo-banner">' + s.no_reference + ' ítem(s) no tienen costo anterior para comparar (ni factura, ni cotización aprobada, ni legacy): se aprueban sin poder verificar si suben.</div>');
+        }
+        $('#aprobar-todo-avisos').html(avisos.join(''));
+
+        // Alzas primero, luego sin referencia, luego el resto en orden de línea.
+        const orden = { sube: 0, sin_referencia: 1, baja: 2, igual: 2 };
+        changes.sort((a, b) => (orden[a.trend] - orden[b.trend]) || (a.linea - b.linea));
+        const rows = changes.map(c => {
+            const trendCls = c.trend === 'sube' ? 'cost-up' : (c.trend === 'baja' ? 'cost-down' : '');
+            return '<tr class="' + (c.trend === 'sube' ? 'aprobar-todo-sube' : '') + '">' +
+                '<td>' + c.linea + '</td>' +
+                '<td>' + escapeHtml(c.codigo || '—') + '</td>' +
+                '<td>' + escapeHtml(c.descripcion || '—') + '</td>' +
+                '<td><span class="decision-' + escapeHtml(c.decision_actual) + '">' + escapeHtml(c.decision_actual_label) + '</span>' +
+                ' → <span class="decision-' + escapeHtml(c.decision_nueva) + '">' + escapeHtml(c.decision_nueva_label) + '</span></td>' +
+                '<td style="text-align:right">' + (c.reference_cost === null ? '—' : formatItemCost(c.reference_cost)) + '</td>' +
+                '<td style="text-align:right">' + formatItemCost(c.costo_actual) + '</td>' +
+                '<td style="text-align:right" class="' + trendCls + '">' + formatDeltaCosto(c.delta, c.delta_pct) + '</td>' +
+                '</tr>';
+        });
+        $('#tabla-aprobar-todo tbody').html(rows.join(''));
+        $('#aprobar-todo-tabla-wrap').toggle(changes.length > 0);
+
+        let mantienen = '';
+        if (kept.length) {
+            mantienen += '<p class="description"><strong>No cambian (' + kept.length + '):</strong> ' +
+                kept.map(k => 'línea ' + k.linea + ' · ' + escapeHtml(k.decision_actual_label)).join(', ') +
+                '. Son decisiones explícitas (Quitar, Agregar, Corregir cantidad); cámbielas una a una si corresponde.</p>';
+        }
+        if (s.already_approved) {
+            mantienen += '<p class="description">' + s.already_approved + ' ítem(s) ya estaban aprobados y quedan igual.</p>';
+        }
+        $('#aprobar-todo-mantienen').html(mantienen);
+
+        const $ok = $('#btn-confirmar-aprobar-todo');
+        $ok.prop('disabled', !changes.length).text(
+            changes.length
+                ? ('Aprobar ' + changes.length + ' ítem(s)' + (s.increases ? ' con ' + s.increases + ' alza(s)' : ''))
+                : 'Aprobar ítems'
+        );
+        $('#aprobar-todo-cargando').hide();
+        $('#aprobar-todo-contenido').show();
+    }
+
+    $('#btn-aprobar-todo').on('click', function() {
+        const id = $('#cotizacion-id').val();
+        if (!id || id === '0') {
+            alert('Guarde la cotización primero');
+            return;
+        }
+        if (necesitaConfirmacionHumana(cotizacionActual)) {
+            alert('Confirme el tipo como cotización antes de aprobar ítems.');
+            return;
+        }
+        aprobarTodoItemIds = [];
+        $('#aprobar-todo-contenido').hide();
+        $('#aprobar-todo-cargando').text('Revisando ítems y costos…').show();
+        $('#btn-confirmar-aprobar-todo').prop('disabled', true).text('Aprobar ítems');
+        $('#modal-aprobar-todo').show();
+        $.post(ajaxurl, {
+            action: 'riverso_approve_all_quote_items',
+            nonce: nonce,
+            id: id,
+            dry_run: 1
+        }, function(r) {
+            if (!r.success) {
+                $('#aprobar-todo-cargando').text((r.data && r.data.message) ? r.data.message : 'No se pudo revisar los ítems.');
+                return;
+            }
+            renderAprobarTodo(r.data || {});
+        }).fail(function() {
+            $('#aprobar-todo-cargando').text('Error de red al revisar los ítems.');
+        });
+    });
+
+    $('#btn-confirmar-aprobar-todo').on('click', function() {
+        const id = $('#cotizacion-id').val();
+        if (!aprobarTodoItemIds.length) return;
+        const $btn = $(this).prop('disabled', true);
+        $.post(ajaxurl, {
+            action: 'riverso_approve_all_quote_items',
+            nonce: nonce,
+            id: id,
+            item_ids: aprobarTodoItemIds
+        }, function(r) {
+            if (!r.success) {
+                $btn.prop('disabled', false);
+                alert((r.data && r.data.message) ? r.data.message : 'No se pudo aprobar');
+                return;
+            }
+            $('#modal-aprobar-todo').hide();
+            alert(r.data.message || 'Ítems aprobados');
+            verCotizacion(id);
+        }).fail(function() {
+            $btn.prop('disabled', false);
+            alert('Error de red al aprobar');
         });
     });
 

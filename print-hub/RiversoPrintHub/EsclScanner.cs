@@ -40,11 +40,15 @@ internal sealed class EsclScanner : IDisposable
     private readonly HttpClient _http;
     private readonly string _root;
 
-    public EsclScanner(string host)
+    // Una página a doble cara puede tardar bastante en salir del alimentador.
+    public EsclScanner(string host) : this(host, TimeSpan.FromSeconds(120))
+    {
+    }
+
+    private EsclScanner(string host, TimeSpan timeout)
     {
         _root = "http://" + host.Trim();
-        // Una página a doble cara puede tardar bastante en salir del alimentador.
-        _http = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
+        _http = new HttpClient { Timeout = timeout };
     }
 
     /// <summary>¿Hay un escáner eSCL en esta dirección? null si no responde o no lo es.</summary>
@@ -70,6 +74,25 @@ internal sealed class EsclScanner : IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             return null;
+        }
+    }
+
+    /// <summary>¿Hay hojas en el alimentador? con_hojas | vacio | «» si no se pudo saber.</summary>
+    public static async Task<string> FeederAsync(string host, CancellationToken ct)
+    {
+        try
+        {
+            using var scanner = new EsclScanner(host, TimeSpan.FromSeconds(4));
+            return (await scanner.StatusAsync(ct)).AdfState switch
+            {
+                "ScannerAdfLoaded" => "con_hojas",
+                "ScannerAdfEmpty" => "vacio",
+                _ => "",
+            };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            return "";
         }
     }
 

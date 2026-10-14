@@ -191,6 +191,8 @@ class Riverso_Scan_Module {
             $payload['message'] = count($docs) . ' documento(s) extraído(s)';
         } elseif ($estado === 'error') {
             $payload['message'] = $row['error_mensaje'] ?: 'Error al procesar con IA';
+            // El archivo se guarda igual: se puede abrir para ver qué se subió o escaneó.
+            $payload['file_url'] = $this->file_view_url($archivo_id);
         } else {
             $payload['message'] = 'Procesando con IA…';
         }
@@ -323,8 +325,12 @@ class Riverso_Scan_Module {
         return $path;
     }
 
+    /**
+     * @return bool true si puede ver cualquier archivo; false si solo los que subió él (Recepción).
+     */
     private function verify_stream_request() {
-        if (!$this->user_can_view()) {
+        $full = $this->user_can_view();
+        if (!$full && !$this->user_can_ingest()) {
             status_header(403);
             nocache_headers();
             header('Content-Type: text/plain; charset=UTF-8');
@@ -339,6 +345,7 @@ class Riverso_Scan_Module {
             echo 'Enlace expirado. Recargue la página e intente de nuevo.';
             exit;
         }
+        return $full;
     }
 
     private function stream_local_file($path, $mime, $filename) {
@@ -1396,7 +1403,7 @@ class Riverso_Scan_Module {
      * Sirve el PDF/imagen desde copia local (o la baja de R2 una vez).
      */
     public function ajax_file_stream() {
-        $this->verify_stream_request();
+        $full = $this->verify_stream_request();
 
         if (function_exists('set_time_limit')) {
             @set_time_limit(300);
@@ -1414,11 +1421,15 @@ class Riverso_Scan_Module {
 
         global $wpdb;
         $archivo = $wpdb->get_row($wpdb->prepare(
-            "SELECT archivo_hash, r2_key_original, nombre_original, mime
+            "SELECT archivo_hash, r2_key_original, nombre_original, mime, subido_por
              FROM {$this->table('documentos_archivos')} WHERE id = %d",
             $archivo_id
         ), ARRAY_A);
 
+        // Quien solo recibe mercadería ve lo que él mismo subió o escaneó.
+        if ($archivo && !$full && (int) $archivo['subido_por'] !== get_current_user_id()) {
+            $archivo = null;
+        }
         if (!$archivo) {
             status_header(404);
             nocache_headers();

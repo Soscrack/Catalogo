@@ -110,6 +110,10 @@ Recepción ──«Escanear»──►  riverso.cl (cola)  ◄──consulta─�
   escribe la IP de la Canon en **Facturación → Impresión → Editar** (se ve en el panel de la
   impresora: *Configuración de LAN → Wi-Fi*) y conviene reservarla en el router para que no cambie.
 - Opciones (flecha ▾): **Dos caras** y **Hoja oficio (larga)**. Se escanea a 200 ppp en gris.
+- Punto de color en el botón (se revisa cada 10 s; requiere hub 1.1.1):
+  **verde** hay hojas en el alimentador, **amarillo** alimentador vacío (se escanea lo que haya en
+  el vidrio), **rojo** PC1, el hub o la Canon no responden. Al presionar **Escanear** el hub vuelve
+  a revisar el alimentador, así que si recién se pusieron hojas no hay que esperar a que cambie a verde.
 - Máximo 15 páginas por escaneo. Si quedan hojas en el alimentador, el aviso lo dice y se vuelve
   a presionar **Escanear** para el resto.
 - Si hay un atasco a mitad de camino, el escaneo completo se descarta: se vuelven a poner todas las hojas.
@@ -117,6 +121,7 @@ Recepción ──«Escanear»──►  riverso.cl (cola)  ◄──consulta─�
 
 ## 6. Problemas comunes
 
+- **No abre solo al prender el PC:** desde la 1.1.2, cada vez que se abre el hub corrige la entrada de inicio de Windows (si el .exe se movió o se reemplazó) y le quita la marca «descargado de internet». Si Windows lo tiene desactivado en *Administrador de tareas → Aplicaciones de arranque*, avisa con un globo: márcalo de nuevo en el menú del ícono → *Iniciar con Windows*. En el registro queda «Abierto por Windows al iniciar sesión» o «Abierto a mano», así se sabe si funcionó. Conviene dejar el .exe en una carpeta fija (ej. `C:\RiversoPrintHub\`) y reemplazarlo ahí al actualizar.
 - **Registro:** menú del ícono → *Abrir registro* (`%LOCALAPPDATA%\RiversoPrintHub\logs`, se guardan 14 días).
 - **Token rechazado** (ícono rojo): genera un token nuevo en *Facturación → Impresión → Nuevo token* y pégalo en *Configurar…*.
 - **La térmica aparece «Sin conexión USB» estando encendida:** usa el menú del ícono → *Diagnóstico USB…*. Abre un informe con las impresoras USB que Windows ve conectadas y el puerto de cada una (debe coincidir con el `USB002` de la cola). Mientras se revisa, desmarca *Avisar si la impresora USB está desconectada*. Una térmica apagada se seguirá detectando al imprimir, porque el trabajo queda con error en la cola de Windows y se cancela, solo que unos segundos más tarde.

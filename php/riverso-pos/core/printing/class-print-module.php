@@ -40,7 +40,7 @@ class Riverso_Print_Module {
     /** El hub recomprime para no pasar de este tamaño (margen bajo SCAN_MAX_BYTES). */
     const SCAN_TARGET_BYTES = 12582912;
     const SCAN_DPI = 200;
-    /** Escáneres de red que reporta cada hub: agent_id => [{name, adf, duplex}]. */
+    /** Escáneres de red que reporta cada hub: agent_id => [{name, adf, duplex, hojas}]. */
     const SCANNERS_OPTION = 'riverso_print_scanners';
 
     const MODES = ['driver', 'escpos'];
@@ -918,13 +918,16 @@ class Riverso_Print_Module {
                 continue;
             }
             if (isset($p['scanner']) && is_array($p['scanner'])) {
+                $hojas = (string) ($p['adf_state'] ?? '');
                 $list[] = [
                     'name' => $name,
                     'adf' => !empty($p['scanner']['adf']),
                     'duplex' => !empty($p['scanner']['duplex']),
+                    // Hojas en el alimentador (hub 1.1.1+). Solo se escribe la opción cuando cambia.
+                    'hojas' => in_array($hojas, ['con_hojas', 'vacio'], true) ? $hojas : '',
                 ];
             } elseif (isset($known[$name])) {
-                $list[] = $known[$name];
+                $list[] = array_merge($known[$name], ['hojas' => '']);
             }
         }
         if ($list === array_values($known)) {
@@ -982,13 +985,18 @@ class Riverso_Print_Module {
     }
 
     /**
-     * Estado del escáner para el botón «Escanear».
+     * Estado del escáner para el botón «Escanear» y su punto de color.
+     * feeder: con_hojas | vacio | «» (hub antiguo o no se pudo saber); checkedAgo: segundos desde
+     * el último reporte del hub, que es cuando revisó el alimentador.
      */
     public function scan_overview() {
         $t = $this->scan_target();
+        $feeder = $t['ok'] ? (string) ($t['scanner']['hojas'] ?? '') : '';
         return [
             'available' => $t['printer'] !== null,
             'ready' => $t['ok'],
+            'feeder' => $feeder,
+            'checkedAgo' => $feeder !== '' ? Riverso_Print_Repository::age($t['agent']['printers_at']) : null,
             'label' => $t['printer'] ? $this->printer_label($t['printer']) : '',
             'duplex' => $t['scanner'] ? !empty($t['scanner']['duplex']) : false,
             'maxPages' => self::SCAN_MAX_PAGES,

@@ -19,6 +19,8 @@ internal sealed class PrinterReport
     public string Host { get; set; } = "";
     /// <summary>Solo si la impresora también escanea por red (eSCL).</summary>
     public ScannerCaps? Scanner { get; set; }
+    /// <summary>Hojas en el alimentador del escáner: con_hojas | vacio | «» si no se sabe.</summary>
+    public string AdfState { get; set; } = "";
 }
 
 /// <summary>Lo que ofrece el escáner de una multifuncional: alimentador y doble cara.</summary>

@@ -59,6 +59,7 @@ internal sealed partial class PrinterInventory
                 IsVirtual = p.IsVirtual,
                 Host = p.Host,
                 Scanner = p.Scanner,
+                AdfState = p.AdfState,
                 Papers = withPapers ? p.Papers : null,
             }).ToList();
         }
@@ -172,6 +173,9 @@ internal sealed partial class PrinterInventory
             }
 
             var papers = PapersFor(name, isVirtual, ref paperChanged);
+            var scanner = !isVirtual && host.Length > 0 ? await ScannerForAsync(host, ct) : null;
+            // Hojas en el alimentador: se consulta en cada refresco (~10 s) para el punto de «Escanear».
+            var adf = scanner is { Adf: true } && state.Status != "offline" ? await EsclScanner.FeederAsync(host, ct) : "";
             reports.Add(new PrinterReport
             {
                 Name = name,
@@ -182,7 +186,8 @@ internal sealed partial class PrinterInventory
                 IsDefault = string.Equals(name, defaultName, StringComparison.OrdinalIgnoreCase),
                 IsVirtual = isVirtual,
                 Host = host,
-                Scanner = !isVirtual && host.Length > 0 ? await ScannerForAsync(host, ct) : null,
+                Scanner = scanner,
+                AdfState = adf,
                 Papers = papers,
             });
         }

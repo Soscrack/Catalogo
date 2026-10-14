@@ -11,7 +11,7 @@
     <ApplicationHighDpiMode>SystemAware</ApplicationHighDpiMode>
     <AssemblyName>RiversoPrintHub</AssemblyName>
     <RootNamespace>RiversoPrintHub</RootNamespace>
-    <Version>1.1.0</Version>
+    <Version>1.1.2</Version>
     <Product>Riverso Print Hub</Product>
     <Company>Riverso</Company>
   </PropertyGroup>

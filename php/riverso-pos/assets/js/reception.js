@@ -563,6 +563,15 @@
     card.className = "rx-ingest" + (cls ? " " + cls : "");
   }
 
+  /** Error en la tarjeta; si el archivo alcanzó a guardarse, enlace para verlo. */
+  function cardError(card, err) {
+    var html = '<div class="rx-warn">' + esc(err && err.message ? err.message : String(err)) + "</div>";
+    if (err && err.fileUrl) {
+      html += '<a class="rx-link" href="' + esc(err.fileUrl) + '" target="_blank" rel="noopener">Ver lo que se subió ↗</a>';
+    }
+    cardBody(card, html, "is-error");
+  }
+
   function busyHtml(text) {
     return '<span class="rx-spinner" aria-hidden="true"></span> ' + esc(text);
   }
@@ -584,7 +593,7 @@
     cardBody(card, busyHtml(isXml(file) ? "Leyendo XML…" : "Subiendo…"), "is-busy");
     var job = isXml(file) ? ingestXml(file, card, single) : ingestScan(file, card, single);
     return job.catch(function (err) {
-      cardBody(card, '<div class="rx-warn">' + esc(err && err.message ? err.message : String(err)) + "</div>", "is-error");
+      cardError(card, err);
     });
   }
 
@@ -677,14 +686,55 @@
   var DEVICE_POLL_MS = 1500;
   var DEVICE_POLL_MAX = 400; // ~10 min: un alimentador lleno a dos caras
   var SCAN_OPTS_KEY = "riverso-rx-scan-opts";
+  var SCANNER_REFRESH_MS = 10000; // el hub revisa el alimentador cada ~10 s
+
+  function agoText(seconds) {
+    var s = Math.max(0, Number(seconds) || 0);
+    return s < 60 ? "hace " + s + " s" : "hace " + Math.round(s / 60) + " min";
+  }
+
+  /** Punto de «Escanear»: verde con hojas, amarillo alimentador vacío, rojo sin conexión. */
+  function renderScanner(sc) {
+    cfg.scanner = sc;
+    var dot = $("rx-scan-dot");
+    var title;
+    if (!sc.ready) {
+      dot.className = "rx-scan-dot is-error";
+      title = sc.message;
+    } else if (sc.feeder === "vacio") {
+      dot.className = "rx-scan-dot is-warn";
+      title =
+        "Sin hojas en el alimentador (revisado " + agoText(sc.checkedAgo) + "). " +
+        "Si recién pusiste hojas, presiona Escanear igual: se revisa de nuevo al escanear. " +
+        "Sin hojas, se escanea lo que haya en el vidrio.";
+    } else {
+      dot.className = "rx-scan-dot is-ok";
+      title = (sc.feeder === "con_hojas" ? "Hojas en el alimentador. " : "") + "Escanear en " + sc.label;
+    }
+    $("rx-scan-btn").title = title;
+    $("rx-scan-btn").setAttribute("aria-label", "Escanear. " + title);
+  }
+
+  function refreshScanner() {
+    if (document.hidden) return;
+    post(cfg.actions.scanDevice, { op: "status" })
+      .then(function (data) {
+        if (data.scanner) renderScanner(data.scanner);
+      })
+      .catch(function () {
+        $("rx-scan-dot").className = "rx-scan-dot is-none";
+        $("rx-scan-btn").title = "No se pudo revisar el escáner (¿sin internet?).";
+      });
+  }
 
   function setupScanner() {
     var sc = cfg.scanner;
     if (!sc || !sc.available || !cfg.actions.scanDevice) return;
     var opts = storageGet(SCAN_OPTS_KEY) || {};
     $("rx-scanbox").hidden = false;
-    $("rx-scanbox").classList.toggle("is-off", !sc.ready);
-    $("rx-scan-btn").title = sc.ready ? "Escanear en " + sc.label : sc.message;
+    renderScanner(sc);
+    setInterval(refreshScanner, SCANNER_REFRESH_MS);
+    document.addEventListener("visibilitychange", refreshScanner);
     $("rx-scan-duplex-row").hidden = !sc.duplex;
     $("rx-scan-duplex").checked = !!sc.duplex && !!opts.dosCaras;
     $("rx-scan-oficio").checked = !!opts.oficio;
@@ -715,6 +765,7 @@
       .then(function (job) {
         // El escáner ya quedó libre: se puede lanzar otro mientras la IA lee este.
         btn.disabled = false;
+        refreshScanner();
         cardBody(
           card,
           busyHtml((job.detalle ? job.detalle + ". " : "") + "Leyendo con IA… puede tardar un par de minutos."),
@@ -726,7 +777,7 @@
         showScanDocs(card, data, true);
       })
       .catch(function (err) {
-        cardBody(card, '<div class="rx-warn">' + esc(err && err.message ? err.message : String(err)) + "</div>", "is-error");
+        cardError(card, err);
       })
       .finally(function () {
         btn.disabled = false;
@@ -786,7 +837,9 @@
             if (!d.done) {
               retry("La IA está tardando. Revisa «Escaneados sin ingresar» en unos minutos.");
             } else if (d.estado === "error") {
-              reject(new Error(d.message || "Error al leer el documento con IA."));
+              var error = new Error(d.message || "Error al leer el documento con IA.");
+              error.fileUrl = d.file_url || "";
+              reject(error);
             } else {
               resolve(d);
             }

@@ -305,7 +305,21 @@
 /* Escanear desde la multifuncional: botón + opciones */
 .rx-scanbox { display: inline-flex; position: relative; }
 .rx-scanbox > .rx-btn { border-radius: 4px 0 0 4px; }
-.rx-scanbox.is-off > .rx-btn { background: #90a4ae; }
+
+/* Punto de estado, igual que «Imprimir Ya!»: verde con hojas, amarillo alimentador vacío, rojo sin conexión. */
+.rx-scan-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 2px #fff;
+}
+/* Verde más oscuro que el botón para que se distinga sobre él. */
+.rx-scan-dot.is-ok { background: #14532d; }
+.rx-scan-dot.is-warn { background: #facc15; }
+.rx-scan-dot.is-error { background: #dc2626; }
+.rx-scan-dot.is-none { background: #9ca3af; }
 
 .rx-scan-opts > summary {
   display: flex;
@@ -322,7 +336,6 @@
 }
 .rx-scan-opts > summary::-webkit-details-marker { display: none; }
 .rx-scan-opts > summary:hover { background: var(--rx-green-dark); }
-.rx-scanbox.is-off .rx-scan-opts > summary { background: #90a4ae; }
 
 .rx-scan-opts-menu {
   position: absolute;

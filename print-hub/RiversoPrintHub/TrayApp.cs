@@ -57,6 +57,13 @@ internal sealed class TrayApp : ApplicationContext
         {
             _service.Start();
         }
+        // Un hub sin configurar (copia de prueba) no se registra para iniciar con Windows.
+        var startupWarning = Startup.Repair(_config.IsConfigured && _config.AutoStart);
+        _startupItem.Checked = Startup.IsEnabled;
+        if (startupWarning is not null)
+        {
+            _icon.ShowBalloonTip(10000, "Riverso Print Hub no abrirá solo", startupWarning, ToolTipIcon.Warning);
+        }
         else
         {
             ApplyStatus(_service.Status);
@@ -112,7 +119,7 @@ internal sealed class TrayApp : ApplicationContext
         _config = HubConfig.Load();
         _service = CreateService();
         _service.Start();
-        if (!Startup.IsEnabled)
+        if (_config.AutoStart && !Startup.IsEnabled)
         {
             Startup.Set(true);
             _startupItem.Checked = true;
@@ -121,7 +128,10 @@ internal sealed class TrayApp : ApplicationContext
 
     private void ToggleStartup()
     {
-        Startup.Set(!Startup.IsEnabled);
+        bool enable = !Startup.IsEnabled;
+        Startup.Set(enable);
+        _config.AutoStart = enable;
+        _config.Save();
         _startupItem.Checked = Startup.IsEnabled;
     }
 

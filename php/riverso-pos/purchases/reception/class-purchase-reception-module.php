@@ -259,7 +259,7 @@ class Riverso_Purchase_Reception_Module {
     }
 
     /**
-     * Botón «Escanear»: op start (encola el escaneo en el hub) o job (avance del escaneo).
+     * Botón «Escanear»: op status (punto de color), start (encola el escaneo en el hub) o job (avance).
      */
     public function ajax_scan_device() {
         $this->authorize();
@@ -267,6 +267,9 @@ class Riverso_Purchase_Reception_Module {
             $this->fail('El escaneo desde la impresora no está disponible.');
         }
         $print = Riverso_Print_Module::get_instance();
+        if ($this->post_string('op') === 'status') {
+            $this->ok(['scanner' => $print->scan_overview()]);
+        }
         if ($this->post_string('op') === 'start') {
             $job = $print->enqueue_scan([
                 'dos_caras' => $this->post_string('dos_caras') === '1',

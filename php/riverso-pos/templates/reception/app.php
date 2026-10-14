@@ -30,7 +30,7 @@ $json_flags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_AP
                     Reclamos a proveedores <span class="rx-badge" id="rx-claims-count" hidden></span>
                 </button>
                 <span class="rx-scanbox" id="rx-scanbox" hidden>
-                    <button type="button" class="rx-btn" id="rx-scan-btn">Escanear</button>
+                    <button type="button" class="rx-btn" id="rx-scan-btn"><span class="rx-scan-dot is-none" id="rx-scan-dot" aria-hidden="true"></span>Escanear</button>
                     <details class="rx-scan-opts" id="rx-scan-opts">
                         <summary aria-label="Opciones de escaneo" title="Opciones de escaneo">▾</summary>
                         <div class="rx-scan-opts-menu">

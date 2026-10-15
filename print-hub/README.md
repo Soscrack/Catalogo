@@ -73,6 +73,7 @@ depender del papel de 3276 mm ni de la escala del driver. Quédate con el que im
 |---|---|---|
 | Boleta electrónica | Boleta térmica | Factura carta |
 | Factura electrónica | Factura carta | — |
+| Cotización | Factura carta | — |
 
 Las **estaciones** son opcionales. Sirven si más adelante cada caja o celular debe imprimir en
 una impresora distinta: cada dispositivo elige su estación en la misma pantalla, y una regla de
@@ -81,6 +82,8 @@ estación tiene prioridad sobre la general.
 ## 4. Uso
 
 - **Imprimir Ya!** (vista del documento, a la izquierda de *Imprimir*): imprime con el preset del ruteo. El punto del botón indica el estado: verde lista, rojo con problema, gris sin regla. La flecha ▾ permite imprimir con otro preset.
+- **Cotizaciones** (hub 1.2.0 o superior): el editor de la cotización tiene **Imprimir Ya!** e **Imprimir**, junto al botón PDF. Los dos usan el formato elegido en el selector (*por familia* o *por producto*) y, si hay cambios sin guardar, guardan antes. El servidor entrega la cotización como HTML y el hub la convierte a PDF con Microsoft Edge sin ventana (viene con Windows 11; si no está, usa Google Chrome), igual que «Guardar como PDF» del navegador. Hace falta una regla de ruteo para *Cotización*; un hub más antiguo no toma estos trabajos y el aviso dice que nadie los tomó.
+- **Email de cotizaciones** (hub 1.3.0 o superior para el adjunto): el botón **Email** del editor carga los contactos con correo del cliente y el correo de su ficha. Con el hub en línea, el hub genera el PDF (mismo formato que *Imprimir*), lo sube y el servidor lo adjunta; no usa impresora ni ruteo. También se puede incluir un enlace firmado a la cotización (vence a los 30 días): se marcan *PDF adjunto*, *Enlace* o ambos (por defecto solo el PDF; sin hub en línea, solo el enlace). Si el PDF falla, se ofrece **Enviar solo con enlace**. Los correos nuevos quedan como contactos del cliente.
 - **Impresión rápida** (al emitir): el servidor encola la impresión junto con la emisión y la vista del documento muestra cómo avanza. La impresión nunca bloquea la emisión.
 - Si algo falla, aparece el aviso de emergencia con el motivo y estas opciones: **Reintentar**, **imprimir en la alternativa** o **Imprimir normal** (el diálogo de siempre).
 

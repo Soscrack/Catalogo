@@ -14,7 +14,8 @@ internal enum HubState
 
 internal sealed record HubStatus(HubState State, string Message, string AgentName);
 
-internal sealed record JobResult(long JobId, string Titulo, bool Ok, string Message);
+/// <param name="Printed">false si el trabajo solo generaba un PDF (correo), sin imprimir.</param>
+internal sealed record JobResult(long JobId, string Titulo, bool Ok, string Message, bool Printed = true);
 
 /// <summary>
 /// Ciclo del hub: consulta la cola cada ~2 s (enviando el estado de las impresoras cada ~10 s)
@@ -191,12 +192,14 @@ internal sealed class HubService
     {
         var printer = job.Settings?.Printer ?? "";
         bool scan = job.Kind == "scan";
+        bool render = job.Kind == "render";
         // El escáner tiene su propia fila: la multifuncional puede imprimir mientras escanea.
-        var gate = _printerLocks.GetOrAdd(scan ? "scan:" + printer : printer, _ => new SemaphoreSlim(1, 1));
+        // Generar un PDF no usa impresora: va en una fila aparte.
+        var gate = _printerLocks.GetOrAdd(render ? "render:" : scan ? "scan:" + printer : printer, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(ct);
         try
         {
-            await (scan ? RunScanJobAsync(api, job, ct) : RunJobAsync(api, job, ct));
+            await (render ? RunRenderJobAsync(api, job, ct) : scan ? RunScanJobAsync(api, job, ct) : RunJobAsync(api, job, ct));
         }
         catch (Exception ex)
         {
@@ -293,6 +296,60 @@ internal sealed class HubService
 
     private sealed class JobClosedException : Exception
     {
+    }
+
+    /// <summary>Convierte el documento a PDF y lo sube, sin imprimir (adjunto del correo de una cotización).</summary>
+    private async Task RunRenderJobAsync(HubApi api, HubJob job, CancellationToken ct)
+    {
+        Log.Info($"Trabajo #{job.Id} «{job.Titulo}» → PDF para correo");
+        try
+        {
+            await api.ReportAsync(job.Id, "tomado", "Generando PDF");
+            byte[] pdf = await FetchPdfAsync(api, job, ct);
+            await api.ReportAsync(job.Id, "imprimiendo", "Subiendo PDF");
+            (string Code, string Message) upload;
+            try
+            {
+                upload = await api.UploadRenderAsync(job.Id, pdf, ct);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+            {
+                upload = ("upload_failed", ex.Message);
+            }
+            if (upload.Code == "job_closed")
+            {
+                Log.Info($"Trabajo #{job.Id}: el servidor lo cerró (vencido); el PDF no se usó.");
+                return;
+            }
+            if (upload.Code != "ok")
+            {
+                await Fail(api, job, upload.Code, upload.Message);
+                return;
+            }
+            Log.Info($"Trabajo #{job.Id}: PDF subido ({pdf.Length / 1024} KB)");
+            JobFinished?.Invoke(new JobResult(job.Id, job.Titulo, true, "PDF para correo", false));
+        }
+        catch (PrintJobException ex)
+        {
+            await Fail(api, job, ex.Code, ex.Detail);
+        }
+        catch (JobClosedException)
+        {
+            Log.Info($"Trabajo #{job.Id}: el servidor lo cerró (vencido o cancelado).");
+        }
+        catch (HubAuthException ex)
+        {
+            Log.Error($"Trabajo #{job.Id}: {ex.Message}");
+        }
+        catch (OperationCanceledException)
+        {
+            await Fail(api, job, "hub_lost", "El hub se cerró mientras generaba el PDF");
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Trabajo #{job.Id}: {ex}");
+            await Fail(api, job, "render_failed", ex.Message);
+        }
     }
 
     /// <summary>Escanea en la multifuncional (alimentador o vidrio), arma el PDF y lo sube al servidor.</summary>
@@ -399,6 +456,11 @@ internal sealed class HubService
             {
                 return r.Bytes;
             }
+            if (r.Html is not null)
+            {
+                await api.ReportAsync(job.Id, "tomado", "Generando PDF");
+                return await HtmlToPdf.ConvertAsync(r.Html, ct);
+            }
             if (r.Code == "job_closed")
             {
                 throw new JobClosedException();
@@ -406,11 +468,12 @@ internal sealed class HubService
             bool retryable = r.Code is "pdf_not_ready" or "pdf_unavailable" || r.Code.StartsWith("http_5");
             if (!retryable || DateTime.UtcNow - started > PdfWaitLimit)
             {
-                throw new PrintJobException(r.Code == "source_missing" ? "source_missing" : "pdf_unavailable", r.Message);
+                string code = r.Code == "source_missing" ? "source_missing" : job.Kind is "html" or "render" ? "render_failed" : "pdf_unavailable";
+                throw new PrintJobException(code, r.Message);
             }
             if (!told)
             {
-                await api.ReportAsync(job.Id, "tomado", "Esperando el PDF de FACTO");
+                await api.ReportAsync(job.Id, "tomado", job.Kind is "html" or "render" ? "Esperando el documento" : "Esperando el PDF de FACTO");
                 told = true;
             }
             await Task.Delay(2000, ct);
@@ -421,7 +484,7 @@ internal sealed class HubService
     {
         Log.Warn($"Trabajo #{job.Id} no impreso: {code} {detail}");
         await api.ReportAsync(job.Id, "error", detail, code, detail);
-        JobFinished?.Invoke(new JobResult(job.Id, job.Titulo, false, Humanize(code, detail)));
+        JobFinished?.Invoke(new JobResult(job.Id, job.Titulo, false, Humanize(code, detail), job.Kind != "render"));
     }
 
     private static string Humanize(string code, string detail) => code switch

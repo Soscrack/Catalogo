@@ -224,6 +224,27 @@
         lineDiscountHint: document.getElementById("cq-line-discount-hint"),
         linePreview: document.getElementById("cq-line-preview"),
         pdf: document.getElementById("cq-pdf"),
+        print: document.getElementById("cq-print"),
+        email: document.getElementById("cq-email"),
+        emailModal: document.getElementById("cq-email-modal"),
+        emailSub: document.getElementById("cq-email-sub"),
+        emailList: document.getElementById("cq-email-list"),
+        emailEmpty: document.getElementById("cq-email-empty"),
+        emailInput: document.getElementById("cq-email-input"),
+        emailAdd: document.getElementById("cq-email-add"),
+        emailSubject: document.getElementById("cq-email-subject"),
+        emailMessage: document.getElementById("cq-email-message"),
+        emailModePdf: document.getElementById("cq-email-mode-pdf"),
+        emailModeLink: document.getElementById("cq-email-mode-link"),
+        emailModeNote: document.getElementById("cq-email-mode-note"),
+        emailLinkDays: document.getElementById("cq-email-link-days"),
+        emailStatus: document.getElementById("cq-email-status"),
+        emailSend: document.getElementById("cq-email-send"),
+        emailUseLink: document.getElementById("cq-email-use-link"),
+        printNow: document.getElementById("cq-print-now"),
+        printNowCaret: document.getElementById("cq-print-now-caret"),
+        printNowMenu: document.getElementById("cq-print-now-menu"),
+        printNowDot: document.getElementById("cq-print-now-dot"),
         pdfTemplate: document.getElementById("cq-pdf-template"),
         options: document.getElementById("cq-options"),
         optionsMenu: document.getElementById("cq-options-menu"),
@@ -370,6 +391,13 @@
         if (els.optionsMenu && !els.optionsMenu.hidden) {
             closeOptionsMenu();
         }
+        if (els.printNowMenu && !els.printNowMenu.hidden) {
+            closePrintNowMenu();
+        }
+        if (els.emailModal && !els.emailModal.hidden) {
+            event.preventDefault();
+            closeEmailModal();
+        }
     });
     if (els.applyFilters) {
         els.applyFilters.addEventListener("click", function () {
@@ -465,6 +493,7 @@
         closeViewMenus();
         closeOrderMenu();
         closeOptionsMenu();
+        closePrintNowMenu();
     });
     // Interfaz vendedor: margen, utilidad, stock y costos solo a la vista del vendedor.
     // Parte siempre apagada (también si el navegador restaura el formulario).
@@ -629,6 +658,71 @@
     }
     if (els.pdf) {
         els.pdf.addEventListener("click", openQuotePdf);
+    }
+    if (els.print) {
+        els.print.addEventListener("click", printQuoteDialog);
+    }
+    if (els.email && els.emailModal) {
+        els.email.addEventListener("click", openEmailModal);
+        els.emailModal.addEventListener("click", function (event) {
+            if (event.target.closest("[data-cq-email-close]")) {
+                closeEmailModal();
+            }
+        });
+        els.emailList.addEventListener("change", function (event) {
+            var box = event.target.closest("input[data-email-idx]");
+            if (!box) return;
+            var item = emailState.recipients[Number(box.getAttribute("data-email-idx"))];
+            if (item) item.selected = !!box.checked;
+        });
+        els.emailList.addEventListener("click", function (event) {
+            var del = event.target.closest("[data-email-remove]");
+            if (!del) return;
+            emailState.recipients.splice(Number(del.getAttribute("data-email-remove")), 1);
+            renderEmailRecipients();
+        });
+        els.emailAdd.addEventListener("click", addEmailRecipient);
+        els.emailInput.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                addEmailRecipient();
+            }
+        });
+        els.emailSend.addEventListener("click", sendQuoteEmail);
+        els.emailUseLink.addEventListener("click", function () {
+            els.emailModePdf.checked = false;
+            els.emailModeLink.checked = true;
+            sendQuoteEmail();
+        });
+    }
+    if (els.printNow) {
+        els.printNow.addEventListener("click", function () {
+            printQuoteNow(0);
+        });
+        refreshPrintNow();
+    }
+    if (els.printNowCaret && els.printNowMenu) {
+        els.printNowCaret.addEventListener("click", function (event) {
+            event.stopPropagation();
+            var open = els.printNowMenu.hidden;
+            closeViewMenus();
+            closeOrderMenu();
+            closeOptionsMenu();
+            closePrintNowMenu();
+            if (open) {
+                els.printNowMenu.hidden = false;
+                els.printNowCaret.setAttribute("aria-expanded", "true");
+                refreshPrintNow();
+            }
+        });
+        els.printNowMenu.addEventListener("click", function (event) {
+            event.stopPropagation();
+            var item = event.target.closest("[data-preset-id]");
+            if (item) {
+                closePrintNowMenu();
+                printQuoteNow(Number(item.getAttribute("data-preset-id")) || 0);
+            }
+        });
     }
     if (els.options && els.optionsMenu) {
         els.options.addEventListener("click", function (event) {
@@ -6246,6 +6340,22 @@
         }
     }
 
+    function currentPdfTemplate() {
+        var template = normalizePdfTemplate(els.pdfTemplate ? els.pdfTemplate.value : "family");
+        persistPdfTemplate(template);
+        return template;
+    }
+
+    function quotePdfUrl(id, template) {
+        var action = (cfg.actions && cfg.actions.pdf) ? cfg.actions.pdf : "riverso_cq_pdf";
+        return cfg.ajaxUrl
+            + (cfg.ajaxUrl.indexOf("?") >= 0 ? "&" : "?")
+            + "action=" + encodeURIComponent(action)
+            + "&id=" + encodeURIComponent(String(id))
+            + "&template=" + encodeURIComponent(template)
+            + "&nonce=" + encodeURIComponent(cfg.nonce);
+    }
+
     function openQuotePdf() {
         var id = state.quote && state.quote.id != null ? Number(state.quote.id) : 0;
         if (!(id > 0)) {
@@ -6256,21 +6366,371 @@
             setMessage("No se pudo abrir el PDF (configuración incompleta).", true);
             return;
         }
-        var template = normalizePdfTemplate(els.pdfTemplate ? els.pdfTemplate.value : "family");
-        persistPdfTemplate(template);
-        var action = (cfg.actions && cfg.actions.pdf) ? cfg.actions.pdf : "riverso_cq_pdf";
-        var url = cfg.ajaxUrl
-            + (cfg.ajaxUrl.indexOf("?") >= 0 ? "&" : "?")
-            + "action=" + encodeURIComponent(action)
-            + "&id=" + encodeURIComponent(String(id))
-            + "&template=" + encodeURIComponent(template)
-            + "&nonce=" + encodeURIComponent(cfg.nonce);
+        var url = quotePdfUrl(id, currentPdfTemplate());
         var win = window.open(url, "_blank");
         if (!win) {
             setMessage("El navegador bloqueó la ventana del PDF. Permite ventanas emergentes.", true);
             return;
         }
         setMessage("PDF abierto en una pestaña nueva. Usa Imprimir → Guardar como PDF.", false);
+    }
+
+    // ── Imprimir / Imprimir Ya! (mismo formato que el PDF) ──
+
+    /**
+     * Se imprime lo guardado en el servidor: si hay cambios pendientes se guardan antes.
+     * Resuelve con el id de la cotización, o 0 si no se pudo.
+     */
+    function ensureSavedForPrint() {
+        var pending = state.autosave.inflight || Promise.resolve();
+        return Promise.resolve(pending).then(function () {
+            if (state.quote.editable === false || !isDirty()) {
+                return null;
+            }
+            return saveQuote(true).then(function () {
+                return state.autosave.inflight;
+            });
+        }).then(function () {
+            var id = state.quote && state.quote.id != null ? Number(state.quote.id) : 0;
+            if (!(id > 0)) {
+                setMessage("Guarda la cotización antes de imprimir.", true);
+                return 0;
+            }
+            if (state.quote.editable !== false && isDirty()) {
+                setMessage("No se pudieron guardar los últimos cambios; revisa antes de imprimir.", true);
+                return 0;
+            }
+            return id;
+        });
+    }
+
+    function printQuoteDialog() {
+        if (!cfg.ajaxUrl || !cfg.nonce) {
+            setMessage("No se pudo imprimir (configuración incompleta).", true);
+            return;
+        }
+        var template = currentPdfTemplate();
+        ensureSavedForPrint().then(function (id) {
+            if (!id) return;
+            var frame = document.getElementById("cq-print-frame");
+            if (frame) frame.remove();
+            frame = document.createElement("iframe");
+            frame.id = "cq-print-frame";
+            frame.className = "cq-print-frame";
+            frame.setAttribute("aria-hidden", "true");
+            var url = quotePdfUrl(id, template);
+            frame.onload = function () {
+                try {
+                    frame.contentWindow.focus();
+                    frame.contentWindow.print();
+                } catch (err) {
+                    window.open(url, "_blank");
+                }
+            };
+            frame.src = url;
+            document.body.appendChild(frame);
+            setMessage("", false);
+        });
+    }
+
+    function printQuoteNow(presetId) {
+        var rp = window.RiversoPrint;
+        if (!rp) {
+            setMessage("La impresión directa no está disponible. Usa Imprimir.", true);
+            return;
+        }
+        var template = currentPdfTemplate();
+        ensureSavedForPrint().then(function (id) {
+            if (!id) return;
+            rp.printQuote(id, template, {
+                presetId: presetId || 0,
+                fallbackDialog: printQuoteDialog,
+                onDone: refreshPrintNow,
+            });
+        });
+    }
+
+    // ── Enviar por correo ──
+    // PDF adjunto (lo genera el hub de PC1, igual que «Imprimir Ya!») o enlace firmado si el hub
+    // no está disponible.
+
+    var emailState = { id: 0, template: "family", recipients: [], busy: false, token: 0 };
+
+    function isEmailAddress(value) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+    }
+
+    function setEmailStatus(text, kind) {
+        if (!els.emailStatus) return;
+        els.emailStatus.hidden = !text;
+        els.emailStatus.textContent = text || "";
+        els.emailStatus.className = "cq-email-status" + (kind ? " is-" + kind : "");
+    }
+
+    function setEmailBusy(busy) {
+        emailState.busy = busy;
+        [els.emailSend, els.emailUseLink, els.emailAdd, els.emailInput, els.emailSubject, els.emailMessage].forEach(function (el) {
+            if (el) el.disabled = busy;
+        });
+    }
+
+    function renderEmailRecipients() {
+        var list = emailState.recipients;
+        els.emailList.innerHTML = list.map(function (r, idx) {
+            return '<li class="cq-email-row">' +
+                '<label><input type="checkbox" data-email-idx="' + idx + '"' + (r.selected ? " checked" : "") + ">" +
+                '<span class="cq-email-addr">' + escapeHtml(r.email) + "</span>" +
+                (r.nombre ? ' <span class="cq-email-name">' + escapeHtml(r.nombre) + "</span>" : "") +
+                (r.origen ? ' <span class="cq-email-tag">' + escapeHtml(r.origen) + "</span>" : "") +
+                "</label>" +
+                (r.manual ? '<button type="button" class="cq-email-x" data-email-remove="' + idx + '" aria-label="Quitar ' + escapeHtml(r.email) + '">×</button>' : "") +
+                "</li>";
+        }).join("");
+        els.emailEmpty.hidden = list.length > 0;
+        els.emailEmpty.textContent = emailState.hasCustomer
+            ? "El cliente no tiene contactos con correo. Escribe uno y pulsa Enter."
+            : "Sin cliente registrado: escribe los correos y pulsa Enter.";
+    }
+
+    function addEmailRecipient() {
+        var value = String(els.emailInput.value || "").trim().toLowerCase();
+        if (!value) return;
+        if (!isEmailAddress(value)) {
+            setEmailStatus("Correo no válido: " + value, "error");
+            els.emailInput.focus();
+            return;
+        }
+        var existing = emailState.recipients.filter(function (r) { return r.email === value; })[0];
+        if (existing) {
+            existing.selected = true;
+        } else {
+            emailState.recipients.push({ email: value, nombre: "", origen: emailState.hasCustomer ? "Nuevo: quedará en Contactos" : "", selected: true, manual: true });
+        }
+        els.emailInput.value = "";
+        setEmailStatus("", "");
+        renderEmailRecipients();
+        els.emailInput.focus();
+    }
+
+    function setEmailMode(render) {
+        var canPdf = !!(render && render.ok) && !!window.RiversoPrint;
+        // Por defecto solo el PDF; sin hub, solo el enlace. Se pueden marcar ambos.
+        els.emailModePdf.disabled = !canPdf;
+        els.emailModePdf.checked = canPdf;
+        els.emailModeLink.checked = !canPdf;
+        var note = canPdf ? "" : ((render && render.message) || "La impresión directa no está disponible en esta página.") + " Se enviará el enlace.";
+        els.emailModeNote.hidden = !note;
+        els.emailModeNote.textContent = note;
+    }
+
+    function openEmailModal() {
+        if (!cfg.ajaxUrl || !cfg.nonce) {
+            setMessage("No se pudo abrir el correo (configuración incompleta).", true);
+            return;
+        }
+        var template = currentPdfTemplate();
+        ensureSavedForPrint().then(function (id) {
+            if (!id) return;
+            var token = ++emailState.token;
+            emailState.id = id;
+            emailState.template = template;
+            emailState.recipients = [];
+            emailState.hasCustomer = false;
+            els.emailSub.textContent = "Formato: " + (template === "product" ? "por producto" : "por familia");
+            els.emailSubject.value = "";
+            els.emailMessage.value = "";
+            els.emailInput.value = "";
+            els.emailUseLink.hidden = true;
+            setEmailMode({ ok: true });
+            els.emailList.innerHTML = "";
+            els.emailEmpty.hidden = false;
+            els.emailEmpty.textContent = "Cargando correos…";
+            setEmailStatus("", "");
+            setEmailBusy(true);
+            els.emailModal.hidden = false;
+            els.emailModal.setAttribute("aria-hidden", "false");
+            post(cfg.actions.emailPrepare || "riverso_cq_email_prepare", { id: id })
+                .then(function (data) {
+                    if (token !== emailState.token) return;
+                    emailState.hasCustomer = !!data.hasCustomer;
+                    emailState.recipients = (data.recipients || []).map(function (r) {
+                        return { email: r.email, nombre: r.nombre || "", origen: r.origen || "", selected: true, manual: false };
+                    });
+                    els.emailSubject.value = data.subject || "";
+                    els.emailMessage.value = data.message || "";
+                    els.emailLinkDays.textContent = data.linkDays ? "(válido " + data.linkDays + " días)" : "";
+                    setEmailMode(data.render);
+                    renderEmailRecipients();
+                    setEmailBusy(false);
+                    (emailState.recipients.length ? els.emailSubject : els.emailInput).focus();
+                })
+                .catch(function (err) {
+                    if (token !== emailState.token) return;
+                    setEmailBusy(false);
+                    renderEmailRecipients();
+                    setEmailStatus(err.message || "No se pudieron cargar los correos.", "error");
+                });
+        });
+    }
+
+    function closeEmailModal() {
+        if (!els.emailModal) return;
+        // Un envío en curso sigue en el servidor; cerrar solo deja de mostrarlo.
+        emailState.token++;
+        setEmailBusy(false);
+        els.emailModal.hidden = true;
+        els.emailModal.setAttribute("aria-hidden", "true");
+    }
+
+    /** Sigue el trabajo del hub hasta que el PDF esté listo (o falle). */
+    function waitForQuotePdf(jobId, token) {
+        var rp = window.RiversoPrint;
+        var started = Date.now();
+        return new Promise(function (resolve, reject) {
+            function tick() {
+                if (token !== emailState.token) {
+                    reject(new Error(""));
+                    return;
+                }
+                rp.post("riverso_print_job", { job_id: jobId })
+                    .then(function (data) {
+                        var job = data.job || {};
+                        if (job.final) {
+                            if (job.ok) resolve(job);
+                            else reject(new Error(job.message || "El hub no pudo generar el PDF."));
+                            return;
+                        }
+                        setEmailStatus(job.estado === "pendiente" ? "Esperando al hub de PC1…" : "Generando el PDF en PC1…", "busy");
+                        if (Date.now() - started > 90000) {
+                            reject(new Error("El hub no terminó de generar el PDF a tiempo."));
+                            return;
+                        }
+                        setTimeout(tick, 1000);
+                    })
+                    .catch(function () {
+                        if (Date.now() - started > 90000) {
+                            reject(new Error("No se pudo consultar el estado del PDF."));
+                            return;
+                        }
+                        setTimeout(tick, 2000);
+                    });
+            }
+            tick();
+        });
+    }
+
+    function sendQuoteEmail() {
+        if (emailState.busy) return;
+        if (String(els.emailInput.value || "").trim()) {
+            addEmailRecipient();
+            if (String(els.emailInput.value || "").trim()) return;
+        }
+        var emails = emailState.recipients.filter(function (r) { return r.selected; }).map(function (r) { return r.email; });
+        if (!emails.length) {
+            setEmailStatus("Elige o escribe al menos un correo.", "error");
+            return;
+        }
+        var withPdf = els.emailModePdf.checked && !els.emailModePdf.disabled;
+        var withLink = els.emailModeLink.checked;
+        if (!withPdf && !withLink) {
+            setEmailStatus("Marca PDF adjunto, enlace o ambos.", "error");
+            return;
+        }
+        var token = emailState.token;
+        var fields = {
+            id: emailState.id,
+            template: emailState.template,
+            emails: JSON.stringify(emails),
+            subject: els.emailSubject.value,
+            message: els.emailMessage.value,
+            attach_pdf: withPdf ? "1" : "0",
+            include_link: withLink ? "1" : "0"
+        };
+        setEmailBusy(true);
+        els.emailUseLink.hidden = true;
+        var ready = Promise.resolve(null);
+        if (withPdf) {
+            setEmailStatus("Pidiendo el PDF al hub de PC1…", "busy");
+            ready = post(cfg.actions.emailPdf || "riverso_cq_email_pdf", { id: emailState.id, template: emailState.template })
+                .then(function (data) {
+                    var job = data.job || {};
+                    if (job.final && !job.ok) throw new Error(job.message || "El hub no pudo generar el PDF.");
+                    return job.final ? job : waitForQuotePdf(job.id, token);
+                })
+                .then(function (job) {
+                    fields.job_id = job.id;
+                    return job;
+                })
+                .catch(function (err) {
+                    if (err && err.message) err.pdfFailed = true;
+                    throw err;
+                });
+        }
+        ready
+            .then(function () {
+                if (token !== emailState.token) return null;
+                setEmailStatus("Enviando correo…", "busy");
+                return post(cfg.actions.emailSend || "riverso_cq_email_send", fields);
+            })
+            .then(function (data) {
+                if (!data || token !== emailState.token) return;
+                closeEmailModal();
+                setMessage(data.message || "Correo enviado.", false);
+            })
+            .catch(function (err) {
+                if (token !== emailState.token || !err || !err.message) return;
+                setEmailBusy(false);
+                setEmailStatus(err.pdfFailed ? "No se pudo adjuntar el PDF: " + err.message : err.message, "error");
+                // Con el PDF fallido (o ya no disponible) se ofrece enviar solo con enlace.
+                els.emailUseLink.hidden = !withPdf;
+            });
+    }
+
+    function closePrintNowMenu() {
+        if (els.printNowMenu) els.printNowMenu.hidden = true;
+        if (els.printNowCaret) els.printNowCaret.setAttribute("aria-expanded", "false");
+    }
+
+    /** Punto de color y menú: a qué impresora irá la cotización desde este dispositivo. */
+    function refreshPrintNow() {
+        var rp = window.RiversoPrint;
+        var menu = els.printNowMenu;
+        if (!rp || !menu || !els.printNow) return;
+        rp.describe(rp.config.quoteTypeId || 900)
+            .then(function (ov) {
+                var route = ov.route;
+                if (els.printNowDot) {
+                    els.printNowDot.className = "cq-now-dot is-" + (!route ? "none" : route.ok ? "ok" : "error");
+                }
+                els.printNow.title = !route
+                    ? ov.noRouteMessage || "Sin impresora configurada."
+                    : route.ok
+                        ? "Imprimir directo en " + route.nombre + (route.printer ? " (" + route.printer + ")" : "")
+                        : route.message;
+                var html = '<div class="cq-now-note">' + (route
+                    ? "Destino: <strong>" + escapeHtml(route.nombre) + "</strong>" + (route.printer ? " · " + escapeHtml(route.printer) : "") +
+                        (route.ok ? "" : '<br><span class="is-error">' + escapeHtml(route.message) + "</span>")
+                    : '<span class="is-error">' + escapeHtml(ov.noRouteMessage) + "</span>") + "</div>";
+                if (ov.presets && ov.presets.length) {
+                    html += '<div class="cq-now-label">Imprimir en…</div>';
+                    html += ov.presets.map(function (p) {
+                        return '<button type="button" role="menuitem" data-preset-id="' + escapeHtml(p.id) + '"' +
+                            (p.ok ? "" : ' title="' + escapeHtml(p.message) + '"') + ">" +
+                            '<span class="cq-now-dot is-' + (p.ok ? "ok" : "error") + '" aria-hidden="true"></span>' + escapeHtml(p.nombre) +
+                            (p.printer ? " <small>" + escapeHtml(p.printer) + "</small>" : "") + "</button>";
+                    }).join("");
+                }
+                var st = rp.station();
+                html += '<div class="cq-now-sep"></div>' +
+                    '<div class="cq-now-note">Este dispositivo: <strong>' + escapeHtml(st ? st.nombre : "sin estación") + "</strong></div>";
+                if (rp.config.configUrl) {
+                    html += '<a class="cq-now-link" role="menuitem" href="' + escapeHtml(rp.config.configUrl) + '">Configurar impresión…</a>';
+                }
+                menu.innerHTML = html;
+            })
+            .catch(function (err) {
+                menu.innerHTML = '<div class="cq-now-note is-error">' + escapeHtml(err.message || "No se pudo consultar la impresión.") + "</div>";
+            });
     }
 
     function setMessage(text, isError) {

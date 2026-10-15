@@ -2186,3 +2186,317 @@ button.cq-breakdown-chip {
         grid-template-columns: 1fr;
     }
 }
+
+/* ── Imprimir / Imprimir Ya! (barra del editor) ── */
+#cq-print {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cq-split {
+    position: relative;
+    display: inline-flex;
+}
+
+.riverso-cq .cq-btn.cq-btn-now {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #84cc16;
+    border-color: #65a30d;
+    color: #14532d;
+    font-weight: 600;
+}
+
+.riverso-cq .cq-btn.cq-btn-now:hover {
+    background: #a3e635;
+}
+
+.riverso-cq .cq-split > .cq-btn:first-child {
+    border-radius: 8px 0 0 8px;
+}
+
+.riverso-cq .cq-split > .cq-btn.cq-btn-caret {
+    padding: 8px;
+    border-left-width: 0;
+    border-radius: 0 8px 8px 0;
+    font-size: 11px;
+}
+
+.cq-now-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px rgba(20, 83, 45, 0.35);
+    flex: 0 0 auto;
+}
+
+.cq-now-dot.is-ok {
+    background: #16a34a;
+    box-shadow: 0 0 0 2px #fff;
+}
+
+.cq-now-dot.is-error {
+    background: #dc2626;
+    box-shadow: 0 0 0 2px #fff;
+}
+
+.cq-now-dot.is-none {
+    background: #9ca3af;
+    box-shadow: 0 0 0 2px #fff;
+}
+
+.cq-order-menu.cq-now-menu {
+    left: 0;
+    right: auto;
+    min-width: 280px;
+    max-width: min(360px, calc(100vw - 32px));
+}
+
+.cq-now-menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cq-now-menu button small {
+    margin-left: auto;
+    color: #64748b;
+    font-size: 11px;
+}
+
+.cq-now-note {
+    padding: 8px 12px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #475569;
+}
+
+.cq-now-note .is-error,
+.cq-now-note.is-error {
+    color: #b91c1c;
+}
+
+.cq-now-label {
+    padding: 6px 12px 2px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.cq-now-sep {
+    height: 1px;
+    margin: 4px 0;
+    background: #e2e8f0;
+}
+
+.cq-now-link {
+    display: block;
+    padding: 8px 12px;
+    color: #1e293b;
+    text-decoration: none;
+}
+
+.cq-now-link:hover {
+    background: #f1f5f9;
+}
+
+/* Marco oculto para el diálogo de impresión del navegador. */
+.cq-print-frame {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    width: 0;
+    height: 0;
+    border: 0;
+    visibility: hidden;
+}
+
+/* ── Enviar por correo ── */
+#cq-email {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cq-email-dialog {
+    width: min(600px, 100%);
+}
+
+.cq-email-sub {
+    margin: 2px 0 0;
+    font-size: 0.82rem;
+    color: #6b6258;
+}
+
+.cq-email-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.cq-email-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.92rem;
+}
+
+.cq-email-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid #e4d9c8;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.cq-email-list:empty {
+    display: none;
+}
+
+.cq-email-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 10px;
+    border-top: 1px solid #f1e9de;
+}
+
+.cq-email-row:first-child {
+    border-top: 0;
+}
+
+.cq-email-row label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.cq-email-addr {
+    overflow-wrap: anywhere;
+}
+
+.cq-email-name {
+    color: #6b6258;
+    font-size: 0.85rem;
+}
+
+.cq-email-tag {
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: #f3ece2;
+    color: #6b6258;
+    font-size: 0.72rem;
+}
+
+.cq-email-x {
+    border: 0;
+    background: transparent;
+    color: #9a3412;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.cq-email-empty {
+    margin: 0;
+    color: #6b6258;
+    font-size: 0.88rem;
+}
+
+.cq-email-add {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.cq-email-add input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid #d9cbb8;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font: inherit;
+    background: #fff;
+}
+
+.cq-field textarea {
+    border: 1px solid #d9cbb8;
+    background: #fff;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font: inherit;
+    color: inherit;
+    resize: vertical;
+}
+
+.cq-field textarea:focus,
+.cq-email-add input:focus {
+    outline: 2px solid #9a3412;
+    border-color: #9a3412;
+}
+
+.cq-email-mode {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid #e4d9c8;
+    border-radius: 8px;
+}
+
+.cq-email-mode legend {
+    padding: 0 4px;
+    font-size: 0.92rem;
+}
+
+.cq-email-mode label {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.cq-email-mode input:disabled + span {
+    color: #a39889;
+}
+
+.cq-email-mode small {
+    color: #6b6258;
+}
+
+.cq-email-mode-note {
+    margin: 2px 0 0;
+    color: #92400e;
+    font-size: 0.85rem;
+}
+
+.cq-email-status {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #475569;
+}
+
+.cq-email-status.is-error {
+    color: #b91c1c;
+}
+
+.cq-email-foot {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 16px 14px;
+    border-top: 1px solid #efe6da;
+    background: #faf6f0;
+}

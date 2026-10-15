@@ -69,7 +69,7 @@ internal sealed class JobSettings
 internal sealed class HubJob
 {
     public long Id { get; set; }
-    /// <summary>pdf | prueba | scan</summary>
+    /// <summary>pdf | html | prueba | scan | render (solo generar el PDF y subirlo, sin imprimir)</summary>
     public string Kind { get; set; } = "pdf";
     public string Titulo { get; set; } = "";
     public JobSettings? Settings { get; set; }
@@ -96,6 +96,8 @@ internal sealed class FileResponse
     public string? Code { get; set; }
     public string? Message { get; set; }
     public string? PdfBase64 { get; set; }
+    /// <summary>Documentos que el servidor entrega como HTML (kind = html); el hub los convierte a PDF.</summary>
+    public string? Html { get; set; }
 }
 
 /// <summary>El servidor rechazó el token (revocado o mal copiado).</summary>
@@ -104,8 +106,8 @@ internal sealed class HubAuthException : Exception
     public HubAuthException(string message) : base(message) { }
 }
 
-/// <summary>Resultado de pedir el PDF de un trabajo.</summary>
-internal sealed record PdfFetch(byte[]? Bytes, string Code, string Message);
+/// <summary>Resultado de pedir el archivo de un trabajo: PDF listo o HTML por convertir.</summary>
+internal sealed record PdfFetch(byte[]? Bytes, string Code, string Message, string? Html = null);
 
 /// <summary>Cliente de la cola de impresión de riverso.cl (/wp-json/riverso/v1/print-hub/).</summary>
 internal sealed class HubApi : IDisposable
@@ -158,6 +160,10 @@ internal sealed class HubApi : IDisposable
         if (resp.IsSuccessStatusCode && body?.PdfBase64 is string b64 && b64.Length > 0)
         {
             return new PdfFetch(Convert.FromBase64String(b64), "ok", "");
+        }
+        if (resp.IsSuccessStatusCode && body?.Html is string html && html.Length > 0)
+        {
+            return new PdfFetch(null, "ok", "", html);
         }
         var code = body?.Code ?? ("http_" + (int)resp.StatusCode);
         return new PdfFetch(null, code, body?.Message ?? resp.ReasonPhrase ?? "");
@@ -216,6 +222,29 @@ internal sealed class HubApi : IDisposable
         if (resp.StatusCode == HttpStatusCode.RequestEntityTooLarge)
         {
             return ("too_large", "");
+        }
+        return (body?.Code ?? "upload_failed", body?.Message ?? "HTTP " + (int)resp.StatusCode);
+    }
+
+    /// <summary>Sube el PDF generado de un trabajo «render» (correo de cotización). Devuelve el código del servidor, o «ok».</summary>
+    public async Task<(string Code, string Message)> UploadRenderAsync(long jobId, byte[] pdf, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, _base + "jobs/" + jobId + "/pdf");
+        req.Content = new ByteArrayContent(pdf);
+        req.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+        using var resp = await _upload.SendAsync(req, ct);
+        await EnsureAuth(resp);
+        FileResponse? body = null;
+        try
+        {
+            body = await resp.Content.ReadFromJsonAsync<FileResponse>(Json, ct);
+        }
+        catch (JsonException)
+        {
+        }
+        if (resp.IsSuccessStatusCode && body?.Ok == true)
+        {
+            return ("ok", "");
         }
         return (body?.Code ?? "upload_failed", body?.Message ?? "HTTP " + (int)resp.StatusCode);
     }

@@ -26,6 +26,14 @@ $scanner_css_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR 
 $scanner_js_ver = (is_string($scanner_js_path) && is_file($scanner_js_path)) ? (string) filemtime($scanner_js_path) : $version;
 $scanner_css_ver = (is_string($scanner_css_path) && is_file($scanner_css_path)) ? (string) filemtime($scanner_css_path) : $version;
 $cq_comunas = (isset($riverso_cq['comunas']) && is_array($riverso_cq['comunas'])) ? $riverso_cq['comunas'] : [];
+// "Imprimir Ya!": solo si el módulo de impresión está activo.
+$cq_print_config = (!$standalone && class_exists('Riverso_Print_Module'))
+    ? Riverso_Print_Module::get_instance()->client_config()
+    : null;
+$print_js_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/print-quick.js';
+$print_css_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/css/printing.css';
+$print_js_ver = (is_string($print_js_path) && is_file($print_js_path)) ? (string) filemtime($print_js_path) : $version;
+$print_css_ver = (is_string($print_css_path) && is_file($print_css_path)) ? (string) filemtime($print_css_path) : $version;
 
 if (!function_exists('riverso_pos_cq_json')) {
     function riverso_pos_cq_json($data) {
@@ -55,6 +63,9 @@ if (!function_exists('riverso_pos_cq_json')) {
 <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes.css?ver=<?php echo htmlspecialchars($css_ver, ENT_QUOTES, 'UTF-8'); ?>">
 <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customers.css?ver=<?php echo htmlspecialchars($css_customers_ver, ENT_QUOTES, 'UTF-8'); ?>">
 <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/barcode-scanner.css?ver=<?php echo htmlspecialchars($scanner_css_ver, ENT_QUOTES, 'UTF-8'); ?>">
+<?php if ($cq_print_config !== null): ?>
+<link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/printing.css?ver=<?php echo htmlspecialchars($print_css_ver, ENT_QUOTES, 'UTF-8'); ?>">
+<?php endif; ?>
 <?php if ($surface === 'portal'): ?>
 <link rel="stylesheet" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/css/customer-quotes-portal.css?ver=<?php echo htmlspecialchars($css_portal_ver, ENT_QUOTES, 'UTF-8'); ?>">
 <?php endif; ?>
@@ -244,7 +255,28 @@ if (!function_exists('riverso_pos_cq_json')) {
                             <option value="product">PDF: por producto</option>
                         </select>
                     </label>
+                    <?php if ($cq_print_config !== null): ?>
+                    <div class="cq-split cq-now-wrap">
+                        <button type="button" class="cq-btn cq-btn-now" id="cq-print-now" title="Imprimir directo con el preset configurado">
+                            <span class="cq-now-dot" id="cq-print-now-dot" aria-hidden="true"></span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+                            <span>Imprimir Ya!</span>
+                        </button>
+                        <button type="button" class="cq-btn cq-btn-now cq-btn-caret" id="cq-print-now-caret" aria-haspopup="menu" aria-expanded="false" aria-label="Opciones de Imprimir Ya!">▾</button>
+                        <div class="cq-order-menu cq-now-menu" id="cq-print-now-menu" role="menu" hidden>
+                            <div class="cq-now-note">Cargando impresoras…</div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    <button type="button" class="cq-btn" id="cq-print" title="Imprimir con el diálogo del navegador">
+                        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+                        <span>Imprimir</span>
+                    </button>
                     <button type="button" class="cq-btn" id="cq-pdf" title="Abrir cotización en PDF">PDF</button>
+                    <button type="button" class="cq-btn cq-btn-icon" id="cq-email" title="Enviar por correo">
+                        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                        <span>Email</span>
+                    </button>
                     <div class="cq-order-wrap cq-options-wrap">
                         <button type="button" class="cq-btn" id="cq-options" aria-haspopup="true" aria-expanded="false">Opciones ▾</button>
                         <div class="cq-order-menu cq-options-menu" id="cq-options-menu" hidden role="menu">
@@ -739,11 +771,59 @@ if (!function_exists('riverso_pos_cq_json')) {
             </div>
         </div>
 
+        <div id="cq-email-modal" class="cq-modal" hidden aria-hidden="true">
+            <div class="cq-modal-backdrop" data-cq-email-close="1"></div>
+            <div class="cq-modal-dialog cq-email-dialog" role="dialog" aria-modal="true" aria-labelledby="cq-email-title">
+                <header class="cq-modal-head">
+                    <div>
+                        <h3 id="cq-email-title">Enviar por correo</h3>
+                        <p class="cq-email-sub" id="cq-email-sub"></p>
+                    </div>
+                    <button type="button" class="cq-modal-close" aria-label="Cerrar" data-cq-email-close="1">×</button>
+                </header>
+                <div class="cq-modal-body cq-email-body">
+                    <div class="cq-email-section">
+                        <span class="cq-email-label">Destinatarios</span>
+                        <ul class="cq-email-list" id="cq-email-list" role="list"></ul>
+                        <p class="cq-email-empty" id="cq-email-empty" hidden></p>
+                        <div class="cq-email-add">
+                            <input type="email" id="cq-email-input" placeholder="correo@empresa.cl — Enter para agregar" autocomplete="email" enterkeyhint="done">
+                            <button type="button" class="cq-btn" id="cq-email-add">Agregar</button>
+                        </div>
+                    </div>
+                    <label class="cq-field">
+                        <span>Asunto</span>
+                        <input type="text" id="cq-email-subject" maxlength="190">
+                    </label>
+                    <label class="cq-field">
+                        <span>Mensaje</span>
+                        <textarea id="cq-email-message" rows="7"></textarea>
+                    </label>
+                    <fieldset class="cq-email-mode">
+                        <legend>Qué incluir en el correo</legend>
+                        <label><input type="checkbox" id="cq-email-mode-pdf"> <span>PDF adjunto <small>(lo genera el hub de impresión de PC1)</small></span></label>
+                        <label><input type="checkbox" id="cq-email-mode-link"> <span>Enlace para ver la cotización <small id="cq-email-link-days"></small></span></label>
+                        <p class="cq-email-mode-note" id="cq-email-mode-note" hidden></p>
+                    </fieldset>
+                    <p class="cq-email-status" id="cq-email-status" role="status" hidden></p>
+                </div>
+                <footer class="cq-modal-foot cq-email-foot">
+                    <button type="button" class="cq-btn" data-cq-email-close="1">Cancelar</button>
+                    <button type="button" class="cq-btn" id="cq-email-use-link" hidden>Enviar solo con enlace</button>
+                    <button type="button" class="cq-btn cq-btn-primary" id="cq-email-send">Enviar</button>
+                </footer>
+            </div>
+        </div>
+
         <p id="cq-list-message" class="cq-message" role="status"></p>
     </div>
 </div>
 <script>window.RIVERSO_CQ = <?php echo riverso_pos_cq_json($riverso_cq); ?>;</script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/barcode-scanner.js?ver=<?php echo htmlspecialchars($scanner_js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<?php if ($cq_print_config !== null): ?>
+<script>window.RIVERSO_PRINT = <?php echo riverso_pos_cq_json($cq_print_config); ?>;</script>
+<script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/print-quick.js?ver=<?php echo htmlspecialchars($print_js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<?php endif; ?>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/customer-quotes.js?ver=<?php echo htmlspecialchars($js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <?php if ($standalone): ?>
 </body>

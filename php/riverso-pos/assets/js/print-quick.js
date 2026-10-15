@@ -6,6 +6,7 @@
  * y el diálogo normal del navegador como último recurso.
  *
  * Uso: window.RiversoPrint.printDte(dteId, { fallbackDialog: fn })
+ *      window.RiversoPrint.printQuote(quoteId, "family" | "product", { fallbackDialog: fn })
  */
 (function () {
   "use strict";
@@ -150,7 +151,7 @@
   function showEmergency(job, ctx) {
     closeEmergency();
     hideToast();
-    var canRetry = !!ctx.dteId;
+    var canRetry = !!ctx.source;
     var alts = canRetry ? job.alternatives || [] : [];
     var altHtml = "";
     if (alts.length) {
@@ -196,16 +197,17 @@
       }
       if (e.target.closest("[data-rp-retry]")) {
         closeEmergency();
-        printDte(ctx.dteId, { presetId: job.preset_id || 0, origen: "reintento", fallbackDialog: ctx.fallbackDialog });
+        printSource(ctx.source, { presetId: job.preset_id || 0, origen: "reintento", fallbackDialog: ctx.fallbackDialog, onDone: ctx.onDone });
         return;
       }
       var alt = e.target.closest("[data-rp-alt]");
       if (alt) {
         closeEmergency();
-        printDte(ctx.dteId, {
+        printSource(ctx.source, {
           presetId: Number(alt.getAttribute("data-rp-alt")) || 0,
           origen: "alternativa",
           fallbackDialog: ctx.fallbackDialog,
+          onDone: ctx.onDone,
         });
       }
     });
@@ -227,6 +229,7 @@
 
   function track(jobId, ctx) {
     ctx = ctx || {};
+    if (!ctx.source && ctx.dteId) ctx.source = { dte_id: ctx.dteId };
     jobId = Number(jobId) || 0;
     if (!jobId) return Promise.resolve(null);
     if (tracking[jobId]) return tracking[jobId];
@@ -274,19 +277,18 @@
   }
 
   /**
-   * @param {number} dteId
+   * @param {{dte_id?: number, quote_id?: number, template?: string}} source Qué imprimir.
    * @param {{presetId?: number, origen?: string, fallbackDialog?: Function, onDone?: Function}} opts
    */
-  function printDte(dteId, opts) {
+  function printSource(source, opts) {
     opts = opts || {};
-    var ctx = { dteId: dteId, fallbackDialog: opts.fallbackDialog, onDone: opts.onDone };
+    var ctx = { source: source, fallbackDialog: opts.fallbackDialog, onDone: opts.onDone };
     toast("busy", "Imprimir Ya!", "Enviando a la impresora…");
-    return post(action("quick", "riverso_print_quick"), {
-      dte_id: dteId,
+    return post(action("quick", "riverso_print_quick"), Object.assign({}, source, {
       station_id: stationId(),
       preset_id: opts.presetId || 0,
       origen: opts.origen || "boton",
-    })
+    }))
       .then(function (data) {
         return handle(data.job, ctx);
       })
@@ -297,6 +299,15 @@
         });
         return null;
       });
+  }
+
+  function printDte(dteId, opts) {
+    return printSource({ dte_id: dteId }, opts);
+  }
+
+  /** Cotización de venta con su plantilla (family | product). */
+  function printQuote(quoteId, template, opts) {
+    return printSource({ quote_id: quoteId, template: template || "family" }, opts);
   }
 
   /** Qué preset usará "Imprimir Ya!" para un tipo de documento en esta estación. */
@@ -311,6 +322,7 @@
     config: cfg,
     post: post,
     printDte: printDte,
+    printQuote: printQuote,
     track: track,
     describe: describe,
     station: station,

@@ -104,7 +104,7 @@ internal sealed class TrayApp : ApplicationContext
         _lastJobItem.Text = (r.Ok ? "✓ " : "✗ ") + DateTime.Now.ToString("HH:mm") + " " + r.Titulo;
         if (!r.Ok)
         {
-            _icon.ShowBalloonTip(8000, "No se imprimió " + r.Titulo, r.Message, ToolTipIcon.Warning);
+            _icon.ShowBalloonTip(8000, (r.Printed ? "No se imprimió " : "No se generó el PDF de ") + r.Titulo, r.Message, ToolTipIcon.Warning);
         }
     }
 

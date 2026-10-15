@@ -466,11 +466,17 @@ class Riverso_Print_Repository {
     /**
      * Toma el trabajo pendiente más antiguo del hub (atómico entre consultas concurrentes).
      */
-    public function claim_next($agent_id, $allow_scan = true) {
+    /**
+     * @param int      $agent_id
+     * @param string[] $skip_types Tipos de trabajo que este hub no sabe atender (hub antiguo).
+     */
+    public function claim_next($agent_id, array $skip_types = []) {
         global $wpdb;
         $agent_id = absint($agent_id);
-        // Un hub antiguo imprimiría un escaneo como si fuera un documento: no se le entregan.
-        $only = $allow_scan ? '' : " AND source_type <> 'escaneo'";
+        $only = '';
+        foreach ($skip_types as $type) {
+            $only .= " AND source_type <> '" . esc_sql(sanitize_key($type)) . "'";
+        }
         for ($i = 0; $i < 3; $i++) {
             $id = (int) $wpdb->get_var($wpdb->prepare(
                 "SELECT id FROM {$this->jobs} WHERE agent_id = %d AND estado = 'pendiente'{$only} ORDER BY id ASC LIMIT 1",
@@ -490,7 +496,7 @@ class Riverso_Print_Repository {
     public function list_recent_jobs($limit = 25) {
         global $wpdb;
         return $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$this->jobs} WHERE source_type <> 'escaneo' ORDER BY id DESC LIMIT %d",
+            "SELECT * FROM {$this->jobs} WHERE source_type NOT IN ('escaneo', 'cotiz_pdf') ORDER BY id DESC LIMIT %d",
             max(1, min(200, (int) $limit))
         ), ARRAY_A) ?: [];
     }

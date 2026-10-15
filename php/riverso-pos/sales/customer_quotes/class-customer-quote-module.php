@@ -99,6 +99,12 @@ class Riverso_Customer_Quote_Module {
         add_action('wp_ajax_riverso_cq_received_preview', array($this, 'ajax_received_preview'));
         add_action('wp_ajax_riverso_cq_received_import', array($this, 'ajax_received_import'));
         add_action('wp_ajax_riverso_cq_pdf', array($this, 'ajax_pdf'));
+        add_action('wp_ajax_riverso_cq_email_prepare', array($this, 'ajax_email_prepare'));
+        add_action('wp_ajax_riverso_cq_email_pdf', array($this, 'ajax_email_pdf'));
+        add_action('wp_ajax_riverso_cq_email_send', array($this, 'ajax_email_send'));
+        // Enlace del correo: lo abre el cliente, sin sesión (firmado y con vencimiento).
+        add_action('wp_ajax_riverso_cq_public', array($this, 'ajax_public'));
+        add_action('wp_ajax_nopriv_riverso_cq_public', array($this, 'ajax_public'));
         // P1.5 proxies (nonce cotizaciones) → quick-view / pricing / families / unit / tienda-local
         add_action('wp_ajax_riverso_cq_products_quick_lookup', array($this, 'ajax_products_quick_lookup'));
         add_action('wp_ajax_riverso_cq_products_quick_search', array($this, 'ajax_products_quick_search'));
@@ -217,6 +223,9 @@ class Riverso_Customer_Quote_Module {
                 'tiendaLocal' => 'riverso_cq_tienda_local',
                 'familyPrice' => 'riverso_cq_family_price',
                 'pdf' => 'riverso_cq_pdf',
+                'emailPrepare' => 'riverso_cq_email_prepare',
+                'emailPdf' => 'riverso_cq_email_pdf',
+                'emailSend' => 'riverso_cq_email_send',
                 'customersSearch' => 'riverso_cq_customers_search',
                 'customerSave' => 'riverso_cq_customer_save',
             ),
@@ -235,32 +244,335 @@ class Riverso_Customer_Quote_Module {
         if ($id <= 0) {
             $this->fail_html('Cotización no encontrada.', 404);
         }
-        $template = $this->request_string('template');
-        $quote = $this->quotes->find($id);
-        if ($quote === null) {
-            $this->fail_html('Cotización no encontrada.', 404);
-        }
-        $quote = $this->catalog->hydrate_quote_families($quote);
-        $quote = $this->enrich_quote_seller($quote, $id);
         if (!class_exists('Riverso_Quote_Pdf')) {
             $this->fail_html('Generador PDF no disponible.', 500);
         }
-        $doc = Riverso_Quote_Pdf::build($quote, $template);
-        $css_path = RIVERSO_POS_PLUGIN_DIR . 'assets/css/customer-quote-pdf.css';
-        $css_url = rtrim(RIVERSO_POS_PLUGIN_URL, '/') . '/assets/css/customer-quote-pdf.css';
-        if (is_file($css_path)) {
-            $css_url .= '?ver=' . rawurlencode((string) filemtime($css_path));
-        }
-        $logo_path = RIVERSO_POS_PLUGIN_DIR . 'assets/img/logo-rs.png';
-        $logo_url = '';
-        if (is_file($logo_path)) {
-            $logo_url = rtrim(RIVERSO_POS_PLUGIN_URL, '/') . '/assets/img/logo-rs.png?ver='
-                . rawurlencode((string) filemtime($logo_path));
+        $html = $this->document_html($id, $this->request_string('template'));
+        if ($html === null) {
+            $this->fail_html('Cotización no encontrada.', 404);
         }
         nocache_headers();
         status_header(200);
         header('Content-Type: text/html; charset=UTF-8');
+        echo $html;
+        exit;
+    }
+
+    /**
+     * HTML imprimible de la cotización (el mismo del botón PDF).
+     *
+     * @param int    $id
+     * @param string $template family|product
+     * @param bool   $standalone CSS y logo incrustados: lo usa el hub de impresión, que
+     *                           convierte el HTML a PDF sin sesión ni descargas extra.
+     * @return string|null null si la cotización no existe.
+     */
+    public function document_html($id, $template, $standalone = false) {
+        $id = (int) $id;
+        $quote = $id > 0 ? $this->quotes->find($id) : null;
+        if ($quote === null || !class_exists('Riverso_Quote_Pdf')) {
+            return null;
+        }
+        $quote = $this->catalog->hydrate_quote_families($quote);
+        $quote = $this->enrich_quote_seller($quote, $id);
+        $doc = Riverso_Quote_Pdf::build($quote, $template);
+        $css_path = RIVERSO_POS_PLUGIN_DIR . 'assets/css/customer-quote-pdf.css';
+        $logo_path = RIVERSO_POS_PLUGIN_DIR . 'assets/img/logo-rs.png';
+        $css_url = '';
+        $css_inline = '';
+        $logo_url = '';
+        if ($standalone) {
+            $css_inline = is_file($css_path) ? (string) file_get_contents($css_path) : '';
+            if (is_file($logo_path)) {
+                $logo_url = 'data:image/png;base64,' . base64_encode((string) file_get_contents($logo_path));
+            }
+        } else {
+            $css_url = rtrim(RIVERSO_POS_PLUGIN_URL, '/') . '/assets/css/customer-quote-pdf.css';
+            if (is_file($css_path)) {
+                $css_url .= '?ver=' . rawurlencode((string) filemtime($css_path));
+            }
+            if (is_file($logo_path)) {
+                $logo_url = rtrim(RIVERSO_POS_PLUGIN_URL, '/') . '/assets/img/logo-rs.png?ver='
+                    . rawurlencode((string) filemtime($logo_path));
+            }
+        }
+        ob_start();
         include RIVERSO_POS_PLUGIN_DIR . 'templates/customer-quotes/pdf.php';
+        return (string) ob_get_clean();
+    }
+
+    /**
+     * Datos para encolar la impresión directa ("Imprimir Ya!").
+     *
+     * @param int $id
+     * @return array{id: int, titulo: string}|null
+     */
+    public function print_info($id) {
+        $quote = (int) $id > 0 ? $this->quotes->find((int) $id) : null;
+        if ($quote === null) {
+            return null;
+        }
+        $number = trim((string) ($quote['quote_number'] ?? ''));
+        return [
+            'id' => (int) $id,
+            'titulo' => 'Cotización N° ' . ($number !== '' ? $number : (string) (int) $id),
+        ];
+    }
+
+    // ───────────────────────── Correo ─────────────────────────
+    // Adjunta el PDF que genera el hub de impresión (igual al de «Imprimir Ya!»); si el hub no
+    // está disponible, el correo lleva un enlace firmado a la cotización.
+
+    /** Días que dura el enlace del correo. */
+    const PUBLIC_LINK_DAYS = 30;
+    /** Tope de destinatarios por envío. */
+    const EMAIL_MAX_TO = 10;
+
+    /**
+     * @return Riverso_Print_Module|null
+     */
+    private function print_module() {
+        return class_exists('Riverso_Print_Module') && method_exists('Riverso_Print_Module', 'render_overview')
+            ? Riverso_Print_Module::get_instance()
+            : null;
+    }
+
+    /**
+     * @return Riverso_Cliente_Contact_Repository|null
+     */
+    private function contact_repo() {
+        if (!class_exists('Riverso_Cliente_Contact_Repository')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'sales/customers/class-cliente-contact-repository.php';
+            if (!file_exists($path)) {
+                return null;
+            }
+            require_once $path;
+        }
+        return new Riverso_Cliente_Contact_Repository();
+    }
+
+    /**
+     * Correos del cliente de la cotización: sus contactos activos y el correo de su ficha.
+     *
+     * @return array<int, array{email:string,nombre:string,origen:string}>
+     */
+    private function quote_recipients(array $quote) {
+        $customer_id = (int) ($quote['customer_id'] ?? 0);
+        if ($customer_id <= 0) {
+            return [];
+        }
+        $out = [];
+        $contacts = $this->contact_repo();
+        if ($contacts && method_exists($contacts, 'email_book')) {
+            foreach ($contacts->email_book($customer_id) as $c) {
+                $out[$c['email']] = [
+                    'email' => $c['email'],
+                    'nombre' => $c['nombre'],
+                    'origen' => $c['primario'] ? 'Contacto principal' : 'Contacto',
+                ];
+            }
+        }
+        $repo = $this->customer_repo();
+        $customer = $repo ? $repo->get($customer_id) : null;
+        $email = $customer ? strtolower(trim(sanitize_email((string) ($customer['contacto_email'] ?? '')))) : '';
+        $blocked = $contacts && $email !== '' && $contacts->inactive_email($customer_id, $email);
+        if ($email !== '' && is_email($email) && !isset($out[$email]) && !$blocked) {
+            $out[$email] = ['email' => $email, 'nombre' => '', 'origen' => 'Ficha del cliente'];
+        }
+        return array_values($out);
+    }
+
+    public function ajax_email_prepare() {
+        $this->authorize();
+        $id = (int) $this->post_string('id');
+        $quote = $id > 0 ? $this->quotes->find($id) : null;
+        if ($quote === null) {
+            $this->fail('Cotización no encontrada.', 404);
+        }
+        $info = $this->print_info($id);
+        $number = trim((string) ($quote['quote_number'] ?? ''));
+        $customer = trim((string) ($quote['customer_name'] ?? ''));
+        $days = $quote['validity_days'] ?? null;
+        $user = wp_get_current_user();
+        $seller = $user && !empty($user->display_name) ? (string) $user->display_name : '';
+        $message = ($customer !== '' ? 'Estimado(a) ' . $customer . ':' : 'Estimado(a):') . "\n\n"
+            . 'Le enviamos la cotización N° ' . ($number !== '' ? $number : $id)
+            . ($days !== null && $days !== '' && (int) $days > 0 ? ', válida por ' . (int) $days . ' días' : '') . ".\n\n"
+            . "Quedamos atentos a sus comentarios.\n\nSaludos,\n"
+            . ($seller !== '' ? $seller . "\n" : '') . 'Riverso';
+        $print = $this->print_module();
+        $this->ok([
+            'recipients' => $this->quote_recipients($quote),
+            'hasCustomer' => (int) ($quote['customer_id'] ?? 0) > 0,
+            'customerName' => $customer,
+            'subject' => $info['titulo'] . ' – Riverso',
+            'message' => $message,
+            'render' => $print ? $print->render_overview() : ['ok' => false, 'message' => 'La impresión directa no está activa: se enviará un enlace.', 'hub' => ''],
+            'linkDays' => self::PUBLIC_LINK_DAYS,
+        ]);
+    }
+
+    /** Pide al hub el PDF para adjuntar (el navegador sigue el trabajo y luego envía). */
+    public function ajax_email_pdf() {
+        $this->authorize();
+        $id = (int) $this->post_string('id');
+        $print = $this->print_module();
+        if (!$print) {
+            $this->fail('La impresión directa no está activa.');
+        }
+        $job = $print->enqueue_quote_pdf($id, $this->post_string('template'));
+        if (!$job) {
+            $this->fail('Cotización no encontrada.', 404);
+        }
+        $this->ok(['job' => $job]);
+    }
+
+    public function ajax_email_send() {
+        $this->authorize();
+        $id = (int) $this->post_string('id');
+        $quote = $id > 0 ? $this->quotes->find($id) : null;
+        if ($quote === null) {
+            $this->fail('Cotización no encontrada.', 404);
+        }
+        $template = Riverso_Quote_Pdf::normalize_template($this->post_string('template'));
+        // Se puede enviar el PDF adjunto, el enlace o ambos en el mismo correo.
+        $with_pdf = $this->post_string('attach_pdf') === '1';
+        $with_link = $this->post_string('include_link') === '1';
+        if (!$with_pdf && !$with_link) {
+            $this->fail('Elige PDF adjunto, enlace o ambos.');
+        }
+
+        $raw = isset($_POST['emails']) ? json_decode((string) wp_unslash($_POST['emails']), true) : null;
+        $emails = array();
+        foreach (is_array($raw) ? $raw : array() as $addr) {
+            $addr = strtolower(trim(sanitize_email((string) $addr)));
+            if ($addr !== '' && is_email($addr)) {
+                $emails[$addr] = $addr;
+            }
+        }
+        if (!$emails) {
+            $this->fail('Indica al menos un correo válido.');
+        }
+        if (count($emails) > self::EMAIL_MAX_TO) {
+            $this->fail('Máximo ' . self::EMAIL_MAX_TO . ' destinatarios por envío.');
+        }
+
+        $info = $this->print_info($id);
+        $subject = trim(sanitize_text_field(isset($_POST['subject']) ? wp_unslash($_POST['subject']) : ''));
+        if ($subject === '') {
+            $subject = $info['titulo'] . ' – Riverso';
+        }
+        $body = trim(sanitize_textarea_field(isset($_POST['message']) ? wp_unslash($_POST['message']) : ''));
+
+        $attachments = array();
+        $job_id = (int) $this->post_string('job_id');
+        $print = $this->print_module();
+        $tmp_dir = '';
+        if ($with_pdf) {
+            $source = $print ? $print->render_file($job_id, $id) : null;
+            if (!$source) {
+                $this->fail('El PDF ya no está disponible. Vuelve a intentar o envía con enlace.');
+            }
+            // El adjunto toma el nombre del archivo: se copia con un nombre legible.
+            $tmp_dir = trailingslashit(wp_upload_dir()['basedir']) . 'riverso-tmp/cq-' . wp_generate_password(12, false, false);
+            wp_mkdir_p($tmp_dir);
+            $number = preg_replace('/[^0-9A-Za-z_-]/', '', (string) ($quote['quote_number'] ?? '')) ?: (string) $id;
+            $file = $tmp_dir . '/Cotizacion-' . $number . '.pdf';
+            if (!copy($source, $file)) {
+                $this->fail('No se pudo preparar el adjunto.', 500);
+            }
+            $attachments[] = $file;
+        }
+        if ($with_link) {
+            $expires = time() + self::PUBLIC_LINK_DAYS * DAY_IN_SECONDS;
+            $body .= ($body !== '' ? "\n\n" : '')
+                . 'Ver la cotización: ' . $this->public_url($id, $template, $expires) . "\n"
+                . '(Enlace disponible hasta el ' . wp_date('d-m-Y', $expires) . '.)';
+        }
+
+        $mail_error = '';
+        $on_fail = static function ($error) use (&$mail_error) {
+            if (is_wp_error($error)) {
+                $mail_error = $error->get_error_message();
+            }
+        };
+        add_action('wp_mail_failed', $on_fail);
+        $sent = wp_mail(array_values($emails), $subject, $body, array('Content-Type: text/plain; charset=UTF-8'), $attachments);
+        remove_action('wp_mail_failed', $on_fail);
+        foreach ($attachments as $file) {
+            @unlink($file);
+        }
+        if ($tmp_dir !== '') {
+            @rmdir($tmp_dir);
+        }
+        if (class_exists('Riverso_Audit_Module')) {
+            Riverso_Audit_Module::get_instance()->log(
+                'quotes.email',
+                'customer_quote',
+                $id,
+                array(),
+                array('to' => array_values($emails), 'pdf' => $with_pdf, 'link' => $with_link, 'template' => $template, 'ok' => $sent, 'error' => $mail_error),
+                'Correo ' . $info['titulo']
+            );
+        }
+        if (!$sent) {
+            $this->fail($mail_error !== '' ? 'No se pudo enviar el correo: ' . $mail_error : 'No se pudo enviar el correo.');
+        }
+        if ($with_pdf && $print) {
+            $print->release_render_file($job_id, $id);
+        }
+
+        // Los correos nuevos quedan como contactos del cliente (los inhabilitados no se reactivan).
+        $customer_id = (int) ($quote['customer_id'] ?? 0);
+        $contacts = $customer_id > 0 ? $this->contact_repo() : null;
+        if ($contacts) {
+            foreach ($emails as $addr) {
+                $contacts->remember($customer_id, $addr, 'cotizacion');
+            }
+        }
+
+        $this->ok(array(
+            'message' => 'Correo enviado a ' . implode(', ', array_values($emails))
+                . ($with_pdf && $with_link ? ' con el PDF adjunto y el enlace a la cotización.'
+                    : ($with_pdf ? ' con el PDF adjunto.' : ' con el enlace a la cotización.')),
+        ));
+    }
+
+    private function public_signature($id, $template, $expires) {
+        return substr(hash_hmac('sha256', 'cq|' . (int) $id . '|' . $template . '|' . (int) $expires, wp_salt('auth')), 0, 32);
+    }
+
+    private function public_url($id, $template, $expires) {
+        return add_query_arg(array(
+            'action' => 'riverso_cq_public',
+            'id' => (int) $id,
+            't' => $template,
+            'e' => (int) $expires,
+            's' => $this->public_signature($id, $template, $expires),
+        ), admin_url('admin-ajax.php'));
+    }
+
+    /** Cotización vista por el cliente desde el enlace del correo. */
+    public function ajax_public() {
+        $id = (int) $this->request_string('id');
+        $template = Riverso_Quote_Pdf::normalize_template($this->request_string('t'));
+        $expires = (int) $this->request_string('e');
+        $sig = $this->request_string('s');
+        if ($id <= 0 || $sig === '' || !hash_equals($this->public_signature($id, $template, $expires), $sig)) {
+            $this->fail_html('Enlace no válido.', 403);
+        }
+        if ($expires < time()) {
+            $this->fail_html('Este enlace venció. Pide a Riverso que te envíe la cotización de nuevo.', 410);
+        }
+        $html = $this->document_html($id, $template);
+        if ($html === null) {
+            $this->fail_html('La cotización ya no está disponible.', 404);
+        }
+        nocache_headers();
+        header('X-Robots-Tag: noindex, nofollow');
+        status_header(200);
+        header('Content-Type: text/html; charset=UTF-8');
+        echo $html;
         exit;
     }
 

@@ -33,6 +33,19 @@ class Riverso_Print_Module {
 
     /** Primera versión del hub que sabe escanear. */
     const SCAN_MIN_HUB = '1.1.0';
+    /** Primera versión del hub que convierte HTML a PDF (cotizaciones). */
+    const HTML_MIN_HUB = '1.2.0';
+    /**
+     * Tipo de documento interno de las cotizaciones en el ruteo (no es un código SII; los DTE
+     * usan los del SII, que no pasan de 2 dígitos).
+     */
+    const QUOTE_TYPE = 900;
+    /** Primera versión del hub que genera un PDF y lo sube sin imprimir (correo de cotización). */
+    const RENDER_MIN_HUB = '1.3.0';
+    /** Tamaño máximo del PDF generado que se acepta. */
+    const RENDER_MAX_BYTES = 15728640;
+    /** El PDF generado se borra si no se usó en este plazo. */
+    const RENDER_KEEP_SECONDS = 3600;
     /** Tope de páginas por escaneo: la lectura con IA procesa el archivo completo por página. */
     const SCAN_MAX_PAGES = 15;
     /** Tamaño máximo del PDF que acepta la lectura con IA. */
@@ -109,6 +122,15 @@ class Riverso_Print_Module {
         return current_user_can(self::CAP_MANAGE) || current_user_can('manage_options');
     }
 
+    /** Quien puede ver cotizaciones puede imprimirlas, aunque no emita documentos. */
+    public function can_print_quotes() {
+        return current_user_can('riverso_view_quotes')
+            || current_user_can('riverso_create_quotes')
+            || current_user_can('riverso_edit_quotes')
+            || current_user_can('manage_woocommerce')
+            || current_user_can('manage_options');
+    }
+
     /**
      * Configuración para el cliente JS (botón "Imprimir Ya!" y pantalla de configuración).
      *
@@ -120,6 +142,7 @@ class Riverso_Print_Module {
             'nonce' => wp_create_nonce(self::NONCE),
             'configUrl' => home_url('/interno/facturacion/?vista=impresion'),
             'canManage' => $this->can_manage(),
+            'quoteTypeId' => self::QUOTE_TYPE,
             'serverUrl' => untrailingslashit(home_url('/')),
             'actions' => [
                 'quick' => 'riverso_print_quick',
@@ -159,6 +182,49 @@ class Riverso_Print_Module {
             'origen' => $this->sanitize_origin($opts['origen'] ?? 'boton'),
         ]);
         return $job ? $this->present_job($job, true) : null;
+    }
+
+    /**
+     * Encola una cotización de venta con la plantilla elegida (por familia o por producto).
+     * El hub recibe el HTML del documento y lo convierte a PDF antes de imprimir.
+     *
+     * @param int    $quote_id
+     * @param string $template family|product
+     * @param array  $opts station_id, preset_id (forzar preset), origen.
+     * @return array|null Trabajo presentado para la UI (null si la cotización no existe).
+     */
+    public function enqueue_quote($quote_id, $template, array $opts = []) {
+        $quotes = $this->quote_module();
+        $info = $quotes ? $quotes->print_info(absint($quote_id)) : null;
+        if (!$info) {
+            return null;
+        }
+        $job = $this->enqueue([
+            'source_type' => 'cotizacion',
+            'source_id' => (int) $info['id'],
+            'document_type_id' => self::QUOTE_TYPE,
+            'titulo' => $info['titulo'],
+            'station_id' => absint($opts['station_id'] ?? 0),
+            'preset_id' => absint($opts['preset_id'] ?? 0),
+            'origen' => $this->sanitize_origin($opts['origen'] ?? 'boton'),
+            'extra' => ['plantilla' => Riverso_Quote_Pdf::normalize_template($template)],
+        ]);
+        return $job ? $this->present_job($job, true) : null;
+    }
+
+    /**
+     * @return Riverso_Customer_Quote_Module|null
+     */
+    private function quote_module() {
+        if (!class_exists('Riverso_Customer_Quote_Module')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'sales/customer_quotes/class-customer-quote-module.php';
+            if (!file_exists($path)) {
+                return null;
+            }
+            require_once $path;
+        }
+        $module = Riverso_Customer_Quote_Module::get_instance();
+        return method_exists($module, 'print_info') ? $module : null;
     }
 
     /**
@@ -202,7 +268,7 @@ class Riverso_Print_Module {
             $data['agent_id'] = $health['agent'] ? (int) $health['agent']['id'] : null;
             $data['printer_id'] = $health['printer'] ? (int) $health['printer']['id'] : null;
             if ($health['printer']) {
-                $data['ajustes'] = wp_json_encode($this->build_settings($preset, $health['printer']));
+                $data['ajustes'] = wp_json_encode(array_merge($this->build_settings($preset, $health['printer']), $req['extra'] ?? []));
             }
             $code = $health['ok'] ? '' : $health['code'];
             if (!$health['ok']) {
@@ -443,6 +509,12 @@ class Riverso_Print_Module {
                 return 'El papel ' . ($detail !== '' ? '«' . $detail . '» ' : '') . 'no existe en la impresora ' . $printer . '. Revisa el preset.';
             case 'source_missing':
                 return 'El documento ya no existe.';
+            case 'no_hub':
+                return 'No hay un hub de impresión en línea para generar el PDF. Revisa que PC1 esté encendido y con Riverso Print Hub abierto.';
+            case 'hub_old':
+                return 'El hub ' . $hub . ' es una versión antigua y no puede generar el PDF. Actualízalo a la ' . self::RENDER_MIN_HUB . ' o superior.';
+            case 'render_failed':
+                return 'El hub no pudo generar el PDF del documento' . ($detail !== '' ? ': ' . $detail_lc : '') . '. Usa «Imprimir normal» mientras tanto.';
             case 'print_failed':
                 return 'No se pudo imprimir en ' . $printer . ($detail !== '' ? ': ' . $detail : '.');
             default:
@@ -475,6 +547,7 @@ class Riverso_Print_Module {
             2 => 'Factura electrónica',
             41 => 'Boleta exenta electrónica',
             32 => 'Factura exenta electrónica',
+            self::QUOTE_TYPE => 'Cotización',
         ];
     }
 
@@ -668,12 +741,16 @@ class Riverso_Print_Module {
 
     // ───────────────────────── AJAX ─────────────────────────
 
-    private function authorize($manage = false) {
+    /**
+     * @param bool $manage    Exige permiso de configuración.
+     * @param bool $quotes_ok También basta con poder ver cotizaciones (imprimirlas y seguir el trabajo).
+     */
+    private function authorize($manage = false, $quotes_ok = false) {
         $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
         if (!wp_verify_nonce($nonce, self::NONCE)) {
             wp_send_json_error(['message' => 'Sesión inválida. Recarga la página.'], 403);
         }
-        if (!$this->can_print() && !$this->can_manage()) {
+        if (!$this->can_print() && !$this->can_manage() && !($quotes_ok && $this->can_print_quotes())) {
             wp_send_json_error(['message' => 'Sin permiso para imprimir documentos.'], 403);
         }
         if ($manage && !$this->can_manage()) {
@@ -691,13 +768,24 @@ class Riverso_Print_Module {
     }
 
     public function ajax_quick() {
-        $this->authorize();
-        $dte_id = $this->post_int('dte_id');
-        $job = $this->enqueue_dte($dte_id, [
+        $this->authorize(false, true);
+        $opts = [
             'station_id' => $this->post_int('station_id'),
             'preset_id' => $this->post_int('preset_id'),
             'origen' => $this->post_text('origen', 20),
-        ]);
+        ];
+        $quote_id = $this->post_int('quote_id');
+        if ($quote_id > 0) {
+            $job = $this->enqueue_quote($quote_id, $this->post_text('template', 20), $opts);
+            if (!$job) {
+                wp_send_json_error(['message' => 'Cotización no encontrada.']);
+            }
+            wp_send_json_success(['job' => $job]);
+        }
+        if (!$this->can_print() && !$this->can_manage()) {
+            wp_send_json_error(['message' => 'Sin permiso para imprimir documentos.'], 403);
+        }
+        $job = $this->enqueue_dte($this->post_int('dte_id'), $opts);
         if (!$job) {
             wp_send_json_error(['message' => 'Documento no encontrado.']);
         }
@@ -705,7 +793,7 @@ class Riverso_Print_Module {
     }
 
     public function ajax_job() {
-        $this->authorize();
+        $this->authorize(false, true);
         $this->repo->expire_jobs(self::STUCK_AFTER);
         $job = $this->repo->get_job($this->post_int('job_id'));
         if (!$job) {
@@ -715,7 +803,7 @@ class Riverso_Print_Module {
     }
 
     public function ajax_overview() {
-        $this->authorize();
+        $this->authorize(false, true);
         wp_send_json_success($this->overview($this->post_int('document_type_id'), $this->post_int('station_id')));
     }
 
@@ -896,6 +984,189 @@ class Riverso_Print_Module {
 
     private function hub_can_scan($version) {
         return version_compare((string) $version, self::SCAN_MIN_HUB, '>=');
+    }
+
+    private function hub_can_html($version) {
+        return version_compare((string) $version, self::HTML_MIN_HUB, '>=');
+    }
+
+    private function hub_can_render($version) {
+        return version_compare((string) $version, self::RENDER_MIN_HUB, '>=');
+    }
+
+    // ───────────────────────── PDF para correo ─────────────────────────
+    // El servidor no sabe convertir HTML a PDF: un hub en línea genera el PDF de la cotización
+    // (igual que «Imprimir Ya!») y lo sube; el correo lo adjunta. source_type «cotiz_pdf».
+
+    /**
+     * Hub que puede generar el PDF ahora (cualquiera en línea y actualizado).
+     *
+     * @return array{ok: bool, code: string, agent: ?array}
+     */
+    private function render_target() {
+        $old = null;
+        foreach ($this->repo->list_agents() as $agent) {
+            if (!$this->agent_online($agent)) {
+                continue;
+            }
+            if (!$this->hub_can_render($agent['version'])) {
+                $old = $old ?: $agent;
+                continue;
+            }
+            return ['ok' => true, 'code' => '', 'agent' => $agent];
+        }
+        return ['ok' => false, 'code' => $old ? 'hub_old' : 'no_hub', 'agent' => $old];
+    }
+
+    /**
+     * ¿Se puede adjuntar el PDF? Para elegir entre adjunto y enlace al abrir el correo.
+     *
+     * @return array{ok: bool, message: string, hub: string}
+     */
+    public function render_overview() {
+        $t = $this->render_target();
+        $hub = $t['agent'] ? (string) $t['agent']['nombre'] : '';
+        return [
+            'ok' => $t['ok'],
+            'message' => $t['ok'] ? '' : $this->error_message($t['code'], [
+                'doc' => '', 'printer' => '', 'hub' => $hub, 'hub_seen' => '', 'hub_online' => true, 'detail' => '',
+            ]),
+            'hub' => $hub,
+        ];
+    }
+
+    /**
+     * Encola la generación del PDF de una cotización para adjuntarlo a un correo.
+     *
+     * @return array|null Trabajo presentado (null si la cotización no existe).
+     */
+    public function enqueue_quote_pdf($quote_id, $template) {
+        $quotes = $this->quote_module();
+        $info = $quotes ? $quotes->print_info(absint($quote_id)) : null;
+        if (!$info) {
+            return null;
+        }
+        $t = $this->render_target();
+        $data = [
+            'origen' => 'boton',
+            'source_type' => 'cotiz_pdf',
+            'source_id' => (int) $info['id'],
+            'document_type_id' => self::QUOTE_TYPE,
+            'titulo' => mb_substr($info['titulo'], 0, 150),
+            'station_id' => 0,
+            'agent_id' => $t['agent'] ? (int) $t['agent']['id'] : null,
+            'ajustes' => wp_json_encode(['plantilla' => Riverso_Quote_Pdf::normalize_template($template)]),
+            'requested_by' => get_current_user_id() ?: null,
+        ];
+        if ($t['ok']) {
+            $data['estado'] = 'pendiente';
+            $data['expires_at'] = Riverso_Print_Repository::at(self::CLAIM_TIMEOUT);
+        } else {
+            $data['estado'] = 'error';
+            $data['error_code'] = $t['code'];
+            $data['finished_at'] = Riverso_Print_Repository::now();
+        }
+        $id = $this->repo->create_job($data);
+        $job = $id ? $this->repo->get_job($id) : null;
+        return $job ? $this->present_job($job) : null;
+    }
+
+    /**
+     * Archivo del PDF generado, solo para quien lo pidió y para esa cotización.
+     *
+     * @return string|null Ruta local.
+     */
+    public function render_file($job_id, $quote_id) {
+        $job = $this->repo->get_job(absint($job_id));
+        if (!$job || $job['source_type'] !== 'cotiz_pdf' || $job['estado'] !== 'impreso'
+            || (int) $job['source_id'] !== (int) $quote_id
+            || (int) $job['requested_by'] !== get_current_user_id()) {
+            return null;
+        }
+        $settings = json_decode((string) $job['ajustes'], true);
+        $name = is_array($settings) ? basename((string) ($settings['archivo'] ?? '')) : '';
+        $path = $name !== '' ? $this->render_dir() . $name : '';
+        return $path !== '' && is_file($path) ? $path : null;
+    }
+
+    /** Borra el PDF generado una vez enviado el correo. */
+    public function release_render_file($job_id, $quote_id) {
+        $path = $this->render_file($job_id, $quote_id);
+        if ($path) {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * Carpeta privada de los PDF generados (se borran al enviar o a la hora).
+     */
+    private function render_dir() {
+        $dir = trailingslashit(wp_upload_dir()['basedir']) . 'riverso-tmp/cotizaciones-pdf/';
+        if (!is_dir($dir)) {
+            wp_mkdir_p($dir);
+            // Con nginx delante (Plesk) el .htaccess puede no aplicarse: por eso el nombre del
+            // archivo es aleatorio y el PDF dura poco.
+            @file_put_contents($dir . '.htaccess', "<IfModule mod_authz_core.c>\nRequire all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\nDeny from all\n</IfModule>\n");
+            @file_put_contents($dir . 'index.php', "<?php\n// Silencio.\n");
+        }
+        return $dir;
+    }
+
+    private function clean_render_dir($dir) {
+        foreach ((array) glob($dir . '*.pdf') as $file) {
+            if (is_string($file) && is_file($file) && time() - (int) filemtime($file) > self::RENDER_KEEP_SECONDS) {
+                @unlink($file);
+            }
+        }
+    }
+
+    public function rest_render_upload(WP_REST_Request $request) {
+        $agent = $this->rest_agent($request);
+        if ($agent instanceof WP_REST_Response) {
+            return $agent;
+        }
+        $job = $this->rest_job($request, $agent);
+        if ($job instanceof WP_REST_Response) {
+            return $job;
+        }
+        $active = ['tomado', 'imprimiendo'];
+        if ($job['source_type'] !== 'cotiz_pdf' || !in_array($job['estado'], $active, true)) {
+            return new WP_REST_Response(['ok' => false, 'code' => 'job_closed', 'message' => 'El trabajo ya no está activo.'], 410);
+        }
+        $job_id = (int) $job['id'];
+        $reject = function ($code, $message, $status) use ($job_id, $active) {
+            $this->repo->transition_job($job_id, $active, [
+                'estado' => 'error',
+                'error_code' => $code,
+                'error_msg' => mb_substr($message, 0, 255),
+                'finished_at' => Riverso_Print_Repository::now(),
+            ]);
+            return new WP_REST_Response(['ok' => false, 'code' => $code, 'message' => $message], $status);
+        };
+        $pdf = (string) $request->get_body();
+        if (strncmp($pdf, '%PDF-', 5) !== 0) {
+            return $reject('upload_failed', 'el archivo no llegó completo', 400);
+        }
+        if (strlen($pdf) > self::RENDER_MAX_BYTES) {
+            return $reject('too_large', 'el PDF es demasiado grande', 413);
+        }
+        $dir = $this->render_dir();
+        $this->clean_render_dir($dir);
+        $name = 'job-' . $job_id . '-' . wp_generate_password(16, false, false) . '.pdf';
+        if (file_put_contents($dir . $name, $pdf) === false) {
+            return $reject('upload_failed', 'no se pudo guardar el archivo en el servidor', 500);
+        }
+        $settings = json_decode((string) $job['ajustes'], true);
+        $settings = is_array($settings) ? $settings : [];
+        $settings['archivo'] = $name;
+        $this->repo->transition_job($job_id, $active, [
+            'estado' => 'impreso',
+            'detalle' => 'PDF listo',
+            'ajustes' => wp_json_encode($settings),
+            'error_code' => null,
+            'finished_at' => Riverso_Print_Repository::now(),
+        ]);
+        return new WP_REST_Response(['ok' => true], 200);
     }
 
     /**
@@ -1217,6 +1488,11 @@ class Riverso_Print_Module {
             'callback' => [$this, 'rest_scan_upload'],
             'permission_callback' => '__return_true',
         ]);
+        register_rest_route(self::REST_NS, '/print-hub/jobs/(?P<id>\d+)/pdf', [
+            'methods' => 'POST',
+            'callback' => [$this, 'rest_render_upload'],
+            'permission_callback' => '__return_true',
+        ]);
     }
 
     /**
@@ -1264,12 +1540,22 @@ class Riverso_Print_Module {
         $this->repo->expire_jobs(self::STUCK_AFTER);
 
         // probe: el hub solo prueba la conexión (pantalla Configurar) y no debe tomar trabajos.
-        $can_scan = $this->hub_can_scan($fields['version']);
-        $job = empty($body['probe']) ? $this->repo->claim_next((int) $agent['id'], $can_scan) : null;
+        // Un hub antiguo imprimiría un escaneo como documento y no sabe convertir HTML: no se le entregan.
+        $skip = [];
+        if (!$this->hub_can_scan($fields['version'])) {
+            $skip[] = 'escaneo';
+        }
+        if (!$this->hub_can_html($fields['version'])) {
+            $skip[] = 'cotizacion';
+        }
+        if (!$this->hub_can_render($fields['version'])) {
+            $skip[] = 'cotiz_pdf';
+        }
+        $job = empty($body['probe']) ? $this->repo->claim_next((int) $agent['id'], $skip) : null;
         $payload = null;
         if ($job) {
             $settings = json_decode((string) $job['ajustes'], true);
-            $kinds = ['prueba' => 'prueba', 'escaneo' => 'scan'];
+            $kinds = ['prueba' => 'prueba', 'escaneo' => 'scan', 'cotizacion' => 'html', 'cotiz_pdf' => 'render'];
             $payload = [
                 'id' => (int) $job['id'],
                 'kind' => $kinds[$job['source_type']] ?? 'pdf',
@@ -1298,6 +1584,9 @@ class Riverso_Print_Module {
         if (!in_array($job['estado'], ['tomado', 'imprimiendo'], true)) {
             return new WP_REST_Response(['ok' => false, 'code' => 'job_closed', 'message' => 'El trabajo ya no está activo.'], 410);
         }
+        if ($job['source_type'] === 'cotizacion' || $job['source_type'] === 'cotiz_pdf') {
+            return $this->rest_quote_file($job);
+        }
         if ($job['source_type'] !== 'dte') {
             return new WP_REST_Response(['ok' => false, 'code' => 'no_file'], 400);
         }
@@ -1321,6 +1610,25 @@ class Riverso_Print_Module {
         return new WP_REST_Response([
             'ok' => true,
             'pdf_base64' => $b64,
+            'filename' => sanitize_file_name((string) $job['titulo']) . '.pdf',
+        ], 200);
+    }
+
+    /**
+     * HTML de la cotización, con CSS y logo incrustados para que el hub lo convierta sin
+     * depender de la sesión ni de otras descargas.
+     */
+    private function rest_quote_file(array $job) {
+        $settings = json_decode((string) $job['ajustes'], true);
+        $template = is_array($settings) ? (string) ($settings['plantilla'] ?? '') : '';
+        $quotes = $this->quote_module();
+        $html = $quotes ? $quotes->document_html((int) $job['source_id'], $template, true) : null;
+        if ($html === null) {
+            return new WP_REST_Response(['ok' => false, 'code' => 'source_missing', 'message' => 'Cotización no encontrada.'], 404);
+        }
+        return new WP_REST_Response([
+            'ok' => true,
+            'html' => $html,
             'filename' => sanitize_file_name((string) $job['titulo']) . '.pdf',
         ], 200);
     }

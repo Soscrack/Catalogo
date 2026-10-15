@@ -4,6 +4,8 @@
  *
  * @var array $doc Resultado de Riverso_Quote_Pdf::build()
  * @var string $css_url URL del CSS de impresión
+ * @var string $css_inline CSS incrustado (opcional; reemplaza a $css_url)
+ * @var string $logo_url URL o data URI del logo
  */
 if (!defined('ABSPATH')) {
     exit;
@@ -13,6 +15,8 @@ $company = isset($doc['company']) && is_array($doc['company']) ? $doc['company']
 $totals = isset($doc['totals']) && is_array($doc['totals']) ? $doc['totals'] : array();
 $rows = isset($doc['rows']) && is_array($doc['rows']) ? $doc['rows'] : array();
 $css_url = isset($css_url) ? (string) $css_url : '';
+// CSS incrustado (impresión directa: el hub convierte el HTML sin descargar nada más).
+$css_inline = isset($css_inline) ? str_replace('</', '<\/', (string) $css_inline) : '';
 $logo_url = isset($logo_url) ? (string) $logo_url : '';
 $notes = trim((string) ($doc['notes'] ?? ''));
 $terms = trim((string) ($doc['validity_terms'] ?? ''));
@@ -58,7 +62,9 @@ $title = trim($doc_heading . ' ' . $doc_number);
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?php echo riverso_cq_pdf_esc($title); ?></title>
-    <?php if ($css_url !== ''): ?>
+    <?php if ($css_inline !== ''): ?>
+    <style><?php echo $css_inline; ?></style>
+    <?php elseif ($css_url !== ''): ?>
     <link rel="stylesheet" href="<?php echo riverso_cq_pdf_esc($css_url); ?>">
     <?php endif; ?>
 </head>

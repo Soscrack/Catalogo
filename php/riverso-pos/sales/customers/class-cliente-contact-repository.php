@@ -444,6 +444,48 @@ class Riverso_Cliente_Contact_Repository {
         return $out;
     }
 
+    /**
+     * Correos activos con el nombre del contacto, para elegir destinatarios (cotizaciones).
+     * El primario va primero.
+     *
+     * @param int $cliente_id
+     * @return array<int, array{id:int,email:string,nombre:string,primario:bool}>
+     */
+    public function email_book($cliente_id) {
+        global $wpdb;
+        $cliente_id = (int) $cliente_id;
+        if ($cliente_id <= 0) {
+            return [];
+        }
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, email, primer_nombre, apellido_paterno, es_primario FROM {$this->table}
+                 WHERE cliente_id = %d AND activo = 1 AND email <> ''
+                 ORDER BY es_primario DESC, apellido_paterno ASC, primer_nombre ASC, id ASC",
+                $cliente_id
+            ),
+            ARRAY_A
+        );
+        $out = [];
+        $seen = [];
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            $email = $this->normalize_email((string) ($row['email'] ?? ''));
+            if ($email === false || $email === '' || isset($seen[$email])) {
+                continue;
+            }
+            $seen[$email] = true;
+            $nombre = trim((string) ($row['primer_nombre'] ?? '') . ' ' . (string) ($row['apellido_paterno'] ?? ''));
+            $out[] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'email' => $email,
+                // «Contacto Contacto» es el nombre de relleno de los contactos creados desde un correo.
+                'nombre' => $nombre === 'Contacto Contacto' ? '' : $nombre,
+                'primario' => (int) ($row['es_primario'] ?? 0) === 1,
+            ];
+        }
+        return $out;
+    }
+
     public function remember($cliente_id, $email, $origen = 'facturacion', $phone = '') {
         $this->ensure_ready();
         $cliente_id = (int) $cliente_id;

@@ -22,6 +22,8 @@ $notes = trim((string) ($doc['notes'] ?? ''));
 $terms = trim((string) ($doc['validity_terms'] ?? ''));
 $days = $doc['validity_days'] ?? null;
 $has_validity = ($days !== null && $days !== '');
+// Plantillas de detalle: columna Valor c/Dsc.
+$show_unit_after = !empty($doc['show_unit_after_discount']);
 
 if (!function_exists('riverso_cq_pdf_money')) {
     /**
@@ -148,11 +150,14 @@ $title = trim($doc_heading . ' ' . $doc_number);
         <table class="cq-pdf-items">
             <thead>
                 <tr>
-                    <th class="cq-pdf-col-desc">Servicio/Producto</th>
+                    <th class="cq-pdf-col-code">Código</th>
                     <th class="cq-pdf-col-desc">Descripción</th>
                     <th class="cq-pdf-col-qty">Cant.</th>
                     <th class="cq-pdf-col-num">Valor</th>
                     <th class="cq-pdf-col-dsc">Dsc</th>
+                    <?php if ($show_unit_after): ?>
+                    <th class="cq-pdf-col-num">Valor c/Dsc</th>
+                    <?php endif; ?>
                     <th class="cq-pdf-col-iva">Afec. IVA</th>
                     <th class="cq-pdf-col-num">Imp. Esp.</th>
                     <th class="cq-pdf-col-num">Total</th>
@@ -161,12 +166,15 @@ $title = trim($doc_heading . ' ' . $doc_number);
             <tbody>
             <?php if (!$rows): ?>
                 <tr>
-                    <td colspan="8" class="cq-pdf-empty">Sin líneas.</td>
+                    <td colspan="<?php echo $show_unit_after ? 9 : 8; ?>" class="cq-pdf-empty">Sin líneas.</td>
                 </tr>
             <?php else: ?>
                 <?php foreach ($rows as $row): ?>
                 <tr>
-                    <td></td>
+                    <td class="cq-pdf-col-code"><?php
+                        $code = trim((string) ($row['code'] ?? ''));
+                        echo riverso_cq_pdf_esc($code !== '' ? $code : '—');
+                    ?></td>
                     <td class="cq-pdf-col-desc"><?php echo riverso_cq_pdf_esc($row['description'] ?? ''); ?></td>
                     <td class="cq-pdf-col-qty"><?php echo riverso_cq_pdf_esc($row['qty_label'] ?? ''); ?></td>
                     <td class="cq-pdf-col-num"><?php
@@ -185,6 +193,13 @@ $title = trim($doc_heading . ' ' . $doc_number);
                         echo $dsc > 0 ? riverso_cq_pdf_esc(number_format($dsc, 2, ',', '.') . '%') : '';
                         ?>
                     </td>
+                    <?php if ($show_unit_after): ?>
+                    <td class="cq-pdf-col-num"><?php
+                        $after_decimals = isset($row['unit_after_decimals']) ? (int) $row['unit_after_decimals'] : 2;
+                        $after_decimals = max(2, min(6, $after_decimals));
+                        echo riverso_cq_pdf_money($row['unit_net_after'] ?? ($row['unit_net'] ?? 0), $after_decimals);
+                    ?></td>
+                    <?php endif; ?>
                     <td class="cq-pdf-col-iva"><?php echo riverso_cq_pdf_esc($row['afecto_label'] ?? 'SI'); ?></td>
                     <td class="cq-pdf-col-num"></td>
                     <td class="cq-pdf-col-num"><?php

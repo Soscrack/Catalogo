@@ -1302,6 +1302,8 @@ class Riverso_Customer_Quote_Repository {
                 'price_discount' => isset($line['price_discount']) ? $line['price_discount'] : 0,
                 'margin_discount' => isset($line['margin_discount']) ? $line['margin_discount'] : 0,
                 'discount_amount' => $discount,
+                'discount_anchor' => isset($line['discount_anchor']) ? $line['discount_anchor'] : null,
+                'discount_anchor_value' => isset($line['discount_anchor_value']) ? $line['discount_anchor_value'] : null,
                 'discount_percent' => 0,
                 'subtotal' => $line_net + $discount,
                 'tax_percent' => 0,
@@ -1313,6 +1315,7 @@ class Riverso_Customer_Quote_Repository {
                 'packaging' => isset($line['packaging']) ? $line['packaging'] : null,
                 'units_per_pack' => isset($line['units_per_pack']) ? $line['units_per_pack'] : null,
                 'price_mode' => isset($line['price_mode']) ? $line['price_mode'] : null,
+                'price_rule_codigo' => isset($line['price_rule_codigo']) ? $line['price_rule_codigo'] : null,
                 'price_ref' => isset($line['price_ref']) ? $line['price_ref'] : null,
                 'price_total' => isset($line['price_total']) ? $line['price_total'] : null,
                 // T_final de la regla (total de la familia si hay grupo); calculate() lo quita si no aplica.
@@ -1416,7 +1419,14 @@ class Riverso_Customer_Quote_Repository {
             $rule_adjusted = false;
         }
         $price_mode = isset($line['price_mode']) ? strtolower(trim((string) $line['price_mode'])) : '';
-        if (!in_array($price_mode, array('auto', 'manual', 'ref', 'std'), true)) {
+        if (!in_array($price_mode, array('auto', 'manual', 'ref', 'std', 'rule'), true)) {
+            $price_mode = 'auto';
+        }
+        // «Otra regla»: código de la regla aprobada elegida (sigue su última versión, como R-1).
+        $price_rule_codigo = $price_mode === 'rule'
+            ? $this->clip(trim((string) (isset($line['price_rule_codigo']) ? $line['price_rule_codigo'] : '')), 50)
+            : '';
+        if ($price_mode === 'rule' && $price_rule_codigo === '') {
             $price_mode = 'auto';
         }
         $price_ref = null;
@@ -1434,13 +1444,27 @@ class Riverso_Customer_Quote_Repository {
                 $price_total = null;
             }
         }
-        if ($price_mode === 'auto' || $price_mode === 'std') {
+        if ($price_mode === 'auto' || $price_mode === 'std' || $price_mode === 'rule') {
             $price_ref = null;
             $price_total = null;
         } elseif ($price_mode === 'manual') {
             $price_ref = null;
         } elseif ($price_mode === 'ref') {
             $price_total = null;
+        }
+        // Valor fijado del módulo Descuentos: campo y valor exacto que escribió el vendedor.
+        $anchor = Riverso_Quote_Totals::normalize_anchor(isset($line['discount_anchor']) ? $line['discount_anchor'] : null);
+        $anchor_value = null;
+        if ($anchor !== null && isset($line['discount_anchor_value'])
+            && $line['discount_anchor_value'] !== null && $line['discount_anchor_value'] !== ''
+        ) {
+            $anchor_value = round((float) $line['discount_anchor_value'], 6);
+            if ($anchor_value < 0) {
+                $anchor_value = null;
+            }
+        }
+        if ($anchor_value === null) {
+            $anchor = null;
         }
         return array(
             'product_id' => $product_id,
@@ -1455,6 +1479,8 @@ class Riverso_Customer_Quote_Repository {
             'price_discount' => $this->rate(isset($line['price_discount']) ? $line['price_discount'] : 0),
             'margin_discount' => $this->rate(isset($line['margin_discount']) ? $line['margin_discount'] : 0),
             'discount_amount' => round((float) (isset($line['discount_amount']) ? $line['discount_amount'] : 0), 2),
+            'discount_anchor' => $anchor,
+            'discount_anchor_value' => $anchor_value,
             'family_mode' => $family_mode,
             'packaging' => $packaging,
             'units_per_pack' => $upp,
@@ -1462,6 +1488,7 @@ class Riverso_Customer_Quote_Repository {
             'rule_total' => $rule_total,
             'rule_adjusted' => $rule_adjusted,
             'price_mode' => ($price_mode === 'auto') ? null : $price_mode,
+            'price_rule_codigo' => $price_rule_codigo !== '' ? $price_rule_codigo : null,
             'price_ref' => $price_ref,
             'price_total' => $price_total,
             // Detalle de entrega (bolsas leídas / sueltas) para la salida de stock al facturar.
@@ -1472,7 +1499,7 @@ class Riverso_Customer_Quote_Repository {
     }
 
     private function rate($value) {
-        $rate = round((float) $value, 2);
+        $rate = round((float) $value, 4);
         if ($rate < 0) {
             return 0.0;
         }
@@ -1799,6 +1826,8 @@ class Riverso_Customer_Quote_Repository {
             'price_discount' => (float) $normalized['price_discount'],
             'margin_discount' => (float) $normalized['margin_discount'],
             'discount_amount' => (float) $normalized['discount_amount'],
+            'discount_anchor' => Riverso_Quote_Totals::normalize_anchor(isset($line['discount_anchor']) ? $line['discount_anchor'] : null),
+            'discount_anchor_value' => $this->nullable_float6(isset($line['discount_anchor_value']) ? $line['discount_anchor_value'] : null),
             'line_net' => $line_net,
             'line_profit' => $normalized['line_profit'],
             'line_margin_percent' => $normalized['line_margin_percent'],
@@ -1808,6 +1837,8 @@ class Riverso_Customer_Quote_Repository {
                 ? (string) $line['packaging'] : null,
             'units_per_pack' => $this->nullable_float(isset($line['units_per_pack']) ? $line['units_per_pack'] : null),
             'price_mode' => $this->normalize_price_mode_present(isset($line['price_mode']) ? $line['price_mode'] : null),
+            'price_rule_codigo' => isset($line['price_rule_codigo']) && $line['price_rule_codigo'] !== '' && $line['price_rule_codigo'] !== null
+                ? (string) $line['price_rule_codigo'] : null,
             'price_ref' => $this->nullable_float4(isset($line['price_ref']) ? $line['price_ref'] : null),
             'price_total' => $this->nullable_float(isset($line['price_total']) ? $line['price_total'] : null),
             'rule_total' => $rule_adjusted ? round((float) $line['rule_total'], 2) : null,
@@ -1819,10 +1850,17 @@ class Riverso_Customer_Quote_Repository {
 
     private function normalize_price_mode_present($value) {
         $mode = strtolower(trim((string) $value));
-        if (in_array($mode, array('manual', 'ref', 'std'), true)) {
+        if (in_array($mode, array('manual', 'ref', 'std', 'rule'), true)) {
             return $mode;
         }
         return 'auto';
+    }
+
+    private function nullable_float6($value) {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        return round((float) $value, 6);
     }
 
     private function nullable_float4($value) {
@@ -1874,7 +1912,13 @@ class Riverso_Customer_Quote_Repository {
         if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_rule_total')) {
             Riverso_POS_Activator::ensure_customer_quotes_rule_total();
         }
-        // Invalidar cache de columnas: phase57/58/59/60/62/74 pudieron agregar campos.
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_discount_anchor')) {
+            Riverso_POS_Activator::ensure_customer_quotes_discount_anchor();
+        }
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_quote_price_rule')) {
+            Riverso_POS_Activator::ensure_quote_price_rule();
+        }
+        // Invalidar cache de columnas: phase57/58/59/60/62/74/77/78 pudieron agregar campos.
         $this->item_columns = null;
         $this->quote_columns = null;
     }

@@ -1072,12 +1072,26 @@ class Riverso_Price_Rules_Module {
      * @return array{id:int,codigo:string,nombre:string,tiers:array}|null
      */
     public function get_standard_rule() {
-        global $wpdb;
-        $prefix = $wpdb->prefix . 'riverso_';
         $codigo = get_option('riverso_pos_standard_rule_codigo', 'R-1');
         $codigo = sanitize_text_field((string) $codigo);
         if ($codigo === '') {
             $codigo = 'R-1';
+        }
+        return $this->get_approved_rule_by_codigo($codigo);
+    }
+
+    /**
+     * Última versión aprobada de un código de regla (p. ej. «Otra regla» en cotizaciones).
+     *
+     * @param string $codigo
+     * @return array{id:int,codigo:string,nombre:string,tiers:array}|null
+     */
+    public function get_approved_rule_by_codigo($codigo) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $codigo = sanitize_text_field((string) $codigo);
+        if ($codigo === '') {
+            return null;
         }
         $rule = $wpdb->get_row($wpdb->prepare(
             "SELECT id, codigo, nombre FROM {$prefix}price_rules
@@ -1095,6 +1109,60 @@ class Riverso_Price_Rules_Module {
             'nombre' => (string) $rule['nombre'],
             'tiers' => $this->get_tiers($rule_id) ?: [],
         ];
+    }
+
+    /**
+     * Reglas aprobadas (última versión de cada código) cuyo código o nombre contiene el texto.
+     * Incluye un resumen de tramos por cantidad para elegir sin abrir el editor de reglas.
+     *
+     * @param string $term
+     * @param int    $limit
+     * @return array<int, array{codigo:string,nombre:string,version:int,tramos:int,resumen:string}>
+     */
+    public function search_approved_rules($term = '', $limit = 50) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $term = trim(sanitize_text_field((string) $term));
+        $limit = max(1, min(200, (int) $limit));
+        $where = '';
+        $args = array();
+        if ($term !== '') {
+            $like = '%' . $wpdb->esc_like($term) . '%';
+            $where = ' AND (r.codigo LIKE %s OR r.nombre LIKE %s)';
+            $args[] = $like;
+            $args[] = $like;
+        }
+        $args[] = $limit;
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT r.id, r.codigo, r.nombre, r.version
+             FROM {$prefix}price_rules r
+             WHERE r.estado = 'aprobada'
+               AND r.version = (
+                   SELECT MAX(r2.version) FROM {$prefix}price_rules r2
+                   WHERE r2.codigo = r.codigo AND r2.estado = 'aprobada'
+               ){$where}
+             ORDER BY r.codigo ASC
+             LIMIT %d",
+            ...$args
+        ), ARRAY_A);
+        $out = array();
+        foreach ((array) $rows as $row) {
+            $tiers = $this->get_tiers((int) $row['id']) ?: array();
+            $ranges = array();
+            foreach ($tiers as $tier) {
+                $min = (int) $tier['qty_min'];
+                $max = isset($tier['qty_max']) && $tier['qty_max'] !== null && $tier['qty_max'] !== '' ? (int) $tier['qty_max'] : null;
+                $ranges[] = $max === null ? ($min . '+') : ($min === $max ? (string) $min : ($min . '–' . $max));
+            }
+            $out[] = array(
+                'codigo' => (string) $row['codigo'],
+                'nombre' => (string) $row['nombre'],
+                'version' => (int) $row['version'],
+                'tramos' => count($tiers),
+                'resumen' => $ranges ? implode(' · ', $ranges) . ' u.' : 'Sin tramos',
+            );
+        }
+        return $out;
     }
 
     /**

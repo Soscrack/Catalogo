@@ -10,6 +10,10 @@
  *
  * Si una familia tiene rule_total ajustado (T_final del motor de reglas),
  * el bruto de cada línea se prorratea para que la suma coincida con ese total.
+ *
+ * Valor fijado (discount_anchor + discount_anchor_value): el campo que escribió
+ * el vendedor y su valor exacto. Si está, el monto se deriva de él con el bruto
+ * actual (p. ej. al cambiar la cantidad se mantiene el % o el unitario final).
  */
 if (!defined('ABSPATH')) {
     exit;
@@ -17,6 +21,18 @@ if (!defined('ABSPATH')) {
 
 class Riverso_Quote_Totals {
     const LOW_MARGIN_PERCENT = 5.0;
+
+    /** Campos que el vendedor puede fijar en el módulo Descuentos. */
+    const ANCHORS = array('price_pct', 'margin_pct', 'amount', 'final_unit', 'final_total', 'factor');
+
+    /**
+     * @param mixed $value
+     * @return string|null
+     */
+    public static function normalize_anchor($value) {
+        $anchor = strtolower(trim((string) $value));
+        return in_array($anchor, self::ANCHORS, true) ? $anchor : null;
+    }
 
     /**
      * @param array $lines
@@ -46,8 +62,30 @@ class Riverso_Quote_Totals {
             $has_cost = array_key_exists('unit_cost', $line) && $line['unit_cost'] !== null && $line['unit_cost'] !== '';
             $unit_cost = $has_cost ? round((float) $line['unit_cost'], 2) : null;
 
+            $anchor = self::normalize_anchor(isset($line['discount_anchor']) ? $line['discount_anchor'] : null);
+            $anchor_value = ($anchor !== null && isset($line['discount_anchor_value'])
+                && $line['discount_anchor_value'] !== null && $line['discount_anchor_value'] !== '')
+                ? round((float) $line['discount_anchor_value'], 6)
+                : null;
+            $anchored = $anchor !== null && $anchor_value !== null
+                ? self::discount_from_anchor($anchor, $anchor_value, $gross, $billable, $unit_cost)
+                : null;
+            if ($anchor_value === null) {
+                $anchor = null;
+            }
+            // Sin costo, margen/factor no se pueden derivar: se usa el monto guardado
+            // y el valor fijado se conserva para cuando vuelva el costo.
+
             $amount_money = round((float) (isset($line['discount_amount']) ? $line['discount_amount'] : 0), 2);
-            if ($amount_money > 0) {
+            if ($anchored !== null) {
+                $discount = $anchored;
+                // Los % son vistas del monto derivado.
+                $price_rate = $gross > 0 ? self::rate($discount / $gross * 100) : 0.0;
+                $margin_money = $unit_cost === null ? null : round($gross - round($billable * $unit_cost, 2), 2);
+                $margin_rate = ($margin_money !== null && $margin_money > 0)
+                    ? self::rate($discount / $margin_money * 100)
+                    : 0.0;
+            } elseif ($amount_money > 0) {
                 // Canónico: monto en pesos; % son vistas.
                 $discount = $amount_money;
                 if ($discount > $gross) {
@@ -77,6 +115,8 @@ class Riverso_Quote_Totals {
                 'price_discount' => $price_rate,
                 'margin_discount' => $margin_rate,
                 'discount_amount' => $discount,
+                'discount_anchor' => $anchor,
+                'discount_anchor_value' => $anchor_value,
                 'unit_cost' => $unit_cost,
                 'line_net' => $line_net,
                 'line_profit' => $line_profit,
@@ -268,8 +308,60 @@ class Riverso_Quote_Totals {
         return 0;
     }
 
+    /**
+     * Descuento en pesos desde el valor fijado. null si falta el costo que necesita.
+     *
+     * @param string     $anchor
+     * @param float      $value
+     * @param float      $gross     Bruto de la línea antes del descuento
+     * @param float      $billable  Unidades facturables
+     * @param float|null $unit_cost Costo unitario (2 decimales)
+     * @return float|null
+     */
+    public static function discount_from_anchor($anchor, $value, $gross, $billable, $unit_cost) {
+        $gross = round((float) $gross, 2);
+        $value = (float) $value;
+        $billable = (float) $billable;
+        switch ($anchor) {
+            case 'price_pct':
+                $discount = round($gross * self::rate($value) / 100, 2);
+                break;
+            case 'margin_pct':
+                if ($unit_cost === null) {
+                    return null;
+                }
+                $margin = round($gross - round($billable * $unit_cost, 2), 2);
+                $discount = $margin > 0 ? round($margin * self::rate($value) / 100, 2) : 0.0;
+                break;
+            case 'amount':
+                $discount = round($value, 2);
+                break;
+            case 'final_unit':
+                $discount = round($gross - round($value * $billable, 2), 2);
+                break;
+            case 'final_total':
+                $discount = round($gross - round($value, 2), 2);
+                break;
+            case 'factor':
+                if ($unit_cost === null || $unit_cost <= 0) {
+                    return null;
+                }
+                $discount = round($gross - round($value * $unit_cost * $billable, 2), 2);
+                break;
+            default:
+                return null;
+        }
+        if ($discount < 0) {
+            return 0.0;
+        }
+        if ($discount > $gross) {
+            return $gross;
+        }
+        return $discount;
+    }
+
     private static function rate($value) {
-        $rate = round((float) $value, 2);
+        $rate = round((float) $value, 4);
         if ($rate < 0) {
             return 0.0;
         }

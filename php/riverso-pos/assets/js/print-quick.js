@@ -305,7 +305,7 @@
     return printSource({ dte_id: dteId }, opts);
   }
 
-  /** Cotización de venta con su plantilla (family | product). */
+  /** Cotización de venta con su plantilla (family | product | family_detail | product_detail). */
   function printQuote(quoteId, template, opts) {
     return printSource({ quote_id: quoteId, template: template || "family" }, opts);
   }

@@ -387,6 +387,13 @@
     margin-top: 2px;
 }
 
+.cq-price-cell .cq-line-list-hint {
+    font-size: 0.68rem;
+    color: #8f877d;
+    margin-top: 1px;
+    white-space: nowrap;
+}
+
 .cq-price-cell .cq-price-mode-tag {
     display: inline-block;
     margin-top: 4px;
@@ -2499,4 +2506,122 @@ button.cq-breakdown-chip {
     padding: 12px 16px 14px;
     border-top: 1px solid #efe6da;
     background: #faf6f0;
+}
+
+/* Módulo Descuentos del modal de línea (minimizado por defecto). */
+.cq-discounts {
+    margin-top: 12px;
+    border: 1px solid #efe6da;
+    border-radius: 10px;
+    background: #fffaf3;
+}
+
+.cq-discounts-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.cq-discounts-summary::-webkit-details-marker {
+    display: none;
+}
+
+.cq-discounts-summary::before {
+    content: "▸";
+    color: #8a7f72;
+}
+
+.cq-discounts[open] > .cq-discounts-summary::before {
+    content: "▾";
+}
+
+.cq-discounts-title {
+    font-weight: 600;
+}
+
+.cq-discounts-brief {
+    font-size: 0.82rem;
+    color: #6b6258;
+}
+
+.cq-discounts-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0 12px 12px;
+}
+
+.cq-discounts-help {
+    margin: 0;
+}
+
+.cq-discounts-ref input {
+    background: #f4efe8;
+    color: #6b6258;
+}
+
+.cq-discounts-fields .is-anchor input {
+    border-color: #c45c26;
+    box-shadow: 0 0 0 1px #c45c26;
+}
+
+.cq-discounts-fields .is-anchor > span::after {
+    content: " · fijado";
+    color: #c45c26;
+    font-weight: 600;
+}
+
+.cq-discounts-fields input[hidden] {
+    display: none !important;
+}
+
+.cq-discounts-status.is-warn {
+    color: #991b1b;
+}
+
+/* «Otra regla» en el modal de línea. */
+.cq-line-rule-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 2px 0 4px 24px;
+}
+
+.cq-line-rule-picker[hidden] {
+    display: none;
+}
+
+.cq-line-rule-picker-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.cq-line-rule-picker-row input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid #d7c7b4;
+    border-radius: 8px;
+    padding: 7px 10px;
+    font: inherit;
+}
+
+.cq-line-rule-picker .cq-results {
+    margin: 0;
+}
+
+.cq-line-rule-picker .cq-modal-hint {
+    margin: 0;
+}
+
+.cq-line-rule-picker .cq-modal-hint.is-warn {
+    color: #991b1b;
+}
+
+.cq-rule-search-dialog {
+    width: min(560px, 100%);
 }

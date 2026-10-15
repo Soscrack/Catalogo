@@ -60,6 +60,12 @@ class Riverso_Customer_Quote_Module {
         if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_rule_total')) {
             Riverso_POS_Activator::ensure_customer_quotes_rule_total();
         }
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_customer_quotes_discount_anchor')) {
+            Riverso_POS_Activator::ensure_customer_quotes_discount_anchor();
+        }
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_quote_price_rule')) {
+            Riverso_POS_Activator::ensure_quote_price_rule();
+        }
     }
 
     public function init() {
@@ -114,6 +120,7 @@ class Riverso_Customer_Quote_Module {
         add_action('wp_ajax_riverso_cq_unit_product', array($this, 'ajax_unit_product'));
         add_action('wp_ajax_riverso_cq_tienda_local', array($this, 'ajax_tienda_local'));
         add_action('wp_ajax_riverso_cq_family_price', array($this, 'ajax_family_price'));
+        add_action('wp_ajax_riverso_cq_price_rules_search', array($this, 'ajax_price_rules_search'));
         add_action('wp_ajax_riverso_cq_customers_search', array($this, 'ajax_customers_search'));
         add_action('wp_ajax_riverso_cq_customer_save', array($this, 'ajax_customer_save'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_assets'));
@@ -222,6 +229,7 @@ class Riverso_Customer_Quote_Module {
                 'unitProduct' => 'riverso_cq_unit_product',
                 'tiendaLocal' => 'riverso_cq_tienda_local',
                 'familyPrice' => 'riverso_cq_family_price',
+                'priceRulesSearch' => 'riverso_cq_price_rules_search',
                 'pdf' => 'riverso_cq_pdf',
                 'emailPrepare' => 'riverso_cq_email_prepare',
                 'emailPdf' => 'riverso_cq_email_pdf',
@@ -1791,10 +1799,12 @@ class Riverso_Customer_Quote_Module {
             }
         }
         $rule_mode = strtolower(trim($this->post_string('rule_mode')));
-        if (!in_array($rule_mode, array('auto', 'std', 'manual', 'ref'), true)) {
+        if (!in_array($rule_mode, array('auto', 'std', 'manual', 'ref', 'rule'), true)) {
             $rule_mode = 'auto';
         }
-        $pack = $this->catalog->local_price_pack($pb, $qty, $p_override, $rule_mode);
+        // «Otra regla»: código de la regla aprobada que eligió el vendedor.
+        $rule_codigo = substr(sanitize_text_field($this->post_string('rule_codigo')), 0, 50);
+        $pack = $this->catalog->local_price_pack($pb, $qty, $p_override, $rule_mode, $rule_codigo);
         $offers = $this->catalog->family_offers_for_base($pb);
 
         $by_total = null;
@@ -1810,6 +1820,7 @@ class Riverso_Customer_Quote_Module {
             }
             $by_total = $this->catalog->qty_for_amount($pb, $target_total, array(
                 'rule_mode' => $rule_mode,
+                'rule_codigo' => $rule_codigo,
                 'p_ref' => $p_override,
                 'units_per_pack' => $upp,
                 'others_units' => $others,
@@ -1834,8 +1845,24 @@ class Riverso_Customer_Quote_Module {
             'family_qty' => $qty,
             'p_ref' => $p_override,
             'rule_mode' => $rule_mode,
+            'price_rule_codigo' => isset($pack['price_rule_codigo']) ? $pack['price_rule_codigo'] : null,
+            'rule_missing' => !empty($pack['rule_missing']),
             'by_total' => $by_total,
         ));
+    }
+
+    /**
+     * Proxy: reglas de precio aprobadas para «Otra regla» (nonce cotizaciones).
+     * El vendedor puede no tener permiso sobre el editor de reglas; solo lee código, nombre y tramos.
+     */
+    public function ajax_price_rules_search() {
+        $this->authorize();
+        if (!class_exists('Riverso_Price_Rules_Module')) {
+            $this->ok(array('rules' => array()));
+        }
+        $term = sanitize_text_field($this->post_string('q'));
+        $rules = Riverso_Price_Rules_Module::get_instance()->search_approved_rules($term, 50);
+        $this->ok(array('rules' => $rules));
     }
 
     /**

@@ -18,6 +18,9 @@ $css_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 
 $css_portal_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/css/customer-quotes-portal.css';
 $css_customers_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/css/customers.css';
 $js_ver = (is_string($js_path) && is_file($js_path)) ? (string) filemtime($js_path) : $version;
+// Descuentos y «Otra regla» compartidos con facturación.
+$line_discounts_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/line-discounts.js';
+$line_discounts_ver = (is_string($line_discounts_path) && is_file($line_discounts_path)) ? (string) filemtime($line_discounts_path) : $version;
 $css_ver = (is_string($css_path) && is_file($css_path)) ? (string) filemtime($css_path) : $version;
 $css_portal_ver = (is_string($css_portal_path) && is_file($css_portal_path)) ? (string) filemtime($css_portal_path) : $version;
 $css_customers_ver = (is_string($css_customers_path) && is_file($css_customers_path)) ? (string) filemtime($css_customers_path) : $version;
@@ -253,6 +256,8 @@ if (!function_exists('riverso_pos_cq_json')) {
                         <select id="cq-pdf-template" aria-label="Plantilla PDF">
                             <option value="family">PDF: por familia</option>
                             <option value="product">PDF: por producto</option>
+                            <option value="family_detail">PDF: por familia – detalle</option>
+                            <option value="product_detail">PDF: por producto – detalle</option>
                         </select>
                     </label>
                     <?php if ($cq_print_config !== null): ?>
@@ -516,7 +521,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                             <tr>
                                 <th scope="col">Detalle</th>
                                 <th scope="col" class="cq-num">Cantidad</th>
-                                <th scope="col" class="cq-num">Total bruto</th>
+                                <th scope="col" class="cq-num" title="Monto final con IVA y descuento aplicado; entre paréntesis, el precio de lista">Total bruto</th>
                                 <th scope="col" class="cq-num cq-advanced" title="Porcentaje de descuento sobre el bruto de la línea (equivalente al dscto margen)">Dscto precio</th>
                                 <th scope="col" class="cq-num cq-advanced" title="Mismo descuento expresado como % del margen bruto − costo (equivalente al dscto precio)">Dscto margen</th>
                                 <th scope="col" class="cq-num cq-advanced cq-seller-only">Utilidad</th>
@@ -627,6 +632,17 @@ if (!function_exists('riverso_pos_cq_json')) {
                         <div class="cq-line-mode-radios" id="cq-line-mode-radios" hidden>
                             <label><input type="radio" name="cq-line-mode" value="auto"> <span id="cq-line-mode-auto-label">Usar regla</span></label>
                             <label id="cq-line-mode-std-wrap" hidden><input type="radio" name="cq-line-mode" value="std"> <span id="cq-line-mode-std-label">Regla estándar ferretería (R-1)</span></label>
+                            <label><input type="radio" name="cq-line-mode" value="rule"> Otra regla</label>
+                            <div class="cq-line-rule-picker" id="cq-line-rule-picker" hidden>
+                                <div class="cq-line-rule-picker-row">
+                                    <input type="text" id="cq-line-rule-input" autocomplete="off" placeholder="Buscar regla por código o nombre" aria-label="Buscar regla">
+                                    <button type="button" class="cq-btn cq-btn-customer-action" id="cq-line-rule-search-btn" title="Buscar reglas" aria-label="Buscar reglas">
+                                        <span aria-hidden="true">🔍</span>
+                                    </button>
+                                </div>
+                                <ul id="cq-line-rule-suggest" class="cq-results cq-rule-results" hidden></ul>
+                                <p id="cq-line-rule-chosen" class="cq-modal-hint" role="status"></p>
+                            </div>
                             <label><input type="radio" name="cq-line-mode" value="ref"> Cambiar precio de referencia (P)</label>
                             <label><input type="radio" name="cq-line-mode" value="manual"> Ignorar regla — precio final</label>
                         </div>
@@ -653,27 +669,58 @@ if (!function_exists('riverso_pos_cq_json')) {
                             <input type="text" id="cq-line-total" inputmode="decimal" autocomplete="off">
                             <em id="cq-line-total-hint" class="cq-float-hint"></em>
                         </label>
-                        <label class="cq-float-field">
-                            <span>Descuento precio %</span>
-                            <input type="text" id="cq-line-price-discount" inputmode="decimal" autocomplete="off">
-                        </label>
-                        <label class="cq-float-field" id="cq-line-margin-field">
-                            <span>
-                                Descuento margen %
-                                <abbr id="cq-line-margin-help" class="cq-help-tip" title="Costo no encontrado" hidden>?</abbr>
-                            </span>
-                            <input type="text" id="cq-line-margin-discount" inputmode="decimal" autocomplete="off">
-                            <em id="cq-line-margin-na" class="cq-margin-na-text" hidden>—</em>
-                        </label>
-                        <label class="cq-float-field">
-                            <span>Monto de descuento</span>
-                            <input type="text" id="cq-line-discount-amount" inputmode="decimal" autocomplete="off">
-                        </label>
-                        <label class="cq-float-field cq-manual-full">
-                            <span>Monto final</span>
-                            <input type="text" id="cq-line-final-amount" readonly tabindex="-1" autocomplete="off">
-                        </label>
                     </div>
+                    <details class="cq-discounts" id="cq-line-discounts">
+                        <summary class="cq-discounts-summary">
+                            <span class="cq-discounts-title">Descuentos</span>
+                            <span class="cq-discounts-brief" id="cq-line-discounts-brief"></span>
+                        </summary>
+                        <div class="cq-discounts-body">
+                            <div class="cq-line-fields cq-discounts-ref">
+                                <label class="cq-float-field">
+                                    <span>Costo unitario</span>
+                                    <input type="text" id="cq-dm-cost" readonly tabindex="-1" autocomplete="off">
+                                </label>
+                                <label class="cq-float-field">
+                                    <span>Factor anterior</span>
+                                    <input type="text" id="cq-dm-factor-before" readonly tabindex="-1" autocomplete="off">
+                                    <em class="cq-float-hint">Precio de lista / costo</em>
+                                </label>
+                            </div>
+                            <p class="cq-modal-hint cq-discounts-help">Todos son el mismo descuento. El campo que escribes queda <strong>fijado</strong>: si cambia la cantidad o el precio, se mantiene ese valor.</p>
+                            <div class="cq-line-fields cq-discounts-fields">
+                                <label class="cq-float-field" data-anchor="price_pct">
+                                    <span>Descuento precio %</span>
+                                    <input type="text" id="cq-line-price-discount" inputmode="decimal" autocomplete="off">
+                                </label>
+                                <label class="cq-float-field" data-anchor="margin_pct">
+                                    <span>Descuento margen %</span>
+                                    <input type="text" id="cq-line-margin-discount" inputmode="decimal" autocomplete="off">
+                                    <em class="cq-margin-na-text cq-dm-na" title="Costo no encontrado" hidden>— sin costo</em>
+                                </label>
+                                <label class="cq-float-field" data-anchor="amount">
+                                    <span>Monto de descuento</span>
+                                    <input type="text" id="cq-line-discount-amount" inputmode="decimal" autocomplete="off">
+                                </label>
+                                <label class="cq-float-field" data-anchor="factor">
+                                    <span>Factor objetivo</span>
+                                    <input type="text" id="cq-dm-factor" inputmode="decimal" autocomplete="off">
+                                    <em class="cq-margin-na-text cq-dm-na" title="Costo no encontrado" hidden>— sin costo</em>
+                                    <em class="cq-float-hint">Final unitario / costo</em>
+                                </label>
+                                <label class="cq-float-field" data-anchor="final_unit">
+                                    <span>Monto final unitario objetivo</span>
+                                    <input type="text" id="cq-dm-final-unit" inputmode="decimal" autocomplete="off">
+                                    <em class="cq-float-hint">Por unidad</em>
+                                </label>
+                                <label class="cq-float-field" data-anchor="final_total">
+                                    <span>Monto final objetivo</span>
+                                    <input type="text" id="cq-line-final-amount" inputmode="decimal" autocomplete="off">
+                                </label>
+                            </div>
+                            <p id="cq-line-discount-hint" class="cq-line-preview cq-discounts-status" role="status"></p>
+                        </div>
+                    </details>
                     <div class="cq-line-by-amount" id="cq-line-by-amount">
                         <p class="cq-line-by-amount-row">
                             <strong>Por monto:</strong>
@@ -683,13 +730,30 @@ if (!function_exists('riverso_pos_cq_json')) {
                         <p class="cq-modal-hint">Total deseado antes de descuentos. Calcula la cantidad a entregar con la regla activa.</p>
                         <div id="cq-line-by-amount-result" class="cq-line-by-amount-result"></div>
                     </div>
-                    <p id="cq-line-discount-hint" class="cq-line-preview" role="status"></p>
                     <p id="cq-line-preview" class="cq-line-preview" role="status"></p>
                 </div>
                 <footer class="cq-modal-foot cq-line-modal-foot">
                     <button type="button" class="cq-btn" id="cq-line-cancel" data-cq-line-close="1">Cancelar</button>
                     <button type="button" class="cq-btn cq-btn-save-line" id="cq-line-save">Guardar cambios</button>
                 </footer>
+            </div>
+        </div>
+
+        <div id="cq-rule-search-modal" class="cq-modal" hidden aria-hidden="true">
+            <div class="cq-modal-backdrop" data-rule-search-close="1"></div>
+            <div class="cq-modal-dialog cq-rule-search-dialog" role="dialog" aria-modal="true" aria-labelledby="cq-rule-search-title">
+                <header class="cq-modal-head">
+                    <h3 id="cq-rule-search-title">Buscar regla</h3>
+                    <button type="button" class="cq-modal-close" id="cq-rule-search-close" aria-label="Cerrar" data-rule-search-close="1">×</button>
+                </header>
+                <div class="cq-modal-body">
+                    <label class="cq-field cq-field-wide">
+                        <span>Código o nombre</span>
+                        <input type="text" id="cq-rule-search-q" autocomplete="off" placeholder="Ej.: R-3, mayorista">
+                    </label>
+                    <p id="cq-rule-search-hint" class="cq-modal-hint" role="status">Reglas aprobadas (última versión de cada código).</p>
+                    <ul id="cq-rule-search-results" class="cq-results cq-modal-results cq-rule-results"></ul>
+                </div>
             </div>
         </div>
 
@@ -824,6 +888,7 @@ if (!function_exists('riverso_pos_cq_json')) {
 <script>window.RIVERSO_PRINT = <?php echo riverso_pos_cq_json($cq_print_config); ?>;</script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/print-quick.js?ver=<?php echo htmlspecialchars($print_js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <?php endif; ?>
+<script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/line-discounts.js?ver=<?php echo htmlspecialchars($line_discounts_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/customer-quotes.js?ver=<?php echo htmlspecialchars($js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <?php if ($standalone): ?>
 </body>

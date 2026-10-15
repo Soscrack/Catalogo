@@ -11,6 +11,8 @@ if (!defined('ABSPATH')) {
 class Riverso_Quote_Pdf {
     const TEMPLATE_FAMILY = 'family';
     const TEMPLATE_PRODUCT = 'product';
+    const TEMPLATE_FAMILY_DETAIL = 'family_detail';
+    const TEMPLATE_PRODUCT_DETAIL = 'product_detail';
     const IVA_FACTOR = 1.19;
 
     /**
@@ -35,18 +37,33 @@ class Riverso_Quote_Pdf {
 
     /**
      * @param string $template
-     * @return string family|product
+     * @return string family|product|family_detail|product_detail
      */
     public static function normalize_template($template) {
         $template = strtolower(trim((string) $template));
-        return $template === self::TEMPLATE_PRODUCT
-            ? self::TEMPLATE_PRODUCT
-            : self::TEMPLATE_FAMILY;
+        $known = array(
+            self::TEMPLATE_FAMILY,
+            self::TEMPLATE_PRODUCT,
+            self::TEMPLATE_FAMILY_DETAIL,
+            self::TEMPLATE_PRODUCT_DETAIL,
+        );
+        return in_array($template, $known, true) ? $template : self::TEMPLATE_FAMILY;
+    }
+
+    /**
+     * Las plantillas de detalle agregan la columna Valor c/Dsc.
+     *
+     * @param string $template
+     * @return bool
+     */
+    public static function is_detail_template($template) {
+        $template = self::normalize_template($template);
+        return $template === self::TEMPLATE_FAMILY_DETAIL || $template === self::TEMPLATE_PRODUCT_DETAIL;
     }
 
     /**
      * @param array  $quote Cotización ya hidratada (_family).
-     * @param string $template family|product
+     * @param string $template family|product|family_detail|product_detail
      * @return array Documento listo para la plantilla.
      */
     public static function build(array $quote, $template = self::TEMPLATE_FAMILY) {
@@ -54,7 +71,7 @@ class Riverso_Quote_Pdf {
         $lines = isset($quote['lines']) && is_array($quote['lines']) ? $quote['lines'] : array();
         $iva_map = self::load_iva_tipos($lines);
 
-        if ($template === self::TEMPLATE_FAMILY) {
+        if ($template === self::TEMPLATE_FAMILY || $template === self::TEMPLATE_FAMILY_DETAIL) {
             $rows = self::build_family_rows($lines, $iva_map);
         } else {
             $rows = self::build_product_rows($lines, $iva_map);
@@ -67,6 +84,7 @@ class Riverso_Quote_Pdf {
         return array(
             'company' => self::company(),
             'template' => $template,
+            'show_unit_after_discount' => self::is_detail_template($template),
             'quote_id' => isset($quote['id']) ? (int) $quote['id'] : 0,
             'quote_number' => (string) (isset($quote['quote_number']) ? $quote['quote_number'] : ''),
             'issue_date' => self::format_date(isset($quote['issue_date']) ? $quote['issue_date'] : (isset($quote['created_at']) ? $quote['created_at'] : '')),
@@ -247,13 +265,60 @@ class Riverso_Quote_Pdf {
         $bruto_total = round($bruto_total, 2);
         $discount_total = round($discount_total, 2);
 
-        return self::make_row(
+        $row = self::make_row(
             $description,
             $qty_units,
             $bruto_total,
             $discount_total,
             $afecto
         );
+        $row['code'] = self::family_row_code($lines, $indexes);
+        return $row;
+    }
+
+    /**
+     * Código de una fila de familia colapsada: SKU del embolsado.
+     * Si no se cotizó el embolsado, el del miembro unitario de la familia.
+     *
+     * @param array $lines
+     * @param int[] $indexes
+     * @return string
+     */
+    private static function family_row_code(array $lines, array $indexes) {
+        foreach ($indexes as $idx) {
+            $sku = self::line_sku($lines[$idx]);
+            if ($sku !== '' && self::units_per_pack($lines[$idx]) <= 1.0001) {
+                return $sku;
+            }
+        }
+        $first = $lines[$indexes[0]];
+        $members = isset($first['_family']['members']) && is_array($first['_family']['members'])
+            ? $first['_family']['members']
+            : array();
+        foreach ($members as $member) {
+            if (!is_array($member) || empty($member['es_unitario'])) {
+                continue;
+            }
+            $sku = trim((string) (!empty($member['sku_local']) ? $member['sku_local'] : (isset($member['sku']) ? $member['sku'] : '')));
+            if ($sku !== '' && $sku !== '?') {
+                return $sku;
+            }
+        }
+        foreach ($indexes as $idx) {
+            $sku = self::line_sku($lines[$idx]);
+            if ($sku !== '') {
+                return $sku;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * @param array $line
+     * @return string
+     */
+    private static function line_sku(array $line) {
+        return trim((string) (isset($line['sku']) ? $line['sku'] : ''));
     }
 
     /**
@@ -283,7 +348,9 @@ class Riverso_Quote_Pdf {
         $tipo = isset($iva_map[$pb]) ? $iva_map[$pb] : 'afecto';
         $afecto = ($tipo !== 'exento');
 
-        return self::make_row($description, $qty, $figs['bruto'], $figs['discount'], $afecto);
+        $row = self::make_row($description, $qty, $figs['bruto'], $figs['discount'], $afecto);
+        $row['code'] = self::line_sku($line);
+        return $row;
     }
 
     /**
@@ -437,6 +504,10 @@ class Riverso_Quote_Pdf {
             $priced = self::unit_price_for_line($neto_for_unit, $qty);
             $row['unit_net'] = $priced['unit'];
             $row['unit_decimals'] = $priced['decimals'];
+            // Valor c/Dsc (plantillas de detalle): Cant × valor = Total, como en la factura.
+            $after = self::unit_price_for_line($line_net, $qty);
+            $row['unit_net_after'] = $after['unit'];
+            $row['unit_after_decimals'] = $after['decimals'];
             $row['line_net'] = $line_net;
             // Con descuento, Cant×Valor ≠ Total a propósito (Valor es lista).
             $row['unit_is_list_price'] = ($discount_pct > 0);
@@ -595,17 +666,17 @@ class Riverso_Quote_Pdf {
             $gross = round($billable * round($price, 2), 2);
         }
 
-        $discount = 0.0;
-        if ($price_rate > 0) {
+        // Canónico: monto en pesos (igual que Riverso_Quote_Totals). Los % redondeados
+        // solo se usan en líneas antiguas sin monto.
+        $discount = round((float) (isset($line['discount_amount']) ? $line['discount_amount'] : 0), 2);
+        if ($discount <= 0 && $price_rate > 0) {
             $discount = round($gross * $price_rate / 100, 2);
-        } elseif ($margin_rate > 0 && isset($line['unit_cost']) && $line['unit_cost'] !== null && $line['unit_cost'] !== '') {
+        } elseif ($discount <= 0 && $margin_rate > 0 && isset($line['unit_cost']) && $line['unit_cost'] !== null && $line['unit_cost'] !== '') {
             $unit_cost = round((float) $line['unit_cost'], 2);
             $margin_base = round($gross - round($billable * $unit_cost, 2), 2);
             if ($margin_base > 0) {
                 $discount = round($margin_base * $margin_rate / 100, 2);
             }
-        } else {
-            $discount = round((float) (isset($line['discount_amount']) ? $line['discount_amount'] : 0), 2);
         }
         if ($discount < 0) {
             $discount = 0.0;
@@ -711,7 +782,7 @@ class Riverso_Quote_Pdf {
      * @return float
      */
     private static function rate($value) {
-        $rate = round((float) $value, 2);
+        $rate = round((float) $value, 4);
         if ($rate < 0) {
             return 0.0;
         }

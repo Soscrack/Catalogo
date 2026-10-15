@@ -185,11 +185,11 @@ class Riverso_Print_Module {
     }
 
     /**
-     * Encola una cotización de venta con la plantilla elegida (por familia o por producto).
+     * Encola una cotización de venta con la plantilla elegida (por familia o por producto, con o sin detalle).
      * El hub recibe el HTML del documento y lo convierte a PDF antes de imprimir.
      *
      * @param int    $quote_id
-     * @param string $template family|product
+     * @param string $template family|product|family_detail|product_detail
      * @param array  $opts station_id, preset_id (forzar preset), origen.
      * @return array|null Trabajo presentado para la UI (null si la cotización no existe).
      */

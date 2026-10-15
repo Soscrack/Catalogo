@@ -83,6 +83,12 @@ class Riverso_Billing_Module {
             if (method_exists('Riverso_POS_Activator', 'ensure_billing_payments_schema')) {
                 Riverso_POS_Activator::ensure_billing_payments_schema();
             }
+            if (method_exists('Riverso_POS_Activator', 'ensure_quote_price_rule')) {
+                Riverso_POS_Activator::ensure_quote_price_rule();
+            }
+            if (method_exists('Riverso_POS_Activator', 'ensure_billing_draft_discount_anchor')) {
+                Riverso_POS_Activator::ensure_billing_draft_discount_anchor();
+            }
         }
     }
 
@@ -127,6 +133,7 @@ class Riverso_Billing_Module {
         add_action('wp_ajax_riverso_billing_draft_payment', [$this, 'ajax_draft_payment']);
         add_action('wp_ajax_riverso_billing_product_lookup', [$this, 'ajax_product_lookup']);
         add_action('wp_ajax_riverso_billing_family_price', [$this, 'ajax_family_price']);
+        add_action('wp_ajax_riverso_billing_price_rules_search', [$this, 'ajax_price_rules_search']);
         add_action('wp_ajax_riverso_billing_line_stock', [$this, 'ajax_line_stock']);
         add_action('wp_ajax_riverso_billing_search_quotes', [$this, 'ajax_search_quotes']);
         add_action('wp_ajax_riverso_billing_cash_boxes', [$this, 'ajax_cash_boxes']);
@@ -251,6 +258,7 @@ class Riverso_Billing_Module {
                 'draftPayment' => 'riverso_billing_draft_payment',
                 'productLookup' => 'riverso_billing_product_lookup',
                 'familyPrice' => 'riverso_billing_family_price',
+                'priceRulesSearch' => 'riverso_billing_price_rules_search',
                 'lineStock' => 'riverso_billing_line_stock',
                 'searchQuotes' => 'riverso_billing_search_quotes',
                 'cashBoxes' => 'riverso_billing_cash_boxes',
@@ -1153,6 +1161,9 @@ class Riverso_Billing_Module {
                 'price_discount' => (float) ($line['price_discount'] ?? 0),
                 'margin_discount' => (float) ($line['margin_discount'] ?? 0),
                 'discount_amount' => (float) ($line['discount_amount'] ?? 0),
+                // Valor fijado del módulo Descuentos: Riverso_Quote_Totals deriva el monto de él.
+                'discount_anchor' => $line['discount_anchor'] ?? null,
+                'discount_anchor_value' => $line['discount_anchor_value'] ?? null,
                 'product_id' => !empty($line['product_id']) ? (int) $line['product_id'] : null,
                 'producto_base_id' => !empty($line['producto_base_id']) ? (int) $line['producto_base_id'] : null,
                 'units_per_pack' => (float) ($line['units_per_pack'] ?? 1),
@@ -1160,6 +1171,7 @@ class Riverso_Billing_Module {
                 'packaging' => (string) ($line['packaging'] ?? ''),
                 'grupo_id' => $gid > 0 ? $gid : null,
                 'price_mode' => (string) ($line['price_mode'] ?? 'auto'),
+                'price_rule_codigo' => isset($line['price_rule_codigo']) ? $line['price_rule_codigo'] : null,
                 'price_ref' => isset($line['price_ref']) ? $line['price_ref'] : null,
                 'price_total' => isset($line['price_total']) ? $line['price_total'] : null,
                 'rule_total' => $rule_total,
@@ -1214,11 +1226,14 @@ class Riverso_Billing_Module {
                 'grupo_id' => $src['grupo_id'] ?? null,
                 'unit_cost' => array_key_exists('unit_cost', $line) ? $line['unit_cost'] : ($src['unit_cost'] ?? null),
                 'price_mode' => (string) ($src['price_mode'] ?? 'auto'),
+                'price_rule_codigo' => $src['price_rule_codigo'] ?? null,
                 'price_ref' => $src['price_ref'] ?? null,
                 'price_total' => $src['price_total'] ?? null,
                 'price_discount' => (float) ($line['price_discount'] ?? 0),
                 'margin_discount' => (float) ($line['margin_discount'] ?? 0),
                 'discount_amount' => (float) ($line['discount_amount'] ?? 0),
+                'discount_anchor' => $line['discount_anchor'] ?? null,
+                'discount_anchor_value' => $line['discount_anchor_value'] ?? null,
                 'rule_total' => $rule_total_persist,
                 'rule_adjusted' => $rule_adjusted_persist,
             ];
@@ -1343,11 +1358,15 @@ class Riverso_Billing_Module {
                 '_family' => $family,
                 'unit_cost' => array_key_exists('unit_cost', $line) ? $line['unit_cost'] : null,
                 'price_mode' => (string) ($line['price_mode'] ?? 'auto'),
+                'price_rule_codigo' => isset($line['price_rule_codigo']) ? $line['price_rule_codigo'] : null,
                 'price_ref' => isset($line['price_ref']) ? $line['price_ref'] : null,
                 'price_total' => isset($line['price_total']) ? $line['price_total'] : null,
                 'price_discount' => (float) ($line['price_discount'] ?? 0),
                 'margin_discount' => (float) ($line['margin_discount'] ?? 0),
                 'discount_amount' => (float) ($line['discount_amount'] ?? 0),
+                // Lo que fijó el vendedor en la cotización: al cambiar la cantidad se mantiene.
+                'discount_anchor' => $line['discount_anchor'] ?? null,
+                'discount_anchor_value' => $line['discount_anchor_value'] ?? null,
                 'rule_total' => $rule_adjusted ? round((float) $line['rule_total'], 2) : null,
                 'rule_adjusted' => $rule_adjusted,
                 'stock_breakdown' => $line['stock_breakdown'] ?? null,
@@ -2807,10 +2826,14 @@ class Riverso_Billing_Module {
             }
         }
         $rule_mode = isset($_POST['rule_mode']) ? strtolower(trim((string) wp_unslash($_POST['rule_mode']))) : 'auto';
-        if (!in_array($rule_mode, ['auto', 'std', 'manual', 'ref'], true)) {
+        if (!in_array($rule_mode, ['auto', 'std', 'manual', 'ref', 'rule'], true)) {
             $rule_mode = 'auto';
         }
-        $pack = $catalog->local_price_pack($pb, $qty, $p_override, $rule_mode);
+        // «Otra regla» elegida en la cotización: se conserva al facturar.
+        $rule_codigo = isset($_POST['rule_codigo'])
+            ? substr(sanitize_text_field(wp_unslash($_POST['rule_codigo'])), 0, 50)
+            : '';
+        $pack = $catalog->local_price_pack($pb, $qty, $p_override, $rule_mode, $rule_codigo);
         $offers = $catalog->family_offers_for_base($pb);
 
         $by_total = null;
@@ -2826,6 +2849,7 @@ class Riverso_Billing_Module {
             }
             $by_total = $catalog->qty_for_amount($pb, $target_total, [
                 'rule_mode' => $rule_mode,
+                'rule_codigo' => $rule_codigo,
                 'p_ref' => $p_override,
                 'units_per_pack' => $upp,
                 'others_units' => $others,
@@ -2850,8 +2874,24 @@ class Riverso_Billing_Module {
             'family_qty' => $qty,
             'p_ref' => $p_override,
             'rule_mode' => $rule_mode,
+            'price_rule_codigo' => isset($pack['price_rule_codigo']) ? $pack['price_rule_codigo'] : null,
+            'rule_missing' => !empty($pack['rule_missing']),
             'by_total' => $by_total,
         ]);
+    }
+
+    /**
+     * Reglas de precio aprobadas para «Otra regla» en borradores (corregir la regla de la cotización).
+     * Solo lee código, nombre y tramos; no requiere permiso sobre el editor de reglas.
+     */
+    public function ajax_price_rules_search() {
+        $this->authorize();
+        if (!class_exists('Riverso_Price_Rules_Module')) {
+            wp_send_json_success(['rules' => []]);
+        }
+        $term = isset($_POST['q']) ? sanitize_text_field(wp_unslash($_POST['q'])) : '';
+        $rules = Riverso_Price_Rules_Module::get_instance()->search_approved_rules($term, 50);
+        wp_send_json_success(['rules' => $rules]);
     }
 
     public function ajax_search_quotes() {

@@ -376,6 +376,9 @@ class Riverso_POS_Activator {
         self::create_phase74_customer_quotes_rule_total($prefix);
         self::create_phase75_purchase_notices($prefix, $charset_collate);
         self::create_phase76_purchase_orders($prefix, $charset_collate);
+        self::create_phase77_customer_quotes_discount_anchor($prefix);
+        self::create_phase78_quote_price_rule($prefix);
+        self::create_phase79_billing_draft_discount_anchor($prefix);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -5577,6 +5580,40 @@ class Riverso_POS_Activator {
     }
 
     /**
+     * Garantiza % de descuento con 4 decimales y el valor fijado en líneas de cotización.
+     */
+    public static function ensure_customer_quotes_discount_anchor() {
+        global $wpdb;
+        // Corre en cada carga del módulo: una vez aplicada, no repetir las consultas de schema.
+        if (get_option('riverso_pos_phase77_customer_quotes_discount_anchor') === '1') {
+            return;
+        }
+        self::create_phase77_customer_quotes_discount_anchor($wpdb->prefix . 'riverso_');
+    }
+
+    /**
+     * Garantiza price_rule_codigo («Otra regla») en líneas de cotización y de borradores de factura.
+     */
+    /**
+     * Garantiza el valor fijado del módulo Descuentos en líneas de borradores de factura.
+     */
+    public static function ensure_billing_draft_discount_anchor() {
+        global $wpdb;
+        if (get_option('riverso_pos_phase79_billing_draft_discount_anchor') === '1') {
+            return;
+        }
+        self::create_phase79_billing_draft_discount_anchor($wpdb->prefix . 'riverso_');
+    }
+
+    public static function ensure_quote_price_rule() {
+        global $wpdb;
+        if (get_option('riverso_pos_phase78_quote_price_rule') === '1') {
+            return;
+        }
+        self::create_phase78_quote_price_rule($wpdb->prefix . 'riverso_');
+    }
+
+    /**
      * Garantiza tabla de clientes comerciales (deploy sin bump de versión).
      */
     public static function ensure_clientes_schema() {
@@ -5890,6 +5927,95 @@ class Riverso_POS_Activator {
             Riverso_POS_Audit::log('schema.phase74_customer_quotes_rule_total', 'customer_quote_items', 0, array(
                 'actor_type' => 'computer',
                 'details' => 'Fase 74: rule_total/rule_adjusted y unit_price DECIMAL(14,4) en lineas de cotizacion',
+            ));
+        }
+    }
+
+    /**
+     * Fase 77: módulo Descuentos de cotizaciones.
+     * - price_discount / margin_discount DECIMAL(8,4): % con 4 decimales.
+     * - discount_anchor / discount_anchor_value: campo que fijó el vendedor
+     *   (price_pct, margin_pct, amount, final_unit, final_total, factor) y su valor exacto.
+     * Idempotente: add_column_if_missing + MODIFY solo si la escala es menor a 4.
+     */
+    private static function create_phase77_customer_quotes_discount_anchor($prefix) {
+        global $wpdb;
+        $items = "{$prefix}customer_quote_items";
+        if (!self::table_exists($items)) {
+            return;
+        }
+        foreach (array('price_discount', 'margin_discount') as $column) {
+            $scale = $wpdb->get_var($wpdb->prepare(
+                "SELECT NUMERIC_SCALE FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s",
+                DB_NAME,
+                $items,
+                $column
+            ));
+            if ($scale !== null && (int) $scale < 4) {
+                $wpdb->query("ALTER TABLE `{$items}` MODIFY COLUMN {$column} DECIMAL(8,4) NOT NULL DEFAULT 0");
+            }
+        }
+        self::add_column_if_missing($items, 'discount_anchor', 'discount_anchor VARCHAR(16) NULL DEFAULT NULL');
+        self::add_column_if_missing($items, 'discount_anchor_value', 'discount_anchor_value DECIMAL(18,6) NULL DEFAULT NULL');
+
+        if (get_option('riverso_pos_phase77_customer_quotes_discount_anchor') === '1') {
+            return;
+        }
+        update_option('riverso_pos_phase77_customer_quotes_discount_anchor', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase77_customer_quotes_discount_anchor', 'customer_quote_items', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 77: dsctos DECIMAL(8,4) y discount_anchor/discount_anchor_value en lineas de cotizacion',
+            ));
+        }
+    }
+
+    /**
+     * Fase 78: «Otra regla» en cotizaciones.
+     * price_rule_codigo guarda el código de la regla aprobada elegida (price_mode = rule)
+     * en líneas de cotización y en líneas de borradores de factura, para que facturar
+     * no vuelva a la regla asignada.
+     */
+    /**
+     * Fase 79: módulo Descuentos en borradores de boleta/factura.
+     * discount_anchor / discount_anchor_value: campo que fijó el vendedor y su valor exacto,
+     * como en las líneas de cotización (fase 77). price_discount / margin_discount ya
+     * tienen 4 decimales en esta tabla.
+     */
+    private static function create_phase79_billing_draft_discount_anchor($prefix) {
+        $lines = "{$prefix}billing_draft_lines";
+        if (!self::table_exists($lines)) {
+            return;
+        }
+        self::add_column_if_missing($lines, 'discount_anchor', 'discount_anchor VARCHAR(16) NULL DEFAULT NULL');
+        self::add_column_if_missing($lines, 'discount_anchor_value', 'discount_anchor_value DECIMAL(18,6) NULL DEFAULT NULL');
+        if (get_option('riverso_pos_phase79_billing_draft_discount_anchor') === '1') {
+            return;
+        }
+        update_option('riverso_pos_phase79_billing_draft_discount_anchor', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase79_billing_draft_discount_anchor', 'billing_draft_lines', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 79: discount_anchor/discount_anchor_value en lineas de borradores de factura',
+            ));
+        }
+    }
+
+    private static function create_phase78_quote_price_rule($prefix) {
+        foreach (array("{$prefix}customer_quote_items", "{$prefix}billing_draft_lines") as $table) {
+            if (self::table_exists($table)) {
+                self::add_column_if_missing($table, 'price_rule_codigo', 'price_rule_codigo VARCHAR(50) NULL DEFAULT NULL');
+            }
+        }
+        if (get_option('riverso_pos_phase78_quote_price_rule') === '1') {
+            return;
+        }
+        update_option('riverso_pos_phase78_quote_price_rule', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase78_quote_price_rule', 'customer_quote_items', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 78: price_rule_codigo (Otra regla) en lineas de cotizacion y borradores de factura',
             ));
         }
     }

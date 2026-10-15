@@ -14,6 +14,9 @@ $css_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 
 $css_cq_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/css/customer-quotes.css';
 $js_ver = (is_string($js_path) && is_file($js_path)) ? (string) filemtime($js_path) : $version;
 $js_lines_ver = (is_string($js_lines_path) && is_file($js_lines_path)) ? (string) filemtime($js_lines_path) : $version;
+// Descuentos y «Otra regla» compartidos con cotizaciones.
+$line_discounts_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/line-discounts.js';
+$line_discounts_ver = (is_string($line_discounts_path) && is_file($line_discounts_path)) ? (string) filemtime($line_discounts_path) : $version;
 $js_emails_ver = (is_string($js_emails_path) && is_file($js_emails_path)) ? (string) filemtime($js_emails_path) : $version;
 $css_ver = (is_string($css_path) && is_file($css_path)) ? (string) filemtime($css_path) : $version;
 $css_cq_ver = (is_string($css_cq_path) && is_file($css_cq_path)) ? (string) filemtime($css_cq_path) : $version;
@@ -552,6 +555,8 @@ if (!function_exists('riverso_pos_billing_json')) {
                                 <button type="button" class="bill-preview-item" role="menuitem" data-preview="thermal50">Previsualizar: Formato térmico 50mm</button>
                                 <button type="button" class="bill-preview-item" role="menuitem" data-preview="family">Previsualizar: Carta por familia</button>
                                 <button type="button" class="bill-preview-item" role="menuitem" data-preview="product">Previsualizar: Carta por producto</button>
+                                <button type="button" class="bill-preview-item" role="menuitem" data-preview="family_detail">Previsualizar: Carta por familia – detalle</button>
+                                <button type="button" class="bill-preview-item" role="menuitem" data-preview="product_detail">Previsualizar: Carta por producto – detalle</button>
                             </div>
                             <button type="button" class="bill-btn bill-btn-primary bill-preview-toggle" id="bill-boleta-preview" aria-haspopup="menu" aria-expanded="false" aria-controls="bill-preview-menu-boleta">
                                 <svg class="bill-preview-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
@@ -873,6 +878,17 @@ if (!function_exists('riverso_pos_billing_json')) {
                 <div class="cq-line-mode-radios" id="bill-line-mode-radios" hidden>
                     <label><input type="radio" name="bill-line-mode" value="auto"> <span id="bill-line-mode-auto-label">Usar regla</span></label>
                     <label id="bill-line-mode-std-wrap" hidden><input type="radio" name="bill-line-mode" value="std"> <span id="bill-line-mode-std-label">Regla estándar ferretería (R-1)</span></label>
+                    <label><input type="radio" name="bill-line-mode" value="rule"> Otra regla</label>
+                    <div class="cq-line-rule-picker" id="bill-line-rule-picker" hidden>
+                        <div class="cq-line-rule-picker-row">
+                            <input type="text" id="bill-line-rule-input" autocomplete="off" placeholder="Buscar regla por código o nombre" aria-label="Buscar regla">
+                            <button type="button" class="cq-btn cq-btn-customer-action" id="bill-line-rule-search-btn" title="Buscar reglas" aria-label="Buscar reglas">
+                                <span aria-hidden="true">🔍</span>
+                            </button>
+                        </div>
+                        <ul id="bill-line-rule-suggest" class="cq-results cq-rule-results" hidden></ul>
+                        <p id="bill-line-rule-chosen" class="cq-modal-hint" role="status"></p>
+                    </div>
                     <label><input type="radio" name="bill-line-mode" value="ref"> Cambiar precio de referencia (P)</label>
                     <label><input type="radio" name="bill-line-mode" value="manual"> Ignorar regla — precio final</label>
                 </div>
@@ -904,27 +920,58 @@ if (!function_exists('riverso_pos_billing_json')) {
                     <input type="text" id="bill-line-total" inputmode="decimal" autocomplete="off">
                     <em id="bill-line-total-hint" class="cq-float-hint"></em>
                 </label>
-                <label class="cq-float-field">
-                    <span>Descuento precio %</span>
-                    <input type="text" id="bill-line-price-discount" inputmode="decimal" autocomplete="off">
-                </label>
-                <label class="cq-float-field" id="bill-line-margin-field">
-                    <span>
-                        Descuento margen %
-                        <abbr id="bill-line-margin-help" class="cq-help-tip" title="Costo no encontrado" hidden>?</abbr>
-                    </span>
-                    <input type="text" id="bill-line-margin-discount" inputmode="decimal" autocomplete="off">
-                    <em id="bill-line-margin-na" class="cq-margin-na-text" hidden>—</em>
-                </label>
-                <label class="cq-float-field">
-                    <span>Monto de descuento</span>
-                    <input type="text" id="bill-line-discount-amount" inputmode="decimal" autocomplete="off">
-                </label>
-                <label class="cq-float-field cq-manual-full">
-                    <span>Monto final</span>
-                    <input type="text" id="bill-line-final-amount" readonly tabindex="-1" autocomplete="off">
-                </label>
             </div>
+            <details class="cq-discounts" id="bill-line-discounts">
+                <summary class="cq-discounts-summary">
+                    <span class="cq-discounts-title">Descuentos</span>
+                    <span class="cq-discounts-brief" id="bill-line-discounts-brief"></span>
+                </summary>
+                <div class="cq-discounts-body">
+                    <div class="cq-line-fields cq-discounts-ref">
+                        <label class="cq-float-field">
+                            <span>Costo unitario</span>
+                            <input type="text" id="bill-dm-cost" readonly tabindex="-1" autocomplete="off">
+                        </label>
+                        <label class="cq-float-field">
+                            <span>Factor anterior</span>
+                            <input type="text" id="bill-dm-factor-before" readonly tabindex="-1" autocomplete="off">
+                            <em class="cq-float-hint">Precio de lista / costo</em>
+                        </label>
+                    </div>
+                    <p class="cq-modal-hint cq-discounts-help">Todos son el mismo descuento. El campo que escribes queda <strong>fijado</strong>: si cambia la cantidad o el precio, se mantiene ese valor.</p>
+                    <div class="cq-line-fields cq-discounts-fields">
+                        <label class="cq-float-field" data-anchor="price_pct">
+                            <span>Descuento precio %</span>
+                            <input type="text" id="bill-line-price-discount" inputmode="decimal" autocomplete="off">
+                        </label>
+                        <label class="cq-float-field" data-anchor="margin_pct">
+                            <span>Descuento margen %</span>
+                            <input type="text" id="bill-line-margin-discount" inputmode="decimal" autocomplete="off">
+                            <em class="cq-margin-na-text cq-dm-na" title="Costo no encontrado" hidden>— sin costo</em>
+                        </label>
+                        <label class="cq-float-field" data-anchor="amount">
+                            <span>Monto de descuento</span>
+                            <input type="text" id="bill-line-discount-amount" inputmode="decimal" autocomplete="off">
+                        </label>
+                        <label class="cq-float-field" data-anchor="factor">
+                            <span>Factor objetivo</span>
+                            <input type="text" id="bill-dm-factor" inputmode="decimal" autocomplete="off">
+                            <em class="cq-margin-na-text cq-dm-na" title="Costo no encontrado" hidden>— sin costo</em>
+                            <em class="cq-float-hint">Final unitario / costo</em>
+                        </label>
+                        <label class="cq-float-field" data-anchor="final_unit">
+                            <span>Monto final unitario objetivo</span>
+                            <input type="text" id="bill-dm-final-unit" inputmode="decimal" autocomplete="off">
+                            <em class="cq-float-hint">Por unidad</em>
+                        </label>
+                        <label class="cq-float-field" data-anchor="final_total">
+                            <span>Monto final objetivo</span>
+                            <input type="text" id="bill-line-final-amount" inputmode="decimal" autocomplete="off">
+                        </label>
+                    </div>
+                    <p id="bill-line-discount-hint" class="cq-line-preview cq-discounts-status" role="status"></p>
+                </div>
+            </details>
             <div class="cq-line-by-amount" id="bill-line-by-amount">
                 <p class="cq-line-by-amount-row">
                     <strong>Por monto:</strong>
@@ -934,13 +981,30 @@ if (!function_exists('riverso_pos_billing_json')) {
                 <p class="cq-modal-hint">Total deseado antes de descuentos. Calcula la cantidad a entregar con la regla activa.</p>
                 <div id="bill-line-by-amount-result" class="cq-line-by-amount-result"></div>
             </div>
-            <p id="bill-line-discount-hint" class="cq-line-preview" role="status"></p>
             <p id="bill-line-preview" class="cq-line-preview" role="status"></p>
         </div>
         <footer class="cq-modal-foot cq-line-modal-foot">
             <button type="button" class="cq-btn" data-bill-line-close="1">Cancelar</button>
             <button type="button" class="cq-btn cq-btn-save-line" id="bill-line-save">Guardar cambios</button>
         </footer>
+    </div>
+</div>
+
+<div id="bill-rule-search-modal" class="cq-modal" hidden aria-hidden="true">
+    <div class="cq-modal-backdrop" data-rule-search-close="1"></div>
+    <div class="cq-modal-dialog cq-rule-search-dialog" role="dialog" aria-modal="true" aria-labelledby="bill-rule-search-title">
+        <header class="cq-modal-head">
+            <h3 id="bill-rule-search-title">Buscar regla</h3>
+            <button type="button" class="cq-modal-close" aria-label="Cerrar" data-rule-search-close="1">×</button>
+        </header>
+        <div class="cq-modal-body">
+            <label class="cq-field cq-field-wide">
+                <span>Código o nombre</span>
+                <input type="text" id="bill-rule-search-q" autocomplete="off" placeholder="Ej.: R-3, mayorista">
+            </label>
+            <p id="bill-rule-search-hint" class="cq-modal-hint" role="status">Reglas aprobadas (última versión de cada código).</p>
+            <ul id="bill-rule-search-results" class="cq-results cq-modal-results cq-rule-results"></ul>
+        </div>
     </div>
 </div>
 
@@ -1040,6 +1104,7 @@ if (!function_exists('riverso_pos_billing_json')) {
 window.RIVERSO_BILLING = <?php echo riverso_pos_billing_json($riverso_billing); ?>;
 </script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/barcode-scanner.js?ver=<?php echo htmlspecialchars($scanner_js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/line-discounts.js?ver=<?php echo htmlspecialchars($line_discounts_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing-lines.js?ver=<?php echo htmlspecialchars($js_lines_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing-emails.js?ver=<?php echo htmlspecialchars($js_emails_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing.js?ver=<?php echo htmlspecialchars($js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>

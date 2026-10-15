@@ -377,19 +377,27 @@ class Riverso_Quote_Catalog_Lookup {
      * @param int         $producto_base_id
      * @param float       $family_qty
      * @param float|null  $p_override
-     * @param string|null $rule_mode  auto|std|manual (manual = sin aplicar regla)
+     * @param string|null $rule_mode  auto|std|manual|rule (manual = sin aplicar regla;
+     *                                rule = la regla aprobada de $rule_codigo, «Otra regla»)
+     * @param string|null $chosen_rule_codigo Código de la regla elegida (solo rule_mode = rule)
      * @return array
      */
-    public function local_price_pack($producto_base_id, $family_qty = 1.0, $p_override = null, $rule_mode = null) {
+    public function local_price_pack($producto_base_id, $family_qty = 1.0, $p_override = null, $rule_mode = null, $chosen_rule_codigo = null) {
         $producto_base_id = (int) $producto_base_id;
         $family_qty = (float) $family_qty;
         if ($family_qty <= 0) {
             $family_qty = 1.0;
         }
         $rule_mode = strtolower(trim((string) $rule_mode));
-        if (!in_array($rule_mode, array('auto', 'std', 'manual', 'ref'), true)) {
+        if (!in_array($rule_mode, array('auto', 'std', 'manual', 'ref', 'rule'), true)) {
             $rule_mode = 'auto';
         }
+        $chosen_codigo = trim((string) $chosen_rule_codigo);
+        if ($rule_mode === 'rule' && $chosen_codigo === '') {
+            $rule_mode = 'auto';
+        }
+        // La regla elegida ya no existe o no está aprobada: se usa la asignada y se avisa.
+        $rule_missing = false;
         // ref usa la misma regla asignada que auto, con P override.
         if ($rule_mode === 'ref') {
             $rule_mode = 'auto';
@@ -460,18 +468,26 @@ class Riverso_Quote_Catalog_Lookup {
 
             if ($rules_mod && $rule_mode !== 'manual') {
                 $detail = null;
-                if ($rule_mode === 'std') {
-                    $std = $rules_mod->get_standard_rule();
-                    if ($std && !empty($std['tiers'])) {
+                $chosen = null;
+                if ($rule_mode === 'rule') {
+                    $chosen = $rules_mod->get_approved_rule_by_codigo($chosen_codigo);
+                    if (!$chosen || empty($chosen['tiers'])) {
+                        $chosen = null;
+                        $rule_missing = true;
+                    }
+                }
+                if ($rule_mode === 'std' || $chosen !== null) {
+                    $chosen = $chosen !== null ? $chosen : $rules_mod->get_standard_rule();
+                    if ($chosen && !empty($chosen['tiers'])) {
                         $detail = $rules_mod->apply_rule_tiers_detail(
-                            $std['tiers'],
+                            $chosen['tiers'],
                             $producto_base_id,
                             $family_qty,
                             $local_price
                         );
                         if ($detail) {
-                            $rule_codigo = $std['codigo'];
-                            $rule_nombre = $std['nombre'];
+                            $rule_codigo = $chosen['codigo'];
+                            $rule_nombre = $chosen['nombre'];
                         }
                     }
                 } else {
@@ -502,7 +518,7 @@ class Riverso_Quote_Catalog_Lookup {
                 if ($assigned_meta) {
                     $assigned_rule_codigo = $assigned_meta['codigo'];
                     $assigned_rule_nombre = $assigned_meta['nombre'];
-                    if ($rule_codigo === null && $rule_mode !== 'std') {
+                    if ($rule_codigo === null && $rule_mode !== 'std' && !($rule_mode === 'rule' && !$rule_missing)) {
                         $rule_codigo = $assigned_meta['codigo'];
                         $rule_nombre = $assigned_meta['nombre'];
                         $has_rule = true;
@@ -545,6 +561,8 @@ class Riverso_Quote_Catalog_Lookup {
             'assigned_rule_nombre' => $assigned_rule_nombre,
             'std_rule' => $std_rule,
             'rule_mode' => $rule_mode,
+            'price_rule_codigo' => $rule_mode === 'rule' ? $chosen_codigo : null,
+            'rule_missing' => $rule_missing,
             'has_local_price' => $unit_price_r > 0,
             'sin_precio_local' => $unit_price_r <= 0,
             'family_qty' => $family_qty,
@@ -558,7 +576,7 @@ class Riverso_Quote_Catalog_Lookup {
      *
      * @param int   $producto_base_id
      * @param float $monto
-     * @param array $opts rule_mode, p_ref, units_per_pack, others_units
+     * @param array $opts rule_mode, rule_codigo, p_ref, units_per_pack, others_units
      * @return array
      */
     public function qty_for_amount($producto_base_id, $monto, array $opts = array()) {
@@ -575,7 +593,11 @@ class Riverso_Quote_Catalog_Lookup {
         }
 
         $rule_mode = isset($opts['rule_mode']) ? strtolower(trim((string) $opts['rule_mode'])) : 'auto';
-        if (!in_array($rule_mode, array('auto', 'std', 'manual', 'ref'), true)) {
+        if (!in_array($rule_mode, array('auto', 'std', 'manual', 'ref', 'rule'), true)) {
+            $rule_mode = 'auto';
+        }
+        $chosen_codigo = isset($opts['rule_codigo']) ? trim((string) $opts['rule_codigo']) : '';
+        if ($rule_mode === 'rule' && $chosen_codigo === '') {
             $rule_mode = 'auto';
         }
         $p_ref = isset($opts['p_ref']) && $opts['p_ref'] !== null && $opts['p_ref'] !== ''
@@ -592,7 +614,7 @@ class Riverso_Quote_Catalog_Lookup {
         $step_units = (abs($upp - $step) < 0.0001) ? $step : 1;
         $others = isset($opts['others_units']) ? max(0.0, (float) $opts['others_units']) : 0.0;
 
-        $pack = $this->local_price_pack($producto_base_id, 1.0, $p_ref, $rule_mode === 'ref' ? 'auto' : $rule_mode);
+        $pack = $this->local_price_pack($producto_base_id, 1.0, $p_ref, $rule_mode === 'ref' ? 'auto' : $rule_mode, $chosen_codigo);
         $p = $p_ref !== null ? $p_ref : (isset($pack['p_asignado']) ? $pack['p_asignado'] : null);
         if ($p === null || $p <= 0) {
             $p = isset($pack['unit_price']) ? (float) $pack['unit_price'] : 0.0;
@@ -607,9 +629,12 @@ class Riverso_Quote_Catalog_Lookup {
             return $this->qty_for_amount_flat($p > 0 ? $p : (float) $pack['unit_price'], $monto, $upp);
         }
 
+        $chosen = $rule_mode === 'rule' ? $rules_mod->get_approved_rule_by_codigo($chosen_codigo) : null;
         if ($rule_mode === 'std') {
             $std = $rules_mod->get_standard_rule();
             $tiers = $std && !empty($std['tiers']) ? $std['tiers'] : array();
+        } elseif ($chosen && !empty($chosen['tiers'])) {
+            $tiers = $chosen['tiers'];
         } else {
             $meta = $rules_mod->get_resolved_rule_meta($producto_base_id);
             if ($meta) {

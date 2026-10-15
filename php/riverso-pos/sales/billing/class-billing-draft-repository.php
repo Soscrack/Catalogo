@@ -11,17 +11,22 @@ if (!defined('ABSPATH')) {
 
 class Riverso_Billing_Draft_Repository {
 
-    /** @var bool|null Columna stock_breakdown en líneas (fase 71). */
-    private $has_breakdown_column = null;
+    /** @var string[]|null Columnas de la tabla de líneas (stock_breakdown fase 71, price_rule_codigo fase 78). */
+    private $line_columns = null;
+
+    /** @return bool */
+    private function has_line_column($column) {
+        if ($this->line_columns === null) {
+            global $wpdb;
+            $cols = $wpdb->get_col("SHOW COLUMNS FROM {$this->lines_table()}", 0);
+            $this->line_columns = is_array($cols) ? $cols : array();
+        }
+        return in_array($column, $this->line_columns, true);
+    }
 
     /** @return bool */
     private function has_breakdown_column() {
-        if ($this->has_breakdown_column === null) {
-            global $wpdb;
-            $cols = $wpdb->get_col("SHOW COLUMNS FROM {$this->lines_table()}", 0);
-            $this->has_breakdown_column = is_array($cols) && in_array('stock_breakdown', $cols, true);
-        }
-        return $this->has_breakdown_column;
+        return $this->has_line_column('stock_breakdown');
     }
 
     /** @return string */
@@ -229,7 +234,13 @@ class Riverso_Billing_Draft_Repository {
                 $afecto = !empty($line['afecto']) ? 1 : 0;
             }
             $price_mode = strtolower(trim((string) ($line['price_mode'] ?? 'auto')));
-            if (!in_array($price_mode, ['auto', 'ref', 'manual', 'std'], true)) {
+            if (!in_array($price_mode, ['auto', 'ref', 'manual', 'std', 'rule'], true)) {
+                $price_mode = 'auto';
+            }
+            $price_rule_codigo = $price_mode === 'rule'
+                ? substr(trim((string) ($line['price_rule_codigo'] ?? '')), 0, 50)
+                : '';
+            if ($price_mode === 'rule' && $price_rule_codigo === '') {
                 $price_mode = 'auto';
             }
             $upp = (float) ($line['units_per_pack'] ?? 1);
@@ -279,6 +290,22 @@ class Riverso_Billing_Draft_Repository {
                 'rule_total' => $rule_total,
                 'rule_adjusted' => !empty($line['rule_adjusted']) || !empty($line['_rule_adjusted']) ? 1 : 0,
             ];
+            if ($this->has_line_column('price_rule_codigo')) {
+                $line_row['price_rule_codigo'] = $price_rule_codigo !== '' ? $price_rule_codigo : null;
+            }
+            // Valor fijado del módulo Descuentos (fase 79): campo y valor exacto que escribió el vendedor.
+            if ($this->has_line_column('discount_anchor')) {
+                $anchor = class_exists('Riverso_Quote_Totals')
+                    ? Riverso_Quote_Totals::normalize_anchor($line['discount_anchor'] ?? null)
+                    : null;
+                $anchor_value = $line['discount_anchor_value'] ?? null;
+                if ($anchor === null || $anchor_value === null || $anchor_value === '' || (float) $anchor_value < 0) {
+                    $anchor = null;
+                    $anchor_value = null;
+                }
+                $line_row['discount_anchor'] = $anchor;
+                $line_row['discount_anchor_value'] = $anchor_value === null ? null : round((float) $anchor_value, 6);
+            }
             // Detalle de entrega (bolsas / sueltas) para la salida de stock.
             if ($this->has_breakdown_column() && class_exists('Riverso_Sale_Stock_Service')) {
                 $line_row['stock_breakdown'] = Riverso_Sale_Stock_Service::breakdown_json(
@@ -665,11 +692,15 @@ class Riverso_Billing_Draft_Repository {
                 'grupo_id' => isset($r['grupo_id']) && $r['grupo_id'] !== null ? (int) $r['grupo_id'] : null,
                 'unit_cost' => isset($r['unit_cost']) && $r['unit_cost'] !== null ? (float) $r['unit_cost'] : null,
                 'price_mode' => (string) ($r['price_mode'] ?? 'auto'),
+                'price_rule_codigo' => isset($r['price_rule_codigo']) && $r['price_rule_codigo'] !== '' ? (string) $r['price_rule_codigo'] : null,
                 'price_ref' => isset($r['price_ref']) && $r['price_ref'] !== null ? (float) $r['price_ref'] : null,
                 'price_total' => isset($r['price_total']) && $r['price_total'] !== null ? (float) $r['price_total'] : null,
                 'price_discount' => (float) ($r['price_discount'] ?? 0),
                 'margin_discount' => (float) ($r['margin_discount'] ?? 0),
                 'discount_amount' => (float) ($r['discount_amount'] ?? 0),
+                'discount_anchor' => isset($r['discount_anchor']) && $r['discount_anchor'] !== '' ? (string) $r['discount_anchor'] : null,
+                'discount_anchor_value' => isset($r['discount_anchor_value']) && $r['discount_anchor_value'] !== null
+                    ? round((float) $r['discount_anchor_value'], 6) : null,
                 'rule_total' => isset($r['rule_total']) && $r['rule_total'] !== null ? (float) $r['rule_total'] : null,
                 'rule_adjusted' => !empty($r['rule_adjusted']),
                 'stock_breakdown' => !empty($r['stock_breakdown']) ? json_decode((string) $r['stock_breakdown'], true) : null,

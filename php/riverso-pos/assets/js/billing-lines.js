@@ -7,13 +7,19 @@
   var BILL_IVA_FACTOR = 1.19;
   var host = null;
   var billEls = {};
+  // Descuentos, valor fijado y «Otra regla» compartidos con cotizaciones (line-discounts.js).
+  var LD = global.RiversoLineDiscounts;
+  var discountModule = null;
+  var rulePicker = null;
   var state = {
     lineModal: {
       index: -1, mode: "auto", taxView: "bruto", previewSeq: 0,
       hasRule: false, isFamily: false, hasLocalProduct: false,
       catalogP: null, unitario0: null,
       ruleTotal: null, ruleCodigo: null, ruleNombre: null, stdRule: null,
-      priceRef: null, unitGross: 0, totalGross: 0
+      priceRef: null, unitGross: 0, totalGross: 0,
+      // «Otra regla»: { codigo, nombre } elegida para esta línea/familia.
+      otherRule: null, ruleMissing: false
     },
     familyLineIndex: -1,
     familyPriceSeq: 0,
@@ -443,24 +449,17 @@
     function priceCell(line, index, editable) {
         var td = document.createElement("td");
         td.className = "cq-num cq-price-cell";
-        var figures = lineFigures(line);
-        var gross = document.createElement("div");
-        gross.className = "cq-line-gross";
-        gross.textContent = formatMoney(figures.gross);
-        gross.title = "Total bruto de la línea";
-        var unitHint = document.createElement("div");
-        unitHint.className = "cq-line-unit-hint";
-        unitHint.textContent = formatUnitPrice(line.unit_price) + " / ud";
-        td.appendChild(gross);
-        td.appendChild(unitHint);
+        // Monto que se emite al SII (pesos enteros); la lista entre paréntesis si hay descuento.
+        LD.buildPriceCellNodes(td);
+        LD.paintPriceFigures(td, line, lineFigures(line), { sii: true });
         var mode = linePriceMode(line);
-        if (mode === "manual" || mode === "ref") {
+        if (mode === "manual" || mode === "ref" || mode === "rule") {
             var tag = document.createElement("span");
             tag.className = "cq-price-mode-tag";
-            tag.textContent = mode === "manual" ? "Manual" : "P ref.";
+            tag.textContent = mode === "manual" ? "Manual" : (mode === "ref" ? "P ref." : String(line.price_rule_codigo));
             tag.title = mode === "manual"
                 ? "Precio final manual (sin regla)"
-                : "Regla con precio de referencia P";
+                : (mode === "ref" ? "Regla con precio de referencia P" : "Otra regla elegida: " + line.price_rule_codigo);
             td.appendChild(tag);
         }
         return td;
@@ -589,8 +588,8 @@
     function displayField(field, line) {
         if (field === "quantity") return formatQty(line.quantity);
         if (field === "unit_price") return formatPlain(line.unit_price);
-        if (field === "price_discount") return formatPlain(line.price_discount || 0);
-        return formatPlain(line.margin_discount || 0);
+        if (field === "price_discount") return LD.formatRate(line.price_discount || 0);
+        return LD.formatRate(line.margin_discount || 0);
     }
 
     function editField(field, line) {
@@ -608,6 +607,16 @@
         else if (field === "price_discount") line.price_discount = parsed;
         else if (field === "margin_discount") line.margin_discount = parsed;
         if (field === "price_discount" || field === "margin_discount") {
+            var rate = clampRate(parsed);
+            if (rate > 0) {
+                line.discount_anchor = field === "price_discount" ? "price_pct" : "margin_pct";
+                line.discount_anchor_value = rate;
+                if (applyDiscountAnchor(line)) return;
+            } else {
+                line.discount_anchor = null;
+                line.discount_anchor_value = null;
+                line.discount_amount = 0;
+            }
             syncEquivalentDiscounts(line, field);
         } else {
             syncDiscountAmount(line, field);
@@ -664,13 +673,13 @@
             if (gross > 0 && money > gross) money = gross;
             line.discount_amount = money;
             line.price_discount = gross > 0 && money > 0
-                ? clampRate(round2(money / gross * 100))
+                ? clampRate(money / gross * 100)
                 : 0;
             if (!lineHasUnitCost(line) || !(marginMoney != null && marginMoney > 0)) {
                 line.margin_discount = 0;
             } else {
                 line.margin_discount = money > 0
-                    ? clampRate(round2(money / marginMoney * 100))
+                    ? clampRate(money / marginMoney * 100)
                     : 0;
             }
             return;
@@ -687,7 +696,7 @@
             money = m > 0 ? round2(marginMoney * m / 100) : 0;
             line.margin_discount = m;
             line.price_discount = gross > 0 && money > 0
-                ? clampRate(round2(money / gross * 100))
+                ? clampRate(money / gross * 100)
                 : 0;
         } else {
             var p = clampRate(line.price_discount);
@@ -697,13 +706,32 @@
                 line.margin_discount = 0;
             } else {
                 line.margin_discount = (marginMoney != null && marginMoney > 0 && money > 0)
-                    ? clampRate(round2(money / marginMoney * 100))
+                    ? clampRate(money / marginMoney * 100)
                     : 0;
             }
         }
         line.discount_amount = money;
         if (line.discount_amount < 0) line.discount_amount = 0;
         if (line.discount_amount > gross) line.discount_amount = gross;
+    }
+
+    /** Bruto, unidades y costo (2 decimales) de la línea antes del descuento. */
+    function anchorBases(line) {
+        var bases = discountBases(line);
+        return {
+            gross: bases.gross,
+            billable: bases.billable,
+            cost: lineHasUnitCost(line) ? round2(Number(line.unit_cost)) : null
+        };
+    }
+
+    /**
+     * Recalcula monto y % desde el valor fijado con el bruto actual.
+     * false si la línea no tiene fijado o le falta el costo (queda el monto guardado).
+     */
+    function applyDiscountAnchor(line) {
+        if (!line) return false;
+        return LD.applyAnchor(line, anchorBases(line));
     }
 
     function syncDiscountAmount(line, field) {
@@ -738,13 +766,9 @@
             if (profitCell) {
                 paintUtility(profitCell, figures);
             }
-            var grossEl = tr.querySelector(".cq-line-gross");
-            if (grossEl) {
-                grossEl.textContent = formatMoney(figures.gross);
-            }
-            var unitHint = tr.querySelector(".cq-line-unit-hint");
-            if (unitHint) {
-                unitHint.textContent = formatUnitPrice(line.unit_price) + " / ud";
+            var priceCellEl = tr.querySelector(".cq-price-cell");
+            if (priceCellEl) {
+                LD.paintPriceFigures(priceCellEl, line, figures, { sii: true });
             }
         });
         refreshFamilyHeaders();
@@ -1016,7 +1040,7 @@
     }
 
     function clampRate(value) {
-        var rate = round2(Number(value) || 0);
+        var rate = round4(Number(value) || 0);
         if (rate < 0) return 0;
         if (rate > 100) return 100;
         return rate;
@@ -1038,7 +1062,32 @@
     function linePriceMode(line) {
         var mode = line && line.price_mode ? String(line.price_mode).toLowerCase() : "auto";
         if (mode === "manual" || mode === "ref" || mode === "std") return mode;
+        // «Otra regla» elegida en la cotización: se conserva con su código.
+        if (mode === "rule" && line.price_rule_codigo) return mode;
         return "auto";
+    }
+
+    /** rule_mode / rule_codigo para cotizar con el modo de precio de la línea. */
+    function setRuleModePayload(payload, mode, ruleCodigo) {
+        if (mode === "std" || mode === "manual") {
+            payload.rule_mode = mode;
+        } else if (mode === "rule" && ruleCodigo) {
+            payload.rule_mode = "rule";
+            payload.rule_codigo = String(ruleCodigo);
+        } else {
+            payload.rule_mode = "auto";
+        }
+        return payload;
+    }
+
+    function familyGroupRuleCodigo(grupoId, lines) {
+        lines = lines || getLines() || [];
+        var codigo = null;
+        familyLineIndexes(grupoId, lines).forEach(function (idx) {
+            if (codigo) return;
+            if (linePriceMode(lines[idx]) === "rule") codigo = lines[idx].price_rule_codigo;
+        });
+        return codigo;
     }
 
     function familyGroupPriceMode(grupoId, lines) {
@@ -1073,6 +1122,9 @@
                 line.price_ref = null;
                 line.price_total = null;
             }
+            line.price_rule_codigo = mode === "rule" && fields.price_rule_codigo
+                ? String(fields.price_rule_codigo)
+                : null;
         });
     }
 
@@ -1080,6 +1132,7 @@
         if (!target || !source) return;
         var mode = linePriceMode(source);
         target.price_mode = mode;
+        target.price_rule_codigo = mode === "rule" ? source.price_rule_codigo : null;
         target.price_ref = mode === "ref" && source.price_ref != null ? Number(source.price_ref) : null;
         target.price_total = mode === "manual" && source.price_total != null ? Number(source.price_total) : null;
         if (mode === "manual" && source.unit_price != null) {
@@ -1120,7 +1173,7 @@
     }
 
     function setLineModalMode(mode) {
-        if (mode !== "manual" && mode !== "ref" && mode !== "std") mode = "auto";
+        if (mode !== "manual" && mode !== "ref" && mode !== "std" && mode !== "rule") mode = "auto";
         state.lineModal.mode = mode;
         if (billEls.lineModeManual) {
             billEls.lineModeManual.checked = mode === "manual";
@@ -1137,6 +1190,13 @@
                 state.lineModal.totalGross = round2((Number(state.lineModal.unitGross) || 0) * scale);
             }
             refreshLineModalFields(true);
+        } else if (mode === "rule") {
+            updateOtherRuleUi();
+            if (state.lineModal.otherRule) {
+                scheduleLineModalPreview();
+            } else if (rulePicker) {
+                rulePicker.focus();
+            }
         } else if (mode === "ref" || mode === "auto" || mode === "std") {
             scheduleLineModalPreview();
         } else {
@@ -1149,6 +1209,7 @@
         var editablePrice = lm.mode === "manual";
         var showPref = lm.mode === "ref";
         if (billEls.linePrefField) billEls.linePrefField.hidden = !showPref;
+        if (billEls.lineRulePicker) billEls.lineRulePicker.hidden = lm.mode !== "rule";
         if (billEls.lineUnit) billEls.lineUnit.disabled = !editablePrice;
         if (billEls.lineTotal) billEls.lineTotal.disabled = !editablePrice;
         if (billEls.linePref) billEls.linePref.disabled = !showPref;
@@ -1225,13 +1286,7 @@
     }
 
     function updateLineModalFinalAmount() {
-        if (!billEls.lineFinalAmount) return;
-        var draft = lineModalDraftForDiscount();
-        if (!draft) {
-            billEls.lineFinalAmount.value = formatMoney(0);
-            return;
-        }
-        billEls.lineFinalAmount.value = formatMoney(lineFigures(draft).lineNet);
+        refreshDiscountModule(false);
     }
 
     function updateLineModalRuleInfo() {
@@ -1294,11 +1349,11 @@
                 state.lineModal.totalGross = round2((Number(state.lineModal.unitGross) || 0) * scale);
             }
             refreshLineModalFields(false);
-            syncLineModalDiscountFields("price_discount", false);
+            refreshDiscountModule(false);
             return;
         }
         scheduleLineModalPreview();
-        syncLineModalDiscountFields("price_discount", false);
+        refreshDiscountModule(false);
     }
 
     function onLineModalPrefInput(format) {
@@ -1319,7 +1374,7 @@
         state.lineModal.totalGross = round2(state.lineModal.unitGross * scale);
         if (format) refreshLineModalFields(true);
         else refreshLineModalFields(false);
-        syncLineModalDiscountFields("price_discount", false);
+        refreshDiscountModule(false);
     }
 
     function onLineModalTotalInput(format) {
@@ -1330,10 +1385,11 @@
         state.lineModal.unitGross = scale > 0 ? round4(state.lineModal.totalGross / scale) : 0;
         if (format) refreshLineModalFields(true);
         else refreshLineModalFields(false);
-        syncLineModalDiscountFields("price_discount", false);
+        refreshDiscountModule(false);
     }
 
-    function lineModalDraftForDiscount() {
+    /** Copia de la línea con la cantidad/precio del modal (el módulo Descuentos le pone el fijado). */
+    function lineModalBaseDraft() {
         var line = (getLines() || [])[state.lineModal.index];
         if (!line) return null;
         var draft = {};
@@ -1352,83 +1408,36 @@
         } else if (state.lineModal.unitGross != null) {
             draft.unit_price = Number(state.lineModal.unitGross) || Number(line.unit_price) || 0;
         }
-        draft.price_discount = clampRate(parseClNumber(billEls.linePriceDiscount ? billEls.linePriceDiscount.value : "0"));
-        draft.margin_discount = clampRate(parseClNumber(billEls.lineMarginDiscount ? billEls.lineMarginDiscount.value : "0"));
-        if (billEls.lineDiscountAmount) {
-            draft.discount_amount = round2(parseClNumber(billEls.lineDiscountAmount.value));
-        } else {
-            draft.discount_amount = round2(Number(line.discount_amount) || 0);
-        }
         return draft;
     }
 
-    function syncLineModalDiscountFields(source, format) {
-        var draft = lineModalDraftForDiscount();
-        if (!draft) return;
-        if (source === "discount_amount") {
-            draft.discount_amount = round2(parseClNumber(billEls.lineDiscountAmount ? billEls.lineDiscountAmount.value : "0"));
-            syncEquivalentDiscounts(draft, "discount_amount");
-        } else if (source === "margin_discount") {
-            draft.margin_discount = clampRate(parseClNumber(billEls.lineMarginDiscount ? billEls.lineMarginDiscount.value : "0"));
-            syncEquivalentDiscounts(draft, "margin_discount");
+    /** Copia de la línea con la cantidad/precio del modal y el valor fijado del módulo. */
+    function lineModalDraftForDiscount() {
+        return discountModule ? discountModule.draft() : null;
+    }
+
+    /** Pinta el módulo Descuentos. force=true también reescribe el campo con foco. */
+    function refreshDiscountModule(force) {
+        if (discountModule) discountModule.refresh(force);
+    }
+
+    /* «Otra regla»: el buscador (sugerencias y lupa) está en line-discounts.js. */
+
+    function updateOtherRuleUi() {
+        if (rulePicker) rulePicker.render(state.lineModal.otherRule, state.lineModal.ruleMissing);
+    }
+
+    function chooseOtherRule(rule) {
+        if (!rule || !rule.codigo) return;
+        var lm = state.lineModal;
+        lm.otherRule = { codigo: String(rule.codigo), nombre: String(rule.nombre || "") };
+        lm.ruleMissing = false;
+        if (lm.mode !== "rule") {
+            setLineModalMode("rule");
         } else {
-            draft.price_discount = clampRate(parseClNumber(billEls.linePriceDiscount ? billEls.linePriceDiscount.value : "0"));
-            syncEquivalentDiscounts(draft, "price_discount");
+            updateOtherRuleUi();
+            scheduleLineModalPreview();
         }
-        state.lineModal.syncing = true;
-        if (billEls.linePriceDiscount && (format || source !== "price_discount" || document.activeElement !== billEls.linePriceDiscount)) {
-            billEls.linePriceDiscount.value = formatPlain(draft.price_discount || 0);
-        }
-        if (billEls.lineMarginDiscount && (format || source !== "margin_discount" || document.activeElement !== billEls.lineMarginDiscount)) {
-            if (lineHasUnitCost(draft)) {
-                billEls.lineMarginDiscount.value = formatPlain(draft.margin_discount || 0);
-            } else {
-                billEls.lineMarginDiscount.value = "";
-            }
-        }
-        if (billEls.lineDiscountAmount && (format || source !== "discount_amount" || document.activeElement !== billEls.lineDiscountAmount)) {
-            billEls.lineDiscountAmount.value = formatPlain(draft.discount_amount || 0);
-        }
-        state.lineModal.syncing = false;
-        updateLineModalDiscountHint(draft);
-        updateLineModalFinalAmount();
-    }
-
-    function onLineModalDiscountInput(source, format) {
-        if (state.lineModal.syncing) return;
-        var draft = lineModalDraftForDiscount();
-        if (source === "margin_discount" && draft && !lineHasUnitCost(draft)) {
-            updateLineModalDiscountHint(draft);
-            return;
-        }
-        syncLineModalDiscountFields(source, !!format);
-    }
-
-    function updateLineModalDiscountHint(draft) {
-        var line = draft || lineModalDraftForDiscount() || {};
-        var hasCost = lineHasUnitCost(line);
-        if (billEls.lineMarginDiscount) {
-            billEls.lineMarginDiscount.hidden = !hasCost;
-            billEls.lineMarginDiscount.disabled = !hasCost;
-        }
-        if (billEls.lineMarginNa) {
-            billEls.lineMarginNa.hidden = hasCost;
-        }
-        if (billEls.lineMarginHelp) {
-            billEls.lineMarginHelp.hidden = hasCost;
-            billEls.lineMarginHelp.title = "Costo no encontrado";
-        }
-        if (!billEls.lineDiscountHint) return;
-        if (!hasCost) {
-            billEls.lineDiscountHint.textContent = "Sin costo guardado: solo se puede editar el dscto precio.";
-            return;
-        }
-        var bases = discountBases(line);
-        if (!(bases.marginMoney > 0)) {
-            billEls.lineDiscountHint.textContent = "Sin margen para equivaler.";
-            return;
-        }
-        billEls.lineDiscountHint.textContent = "Dscto precio, margen y monto son el mismo descuento (equivalentes).";
     }
 
     function scheduleLineModalPreview() {
@@ -1481,6 +1490,8 @@
             family_qty: String(familyQty),
             rule_mode: state.lineModal.mode === "std" ? "std" : (state.lineModal.mode === "manual" ? "manual" : "auto")
         };
+        setRuleModePayload(payload, state.lineModal.mode,
+            state.lineModal.otherRule ? state.lineModal.otherRule.codigo : null);
         if (state.lineModal.mode === "ref") {
             payload.rule_mode = "auto";
             var pref = Number(state.lineModal.priceRef);
@@ -1515,6 +1526,12 @@
         lm.ruleCodigo = data.assigned_rule_codigo || (data.pricing && data.pricing.assigned_rule_codigo) || null;
         lm.ruleNombre = data.rule_nombre || (data.pricing && data.pricing.rule_nombre) || null;
         lm.stdRule = data.std_rule || (data.pricing && data.pricing.std_rule) || null;
+        lm.ruleMissing = lm.mode === "rule" && !!(data.rule_missing || (data.pricing && data.pricing.rule_missing));
+        if (lm.mode === "rule" && lm.otherRule && !lm.otherRule.nombre) {
+            var chosenName = data.rule_nombre || (data.pricing && data.pricing.rule_nombre) || "";
+            if (!lm.ruleMissing && chosenName) lm.otherRule.nombre = chosenName;
+        }
+        updateOtherRuleUi();
         lm.hasRule = !!(data.has_rule || (data.pricing && data.pricing.has_rule) || ruleAdjusted || lm.ruleCodigo
             || (data.unit_price != null && lm.catalogP != null && Number(data.unit_price) !== Number(lm.catalogP)));
         if (ruleAdjusted && ruleTotal != null) lm.ruleTotal = ruleTotal;
@@ -1558,7 +1575,7 @@
         } else {
             if (billEls.lineModeManualWrap) billEls.lineModeManualWrap.hidden = false;
             if (billEls.lineModeRadios) billEls.lineModeRadios.hidden = true;
-            if (lm.mode === "ref" || lm.mode === "std") lm.mode = "auto";
+            if (lm.mode === "ref" || lm.mode === "std" || lm.mode === "rule") lm.mode = "auto";
         }
         updateRuleModeLabels();
         if (billEls.lineModeManual) billEls.lineModeManual.checked = lm.mode === "manual";
@@ -1602,6 +1619,11 @@
         lm.index = index;
         lm.taxView = "bruto";
         lm.mode = linePriceMode(line);
+        // «Otra regla»: la que trae la línea (de la cotización o elegida aquí); se puede cambiar.
+        lm.otherRule = lm.mode === "rule" ? { codigo: String(line.price_rule_codigo), nombre: "" } : null;
+        lm.ruleMissing = false;
+        if (rulePicker) rulePicker.reset(lm.otherRule);
+        updateOtherRuleUi();
         lm.hasRule = false;
         lm.isFamily = !!lineGrupoId(line);
         lm.hasLocalProduct = !!(line.producto_base_id);
@@ -1640,19 +1662,8 @@
             var pack = presentationLabel(line);
             billEls.lineQtyHint.textContent = pack || "";
         }
-        if (billEls.linePriceDiscount) {
-            billEls.linePriceDiscount.value = formatPlain(line.price_discount || 0);
-        }
-        if (billEls.lineMarginDiscount) {
-            billEls.lineMarginDiscount.value = lineHasUnitCost(line)
-                ? formatPlain(line.margin_discount || 0)
-                : "";
-        }
-        if (billEls.lineDiscountAmount) {
-            billEls.lineDiscountAmount.value = formatPlain(line.discount_amount || 0);
-        }
-        updateLineModalDiscountHint(line);
-        updateLineModalFinalAmount();
+        // Valor fijado de la línea; el módulo queda minimizado (el resumen muestra el descuento).
+        if (discountModule) discountModule.open(line);
         setLineTaxView("bruto");
         if (billEls.lineByAmountResult) billEls.lineByAmountResult.innerHTML = "";
         if (billEls.lineMonto) billEls.lineMonto.value = "";
@@ -1670,6 +1681,10 @@
             state.lineModal.debounceTimer = null;
         }
         state.lineModal.index = -1;
+        if (rulePicker) {
+            rulePicker.hideSuggest();
+            rulePicker.closeModal();
+        }
         if (!billEls.lineModal) return;
         billEls.lineModal.hidden = true;
         billEls.lineModal.setAttribute("aria-hidden", "true");
@@ -1694,39 +1709,13 @@
             line.description = descEdited;
         }
         var mode = state.lineModal.mode;
-        var draft = lineModalDraftForDiscount();
-        if (draft) {
-            var priceSrc = clampRate(parseClNumber(billEls.linePriceDiscount ? billEls.linePriceDiscount.value : "0"));
-            var marginSrc = clampRate(parseClNumber(billEls.lineMarginDiscount ? billEls.lineMarginDiscount.value : "0"));
-            var amountSrc = round2(parseClNumber(billEls.lineDiscountAmount ? billEls.lineDiscountAmount.value : "0"));
-            if (document.activeElement === billEls.linePriceDiscount) {
-                draft.price_discount = priceSrc;
-                syncEquivalentDiscounts(draft, "price_discount");
-            } else if (document.activeElement === billEls.lineMarginDiscount) {
-                draft.margin_discount = marginSrc;
-                syncEquivalentDiscounts(draft, "margin_discount");
-            } else if (amountSrc > 0) {
-                draft.discount_amount = amountSrc;
-                syncEquivalentDiscounts(draft, "discount_amount");
-            } else if (priceSrc > 0) {
-                draft.price_discount = priceSrc;
-                syncEquivalentDiscounts(draft, "price_discount");
-            } else if (marginSrc > 0) {
-                draft.margin_discount = marginSrc;
-                syncEquivalentDiscounts(draft, "margin_discount");
-            } else {
-                draft.price_discount = 0;
-                draft.margin_discount = 0;
-                draft.discount_amount = 0;
-            }
-            line.price_discount = clampRate(draft.price_discount);
-            line.margin_discount = lineHasUnitCost(draft) ? clampRate(draft.margin_discount) : 0;
-            line.discount_amount = draft.discount_amount || 0;
-        } else {
-            line.price_discount = 0;
-            line.margin_discount = 0;
-            syncDiscountAmount(line, "price_discount");
+        if (mode === "rule" && !state.lineModal.otherRule) {
+            billSetMessage("Elige la regla en «Otra regla» (escribe su código o usa la lupa).", true);
+            if (rulePicker) rulePicker.focus();
+            return;
         }
+        // Valor fijado y monto derivado (con la cantidad del modal); la tabla lo recalcula después.
+        if (discountModule) discountModule.writeTo(line);
         line.quantity = qty;
 
         var gid = lineGrupoId(line);
@@ -1744,6 +1733,8 @@
                 applyPriceModeToGroup(gid, "ref", { price_ref: priceRef });
             } else if (mode === "std") {
                 applyPriceModeToGroup(gid, "std", {});
+            } else if (mode === "rule") {
+                applyPriceModeToGroup(gid, "rule", { price_rule_codigo: state.lineModal.otherRule.codigo });
             } else {
                 applyPriceModeToGroup(gid, "auto", {});
             }
@@ -1756,6 +1747,7 @@
         }
 
         line.price_mode = mode;
+        line.price_rule_codigo = mode === "rule" ? state.lineModal.otherRule.codigo : null;
         if (mode === "manual") {
             line.unit_price = unitPrice;
             line.price_total = round2(unitPrice * lineBillableUnits(line));
@@ -2006,6 +1998,7 @@
             local_only: !member.product_id,
             family: fam,
             price_mode: linePriceMode(source),
+            price_rule_codigo: linePriceMode(source) === "rule" ? source.price_rule_codigo : null,
             price_ref: source.price_ref != null ? source.price_ref : null,
             price_total: source.price_total != null ? source.price_total : null
         });
@@ -2218,6 +2211,7 @@
             family_qty: String(familyQty),
             rule_mode: mode === "std" ? "std" : (mode === "manual" ? "manual" : "auto")
         };
+        setRuleModePayload(payload, mode, familyGroupRuleCodigo(grupoId, lines));
         if (mode === "ref") {
             payload.rule_mode = "auto";
             var pref = null;
@@ -2248,6 +2242,7 @@
                 var line = lines[idx];
                 if (!line) return;
                 line.price_mode = mode;
+                line.price_rule_codigo = mode === "rule" ? (payload.rule_codigo || null) : null;
                 if (mode === "ref") {
                     line.price_ref = payload.p_ref != null ? Number(payload.p_ref) : line.price_ref;
                     line.price_total = null;
@@ -2338,6 +2333,7 @@
             family_qty: String(packs2 * upp2),
             rule_mode: mode === "std" ? "std" : "auto"
         };
+        setRuleModePayload(payload, mode, line.price_rule_codigo);
         if (mode === "ref" && line.price_ref != null && Number(line.price_ref) > 0) {
             payload.p_ref = String(line.price_ref);
             payload.rule_mode = "auto";
@@ -2445,6 +2441,8 @@
             others_units: String(others),
             rule_mode: mode === "std" ? "std" : "auto"
         };
+        setRuleModePayload(payload, mode === "manual" ? "auto" : mode,
+            state.lineModal.otherRule ? state.lineModal.otherRule.codigo : null);
         if (mode === "ref") {
             var pref = Number(state.lineModal.priceRef);
             if (!(pref > 0) && billEls.linePref) {
@@ -2577,6 +2575,21 @@
       lineModeAutoLabel: g("bill-line-mode-auto-label"),
       lineModeStdWrap: g("bill-line-mode-std-wrap"),
       lineModeStdLabel: g("bill-line-mode-std-label"),
+      lineRulePicker: g("bill-line-rule-picker"),
+      lineRuleInput: g("bill-line-rule-input"),
+      lineRuleSearchBtn: g("bill-line-rule-search-btn"),
+      lineRuleSuggest: g("bill-line-rule-suggest"),
+      lineRuleChosen: g("bill-line-rule-chosen"),
+      ruleSearchModal: g("bill-rule-search-modal"),
+      ruleSearchQ: g("bill-rule-search-q"),
+      ruleSearchHint: g("bill-rule-search-hint"),
+      ruleSearchResults: g("bill-rule-search-results"),
+      lineDmFactor: g("bill-dm-factor"),
+      lineDmFinalUnit: g("bill-dm-final-unit"),
+      lineDmCost: g("bill-dm-cost"),
+      lineDmFactorBefore: g("bill-dm-factor-before"),
+      lineDiscounts: g("bill-line-discounts"),
+      lineDiscountsBrief: g("bill-line-discounts-brief"),
       lineFamilyNote: g("bill-line-family-note"),
       lineRuleInfo: g("bill-line-rule-info"),
       lineByAmount: g("bill-line-by-amount"),
@@ -2590,9 +2603,6 @@
       linePrefField: g("bill-line-pref-field"),
       lineUnitField: g("bill-line-unit-field"),
       lineTotalField: g("bill-line-total-field"),
-      lineMarginField: g("bill-line-margin-field"),
-      lineMarginNa: g("bill-line-margin-na"),
-      lineMarginHelp: g("bill-line-margin-help"),
       lineTaxNeto: g("bill-line-tax-neto"),
       lineTaxBruto: g("bill-line-tax-bruto"),
       net: g("bill-boleta-net"),
@@ -2616,9 +2626,31 @@
     renderBoletaEditorTotals();
   }
 
+  /**
+   * Totales como los emite el SII (Riverso_Billing_Totals): cada línea en pesos enteros,
+   * neto entero por línea afecta e IVA = bruto entero − neto.
+   */
+  function siiTotals() {
+    var net = 0, exento = 0, iva = 0, total = 0;
+    (getLines() || []).forEach(function (line) {
+      if (!line) return;
+      var sii = LD.siiLine(Number(lineFigures(line).lineNet) || 0, line.quantity, line.afecto);
+      total += sii.gross;
+      if (line.afecto !== false) {
+        net += sii.net;
+        iva += sii.tax;
+      } else {
+        exento += sii.gross;
+      }
+    });
+    return { net_amount: net, exempt_amount: exento, tax_amount: iva, total_amount: total };
+  }
+
   function renderBoletaEditorTotals() {
     (getLines() || []).forEach(function (line) {
       if (!line) return;
+      // Valor fijado: se mantiene lo que escribió el vendedor (%, unitario final, etc.).
+      if (applyDiscountAnchor(line)) return;
       var amount = round2(Number(line.discount_amount) || 0);
       var p = clampRate(line.price_discount);
       var m = clampRate(line.margin_discount);
@@ -2628,29 +2660,21 @@
       else if (m > 0) syncEquivalentDiscounts(line, "margin_discount");
     });
     var totals = calculate(getLines() || []);
-    var net = 0, exento = 0, iva = 0, total = 0;
     (getLines() || []).forEach(function (line) {
-      var fig = lineFigures(line);
-      var lineBruto = Number(fig.lineNet) || 0;
-      total += lineBruto;
-      if (line.afecto !== false) {
-        var lineNet = Math.round((lineBruto / BILL_IVA_FACTOR) * 100) / 100;
-        net += lineNet;
-        iva += Math.round((lineBruto - lineNet) * 100) / 100;
-      } else {
-        exento += lineBruto;
-      }
+      // Exacto (con centavos): el servidor redondea cada línea al emitir.
+      var lineBruto = Number(lineFigures(line).lineNet) || 0;
       var qty = Number(line.quantity) || 1;
       line.unit_price_bruto = qty > 0 ? Math.round((lineBruto / qty) * 1e6) / 1e6 : 0;
       line.line_total_bruto = Math.round(lineBruto * 100) / 100;
     });
-    if (billEls.net) billEls.net.textContent = formatMoney(Math.round(net * 100) / 100);
+    var sii = siiTotals();
+    if (billEls.net) billEls.net.textContent = formatMoney(sii.net_amount);
     var exEl = document.getElementById("bill-boleta-exento");
-    if (exEl) exEl.textContent = formatMoney(Math.round(exento * 100) / 100);
+    if (exEl) exEl.textContent = formatMoney(sii.exempt_amount);
     var ivaEl = document.getElementById("bill-boleta-iva");
-    if (ivaEl) ivaEl.textContent = formatMoney(Math.round(iva * 100) / 100);
+    if (ivaEl) ivaEl.textContent = formatMoney(sii.tax_amount);
     var totEl = document.getElementById("bill-boleta-total");
-    if (totEl) totEl.textContent = formatMoney(Math.round(total * 100) / 100);
+    if (totEl) totEl.textContent = formatMoney(sii.total_amount);
     if (billEls.discount) billEls.discount.textContent = formatMoney(totals.discount_total);
     if (billEls.margin) billEls.margin.textContent = formatPercent(totals.margin_percent);
     if (billEls.profit) {
@@ -2694,6 +2718,7 @@
         local_only: !!product.local_only || !product.product_id,
         _family: fam,
         price_mode: product.price_mode || "auto",
+        price_rule_codigo: product.price_rule_codigo || null,
         price_ref: product.price_ref != null ? Number(product.price_ref) : null,
         price_total: product.price_total != null ? Number(product.price_total) : null,
         afecto: product.afecto !== false
@@ -2727,10 +2752,12 @@
       price_mode: "manual", price_ref: null, price_total: null,
       afecto: data.afecto !== false
     };
-    if (priceDiscount > 0) {
-      syncEquivalentDiscounts(line, "price_discount");
-    }
     getLines().push(line);
+    if (priceDiscount > 0) {
+      line.discount_anchor = "price_pct";
+      line.discount_anchor_value = priceDiscount;
+      applyDiscountAnchor(line);
+    }
     renderBoletaEditor();
     scheduleDraftSave(0);
   }
@@ -2804,15 +2831,57 @@
     if (billEls.linePref) billEls.linePref.addEventListener("input", onLineModalPrefInput);
     if (billEls.lineUnit) billEls.lineUnit.addEventListener("input", onLineModalUnitInput);
     if (billEls.lineTotal) billEls.lineTotal.addEventListener("input", onLineModalTotalInput);
-    if (billEls.linePriceDiscount) {
-      billEls.linePriceDiscount.addEventListener("input", function () { syncLineModalDiscountFields("price_discount"); });
-    }
-    if (billEls.lineMarginDiscount) {
-      billEls.lineMarginDiscount.addEventListener("input", function () { syncLineModalDiscountFields("margin_discount"); });
-    }
-    if (billEls.lineDiscountAmount) {
-      billEls.lineDiscountAmount.addEventListener("input", function () { syncLineModalDiscountFields("discount_amount"); });
-    }
+    // Módulo Descuentos (valor fijado, 4 decimales); avisa el monto entero que se emitirá.
+    discountModule = LD.createModule({
+      els: {
+        price_pct: billEls.linePriceDiscount,
+        margin_pct: billEls.lineMarginDiscount,
+        amount: billEls.lineDiscountAmount,
+        factor: billEls.lineDmFactor,
+        final_unit: billEls.lineDmFinalUnit,
+        final_total: billEls.lineFinalAmount,
+        cost: billEls.lineDmCost,
+        factorBefore: billEls.lineDmFactorBefore,
+        details: billEls.lineDiscounts,
+        brief: billEls.lineDiscountsBrief,
+        status: billEls.lineDiscountHint
+      },
+      baseDraft: lineModalBaseDraft,
+      bases: anchorBases,
+      figures: lineFigures,
+      // Mismo precio de lista que muestra la tabla (unitario de la regla, no el prorrateo).
+      listUnit: function (line) { return Number(line.unit_price) || 0; },
+      toView: brutoToView,
+      toBruto: viewToBruto,
+      parse: parseClNumber,
+      formatPercent: formatPercent,
+      sii: true
+    });
+    // «Otra regla»: se puede elegir otra para corregir la de la cotización.
+    rulePicker = LD.createRulePicker({
+      els: {
+        input: billEls.lineRuleInput,
+        searchBtn: billEls.lineRuleSearchBtn,
+        suggest: billEls.lineRuleSuggest,
+        chosen: billEls.lineRuleChosen,
+        modal: billEls.ruleSearchModal,
+        modalQ: billEls.ruleSearchQ,
+        modalHint: billEls.ruleSearchHint,
+        modalResults: billEls.ruleSearchResults
+      },
+      search: function (q) {
+        return post(cfgProxy.actions.priceRulesSearch || "riverso_billing_price_rules_search", { q: q });
+      },
+      onChoose: chooseOtherRule
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key !== "Escape") return;
+      // El buscador de reglas se abre sobre el modal de línea: se cierra primero.
+      if (rulePicker && rulePicker.isModalOpen()) {
+        event.preventDefault();
+        rulePicker.closeModal();
+      }
+    });
   }
 
   function init(hostApi) {
@@ -2828,26 +2897,7 @@
     addManualLine: addManualLine,
     recalcAllFamilyGroups: recalcAllFamilyGroups,
     refreshLineStock: refreshLineStock,
-    getCommercialTotals: function () {
-      var net = 0, exento = 0, iva = 0, total = 0;
-      (getLines() || []).forEach(function (line) {
-        var fig = lineFigures(line);
-        var lineBruto = Number(fig.lineNet) || 0;
-        total += lineBruto;
-        if (line.afecto !== false) {
-          var lineNet = Math.round((lineBruto / BILL_IVA_FACTOR) * 100) / 100;
-          net += lineNet;
-          iva += Math.round((lineBruto - lineNet) * 100) / 100;
-        } else {
-          exento += lineBruto;
-        }
-      });
-      return {
-        net_amount: Math.round(net * 100) / 100,
-        exempt_amount: Math.round(exento * 100) / 100,
-        tax_amount: Math.round(iva * 100) / 100,
-        total_amount: Math.round(total * 100) / 100
-      };
-    }
+    // Totales del documento como los emite el SII (cobros y pagos usan este total).
+    getCommercialTotals: siiTotals
   };
 })(window);

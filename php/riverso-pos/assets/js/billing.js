@@ -1032,7 +1032,9 @@
       );
       return;
     }
-    var template = kind === "product" ? "product" : "family";
+    // Carta por familia / producto, con o sin detalle (columna Valor c/Dsc).
+    var templates = ["family", "product", "family_detail", "product_detail"];
+    var template = templates.indexOf(kind) >= 0 ? kind : "family";
     var action = (cfg.actions && cfg.actions.previewHtml) || "riverso_billing_preview_html";
     showAlert("Generando carta…");
     post(action, Object.assign({}, payload, { template: template }))
@@ -1565,11 +1567,14 @@
         grupo_id: l.grupo_id || null,
         unit_cost: l.unit_cost != null ? l.unit_cost : null,
         price_mode: l.price_mode || "auto",
+        price_rule_codigo: l.price_rule_codigo || null,
         price_ref: l.price_ref != null ? l.price_ref : null,
         price_total: l.price_total != null ? l.price_total : null,
         price_discount: Number(l.price_discount) || 0,
         margin_discount: Number(l.margin_discount) || 0,
         discount_amount: Number(l.discount_amount) || 0,
+        discount_anchor: l.discount_anchor || null,
+        discount_anchor_value: l.discount_anchor_value != null ? Number(l.discount_anchor_value) : null,
         rule_total: l.rule_total != null ? l.rule_total : null,
         rule_adjusted: !!l.rule_adjusted,
         _rule_total: l._rule_total != null ? l._rule_total : (l.rule_adjusted ? l.rule_total : null),
@@ -2164,11 +2169,14 @@
             _family: l._family || l.family || {},
             unit_cost: l.unit_cost != null ? l.unit_cost : null,
             price_mode: l.price_mode || "auto",
+            price_rule_codigo: l.price_rule_codigo || null,
             price_ref: l.price_ref != null ? l.price_ref : null,
             price_total: l.price_total != null ? l.price_total : null,
             price_discount: Number(l.price_discount) || 0,
             margin_discount: Number(l.margin_discount) || 0,
             discount_amount: Number(l.discount_amount) || 0,
+            discount_anchor: l.discount_anchor || null,
+            discount_anchor_value: l.discount_anchor_value != null ? Number(l.discount_anchor_value) : null,
             rule_total: l.rule_adjusted ? l.rule_total : null,
             rule_adjusted: !!l.rule_adjusted,
             _rule_total: l.rule_adjusted && l.rule_total != null ? Number(l.rule_total) : null,

@@ -317,6 +317,54 @@ class Riverso_Folio_Price_Process_Service {
         return $out;
     }
 
+    /**
+     * Respuestas vigentes de una línea (para «Corregir» y «Ya respondido»).
+     * Familia sobre el producto de la línea; emparejamiento sobre el target unitario.
+     *
+     * @param array      $product resolve_item_product()
+     * @param int        $target_id
+     * @param array|null $emp_of  emparejamiento activo del target
+     * @return array
+     */
+    private function line_answers(array $product, $target_id, $emp_of) {
+        global $wpdb;
+        $pb_id = (int) ($product['producto_base_id'] ?? 0);
+        $fam = $wpdb->get_row($wpdb->prepare(
+            "SELECT g.id, g.codigo_grupo, g.nombre
+             FROM {$this->prefix()}equivalence_members em
+             INNER JOIN {$this->prefix()}equivalence_groups g ON g.id = em.grupo_id AND g.activo = 1
+             WHERE em.producto_base_id = %d AND em.activo = 1
+             ORDER BY (g.tipo_sustitucion = 'exacta') DESC, g.id ASC
+             LIMIT 1",
+            $pb_id
+        ), ARRAY_A);
+
+        $emp = [
+            'eligible' => false,
+            'decision' => '',
+            'id' => null,
+            'label' => '',
+        ];
+        if (class_exists('Riverso_Emparejamiento_Module') && (int) $target_id > 0) {
+            $emp_mod = Riverso_Emparejamiento_Module::get_instance();
+            $emp['eligible'] = $emp_mod->is_eligible((int) $target_id);
+            $emp['decision'] = (string) $emp_mod->get_decision((int) $target_id);
+            if ($emp_of) {
+                $emp['id'] = (int) $emp_of['id'];
+                $emp['label'] = trim((string) ($emp_of['codigo'] ?? '') . ' ' . (string) ($emp_of['nombre'] ?? ''));
+            }
+        }
+
+        return [
+            'familia' => [
+                'decision' => (string) ($product['familia_decision'] ?? ''),
+                'grupo_id' => $fam ? (int) $fam['id'] : null,
+                'label' => $fam ? trim((string) ($fam['codigo_grupo'] ?? '') . ' ' . (string) ($fam['nombre'] ?? '')) : '',
+            ],
+            'emparejamiento' => $emp,
+        ];
+    }
+
     private function resolve_price_target($producto_base_id) {
         $unit = $this->unit_service();
         $ctx = $unit ? $unit->resolve_family_unit_for_base($producto_base_id) : null;
@@ -3277,6 +3325,7 @@ class Riverso_Folio_Price_Process_Service {
             ]);
 
             // Emparejamiento activo de precios (para botón / confirmación de márgenes).
+            $emp_of = null;
             if (class_exists('Riverso_Emparejamiento_Module') && $target_id > 0) {
                 $emp_of = Riverso_Emparejamiento_Module::get_instance()->get_of_product($target_id);
                 if ($emp_of && !empty($emp_of['emparejar_precios'])) {
@@ -3285,6 +3334,7 @@ class Riverso_Folio_Price_Process_Service {
                     $line['emparejamiento_codigo'] = (string) ($emp_of['codigo'] ?? '');
                 }
             }
+            $line['answers'] = $this->line_answers($product, $target_id, $emp_of);
 
             foreach ($gates['blockers'] as $b) {
                 $b_item = (int) ($b['item_id'] ?? 0);

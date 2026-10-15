@@ -1361,6 +1361,8 @@
         );
 
         renderBlockers(data.blockers || []);
+        closeRpfFixMenu();
+        renderAnsweredPanel(data.lines || []);
         $('#rpf-complete').toggle(!!(canManage && data.can_complete));
         if (data.is_hybrid && data.can_complete) {
             $('#rpf-complete').text('Completar folio híbrido');
@@ -1517,13 +1519,7 @@
                         ' title="' + esc(ln.emparejamiento_nombre || ln.emparejamiento_codigo || 'Emparejamiento') + '">' +
                         'Precio emparejado</button>';
                 }
-                if (canLinkSku && (ln.sku || ln.unit_sku)) {
-                    saveBtn += ' <button type="button" class="button button-small rpf-search-link-open"' +
-                        ' data-item="' + ln.item_id + '"' +
-                        ' data-codigo="' + esc(ln.codigo_proveedor || '') + '"' +
-                        ' data-nombre="' + esc(ln.nombre || ln.descripcion || '') + '"' +
-                        ' data-current-sku="' + esc(ln.sku || ln.unit_sku || '') + '">Cambiar SKU</button>';
-                }
+                saveBtn += rpfFixMenuButton(ln);
             } else if (blocked) {
                 saveBtn = '<span class="description">' + esc(ln.block_reason || 'Bloqueado') + '</span>';
                 if (canLinkSku && (ln.block_reason || '') === 'Sin SKU') {
@@ -1589,15 +1585,8 @@
                         nombre: ln.nombre || ln.descripcion
                     });
                 }
-                // Si el SKU estaba mal, se corrige antes de responder preguntas de otro producto.
-                if (canLinkSku && (ln.sku || ln.unit_sku) && (ln.block_reason || '') !== 'Sin SKU') {
-                    saveBtn += ' <button type="button" class="button button-small rpf-search-link-open"' +
-                        ' data-item="' + ln.item_id + '"' +
-                        ' data-codigo="' + esc(ln.codigo_proveedor || '') + '"' +
-                        ' data-nombre="' + esc(ln.nombre || ln.descripcion || '') + '"' +
-                        ' data-current-sku="' + esc(ln.sku || ln.unit_sku || '') + '"' +
-                        ' title="¿El SKU no corresponde? Cambialo antes de responder">Cambiar SKU</button>';
-                }
+                // Si el SKU estaba mal, se corrige (desde Corregir) antes de responder preguntas de otro producto.
+                saveBtn += rpfFixMenuButton(ln);
             }
             if (confirmedHere && !blocked && !hybridOmitted) {
                 saveBtn += ' <span class="dashicons dashicons-yes" style="color:green;" title="Confirmado desde este folio"></span>';
@@ -1620,18 +1609,25 @@
                     saveBtn += '<div class="rpf-line-chips rpf-pu-chip-row"><span class="rpf-chip rpf-chip-purchase-units" title="Unidades reales por unidad facturada (respuesta guardada en el código del proveedor)">' +
                         esc(ln.codigo_proveedor || '') + ' = ' + esc(String(puFactor)) + ' u' +
                         (puFactor > 1 ? '' : ' (unidad real)') + '</span>';
-                    if (canManage && puAnswered) {
-                        saveBtn += ' ' + purchaseUnitsOpenButton({
-                            itemId: ln.item_id,
-                            factor: puFactor,
-                            codigo: ln.codigo_proveedor,
-                            sku: ln.sku,
-                            nombre: ln.nombre || ln.descripcion,
-                            change: true,
-                            label: 'Cambiar'
-                        });
-                    }
                     saveBtn += '</div>';
+                }
+                var puSug = puAnswered ? rpfPackSuggestion(ln) : null;
+                if (puSug) {
+                    saveBtn += '<div class="rpf-line-chips rpf-pu-chip-row"><span class="rpf-chip rpf-chip-warn">' +
+                        'Costo ' + esc((Math.round(puSug.ratio * 10) / 10).toLocaleString('es-CL')) +
+                        '× el anterior — ¿paquete de ' + puSug.n + '?</span>' +
+                        (canManage
+                            ? ' ' + purchaseUnitsOpenButton({
+                                itemId: ln.item_id,
+                                factor: puFactor,
+                                codigo: ln.codigo_proveedor,
+                                sku: ln.sku,
+                                nombre: ln.nombre || ln.descripcion,
+                                change: true,
+                                label: 'Revisar'
+                            })
+                            : '') +
+                        '</div>';
                 }
                 if (ln.purchase_units_cost_reconfirm) {
                     saveBtn += '<div class="rpf-line-chips"><span class="rpf-chip rpf-chip-warn">' +
@@ -4024,6 +4020,7 @@
     function backToList(opts) {
         rpfSession = null;
         rpfFacturaId = 0;
+        closeRpfFixMenu();
         closeRpfFleteModal();
         closeRpfFolioDock();
         $('#rpf-folio-dock').hide();
@@ -4516,6 +4513,293 @@
             html += '</div>';
         }
         return html;
+    }
+
+    /**
+     * Sugerencia de paquete: costo por unidad facturada ≈ N × costo anterior (N entero ≥ 2).
+     * Solo si hoy el código está en factor 1 y no es envase de familia.
+     *
+     * @return {{ratio:number, n:number, costo:number, anterior:number}|null}
+     */
+    function rpfPackSuggestion(ln) {
+        if (!ln || ln.purchase_units_family_pack || Number(ln.purchase_units_factor) > 1) {
+            return null;
+        }
+        var raw = rpfPickCostBase(ln.costo_folio_bases_raw || ln.costo_folio_bases, rpfCostMode,
+            ln.costo_folio_raw != null ? ln.costo_folio_raw : ln.costo_folio);
+        var ant = rpfLineCostAnterior(ln);
+        if (raw == null || ant == null || !(Number(ant) > 0) || !(Number(raw) > 0)) {
+            return null;
+        }
+        var ratio = Number(raw) / Number(ant);
+        var n = Math.round(ratio);
+        if (n < 2 || Math.abs(ratio - n) / n > 0.15) {
+            return null;
+        }
+        return { ratio: ratio, n: n, costo: Number(raw), anterior: Number(ant) };
+    }
+
+    function rpfPackSuggestionText(sug, iva) {
+        return 'El costo por unidad facturada (' + money(rpfCostDisplay(sug.costo, iva)) + ') es ' +
+            (Math.round(sug.ratio * 10) / 10).toLocaleString('es-CL') + '× el costo anterior (' +
+            money(rpfCostDisplay(sug.anterior, iva)) + '). ¿Es un paquete de ' + sug.n + '?';
+    }
+
+    /** Estado de unidades de compra de la línea: pending | answered | family_pack | none | later. */
+    function rpfPurchaseUnitsState(ln) {
+        if (ln.purchase_units_family_pack) {
+            return 'family_pack';
+        }
+        if (!ln.purchase_units_pp_id) {
+            return 'none';
+        }
+        if (ln.purchase_units_needs_confirm) {
+            return 'pending';
+        }
+        // El gate de unidades va después de familia: sin bloqueo (o bloqueada solo por
+        // emparejamiento, que va después) la pregunta ya se respondió.
+        if (!ln.blocked || Number(ln.purchase_units_factor) > 1
+            || ln.can_answer_emparejamiento || ln.can_assign_emparejamiento) {
+            return 'answered';
+        }
+        return 'later';
+    }
+
+    /**
+     * Pasos de la línea con su respuesta vigente, dónde se guarda y la acción para cambiarla.
+     * Lo usan el menú «Corregir» de la fila y el panel «Ya respondido en este folio».
+     */
+    function rpfAnswerItems(ln) {
+        var items = [];
+        if (!ln || ln.hybrid_omitted || !ln.producto_base_id) {
+            return items;
+        }
+        var code = String(ln.codigo_proveedor || '');
+        var nombre = ln.nombre || ln.descripcion || '';
+        var prov = (rpfSession && rpfSession.invoice && rpfSession.invoice.proveedor_nombre) || 'el proveedor';
+        var unitSku = ln.unit_sku || ln.sku || '';
+        var answers = ln.answers || {};
+
+        items.push({
+            key: 'sku',
+            label: 'SKU',
+            state: 'answered',
+            value: (code ? '<code>' + esc(code) + '</code> → ' : '') + '<code>' + esc(ln.sku || '—') + '</code>' +
+                (nombre ? ' <span class="description">' + esc(nombre) + '</span>' : ''),
+            where: 'el código ' + (code || '—') + ' de ' + prov + ' (este y los próximos folios)',
+            action: canLinkSku
+                ? '<button type="button" class="button button-small rpf-search-link-open"' +
+                    ' data-item="' + ln.item_id + '"' +
+                    ' data-codigo="' + esc(code) + '"' +
+                    ' data-nombre="' + esc(nombre) + '"' +
+                    ' data-current-sku="' + esc(ln.sku || ln.unit_sku || '') + '">Cambiar SKU</button>'
+                : ''
+        });
+
+        var fam = answers.familia || {};
+        var famItem = {
+            key: 'familia',
+            label: 'Familia',
+            where: 'el producto ' + (ln.sku || '—') + ' (todos los folios)',
+            action: ''
+        };
+        if (fam.grupo_id) {
+            famItem.state = 'answered';
+            famItem.value = 'En familia <strong>' + esc(fam.label || ('#' + fam.grupo_id)) + '</strong>';
+            if (ln.es_familia_unitaria && ln.grupo_id) {
+                famItem.action = '<button type="button" class="button button-small rpf-family"' +
+                    ' data-grupo="' + ln.grupo_id + '" data-item="' + ln.item_id + '">Ver familia</button>';
+            }
+        } else if (fam.decision === 'no_requiere') {
+            famItem.state = 'answered';
+            famItem.value = 'No requiere (queda solo)';
+            if (canAnswerFamily) {
+                famItem.action = '<button type="button" class="button button-small rpf-answer-family-open"' +
+                    ' data-producto="' + ln.producto_base_id + '"' +
+                    ' data-decision="no_requiere"' +
+                    ' data-sku="' + esc(ln.sku || '') + '"' +
+                    ' data-nombre="' + esc(nombre) + '">Cambiar</button>';
+            }
+        } else {
+            famItem.state = 'pending';
+            famItem.value = fam.decision === 'requiere' ? 'Sí — falta asignar familia' : 'Sin responder';
+        }
+        items.push(famItem);
+
+        var puState = rpfPurchaseUnitsState(ln);
+        var factor = Number(ln.purchase_units_factor) > 1 ? Number(ln.purchase_units_factor) : 1;
+        var puItem = {
+            key: 'unidades',
+            label: 'Unidades de compra',
+            state: puState,
+            where: 'el código ' + (code || '—') + ' de ' + prov + ' (folios y recepciones)',
+            action: ''
+        };
+        if (puState === 'family_pack') {
+            puItem.value = 'Envase de familia' + (ln.pack_qty ? ' ×' + esc(fmtQty(ln.pack_qty)) : '') +
+                ' · costo por unidad facturada';
+        } else if (puState === 'none') {
+            puItem.value = 'Sin código de proveedor vinculado';
+        } else if (puState === 'pending') {
+            puItem.value = 'Pendiente de responder';
+        } else if (puState === 'later') {
+            puItem.value = 'Se pregunta después de resolver la familia';
+        } else {
+            puItem.value = factor > 1
+                ? ('No: cada unidad facturada son <strong>' + esc(String(factor)) + '</strong> unidades')
+                : 'Sí, la cantidad facturada es la unidad real';
+            var sug = rpfPackSuggestion(ln);
+            if (sug) {
+                puItem.value += '<div class="rpf-fix-alert">' + esc(rpfPackSuggestionText(sug, ln.iva_tipo || 'afecto')) + '</div>';
+            }
+            if (canManage) {
+                puItem.action = purchaseUnitsOpenButton({
+                    itemId: ln.item_id,
+                    factor: factor,
+                    codigo: code,
+                    sku: ln.sku,
+                    nombre: nombre,
+                    change: true,
+                    label: 'Cambiar'
+                });
+            }
+        }
+        items.push(puItem);
+
+        var emp = answers.emparejamiento || {};
+        var empItem = {
+            key: 'emparejamiento',
+            label: 'Emparejamiento',
+            where: 'el producto unitario ' + (unitSku || '—') + ' (todos los folios)',
+            action: ''
+        };
+        if (!emp.eligible) {
+            empItem.state = 'none';
+            empItem.value = 'No aplica';
+        } else if (emp.id) {
+            empItem.state = 'answered';
+            empItem.value = 'En <strong>' + esc(emp.label || ('#' + emp.id)) + '</strong>';
+        } else if (emp.decision === 'no_requiere') {
+            empItem.state = 'answered';
+            empItem.value = 'No requiere';
+            if (canManageEmparejamientos && ln.target_id) {
+                empItem.action = '<button type="button" class="button button-small rpf-answer-emp-open"' +
+                    ' data-target="' + ln.target_id + '"' +
+                    ' data-decision="no_requiere"' +
+                    ' data-sku="' + esc(unitSku) + '"' +
+                    ' data-nombre="' + esc(nombre) + '">Cambiar</button>';
+            }
+        } else {
+            empItem.state = 'pending';
+            empItem.value = emp.decision === 'requiere' ? 'Sí — falta asignar' : 'Sin responder';
+        }
+        items.push(empItem);
+        return items;
+    }
+
+    function rpfAnswerItemsTable(items) {
+        var html = '<table class="rpf-fix-table"><tbody>';
+        items.forEach(function (it) {
+            html += '<tr class="rpf-fix-' + esc(it.state || '') + '">' +
+                '<th>' + esc(it.label) + '</th>' +
+                '<td><div>' + it.value + '</div>' +
+                '<div class="description rpf-fix-where">Se guarda en ' + esc(it.where) + '</div></td>' +
+                '<td class="rpf-fix-action">' + (it.action || '') + '</td>' +
+                '</tr>';
+        });
+        return html + '</tbody></table>';
+    }
+
+    function rpfFixMenuButton(ln) {
+        if (!ln || ln.hybrid_omitted || !ln.producto_base_id) {
+            return '';
+        }
+        return ' <button type="button" class="button button-small rpf-fix-open" data-item="' + ln.item_id + '"' +
+            ' aria-haspopup="dialog" title="Ver y corregir las respuestas de esta línea">Corregir ▾</button>';
+    }
+
+    function closeRpfFixMenu() {
+        $('#rpf-fix-pop').hide().empty().removeAttr('data-item');
+    }
+
+    function openRpfFixMenu($btn) {
+        var itemId = parseInt($btn.data('item'), 10) || 0;
+        var $pop = $('#rpf-fix-pop');
+        if ($pop.is(':visible') && parseInt($pop.attr('data-item'), 10) === itemId) {
+            closeRpfFixMenu();
+            return;
+        }
+        var ln = findSessionLineByItemId(itemId);
+        var items = rpfAnswerItems(ln);
+        if (!items.length) {
+            return;
+        }
+        if (!$pop.length) {
+            // Fuera de #rpf-lines (tiene scroll propio y recortaría el desplegable).
+            $pop = $('<div id="rpf-fix-pop" class="rpf-fix-pop" role="dialog" style="display:none;"></div>').appendTo('body');
+        }
+        $pop.attr('data-item', itemId).html(
+            '<div class="rpf-fix-head"><strong>Línea ' + esc(String(ln.numero_linea || '')) + '</strong> · ' +
+            'volver a un paso y corregir</div>' +
+            rpfAnswerItemsTable(items)
+        ).show();
+        var rect = $btn[0].getBoundingClientRect();
+        var w = $pop.outerWidth();
+        var h = $pop.outerHeight();
+        var left = Math.max(8, Math.min(rect.right - w, window.innerWidth - w - 8));
+        var top = rect.bottom + 4;
+        if (top + h > window.innerHeight - 8) {
+            top = Math.max(8, rect.top - h - 4);
+        }
+        $pop.css({ left: left + 'px', top: top + 'px' });
+    }
+
+    /** Panel plegado con lo ya respondido en el folio (para volver a ver y corregir). */
+    function renderAnsweredPanel(lines) {
+        var $box = $('#rpf-answered');
+        if (!$box.length) {
+            $box = $('<div id="rpf-answered" class="rpf-answered" style="display:none;"></div>');
+            $('#rpf-blockers').after($box);
+        }
+        var wasOpen = $('#rpf-answered-help').prop('open') === true;
+        var rows = '';
+        var n = 0;
+        (lines || []).forEach(function (ln) {
+            var answered = rpfAnswerItems(ln).filter(function (it) {
+                return it.state === 'answered';
+            });
+            if (!answered.length) {
+                return;
+            }
+            n++;
+            rows += '<div class="rpf-answered-line">' +
+                '<div class="rpf-answered-line-head">Línea ' + esc(String(ln.numero_linea || '')) +
+                ' · <code>' + esc(ln.codigo_proveedor || '—') + '</code> · ' +
+                esc(ln.nombre || ln.descripcion || '') + '</div>' +
+                rpfAnswerItemsTable(answered) +
+                '</div>';
+        });
+        if (!n) {
+            $box.hide().empty();
+            return;
+        }
+        $box.html(
+            '<details class="rpf-answered-help" id="rpf-answered-help">' +
+            '<summary class="rpf-answered-summary">' +
+            '<span class="dashicons dashicons-yes-alt" aria-hidden="true"></span>' +
+            '<span class="rpf-answered-title">Ya respondido en este folio</span>' +
+            '<span class="rpf-answered-count">' + n + '</span>' +
+            '<span class="description">revisá y corregí respuestas anteriores</span>' +
+            '</summary>' +
+            '<div class="rpf-answered-body">' +
+            '<p class="description">Cada respuesta se guarda en el código del proveedor o en el producto, no solo en este folio. ' +
+            'Si una quedó mal, cambiala aquí y después revisá el precio de la línea.</p>' +
+            rows +
+            '</div></details>'
+        ).show();
+        if (wasOpen) {
+            $('#rpf-answered-help').attr('open', 'open');
+        }
     }
 
     function deltaClass(delta) {
@@ -6239,10 +6523,37 @@
             }
             openAnswerEmpModal({
                 target_id: parseInt($(this).data('target'), 10) || 0,
+                decision_actual: String($(this).data('decision') || ''),
                 sku: String($(this).data('sku') || ''),
                 nombre: String($(this).data('nombre') || '')
             });
         });
+
+        // Menú «Corregir ▾» de cada línea (popover fuera del panel con scroll).
+        $(document).on('click', '.rpf-fix-open', function (e) {
+            e.preventDefault();
+            openRpfFixMenu($(this));
+        });
+        $(document).on('click', '#rpf-fix-pop button', function () {
+            setTimeout(closeRpfFixMenu, 0);
+        });
+        $(document).on('mousedown', function (e) {
+            var $pop = $('#rpf-fix-pop');
+            if (!$pop.is(':visible')) {
+                return;
+            }
+            if ($(e.target).closest('#rpf-fix-pop, .rpf-fix-open').length) {
+                return;
+            }
+            closeRpfFixMenu();
+        });
+        $(document).on('keydown', function (e) {
+            if (e.key === 'Escape') {
+                closeRpfFixMenu();
+            }
+        });
+        $(window).on('resize scroll', closeRpfFixMenu);
+        $('#rpf-lines').on('scroll', closeRpfFixMenu);
 
         $(document).on('click', '.rpf-search-emp-open', function () {
             if (!canManageEmparejamientos) {
@@ -7563,6 +7874,7 @@
             ? (ln.costo_folio_raw != null ? ln.costo_folio_raw : ln.costo_folio)
             : null;
         var costoNeto = rpfPickCostBase(basesRaw, rpfCostMode, costoRawFallback);
+        var suggestion = ln ? rpfPackSuggestion(ln) : null;
         rpfPurchaseUnits = {
             step: 'form',
             item_id: itemId,
@@ -7570,7 +7882,9 @@
             sku: opts.sku || (ln && ln.sku) || '',
             nombre: opts.nombre || (ln && (ln.nombre || ln.descripcion)) || '',
             folio: inv.folio || '',
-            factor: factor > 1 ? factor : '',
+            // Precarga: factor guardado, o el paquete sugerido por el costo anterior.
+            factor: factor > 1 ? factor : (suggestion ? suggestion.n : ''),
+            suggestion: suggestion,
             is_change: !!opts.is_change,
             current_factor: factor > 1 ? factor : 1,
             is_unit_real: null,
@@ -7747,13 +8061,20 @@
             : '¿La cantidad facturada es la unidad real?');
         $('#rpf-pu-body').html(
             purchaseUnitsMetaHtml({ scenario: 'both' }) +
+            (rpfPurchaseUnits.suggestion
+                ? '<div class="notice notice-warning inline rpf-pu-suggestion"><p>' +
+                    esc(rpfPackSuggestionText(rpfPurchaseUnits.suggestion, rpfPurchaseUnits.iva_tipo)) +
+                    ' Si es así, elegí «No, es un paquete» (ya viene ' + esc(String(rpfPurchaseUnits.suggestion.n)) +
+                    ' cargado).</p></div>'
+                : '') +
             '<p class="rpf-answer-family-question">Elegí qué llegó respecto de lo que dice el documento.</p>' +
             '<div class="rpf-pu-options">' +
             '<p class="rpf-pu-option"><strong>Sí, es la unidad real</strong>' +
             'Llegaron las unidades unitarias que dice el documento. Si la factura dice 12, entraron 12 unidades sueltas.</p>' +
             '<p class="rpf-pu-option"><strong>No, es un paquete</strong>' +
             'El documento registra un paquete (por ejemplo 1) y en realidad son varias unidades, como 12 u otra cantidad.</p>' +
-            '</div>'
+            '</div>' +
+            purchaseUnitsScopeHtml()
         );
         $('#rpf-pu-footer').html(
             '<button type="button" class="button" id="rpf-pu-cancel">Cancelar</button>' +
@@ -7885,6 +8206,7 @@
             sku: opts.sku || '',
             nombre: opts.nombre || '',
             folio: inv.folio || '',
+            decision_actual: opts.decision_actual || '',
             needs_emp: null
         };
         $('#rpf-answer-emp-modal').css('display', 'flex').attr('aria-hidden', 'false');
@@ -7895,12 +8217,19 @@
         if (!rpfAnswerEmp) return;
         rpfAnswerEmp.step = 'form';
         rpfAnswerEmp.needs_emp = null;
-        $('#rpf-answer-emp-title').text('¿Tiene emparejamiento?');
+        var actual = rpfAnswerEmp.decision_actual || '';
+        $('#rpf-answer-emp-title').text(actual ? 'Corregir respuesta de emparejamiento' : '¿Tiene emparejamiento?');
         $('#rpf-answer-emp-body').html(
             '<dl class="rpf-create-local-meta">' +
             '<dt>Folio</dt><dd><code>' + esc(rpfAnswerEmp.folio || '—') + '</code></dd>' +
             '<dt>SKU</dt><dd><code>' + esc(rpfAnswerEmp.sku || '—') + '</code></dd>' +
             '<dt>Producto</dt><dd>' + esc(rpfAnswerEmp.nombre || '—') + '</dd>' +
+            (actual
+                ? '<dt>Respuesta actual</dt><dd><strong>' +
+                    (actual === 'no_requiere' ? 'No, sin emparejar' : 'Sí, necesita emparejamiento') + '</strong></dd>'
+                : '') +
+            '<dt>Se guarda en</dt><dd>El producto unitario <code>' + esc(rpfAnswerEmp.sku || '—') +
+            '</code> (precio unitario): aplica en todos los folios.</dd>' +
             '</dl>' +
             '<p class="rpf-answer-family-question">¿Este producto (precio unitario) necesita emparejamiento de precio y/o stock?</p>' +
             '<p class="description">Sí = buscar o crear grupo. No = queda sin emparejar (no_requiere).</p>'
@@ -8298,16 +8627,36 @@
         }
         rpfAnswerFamily.step = 'form';
         rpfAnswerFamily.decision = null;
-        var isCorrection = rpfAnswerFamily.decision_actual === 'requiere';
-        $('#rpf-answer-family-title').text(isCorrection ? 'Corregir respuesta de familia' : '¿Necesita familia?');
+        var actual = rpfAnswerFamily.decision_actual || '';
+        var isCorrection = actual === 'requiere';
+        var isChangeNo = actual === 'no_requiere';
+        $('#rpf-answer-family-title').text(isCorrection || isChangeNo
+            ? 'Corregir respuesta de familia'
+            : '¿Necesita familia?');
         var meta = '<dl class="rpf-create-local-meta">' +
             '<dt>Folio</dt><dd><code>' + esc(rpfAnswerFamily.folio || '—') + '</code></dd>' +
             '<dt>SKU</dt><dd><code>' + esc(rpfAnswerFamily.sku || '—') + '</code></dd>' +
             '<dt>Producto</dt><dd>' + esc(rpfAnswerFamily.nombre || '—') + '</dd>' +
-            (isCorrection
-                ? '<dt>Respuesta actual</dt><dd><strong>' + rpfFamilyDecisionLabel('requiere') + '</strong></dd>'
+            (isCorrection || isChangeNo
+                ? '<dt>Respuesta actual</dt><dd><strong>' + rpfFamilyDecisionLabel(actual) + '</strong></dd>'
                 : '') +
+            '<dt>Se guarda en</dt><dd>El producto <code>' + esc(rpfAnswerFamily.sku || '—') +
+            '</code> (no solo este folio): aplica en todos los folios donde aparezca.</dd>' +
             '</dl>';
+        if (isChangeNo) {
+            $('#rpf-answer-family-body').html(
+                meta +
+                '<p class="rpf-answer-family-question">¿Qué querés hacer con esta respuesta?</p>' +
+                '<p class="description"><strong>Sí, necesita</strong>: el folio quedará bloqueado hasta asignarle una familia. ' +
+                '<strong>Volver a sin responder</strong>: vuelve a aparecer la pregunta «¿Necesita familia?».</p>'
+            );
+            $('#rpf-answer-family-footer').html(
+                '<button type="button" class="button" id="rpf-answer-family-cancel">Cancelar</button>' +
+                '<button type="button" class="button" id="rpf-answer-family-reset">Volver a sin responder</button>' +
+                '<button type="button" class="button button-primary" id="rpf-answer-family-yes">Sí, necesita</button>'
+            );
+            return;
+        }
         if (isCorrection) {
             $('#rpf-answer-family-body').html(
                 meta +

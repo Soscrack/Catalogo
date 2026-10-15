@@ -173,6 +173,7 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
         </p>
         <div id="rpf-session-header" class="rpf-session-header"></div>
         <div id="rpf-blockers" class="rpf-blockers" style="display:none;"></div>
+        <div id="rpf-answered" class="rpf-answered" style="display:none;"></div>
         <div id="rpf-lines"></div>
         <div id="rpf-folio-dock" class="rpf-folio-dock" style="display:none;">
             <div class="rpf-folio-dock-bar">

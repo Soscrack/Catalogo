@@ -1447,12 +1447,12 @@ class Riverso_Supplier_Links_Module {
                     (string) ($row['codigo_proveedor'] ?? ''),
                     (int) ($row['proveedor_id'] ?? 0)
                 );
-                $row['purchase_units_factor'] = (float) ($ctx['factor'] ?? $row['purchase_units_factor']);
+                // Caja de familia: el factor dice si la factura cuenta unidades (1) o cajas (pack_qty).
+                $row['purchase_units_factor'] = !empty($ctx['is_family_pack'])
+                    ? (float) ($ctx['invoice_factor'] ?? 1)
+                    : (float) ($ctx['factor'] ?? $row['purchase_units_factor']);
                 $row['purchase_units_family_pack'] = !empty($ctx['is_family_pack']);
                 $row['purchase_units_pack_qty'] = $ctx['pack_qty'] ?? null;
-                if (!empty($ctx['is_family_pack'])) {
-                    $row['purchase_units_can_edit'] = false;
-                }
             }
         }
 
@@ -1474,12 +1474,6 @@ class Riverso_Supplier_Links_Module {
         }
         if (empty($detail['producto_base_id'])) {
             return new WP_Error('no_sku', 'Vinculá un SKU local antes de pedir confirmación de unidades');
-        }
-        if (!empty($detail['purchase_units_family_pack'])) {
-            return new WP_Error(
-                'family_pack',
-                'Este código ya es un envase de familia. Las unidades las resuelve la familia.'
-            );
         }
         if (!empty($detail['purchase_units_task_id'])) {
             return $detail;

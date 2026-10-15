@@ -228,7 +228,8 @@ class Riverso_Purchase_Reception_Service {
         $extras = [];
         foreach ($rx_lines as $rl) {
             if (!empty($rl['factura_item_id'])) {
-                $by_item[(int) $rl['factura_item_id']] = $rl;
+                // Una caja de familia que no calza puede tener dos líneas: cajas y sueltas.
+                $by_item[(int) $rl['factura_item_id']][] = $rl;
             } else {
                 $extras[] = $rl;
             }
@@ -236,18 +237,27 @@ class Riverso_Purchase_Reception_Service {
 
         $lines = [];
         foreach ($items as $item) {
-            $rl = $by_item[(int) $item['id']] ?? null;
-            if ($rl) {
-                $pb = (int) $rl['producto_base_id'];
-                $factor = (float) $rl['factor'];
-                $expected = (float) $rl['cantidad_esperada'];
-            } else {
-                $resolved = $this->resolve_item($factura, $item);
-                $pb = $resolved['producto_base_id'];
-                $factor = $resolved['factor'];
-                $expected = round((float) $item['cantidad'] * $factor, 4);
+            $item_lines = $by_item[(int) $item['id']] ?? [];
+            if ($item_lines) {
+                usort($item_lines, function ($a, $b) {
+                    return (int) !empty($a['es_suelto']) - (int) !empty($b['es_suelto']);
+                });
+                foreach ($item_lines as $rl) {
+                    $lines[] = $this->present_line($item, $rl, (int) $rl['producto_base_id'], (float) $rl['factor'], (float) $rl['cantidad_esperada'], [
+                        'envase' => isset($rl['unidades_envase']) ? (float) $rl['unidades_envase'] : 1.0,
+                        'suelto' => !empty($rl['es_suelto']),
+                    ]);
+                }
+                continue;
             }
-            $lines[] = $this->present_line($item, $rl, $pb, $factor, $expected);
+            $resolved = $this->resolve_item($factura, $item);
+            $lines[] = $this->present_line($item, null, $resolved['producto_base_id'], $resolved['factor'], self::expected_stock($item, $resolved), [
+                'envase' => $resolved['envase'],
+                'unidad_pb' => $resolved['unidad_pb'],
+                'pendiente_confirmar' => $resolved['pendiente_confirmar'],
+                'requiere_reparto' => !$resolved['pendiente_confirmar'] && self::needs_split($item, $resolved),
+                'folio_url' => $resolved['pendiente_confirmar'] ? $this->folio_url((int) $factura['id'], (int) $item['id']) : '',
+            ]);
         }
         foreach ($extras as $rl) {
             $lines[] = $this->present_line(null, $rl, (int) $rl['producto_base_id'], 1.0, 0.0);
@@ -309,16 +319,30 @@ class Riverso_Purchase_Reception_Service {
      * @param array|null $item Fila de factura_items (null = producto extra).
      * @param array|null $rl   Fila de recepcion_lineas.
      * @param int        $pb
-     * @param float      $factor
-     * @param float      $expected
+     * @param float      $factor   unidades reales por unidad facturada
+     * @param float      $expected en unidades de stock del producto
+     * @param array      $info     envase, suelto, unidad_pb, pendiente_confirmar, requiere_reparto, folio_url
      * @return array
      */
-    private function present_line($item, $rl, $pb, $factor, $expected) {
+    private function present_line($item, $rl, $pb, $factor, $expected, array $info = []) {
         $received = $rl ? (float) $rl['cantidad_recibida'] : 0.0;
         $ordered = $rl ? (float) $rl['cantidad_ordenada'] : 0.0;
         $claimed = $rl ? (float) $rl['cantidad_reclamada'] : 0.0;
+        $envase = isset($info['envase']) && (float) $info['envase'] > 0 ? (float) $info['envase'] : 1.0;
+        $suelto = !empty($info['suelto']);
+        $total_units = $item ? round((float) $item['cantidad'] * $factor, 4) : 0.0;
         return [
-            'key' => $item ? 'i' . (int) $item['id'] : 'l' . (int) $rl['id'],
+            // La parte suelta de una caja de familia es otra fila del mismo ítem.
+            'key' => $item && !$suelto ? 'i' . (int) $item['id'] : 'l' . (int) $rl['id'],
+            'unidades_envase' => round($envase, 4),
+            'suelto' => $suelto,
+            // Leer el código del documento: una caja de familia suma 1 caja; un paquete, sus unidades.
+            'por_escaneo' => $suelto ? 1 : ($envase > 1.0001 ? 1 : round($factor, 4)),
+            'total_unidades' => $total_units,
+            'unidad_pb' => (int) ($info['unidad_pb'] ?? 0),
+            'pendiente_confirmar' => !empty($info['pendiente_confirmar']),
+            'requiere_reparto' => !empty($info['requiere_reparto']),
+            'folio_url' => (string) ($info['folio_url'] ?? ''),
             'factura_item_id' => $item ? (int) $item['id'] : 0,
             'linea_id' => $rl ? (int) $rl['id'] : 0,
             'numero_linea' => $item ? (int) $item['numero_linea'] : 0,
@@ -351,6 +375,9 @@ class Riverso_Purchase_Reception_Service {
             if ($line['producto_base_id'] > 0) {
                 $ids[$line['producto_base_id']] = true;
             }
+            if (!empty($line['unidad_pb'])) {
+                $ids[(int) $line['unidad_pb']] = true;
+            }
         }
         $products = [];
         $suggest = [];
@@ -382,6 +409,9 @@ class Riverso_Purchase_Reception_Service {
             $line['sku'] = $product ? (string) $product['canonical_sku'] : '';
             $line['sugerencia'] = $suggest[$pb] ?? null;
             $line['saldo_zona'] = isset($zone[$pb]) ? round($zone[$pb], 4) : 0;
+            $unit = !empty($line['unidad_pb']) ? ($products[(int) $line['unidad_pb']] ?? null) : null;
+            $line['unidad_producto'] = $unit ? (string) $unit['nombre_canonico'] : '';
+            $line['unidad_sku'] = $unit ? (string) $unit['canonical_sku'] : '';
         }
         unset($line);
     }
@@ -472,10 +502,19 @@ class Riverso_Purchase_Reception_Service {
             if ($qty <= self::EPS) {
                 continue;
             }
+            $reparto = null;
+            if (isset($row['reparto']) && is_array($row['reparto'])) {
+                $reparto = [
+                    'cajas' => (float) ($row['reparto']['cajas'] ?? 0),
+                    'sueltas' => (float) ($row['reparto']['sueltas'] ?? 0),
+                ];
+            }
             $entries[] = [
                 'factura_item_id' => (int) ($row['factura_item_id'] ?? 0),
                 'linea_id' => (int) ($row['linea_id'] ?? 0),
                 'producto_base_id' => (int) ($row['producto_base_id'] ?? 0),
+                'parte' => ($row['parte'] ?? '') === 'suelto' ? 'suelto' : 'envase',
+                'reparto' => $reparto,
                 'cantidad' => $qty,
             ];
         }
@@ -528,24 +567,37 @@ class Riverso_Purchase_Reception_Service {
             $lines_by_item = [];
             foreach ($this->reception_lines($rec_id) as $rl) {
                 if (!empty($rl['factura_item_id'])) {
-                    $lines_by_item[(int) $rl['factura_item_id']] = $rl;
+                    $lines_by_item[(int) $rl['factura_item_id']][] = $rl;
                 }
             }
             $missing = [];
             foreach ($items as $item_id => $item) {
-                $rl = $lines_by_item[$item_id] ?? null;
-                if ($rl) {
+                $item_lines = $lines_by_item[$item_id] ?? [];
+                foreach ($item_lines as $rl) {
                     $left = (float) $rl['cantidad_esperada'] - (float) $rl['cantidad_recibida'];
-                    $pb = (int) $rl['producto_base_id'];
-                    $factor = (float) $rl['factor'];
-                } else {
-                    $resolved = $this->resolve_item($factura, $item);
-                    $pb = $resolved['producto_base_id'];
-                    $factor = $resolved['factor'];
-                    $left = (float) $item['cantidad'] * $factor;
+                    if ($left > self::EPS) {
+                        $missing[] = [
+                            'item' => $item,
+                            'linea' => $rl,
+                            'producto_base_id' => (int) $rl['producto_base_id'],
+                            'costo_unitario' => $rl['costo_unitario'] !== null ? (float) $rl['costo_unitario'] : null,
+                            'cantidad' => round($left, 4),
+                        ];
+                    }
                 }
+                if ($item_lines) {
+                    continue;
+                }
+                $resolved = $this->resolve_item($factura, $item);
+                $left = self::expected_stock($item, $resolved);
                 if ($left > self::EPS) {
-                    $missing[] = ['item' => $item, 'linea' => $rl, 'producto_base_id' => $pb, 'factor' => $factor, 'cantidad' => round($left, 4)];
+                    $missing[] = [
+                        'item' => $item,
+                        'linea' => null,
+                        'producto_base_id' => $resolved['producto_base_id'],
+                        'costo_unitario' => $this->unit_cost($item, $resolved['factor'], $resolved['envase']),
+                        'cantidad' => $left,
+                    ];
                 }
             }
 
@@ -560,7 +612,7 @@ class Riverso_Purchase_Reception_Service {
                         'nombre' => (string) $miss['item']['nombre'],
                         'motivo' => 'faltante',
                         'cantidad' => $miss['cantidad'],
-                        'costo_unitario' => $this->unit_cost($miss['item'], $miss['factor']),
+                        'costo_unitario' => $miss['costo_unitario'],
                         'movimiento_id' => null,
                         'notas' => 'No llegó (recepción cerrada con faltante).',
                     ]);
@@ -626,37 +678,70 @@ class Riverso_Purchase_Reception_Service {
                 throw new Exception('El ítem no pertenece a este documento.');
             }
             $item = $items[$item_id];
-            $line = $wpdb->get_row($wpdb->prepare(
-                "SELECT * FROM {$this->table('recepcion_lineas')} WHERE recepcion_id = %d AND factura_item_id = %d",
-                $rec_id,
-                $item_id
-            ), ARRAY_A);
-            if ($line) {
-                return $line;
+            $packs = $this->has_column('recepcion_lineas', 'es_suelto');
+            $suelto = $entry['parte'] === 'suelto';
+            $existing = $this->item_lines($rec_id, $item_id);
+            foreach ($existing as $line) {
+                if (!$packs || (bool) $line['es_suelto'] === $suelto) {
+                    return $line;
+                }
+            }
+            if ($existing) {
+                throw new Exception('La línea "' . $item['nombre'] . '" no tiene parte ' . ($suelto ? 'suelta' : 'en cajas') . '.');
             }
             $resolved = $this->resolve_item($factura, $item);
             $pb = $resolved['producto_base_id'];
             $manual = false;
-            if ($entry['producto_base_id'] > 0 && $entry['producto_base_id'] !== $pb) {
+            if ($entry['producto_base_id'] > 0 && $entry['producto_base_id'] !== $pb && !$suelto) {
                 $pb = $this->valid_product($entry['producto_base_id']);
                 $manual = true;
             }
             if ($pb <= 0) {
                 throw new Exception('La línea "' . $item['nombre'] . '" no tiene producto: asígnalo antes de recibir.');
             }
-            // Un producto asignado a mano no hereda el factor del código de proveedor.
-            $factor = $manual ? 1.0 : $resolved['factor'];
-            $wpdb->insert($this->table('recepcion_lineas'), [
+            $base = [
                 'recepcion_id' => $rec_id,
                 'factura_item_id' => $item_id,
-                'producto_base_id' => $pb,
                 'asignado_manual' => $manual ? 1 : 0,
                 'nombre' => (string) $item['nombre'],
                 'codigo_proveedor' => (string) $item['codigo_proveedor'],
-                'factor' => $factor,
-                'cantidad_esperada' => round((float) $item['cantidad'] * $factor, 4),
-                'costo_unitario' => $this->unit_cost($item, $factor),
-            ]);
+            ];
+            if ($manual) {
+                // Un producto asignado a mano no hereda el factor ni el envase del código de proveedor.
+                $wpdb->insert($this->table('recepcion_lineas'), $this->line_row($base + [
+                    'producto_base_id' => $pb,
+                    'factor' => 1.0,
+                    'cantidad_esperada' => round((float) $item['cantidad'], 4),
+                    'costo_unitario' => $this->unit_cost($item, 1.0),
+                ], 1.0, false));
+            } else {
+                if ($resolved['pendiente_confirmar']) {
+                    throw new Exception(sprintf(
+                        'La línea "%s" (código %s) es una caja de %s: falta confirmar en Procesar folios si la factura cuenta unidades o cajas.',
+                        $item['nombre'],
+                        $item['codigo_proveedor'],
+                        self::fmt_qty($resolved['envase'])
+                    ));
+                }
+                $envase = (float) $resolved['envase'];
+                $factor = (float) $resolved['factor'];
+                if (self::needs_split($item, $resolved) || $suelto) {
+                    $this->insert_split_lines($base, $item, $resolved, $entry['reparto']);
+                    // Cajas + sueltas (o solo una de las partes): devolver la parte pedida.
+                    foreach ($this->item_lines($rec_id, $item_id) as $line) {
+                        if ((bool) $line['es_suelto'] === $suelto) {
+                            return $line;
+                        }
+                    }
+                    throw new Exception('El reparto de "' . $item['nombre'] . '" no tiene parte ' . ($suelto ? 'suelta' : 'en cajas') . '.');
+                }
+                $wpdb->insert($this->table('recepcion_lineas'), $this->line_row($base + [
+                    'producto_base_id' => $pb,
+                    'factor' => $factor,
+                    'cantidad_esperada' => self::expected_stock($item, $resolved),
+                    'costo_unitario' => $this->unit_cost($item, $factor, $envase),
+                ], $envase, false));
+            }
         } else {
             $pb = $this->valid_product($entry['producto_base_id']);
             if ($pb <= 0) {
@@ -1559,11 +1644,18 @@ class Riverso_Purchase_Reception_Service {
     }
 
     /**
-     * Producto del ítem: vínculo proveedor+código, SKU local o producto WooCommerce; y su factor caja → unidades.
+     * Producto del ítem: vínculo proveedor+código, SKU local o producto WooCommerce; y cómo pasar la
+     * cantidad facturada a unidades de stock de ese producto.
+     *
+     * - factor: unidades reales por unidad facturada (código normal: factor confirmado; caja de familia:
+     *   respuesta «la factura cuenta unidades (1) o cajas (N)»).
+     * - envase: unidades del envase del producto vinculado cuando el código es una caja de familia
+     *   (caja de 500 → 500), si no 1. Stock esperado = cantidad × factor ÷ envase.
+     * - pendiente_confirmar: caja de familia sin respuesta en Procesar folios (no se puede convertir).
      *
      * @param array $factura
      * @param array $item
-     * @return array{producto_base_id: int, factor: float}
+     * @return array{producto_base_id: int, factor: float, envase: float, unidad_pb: int, pendiente_confirmar: bool}
      */
     private function resolve_item(array $factura, array $item) {
         global $wpdb;
@@ -1601,7 +1693,13 @@ class Riverso_Purchase_Reception_Service {
             ));
         }
 
-        $factor = 1.0;
+        $out = [
+            'producto_base_id' => $pb,
+            'factor' => 1.0,
+            'envase' => 1.0,
+            'unidad_pb' => 0,
+            'pendiente_confirmar' => false,
+        ];
         if ($pb > 0 && $code !== '') {
             if (!class_exists('Riverso_Unit_Product_Service')) {
                 $path = RIVERSO_POS_PLUGIN_DIR . 'modules/families/class-unit-product-service.php';
@@ -1612,35 +1710,188 @@ class Riverso_Purchase_Reception_Service {
             if (class_exists('Riverso_Unit_Product_Service')
                 && method_exists('Riverso_Unit_Product_Service', 'resolve_purchase_units')
             ) {
-                $units = Riverso_Unit_Product_Service::get_instance()->resolve_purchase_units($pb, $code, $proveedor_id);
-                if (!empty($units['apply_factor']) && (float) $units['factor'] > 1.0001) {
-                    $factor = (float) $units['factor'];
+                $unit_svc = Riverso_Unit_Product_Service::get_instance();
+                $units = $unit_svc->resolve_purchase_units($pb, $code, $proveedor_id);
+                if (!empty($units['is_family_pack']) && (float) ($units['pack_qty'] ?? 0) > 1.0001) {
+                    $out['envase'] = (float) $units['pack_qty'];
+                    $out['unidad_pb'] = (int) ($units['unit_producto_base_id'] ?? 0);
+                    $f = (float) ($units['invoice_factor'] ?? 1);
+                    $out['factor'] = $f > 1.0001 ? $f : 1.0;
+                    $pp_id = (int) ($units['producto_proveedor_id'] ?? 0);
+                    $out['pendiente_confirmar'] = !method_exists($unit_svc, 'purchase_units_confirmed')
+                        || !$unit_svc->purchase_units_confirmed($pp_id);
+                } elseif (!empty($units['apply_factor']) && (float) $units['factor'] > 1.0001) {
+                    $out['factor'] = (float) $units['factor'];
                 }
             }
         }
-        return ['producto_base_id' => $pb, 'factor' => $factor];
+        return $out;
     }
 
     /**
-     * Costo neto por unidad de stock (para valorizar el reclamo).
+     * Stock esperado del producto vinculado (cantidad facturada × factor ÷ envase).
      *
      * @param array $item
-     * @param float $factor
+     * @param array $resolved resolve_item()
+     * @return float
+     */
+    private static function expected_stock(array $item, array $resolved) {
+        $envase = (float) ($resolved['envase'] ?? 1) > 0 ? (float) $resolved['envase'] : 1.0;
+        return round((float) $item['cantidad'] * (float) $resolved['factor'] / $envase, 4);
+    }
+
+    /**
+     * Caja de familia cuya cantidad no da cajas enteras (p. ej. 20.250 U en cajas de 500).
+     *
+     * @param array $item
+     * @param array $resolved
+     * @return bool
+     */
+    private static function needs_split(array $item, array $resolved) {
+        if ((float) ($resolved['envase'] ?? 1) <= 1.0001) {
+            return false;
+        }
+        $boxes = (float) $item['cantidad'] * (float) $resolved['factor'] / (float) $resolved['envase'];
+        return abs($boxes - round($boxes)) > 0.001;
+    }
+
+    /**
+     * Costo neto por unidad de stock (para valorizar el reclamo): por unidad real × unidades del envase.
+     *
+     * @param array $item
+     * @param float $factor unidades reales por unidad facturada
+     * @param float $envase unidades por unidad de stock del producto (caja de 500 → 500)
      * @return float|null
      */
-    private function unit_cost(array $item, $factor) {
+    private function unit_cost(array $item, $factor, $envase = 1.0) {
         $qty = (float) ($item['cantidad'] ?? 0);
         $factor = $factor > 0 ? (float) $factor : 1.0;
+        $envase = $envase > 0 ? (float) $envase : 1.0;
         if ($qty <= self::EPS) {
             return null;
         }
         if (isset($item['costo_neto_final']) && $item['costo_neto_final'] !== null && (float) $item['costo_neto_final'] > 0) {
-            return round((float) $item['costo_neto_final'] / $qty / $factor, 4);
+            return round((float) $item['costo_neto_final'] / $qty / $factor * $envase, 4);
         }
         if ((float) ($item['monto_total'] ?? 0) > 0) {
-            return round((float) $item['monto_total'] / $qty / $factor, 4);
+            return round((float) $item['monto_total'] / $qty / $factor * $envase, 4);
         }
-        return round((float) ($item['precio_unitario'] ?? 0) / $factor, 4);
+        return round((float) ($item['precio_unitario'] ?? 0) / $factor * $envase, 4);
+    }
+
+    /**
+     * @param int $rec_id
+     * @param int $item_id
+     * @return array
+     */
+    private function item_lines($rec_id, $item_id) {
+        global $wpdb;
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$this->table('recepcion_lineas')} WHERE recepcion_id = %d AND factura_item_id = %d ORDER BY id ASC",
+            $rec_id,
+            $item_id
+        ), ARRAY_A) ?: [];
+    }
+
+    /**
+     * Fila de recepcion_lineas con las columnas de cajas (si la migración ya corrió).
+     *
+     * @param array $row
+     * @param float $envase
+     * @param bool  $suelto
+     * @return array
+     */
+    private function line_row(array $row, $envase, $suelto) {
+        if ($this->has_column('recepcion_lineas', 'unidades_envase')) {
+            $row['unidades_envase'] = round((float) $envase, 4);
+            $row['es_suelto'] = $suelto ? 1 : 0;
+        }
+        return $row;
+    }
+
+    /**
+     * Caja de familia que no calza con cajas enteras: quien recibe indica cuántas cajas y cuántas
+     * sueltas. Crea la línea de cajas (producto vinculado) y la de sueltas (unitario de la familia).
+     *
+     * @param array      $base     columnas comunes de la línea
+     * @param array      $item
+     * @param array      $resolved resolve_item()
+     * @param array|null $reparto  {cajas, sueltas}
+     * @throws Exception
+     */
+    private function insert_split_lines(array $base, array $item, array $resolved, $reparto) {
+        global $wpdb;
+        $envase = (float) $resolved['envase'];
+        $factor = (float) $resolved['factor'];
+        $total = round((float) $item['cantidad'] * $factor, 4);
+        $label = sprintf('"%s" (%s unidades, cajas de %s)', $item['nombre'], self::fmt_qty($total), self::fmt_qty($envase));
+        if ($envase <= 1.0001 || !$this->has_column('recepcion_lineas', 'es_suelto')) {
+            throw new Exception('La línea ' . $label . ' no admite reparto en cajas y sueltas.');
+        }
+        if (!is_array($reparto)) {
+            throw new Exception('La línea ' . $label . ' no calza con cajas enteras: indica cuántas cajas y cuántas sueltas llegaron.');
+        }
+        $cajas = (float) $reparto['cajas'];
+        $sueltas = (float) $reparto['sueltas'];
+        if ($cajas < 0 || $sueltas < 0 || abs($cajas - round($cajas)) > self::EPS) {
+            throw new Exception('Reparto inválido para ' . $label . ': las cajas deben ser enteras y nada negativo.');
+        }
+        if (abs($cajas * $envase + $sueltas - $total) > 0.001) {
+            throw new Exception(sprintf(
+                'Reparto de %s: %s cajas × %s + %s sueltas = %s, pero el documento dice %s unidades.',
+                $label,
+                self::fmt_qty($cajas),
+                self::fmt_qty($envase),
+                self::fmt_qty($sueltas),
+                self::fmt_qty($cajas * $envase + $sueltas),
+                self::fmt_qty($total)
+            ));
+        }
+        if ($sueltas > self::EPS && (int) $resolved['unidad_pb'] <= 0) {
+            throw new Exception('La familia de ' . $label . ' no tiene producto unitario para las sueltas.');
+        }
+        if ($cajas > self::EPS) {
+            $wpdb->insert($this->table('recepcion_lineas'), $this->line_row($base + [
+                'producto_base_id' => (int) $resolved['producto_base_id'],
+                'factor' => $factor,
+                'cantidad_esperada' => round($cajas, 4),
+                'costo_unitario' => $this->unit_cost($item, $factor, $envase),
+            ], $envase, false));
+        }
+        if ($sueltas > self::EPS) {
+            $base['nombre'] = $base['nombre'] . ' (sueltas)';
+            $wpdb->insert($this->table('recepcion_lineas'), $this->line_row($base + [
+                'producto_base_id' => (int) $resolved['unidad_pb'],
+                'factor' => $factor,
+                'cantidad_esperada' => round($sueltas, 4),
+                'costo_unitario' => $this->unit_cost($item, $factor, 1.0),
+            ], 1.0, true));
+        }
+    }
+
+    /**
+     * @param float $n
+     * @return string
+     */
+    private static function fmt_qty($n) {
+        $n = round((float) $n, 4);
+        return abs($n - round($n)) < 0.00005
+            ? number_format($n, 0, ',', '.')
+            : rtrim(rtrim(number_format($n, 4, ',', '.'), '0'), ',');
+    }
+
+    /**
+     * Procesar folios con la línea abierta (allí se confirma «unidades o cajas»).
+     *
+     * @param int $factura_id
+     * @param int $item_id
+     * @return string
+     */
+    private function folio_url($factura_id, $item_id) {
+        if (!function_exists('admin_url')) {
+            return '';
+        }
+        return admin_url('admin.php?page=riverso-pos-pricing&tab=process&factura_id=' . (int) $factura_id . '&item_id=' . (int) $item_id);
     }
 
     /**
@@ -1867,6 +2118,9 @@ class Riverso_Purchase_Reception_Service {
             Riverso_POS_Activator::ensure_purchase_reception();
             $this->location_id = null;
             $ok = $this->table_exists('recepciones') && $this->table_exists('reclamo_lineas') && $this->location_id() > 0;
+        }
+        if ($ok && class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_reception_packs')) {
+            Riverso_POS_Activator::ensure_reception_packs();
         }
         $this->ready = $ok && class_exists('Riverso_Movement');
         return $this->ready;

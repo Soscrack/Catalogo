@@ -23,6 +23,7 @@
     draft: {}, // key → cantidad a recibir ahora
     assign: {}, // key → {producto_base_id, nombre, sku} (línea sin vincular)
     extras: [], // productos no incluidos aún no confirmados
+    split: {}, // key → {cajas, sueltas} (caja de familia que no calza con cajas enteras)
     destinations: null,
     orderDest: {}, // linea_id → ubicacion_id
     claimFilter: "abiertos",
@@ -977,8 +978,11 @@
     var hasData =
       Object.keys(state.draft).some(function (k) {
         return state.draft[k] > EPS;
-      }) || state.extras.length;
-    storageSet(draftKey(state.doc.id), hasData ? { draft: state.draft, assign: state.assign, extras: state.extras } : null);
+      }) || state.extras.length || Object.keys(state.split).length;
+    storageSet(
+      draftKey(state.doc.id),
+      hasData ? { draft: state.draft, assign: state.assign, extras: state.extras, split: state.split } : null
+    );
   }
 
   function openDoc(id, tab, fromHistory) {
@@ -991,6 +995,7 @@
     state.draft = stored.draft || {};
     state.assign = stored.assign || {};
     state.extras = stored.extras || [];
+    state.split = stored.split || {};
     state.orderDest = {};
     return Promise.all([post(cfg.actions.get, { id: id }), loadDestinations()])
       .then(function (res) {
@@ -1019,8 +1024,12 @@
     doc.lines.forEach(function (l) {
       keys[l.key] = true;
     });
+    // «i12#s» es la parte suelta (virtual) de la línea i12 mientras no se recibe.
     Object.keys(state.draft).forEach(function (k) {
-      if (!keys[k] && k.charAt(0) !== "x") delete state.draft[k];
+      if (!keys[k.split("#")[0]] && k.charAt(0) !== "x") delete state.draft[k];
+    });
+    Object.keys(state.split).forEach(function (k) {
+      if (!keys[k]) delete state.split[k];
     });
     renderDoc();
     var defaultTab = doc.can_receive ? "recibir" : orderPending().length ? "ordenar" : doc.claims.length ? "reclamos" : "recibir";
@@ -1140,8 +1149,77 @@
 
   /* ----- Recibir ----- */
 
+  /** Reparto válido: cajas enteras × envase + sueltas = unidades del documento. */
+  function validSplit(l) {
+    var sp = state.split[l.key];
+    if (!sp) return null;
+    var cajas = Number(sp.cajas) || 0;
+    var sueltas = Number(sp.sueltas) || 0;
+    if (cajas < 0 || sueltas < 0 || Math.abs(cajas - Math.round(cajas)) > EPS) return null;
+    if (Math.abs(cajas * l.unidades_envase + sueltas - l.total_unidades) > 0.001) return null;
+    return { cajas: cajas, sueltas: sueltas };
+  }
+
+  /**
+   * Líneas del documento tal como se reciben ahora: una caja de familia que no calza se parte en
+   * cajas (producto vinculado) y sueltas (unitario) según el reparto que indica quien recibe.
+   */
+  function docReceiveLines() {
+    var out = [];
+    state.doc.lines.forEach(function (l) {
+      if (state.assign[l.key]) {
+        // Asignado a mano: no hereda factor ni envase; se espera la cantidad del documento.
+        if (!l.linea_id && (l.unidades_envase > 1 || l.factor !== 1)) {
+          out.push(Object.assign({}, l, { esperada: l.cantidad_doc, por_recibir: l.cantidad_doc, factor: 1, unidades_envase: 1, por_escaneo: 1 }));
+        } else {
+          out.push(l);
+        }
+        return;
+      }
+      if (!l.requiere_reparto) {
+        out.push(l);
+        return;
+      }
+      var sp = validSplit(l);
+      if (!sp) {
+        out.push(Object.assign({}, l, { bloqueo: "reparto" }));
+        return;
+      }
+      if (sp.cajas > EPS) {
+        out.push(Object.assign({}, l, { esperada: sp.cajas, por_recibir: sp.cajas, parte: "envase", reparto: sp, split_parent: l.key }));
+      }
+      if (sp.sueltas > EPS) {
+        out.push(
+          Object.assign({}, l, {
+            key: l.key + "#s",
+            producto_base_id: l.unidad_pb,
+            producto: l.unidad_producto,
+            sku: l.unidad_sku,
+            esperada: sp.sueltas,
+            por_recibir: sp.sueltas,
+            unidades_envase: 1,
+            por_escaneo: 1,
+            suelto: true,
+            parte: "suelto",
+            reparto: sp,
+            split_parent: l.key,
+            split_child: true,
+          })
+        );
+      }
+    });
+    return out;
+  }
+
+  /** Línea que aún no se puede recibir (falta confirmar en Procesar folios o indicar el reparto). */
+  function lineBlocked(l) {
+    if (state.assign[l.key]) return "";
+    if (l.pendiente_confirmar) return "confirmar";
+    return l.bloqueo || "";
+  }
+
   function receiveLines() {
-    var lines = state.doc.lines.slice();
+    var lines = docReceiveLines();
     state.extras.forEach(function (x) {
       var exists = lines.some(function (l) {
         return l.extra && l.producto_base_id === x.producto_base_id;
@@ -1177,7 +1255,60 @@
   }
 
   function canAssign(line) {
-    return !line.extra && !line.linea_id;
+    return !line.extra && !line.linea_id && !line.split_child;
+  }
+
+  /** Cantidad del documento y su equivalencia en cajas o unidades. */
+  function docQtyHtml(l) {
+    if (l.extra) return "—";
+    var html = qty(l.cantidad_doc) + " " + esc(l.unidad_doc || "");
+    var env = Number(l.unidades_envase) || 1;
+    if (state.assign[l.key]) return html;
+    if (l.suelto) return html + '<div class="rx-sub">parte suelta</div>';
+    if (env > 1 && l.linea_id) {
+      // Ya registrada: lo esperado (columna Esperado) son cajas; si hubo reparto, el resto va suelto.
+      html += '<div class="rx-sub">= ' + qty(l.total_unidades) + " u, en cajas de " + qty(env) + "</div>";
+    } else if (env > 1 && !l.pendiente_confirmar) {
+      var cajas = round4(l.total_unidades / env);
+      html += '<div class="rx-sub">= ' + qty(l.total_unidades) + " u = " + qty(cajas) + " caja" + (cajas === 1 ? "" : "s") + " de " + qty(env) + "</div>";
+    } else if (l.factor > 1) {
+      html += '<div class="rx-sub">× ' + qty(l.factor) + " por unidad</div>";
+    }
+    return html;
+  }
+
+  /** Aviso de la línea: confirmar unidades/cajas, o indicar cuántas cajas y sueltas llegaron. */
+  function lineNoticeHtml(l, editable) {
+    var why = lineBlocked(l);
+    if (why === "confirmar") {
+      return (
+        '<div class="rx-warn">⚠ El código ' + esc(l.codigo_proveedor) + " es una caja de " + qty(l.unidades_envase) +
+        ": falta confirmar si la factura cuenta unidades o cajas." +
+        (l.folio_url ? ' <a href="' + esc(l.folio_url) + '" target="_blank" rel="noopener">Confirmar en Procesar folios</a>' : "") +
+        "</div>"
+      );
+    }
+    if (l.requiere_reparto && !state.assign[l.key] && !l.split_child) {
+      var env = Number(l.unidades_envase) || 1;
+      var cajas = l.total_unidades / env;
+      var sp = state.split[l.key] || {};
+      var ok = !!validSplit(l);
+      var html =
+        '<div class="rx-warn rx-split">⚠ ' + qty(l.total_unidades) + " unidades no calzan con cajas de " + qty(env) +
+        " (" + qty(round4(cajas)) + " cajas). Indica qué llegó:";
+      if (editable) {
+        html +=
+          '<div class="rx-split-form">' +
+          '<label>Cajas <input type="number" min="0" step="1" class="rx-split-cajas" data-split="' + esc(l.key) + '" value="' + (sp.cajas != null ? esc(sp.cajas) : Math.floor(cajas)) + '"></label>' +
+          '<label>Sueltas <input type="number" min="0" step="any" class="rx-split-sueltas" data-split="' + esc(l.key) + '" value="' + (sp.sueltas != null ? esc(sp.sueltas) : round4(l.total_unidades - Math.floor(cajas) * env)) + '"></label>' +
+          '<button type="button" class="rx-link-btn" data-split-apply="' + esc(l.key) + '">' + (ok ? "Cambiar reparto" : "Usar este reparto") + "</button>" +
+          "</div>" +
+          '<div class="rx-sub">Cajas a ' + esc(l.sku || l.producto || "") + " · sueltas a " + esc(l.unidad_sku || l.unidad_producto || "unitario") +
+          " · deben sumar " + qty(l.total_unidades) + " u</div>";
+      }
+      return html + "</div>";
+    }
+    return "";
   }
 
   function renderReceive() {
@@ -1213,24 +1344,27 @@
             product += '<div class="rx-warn">Sin vincular a un producto</div>';
           }
           if (assigned || l.asignado_manual) product += '<span class="rx-tag">Asignado en recepción</span>';
+          if (l.suelto) product += '<span class="rx-tag">Sueltas al unitario</span>';
+          product += lineNoticeHtml(l, editable);
           if (editable && canAssign(l)) {
             product +=
               ' <button type="button" class="rx-link-btn" data-assign="' + esc(l.key) + '">' + (pb ? "Cambiar producto" : "Asignar producto") + "</button>";
           }
         }
-        var docQty = l.extra ? "—" : qty(l.cantidad_doc) + " " + esc(l.unidad_doc || "") + (l.factor > 1 ? '<div class="rx-sub">× ' + qty(l.factor) + " por unidad</div>" : "");
+        var docQty = l.split_child ? "" : docQtyHtml(l);
         var now = state.draft[l.key] || 0;
         var cls = lineClass(l);
+        var blockedNow = !!lineBlocked(l);
         var input = editable
-          ? '<input type="number" class="rx-qty" min="0" step="any" data-qty="' + esc(l.key) + '" value="' + (now > EPS ? round4(now) : "") + '"' + (pb ? "" : " disabled") + ' placeholder="0">' +
-            (!l.extra && l.por_recibir > EPS ? '<div class="rx-sub">faltan ' + qty(l.por_recibir) + "</div>" : "")
+          ? '<input type="number" class="rx-qty" min="0" step="any" data-qty="' + esc(l.key) + '" value="' + (now > EPS ? round4(now) : "") + '"' + (pb && !blockedNow ? "" : " disabled") + ' placeholder="0">' +
+            (!l.extra && !blockedNow && l.por_recibir > EPS ? '<div class="rx-sub">faltan ' + qty(l.por_recibir) + "</div>" : "")
           : "—";
         return (
           '<tr class="' + cls + '" data-line="' + esc(l.key) + '">' +
           "<td>" + (l.numero_linea || "") + "</td>" +
           "<td>" + product + "</td>" +
           '<td class="num">' + docQty + "</td>" +
-          '<td class="num">' + (l.extra ? "—" : qty(l.esperada)) + "</td>" +
+          '<td class="num">' + (l.extra ? "—" : blockedNow ? "—" : qty(l.esperada) + (l.unidades_envase > 1 && !state.assign[l.key] ? '<div class="rx-sub">cajas</div>' : "")) + "</td>" +
           '<td class="num">' + qty(l.recibida) + "</td>" +
           '<td class="num">' + input + "</td>" +
           "</tr>"
@@ -1291,6 +1425,29 @@
   });
 
   $("rx-receive-body").addEventListener("click", function (e) {
+    var apply = e.target.closest("[data-split-apply]");
+    if (apply) {
+      var sk = apply.getAttribute("data-split-apply");
+      var row = apply.closest(".rx-split-form");
+      var cajas = parseFloat(String(row.querySelector(".rx-split-cajas").value).replace(",", ".")) || 0;
+      var sueltas = parseFloat(String(row.querySelector(".rx-split-sueltas").value).replace(",", ".")) || 0;
+      var base = lineByKey(sk) || state.doc.lines.filter(function (x) { return x.key === sk; })[0];
+      state.split[sk] = { cajas: cajas, sueltas: sueltas };
+      if (base && !validSplit(base)) {
+        delete state.split[sk];
+        alert(
+          "El reparto no calza: " + qty(cajas) + " cajas × " + qty(base.unidades_envase) + " + " + qty(sueltas) +
+          " sueltas = " + qty(round4(cajas * base.unidades_envase + sueltas)) + ", pero el documento dice " + qty(base.total_unidades) +
+          " unidades. Las cajas deben ser enteras."
+        );
+        return;
+      }
+      delete state.draft[sk];
+      delete state.draft[sk + "#s"];
+      saveDraft();
+      renderReceive();
+      return;
+    }
     var btn = e.target.closest("[data-assign]");
     if (!btn) return;
     var key = btn.getAttribute("data-assign");
@@ -1337,8 +1494,12 @@
     // Código de proveedor del documento → una unidad del documento (caja × factor).
     for (var i = 0; i < lines.length; i++) {
       var l = lines[i];
-      if (!l.extra && l.codigo_proveedor && l.codigo_proveedor.toLowerCase() === code.toLowerCase() && linePb(l)) {
-        addToLine(l, l.factor || 1);
+      if (!l.extra && !l.split_child && l.codigo_proveedor && l.codigo_proveedor.toLowerCase() === code.toLowerCase() && linePb(l)) {
+        if (lineBlocked(l)) {
+          scanStatus("La línea de " + esc(l.codigo_proveedor) + " aún no se puede recibir: revisa el aviso de la línea.", true);
+          return;
+        }
+        addToLine(l, l.por_escaneo || l.factor || 1);
         return;
       }
     }
@@ -1362,10 +1523,10 @@
       .then(function (data) {
         if (data.lineas && data.lineas.length) {
           var line = lines.filter(function (x) {
-            return x.factura_item_id === data.lineas[0].factura_item_id;
+            return x.factura_item_id === data.lineas[0].factura_item_id && !x.split_child;
           })[0];
-          if (line && linePb(line)) {
-            addToLine(line, line.factor || 1);
+          if (line && linePb(line) && !lineBlocked(line)) {
+            addToLine(line, line.por_escaneo || line.factor || 1);
             return;
           }
         }
@@ -1430,16 +1591,16 @@
 
   $("rx-fill-all").addEventListener("click", function () {
     receiveLines().forEach(function (l) {
-      if (!l.extra && linePb(l) && l.por_recibir > EPS) state.draft[l.key] = round4(l.por_recibir);
+      if (!l.extra && linePb(l) && !lineBlocked(l) && l.por_recibir > EPS) state.draft[l.key] = round4(l.por_recibir);
     });
     saveDraft();
     renderReceive();
     var missing = receiveLines().filter(function (l) {
-      return !l.extra && !linePb(l) && l.por_recibir > EPS;
+      return !l.extra && (!linePb(l) || lineBlocked(l)) && l.por_recibir > EPS;
     }).length;
     scanStatus(
       missing
-        ? "Se completaron las líneas vinculadas. " + missing + " línea" + (missing === 1 ? "" : "s") + " sin vincular: asigna el producto para recibirlas."
+        ? "Se completaron las líneas listas. " + missing + " línea" + (missing === 1 ? "" : "s") + " sin vincular o con aviso: revísalas para recibirlas."
         : "Se completaron todas las líneas con lo esperado.",
       !!missing
     );
@@ -1459,12 +1620,16 @@
     receiveLines().forEach(function (l) {
       var n = state.draft[l.key] || 0;
       if (n <= EPS) return;
-      out.push({
+      if (lineBlocked(l)) return;
+      var row = {
         factura_item_id: l.factura_item_id || 0,
         linea_id: l.extra && l.linea_id ? l.linea_id : 0,
-        producto_base_id: linePb(l) || 0,
+        producto_base_id: l.suelto ? 0 : linePb(l) || 0,
+        parte: l.suelto ? "suelto" : "envase",
         cantidad: round4(n),
-      });
+      };
+      if (l.reparto) row.reparto = l.reparto;
+      out.push(row);
     });
     return out;
   }

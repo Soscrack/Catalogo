@@ -1575,11 +1575,10 @@
                             ' data-nombre="' + esc(empNombre) + '">Crear</button>';
                     }
                 }
-                if (canManage && (ln.can_confirm_purchase_units || ln.purchase_units_needs_confirm)
-                    && !ln.purchase_units_family_pack) {
+                if (canManage && (ln.can_confirm_purchase_units || ln.purchase_units_needs_confirm)) {
                     saveBtn += ' ' + purchaseUnitsOpenButton({
                         itemId: ln.item_id,
-                        factor: ln.purchase_units_factor,
+                        factor: rpfPurchaseFactor(ln),
                         codigo: ln.codigo_proveedor,
                         sku: ln.sku,
                         nombre: ln.nombre || ln.descripcion
@@ -1594,12 +1593,11 @@
             if (chips) {
                 saveBtn += '<div class="rpf-line-chips">' + chips + '</div>';
             }
-            if (!hybridOmitted && ln.purchase_units_family_pack && ln.producto_base_id) {
+            if (!hybridOmitted && ln.purchase_units_family_pack && ln.producto_base_id
+                && rpfPurchaseUnitsState(ln) === 'answered') {
                 saveBtn += '<div class="rpf-line-chips"><span class="rpf-chip rpf-chip-purchase-units"' +
-                    ' title="El código es un envase de la familia: no se aplica factor de compra y el costo del folio se toma por unidad facturada.">' +
-                    esc(ln.codigo_proveedor || '') + ' = envase de familia' +
-                    (ln.pack_qty ? ' ×' + esc(fmtQty(ln.pack_qty)) : '') +
-                    ' · costo por unidad facturada</span></div>';
+                    ' title="Código de caja de familia: respuesta guardada en el código del proveedor. Recepción convierte a cajas con ella.">' +
+                    esc(rpfPackAnswerText(ln)) + '</span></div>';
             }
             if (!hybridOmitted && !ln.purchase_units_family_pack) {
                 var puFactor = Number(ln.purchase_units_factor) > 1 ? Number(ln.purchase_units_factor) : 1;
@@ -4547,9 +4545,6 @@
 
     /** Estado de unidades de compra de la línea: pending | answered | family_pack | none | later. */
     function rpfPurchaseUnitsState(ln) {
-        if (ln.purchase_units_family_pack) {
-            return 'family_pack';
-        }
         if (!ln.purchase_units_pp_id) {
             return 'none';
         }
@@ -4558,11 +4553,26 @@
         }
         // El gate de unidades va después de familia: sin bloqueo (o bloqueada solo por
         // emparejamiento, que va después) la pregunta ya se respondió.
-        if (!ln.blocked || Number(ln.purchase_units_factor) > 1
+        if (!ln.blocked || rpfPurchaseFactor(ln) > 1
             || ln.can_answer_emparejamiento || ln.can_assign_emparejamiento) {
             return 'answered';
         }
         return 'later';
+    }
+
+    /** Unidades reales por unidad facturada guardadas en el código (caja de familia: lo que cuenta la factura). */
+    function rpfPurchaseFactor(ln) {
+        var f = ln.purchase_units_family_pack
+            ? Number(ln.purchase_units_invoice_factor)
+            : Number(ln.purchase_units_factor);
+        return f > 1 ? f : 1;
+    }
+
+    /** «B23TAD = caja ×500 · la factura cuenta unidades» (o cajas). */
+    function rpfPackAnswerText(ln) {
+        var pack = Number(ln.purchase_units_pack_qty || ln.pack_qty) || 0;
+        return (ln.codigo_proveedor || '') + ' = caja' + (pack ? ' ×' + fmtQty(pack) : '') +
+            (rpfPurchaseFactor(ln) > 1 ? ' · la factura cuenta cajas' : ' · la factura cuenta unidades');
     }
 
     /**
@@ -4635,19 +4645,22 @@
             where: 'el código ' + (code || '—') + ' de ' + prov + ' (folios y recepciones)',
             action: ''
         };
-        if (puState === 'family_pack') {
-            puItem.value = 'Envase de familia' + (ln.pack_qty ? ' ×' + esc(fmtQty(ln.pack_qty)) : '') +
-                ' · costo por unidad facturada';
-        } else if (puState === 'none') {
+        if (puState === 'none') {
             puItem.value = 'Sin código de proveedor vinculado';
         } else if (puState === 'pending') {
             puItem.value = 'Pendiente de responder';
         } else if (puState === 'later') {
             puItem.value = 'Se pregunta después de resolver la familia';
         } else {
-            puItem.value = factor > 1
-                ? ('No: cada unidad facturada son <strong>' + esc(String(factor)) + '</strong> unidades')
-                : 'Sí, la cantidad facturada es la unidad real';
+            factor = rpfPurchaseFactor(ln);
+            if (ln.purchase_units_family_pack) {
+                puItem.value = 'Caja de ' + esc(fmtQty(ln.purchase_units_pack_qty || ln.pack_qty)) + ': ' +
+                    (factor > 1 ? 'la factura cuenta <strong>cajas</strong>' : 'la factura cuenta <strong>unidades sueltas</strong>');
+            } else {
+                puItem.value = factor > 1
+                    ? ('No: cada unidad facturada son <strong>' + esc(String(factor)) + '</strong> unidades')
+                    : 'Sí, la cantidad facturada es la unidad real';
+            }
             var sug = rpfPackSuggestion(ln);
             if (sug) {
                 puItem.value += '<div class="rpf-fix-alert">' + esc(rpfPackSuggestionText(sug, ln.iva_tipo || 'afecto')) + '</div>';
@@ -6204,7 +6217,7 @@
                 return;
             }
             if (rpfPurchaseUnits.step === 'confirm') {
-                if (rpfPurchaseUnits.is_unit_real) {
+                if (rpfPurchaseUnits.is_unit_real || rpfPurchaseUnits.pack_qty) {
                     renderPurchaseUnitsForm();
                 } else {
                     renderPurchaseUnitsQty();
@@ -6223,6 +6236,14 @@
             }
             rpfPurchaseUnits.is_unit_real = true;
             rpfPurchaseUnits.units = 1;
+            renderPurchaseUnitsConfirm();
+        });
+        $(document).on('click', '#rpf-pu-pack-boxes', function () {
+            if (!rpfPurchaseUnits || !rpfPurchaseUnits.pack_qty) {
+                return;
+            }
+            rpfPurchaseUnits.is_unit_real = false;
+            rpfPurchaseUnits.units = Number(rpfPurchaseUnits.pack_qty);
             renderPurchaseUnitsConfirm();
         });
         $(document).on('click', '#rpf-pu-no', function () {
@@ -7887,6 +7908,11 @@
             suggestion: suggestion,
             is_change: !!opts.is_change,
             current_factor: factor > 1 ? factor : 1,
+            // Código de caja de familia: la pregunta es «¿la factura cuenta unidades o cajas?».
+            pack_qty: ln && ln.purchase_units_family_pack ? (Number(ln.purchase_units_pack_qty || ln.pack_qty) || null) : null,
+            pack_sku: ln ? String(ln.pack_sku || ln.sku || '') : '',
+            unit_sku: ln ? String(ln.unit_sku || '') : '',
+            costo_anterior_neto: ln ? rpfLineCostAnterior(ln) : null,
             is_unit_real: null,
             units: null,
             unidad: ln ? String(ln.unidad || '') : '',
@@ -8002,6 +8028,9 @@
 
     function purchaseUnitsAnswerLabel(factor) {
         var n = Number(factor);
+        if (rpfPurchaseUnits && rpfPurchaseUnits.pack_qty) {
+            return n > 1 ? 'La factura cuenta cajas' : 'La factura cuenta unidades sueltas';
+        }
         return n > 1
             ? ('No: cada unidad facturada son ' + n + ' unidades reales')
             : 'Sí, la cantidad facturada es la unidad real';
@@ -8049,6 +8078,63 @@
         }
     }
 
+    /** Datos para decidir si la factura cuenta unidades o cajas (código de caja de familia). */
+    function purchaseUnitsPackMetaHtml(answer) {
+        var pu = rpfPurchaseUnits;
+        var pack = Number(pu.pack_qty);
+        var cant = pu.cantidad != null && !isNaN(pu.cantidad) ? Number(pu.cantidad) : null;
+        var costo = pu.costo_facturado_neto;
+        var num = function (x) {
+            return Number(x).toLocaleString('es-CL', { maximumFractionDigits: 4 });
+        };
+        var html = '<dl class="rpf-create-local-meta">' +
+            '<dt>Folio</dt><dd><code>' + esc(pu.folio || '—') + '</code></dd>' +
+            '<dt>Código</dt><dd><code>' + esc(pu.codigo || '—') + '</code> = caja de <strong>' + esc(num(pack)) +
+            '</strong> unidades' + (pu.pack_sku ? ' (SKU <code>' + esc(pu.pack_sku) + '</code>)' : '') + '</dd>' +
+            '<dt>Producto</dt><dd>' + esc(pu.nombre || '—') + '</dd>' +
+            (pu.is_change
+                ? '<dt>Respuesta actual</dt><dd><strong>' + esc(purchaseUnitsAnswerLabel(pu.current_factor)) + '</strong></dd>'
+                : '') +
+            '<dt>La factura dice</dt><dd><strong>' + (cant != null ? esc(num(cant)) : '—') + '</strong> ' +
+            esc(pu.unidad || '') + ' a ' + purchaseUnitsFmtCost(costo) + ' c/u</dd>' +
+            (pu.costo_anterior_neto != null
+                ? '<dt>Costo anterior por unidad</dt><dd>' + purchaseUnitsFmtCost(pu.costo_anterior_neto) + '</dd>'
+                : '');
+        if (answer !== 'cajas') {
+            html += '<dt>Si cuenta unidades sueltas</dt><dd>' +
+                (cant != null ? esc(num(cant)) + ' unidades = <strong>' + esc(num(rpfRound4(cant / pack))) + ' cajas</strong>' : '—') +
+                ' · costo ' + purchaseUnitsFmtCost(costo) + ' c/u</dd>';
+        }
+        if (answer !== 'unidades') {
+            html += '<dt>Si cuenta cajas</dt><dd>' +
+                (cant != null ? '<strong>' + esc(num(cant)) + ' cajas</strong> = ' + esc(num(cant * pack)) + ' unidades' : '—') +
+                ' · costo ' + purchaseUnitsFmtCost(costo != null ? rpfRound4(Number(costo) / pack) : null) + ' c/u</dd>';
+        }
+        return html + '</dl>';
+    }
+
+    function renderPurchaseUnitsPackForm() {
+        $('#rpf-pu-title').text(rpfPurchaseUnits.is_change
+            ? 'Cambiar respuesta: ¿la factura cuenta unidades o cajas?'
+            : '¿La factura cuenta unidades sueltas o cajas?');
+        $('#rpf-pu-body').html(
+            purchaseUnitsPackMetaHtml('') +
+            '<p class="rpf-answer-family-question">Este código es una caja. ¿La cantidad de la factura son unidades sueltas o cajas?</p>' +
+            '<div class="rpf-pu-options">' +
+            '<p class="rpf-pu-option"><strong>Unidades sueltas</strong>' +
+            'La factura suma las unidades de todas las cajas (por ejemplo 20.000 tornillos en cajas de 500 = 40 cajas).</p>' +
+            '<p class="rpf-pu-option"><strong>Cajas</strong>' +
+            'La factura cuenta cajas (por ejemplo 40 = 40 cajas de 500).</p>' +
+            '</div>' +
+            purchaseUnitsScopeHtml()
+        );
+        $('#rpf-pu-footer').html(
+            '<button type="button" class="button" id="rpf-pu-cancel">Cancelar</button>' +
+            '<button type="button" class="button" id="rpf-pu-pack-boxes">Cajas</button>' +
+            '<button type="button" class="button button-primary" id="rpf-pu-yes">Unidades sueltas</button>'
+        );
+    }
+
     function renderPurchaseUnitsForm() {
         if (!rpfPurchaseUnits) {
             return;
@@ -8056,6 +8142,10 @@
         rpfPurchaseUnits.step = 'form';
         rpfPurchaseUnits.is_unit_real = null;
         rpfPurchaseUnits.units = null;
+        if (rpfPurchaseUnits.pack_qty) {
+            renderPurchaseUnitsPackForm();
+            return;
+        }
         $('#rpf-pu-title').text(rpfPurchaseUnits.is_change
             ? 'Cambiar respuesta: ¿la cantidad facturada es la unidad real?'
             : '¿La cantidad facturada es la unidad real?');
@@ -8117,6 +8207,21 @@
         var yes = !!rpfPurchaseUnits.is_unit_real;
         var units = rpfPurchaseUnits.units;
         $('#rpf-pu-title').text('Confirmar respuesta');
+        if (rpfPurchaseUnits.pack_qty) {
+            $('#rpf-pu-body').html(
+                purchaseUnitsPackMetaHtml(yes ? 'unidades' : 'cajas') +
+                '<dl class="rpf-create-local-meta"><dt>Respuesta</dt><dd><strong>' +
+                esc(purchaseUnitsAnswerLabel(yes ? 1 : units)) + '</strong></dd></dl>' +
+                '<p class="rpf-create-local-sure">¿Estás seguro? Recepción usará esta respuesta para convertir la cantidad a cajas. ' +
+                'El precio guardado no se borra.</p>' +
+                purchaseUnitsScopeHtml()
+            );
+            $('#rpf-pu-footer').html(
+                '<button type="button" class="button" id="rpf-pu-cancel">Volver</button>' +
+                '<button type="button" class="button button-primary" id="rpf-pu-confirm">Confirmar</button>'
+            );
+            return;
+        }
         $('#rpf-pu-body').html(
             purchaseUnitsMetaHtml(yes
                 ? { scenario: 'yes' }

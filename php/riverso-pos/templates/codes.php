@@ -1238,13 +1238,14 @@ jQuery(function($) {
         if (familyPack) {
             const qty = code.purchase_units_pack_qty != null ? code.purchase_units_pack_qty : '—';
             $('#edit-code-pu-family-hint').text(
-                'Envase de familia: ' + qty + ' u. Las unidades las resuelve la familia; no se edita el factor de compra.'
+                'Caja de familia de ' + qty + ' u. Poné 1 si la factura cuenta unidades sueltas, o ' + qty +
+                ' si cuenta cajas. Recepción convierte a cajas con esta respuesta.'
             );
         }
-        $('#edit-code-pu-controls').toggle(!familyPack);
-        $('#edit-code-pu-task-badge').toggle(pending && !familyPack);
+        $('#edit-code-pu-controls').show();
+        $('#edit-code-pu-task-badge').toggle(pending);
         $('#edit-code-pu-factor').val(factor > 0 ? factor : 1);
-        $('#edit-code-pu-request').toggle(!familyPack && !pending);
+        $('#edit-code-pu-request').toggle(!pending);
     }
 
     function saveEditPurchaseUnits(isUnitReal) {

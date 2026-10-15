@@ -3227,11 +3227,18 @@ class Riverso_Unit_Product_Service {
         }
 
         if ($is_family_pack) {
+            // factor/apply_factor siguen en 1/false para los flujos antiguos (lotes, costos de
+            // factura). invoice_factor = unidades reales por unidad facturada del código, que
+            // Procesar folios confirma («la factura cuenta unidades o cajas»): 1 = unidades,
+            // pack_qty = cajas. Lo usan Procesar folios (costo) y Recepción (cajas a stock).
+            $invoice_factor = ($factor_from_pp !== null && $factor_from_pp > 1.0001) ? $factor_from_pp : 1.0;
             return [
                 'factor' => 1.0,
                 'apply_factor' => false,
                 'is_family_pack' => true,
                 'pack_qty' => $pack_qty,
+                'invoice_factor' => round($invoice_factor, 4),
+                'unit_producto_base_id' => isset($sku_pair['unit_producto_base_id']) ? (int) $sku_pair['unit_producto_base_id'] : null,
                 'producto_proveedor_id' => $pp_id,
                 'factor_source' => 'family_pack',
             ];
@@ -3256,9 +3263,35 @@ class Riverso_Unit_Product_Service {
             'apply_factor' => $apply,
             'is_family_pack' => false,
             'pack_qty' => $pack_qty,
+            'invoice_factor' => round($factor, 4),
+            'unit_producto_base_id' => null,
             'producto_proveedor_id' => $pp_id,
             'factor_source' => $source,
         ];
+    }
+
+    /**
+     * ¿Ya se respondió «unidades de compra» para el código (tarea completada y ninguna abierta)?
+     *
+     * @param int $producto_proveedor_id
+     * @return bool
+     */
+    public function purchase_units_confirmed($producto_proveedor_id) {
+        global $wpdb;
+        $producto_proveedor_id = intval($producto_proveedor_id);
+        if ($producto_proveedor_id <= 0) {
+            return false;
+        }
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT SUM(estado = 'completada') AS hechas,
+                    SUM(estado NOT IN ('completada', 'cancelada')) AS abiertas
+             FROM {$wpdb->prefix}riverso_tareas
+             WHERE tipo = 'confirmar_unidades_compra'
+               AND referencia_tipo = 'producto_proveedor'
+               AND referencia_id = %d",
+            $producto_proveedor_id
+        ), ARRAY_A);
+        return $row && (int) $row['hechas'] > 0 && (int) $row['abiertas'] === 0;
     }
 
     /**

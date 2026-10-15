@@ -73,7 +73,8 @@ class Riverso_Movement {
 
         // Ubicación cuyo saldo cambia: destino; en salida/venta sin destino, el origen
         // (antes la salida con solo origen no tocaba ningún saldo).
-        $es_salida = in_array($tipo, ['salida', 'venta', 'reclamo', 'reversa_recepcion'], true);
+        // Apertura: sale la caja cerrada (las unidades entran al unitario con su propio movimiento).
+        $es_salida = in_array($tipo, ['salida', 'venta', 'reclamo', 'reversa_recepcion', 'apertura'], true);
         $saldo_ubicacion_id = $destino_id;
         if ($es_salida && $destino_id <= 0 && $origen_id > 0) {
             $saldo_ubicacion_id = $origen_id;

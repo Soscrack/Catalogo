@@ -1889,13 +1889,15 @@ jQuery(function($){
                     ? ' <span style="background:#e8f0fe;color:#174ea6;padding:2px 8px;border-radius:3px;font-size:11px;">Unidades de compra pendientes</span>'
                     : '';
                 let purchaseUnitsHtml = '';
+                const packQty = s.purchase_units_pack_qty != null ? s.purchase_units_pack_qty : '—';
                 if (s.purchase_units_family_pack) {
                     purchaseUnitsHtml = `<div style="margin-top:8px;font-size:12px;color:#555;">
-                        Envase de familia: <strong>${esc(String(s.purchase_units_pack_qty != null ? s.purchase_units_pack_qty : '—'))} u</strong>.
-                        El coste/stock lo convierte la familia; no se edita factor de compra.
+                        Caja de familia: <strong>${esc(String(packQty))} u</strong>.
+                        Poné 1 si la factura cuenta unidades sueltas, o ${esc(String(packQty))} si cuenta cajas.
                     </div>`;
-                } else if (s.purchase_units_can_edit !== false && s.id) {
-                    purchaseUnitsHtml = `<div class="pp-purchase-units" style="margin-top:8px;padding:8px;background:#f6f7f7;border:1px solid #dcdcde;border-radius:4px;max-width:340px;">
+                }
+                if (s.purchase_units_can_edit !== false && s.id) {
+                    purchaseUnitsHtml += `<div class="pp-purchase-units" style="margin-top:8px;padding:8px;background:#f6f7f7;border:1px solid #dcdcde;border-radius:4px;max-width:340px;">
                         <label style="display:block;font-size:12px;margin-bottom:4px;"><strong>Unidades por unidad facturada</strong>
                         ${taskBadge}</label>
                         <p class="description" style="margin:0 0 6px;">Si el proveedor factura 1 caja y llegan N unidades, poné N (ej. 12). 1 = la cantidad del documento es la unidad.</p>

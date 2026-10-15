@@ -625,3 +625,33 @@
   .rx-qty { width: 70px; }
   .rx-col-actions { white-space: normal; }
 }
+
+/* Caja de familia que no calza con cajas enteras: reparto cajas + sueltas. */
+.rx-split {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px solid #f0c36d;
+  border-radius: 4px;
+  background: #fcf9e8;
+  font-weight: 600;
+}
+
+.rx-split-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  font-weight: 400;
+  color: #1d2327;
+}
+
+.rx-split-form input {
+  width: 90px;
+  margin-left: 4px;
+}
+
+.rx-split .rx-sub {
+  margin-top: 4px;
+  font-weight: 400;
+}

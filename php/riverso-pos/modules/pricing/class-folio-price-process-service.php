@@ -777,7 +777,7 @@ class Riverso_Folio_Price_Process_Service {
         global $wpdb;
         $prefix = $this->prefix();
         $ctx = $this->build_purchase_units_line_ctx($item, $resolved, $target, $proveedor_id);
-        if (empty($ctx['producto_proveedor_id']) || !empty($ctx['is_family_pack'])) {
+        if (empty($ctx['producto_proveedor_id'])) {
             return null;
         }
 
@@ -823,12 +823,7 @@ class Riverso_Folio_Price_Process_Service {
             'producto_proveedor',
             $pp_id,
             [
-                'descripcion' => sprintf(
-                    "¿La cantidad facturada es la unidad real?\n\nCódigo: %s\nSKU: %s\nFolio: %s\n\nSi no, indicá cuántas unidades reales trae cada unidad facturada.",
-                    $code,
-                    $resolved['sku'] ?? '',
-                    $folio
-                ),
+                'descripcion' => $this->purchase_units_task_text($code, (string) ($resolved['sku'] ?? ''), $folio, $ctx),
                 'prioridad' => 'normal',
                 'datos_extra' => [
                     'codigo_proveedor' => $code,
@@ -2012,6 +2007,65 @@ class Riverso_Folio_Price_Process_Service {
     }
 
     /**
+     * Unidades reales por unidad facturada que se aplican al costo de la línea.
+     * Código normal: factor_conversion confirmado. Código de caja de familia: lo que se
+     * respondió en «¿la factura cuenta unidades o cajas?» (mientras esté pendiente, 1).
+     *
+     * @param array $ctx build_purchase_units_line_ctx()
+     * @return float
+     */
+    private function effective_purchase_factor(array $ctx) {
+        if (!empty($ctx['is_family_pack'])) {
+            if (!empty($ctx['needs_confirm'])) {
+                return 1.0;
+            }
+            $f = (float) ($ctx['invoice_factor'] ?? 1);
+            return $f > 1.0001 ? $f : 1.0;
+        }
+        return !empty($ctx['apply_factor']) ? (float) ($ctx['factor'] ?? 1) : 1.0;
+    }
+
+    /**
+     * Texto de la tarea confirmar_unidades_compra (la pregunta cambia si el código es una caja).
+     *
+     * @param string $code
+     * @param string $sku
+     * @param string $folio
+     * @param array  $ctx
+     * @return string
+     */
+    private function purchase_units_task_text($code, $sku, $folio, array $ctx) {
+        $pack = isset($ctx['pack_qty']) ? (float) $ctx['pack_qty'] : 0.0;
+        if (!empty($ctx['is_family_pack']) && $pack > 1) {
+            $n = rtrim(rtrim(number_format($pack, 4, '.', ''), '0'), '.');
+            return sprintf(
+                "El código es una caja de %1$s unidades (SKU %2$s). ¿La cantidad de la factura cuenta unidades sueltas o cajas?
+
+Código: %3$s
+Folio: %4$s
+
+Si cuenta unidades, cada %1$s de la factura es una caja. Si cuenta cajas, cada unidad de la factura es una caja de %1$s.",
+                $n,
+                $sku,
+                $code,
+                $folio
+            );
+        }
+        return sprintf(
+            "¿La cantidad facturada es la unidad real?
+
+Código: %s
+SKU: %s
+Folio: %s
+
+Si no, indicá cuántas unidades reales trae cada unidad facturada.",
+            $code,
+            $sku,
+            $folio
+        );
+    }
+
+    /**
      * Contexto de unidades de compra + tarea abierta para una línea.
      *
      * @param array $item
@@ -2026,6 +2080,7 @@ class Riverso_Folio_Price_Process_Service {
             'apply_factor' => false,
             'is_family_pack' => false,
             'pack_qty' => null,
+            'invoice_factor' => 1.0,
             'producto_proveedor_id' => null,
             'factor_source' => 'none',
             'task_id' => null,
@@ -2062,13 +2117,15 @@ class Riverso_Folio_Price_Process_Service {
             $task_id = $task_id ? (int) $task_id : null;
         }
 
-        $can_confirm = !$ctx['is_family_pack'] && $pp_id > 0 && $code !== '';
+        // Los códigos de caja de familia también se confirman: «¿la factura cuenta unidades o cajas?».
+        $can_confirm = $pp_id > 0 && $code !== '';
 
         return [
             'factor' => (float) ($ctx['factor'] ?? 1),
             'apply_factor' => !empty($ctx['apply_factor']),
             'is_family_pack' => !empty($ctx['is_family_pack']),
             'pack_qty' => $ctx['pack_qty'] ?? null,
+            'invoice_factor' => (float) ($ctx['invoice_factor'] ?? ($ctx['factor'] ?? 1)),
             'producto_proveedor_id' => $pp_id ?: null,
             'factor_source' => (string) ($ctx['factor_source'] ?? ''),
             'task_id' => $task_id,
@@ -2109,12 +2166,6 @@ class Riverso_Folio_Price_Process_Service {
 
         $target = $this->resolve_price_target((int) $product['producto_base_id']);
         $ctx = $this->build_purchase_units_line_ctx($item, $product, $target, $proveedor_id);
-        if (!empty($ctx['is_family_pack'])) {
-            return new WP_Error(
-                'family_pack',
-                'Este código ya es un envase de familia. Las unidades las resuelve la familia; no hace falta confirmar factor.'
-            );
-        }
         if (empty($ctx['producto_proveedor_id'])) {
             return new WP_Error('no_pp', 'No hay código de proveedor vinculado para confirmar unidades');
         }
@@ -2128,12 +2179,7 @@ class Riverso_Folio_Price_Process_Service {
                 'producto_proveedor',
                 (int) $ctx['producto_proveedor_id'],
                 [
-                    'descripcion' => sprintf(
-                        "¿La cantidad facturada es la unidad real?\n\nCódigo: %s\nSKU: %s\nFolio: %s\n\nSi no, indicá cuántas unidades reales trae cada unidad facturada.",
-                        $code,
-                        $product['sku'] ?? '',
-                        $folio
-                    ),
+                    'descripcion' => $this->purchase_units_task_text($code, (string) ($product['sku'] ?? ''), $folio, $ctx),
                     'prioridad' => 'normal',
                     'datos_extra' => [
                         'codigo_proveedor' => $code,
@@ -2185,17 +2231,11 @@ class Riverso_Folio_Price_Process_Service {
 
         $target = $this->resolve_price_target((int) $product['producto_base_id']);
         $ctx = $this->build_purchase_units_line_ctx($item, $product, $target, $proveedor_id);
-        if (!empty($ctx['is_family_pack'])) {
-            return new WP_Error(
-                'family_pack',
-                'Este código ya es un envase de familia. No se guarda factor de compra.'
-            );
-        }
         if (empty($ctx['producto_proveedor_id'])) {
             return new WP_Error('no_pp', 'No hay código de proveedor vinculado');
         }
 
-        $prev_factor = (float) ($ctx['factor'] ?? 1);
+        $prev_factor = $this->effective_purchase_factor($ctx);
         $factor = 1.0;
         if (!$is_unit_real) {
             $factor = floatval($units_per_qty);
@@ -3044,9 +3084,7 @@ class Riverso_Folio_Price_Process_Service {
                 : ($is_omitted ? $this->resolve_item_product($item, $proveedor_id) : null);
             $target_early = isset($item_ctx[$item_id]) ? $item_ctx[$item_id]['target'] : null;
             $purchase_units = $this->build_purchase_units_line_ctx($item, $product, $target_early, $proveedor_id);
-            $purchase_factor = !empty($purchase_units['apply_factor'])
-                ? (float) $purchase_units['factor']
-                : 1.0;
+            $purchase_factor = $this->effective_purchase_factor($purchase_units);
 
             $costo_folio_raw = $this->unit_cost_from_item($item);
             $costo_folio_bases_raw = $this->unit_cost_bases_from_item($item, $current_flete_ok);
@@ -3077,6 +3115,8 @@ class Riverso_Folio_Price_Process_Service {
                 'purchase_units_factor' => (float) ($purchase_units['factor'] ?? 1),
                 'purchase_units_apply' => !empty($purchase_units['apply_factor']),
                 'purchase_units_family_pack' => !empty($purchase_units['is_family_pack']),
+                'purchase_units_pack_qty' => $purchase_units['pack_qty'] ?? null,
+                'purchase_units_invoice_factor' => (float) ($purchase_units['invoice_factor'] ?? 1),
                 'purchase_units_task_id' => $purchase_units['task_id'] ?? null,
                 'purchase_units_needs_confirm' => !empty($purchase_units['needs_confirm']),
                 'purchase_units_can_confirm' => !empty($purchase_units['can_confirm']),
@@ -3673,7 +3713,11 @@ class Riverso_Folio_Price_Process_Service {
             }
         }
 
-        $costo = $this->unit_cost_from_item($item);
+        // Mismo costo unitario que muestra la grilla (dividido por unidades de compra).
+        $costo = $this->scale_unit_cost_by_purchase_factor(
+            $this->unit_cost_from_item($item),
+            $this->effective_purchase_factor($pu_ctx)
+        );
         $folio_label = (string) ($loaded['factura']['folio'] ?? $factura_id);
         $fecha_emision = (string) ($loaded['factura']['fecha_emision'] ?? '');
         $meta = [

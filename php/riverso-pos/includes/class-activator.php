@@ -379,6 +379,7 @@ class Riverso_POS_Activator {
         self::create_phase77_customer_quotes_discount_anchor($prefix);
         self::create_phase78_quote_price_rule($prefix);
         self::create_phase79_billing_draft_discount_anchor($prefix);
+        self::create_phase80_reception_packs($prefix);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -5605,6 +5606,17 @@ class Riverso_POS_Activator {
         self::create_phase79_billing_draft_discount_anchor($wpdb->prefix . 'riverso_');
     }
 
+    /**
+     * Garantiza columnas de cajas/sueltas en recepción (deploy sin bump de versión).
+     */
+    public static function ensure_reception_packs() {
+        global $wpdb;
+        if (get_option('riverso_pos_phase80_reception_packs') === '1') {
+            return;
+        }
+        self::create_phase80_reception_packs($wpdb->prefix . 'riverso_');
+    }
+
     public static function ensure_quote_price_rule() {
         global $wpdb;
         if (get_option('riverso_pos_phase78_quote_price_rule') === '1') {
@@ -5998,6 +6010,31 @@ class Riverso_POS_Activator {
             Riverso_POS_Audit::log('schema.phase79_billing_draft_discount_anchor', 'billing_draft_lines', 0, array(
                 'actor_type' => 'computer',
                 'details' => 'Fase 79: discount_anchor/discount_anchor_value en lineas de borradores de factura',
+            ));
+        }
+    }
+
+    /**
+     * Fase 80: recepción de códigos de caja de familia.
+     * - unidades_envase: unidades del envase del producto de la línea (caja de 500 → 500; 1 si no es caja).
+     *   Lo esperado = cantidad facturada × factor ÷ unidades_envase.
+     * - es_suelto: parte en unidades sueltas (al unitario) cuando la cantidad no calza con cajas enteras.
+     */
+    private static function create_phase80_reception_packs($prefix) {
+        $table = "{$prefix}recepcion_lineas";
+        if (!self::table_exists($table)) {
+            return;
+        }
+        self::add_column_if_missing($table, 'unidades_envase', 'unidades_envase DECIMAL(12,4) NOT NULL DEFAULT 1');
+        self::add_column_if_missing($table, 'es_suelto', 'es_suelto TINYINT(1) NOT NULL DEFAULT 0');
+        if (get_option('riverso_pos_phase80_reception_packs') === '1') {
+            return;
+        }
+        update_option('riverso_pos_phase80_reception_packs', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase80_reception_packs', 'recepcion_lineas', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 80: unidades_envase y es_suelto en lineas de recepcion (cajas de familia)',
             ));
         }
     }

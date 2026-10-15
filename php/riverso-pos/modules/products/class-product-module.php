@@ -912,12 +912,12 @@ class Riverso_Product_Module {
                 $code,
                 $proveedor_id
             );
-            $prov['purchase_units_factor'] = (float) ($ctx['factor'] ?? $factor);
+            // Caja de familia: el factor dice si la factura cuenta unidades (1) o cajas (pack_qty).
+            $prov['purchase_units_factor'] = !empty($ctx['is_family_pack'])
+                ? (float) ($ctx['invoice_factor'] ?? 1)
+                : (float) ($ctx['factor'] ?? $factor);
             $prov['purchase_units_family_pack'] = !empty($ctx['is_family_pack']);
             $prov['purchase_units_pack_qty'] = $ctx['pack_qty'] ?? null;
-            if (!empty($ctx['is_family_pack'])) {
-                $prov['purchase_units_can_edit'] = false;
-            }
         }
 
         if ($pp_id > 0) {
@@ -6430,12 +6430,6 @@ class Riverso_Product_Module {
 			(string) ($pp['codigo_proveedor'] ?? ''),
 			(int) ($pp['proveedor_id'] ?? 0)
 		);
-		if (!empty($ctx['is_family_pack'])) {
-			wp_send_json_error([
-				'message' => 'Este código ya es un envase de familia. Las unidades las resuelve la familia; no se edita el factor de compra.',
-			], 400);
-		}
-
 		if ($is_unit_real) {
 			$factor = 1.0;
 		} elseif ($factor === null || $factor < 1) {

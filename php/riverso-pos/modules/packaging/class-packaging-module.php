@@ -318,6 +318,32 @@ class Riverso_Packaging_Module {
             }
         }
 
+        // 2b. Descontar la caja del stock Riverso (Recepción la ingresa como cajas del miembro).
+        // Solo saldo positivo: las cajas que nunca entraron al stock nuevo viven en WooCommerce/lotes.
+        if ($unit_base_id && intval($pb['id']) !== intval($unit_base_id) && class_exists('Riverso_Movement')) {
+            $pendiente = $cantidad_envases;
+            $saldos = $wpdb->get_results($wpdb->prepare(
+                "SELECT pu.ubicacion_id, pu.cantidad
+                 FROM {$prefix}producto_ubicacion pu
+                 INNER JOIN {$prefix}ubicaciones u ON u.id = pu.ubicacion_id
+                 WHERE pu.product_id = %d AND pu.cantidad > 0 AND COALESCE(u.tipo, '') <> 'virtual'
+                 ORDER BY pu.cantidad DESC",
+                intval($pb['id'])
+            ), ARRAY_A) ?: [];
+            foreach ($saldos as $saldo) {
+                if ($pendiente <= 0.0001) {
+                    break;
+                }
+                $sale = min($pendiente, (float) $saldo['cantidad']);
+                Riverso_Movement::create('apertura', intval($pb['id']), $sale, [
+                    'ubicacion_origen' => intval($saldo['ubicacion_id']),
+                    'referencia_tipo' => 'apertura',
+                    'notas' => sprintf('Apertura envase #%d → unitario', $envase_id),
+                ]);
+                $pendiente -= $sale;
+            }
+        }
+
         // 3. Descontar stock cerrado en WooCommerce (envase = variación/producto).
         if ($wc_product && $wc_product->managing_stock()) {
             $wc_stock_result = wc_update_product_stock($wc_product, $cantidad_envases, 'decrease');

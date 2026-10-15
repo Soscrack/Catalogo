@@ -147,6 +147,10 @@ class Riverso_Emparejamiento_Module {
     }
 }
 
+// Envase de los miembros de familia (caja de 500 → se pide en unidades y se muestran cajas).
+$wpdb->query("CREATE TABLE {$p}envases (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, producto_base_id BIGINT UNSIGNED NOT NULL,
+    cantidad_unidades DECIMAL(12,4) NOT NULL DEFAULT 1, activo TINYINT(1) DEFAULT 1, PRIMARY KEY (id)) $cc");
+
 /* ---------- Código bajo prueba ---------- */
 require RIVERSO_POS_PLUGIN_DIR . 'includes/class-activator.php';
 require RIVERSO_POS_PLUGIN_DIR . 'purchases/notices/class-purchase-notice-service.php';
@@ -497,6 +501,42 @@ check('un pedido cancelado no se reabre con decide', throws(function () use ($sv
 $list = $svc->list_orders();
 check('la lista trae los pedidos con su estado y cuenta por estado', count($list['pedidos']) === 5 && $list['counts']['cancelada'] === 3 && $list['counts']['recibida'] === 1, json_encode($list['counts']));
 check('filtro por estado y búsqueda por proveedor', count($svc->list_orders(['estado' => 'recibida'])['pedidos']) === 1 && count($svc->list_orders(['buscar' => 'steelfix'])['pedidos']) === 1);
+
+echo "\n== Caja de familia: se pide en unidades ==\n";
+$wpdb->insert("{$p}producto_base", ['canonical_sku' => '272', 'nombre_canonico' => 'CRS 6 x 2 Zinc.']);
+$crs = (int) $wpdb->insert_id;
+$wpdb->insert("{$p}producto_base", ['canonical_sku' => '247610', 'nombre_canonico' => 'CRS 6 x 2 (Caja 500)']);
+$crs_box = (int) $wpdb->insert_id;
+$wpdb->insert("{$p}equivalence_groups", ['nombre' => 'CRS 6x2', 'unit_producto_base_id' => $crs, 'activo' => 1]);
+$crs_g = (int) $wpdb->insert_id;
+$wpdb->insert("{$p}equivalence_members", ['grupo_id' => $crs_g, 'producto_base_id' => $crs]);
+$wpdb->insert("{$p}equivalence_members", ['grupo_id' => $crs_g, 'producto_base_id' => $crs_box]);
+$wpdb->insert("{$p}envases", ['producto_base_id' => $crs_box, 'cantidad_unidades' => 500]);
+$wpdb->insert("{$p}producto_proveedor", ['producto_base_id' => $crs_box, 'proveedor_id' => 3, 'codigo_proveedor' => 'B23TAD', 'unidad_compra' => 'CJ']);
+$crs_pp = (int) $wpdb->insert_id;
+$notices = Riverso_Purchase_Notice_Service::get_instance();
+check('Avisos sabe que la caja trae 500 y el unitario no es caja', $notices->pack_units($crs_box) == 500 && $notices->pack_units($crs) === null);
+$draft = $svc->create_draft(3);
+$draft_id = is_array($draft) ? (int) $draft['id'] : (int) $draft;
+$o = $svc->add_line($draft_id, ['producto_base_id' => $crs_box, 'pp_id' => $crs_pp]);
+$l = line_of($o, '247610');
+check('sin cantidad, la unidad por defecto es unidades (aunque el código diga CJ)', $l && $l['unidad'] === 'unidad' && $l['envase'] == 500, json_encode($l ? [$l['unidad'], $l['envase']] : null));
+$o = $svc->update_line($l['id'], ['cantidad' => '20000', 'unidad' => 'unidad']);
+$l = line_of($o, '247610');
+check('20.000 unidades = 40 cajas de 500', $l['cantidad'] == 20000 && $l['cajas'] == 40 && $l['equivalencia'] === null, json_encode([$l['cantidad'], $l['cajas']]));
+$o = $svc->update_line($l['id'], ['cantidad' => '40', 'unidad' => 'caja']);
+$l = line_of($o, '247610');
+check('pedida en cajas: 40 cajas = 20.000 unidades', $l['cajas'] === null && $l['equivalencia'] == 20000);
+$o = $svc->update_line($l['id'], ['cantidad' => '20000', 'unidad' => 'unidad']);
+$svc->send($draft_id);
+$wpdb->insert("{$p}facturas", ['tipo_dte' => 33, 'folio' => '750061', 'proveedor_id' => 3, 'fecha_emision' => '2026-10-20']);
+$crs_f = (int) $wpdb->insert_id;
+$wpdb->insert("{$p}recepciones", ['factura_id' => $crs_f, 'estado' => 'recibida']);
+// Recepción ingresa cajas del producto vinculado (20.000 U facturadas = 40 cajas).
+$wpdb->insert("{$p}recepcion_lineas", ['recepcion_id' => $wpdb->insert_id, 'producto_base_id' => $crs_box, 'cantidad_recibida' => 40]);
+$o = $svc->link_document($draft_id, $crs_f);
+$l = line_of($o, '247610');
+check('40 cajas recibidas completan las 20.000 unidades pedidas', $l['cantidad_recibida'] == 20000 && $o['estado'] === 'recibida', json_encode([$l['cantidad_recibida'], $l['estado'], $o['estado']]));
 
 echo "\nconsultas ejecutadas: {$wpdb->queries}\n";
 echo $fails ? "RESULTADO: {$fails} FALLAS\n" : "RESULTADO: todo ok\n";

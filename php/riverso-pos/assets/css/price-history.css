@@ -810,7 +810,11 @@
 .rpf-code-link-warn {
     margin-top: 4px;
     padding: 3px 6px;
-    max-width: 240px;
+    max-width: 260px;
+    box-sizing: border-box;
+    /* La celda SKU es nowrap (par unitario · caja): el aviso sí debe hacer salto de línea. */
+    white-space: normal;
+    overflow-wrap: anywhere;
     font-size: 11px;
     line-height: 1.4;
     background: #fcf0e3;
@@ -820,7 +824,8 @@
 }
 
 .rpf-code-link-warn .button {
-    margin-top: 3px;
+    display: block;
+    margin-top: 4px;
 }
 
 .rpf-pu-scope {
@@ -2125,4 +2130,21 @@
 
 .rpf-pu-suggestion {
     margin: 10px 0 0 !important;
+}
+
+/* Barcode ya existente: dónde está y qué hacer (traspaso / reemplazo / actualizar). */
+.rpf-bc-conflict p {
+    margin: 0 0 6px;
+}
+
+.rpf-bc-conflict-list {
+    margin: 0 0 8px 18px;
+    list-style: disc;
+}
+
+.rpf-bc-conflict-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+    margin: 0 !important;
 }

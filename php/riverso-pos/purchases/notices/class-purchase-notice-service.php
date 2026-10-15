@@ -75,6 +75,12 @@ class Riverso_Purchase_Notice_Service {
     /** @var array<int, array> */
     private $scopes = [];
 
+    /** @var array<int, float|null> Unidades por caja de un miembro de familia (null = no es caja). */
+    private $packs = [];
+
+    /** @var bool|null */
+    private $has_envases = null;
+
     /** @var array<int, int> */
     private $local_ids = [];
 
@@ -611,6 +617,8 @@ class Riverso_Purchase_Notice_Service {
                 'unidad' => (string) $row['unidad_compra'],
                 // factor_conversion nace en 1: solo un valor mayor dice algo.
                 'factor' => $factor > 1.0001 ? $factor : null,
+                // El código es una caja de familia: se pide en unidades y se muestran las cajas.
+                'envase' => $this->pack_units((int) $row['producto_base_id']),
                 'preferido' => (int) $row['es_preferido'] === 1,
                 'calzo' => (int) $row['id'] === $matched_pp_id,
                 'sin_codigo' => false,
@@ -798,6 +806,49 @@ class Riverso_Purchase_Notice_Service {
      *
      * @return bool
      */
+    /**
+     * Unidades que trae el producto cuando es una caja de una familia con unitario
+     * (CRS 6x2 caja 500 → 500). Null si es el unitario, no tiene familia o no tiene envase.
+     * Recepción ingresa estas líneas en cajas; Pedidos se escribe en unidades y se convierte.
+     *
+     * @param int $producto_base_id
+     * @return float|null
+     */
+    public function pack_units($producto_base_id) {
+        global $wpdb;
+        $pb = (int) $producto_base_id;
+        if ($pb <= 0) {
+            return null;
+        }
+        if (array_key_exists($pb, $this->packs)) {
+            return $this->packs[$pb];
+        }
+        if ($this->has_envases === null) {
+            $this->has_envases = $this->table_exists('envases');
+        }
+        $qty = null;
+        if ($this->has_envases && $this->has_family_units()) {
+            $family = $this->family_of($pb);
+            $unit = $family > 0 ? (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT unit_producto_base_id FROM {$this->table('equivalence_groups')} WHERE id = %d AND activo = 1",
+                $family
+            )) : 0;
+            if ($unit > 0 && $unit !== $pb) {
+                $units = (float) $wpdb->get_var($wpdb->prepare(
+                    "SELECT cantidad_unidades FROM {$this->table('envases')}
+                     WHERE producto_base_id = %d AND activo = 1
+                     ORDER BY cantidad_unidades DESC LIMIT 1",
+                    $pb
+                ));
+                if ($units > 1.0001) {
+                    $qty = round($units, 4);
+                }
+            }
+        }
+        $this->packs[$pb] = $qty;
+        return $qty;
+    }
+
     private function has_family_units() {
         global $wpdb;
         if ($this->has_family_units === null) {

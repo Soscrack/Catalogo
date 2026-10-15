@@ -2038,17 +2038,17 @@ class Riverso_Folio_Price_Process_Service {
         $pack = isset($ctx['pack_qty']) ? (float) $ctx['pack_qty'] : 0.0;
         if (!empty($ctx['is_family_pack']) && $pack > 1) {
             $n = rtrim(rtrim(number_format($pack, 4, '.', ''), '0'), '.');
+            // Sin argumentos posicionales: "%1$s" entre comillas dobles interpola $s y rompe sprintf.
             return sprintf(
-                "El código es una caja de %1$s unidades (SKU %2$s). ¿La cantidad de la factura cuenta unidades sueltas o cajas?
-
-Código: %3$s
-Folio: %4$s
-
-Si cuenta unidades, cada %1$s de la factura es una caja. Si cuenta cajas, cada unidad de la factura es una caja de %1$s.",
+                'El código es una caja de %s unidades (SKU %s). ¿La cantidad de la factura cuenta unidades sueltas o cajas?'
+                    . "\n\nCódigo: %s\nFolio: %s\n\n"
+                    . 'Si cuenta unidades, cada %s de la factura es una caja. Si cuenta cajas, cada unidad de la factura es una caja de %s.',
                 $n,
                 $sku,
                 $code,
-                $folio
+                $folio,
+                $n,
+                $n
             );
         }
         return sprintf(

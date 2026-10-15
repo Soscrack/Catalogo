@@ -3309,15 +3309,45 @@ class Riverso_Product_Module {
             $tipo = 'ean13';
         }
 
-        $barcode_id = Riverso_Barcode_Model::create(
-            $barcode,
-            $tipo,
-            $product_id,
-            $cantidad > 0 ? $cantidad : 1,
-            $unidad_medida ?: 'unidad',
-            $proveedor_id > 0 ? $proveedor_id : null,
-            $envase_id > 0 ? $envase_id : null
-        );
+        // El código ya vive en algún producto: no se duplica. Se pregunta qué hacer
+        // (actualizar aquí, traspaso dentro de la familia o reemplazo) y se resuelve con «resolucion».
+        $conflict = $this->barcode_conflict($barcode, $product_id);
+        if ($conflict) {
+            $resolucion = sanitize_key($_POST['resolucion'] ?? '');
+            if (!in_array($resolucion, $conflict['opciones'], true)) {
+                wp_send_json_error([
+                    'message' => $conflict['mensaje'],
+                    'conflict' => $conflict,
+                ]);
+            }
+            if ($resolucion === 'reemplazar' && trim($audit_reason) === '') {
+                wp_send_json_error([
+                    'message' => 'Escribe el motivo del reemplazo: el otro producto pierde este código.',
+                    'conflict' => $conflict,
+                ]);
+            }
+            $barcode_id = $this->resolve_barcode_conflict($conflict, $resolucion, [
+                'codigo' => $barcode,
+                'tipo' => $tipo,
+                'cantidad' => $cantidad > 0 ? $cantidad : 1,
+                'unidad_medida' => $unidad_medida ?: 'unidad',
+                'proveedor_id' => $tipo === 'supplier' && $proveedor_id > 0 ? $proveedor_id : null,
+                'motivo' => $audit_reason,
+            ]);
+            if (is_wp_error($barcode_id)) {
+                wp_send_json_error(['message' => $barcode_id->get_error_message()]);
+            }
+        } else {
+            $barcode_id = Riverso_Barcode_Model::create(
+                $barcode,
+                $tipo,
+                $product_id,
+                $cantidad > 0 ? $cantidad : 1,
+                $unidad_medida ?: 'unidad',
+                $proveedor_id > 0 ? $proveedor_id : null,
+                $envase_id > 0 ? $envase_id : null
+            );
+        }
 
         if (!$barcode_id) {
             wp_send_json_error(['message' => 'No se pudo crear el código de barra']);
@@ -3359,6 +3389,239 @@ class Riverso_Product_Module {
             'barcode_id' => (int) $barcode_id,
             'item' => $item,
         ]);
+    }
+
+    /**
+     * Familia del producto: cada integrante con su papel (unitario, caja de N, integrante).
+     *
+     * @param int $product_id
+     * @return array{grupo_id:int, nombre:string, roles: array<int, string>}|null
+     */
+    private function barcode_family_roles($product_id) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $group = $wpdb->get_row($wpdb->prepare(
+            "SELECT g.id, g.codigo_grupo, g.nombre, g.unit_producto_base_id
+             FROM {$prefix}equivalence_members em
+             INNER JOIN {$prefix}equivalence_groups g ON g.id = em.grupo_id AND g.activo = 1
+             WHERE em.producto_base_id = %d AND em.activo = 1
+             ORDER BY (g.tipo_sustitucion = 'exacta') DESC, g.id ASC
+             LIMIT 1",
+            absint($product_id)
+        ), ARRAY_A);
+        if (!$group) {
+            return null;
+        }
+        $members = array_map('intval', $wpdb->get_col($wpdb->prepare(
+            "SELECT producto_base_id FROM {$prefix}equivalence_members WHERE grupo_id = %d AND activo = 1",
+            (int) $group['id']
+        )) ?: []);
+        $unit_id = (int) ($group['unit_producto_base_id'] ?? 0);
+        $roles = [];
+        foreach ($members as $member) {
+            if ($member === $unit_id) {
+                $roles[$member] = 'unitario';
+                continue;
+            }
+            $qty = (float) $wpdb->get_var($wpdb->prepare(
+                "SELECT cantidad_unidades FROM {$prefix}envases WHERE producto_base_id = %d AND activo = 1
+                 ORDER BY cantidad_unidades DESC LIMIT 1",
+                $member
+            ));
+            $roles[$member] = $qty > 1.0001
+                ? 'caja de ' . rtrim(rtrim(number_format($qty, 4, ',', '.'), '0'), ',')
+                : 'integrante';
+        }
+        return [
+            'grupo_id' => (int) $group['id'],
+            'nombre' => trim((string) ($group['codigo_grupo'] ?? '') . ' ' . (string) ($group['nombre'] ?? '')),
+            'roles' => $roles,
+        ];
+    }
+
+    /**
+     * ¿El código ya está activo en algún producto? Devuelve dónde, su relación con el producto
+     * de destino y qué se puede hacer:
+     * - actualizar: solo está en este producto (se actualiza y se quitan duplicados).
+     * - mover: está en otro integrante de la misma familia (traspaso, como en «Ver familia»).
+     * - reemplazar: está en un producto de fuera (lo pierde: queda en desuso y desactivado).
+     *
+     * @param string $codigo
+     * @param int    $product_id
+     * @return array|null
+     */
+    private function barcode_conflict($codigo, $product_id) {
+        if (!class_exists('Riverso_Barcode_Model') || !method_exists('Riverso_Barcode_Model', 'active_occurrences')) {
+            return null;
+        }
+        $occurrences = Riverso_Barcode_Model::active_occurrences($codigo);
+        if (!$occurrences) {
+            return null;
+        }
+        global $wpdb;
+        $product_id = absint($product_id);
+        $target = $wpdb->get_row($wpdb->prepare(
+            "SELECT canonical_sku, nombre_canonico FROM {$wpdb->prefix}riverso_producto_base WHERE id = %d",
+            $product_id
+        ), ARRAY_A) ?: [];
+        $family = $this->barcode_family_roles($product_id);
+        $roles = $family ? $family['roles'] : [];
+
+        $kinds = [];
+        $lines = [];
+        foreach ($occurrences as &$occ) {
+            $pb = (int) $occ['producto_base_id'];
+            if ($pb === $product_id) {
+                $occ['relacion'] = 'mismo_producto';
+            } elseif ($pb > 0 && isset($roles[$pb])) {
+                $occ['relacion'] = 'misma_familia';
+                $occ['rol'] = $roles[$pb];
+            } else {
+                $occ['relacion'] = 'otro_producto';
+            }
+            $kinds[$occ['relacion']] = true;
+            $where = $occ['relacion'] === 'mismo_producto'
+                ? 'este producto'
+                : ('SKU ' . ($occ['canonical_sku'] !== '' ? $occ['canonical_sku'] : '—') .
+                    ($occ['nombre'] !== '' ? ' — ' . $occ['nombre'] : '') .
+                    (!empty($occ['rol']) ? ' (' . $occ['rol'] . ' de la familia ' . $family['nombre'] . ')' : ''));
+            $lines[] = $where . ' · ' . ($occ['estado'] !== '' ? $occ['estado'] : 'sin estado') .
+                ' · ×' . rtrim(rtrim(number_format((float) $occ['cantidad'], 4, ',', '.'), '0'), ',');
+        }
+        unset($occ);
+
+        if (isset($kinds['otro_producto'])) {
+            $opciones = ['reemplazar'];
+        } elseif (isset($kinds['misma_familia'])) {
+            $opciones = ['mover'];
+        } else {
+            $opciones = ['actualizar'];
+        }
+
+        return [
+            'codigo' => $codigo,
+            'producto_base_id' => $product_id,
+            'destino_sku' => (string) ($target['canonical_sku'] ?? ''),
+            'destino_nombre' => (string) ($target['nombre_canonico'] ?? ''),
+            'destino_rol' => $roles[$product_id] ?? '',
+            'familia' => $family ? $family['nombre'] : '',
+            'ocurrencias' => $occurrences,
+            'opciones' => $opciones,
+            'mensaje' => 'El código ' . $codigo . ' ya está activo en: ' . implode('; ', $lines) . '.',
+        ];
+    }
+
+    /**
+     * Aplica la resolución: deja una sola fila activa del código, en el producto de destino.
+     * El producto que lo pierde no lo borra: queda en desuso y desactivado, con motivo.
+     *
+     * @param array  $conflict barcode_conflict()
+     * @param string $resolucion actualizar|mover|reemplazar
+     * @param array  $fields codigo, tipo, cantidad, unidad_medida, proveedor_id, motivo
+     * @return int|WP_Error id de la fila que queda
+     */
+    private function resolve_barcode_conflict(array $conflict, $resolucion, array $fields) {
+        $target = (int) $conflict['producto_base_id'];
+        $dest_label = 'SKU ' . ($conflict['destino_sku'] !== '' ? $conflict['destino_sku'] : '#' . $target) .
+            ($conflict['destino_rol'] !== '' ? ' (' . $conflict['destino_rol'] . ')' : '');
+        $motivo = trim((string) $fields['motivo']);
+        $on_target = [];
+        $others = [];
+        foreach ($conflict['ocurrencias'] as $occ) {
+            if ($occ['relacion'] === 'mismo_producto') {
+                $on_target[] = $occ;
+            } else {
+                $others[] = $occ;
+            }
+        }
+
+        $cantidad = (float) $fields['cantidad'];
+        $keep = $on_target ? $on_target[0] : null;
+        if (!$keep && $resolucion === 'mover') {
+            // Traspaso dentro de la familia: la misma fila cambia de integrante (no queda copia atrás).
+            if (!class_exists('Riverso_Unit_Product_Service')) {
+                $path = RIVERSO_POS_PLUGIN_DIR . 'modules/families/class-unit-product-service.php';
+                if (file_exists($path)) {
+                    require_once $path;
+                }
+            }
+            if (!class_exists('Riverso_Unit_Product_Service')) {
+                return new WP_Error('unavailable', 'Servicio de familias no disponible');
+            }
+            $unit_svc = Riverso_Unit_Product_Service::get_instance();
+            $env = $unit_svc->get_canonical_envase($target);
+            if ($cantidad <= 1.0001 && $env && (float) $env['cantidad_unidades'] > 1) {
+                $cantidad = (float) $env['cantidad_unidades'];
+            }
+            $keep = array_shift($others);
+            $moved = $unit_svc->move_barcode_to_pack((int) $keep['id'], $target, $cantidad, [
+                'motivo' => 'Traspaso desde SKU ' . $keep['canonical_sku'] . ' a ' . $dest_label,
+            ]);
+            if (is_wp_error($moved)) {
+                return $moved;
+            }
+        }
+
+        foreach (array_slice($on_target, 1) as $dup) {
+            Riverso_Barcode_Model::retire((int) $dup['id'], 'Duplicado en el mismo producto (se dejó una sola fila).');
+        }
+        foreach ($others as $occ) {
+            $why = $occ['relacion'] === 'misma_familia'
+                ? 'Traspaso dentro de la familia: pasó a ' . $dest_label . '.'
+                : 'Reemplazado: pasó a ' . $dest_label . '.';
+            Riverso_Barcode_Model::retire((int) $occ['id'], $why . ($motivo !== '' ? ' Motivo: ' . $motivo : ''));
+        }
+
+        if (!$keep) {
+            // Reemplazo sin fila en el destino: ya no queda ninguna activa, se crea normal.
+            $id = Riverso_Barcode_Model::create(
+                $fields['codigo'],
+                $fields['tipo'],
+                $target,
+                $cantidad,
+                $fields['unidad_medida'],
+                $fields['proveedor_id']
+            );
+            if (!$id) {
+                return new WP_Error('create', 'No se pudo crear el código de barra');
+            }
+        } else {
+            $id = (int) $keep['id'];
+            // La fila que queda se confirma con lo que se escribió (aunque viniera del sistema antiguo).
+            Riverso_Barcode_Model::update($id, [
+                'producto_base_id' => $target,
+                'tipo' => $fields['tipo'],
+                'cantidad' => $cantidad,
+                'factor_a_unidad_base' => $cantidad,
+                'unidad_medida' => $fields['unidad_medida'],
+                'proveedor_id' => $fields['proveedor_id'],
+                'origen_datos' => 'manual',
+                'conflicto' => 0,
+            ]);
+            global $wpdb;
+            $wpdb->update(
+                $wpdb->prefix . 'riverso_codigo_barra',
+                ['legacy_ref' => '', 'migrado_de_tabla' => ''],
+                ['id' => $id]
+            );
+            Riverso_Barcode_Model::set_status($id, 'verificado', $resolucion === 'actualizar'
+                ? 'Confirmado al volver a ingresarlo en este producto.'
+                : ($resolucion === 'mover' ? 'Traspaso dentro de la familia a ' : 'Reemplazo hacia ') . $dest_label .
+                    ($motivo !== '' ? '. Motivo: ' . $motivo : ''));
+        }
+
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('barcode_' . ($resolucion === 'mover' ? 'transferred' : ($resolucion === 'reemplazar' ? 'replaced' : 'reconfirmed')), 'codigo_barra', (int) $id, [
+                'actor_type' => 'human',
+                'codigo' => $fields['codigo'],
+                'destino_producto_base_id' => $target,
+                'desde' => array_map(function ($occ) {
+                    return ['id' => $occ['id'], 'producto_base_id' => $occ['producto_base_id'], 'sku' => $occ['canonical_sku'], 'relacion' => $occ['relacion']];
+                }, $conflict['ocurrencias']),
+                'razon' => $motivo,
+            ]);
+        }
+        return (int) $id;
     }
 
     public function ajax_update_barcode() {

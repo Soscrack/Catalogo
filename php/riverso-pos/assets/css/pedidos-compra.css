@@ -285,3 +285,10 @@ td.pc-acts {
   .pc-group-foot { flex-direction: column; align-items: stretch; }
   .pc-order-actions .av-btn { flex: 1 1 auto; }
 }
+
+/* Caja de familia: total de unidades → cajas. */
+.pc-pack-hint {
+  margin-top: 4px;
+  font-weight: 600;
+  color: #2271b1;
+}

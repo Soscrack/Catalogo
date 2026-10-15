@@ -637,6 +637,20 @@ class Riverso_Barcode_Mapping_Module {
                 $codigo
             ));
             if ($existing) {
+                // Reasignar desde el mapeo mueve el código de producto: queda registrado desde dónde.
+                $prev_pb = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT producto_base_id FROM {$prefix}codigo_barra WHERE id = %d",
+                    $existing
+                ));
+                if ($prev_pb > 0 && $pb && $prev_pb !== (int) $producto_base_id && class_exists('Riverso_POS_Audit')) {
+                    Riverso_POS_Audit::log('barcode_reassigned', 'codigo_barra', $existing, [
+                        'actor_type' => 'human',
+                        'codigo' => $codigo,
+                        'desde_producto_base_id' => $prev_pb,
+                        'hacia_producto_base_id' => (int) $producto_base_id,
+                        'origen' => 'mapeo de barcodes',
+                    ]);
+                }
                 $payload['codigo'] = $codigo;
                 Riverso_Barcode_Model::update($existing, $payload);
                 Riverso_Barcode_Model::set_status($existing, $estado, sanitize_text_field($_POST['motivo'] ?? 'Actualizado desde wp-admin.'));

@@ -762,13 +762,9 @@ class Riverso_Barcode_Model {
         global $wpdb;
         $prefix = $wpdb->prefix . 'riverso_';
 
-        $existing = $wpdb->get_var($wpdb->prepare(
-            "SELECT id FROM {$prefix}codigo_barra
-             WHERE codigo = %s AND estado = 'verificado' AND activo = 1
-             LIMIT 1",
-            $codigo
-        ));
-        if ($existing) {
+        // Cualquier fila activa cuenta (los propuestos del sistema antiguo también los lee el escáner):
+        // un código vive en un solo producto. Para pasarlo de producto: transfer()/retire().
+        if (self::active_occurrences($codigo)) {
             return false;
         }
 
@@ -1109,5 +1105,97 @@ class Riverso_Barcode_Model {
 
     public static function exists($codigo) {
         return self::resolve($codigo) !== false;
+    }
+
+    /**
+     * Filas activas del código (las que el escáner usa o sugiere), con su producto.
+     * No cuentan las desactivadas (activo = 0) ni las rechazadas.
+     *
+     * @param string $codigo
+     * @return array<int, array{id:int, producto_base_id:int, canonical_sku:string, nombre:string, estado:string, cantidad:float, tipo:string, legacy:bool}>
+     */
+    public static function active_occurrences($codigo) {
+        global $wpdb;
+        $prefix = $wpdb->prefix . 'riverso_';
+        $codigo = trim((string) $codigo);
+        if ($codigo === '') {
+            return [];
+        }
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT cb.*, pb.canonical_sku, pb.nombre_canonico
+             FROM {$prefix}codigo_barra cb
+             LEFT JOIN {$prefix}producto_base pb ON pb.id = cb.producto_base_id
+             WHERE cb.codigo = %s AND cb.activo = 1 AND COALESCE(cb.estado, '') <> 'rechazado'
+             ORDER BY (cb.estado = 'verificado') DESC, cb.id ASC",
+            $codigo
+        ), ARRAY_A) ?: [];
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = [
+                'id' => (int) $row['id'],
+                'producto_base_id' => (int) ($row['producto_base_id'] ?? 0),
+                'canonical_sku' => (string) ($row['canonical_sku'] ?? ($row['sku_local'] ?? '')),
+                'nombre' => (string) ($row['nombre_canonico'] ?? ''),
+                'estado' => (string) ($row['estado'] ?? ''),
+                'cantidad' => (float) ($row['cantidad'] ?? 1),
+                'tipo' => (string) ($row['tipo'] ?? ''),
+                'legacy' => self::is_legacy_row($row),
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Retira un código del producto que lo pierde: queda en desuso y desactivado (el escáner ya no
+     * lo usa ni lo sugiere), con motivo, quién y cuándo. No se borra: queda el rastro y no reaparece.
+     *
+     * @param int    $codigo_id
+     * @param string $motivo
+     * @return bool
+     */
+    public static function retire($codigo_id, $motivo) {
+        global $wpdb;
+        $codigo_id = absint($codigo_id);
+        if ($codigo_id <= 0) {
+            return false;
+        }
+        $prefix = $wpdb->prefix . 'riverso_';
+        $previous = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, codigo, producto_base_id, estado, activo, motivo_estado FROM {$prefix}codigo_barra WHERE id = %d",
+            $codigo_id
+        ), ARRAY_A);
+        if (!$previous) {
+            return false;
+        }
+        $updated = $wpdb->update(
+            $wpdb->prefix . 'riverso_codigo_barra',
+            [
+                'estado' => 'en_desuso',
+                'activo' => 0,
+                'motivo_estado' => sanitize_text_field($motivo),
+                'estado_por' => get_current_user_id() ?: null,
+                'estado_at' => current_time('mysql'),
+                'requires_human_review' => 0,
+                'updated_at' => current_time('mysql'),
+            ],
+            ['id' => $codigo_id]
+        );
+        if ($updated !== false) {
+            // Mismo historial que set_status(): qué producto lo tenía y por qué lo perdió.
+            $wpdb->insert(
+                "{$prefix}codigos_historial",
+                [
+                    'codigo_id' => $codigo_id,
+                    'accion' => 'retiro_codigo_barra',
+                    'campo_modificado' => 'activo',
+                    'valor_anterior' => wp_json_encode($previous),
+                    'valor_nuevo' => wp_json_encode(['estado' => 'en_desuso', 'activo' => 0, 'motivo' => $motivo]),
+                    'usuario_id' => get_current_user_id() ?: null,
+                    'ip_address' => sanitize_text_field($_SERVER['REMOTE_ADDR'] ?? ''),
+                ],
+                ['%d', '%s', '%s', '%s', '%s', '%d', '%s']
+            );
+        }
+        return $updated !== false;
     }
 }

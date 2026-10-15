@@ -423,7 +423,16 @@ class Riverso_Purchase_Order_Service {
             }
         }
         $equivalencia = null;
-        if ($cantidad > 0 && $unidad !== 'unidad' && $factor !== null && $factor > 1.0001) {
+        $pack = $this->notices()->pack_units((int) ($line['producto_base_id'] ?? 0));
+        $cajas = null;
+        if ($pack) {
+            // Caja de familia: en unidades → cuántas cajas; en cajas → cuántas unidades.
+            if ($cantidad > 0 && $unidad === 'unidad') {
+                $cajas = round($cantidad / $pack, 3);
+            } elseif ($cantidad > 0) {
+                $equivalencia = round($cantidad * $pack, 3);
+            }
+        } elseif ($cantidad > 0 && $unidad !== 'unidad' && $factor !== null && $factor > 1.0001) {
             $equivalencia = round($cantidad * $factor, 3);
         }
         return [
@@ -440,6 +449,8 @@ class Riverso_Purchase_Order_Service {
             'unidad_label' => $units[$unidad] ?? $unidad,
             'factor' => $factor,
             'equivalencia' => $equivalencia,
+            'envase' => $pack,
+            'cajas' => $cajas,
             'precio' => $line['precio_unitario'] !== null ? (float) $line['precio_unitario'] : null,
             'origen' => (string) ($line['origen'] ?? 'legado'),
             'origen_label' => self::ORIGINS[$line['origen'] ?? 'legado'] ?? '',
@@ -1089,6 +1100,7 @@ class Riverso_Purchase_Order_Service {
                         'codigo' => $candidate['codigo'],
                         'unidad' => self::unit_key($candidate['unidad']),
                         'factor' => $candidate['factor'],
+                        'envase' => $candidate['envase'] ?? null,
                     ];
                 }
             }
@@ -1104,6 +1116,7 @@ class Riverso_Purchase_Order_Service {
             'unidad' => self::unit_key($row['unidad_compra']),
             // factor_conversion nace en 1: solo un valor mayor dice algo.
             'factor' => $factor > 1.0001 ? $factor : null,
+            'envase' => $this->notices()->pack_units((int) $row['producto_base_id']),
         ];
     }
 
@@ -1124,7 +1137,9 @@ class Riverso_Purchase_Order_Service {
             $unidad = '';
         }
         if ($cantidad === null || $cantidad <= 0) {
-            return ['cantidad' => 0.0, 'unidad' => $unidad !== '' ? $unidad : (($link ? $link['unidad'] : '') ?: 'unidad')];
+            // Caja de familia: compras pide por total de unidades; las cajas se muestran aparte.
+            $default = $link && !empty($link['envase']) ? 'unidad' : (($link ? $link['unidad'] : '') ?: 'unidad');
+            return ['cantidad' => 0.0, 'unidad' => $unidad !== '' ? $unidad : $default];
         }
         if ($unidad === '') {
             // Sin unidad, "300" puede ser 300 tornillos o 300 cajas.
@@ -3058,6 +3073,11 @@ class Riverso_Purchase_Order_Service {
      * @return float Por cuánto se multiplica la cantidad de la línea para llevarla a unidades de stock.
      */
     protected function line_factor(array $line) {
+        // Caja de familia: Recepción ingresa cajas. Pedida en unidades → ÷ envase; en cajas → 1.
+        $pack = $this->notices()->pack_units((int) ($line['producto_base_id'] ?? 0));
+        if ($pack) {
+            return $line['unidad'] === 'unidad' ? 1 / $pack : 1.0;
+        }
         $factor = $line['factor'] !== null ? (float) $line['factor'] : 0.0;
         return ($line['unidad'] !== 'unidad' && $factor > 1.0001) ? $factor : 1.0;
     }

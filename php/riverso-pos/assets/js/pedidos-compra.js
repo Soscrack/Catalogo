@@ -138,6 +138,24 @@
     return html;
   }
 
+  /**
+   * Caja de familia (el código es una caja de N): compras escribe el total de unidades y aquí se
+   * muestra cuántas cajas son (o, si se pidió en cajas, cuántas unidades).
+   */
+  function packHint(cantidadTexto, unidad, envase) {
+    var env = Number(envase) || 0;
+    if (env <= 1) return "";
+    // Misma lectura que el servidor: la coma es decimal ("20.000" = 20, no veinte mil).
+    var n = parseFloat(String(cantidadTexto == null ? "" : cantidadTexto).replace(",", "."));
+    if (!(n > 0)) return "Caja de " + qty(env) + ": escribe el total de unidades.";
+    if (unidad === "unidad") {
+      var cajas = n / env;
+      var whole = Math.abs(cajas - Math.round(cajas)) < 0.0005;
+      return "= " + qty(cajas) + " caja" + (cajas === 1 ? "" : "s") + " de " + qty(env) + (whole ? "" : " ⚠ no calza con cajas enteras");
+    }
+    return "= " + qty(n * env) + " unidades (cajas de " + qty(env) + ")";
+  }
+
   function quantityText(cantidad, unidadLabel) {
     if (cantidad === null || cantidad === undefined) return "cantidad por definir";
     return qty(cantidad) + " " + (unidadLabel || "");
@@ -425,7 +443,10 @@
         (n.avisos.length ? '<div class="pc-need-line"><button type="button" class="av-btn av-btn-sm" data-join="' + esc(n.clave) + '">Sumar el aviso a ese pedido</button></div>' : "");
     } else {
       var cand = candidateFor(n, n.elegido);
-      var unit = n.unidadElegida !== undefined ? n.unidadElegida : n.unidad || (cand && cfg.units[cand.unidad] ? cand.unidad : "");
+      // Caja de familia: por defecto el total de unidades (como pide compras).
+      var unit = n.unidadElegida !== undefined
+        ? n.unidadElegida
+        : n.unidad || (cand && cand.envase ? "unidad" : cand && cfg.units[cand.unidad] ? cand.unidad : "");
       var value = n.cantidadTexto !== undefined ? n.cantidadTexto : n.cantidad !== null ? String(n.cantidad).replace(".", ",") : "";
       var options = '<option value="0"' + (n.elegido === 0 ? " selected" : "") + ">Sin proveedor</option>";
       var listed = {};
@@ -449,6 +470,9 @@
         '<select data-need-unit aria-label="Unidad">' + unitOptions(unit, "¿en qué?") + "</select>" +
         '<select data-need-supplier aria-label="Proveedor">' + options + "</select>" +
         "</div>" +
+        (cand && cand.envase
+          ? '<div class="av-sub pc-pack-hint" data-need-pack="' + esc(cand.envase) + '">' + esc(packHint(value, unit, cand.envase)) + "</div>"
+          : "") +
         (hint ? '<div class="av-sub">' + esc(hint) + "</div>" : "");
     }
 
@@ -702,7 +726,11 @@
             (extra.length ? '<div class="av-card-line">' + extra.join(" ") + "</div>" : "") +
             (who ? '<div class="av-sub">Avisó: ' + who + "</div>" : "") +
             "</div></div></td>" +
-            '<td class="pc-num">' + esc(quantityText(l.cantidad, l.unidad_label)) + (l.equivalencia ? '<div class="av-sub">' + qty(l.equivalencia) + " unidades</div>" : "") + "</td>" +
+            '<td class="pc-num">' + esc(quantityText(l.cantidad, l.unidad_label)) +
+            (l.envase && l.cantidad !== null
+              ? '<div class="av-sub">' + esc(packHint(l.cantidad, l.unidad, l.envase)) + "</div>"
+              : l.equivalencia ? '<div class="av-sub">' + qty(l.equivalencia) + " unidades</div>" : "") +
+            "</td>" +
             '<td class="pc-num">' + money(l.precio) + "</td>" +
             '<td class="pc-acts">' + acts + "</td></tr>"
           );
@@ -719,6 +747,7 @@
         (line.identificado ? "" : '<label for="pc-m-desc">Descripción</label><input type="text" id="pc-m-desc" maxlength="255" value="' + esc(line.titulo) + '">') +
         '<label for="pc-m-qty">Cantidad</label><div class="av-qty-row"><input type="text" id="pc-m-qty" inputmode="decimal" autocomplete="off" value="' +
         (line.cantidad !== null ? esc(String(line.cantidad).replace(".", ",")) : "") + '"><select id="pc-m-unit" aria-label="Unidad">' + unitOptions(line.unidad, "¿en qué?") + "</select></div>" +
+        (line.envase ? '<div class="av-sub pc-pack-hint" id="pc-m-pack"></div>' : "") +
         '<label for="pc-m-price">Precio unitario <span class="av-sub">Opcional</span></label><input type="text" id="pc-m-price" inputmode="decimal" autocomplete="off" value="' +
         (line.precio !== null ? esc(String(line.precio).replace(".", ",")) : "") + '">',
       "Guardar",
@@ -730,6 +759,19 @@
         });
       }
     );
+    bindModalPackHint(line.envase);
+  }
+
+  /** Aviso «= N cajas» bajo la cantidad del modal (agregar/editar línea). */
+  function bindModalPackHint(envase) {
+    var box = $("pc-m-pack");
+    if (!box) return;
+    var paint = function () {
+      box.textContent = packHint($("pc-m-qty").value, $("pc-m-unit").value, envase);
+    };
+    $("pc-m-qty").addEventListener("input", paint);
+    $("pc-m-unit").addEventListener("change", paint);
+    paint();
   }
 
   function dialogAddLine() {
@@ -742,7 +784,8 @@
         '<div class="av-candidates" id="pc-m-results"></div>' +
         '<div id="pc-m-picked" class="av-product" hidden></div>' +
         '<label for="pc-m-desc">O descríbelo, si no tiene código</label><input type="text" id="pc-m-desc" maxlength="255" placeholder="Ej: hilo 1/4 métrico">' +
-        '<label for="pc-m-qty">Cantidad</label><div class="av-qty-row"><input type="text" id="pc-m-qty" inputmode="decimal" autocomplete="off"><select id="pc-m-unit" aria-label="Unidad">' + unitOptions("", "¿en qué?") + "</select></div>",
+        '<label for="pc-m-qty">Cantidad</label><div class="av-qty-row"><input type="text" id="pc-m-qty" inputmode="decimal" autocomplete="off"><select id="pc-m-unit" aria-label="Unidad">' + unitOptions("", "¿en qué?") + "</select></div>" +
+        '<div class="av-sub pc-pack-hint" id="pc-m-pack" hidden></div>',
       "Agregar",
       function () {
         var data = { id: o.id, cantidad: $("pc-m-qty").value.trim(), unidad: $("pc-m-unit").value };
@@ -803,7 +846,13 @@
       (picked.proveedores || []).forEach(function (s) {
         if (s.proveedor_id === o.proveedor_id) cand = s;
       });
-      if (cand && cfg.units[cand.unidad]) $("pc-m-unit").value = cand.unidad;
+      if (cand && cand.envase) {
+        $("pc-m-unit").value = "unidad";
+        $("pc-m-pack").hidden = false;
+        bindModalPackHint(cand.envase);
+      } else if (cand && cfg.units[cand.unidad]) {
+        $("pc-m-unit").value = cand.unidad;
+      }
       $("pc-m-qty").focus();
     });
   }
@@ -1218,7 +1267,26 @@
     if (t.id === "pc-modal") closeModal();
   });
 
+  function refreshNeedPackHint(target) {
+    var row = target.closest(".pc-need");
+    var hint = row && row.querySelector("[data-need-pack]");
+    if (!hint) return;
+    hint.textContent = packHint(
+      row.querySelector("[data-need-qty]").value,
+      row.querySelector("[data-need-unit]").value,
+      hint.getAttribute("data-need-pack")
+    );
+  }
+
+  root.addEventListener("input", function (e) {
+    if (e.target.matches && e.target.matches("[data-need-qty]")) refreshNeedPackHint(e.target);
+  });
+
   root.addEventListener("change", function (e) {
+    if (e.target.matches && e.target.matches("[data-need-unit]")) {
+      refreshNeedPackHint(e.target);
+      return;
+    }
     var select = e.target.closest("[data-need-supplier]");
     if (!select) return;
     syncNeedInputs();

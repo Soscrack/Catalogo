@@ -3229,7 +3229,58 @@
         });
     }
 
-    function submitRpfBcAdd() {
+    /**
+     * El código ya estaba activo en otro lugar: dónde, qué significa y qué se puede hacer.
+     * Mover = traspaso dentro de la familia; Reemplazar = el otro producto lo pierde (queda en
+     * desuso y desactivado, no se borra).
+     */
+    function rpfBcConflictHtml(c) {
+        var opcion = (c.opciones || [])[0] || '';
+        var destino = (c.destino_sku ? 'SKU ' + c.destino_sku : 'este producto') +
+            (c.destino_rol ? ' (' + c.destino_rol + ')' : '');
+        var origenes = (c.ocurrencias || []).filter(function (o) {
+            return o.relacion !== 'mismo_producto';
+        }).map(function (o) {
+            return 'SKU ' + (o.canonical_sku || '—');
+        }).filter(function (label, i, all) {
+            return all.indexOf(label) === i;
+        });
+        var intro;
+        if (opcion === 'mover') {
+            intro = 'Este código ya está en otro integrante de la familia <strong>' + esc(c.familia || '') + '</strong>. ' +
+                'Pasarlo a <strong>' + esc(destino) + '</strong> es un <strong>traspaso</strong>: ' +
+                esc(origenes.join(', ')) + ' deja de responder a este código y al escanearlo se leerá como ' + esc(destino) + '.';
+        } else if (opcion === 'reemplazar') {
+            intro = 'Este código pertenece a otro producto. Si lo reemplazas, <strong>' + esc(origenes.join(', ')) +
+                '</strong> lo pierde: queda en desuso y desactivado (no se borra, queda el registro). ' +
+                '<strong>Escribe el motivo</strong> en el campo «Motivo» antes de confirmar.';
+        } else {
+            intro = 'Este código ya está en este producto. Puedes actualizar su tipo y cantidad con lo que escribiste' +
+                ((c.ocurrencias || []).length > 1 ? ' (además se quitan las filas repetidas).' : '.');
+        }
+        var rows = (c.ocurrencias || []).map(function (o) {
+            var where = o.relacion === 'mismo_producto'
+                ? 'Este producto'
+                : ('<code>' + esc(o.canonical_sku || '—') + '</code> ' + esc(o.nombre || ''));
+            var rel = o.relacion === 'misma_familia'
+                ? (o.rol || 'integrante') + ' de la familia'
+                : (o.relacion === 'otro_producto' ? 'otro producto' : 'mismo producto');
+            return '<li>' + where + ' <span class="description">· ' + esc(rel) + ' · ' + esc(o.estado || 'sin estado') +
+                ' · ×' + esc(fmtQty(o.cantidad)) + (o.legacy ? ' · sistema antiguo' : '') + '</span></li>';
+        }).join('');
+        var label = opcion === 'mover'
+            ? 'Mover a ' + (c.destino_sku || 'este producto')
+            : (opcion === 'reemplazar' ? 'Reemplazar (quitar de ' + origenes.join(', ') + ')' : 'Actualizar aquí');
+        return '<div class="rpf-bc-conflict">' +
+            '<p><strong>El código <code>' + esc(c.codigo || '') + '</code> ya existe.</strong> ' + intro + '</p>' +
+            '<ul class="rpf-bc-conflict-list">' + rows + '</ul>' +
+            '<p class="rpf-bc-conflict-actions">' +
+            '<button type="button" class="button" id="rpf-bc-conflict-cancel">Cancelar</button> ' +
+            '<button type="button" class="button button-primary" id="rpf-bc-conflict-apply" data-resolucion="' + esc(opcion) + '">' +
+            esc(label) + '</button></p></div>';
+    }
+
+    function submitRpfBcAdd(resolucion) {
         if (!canAssignBarcodes || !rpfBcCtx || !rpfBcCtx.producto_base_id) {
             return;
         }
@@ -3250,14 +3301,25 @@
             cantidad: $('#rpf-bc-cantidad').val() || 1,
             unidad_medida: $('#rpf-bc-unidad').val() || 'unidad',
             origen_datos: $('#rpf-bc-origen').val() || 'manual',
-            audit_reason: $('#rpf-bc-reason').val() || ''
+            audit_reason: $('#rpf-bc-reason').val() || '',
+            resolucion: resolucion || ''
         }).done(function (res) {
             $btn.prop('disabled', false).text('Agregar código de barra');
             if (!res.success) {
+                var conflict = res.data && res.data.conflict;
+                if (conflict) {
+                    rpfBcShowMsg(rpfBcConflictHtml(conflict), true);
+                    if ((conflict.opciones || [])[0] === 'reemplazar') {
+                        $('#rpf-bc-reason').trigger('focus');
+                    }
+                    return;
+                }
                 rpfBcShowMsg('<strong>' + esc((res.data && res.data.message) || 'Error al guardar') + '</strong>', true);
                 return;
             }
-            rpfBcShowMsg('Código agregado.', false);
+            rpfBcShowMsg(resolucion === 'mover'
+                ? 'Código traspasado a este producto.'
+                : (resolucion === 'reemplazar' ? 'Código reemplazado: el otro producto lo perdió (queda en desuso).' : 'Código agregado.'), false);
             $('#rpf-bc-code').val('');
             $('#rpf-bc-cantidad').val('1');
             $('#rpf-bc-reason').val('');
@@ -6871,6 +6933,19 @@
         });
         $(document).on('click', '#rpf-bc-save', function () {
             submitRpfBcAdd();
+        });
+        $(document).on('click', '#rpf-bc-conflict-cancel', function () {
+            rpfBcShowMsg('');
+        });
+        $(document).on('click', '#rpf-bc-conflict-apply', function () {
+            var resolucion = String($(this).data('resolucion') || '');
+            if (resolucion === 'reemplazar' && !String($('#rpf-bc-reason').val() || '').trim()) {
+                window.alert('Escribe el motivo del reemplazo en el campo «Motivo»: el otro producto pierde este código.');
+                $('#rpf-bc-reason').trigger('focus');
+                return;
+            }
+            $(this).prop('disabled', true).text('Guardando…');
+            submitRpfBcAdd(resolucion);
         });
         $(document).on('click', '.rpf-bc-activate', function () {
             if (!canAssignBarcodes || !rpfBcCtx) {

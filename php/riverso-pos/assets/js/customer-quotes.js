@@ -165,6 +165,10 @@
         linesEmpty: document.getElementById("cq-lines-empty"),
         message: document.getElementById("cq-message"),
         transitions: document.getElementById("cq-transitions"),
+        stateWrap: document.getElementById("cq-state-wrap"),
+        stateBtn: document.getElementById("cq-state-btn"),
+        copyLink: document.getElementById("cq-copy-link"),
+        emailStateNote: document.getElementById("cq-email-state-note"),
         deleteBtn: document.getElementById("cq-delete"),
         invoice: document.getElementById("cq-invoice"),
         associatedCard: document.getElementById("cq-associated-card"),
@@ -518,6 +522,7 @@
         closeOrderMenu();
         closeOptionsMenu();
         closePrintNowMenu();
+        closeStateMenu();
     });
     // Interfaz vendedor: margen, utilidad, stock y costos solo a la vista del vendedor.
     // Parte siempre apagada (también si el navegador restaura el formulario).
@@ -800,6 +805,32 @@
             closeOptionsMenu();
             returnQuoteToDraft();
         });
+    }
+    if (els.stateBtn && els.transitions) {
+        els.stateBtn.addEventListener("click", function (event) {
+            event.stopPropagation();
+            var open = els.transitions.hidden;
+            closeViewMenus();
+            closeOrderMenu();
+            closeOptionsMenu();
+            closePrintNowMenu();
+            closeStateMenu();
+            if (open) {
+                els.transitions.hidden = false;
+                els.stateBtn.setAttribute("aria-expanded", "true");
+            }
+        });
+        els.transitions.addEventListener("click", function (event) {
+            event.stopPropagation();
+            var item = event.target.closest("[data-transition]");
+            if (item) {
+                closeStateMenu();
+                transitionQuote(item.getAttribute("data-transition"));
+            }
+        });
+    }
+    if (els.copyLink) {
+        els.copyLink.addEventListener("click", copyQuoteLink);
     }
     ["input", "change"].forEach(function (eventName) {
         els.customer.addEventListener(eventName, function () {
@@ -1622,6 +1653,8 @@
     function lockMessage(quote) {
         var hasDocs = (quote.associated_documents || []).length > 0;
         switch (quote.status) {
+            case "awaiting":
+                return "Cotización Esperando respuesta del cliente: bloqueada para edición (el enlace enviado muestra esta versión). Para modificarla, use Opciones › Devolver a Borrador.";
             case "listed":
                 return hasDocs
                     ? "Cotización Aprobada con documento de venta en preparación; no se puede modificar. Para editarla, use Opciones › Devolver a Borrador."
@@ -1639,28 +1672,47 @@
         }
     }
 
+    function closeStateMenu() {
+        if (els.transitions) els.transitions.hidden = true;
+        if (els.stateBtn) els.stateBtn.setAttribute("aria-expanded", "false");
+    }
+
+    /** Menú «Estado ▾»: Esperando respuesta · Aprobar · Rechazar · Anular (· Reabrir). */
     function renderTransitions(quote) {
         if (!els.transitions) {
             return;
         }
+        closeStateMenu();
         els.transitions.innerHTML = "";
-        if (!quote.id) {
-            return;
-        }
-        (quote.allowed_transitions || []).forEach(function (transition) {
-            // Aprobada → Borrador está en Opciones › Devolver a Borrador.
-            if (quote.status === "listed" && transition.status === "draft") {
-                return;
+        var order = { awaiting: 1, listed: 2, rejected: 3, cancelled: 4, draft: 5 };
+        var items = quote.id ? (quote.allowed_transitions || []).filter(function (transition) {
+            // Aprobada/Esperando → Borrador está en Opciones › Devolver a Borrador.
+            return !(transition.status === "draft" && (quote.status === "listed" || quote.status === "awaiting"));
+        }) : [];
+        items.sort(function (a, b) {
+            return (order[a.status] || 9) - (order[b.status] || 9);
+        });
+        var prevDanger = false;
+        items.forEach(function (transition) {
+            var danger = transition.status === "cancelled" || transition.status === "rejected";
+            var reopen = transition.status === "draft";
+            if (els.transitions.childNodes.length && ((danger && !prevDanger) || reopen)) {
+                var sep = document.createElement("hr");
+                sep.className = "cq-state-sep";
+                els.transitions.appendChild(sep);
             }
+            prevDanger = danger;
             var btn = document.createElement("button");
             btn.type = "button";
-            btn.className = "cq-btn" + (transition.status === "cancelled" || transition.status === "rejected" ? " cq-btn-danger" : "");
+            btn.setAttribute("role", "menuitem");
+            btn.setAttribute("data-transition", transition.status);
+            if (danger) btn.className = "cq-state-danger";
             btn.textContent = transition.label;
-            btn.addEventListener("click", function () {
-                transitionQuote(transition.status);
-            });
             els.transitions.appendChild(btn);
         });
+        if (els.stateWrap) {
+            els.stateWrap.hidden = items.length === 0;
+        }
     }
 
     function renderLines() {
@@ -3906,7 +3958,7 @@
         var status = quote && quote.status ? quote.status : "draft";
         if (els.optDraft) {
             els.optDraft.disabled = !hasId || !opts.canReturnDraft;
-            els.optDraft.title = status === "listed" ? "" : "Solo para cotizaciones Aprobadas.";
+            els.optDraft.title = status === "listed" || status === "awaiting" ? "" : "Solo para cotizaciones Aprobadas o Esperando respuesta.";
         }
         if (els.deleteBtn) {
             els.deleteBtn.disabled = !hasId || !opts.canDelete;
@@ -3937,7 +3989,7 @@
         if (!state.quote.id || !opts.canReturnDraft) {
             setMessage(opts.blockedReason
                 ? "No se puede volver a Borrador: " + opts.blockedReason
-                : "Solo una cotización Aprobada puede volver a Borrador.", true);
+                : "Solo una cotización Aprobada o Esperando respuesta puede volver a Borrador.", true);
             return;
         }
         transitionQuote("draft");
@@ -3990,6 +4042,12 @@
             return "¿Volver " + label + " a Borrador?\n\nSe liberará el stock reservado y podrá editarla de nuevo."
                 + discardDocumentsText();
         }
+        if (target === "draft" && state.quote.status === "awaiting") {
+            return "¿Volver " + label + " a Borrador?\n\nPodrá editarla de nuevo; el enlace ya enviado mostrará los cambios.";
+        }
+        if (target === "awaiting" && state.quote.status === "listed") {
+            return "¿Pasar " + label + " a Esperando respuesta?\n\nSe liberará el stock reservado.";
+        }
         return "";
     }
 
@@ -4040,13 +4098,7 @@
         flushPendingSave().then(function () {
             return post(cfg.actions.transition, { id: String(state.quote.id), status: target });
         }).then(function (data) {
-            state.quote = data.quote;
-            if (!state.quote.lines) {
-                state.quote.lines = [];
-            }
-            prepareLoadedLines(state.quote);
-            paintEditor();
-            state.snapshot = serialize(state.quote);
+            applyServerQuote(data.quote);
             setMessage(data.message || "Estado actualizado.", false);
             if (state.advanced) {
                 refreshLineStock();
@@ -4054,6 +4106,17 @@
         }).catch(function (error) {
             setMessage(error.message, true);
         });
+    }
+
+    /** Reemplaza la cotización en pantalla por la del servidor (tras un cambio de estado). */
+    function applyServerQuote(quote) {
+        state.quote = quote;
+        if (!state.quote.lines) {
+            state.quote.lines = [];
+        }
+        prepareLoadedLines(state.quote);
+        paintEditor();
+        state.snapshot = serialize(state.quote);
     }
 
     function isDirty() {
@@ -4085,7 +4148,7 @@
     function canShowInvoice(quote) {
         var status = quote && quote.status ? quote.status : "draft";
         return !!(cfg.canEmitDte) && !!(quote && quote.id) && (quote.quote_type || "venta") === "venta"
-            && (status === "draft" || status === "listed");
+            && (status === "draft" || status === "awaiting" || status === "listed");
     }
 
     function syncInvoiceButton(quote) {
@@ -6609,6 +6672,9 @@
             emailState.recipients = [];
             emailState.hasCustomer = false;
             els.emailSub.textContent = "Formato: " + pdfTemplateLabels()[normalizePdfTemplate(template)];
+            if (els.emailStateNote) {
+                els.emailStateNote.hidden = !(state.quote.status === "draft" && (state.quote.lines || []).length);
+            }
             els.emailSubject.value = "";
             els.emailMessage.value = "";
             els.emailInput.value = "";
@@ -6747,6 +6813,10 @@
             .then(function (data) {
                 if (!data || token !== emailState.token) return;
                 closeEmailModal();
+                if (data.quote && state.quote && Number(state.quote.id) === Number(data.quote.id)
+                    && data.quote.status !== state.quote.status) {
+                    applyServerQuote(data.quote);
+                }
                 setMessage(data.message || "Correo enviado.", false);
             })
             .catch(function (err) {
@@ -6756,6 +6826,65 @@
                 // Con el PDF fallido (o ya no disponible) se ofrece enviar solo con enlace.
                 els.emailUseLink.hidden = !withPdf;
             });
+    }
+
+    /** Copia el enlace público (el mismo del correo). No cambia el estado. */
+    function copyQuoteLink() {
+        if (!cfg.ajaxUrl || !cfg.nonce) {
+            setMessage("No se pudo copiar el link (configuración incompleta).", true);
+            return;
+        }
+        var template = currentPdfTemplate();
+        var request = ensureSavedForPrint().then(function (id) {
+            if (!id) return null;
+            return post(cfg.actions.publicLink || "riverso_cq_public_link", { id: id, template: template });
+        });
+        var done = function (data) {
+            setMessage("Link copiado al portapapeles (válido hasta el " + data.expires + ").", false);
+        };
+        var manual = function (data) {
+            window.prompt("Copia el enlace de la cotización:", data.url);
+            done(data);
+        };
+        var fail = function (error) {
+            if (error && error.message) setMessage(error.message, true);
+        };
+        // Safari exige escribir en el portapapeles durante el clic: ClipboardItem acepta la promesa.
+        var item = null;
+        if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+            try {
+                item = new window.ClipboardItem({
+                    "text/plain": request.then(function (data) {
+                        if (!data || !data.url) throw new Error("");
+                        return new Blob([data.url], { type: "text/plain" });
+                    })
+                });
+            } catch (e) {
+                item = null;
+            }
+        }
+        if (item) {
+            navigator.clipboard.write([item]).then(function () {
+                return request.then(done);
+            }, function () {
+                return request.then(function (data) {
+                    if (data && data.url) manual(data);
+                });
+            }).catch(fail);
+            return;
+        }
+        request.then(function (data) {
+            if (!data || !data.url) return;
+            if (!navigator.clipboard || !navigator.clipboard.writeText) {
+                manual(data);
+                return;
+            }
+            return navigator.clipboard.writeText(data.url).then(function () {
+                done(data);
+            }, function () {
+                manual(data);
+            });
+        }).catch(fail);
     }
 
     function closePrintNowMenu() {

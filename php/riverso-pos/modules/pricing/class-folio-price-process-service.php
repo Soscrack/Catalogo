@@ -266,6 +266,57 @@ class Riverso_Folio_Price_Process_Service {
         ];
     }
 
+    /**
+     * Vínculo vigente código proveedor → producto (producto_proveedor), por código.
+     * Puede diferir del SKU que el ítem del folio tiene guardado (sku_local).
+     *
+     * @param int   $proveedor_id
+     * @param array $items
+     * @return array<string, array{producto_base_id:int, sku:string, nombre:string}>
+     */
+    private function code_links_by_code($proveedor_id, array $items) {
+        global $wpdb;
+        $codes = [];
+        foreach ($items as $item) {
+            $code = trim((string) ($item['codigo_proveedor'] ?? ''));
+            if ($code !== '') {
+                $codes[$code] = $code;
+            }
+        }
+        if ((int) $proveedor_id <= 0 || !$codes) {
+            return [];
+        }
+        $prefix = $this->prefix();
+        $placeholders = implode(',', array_fill(0, count($codes), '%s'));
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT pp.codigo_proveedor, pp.producto_base_id, pb.canonical_sku, pb.nombre_canonico
+             FROM {$prefix}producto_proveedor pp
+             LEFT JOIN {$prefix}producto_base pb ON pb.id = pp.producto_base_id AND pb.deleted_at IS NULL
+             WHERE pp.proveedor_id = %d AND pp.activo = 1 AND pp.codigo_proveedor IN ({$placeholders})
+             ORDER BY pp.es_preferido DESC, pp.id ASC",
+            array_merge([(int) $proveedor_id], array_values($codes))
+        ), ARRAY_A) ?: [];
+
+        $out = [];
+        foreach ($rows as $row) {
+            $code = (string) $row['codigo_proveedor'];
+            if (isset($out[$code]) || empty($row['producto_base_id'])) {
+                continue;
+            }
+            $sku = trim((string) ($row['canonical_sku'] ?? ''));
+            if ($sku !== '' && function_exists('riverso_sku_equals_supplier_code')
+                && riverso_sku_equals_supplier_code($sku, $code)) {
+                $sku = '';
+            }
+            $out[$code] = [
+                'producto_base_id' => (int) $row['producto_base_id'],
+                'sku' => $sku,
+                'nombre' => (string) ($row['nombre_canonico'] ?? ''),
+            ];
+        }
+        return $out;
+    }
+
     private function resolve_price_target($producto_base_id) {
         $unit = $this->unit_service();
         $ctx = $unit ? $unit->resolve_family_unit_for_base($producto_base_id) : null;
@@ -2931,6 +2982,7 @@ class Riverso_Folio_Price_Process_Service {
         );
 
         $current_flete_ok = $this->factura_flete_ok($factura_id);
+        $code_links = $this->code_links_by_code($proveedor_id, $loaded['items']);
 
         $lines = [];
         $by_target = [];
@@ -2981,6 +3033,7 @@ class Riverso_Folio_Price_Process_Service {
                 'purchase_units_needs_confirm' => !empty($purchase_units['needs_confirm']),
                 'purchase_units_can_confirm' => !empty($purchase_units['can_confirm']),
                 'purchase_units_pp_id' => $purchase_units['producto_proveedor_id'] ?? null,
+                'code_link' => $code !== '' ? ($code_links[$code] ?? null) : null,
             ];
 
             if ($is_omitted) {

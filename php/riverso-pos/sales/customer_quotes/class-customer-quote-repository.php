@@ -380,6 +380,9 @@ class Riverso_Customer_Quote_Repository {
         if ($to === Riverso_Quote_Status::LISTED && empty($quote['lines'])) {
             throw new Riverso_Quote_Exception('Agregue al menos un producto antes de aprobar.');
         }
+        if ($to === Riverso_Quote_Status::AWAITING && empty($quote['lines'])) {
+            throw new Riverso_Quote_Exception('Agregue al menos un producto antes de marcarla como Esperando respuesta.');
+        }
         if (!empty($discard['ids'])) {
             $this->discard_billing_drafts($discard['ids'], (int) $id);
         }
@@ -483,7 +486,7 @@ class Riverso_Customer_Quote_Repository {
         $target = null;
         if ($sale['sold']) {
             $target = Riverso_Quote_Status::INVOICED;
-        } elseif ($sale['has_documents'] && $quote['status'] === Riverso_Quote_Status::DRAFT) {
+        } elseif ($sale['has_documents'] && in_array($quote['status'], array(Riverso_Quote_Status::DRAFT, Riverso_Quote_Status::AWAITING), true)) {
             $target = Riverso_Quote_Status::LISTED;
         } elseif ($quote['status'] === Riverso_Quote_Status::INVOICED && empty($quote['order_id'])) {
             // Se eliminó el documento que la facturó (p. ej. boleta cerrada sin SII): vuelve a Aprobada.
@@ -497,18 +500,38 @@ class Riverso_Customer_Quote_Repository {
     }
 
     /**
-     * Facturar implica que el cliente aceptó: un Borrador con productos pasa a Aprobada
-     * al cargarse en Facturación. Si luego no se emite, sigue Aprobada (con reserva).
+     * Facturar implica que el cliente aceptó: un Borrador o Esperando respuesta con productos
+     * pasa a Aprobada al cargarse en Facturación. Si luego no se emite, sigue Aprobada (con reserva).
      *
      * @param int $id
      * @return bool true si cambió el estado.
      */
     public function approve_for_billing($id) {
         $quote = $this->find((int) $id);
-        if ($quote === null || $quote['status'] !== Riverso_Quote_Status::DRAFT || empty($quote['lines'])) {
+        $open = array(Riverso_Quote_Status::DRAFT, Riverso_Quote_Status::AWAITING);
+        if ($quote === null || !in_array($quote['status'], $open, true) || empty($quote['lines'])) {
             return false;
         }
         $this->apply_status($quote, Riverso_Quote_Status::LISTED);
+        return true;
+    }
+
+    /**
+     * Enviada por correo: un Borrador con productos pasa a Esperando respuesta.
+     * Otros estados no cambian (Aprobada sigue reservando, etc.).
+     *
+     * @param int $id
+     * @return bool true si cambió el estado.
+     */
+    public function mark_awaiting_after_email($id) {
+        $quote = $this->find((int) $id);
+        if ($quote === null || $quote['status'] !== Riverso_Quote_Status::DRAFT || empty($quote['lines'])) {
+            return false;
+        }
+        if ($this->has_associated_document((int) $id)) {
+            return false;
+        }
+        $this->apply_status($quote, Riverso_Quote_Status::AWAITING);
         return true;
     }
 
@@ -561,14 +584,15 @@ class Riverso_Customer_Quote_Repository {
         if (!$any) {
             return;
         }
-        // Solo candidatas a cambiar: vendidas sin Facturada, o borradores con documento.
+        // Solo candidatas a cambiar: vendidas sin Facturada, o borradores/esperando con documento.
         $ids = $wpdb->get_col($wpdb->prepare(
             "SELECT q.id FROM {$this->table_quotes} q
              WHERE (q.status <> %s AND (" . implode(' OR ', $sold ?: array('0')) . "))
-                OR (q.status = %s AND (" . implode(' OR ', $any) . '))
+                OR (q.status IN (%s, %s) AND (" . implode(' OR ', $any) . '))
              LIMIT 200',
             Riverso_Quote_Status::INVOICED,
-            Riverso_Quote_Status::DRAFT
+            Riverso_Quote_Status::DRAFT,
+            Riverso_Quote_Status::AWAITING
         ));
         foreach ((array) $ids as $qid) {
             $this->sync_document_status((int) $qid);
@@ -1631,8 +1655,8 @@ class Riverso_Customer_Quote_Repository {
             isset($row['created_by']) ? $row['created_by'] : null,
             isset($row['seller_name']) ? $row['seller_name'] : null
         );
-        // Vencida solo aplica a cotizaciones abiertas (Borrador/Aprobada).
-        $is_expired = in_array($status, array(Riverso_Quote_Status::DRAFT, Riverso_Quote_Status::LISTED), true)
+        // Vencida solo aplica a cotizaciones abiertas (Borrador/Esperando respuesta/Aprobada).
+        $is_expired = in_array($status, array(Riverso_Quote_Status::DRAFT, Riverso_Quote_Status::AWAITING, Riverso_Quote_Status::LISTED), true)
             && $this->is_expired($issue_date, $validity, isset($row['valid_until']) ? $row['valid_until'] : null);
         $margin_percent = $this->nullable_float(isset($row['margin_percent']) ? $row['margin_percent'] : null);
         $profit_total = $this->nullable_float(isset($row['profit_total']) ? $row['profit_total'] : null);

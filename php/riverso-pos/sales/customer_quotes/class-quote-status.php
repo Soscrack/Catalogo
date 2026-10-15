@@ -3,11 +3,14 @@
  * Estados de cotización de venta.
  *
  * Manuales: Borrador ↔ Aprobada; Borrador/Aprobada → Rechazada | Anulada; Rechazada/Anulada → Borrador.
- * Automático: Facturada (invoiced) cuando un documento de venta queda emitido o cerrado.
+ * Esperando respuesta: desde cualquier estado no facturado; vuelve a Borrador o sigue a Aprobada/Rechazada/Anulada.
+ * Automático: Borrador → Esperando respuesta al enviarla por correo;
+ * Facturada (invoiced) cuando un documento de venta queda emitido o cerrado.
  * Solo Borrador es editable. Aprobada reserva stock (ver repositorio).
  *
  * Mapeo legado → plan:
  * - draft, borrador, expired → draft
+ * - awaiting → awaiting (no se usa `sent`: el legado lo trata como Aprobada)
  * - sent, viewed, accepted, approved, lista, listed, converted → listed (Aprobada)
  * - invoiced, billed, facturada → invoiced
  * - rejected, rechazada → rejected
@@ -19,6 +22,7 @@ if (!defined('ABSPATH')) {
 
 class Riverso_Quote_Status {
     const DRAFT = 'draft';
+    const AWAITING = 'awaiting';
     const LISTED = 'listed';
     const INVOICED = 'invoiced';
     const REJECTED = 'rejected';
@@ -26,6 +30,8 @@ class Riverso_Quote_Status {
 
     public static function label($status) {
         switch (self::normalize_legacy((string) $status)) {
+            case self::AWAITING:
+                return 'Esperando respuesta';
             case self::LISTED:
                 return 'Aprobada';
             case self::INVOICED:
@@ -45,6 +51,7 @@ class Riverso_Quote_Status {
             'draft' => self::DRAFT,
             'borrador' => self::DRAFT,
             'expired' => self::DRAFT,
+            'awaiting' => self::AWAITING,
             'sent' => self::LISTED,
             'viewed' => self::LISTED,
             'accepted' => self::LISTED,
@@ -82,12 +89,14 @@ class Riverso_Quote_Status {
     public static function allowed_targets($status) {
         switch (self::normalize_legacy($status)) {
             case self::DRAFT:
-                return array(self::LISTED, self::REJECTED, self::CANCELLED);
+                return array(self::AWAITING, self::LISTED, self::REJECTED, self::CANCELLED);
+            case self::AWAITING:
+                return array(self::DRAFT, self::LISTED, self::REJECTED, self::CANCELLED);
             case self::LISTED:
-                return array(self::DRAFT, self::REJECTED, self::CANCELLED);
+                return array(self::DRAFT, self::AWAITING, self::REJECTED, self::CANCELLED);
             case self::REJECTED:
             case self::CANCELLED:
-                return array(self::DRAFT);
+                return array(self::DRAFT, self::AWAITING);
             default:
                 return array();
         }
@@ -95,6 +104,8 @@ class Riverso_Quote_Status {
 
     public static function transition_label($target, $from = null) {
         switch ($target) {
+            case self::AWAITING:
+                return 'Esperando respuesta';
             case self::LISTED:
                 return 'Aprobar';
             case self::REJECTED:

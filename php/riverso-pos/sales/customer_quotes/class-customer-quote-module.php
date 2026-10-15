@@ -17,6 +17,7 @@ class Riverso_Customer_Quote_Module {
 
     const QUOTE_STATES = array(
         'draft' => 'Borrador',
+        'awaiting' => 'Esperando respuesta',
         'listed' => 'Aprobada',
         'invoiced' => 'Facturada',
         'rejected' => 'Rechazada',
@@ -108,6 +109,7 @@ class Riverso_Customer_Quote_Module {
         add_action('wp_ajax_riverso_cq_email_prepare', array($this, 'ajax_email_prepare'));
         add_action('wp_ajax_riverso_cq_email_pdf', array($this, 'ajax_email_pdf'));
         add_action('wp_ajax_riverso_cq_email_send', array($this, 'ajax_email_send'));
+        add_action('wp_ajax_riverso_cq_public_link', array($this, 'ajax_public_link'));
         // Enlace del correo: lo abre el cliente, sin sesión (firmado y con vencimiento).
         add_action('wp_ajax_riverso_cq_public', array($this, 'ajax_public'));
         add_action('wp_ajax_nopriv_riverso_cq_public', array($this, 'ajax_public'));
@@ -234,6 +236,7 @@ class Riverso_Customer_Quote_Module {
                 'emailPrepare' => 'riverso_cq_email_prepare',
                 'emailPdf' => 'riverso_cq_email_pdf',
                 'emailSend' => 'riverso_cq_email_send',
+                'publicLink' => 'riverso_cq_public_link',
                 'customersSearch' => 'riverso_cq_customers_search',
                 'customerSave' => 'riverso_cq_customer_save',
             ),
@@ -539,10 +542,47 @@ class Riverso_Customer_Quote_Module {
             }
         }
 
+        // Un Borrador enviado queda Esperando respuesta (otros estados no cambian).
+        $awaiting = false;
+        try {
+            $awaiting = $this->quotes->mark_awaiting_after_email($id);
+        } catch (Exception $error) {
+            // El correo ya salió: no fallar por el estado.
+        }
+        if ($awaiting && class_exists('Riverso_Audit_Module')) {
+            Riverso_Audit_Module::get_instance()->log(
+                'quotes.status',
+                'customer_quote',
+                $id,
+                array('status' => Riverso_Quote_Status::DRAFT),
+                array('status' => Riverso_Quote_Status::AWAITING),
+                'Enviada por correo: Esperando respuesta'
+            );
+        }
+        $updated = $this->quotes->find($id);
+
         $this->ok(array(
             'message' => 'Correo enviado a ' . implode(', ', array_values($emails))
                 . ($with_pdf && $with_link ? ' con el PDF adjunto y el enlace a la cotización.'
-                    : ($with_pdf ? ' con el PDF adjunto.' : ' con el enlace a la cotización.')),
+                    : ($with_pdf ? ' con el PDF adjunto.' : ' con el enlace a la cotización.'))
+                . ($awaiting ? ' Estado: Esperando respuesta.' : ''),
+            'quote' => $updated !== null ? $this->present_quote_with_docs($updated) : null,
+        ));
+    }
+
+    /** Enlace público (el mismo del correo) para copiarlo; no cambia el estado. */
+    public function ajax_public_link() {
+        $this->authorize();
+        $id = (int) $this->post_string('id');
+        $quote = $id > 0 ? $this->quotes->find($id) : null;
+        if ($quote === null) {
+            $this->fail('Cotización no encontrada.', 404);
+        }
+        $template = Riverso_Quote_Pdf::normalize_template($this->post_string('template'));
+        $expires = time() + self::PUBLIC_LINK_DAYS * DAY_IN_SECONDS;
+        $this->ok(array(
+            'url' => $this->public_url($id, $template, $expires),
+            'expires' => wp_date('d-m-Y', $expires),
         ));
     }
 
@@ -2234,7 +2274,7 @@ class Riverso_Customer_Quote_Module {
             $quote['allowed_transitions'] = array();
             $quote['is_expired'] = false;
         }
-        // Menú Opciones: volver a Borrador (desde Aprobada) y borrar; nunca una Facturada.
+        // Menú Opciones: volver a Borrador (desde Aprobada o Esperando respuesta) y borrar; nunca una Facturada.
         // Un documento en facturación sin emitir ni pagos se descarta en la misma acción.
         $status = (string) ($quote['status'] ?? '');
         $discard = $id > 0
@@ -2244,7 +2284,7 @@ class Riverso_Customer_Quote_Module {
             ? 'la cotización está Facturada.'
             : $discard['blocked'];
         $quote['options'] = array(
-            'can_return_draft' => $status === Riverso_Quote_Status::LISTED && $blocked === null,
+            'can_return_draft' => in_array($status, array(Riverso_Quote_Status::LISTED, Riverso_Quote_Status::AWAITING), true) && $blocked === null,
             'can_delete' => $id > 0 && $blocked === null,
             'blocked_reason' => $blocked,
             'discards_documents' => count($discard['ids']),

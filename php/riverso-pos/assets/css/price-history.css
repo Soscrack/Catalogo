@@ -771,6 +771,62 @@
     border: 1px solid #b8e0c8;
 }
 
+.rpf-pu-chip-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.rpf-pu-chip-row .rpf-chip {
+    display: inline-block;
+}
+
+.rpf-pu-chip-row .rpf-pu-change {
+    margin-top: 3px;
+    min-height: 22px;
+    line-height: 20px;
+    padding: 0 6px;
+    font-size: 11px;
+}
+
+/* SKU que usa la línea del folio (en familias se muestra el par unitario · envase). */
+.rpf-sku-current {
+    font-weight: 600;
+    outline: 1px solid #2271b1;
+}
+
+.rpf-code-link {
+    margin-top: 3px;
+    font-size: 11px;
+    color: #50575e;
+    white-space: nowrap;
+}
+
+.rpf-code-link code {
+    font-size: 11px;
+}
+
+.rpf-code-link-warn {
+    margin-top: 4px;
+    padding: 3px 6px;
+    max-width: 240px;
+    font-size: 11px;
+    line-height: 1.4;
+    background: #fcf0e3;
+    color: #8a4b08;
+    border: 1px solid #f0c36d;
+    border-radius: 3px;
+}
+
+.rpf-code-link-warn .button {
+    margin-top: 3px;
+}
+
+.rpf-pu-scope {
+    margin-top: 8px;
+}
+
 .rpf-chip-warn {
     background: #fcf0e3;
     color: #8a4b08;

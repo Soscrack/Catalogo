@@ -958,7 +958,7 @@
                     if ($tr[0].scrollIntoView) {
                         $tr[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
-                    var $open = $tr.find('.rpf-pu-open');
+                    var $open = $tr.find('.rpf-pu-open:not(.rpf-pu-change)');
                     if ($open.length && canManage) {
                         $open.trigger('click');
                     }
@@ -1078,12 +1078,14 @@
         if (!(factor > 1)) {
             factor = '';
         }
-        return '<button type="button" class="button button-small button-primary rpf-pu-open"' +
+        return '<button type="button" class="button button-small' + (ctx.change ? ' rpf-pu-change' : ' button-primary') +
+            ' rpf-pu-open"' +
             ' data-item="' + esc(String(ctx.itemId || '')) + '"' +
             ' data-factor="' + esc(String(factor)) + '"' +
             ' data-codigo="' + esc(ctx.codigo || '') + '"' +
             ' data-sku="' + esc(ctx.sku || '') + '"' +
-            ' data-nombre="' + esc(ctx.nombre || '') + '">Responder</button>';
+            (ctx.change ? ' data-change="1" title="Cambiar la respuesta de unidades de compra de este código"' : '') +
+            ' data-nombre="' + esc(ctx.nombre || '') + '">' + esc(ctx.label || 'Responder') + '</button>';
     }
 
     function renderBlockers(blockers) {
@@ -1587,6 +1589,15 @@
                         nombre: ln.nombre || ln.descripcion
                     });
                 }
+                // Si el SKU estaba mal, se corrige antes de responder preguntas de otro producto.
+                if (canLinkSku && (ln.sku || ln.unit_sku) && (ln.block_reason || '') !== 'Sin SKU') {
+                    saveBtn += ' <button type="button" class="button button-small rpf-search-link-open"' +
+                        ' data-item="' + ln.item_id + '"' +
+                        ' data-codigo="' + esc(ln.codigo_proveedor || '') + '"' +
+                        ' data-nombre="' + esc(ln.nombre || ln.descripcion || '') + '"' +
+                        ' data-current-sku="' + esc(ln.sku || ln.unit_sku || '') + '"' +
+                        ' title="¿El SKU no corresponde? Cambialo antes de responder">Cambiar SKU</button>';
+                }
             }
             if (confirmedHere && !blocked && !hybridOmitted) {
                 saveBtn += ' <span class="dashicons dashicons-yes" style="color:green;" title="Confirmado desde este folio"></span>';
@@ -1594,10 +1605,33 @@
             if (chips) {
                 saveBtn += '<div class="rpf-line-chips">' + chips + '</div>';
             }
+            if (!hybridOmitted && ln.purchase_units_family_pack && ln.producto_base_id) {
+                saveBtn += '<div class="rpf-line-chips"><span class="rpf-chip rpf-chip-purchase-units"' +
+                    ' title="El código es un envase de la familia: no se aplica factor de compra y el costo del folio se toma por unidad facturada.">' +
+                    esc(ln.codigo_proveedor || '') + ' = envase de familia' +
+                    (ln.pack_qty ? ' ×' + esc(fmtQty(ln.pack_qty)) : '') +
+                    ' · costo por unidad facturada</span></div>';
+            }
             if (!hybridOmitted && !ln.purchase_units_family_pack) {
-                if (ln.purchase_units_apply && Number(ln.purchase_units_factor) > 1) {
-                    saveBtn += '<div class="rpf-line-chips"><span class="rpf-chip rpf-chip-purchase-units" title="Unidades reales por unidad facturada">' +
-                        esc(ln.codigo_proveedor || '') + ' = ' + esc(String(ln.purchase_units_factor)) + ' u</span></div>';
+                var puFactor = Number(ln.purchase_units_factor) > 1 ? Number(ln.purchase_units_factor) : 1;
+                // Sin bloqueo y con código vinculado, la pregunta ya se respondió (o no habría pasado el gate).
+                var puAnswered = !blocked && ln.producto_base_id && ln.purchase_units_pp_id;
+                if (puAnswered || (ln.purchase_units_apply && puFactor > 1)) {
+                    saveBtn += '<div class="rpf-line-chips rpf-pu-chip-row"><span class="rpf-chip rpf-chip-purchase-units" title="Unidades reales por unidad facturada (respuesta guardada en el código del proveedor)">' +
+                        esc(ln.codigo_proveedor || '') + ' = ' + esc(String(puFactor)) + ' u' +
+                        (puFactor > 1 ? '' : ' (unidad real)') + '</span>';
+                    if (canManage && puAnswered) {
+                        saveBtn += ' ' + purchaseUnitsOpenButton({
+                            itemId: ln.item_id,
+                            factor: puFactor,
+                            codigo: ln.codigo_proveedor,
+                            sku: ln.sku,
+                            nombre: ln.nombre || ln.descripcion,
+                            change: true,
+                            label: 'Cambiar'
+                        });
+                    }
+                    saveBtn += '</div>';
                 }
                 if (ln.purchase_units_cost_reconfirm) {
                     saveBtn += '<div class="rpf-line-chips"><span class="rpf-chip rpf-chip-warn">' +
@@ -4416,27 +4450,72 @@
     }
 
     function formatFolioSkuCell(ln) {
+        var lineSku = String(ln.sku || '');
+        // Resalta el SKU que usa esta línea del folio (el resto es contexto de familia).
+        function skuCode(s) {
+            var isLine = lineSku !== '' && String(s) === lineSku;
+            return '<code' + (isLine ? ' class="rpf-sku-current" title="SKU de esta línea del folio"' : '') + '>' +
+                esc(s) + '</code>';
+        }
+        var html;
         if (ln.es_familia_unitaria && ln.unit_sku) {
             var unitQty = ln.unit_qty != null ? ln.unit_qty : 1;
-            var html = '<code>' + esc(ln.unit_sku) + '</code>' + rpfSkuQuickLink(ln.unit_sku) +
+            html = skuCode(ln.unit_sku) + rpfSkuQuickLink(ln.unit_sku) +
                 ' <span class="description">(' + esc(fmtQty(unitQty)) + ')</span>';
             if (ln.pack_sku && String(ln.pack_sku) !== String(ln.unit_sku)) {
-                html += ' <span class="description">·</span> <code>' + esc(ln.pack_sku) + '</code>' +
+                html += ' <span class="description">·</span> ' + skuCode(ln.pack_sku) +
                     rpfSkuQuickLink(ln.pack_sku) +
                     ' <span class="description">(' + esc(fmtQty(ln.pack_qty)) + ')</span>';
             }
-            return html;
-        }
-        if (ln.is_child) {
+        } else if (ln.is_child) {
             var childSku = ln.unit_sku || ln.sku || '';
-            return '<code>' + esc(childSku) + '</code>' + rpfSkuQuickLink(childSku) +
+            html = '<code>' + esc(childSku) + '</code>' + rpfSkuQuickLink(childSku) +
                 ' <span class="description">(unitario)</span>';
+        } else if (!lineSku) {
+            html = '<code>—</code>';
+        } else {
+            html = '<code>' + esc(lineSku) + '</code>' + rpfSkuQuickLink(lineSku);
         }
-        var plainSku = ln.sku || '';
-        if (!plainSku) {
-            return '<code>—</code>';
+        return html + rpfCodeLinkHtml(ln);
+    }
+
+    /**
+     * Vínculo vigente código proveedor → SKU (Códigos). Se muestra en familias, sin SKU
+     * o cuando el ítem del folio usa otro SKU que el vinculado al código.
+     */
+    function rpfCodeLinkHtml(ln) {
+        var link = ln.code_link;
+        var code = String(ln.codigo_proveedor || '');
+        if (!link || !code || ln.hybrid_omitted) {
+            return '';
         }
-        return '<code>' + esc(plainSku) + '</code>' + rpfSkuQuickLink(plainSku);
+        var linkSku = String(link.sku || '');
+        var linkPb = parseInt(link.producto_base_id, 10) || 0;
+        var linePb = parseInt(ln.producto_base_id, 10) || 0;
+        var mismatch = linePb > 0 && linkPb > 0 && linkPb !== linePb;
+        if (!mismatch && linePb > 0 && !ln.es_familia_unitaria && !ln.is_child) {
+            return '';
+        }
+        var html = '<div class="rpf-code-link" title="Vínculo del código del proveedor (pantalla Códigos)">' +
+            '<code>' + esc(code) + '</code> → ' +
+            (linkSku
+                ? '<code>' + esc(linkSku) + '</code>'
+                : '<span title="' + esc(link.nombre || '') + '">producto sin SKU</span>') +
+            '</div>';
+        if (mismatch) {
+            html += '<div class="rpf-code-link-warn">Esta línea usa <code>' + esc(ln.sku || '—') +
+                '</code>, pero el código está vinculado a <code>' + esc(linkSku || '—') + '</code>.';
+            if (canLinkSku && linkSku) {
+                html += ' <button type="button" class="button button-small rpf-search-link-open"' +
+                    ' data-item="' + ln.item_id + '"' +
+                    ' data-codigo="' + esc(code) + '"' +
+                    ' data-nombre="' + esc(ln.nombre || ln.descripcion || '') + '"' +
+                    ' data-current-sku="' + esc(ln.sku || '') + '"' +
+                    ' data-query="' + esc(linkSku) + '">Usar ' + esc(linkSku) + '</button>';
+            }
+            html += '</div>';
+        }
+        return html;
     }
 
     function deltaClass(delta) {
@@ -5829,7 +5908,8 @@
                 factor: $(this).data('factor'),
                 codigo: String($(this).data('codigo') || ''),
                 sku: String($(this).data('sku') || ''),
-                nombre: String($(this).data('nombre') || '')
+                nombre: String($(this).data('nombre') || ''),
+                is_change: String($(this).data('change') || '') === '1'
             });
         });
         $(document).on('click', '.rpf-pu-close, .rpf-pu-backdrop', function () {
@@ -6022,7 +6102,8 @@
                 item_id: parseInt($(this).data('item'), 10) || 0,
                 codigo_proveedor: String($(this).data('codigo') || ''),
                 nombre: String($(this).data('nombre') || ''),
-                current_sku: String($(this).data('current-sku') || '')
+                current_sku: String($(this).data('current-sku') || ''),
+                query: String($(this).data('query') || '')
             });
         });
         $(document).on('click', '.rpf-search-link-close, .rpf-search-link-backdrop', function () {
@@ -6950,13 +7031,13 @@
             current_sku: opts.current_sku || '',
             folio: inv.folio || '',
             proveedor_nombre: inv.proveedor_nombre || '',
-            query: opts.codigo_proveedor || opts.nombre || '',
+            query: opts.query || opts.codigo_proveedor || opts.nombre || '',
             words: [],
             items: [],
             total: 0,
             offset: 0,
             limit: 20,
-            loading: !!(opts.codigo_proveedor || opts.nombre),
+            loading: !!(opts.query || opts.codigo_proveedor || opts.nombre),
             selected: null,
             detail: null,
             conflictMessage: ''
@@ -7490,6 +7571,8 @@
             nombre: opts.nombre || (ln && (ln.nombre || ln.descripcion)) || '',
             folio: inv.folio || '',
             factor: factor > 1 ? factor : '',
+            is_change: !!opts.is_change,
+            current_factor: factor > 1 ? factor : 1,
             is_unit_real: null,
             units: null,
             unidad: ln ? String(ln.unidad || '') : '',
@@ -7595,8 +7678,30 @@
             '<dt>Código</dt><dd><code>' + esc(rpfPurchaseUnits.codigo || '—') + '</code></dd>' +
             '<dt>SKU</dt><dd><code>' + esc(rpfPurchaseUnits.sku || '—') + '</code></dd>' +
             '<dt>Producto</dt><dd>' + esc(rpfPurchaseUnits.nombre || '—') + '</dd>' +
+            (rpfPurchaseUnits.is_change
+                ? '<dt>Respuesta actual</dt><dd><strong>' + esc(purchaseUnitsAnswerLabel(rpfPurchaseUnits.current_factor)) +
+                    '</strong></dd>'
+                : '') +
             purchaseUnitsCostHtml(opts) +
             '</dl>';
+    }
+
+    function purchaseUnitsAnswerLabel(factor) {
+        var n = Number(factor);
+        return n > 1
+            ? ('No: cada unidad facturada son ' + n + ' unidades reales')
+            : 'Sí, la cantidad facturada es la unidad real';
+    }
+
+    /** Aviso: la respuesta es del código del proveedor, no solo de este folio. */
+    function purchaseUnitsScopeHtml() {
+        var code = rpfPurchaseUnits && rpfPurchaseUnits.codigo ? rpfPurchaseUnits.codigo : 'este código';
+        return '<p class="description rpf-pu-scope">La respuesta se guarda en el código <code>' + esc(code) +
+            '</code> de este proveedor: se usa en este folio y en los próximos folios y recepciones de ese código.' +
+            (rpfPurchaseUnits && rpfPurchaseUnits.is_change
+                ? ' Si este folio ya se recibió en bodega, el stock recibido no se corrige solo.'
+                : '') +
+            '</p>';
     }
 
     function updatePurchaseUnitsQtyPreview() {
@@ -7637,7 +7742,9 @@
         rpfPurchaseUnits.step = 'form';
         rpfPurchaseUnits.is_unit_real = null;
         rpfPurchaseUnits.units = null;
-        $('#rpf-pu-title').text('¿La cantidad facturada es la unidad real?');
+        $('#rpf-pu-title').text(rpfPurchaseUnits.is_change
+            ? 'Cambiar respuesta: ¿la cantidad facturada es la unidad real?'
+            : '¿La cantidad facturada es la unidad real?');
         $('#rpf-pu-body').html(
             purchaseUnitsMetaHtml({ scenario: 'both' }) +
             '<p class="rpf-answer-family-question">Elegí qué llegó respecto de lo que dice el documento.</p>' +
@@ -7704,7 +7811,8 @@
                 ? '¿Estás seguro? Llegaron las unidades unitarias que dice el documento. El precio guardado no se borra.'
                 : ('¿Estás seguro? El documento cuenta paquetes y cada uno trae ' + esc(String(units)) +
                     ' unidades reales. El costo de la fila se recalcula; el precio guardado no se borra.')) +
-            '</p>'
+            '</p>' +
+            purchaseUnitsScopeHtml()
         );
         $('#rpf-pu-footer').html(
             '<button type="button" class="button" id="rpf-pu-cancel">Volver</button>' +

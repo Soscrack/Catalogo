@@ -109,6 +109,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                         <select id="cq-status-filter">
                             <option value="all">** Todas **</option>
                             <option value="draft">Borrador</option>
+                            <option value="awaiting">Esperando respuesta</option>
                             <option value="listed">Aprobada</option>
                             <option value="invoiced">Facturada</option>
                             <option value="rejected">Rechazada</option>
@@ -248,7 +249,10 @@ if (!function_exists('riverso_pos_cq_json')) {
                     </label>
                     <span id="cq-status" class="cq-badge cq-badge-draft">Borrador</span>
                     <span id="cq-expired-badge" class="cq-expired-tag" hidden>Vencida</span>
-                    <span id="cq-transitions" class="cq-transitions"></span>
+                    <div class="cq-order-wrap cq-state-wrap" id="cq-state-wrap" hidden>
+                        <button type="button" class="cq-btn" id="cq-state-btn" aria-haspopup="true" aria-expanded="false">Estado ▾</button>
+                        <div class="cq-order-menu cq-state-menu" id="cq-transitions" hidden role="menu"></div>
+                    </div>
                     <button type="button" class="cq-btn cq-btn-primary" id="cq-invoice" hidden>Facturar</button>
                     <a id="cq-order-link" class="cq-link cq-order-link" href="#" target="_blank" rel="noopener" hidden>Ver pedido</a>
                     <button type="button" class="cq-btn" id="cq-import" hidden title="Importar desde cotización recibida">Importar</button>
@@ -281,6 +285,10 @@ if (!function_exists('riverso_pos_cq_json')) {
                     <button type="button" class="cq-btn cq-btn-icon" id="cq-email" title="Enviar por correo">
                         <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
                         <span>Email</span>
+                    </button>
+                    <button type="button" class="cq-btn cq-btn-icon" id="cq-copy-link" title="Copiar al portapapeles el enlace para ver la cotización (no cambia el estado)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+                        <span>Copiar link</span>
                     </button>
                     <div class="cq-order-wrap cq-options-wrap">
                         <button type="button" class="cq-btn" id="cq-options" aria-haspopup="true" aria-expanded="false">Opciones ▾</button>
@@ -869,6 +877,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                         <label><input type="checkbox" id="cq-email-mode-link"> <span>Enlace para ver la cotización <small id="cq-email-link-days"></small></span></label>
                         <p class="cq-email-mode-note" id="cq-email-mode-note" hidden></p>
                     </fieldset>
+                    <p class="cq-email-mode-note" id="cq-email-state-note" hidden>Al enviar, la cotización pasará a <strong>Esperando respuesta</strong>.</p>
                     <p class="cq-email-status" id="cq-email-status" role="status" hidden></p>
                 </div>
                 <footer class="cq-modal-foot cq-email-foot">

@@ -64,6 +64,12 @@ internal sealed class JobSettings
     public int Dpi { get; set; } = 200;
     public int MaxPaginas { get; set; } = 15;
     public int MaxBytes { get; set; } = 12 * 1024 * 1024;
+    /// <summary>Giro fijo (0 | 180) de las hojas del alimentador; null = 180 (la Canon las entrega dadas vuelta).</summary>
+    public int? RotarAlimentador { get; set; }
+    /// <summary>Giro fijo (0 | 180) de la hoja del vidrio.</summary>
+    public int RotarVidrio { get; set; }
+    /// <summary>Revisar cada página con el OCR de Windows y enderezar las que quedaron al revés.</summary>
+    public bool OrientacionAuto { get; set; } = true;
 }
 
 internal sealed class HubJob
@@ -194,7 +200,8 @@ internal sealed class HubApi : IDisposable
     }
 
     /// <summary>Sube el PDF escaneado. Devuelve el código de error del servidor, o «ok».</summary>
-    public async Task<(string Code, string Message)> UploadScanAsync(long jobId, byte[] pdf, int pages, bool truncated, CancellationToken ct)
+    /// <param name="straightened">Páginas (desde 1) que venían al revés respecto del resto y se enderezaron.</param>
+    public async Task<(string Code, string Message)> UploadScanAsync(long jobId, byte[] pdf, int pages, bool truncated, IReadOnlyList<int> straightened, CancellationToken ct)
     {
         using var req = new HttpRequestMessage(HttpMethod.Post, _base + "jobs/" + jobId + "/scan");
         req.Content = new ByteArrayContent(pdf);
@@ -203,6 +210,10 @@ internal sealed class HubApi : IDisposable
         if (truncated)
         {
             req.Headers.Add("X-Riverso-Scan-Truncated", "1");
+        }
+        if (straightened.Count > 0)
+        {
+            req.Headers.Add("X-Riverso-Scan-Straightened", string.Join(",", straightened));
         }
         // Un PDF de varios MB por una conexión lenta no cabe en los 40 s del cliente normal.
         using var resp = await _upload.SendAsync(req, ct);

@@ -6,13 +6,15 @@ namespace RiversoPrintHub;
 
 /// <summary>
 /// Arma un PDF con una página por JPEG escaneado. El JPEG se incrusta tal cual (DCTDecode),
-/// sin recodificar, salvo que el total pase del tamaño que acepta el servidor.
+/// sin recodificar, salvo que el total pase del tamaño que acepta el servidor. Las páginas que
+/// llegaron dadas vuelta se enderezan al dibujarlas (matriz de la página), sin tocar el JPEG.
 /// </summary>
 internal static class ScanPdf
 {
     private static readonly long[] FallbackQualities = { 60, 40, 25 };
 
-    public static byte[] Build(List<byte[]> jpegs, int dpi, int maxBytes)
+    /// <param name="rotations">Giro de cada página (0 | 180); null = todas derechas.</param>
+    public static byte[] Build(List<byte[]> jpegs, int dpi, int maxBytes, IReadOnlyList<int>? rotations = null)
     {
         var pages = jpegs;
         foreach (var quality in FallbackQualities)
@@ -23,7 +25,7 @@ internal static class ScanPdf
             }
             pages = jpegs.Select(j => Recompress(j, quality)).ToList();
         }
-        var pdf = Write(pages, dpi);
+        var pdf = Write(pages, dpi, rotations);
         if (pdf.Length > maxBytes)
         {
             throw new ScanException("too_large");
@@ -43,7 +45,7 @@ internal static class ScanPdf
         return output.ToArray();
     }
 
-    private static byte[] Write(List<byte[]> jpegs, int dpi)
+    private static byte[] Write(List<byte[]> jpegs, int dpi, IReadOnlyList<int>? rotations)
     {
         using var ms = new MemoryStream();
         var offsets = new List<long>();
@@ -84,7 +86,11 @@ internal static class ScanPdf
             Text("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + w + " " + h + "] /Contents " + (pageObj + 1)
                 + " 0 R /Resources << /XObject << /Im0 " + (pageObj + 2) + " 0 R >> >> >>\nendobj\n");
 
-            string content = "q " + w + " 0 0 " + h + " 0 0 cm /Im0 Do Q\n";
+            bool upsideDown = rotations is not null && i < rotations.Count && rotations[i] == 180;
+            // Girada 180°: la imagen se dibuja invertida en ambos ejes y desplazada a la esquina opuesta.
+            string content = upsideDown
+                ? "q -" + w + " 0 0 -" + h + " " + w + " " + h + " cm /Im0 Do Q\n"
+                : "q " + w + " 0 0 " + h + " 0 0 cm /Im0 Do Q\n";
             Begin(pageObj + 1);
             Text("<< /Length " + content.Length + " >>\nstream\n" + content + "endstream\nendobj\n");
 

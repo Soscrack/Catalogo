@@ -181,6 +181,16 @@ function http_json_post($url, array $payload, $timeout = 600) {
     return $data;
 }
 
+/**
+ * Precio oculto en la vista pública de sande.cl. Pese al nombre, «ocultarPrecio» = "1" es el
+ * que MUESTRA el precio, y solo con stock (main.js de sande.cl:
+ * "1"===ocultarPrecio&&(stockt>0||!esVistaPublica)).
+ */
+function sande_price_hidden(array $p) {
+    $stock = parse_cl_decimal($p['stockt'] ?? null);
+    return !((string) ($p['ocultarPrecio'] ?? '') === '1' && $stock !== null && $stock > 0);
+}
+
 function parse_cl_decimal($value) {
     if ($value === null || $value === '') {
         return null;
@@ -350,7 +360,7 @@ try {
         $precio = parse_cl_decimal($p['precioProducto'] ?? null);
         $precio_lista = parse_cl_decimal($p['precioProductoL'] ?? null);
         $costo = parse_cl_decimal($p['costoProducto'] ?? ($p['precioCosto'] ?? null));
-        $oculto = ((string) ($p['ocultarPrecio'] ?? '0') === '1') ? 1 : 0;
+        $oculto = sande_price_hidden($p) ? 1 : 0;
         $moneda = $p['moneda'] ?? $p['idMoneda'] ?? 'CLP';
         if ($moneda === '' || $moneda === null) {
             $moneda = 'CLP';

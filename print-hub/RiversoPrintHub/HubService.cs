@@ -378,9 +378,23 @@ internal sealed class HubService
             int pages = result.Pages.Count;
             Log.Info($"Escaneo #{job.Id}: {pages} página(s) desde {(result.FromFeeder ? "el alimentador" : "el vidrio")}, {result.Pages.Sum(p => (long)p.Length) / 1024} KB");
 
+            // La Canon entrega las hojas del alimentador dadas vuelta; el OCR corrige las que se pusieron al revés.
+            int baseRotation = (result.FromFeeder ? s.RotarAlimentador ?? 180 : s.RotarVidrio) == 180 ? 180 : 0;
+            var rotations = Enumerable.Repeat(baseRotation, pages).ToArray();
+            if (s.OrientacionAuto)
+            {
+                await api.ReportAsync(job.Id, "imprimiendo", "Revisando orientación");
+                rotations = await PageOrientation.DecideAsync(result.Pages, baseRotation, ct);
+            }
+            var straightened = Enumerable.Range(0, pages).Where(i => rotations[i] != baseRotation).Select(i => i + 1).ToList();
+            if (straightened.Count > 0)
+            {
+                Log.Info($"Escaneo #{job.Id}: página(s) {string.Join(", ", straightened)} venían al revés; se enderezaron.");
+            }
+
             string uploading = "Subiendo " + pages + (pages == 1 ? " página" : " páginas");
             await api.ReportAsync(job.Id, "imprimiendo", uploading);
-            var pdf = await Task.Run(() => ScanPdf.Build(result.Pages, s.Dpi, s.MaxBytes), ct);
+            var pdf = await Task.Run(() => ScanPdf.Build(result.Pages, s.Dpi, s.MaxBytes, rotations), ct);
 
             // Mientras sube, se sigue avisando para que el servidor no dé el trabajo por perdido.
             using var uploadDone = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -401,7 +415,7 @@ internal sealed class HubService
             (string Code, string Message) upload;
             try
             {
-                upload = await api.UploadScanAsync(job.Id, pdf, pages, result.Truncated, ct);
+                upload = await api.UploadScanAsync(job.Id, pdf, pages, result.Truncated, straightened, ct);
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
             {

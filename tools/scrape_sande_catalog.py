@@ -51,6 +51,16 @@ def norm_code(value: Any) -> str:
     return re.sub(r"[^A-Z0-9]", "", str(value or "").upper())
 
 
+def sande_price_hidden(p: dict) -> bool:
+    """Precio oculto en la vista pública de sande.cl.
+
+    Pese al nombre, ocultarPrecio == "1" es el que MUESTRA el precio, y solo con stock
+    (main.js de sande.cl: "1"===ocultarPrecio&&(stockt>0||!esVistaPublica)).
+    """
+    stock = parse_cl_decimal(p.get("stockt"))
+    return not (str(p.get("ocultarPrecio") or "") == "1" and stock is not None and stock > 0)
+
+
 def parse_cl_decimal(value: Any) -> float | None:
     if value is None:
         return None
@@ -517,7 +527,7 @@ def normalize_outputs(
                 "iva": IVA_FACTOR,
                 "costo": parse_cl_decimal(p.get("costoProducto") or p.get("precioCosto")),
                 "moneda": p.get("moneda") or p.get("idMoneda") or "CLP",
-                "oculto": str(p.get("ocultarPrecio") or "0") == "1",
+                "oculto": sande_price_hidden(p),
             }
         )
 

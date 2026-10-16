@@ -121,6 +121,13 @@ Recepción ──«Escanear»──►  riverso.cl (cola)  ◄──consulta─�
   a presionar **Escanear** para el resto.
 - Si hay un atasco a mitad de camino, el escaneo completo se descarta: se vuelven a poner todas las hojas.
 - Guías delgadas, corcheteadas o arrugadas y boletas térmicas van mejor por el vidrio, de a una.
+- **Orientación (hub 1.4.0 o superior):** por eSCL la Canon entrega las hojas del alimentador
+  dadas vuelta (180°); el hub las endereza al armar el PDF, sin recomprimir. Además lee cada página
+  con el OCR de Windows (viene con Windows, sin instalar nada; ~0,3 s por página) derecha y al revés,
+  y si una hoja se puso al revés la endereza igual; el aviso de Recepción dice qué página fue. Si el
+  OCR no está disponible o la página tiene poco texto, se aplica solo el giro fijo. El giro fijo lo
+  manda el servidor (`SCAN_FEEDER_ROTATION` en `class-print-module.php`); las decisiones por página
+  quedan en el registro del hub («Orientación página N…»).
 
 ## 6. Problemas comunes
 

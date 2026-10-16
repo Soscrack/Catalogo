@@ -53,6 +53,11 @@ class Riverso_Print_Module {
     /** El hub recomprime para no pasar de este tamaño (margen bajo SCAN_MAX_BYTES). */
     const SCAN_TARGET_BYTES = 12582912;
     const SCAN_DPI = 200;
+    /**
+     * Giro fijo de las hojas del alimentador: la Canon GX7010 las entrega dadas vuelta por eSCL.
+     * El hub (1.4.0+) además revisa cada página con OCR y endereza las que se pusieron al revés.
+     */
+    const SCAN_FEEDER_ROTATION = 180;
     /** Escáneres de red que reporta cada hub: agent_id => [{name, adf, duplex, hojas}]. */
     const SCANNERS_OPTION = 'riverso_print_scanners';
 
@@ -1312,6 +1317,9 @@ class Riverso_Print_Module {
                 'color' => false,
                 'max_paginas' => self::SCAN_MAX_PAGES,
                 'max_bytes' => self::SCAN_TARGET_BYTES,
+                'rotar_alimentador' => self::SCAN_FEEDER_ROTATION,
+                'rotar_vidrio' => 0,
+                'orientacion_auto' => true,
             ]);
             $data['estado'] = 'pendiente';
             $data['expires_at'] = Riverso_Print_Repository::at(self::CLAIM_TIMEOUT);
@@ -1448,8 +1456,9 @@ class Riverso_Print_Module {
         $this->repo->transition_job($job_id, $active, [
             'estado' => 'impreso',
             'source_id' => (int) $prepared['archivo_id'],
-            'detalle' => ($pages > 0 ? $pages . ($pages === 1 ? ' página escaneada' : ' páginas escaneadas') : 'Escaneo recibido')
-                . ($request->get_header('x-riverso-scan-truncated') ? ' (tope alcanzado: quedaron hojas sin escanear)' : ''),
+            'detalle' => mb_substr(($pages > 0 ? $pages . ($pages === 1 ? ' página escaneada' : ' páginas escaneadas') : 'Escaneo recibido')
+                . ($request->get_header('x-riverso-scan-truncated') ? ' (tope alcanzado: quedaron hojas sin escanear)' : '')
+                . $this->scan_straightened_note((string) $request->get_header('x-riverso-scan-straightened')), 0, 255),
             'error_code' => null,
             'finished_at' => Riverso_Print_Repository::now(),
         ]);
@@ -1463,6 +1472,23 @@ class Riverso_Print_Module {
         }
         $scans->respond_and_extract($prepared, $response);
         exit;
+    }
+
+    /**
+     * Aviso de las hojas que venían al revés y el hub enderezó («2,3» → « · páginas 2 y 3 venían al revés: se enderezaron»).
+     */
+    private function scan_straightened_note($header) {
+        $nums = array_values(array_unique(array_filter(array_map('intval', explode(',', $header)), function ($n) {
+            return $n > 0;
+        })));
+        if (!$nums) {
+            return '';
+        }
+        if (count($nums) === 1) {
+            return ' · página ' . $nums[0] . ' venía al revés: se enderezó';
+        }
+        $last = array_pop($nums);
+        return ' · páginas ' . implode(', ', $nums) . ' y ' . $last . ' venían al revés: se enderezaron';
     }
 
     // ───────────────────────── REST (hub) ─────────────────────────

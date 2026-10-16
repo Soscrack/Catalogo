@@ -3253,6 +3253,51 @@ button.cq-breakdown-chip {
     color: #fff;
 }
 
+/* Precio que cuenta para la sugerencia (incluye un oculto usado esta vez o siempre): competitivo en verde. */
+.cq-da-ref.is-active {
+    border-color: #15803d;
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.cq-da-ref.is-active:hover,
+.cq-da-ref.is-active:focus-visible {
+    background: #15803d;
+    color: #fff;
+}
+
+/* Codicioso que cuenta: rojo. */
+.cq-da-ref.is-active.is-greedy {
+    border-color: #b91c1c;
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.cq-da-ref.is-active.is-greedy:hover,
+.cq-da-ref.is-active.is-greedy:focus-visible {
+    background: #b91c1c;
+    color: #fff;
+}
+
+/* Precio oculto que cuenta: punteado = «Usar esta vez» (este documento), doble = «Usar siempre». */
+/* Mismo tamaño exterior que el resto (16 px + 1 px de borde): el borde grueso resta al interior. */
+.cq-da-ref.is-hidden-once {
+    width: 14px;
+    height: 14px;
+    border-style: dashed;
+    border-width: 2px;
+    line-height: 12px;
+}
+
+.cq-da-ref.is-hidden-always {
+    width: 12px;
+    height: 12px;
+    border-style: double;
+    border-width: 3px;
+    font-size: 0.55rem;
+    line-height: 10px;
+}
+
 .cq-da-ref.is-disabled {
     border-style: dashed;
     opacity: 0.75;

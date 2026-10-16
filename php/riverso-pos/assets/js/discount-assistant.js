@@ -555,10 +555,13 @@
 
         /* --- Barra --- */
         function renderBar(res) {
-            // Competidores de referencia (no cuentan): puntito «R» bajo la barra que abre su URL.
-            var refs = res.reference.filter(function (i) { return i.total !== null && i.total > 0 && i.c.url; });
+            // Puntito «R» bajo la barra por cada precio de competidor (abre su URL): los que cuentan
+            // en verde (competitivo) o rojo (codicioso), también un oculto usado; gris los de referencia.
+            var withUrl = function (i) { return i.total !== null && i.total > 0 && i.c.url; };
+            var refs = res.counted.filter(withUrl).map(function (i) { return { i: i, active: true }; })
+                .concat(res.reference.filter(withUrl).map(function (i) { return { i: i, active: false }; }));
             var values = res.markers.map(function (m) { return m.value; })
-                .concat(refs.map(function (i) { return i.total; }));
+                .concat(refs.map(function (r) { return r.i.total; }));
             var lo = Math.min.apply(null, values);
             var hi = Math.max.apply(null, values);
             lo = Math.max(lo, res.floor * 0.75);
@@ -611,8 +614,11 @@
             });
 
             var refRows = [];
-            refs.slice().sort(function (x, y) { return x.total - y.total; }).forEach(function (i) {
+            refs.slice().sort(function (x, y) { return x.i.total - y.i.total; }).forEach(function (r) {
+                var i = r.i;
                 var c = i.c;
+                var hidden = c.oculto_uso === "esta_vez" ? " (precio oculto, usado esta vez)"
+                    : (c.oculto_uso === "siempre" ? " (precio oculto, usado siempre)" : "");
                 var p = pos(i.total);
                 var row = 0;
                 while (row < 3 && refRows[row] !== undefined && p - refRows[row] < 3.5) row++;
@@ -620,16 +626,23 @@
                 refRows[row] = p;
                 var edge = i.total < lo + pad ? " ◂" : (i.total > hi - pad ? " ▸" : "");
                 bar.appendChild(h("a", {
-                    className: "cq-da-ref" + (c.deshabilitado ? " is-disabled" : "") + (c.precio_cambio ? " is-changed" : ""),
+                    // Color = actitud (cuenta igual); borde = origen del oculto: punteado esta vez, doble siempre.
+                    className: "cq-da-ref" + (r.active ? (c.actitud === "codicioso" ? " is-active is-greedy" : " is-active") : "")
+                        + (r.active && c.oculto_uso === "esta_vez" ? " is-hidden-once" : "")
+                        + (r.active && c.oculto_uso === "siempre" ? " is-hidden-always" : "")
+                        + (c.deshabilitado ? " is-disabled" : "")
+                        + (c.precio_cambio ? " is-changed" : ""),
                     href: c.url,
                     target: "_blank",
                     rel: "noopener noreferrer",
                     style: "left:" + p + "%;--row:" + row,
-                    title: "Referencia · " + (c.competidor || c.dominio || "") + " · " + (c.tipo_match_label || "")
+                    title: (r.active ? "Cuenta · " + (c.actitud_label || "") + hidden : "Referencia") + " · "
+                        + (c.competidor || c.dominio || "") + " · " + (c.tipo_match_label || "")
                         + " · " + LD.formatUnitPrice(c.precio_unitario) + "/u = " + money(i.total)
                         + (c.fecha ? " · " + c.fecha : "") + ((i.reason || c.motivo) ? " · " + (i.reason || c.motivo) : "") + edge
                         + " · Abrir su página",
-                    "aria-label": "Abrir página de " + (c.competidor || c.dominio || "competidor") + " (referencia)",
+                    "aria-label": "Abrir página de " + (c.competidor || c.dominio || "competidor")
+                        + (r.active ? " (cuenta)" : " (referencia)"),
                     text: "R"
                 }));
             });
@@ -964,9 +977,15 @@
                     siempre: "Oculto en la web: se usa siempre" + (c.usar_oculto_desde ? " (desde " + c.usar_oculto_desde + ")" : "") + ".",
                     siempre_no_ahora: "Oculto en la web: «Usar siempre», pero no en este documento."
                 };
+                // Otro motivo (vínculo sugerido, similar, desactualizado, deshabilitado) le gana al oculto:
+                // aunque se use, no cuenta hasta resolverlo.
+                var blocked = c.motivo_oculto_usado || "";
                 var parts = [
                     h("span", { className: "cq-da-badge is-hidden-price", text: "Precio oculto" }),
-                    h("div", { className: "cq-modal-hint", text: texts[mode] || "" })
+                    h("div", { className: "cq-modal-hint", text: texts[mode] || "" }),
+                    blocked ? h("span", { className: "cq-da-badge is-warn",
+                        text: (mode === "esta_vez" || mode === "siempre" ? "Igual no cuenta: " : "Aunque lo uses, no contará: ") + blocked })
+                        : null
                 ];
                 var btn = function (text, title, onclick, primary) {
                     return h("button", { type: "button", className: "cq-btn cq-btn-small" + (primary ? " cq-btn-primary" : ""),
@@ -977,7 +996,8 @@
                         ? "¿Seguro que quieres volver a usar en este documento el precio oculto de " + who + priceOf(c) + "?"
                         : "¿Seguro que quieres usar esta vez el precio oculto de " + who + priceOf(c) + "?\n\n"
                             + who + " lo oculta en su web, así que puede no ser el precio que ofrece hoy. "
-                            + "Contará solo en el análisis de este documento mientras lo tengas abierto.";
+                            + "Contará solo en el análisis de este documento mientras lo tengas abierto."
+                            + (blocked ? "\n\nOjo: igual no contará hasta resolver esto: " + blocked : "");
                     if (window.confirm(text)) setOnce(c, mode === "siempre_no_ahora" ? null : true);
                 }, true);
                 var useAlways = canManage ? btn("Usar siempre", "Cuenta en todas las cotizaciones y borradores", function () {

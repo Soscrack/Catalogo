@@ -35,6 +35,7 @@ class Riverso_Competencia_Module {
         add_action('wp_ajax_riverso_competencia_price_series', [$this, 'ajax_price_series']);
         add_action('wp_ajax_riverso_competencia_list_skus', [$this, 'ajax_list_skus']);
         add_action('wp_ajax_riverso_competencia_manual_ingreso', [$this, 'ajax_manual_ingreso']);
+        add_action('wp_ajax_riverso_competencia_set_actitud', [$this, 'ajax_set_actitud']);
         add_action('wp_ajax_riverso_competencia_list_fuentes', [$this, 'ajax_list_fuentes']);
         add_action('wp_ajax_riverso_competencia_update_fuente_precio', [$this, 'ajax_update_fuente_precio']);
         add_action('wp_ajax_riverso_competencia_eliminar_fuente', [$this, 'ajax_eliminar_fuente']);
@@ -274,6 +275,14 @@ class Riverso_Competencia_Module {
             ], $status);
         }
 
+        // Actitud del vínculo (Asistente de Descuento): codicioso | competitivo | sin_clasificar.
+        if (isset($_POST['actitud']) && class_exists('Riverso_Discount_Assistant_Service')) {
+            Riverso_Discount_Assistant_Service::set_link_attitude(
+                (int) ($result['producto_competencia_id'] ?? 0),
+                sanitize_key(wp_unslash($_POST['actitud']))
+            );
+        }
+
         if (class_exists('Riverso_POS_Audit')) {
             Riverso_POS_Audit::log('competencia.manual_ingreso', 'competencia', (int) ($result['producto_competencia_id'] ?? 0), [
                 'actor_type' => 'user',
@@ -281,6 +290,22 @@ class Riverso_Competencia_Module {
             ]);
         }
 
+        wp_send_json_success($result);
+    }
+
+    /** Actitud de un vínculo confirmado (Asistente de Descuento). */
+    public function ajax_set_actitud() {
+        $this->guard();
+        if (!class_exists('Riverso_Discount_Assistant_Service')) {
+            wp_send_json_error(['message' => 'Asistente de descuento no disponible.']);
+        }
+        $result = Riverso_Discount_Assistant_Service::set_link_attitude(
+            isset($_POST['producto_competencia_id']) ? (int) $_POST['producto_competencia_id'] : 0,
+            isset($_POST['actitud']) ? sanitize_key(wp_unslash($_POST['actitud'])) : ''
+        );
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
         wp_send_json_success($result);
     }
 

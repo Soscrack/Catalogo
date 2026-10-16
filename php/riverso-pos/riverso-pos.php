@@ -337,6 +337,13 @@ final class Riverso_POS {
                     RIVERSO_POS_PLUGIN_DIR . 'modules/competencia/class-competencia-module.php',
                 ],
             ],
+            'discount-assistant' => [
+                'file'  => 'class-discount-assistant-module.php',
+                'class' => 'Riverso_Discount_Assistant_Module',
+                'paths' => [
+                    RIVERSO_POS_PLUGIN_DIR . 'modules/discount-assistant/class-discount-assistant-module.php',
+                ],
+            ],
             'import'    => ['file' => 'class-mamut-import-module.php', 'class' => 'Riverso_Mamut_Import_Module'],
             'customer-quotes' => [
                 'file' => 'class-customer-quote-module.php',

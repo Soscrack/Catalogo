@@ -10,6 +10,7 @@
   // Descuentos, valor fijado y «Otra regla» compartidos con cotizaciones (line-discounts.js).
   var LD = global.RiversoLineDiscounts;
   var discountModule = null;
+  var discountAssistant = null;
   var rulePicker = null;
   var state = {
     lineModal: {
@@ -608,6 +609,8 @@
         else if (field === "margin_discount") line.margin_discount = parsed;
         if (field === "price_discount" || field === "margin_discount") {
             var rate = clampRate(parsed);
+            // Escrito a mano en la tabla: el Asistente de Descuento lo registra como manual.
+            line.discount_origin = rate > 0 ? "manual" : null;
             if (rate > 0) {
                 line.discount_anchor = field === "price_discount" ? "price_pct" : "margin_pct";
                 line.discount_anchor_value = rate;
@@ -1664,6 +1667,7 @@
         }
         // Valor fijado de la línea; el módulo queda minimizado (el resumen muestra el descuento).
         if (discountModule) discountModule.open(line);
+        if (discountAssistant) discountAssistant.open(line);
         setLineTaxView("bruto");
         if (billEls.lineByAmountResult) billEls.lineByAmountResult.innerHTML = "";
         if (billEls.lineMonto) billEls.lineMonto.value = "";
@@ -2589,6 +2593,8 @@
       lineDmCost: g("bill-dm-cost"),
       lineDmFactorBefore: g("bill-dm-factor-before"),
       lineDiscounts: g("bill-line-discounts"),
+      lineDaFlag: g("bill-line-da-flag"),
+      lineDa: g("bill-line-da"),
       lineDiscountsBrief: g("bill-line-discounts-brief"),
       lineFamilyNote: g("bill-line-family-note"),
       lineRuleInfo: g("bill-line-rule-info"),
@@ -2857,6 +2863,18 @@
       formatPercent: formatPercent,
       sii: true
     });
+    // Asistente de Descuento: barra de rango, competencia e historial dentro de Descuentos.
+    var daCfg = host && host.cfg ? host.cfg.discountAssistant : null;
+    if (global.RiversoDiscountAssistant && daCfg) {
+      discountAssistant = global.RiversoDiscountAssistant.create({
+        module: discountModule,
+        details: billEls.lineDiscounts,
+        flag: billEls.lineDaFlag,
+        container: billEls.lineDa,
+        cfg: daCfg,
+        toView: brutoToView
+      });
+    }
     // «Otra regla»: se puede elegir otra para corregir la de la cotización.
     rulePicker = LD.createRulePicker({
       els: {

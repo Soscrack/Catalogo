@@ -242,6 +242,9 @@ class Riverso_Customer_Quote_Module {
             ),
             'defaultChannel' => 'local',
             'todayDate' => current_time('Y-m-d'),
+            'discountAssistant' => class_exists('Riverso_Discount_Assistant_Module')
+                ? Riverso_Discount_Assistant_Module::client_config()
+                : null,
         );
     }
 

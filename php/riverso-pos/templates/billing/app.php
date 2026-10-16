@@ -17,6 +17,9 @@ $js_lines_ver = (is_string($js_lines_path) && is_file($js_lines_path)) ? (string
 // Descuentos y «Otra regla» compartidos con cotizaciones.
 $line_discounts_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/line-discounts.js';
 $line_discounts_ver = (is_string($line_discounts_path) && is_file($line_discounts_path)) ? (string) filemtime($line_discounts_path) : $version;
+// Asistente de Descuento (barra, competencia e historial) dentro de Descuentos.
+$discount_assistant_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/discount-assistant.js';
+$discount_assistant_ver = (is_string($discount_assistant_path) && is_file($discount_assistant_path)) ? (string) filemtime($discount_assistant_path) : $version;
 $js_emails_ver = (is_string($js_emails_path) && is_file($js_emails_path)) ? (string) filemtime($js_emails_path) : $version;
 $css_ver = (is_string($css_path) && is_file($css_path)) ? (string) filemtime($css_path) : $version;
 $css_cq_ver = (is_string($css_cq_path) && is_file($css_cq_path)) ? (string) filemtime($css_cq_path) : $version;
@@ -823,7 +826,7 @@ if (!function_exists('riverso_pos_billing_json')) {
                     <input type="text" id="bill-adv-contains" autocomplete="off" placeholder="Escribe y Enter…" enterkeyhint="done">
                     <button type="button" class="cq-btn" id="bill-adv-contains-add">Agregar</button>
                 </div>
-                <div id="bill-adv-contains-tags" class="cq-contains-tags" aria-live="polite"></div>
+                <div id="bill-adv-contains-tags" class="cq-contains-tags"></div>
             </div>
             <div class="cq-search-row">
                 <input type="search" id="bill-adv-q" autocomplete="off" placeholder="Buscar…" enterkeyhint="search">
@@ -925,6 +928,7 @@ if (!function_exists('riverso_pos_billing_json')) {
                 <summary class="cq-discounts-summary">
                     <span class="cq-discounts-title">Descuentos</span>
                     <span class="cq-discounts-brief" id="bill-line-discounts-brief"></span>
+                        <span class="cq-da-flag" id="bill-line-da-flag" hidden></span>
                 </summary>
                 <div class="cq-discounts-body">
                     <div class="cq-line-fields cq-discounts-ref">
@@ -970,6 +974,7 @@ if (!function_exists('riverso_pos_billing_json')) {
                         </label>
                     </div>
                     <p id="bill-line-discount-hint" class="cq-line-preview cq-discounts-status" role="status"></p>
+                        <div class="cq-da" id="bill-line-da"></div>
                 </div>
             </details>
             <div class="cq-line-by-amount" id="bill-line-by-amount">
@@ -1105,6 +1110,7 @@ window.RIVERSO_BILLING = <?php echo riverso_pos_billing_json($riverso_billing); 
 </script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/barcode-scanner.js?ver=<?php echo htmlspecialchars($scanner_js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/line-discounts.js?ver=<?php echo htmlspecialchars($line_discounts_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/discount-assistant.js?ver=<?php echo htmlspecialchars($discount_assistant_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing-lines.js?ver=<?php echo htmlspecialchars($js_lines_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing-emails.js?ver=<?php echo htmlspecialchars($js_emails_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/billing.js?ver=<?php echo htmlspecialchars($js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>

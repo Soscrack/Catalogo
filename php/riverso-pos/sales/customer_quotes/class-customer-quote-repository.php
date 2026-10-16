@@ -354,6 +354,19 @@ class Riverso_Customer_Quote_Repository {
      * Con documento de venta asociado el estado lo maneja la facturación.
      * Aprobar reserva stock (aunque quede negativo); salir de Aprobada lo libera.
      */
+    /**
+     * Origen del descuento (Asistente de Descuento): sugerido, maximo, minimo, marcador,
+     * historial o manual. Sin descuento no hay origen; un descuento sin origen es manual.
+     */
+    public static function normalize_discount_origin($origin, $discount_amount) {
+        if (!((float) $discount_amount > 0)) {
+            return null;
+        }
+        $origin = strtolower(trim((string) $origin));
+        $allowed = array('sugerido', 'maximo', 'minimo', 'marcador', 'historial', 'manual');
+        return in_array($origin, $allowed, true) ? $origin : 'manual';
+    }
+
     public function transition($id, $to) {
         $quote = $this->find((int) $id);
         if ($quote === null) {
@@ -392,6 +405,10 @@ class Riverso_Customer_Quote_Repository {
         $updated = $this->find((int) $id);
         if ($updated === null) {
             throw new Riverso_Quote_Exception('Cotización no encontrada.');
+        }
+        if ($quote['status'] !== $updated['status'] && function_exists('do_action')) {
+            // Historial de descuentos (Asistente de Descuento) al aceptar.
+            do_action('riverso_customer_quote_status_changed', $updated, (string) $quote['status'], (string) $updated['status']);
         }
         return $updated;
     }
@@ -1328,6 +1345,7 @@ class Riverso_Customer_Quote_Repository {
                 'discount_amount' => $discount,
                 'discount_anchor' => isset($line['discount_anchor']) ? $line['discount_anchor'] : null,
                 'discount_anchor_value' => isset($line['discount_anchor_value']) ? $line['discount_anchor_value'] : null,
+                'discount_origin' => isset($line['discount_origin']) ? $line['discount_origin'] : null,
                 'discount_percent' => 0,
                 'subtotal' => $line_net + $discount,
                 'tax_percent' => 0,
@@ -1505,6 +1523,10 @@ class Riverso_Customer_Quote_Repository {
             'discount_amount' => round((float) (isset($line['discount_amount']) ? $line['discount_amount'] : 0), 2),
             'discount_anchor' => $anchor,
             'discount_anchor_value' => $anchor_value,
+            'discount_origin' => self::normalize_discount_origin(
+                isset($line['discount_origin']) ? $line['discount_origin'] : null,
+                isset($line['discount_amount']) ? $line['discount_amount'] : 0
+            ),
             'family_mode' => $family_mode,
             'packaging' => $packaging,
             'units_per_pack' => $upp,
@@ -1852,6 +1874,10 @@ class Riverso_Customer_Quote_Repository {
             'discount_amount' => (float) $normalized['discount_amount'],
             'discount_anchor' => Riverso_Quote_Totals::normalize_anchor(isset($line['discount_anchor']) ? $line['discount_anchor'] : null),
             'discount_anchor_value' => $this->nullable_float6(isset($line['discount_anchor_value']) ? $line['discount_anchor_value'] : null),
+            'discount_origin' => self::normalize_discount_origin(
+                isset($line['discount_origin']) ? $line['discount_origin'] : null,
+                $normalized['discount_amount']
+            ),
             'line_net' => $line_net,
             'line_profit' => $normalized['line_profit'],
             'line_margin_percent' => $normalized['line_margin_percent'],
@@ -1942,7 +1968,10 @@ class Riverso_Customer_Quote_Repository {
         if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_quote_price_rule')) {
             Riverso_POS_Activator::ensure_quote_price_rule();
         }
-        // Invalidar cache de columnas: phase57/58/59/60/62/74/77/78 pudieron agregar campos.
+        if (class_exists('Riverso_POS_Activator') && method_exists('Riverso_POS_Activator', 'ensure_discount_assistant_schema')) {
+            Riverso_POS_Activator::ensure_discount_assistant_schema();
+        }
+        // Invalidar cache de columnas: phase57/58/59/60/62/74/77/78/81 pudieron agregar campos.
         $this->item_columns = null;
         $this->quote_columns = null;
     }

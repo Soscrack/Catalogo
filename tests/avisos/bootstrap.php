@@ -131,6 +131,12 @@ class Test_WPDB {
         foreach ($where as $k => $v) $cond[] = "`$k` = " . $this->lit($v);
         return $this->query("UPDATE `$table` SET " . implode(', ', $set) . ' WHERE ' . implode(' AND ', $cond));
     }
+
+    public function delete($table, $where) {
+        $cond = [];
+        foreach ($where as $k => $v) $cond[] = "`$k` = " . $this->lit($v);
+        return $this->query("DELETE FROM `$table` WHERE " . implode(' AND ', $cond));
+    }
 }
 
 @mkdir(ABSPATH . 'wp-admin/includes', 0777, true);

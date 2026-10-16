@@ -89,6 +89,9 @@ class Riverso_Billing_Module {
             if (method_exists('Riverso_POS_Activator', 'ensure_billing_draft_discount_anchor')) {
                 Riverso_POS_Activator::ensure_billing_draft_discount_anchor();
             }
+            if (method_exists('Riverso_POS_Activator', 'ensure_discount_assistant_schema')) {
+                Riverso_POS_Activator::ensure_discount_assistant_schema();
+            }
         }
     }
 
@@ -205,6 +208,9 @@ class Riverso_Billing_Module {
             'initialDocType' => $initial_doc_type,
             'direct' => $direct,
             'currentUserName' => $user_name,
+            'discountAssistant' => class_exists('Riverso_Discount_Assistant_Module')
+                ? Riverso_Discount_Assistant_Module::client_config()
+                : null,
             'searchUsers' => $search_users,
             'cashBoxes' => $cash_boxes,
             'paymentMethods' => $payment_methods,
@@ -1167,6 +1173,7 @@ class Riverso_Billing_Module {
                 // Valor fijado del módulo Descuentos: Riverso_Quote_Totals deriva el monto de él.
                 'discount_anchor' => $line['discount_anchor'] ?? null,
                 'discount_anchor_value' => $line['discount_anchor_value'] ?? null,
+                'discount_origin' => $line['discount_origin'] ?? null,
                 'product_id' => !empty($line['product_id']) ? (int) $line['product_id'] : null,
                 'producto_base_id' => !empty($line['producto_base_id']) ? (int) $line['producto_base_id'] : null,
                 'units_per_pack' => (float) ($line['units_per_pack'] ?? 1),
@@ -1237,6 +1244,7 @@ class Riverso_Billing_Module {
                 'discount_amount' => (float) ($line['discount_amount'] ?? 0),
                 'discount_anchor' => $line['discount_anchor'] ?? null,
                 'discount_anchor_value' => $line['discount_anchor_value'] ?? null,
+                'discount_origin' => $line['discount_origin'] ?? null,
                 'rule_total' => $rule_total_persist,
                 'rule_adjusted' => $rule_adjusted_persist,
             ];
@@ -1370,6 +1378,7 @@ class Riverso_Billing_Module {
                 // Lo que fijó el vendedor en la cotización: al cambiar la cantidad se mantiene.
                 'discount_anchor' => $line['discount_anchor'] ?? null,
                 'discount_anchor_value' => $line['discount_anchor_value'] ?? null,
+                'discount_origin' => $line['discount_origin'] ?? null,
                 'rule_total' => $rule_adjusted ? round((float) $line['rule_total'], 2) : null,
                 'rule_adjusted' => $rule_adjusted,
                 'stock_breakdown' => $line['stock_breakdown'] ?? null,

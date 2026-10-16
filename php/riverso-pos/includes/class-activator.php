@@ -380,6 +380,7 @@ class Riverso_POS_Activator {
         self::create_phase78_quote_price_rule($prefix);
         self::create_phase79_billing_draft_discount_anchor($prefix);
         self::create_phase80_reception_packs($prefix);
+        self::create_phase81_discount_assistant($prefix, $charset_collate);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -6037,6 +6038,115 @@ class Riverso_POS_Activator {
                 'details' => 'Fase 80: unidades_envase y es_suelto en lineas de recepcion (cajas de familia)',
             ));
         }
+    }
+
+    /**
+     * Fase 81: Asistente de Descuento.
+     * - competencia_match.actitud: actitud del vínculo (codicioso | competitivo | sin_clasificar).
+     * - competencia_competidores: actitud por dominio del competidor (sodimac.cl, sande.cl…).
+     * - discount_origin en líneas de cotización y de borradores: de dónde salió el descuento.
+     * - descuento_historial: descuentos de cotizaciones aceptadas y documentos emitidos.
+     */
+    private static function create_phase81_discount_assistant($prefix, $charset_collate) {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $match = "{$prefix}competencia_match";
+        if (self::table_exists($match)) {
+            self::add_column_if_missing($match, 'actitud', 'actitud VARCHAR(16) NULL DEFAULT NULL');
+        }
+        foreach (array("{$prefix}customer_quote_items", "{$prefix}billing_draft_lines") as $table) {
+            if (self::table_exists($table)) {
+                self::add_column_if_missing($table, 'discount_origin', 'discount_origin VARCHAR(16) NULL DEFAULT NULL');
+            }
+        }
+
+        $competidores = "{$prefix}competencia_competidores";
+        if (!self::table_exists($competidores)) {
+            dbDelta("CREATE TABLE {$competidores} (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                dominio VARCHAR(191) NOT NULL,
+                nombre VARCHAR(120) DEFAULT NULL,
+                actitud VARCHAR(16) NOT NULL DEFAULT 'sin_clasificar',
+                updated_by BIGINT UNSIGNED DEFAULT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY  (id),
+                UNIQUE KEY ux_dominio (dominio)
+            ) $charset_collate;");
+        }
+
+        $historial = "{$prefix}descuento_historial";
+        if (!self::table_exists($historial)) {
+            dbDelta("CREATE TABLE {$historial} (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                producto_base_id BIGINT UNSIGNED DEFAULT NULL,
+                sku VARCHAR(64) DEFAULT NULL,
+                descripcion VARCHAR(255) DEFAULT NULL,
+                evento VARCHAR(16) NOT NULL DEFAULT 'aceptada',
+                cotizacion_id BIGINT UNSIGNED DEFAULT NULL,
+                borrador_id BIGINT UNSIGNED DEFAULT NULL,
+                dte_id BIGINT UNSIGNED DEFAULT NULL,
+                documento VARCHAR(80) DEFAULT NULL,
+                cliente VARCHAR(191) DEFAULT NULL,
+                cantidad DECIMAL(14,3) NOT NULL DEFAULT 0,
+                unidades DECIMAL(14,3) NOT NULL DEFAULT 0,
+                costo_unitario DECIMAL(14,4) DEFAULT NULL,
+                bruto DECIMAL(14,2) NOT NULL DEFAULT 0,
+                descuento_monto DECIMAL(14,2) NOT NULL DEFAULT 0,
+                descuento_pct DECIMAL(8,4) NOT NULL DEFAULT 0,
+                total_final DECIMAL(14,2) NOT NULL DEFAULT 0,
+                precio_final_unitario DECIMAL(16,4) DEFAULT NULL,
+                factor_final DECIMAL(10,4) DEFAULT NULL,
+                discount_anchor VARCHAR(16) DEFAULT NULL,
+                discount_anchor_value DECIMAL(18,6) DEFAULT NULL,
+                origen VARCHAR(16) DEFAULT NULL,
+                user_id BIGINT UNSIGNED DEFAULT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY  (id),
+                KEY idx_producto (producto_base_id, created_at),
+                KEY idx_cotizacion (cotizacion_id),
+                KEY idx_borrador (borrador_id)
+            ) $charset_collate;");
+        }
+
+        if (get_option('riverso_pos_phase81_discount_assistant') === '1') {
+            return;
+        }
+        // Competidores conocidos (el usuario los indicó al pedir el asistente); no pisa lo ya marcado.
+        if (self::table_exists($competidores)) {
+            $seed = array(
+                'sande.cl' => array('Sande', 'competitivo'),
+                'dimafi.cl' => array('DIMAFI', 'competitivo'),
+                'sodimac.cl' => array('Sodimac', 'codicioso'),
+            );
+            foreach ($seed as $dominio => $info) {
+                $wpdb->query($wpdb->prepare(
+                    "INSERT IGNORE INTO {$competidores} (dominio, nombre, actitud) VALUES (%s, %s, %s)",
+                    $dominio,
+                    $info[0],
+                    $info[1]
+                ));
+            }
+        }
+        update_option('riverso_pos_phase81_discount_assistant', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase81_discount_assistant', 'descuento_historial', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 81: actitud de competidores, discount_origin en lineas e historial de descuentos',
+            ));
+        }
+    }
+
+    /**
+     * Garantiza el schema del Asistente de Descuento (deploy sin bump de versión).
+     */
+    public static function ensure_discount_assistant_schema() {
+        global $wpdb;
+        if (get_option('riverso_pos_phase81_discount_assistant') === '1') {
+            return;
+        }
+        self::create_phase81_discount_assistant($wpdb->prefix . 'riverso_', $wpdb->get_charset_collate());
     }
 
     private static function create_phase78_quote_price_rule($prefix) {

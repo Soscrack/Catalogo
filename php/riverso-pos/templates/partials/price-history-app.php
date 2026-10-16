@@ -51,6 +51,12 @@ $ph_tab_url = function ($tab) {
         <a href="<?php echo esc_url($ph_tab_url('add')); ?>" class="nav-tab" data-tab="add">
             <span class="dashicons dashicons-plus-alt"></span> Registrar precio
         </a>
+        <a href="<?php echo esc_url($ph_tab_url('descuentos')); ?>" class="nav-tab" data-tab="descuentos">
+            <span class="dashicons dashicons-admin-settings"></span> Asistente de descuento
+        </a>
+        <a href="<?php echo esc_url($ph_tab_url('descuentos_historial')); ?>" class="nav-tab" data-tab="descuentos_historial">
+            <span class="dashicons dashicons-backup"></span> Historial de descuentos
+        </a>
     </nav>
 
     <div class="tab-content" id="tab-process">
@@ -320,5 +326,13 @@ $ph_tab_url = function ($tab) {
             </p>
             <div id="ph-add-msg"></div>
         </div>
+    </div>
+
+    <div class="tab-content" id="tab-descuentos" style="display:none;">
+        <?php $da_view = 'settings'; include RIVERSO_POS_PLUGIN_DIR . 'templates/partials/discount-assistant-admin.php'; ?>
+    </div>
+
+    <div class="tab-content" id="tab-descuentos_historial" style="display:none;">
+        <?php $da_view = 'history'; include RIVERSO_POS_PLUGIN_DIR . 'templates/partials/discount-assistant-admin.php'; ?>
     </div>
 </div>

@@ -26,6 +26,21 @@
 
     var IVA_FACTOR = 1.19;
 
+    /** Origen del descuento (Asistente de Descuento). */
+    var ORIGIN_LABELS = {
+        sugerido: "sugerido",
+        maximo: "máximo",
+        minimo: "mínimo",
+        marcador: "marcador",
+        historial: "repetido",
+        manual: "manual"
+    };
+
+    function normalizeOrigin(value) {
+        var origin = String(value || "").toLowerCase();
+        return Object.prototype.hasOwnProperty.call(ORIGIN_LABELS, origin) ? origin : null;
+    }
+
     function round2(number) {
         return Math.round((number + Number.EPSILON) * 100) / 100;
     }
@@ -263,10 +278,14 @@
      * config.parse(text): número en formato es-CL.
      * config.formatPercent(value).
      * config.sii: avisa el monto entero que se emitirá (borradores de boleta/factura).
+     *
+     * Origen (Asistente de Descuento): sugerido, maximo, minimo, marcador, historial o manual.
+     * Escribir en un campo lo deja manual; setAnchor lo fija con el origen que diga el asistente.
      */
     function createModule(config) {
         var els = config.els || {};
-        var st = { anchor: null, value: null, syncing: false };
+        var st = { anchor: null, value: null, origin: null, syncing: false };
+        var listeners = [];
 
         function fields() {
             return FIELDS.map(function (field) {
@@ -389,8 +408,10 @@
                         + formatMoney(config.toView(sii !== null ? sii : f.finalTotal))
                     : "Sin descuento";
                 if (anchorField && f.discount > 0) brief += " · fijado: " + anchorField.label;
+                if (f.discount > 0 && st.origin && st.origin !== "manual") brief += " · " + ORIGIN_LABELS[st.origin];
                 els.brief.textContent = brief;
             }
+            listeners.forEach(function (fn) { fn({ line: d, figures: f }); });
 
             if (!els.status) return;
             var parts = [];
@@ -422,6 +443,7 @@
         function onInput(field) {
             if (st.syncing || !field.el) return;
             var raw = String(field.el.value || "").trim();
+            st.origin = raw === "" ? null : "manual";
             if (raw === "") {
                 st.anchor = null;
                 st.value = null;
@@ -449,15 +471,41 @@
                 var init = initialAnchor(line, config.bases(line).cost !== null);
                 st.anchor = init.anchor;
                 st.value = init.value;
+                st.origin = init.anchor ? (normalizeOrigin(line.discount_origin) || "manual") : null;
                 if (els.details) els.details.open = false;
             },
             refresh: refresh,
             draft: draft,
+            /** Fija un campo desde el asistente (anchor null quita el descuento). */
+            setAnchor: function (anchor, value, origin) {
+                anchor = normalizeAnchor(anchor);
+                var v = Number(value);
+                if (!anchor || !isFinite(v)) {
+                    st.anchor = null;
+                    st.value = null;
+                    st.origin = null;
+                } else {
+                    st.anchor = anchor;
+                    st.value = round6(anchor === "price_pct" || anchor === "margin_pct" ? clampRate(v) : Math.max(0, v));
+                    st.origin = normalizeOrigin(origin) || "manual";
+                }
+                refresh(true);
+            },
+            /** Cifras actuales del modal: { line, figures } (null sin línea). */
+            snapshot: function () {
+                var d = draft();
+                return d ? { line: d, figures: figuresOf(d) } : null;
+            },
+            /** fn({ line, figures }) en cada repintado del módulo. */
+            onRefresh: function (fn) {
+                if (typeof fn === "function") listeners.push(fn);
+            },
             /** Copia a la línea el valor fijado y el monto derivado (al guardar el modal). */
             writeTo: function (line) {
                 var d = draft();
                 line.discount_anchor = st.anchor || null;
                 line.discount_anchor_value = st.anchor ? st.value : null;
+                line.discount_origin = d && st.anchor && Number(d.discount_amount) > 0 ? (st.origin || "manual") : null;
                 if (d && st.anchor) {
                     line.discount_amount = round2(Number(d.discount_amount) || 0);
                     line.price_discount = clampRate(d.price_discount);
@@ -645,6 +693,7 @@
         round6: round6,
         clampRate: clampRate,
         normalizeAnchor: normalizeAnchor,
+        normalizeOrigin: normalizeOrigin,
         formatNumber: formatNumber,
         formatRate: formatRate,
         formatMoney: formatMoney,

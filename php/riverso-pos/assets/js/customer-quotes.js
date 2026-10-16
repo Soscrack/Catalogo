@@ -241,6 +241,8 @@
         lineDmCost: document.getElementById("cq-dm-cost"),
         lineDmFactorBefore: document.getElementById("cq-dm-factor-before"),
         lineDiscounts: document.getElementById("cq-line-discounts"),
+        lineDaFlag: document.getElementById("cq-line-da-flag"),
+        lineDa: document.getElementById("cq-line-da"),
         lineDiscountsBrief: document.getElementById("cq-line-discounts-brief"),
         lineByAmount: document.getElementById("cq-line-by-amount"),
         lineMonto: document.getElementById("cq-line-monto"),
@@ -741,6 +743,17 @@
         parse: parseClNumber,
         formatPercent: formatPercent
     });
+    // Asistente de Descuento: barra de rango, competencia e historial dentro de Descuentos.
+    var discountAssistant = window.RiversoDiscountAssistant && cfg.discountAssistant
+        ? window.RiversoDiscountAssistant.create({
+            module: discountModule,
+            details: els.lineDiscounts,
+            flag: els.lineDaFlag,
+            container: els.lineDa,
+            cfg: cfg.discountAssistant,
+            toView: brutoToView
+        })
+        : null;
     if (els.importCheckAll) {
         els.importCheckAll.addEventListener("change", function () {
             var on = !!els.importCheckAll.checked;
@@ -2752,6 +2765,8 @@
         else if (field === "margin_discount") line.margin_discount = parsed;
         if (field === "price_discount" || field === "margin_discount") {
             var rate = clampRate(parsed);
+            // Escrito a mano en la tabla: el Asistente de Descuento lo registra como manual.
+            line.discount_origin = rate > 0 ? "manual" : null;
             if (rate > 0) {
                 line.discount_anchor = field === "price_discount" ? "price_pct" : "margin_pct";
                 line.discount_anchor_value = rate;
@@ -3747,6 +3762,7 @@
                         && line.discount_anchor_value != null
                         ? line.discount_anchor_value
                         : null,
+                    discount_origin: line.discount_origin || null,
                     family_mode: line.family_mode || null,
                     packaging: line.packaging || null,
                     units_per_pack: line.units_per_pack != null ? line.units_per_pack : null,
@@ -5701,6 +5717,7 @@
         }
         // Valor fijado de la línea; el módulo queda minimizado (el resumen muestra el descuento).
         discountModule.open(line);
+        if (discountAssistant) discountAssistant.open(line);
         setLineTaxView("bruto");
         if (els.lineByAmountResult) els.lineByAmountResult.innerHTML = "";
         if (els.lineMonto) els.lineMonto.value = "";

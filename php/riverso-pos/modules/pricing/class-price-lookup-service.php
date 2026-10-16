@@ -1065,8 +1065,14 @@ class Riverso_Price_Lookup_Service {
             ? Riverso_Pricing_Module::normalize_iva_tipo($iva_tipo)
             : 'afecto';
 
+        $has_actitud = (bool) $wpdb->get_var($wpdb->prepare(
+            "SHOW COLUMNS FROM {$this->prefix}competencia_match LIKE %s",
+            'actitud'
+        ));
+        $actitud_sql = $has_actitud ? 'cm.actitud' : 'NULL';
         $mapeados = $wpdb->get_results($wpdb->prepare(
             "SELECT cm.id AS match_id, cm.tipo_match, cm.metodo, cm.score, cm.estado AS match_estado,
+                    {$actitud_sql} AS actitud,
                     cp.id AS producto_competencia_id, cp.nombre, cp.codigo_externo, cp.url_producto, cp.slug,
                     f.slug AS fuente_slug, f.nombre AS fuente_nombre,
                     pr.precio, pr.precio_lista, pr.precio_bruto_unitario, pr.precio_bruto_total,

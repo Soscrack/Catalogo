@@ -306,6 +306,13 @@ class Riverso_Billing_Draft_Repository {
                 $line_row['discount_anchor'] = $anchor;
                 $line_row['discount_anchor_value'] = $anchor_value === null ? null : round((float) $anchor_value, 6);
             }
+            // Origen del descuento (fase 81, Asistente de Descuento).
+            if ($this->has_line_column('discount_origin')) {
+                $origin = strtolower(trim((string) ($line['discount_origin'] ?? '')));
+                $line_row['discount_origin'] = $line_row['discount_amount'] > 0
+                    ? (in_array($origin, ['sugerido', 'maximo', 'minimo', 'marcador', 'historial', 'manual'], true) ? $origin : 'manual')
+                    : null;
+            }
             // Detalle de entrega (bolsas / sueltas) para la salida de stock.
             if ($this->has_breakdown_column() && class_exists('Riverso_Sale_Stock_Service')) {
                 $line_row['stock_breakdown'] = Riverso_Sale_Stock_Service::breakdown_json(
@@ -479,6 +486,18 @@ class Riverso_Billing_Draft_Repository {
                 $draft_id
             ));
         }
+        $this->fire_finalized($draft_id);
+    }
+
+    /** Documento emitido o cerrado: historial de descuentos (Asistente de Descuento). */
+    private function fire_finalized($draft_id) {
+        if (!function_exists('do_action')) {
+            return;
+        }
+        $draft = $this->get($draft_id);
+        if ($draft) {
+            do_action('riverso_billing_draft_finalized', $draft);
+        }
     }
 
     /**
@@ -494,6 +513,7 @@ class Riverso_Billing_Draft_Repository {
             'status' => 'closed_local',
             'updated_at' => current_time('mysql'),
         ], ['id' => $draft_id]);
+        $this->fire_finalized($draft_id);
     }
 
     /**
@@ -701,6 +721,7 @@ class Riverso_Billing_Draft_Repository {
                 'discount_anchor' => isset($r['discount_anchor']) && $r['discount_anchor'] !== '' ? (string) $r['discount_anchor'] : null,
                 'discount_anchor_value' => isset($r['discount_anchor_value']) && $r['discount_anchor_value'] !== null
                     ? round((float) $r['discount_anchor_value'], 6) : null,
+                'discount_origin' => isset($r['discount_origin']) && $r['discount_origin'] !== '' ? (string) $r['discount_origin'] : null,
                 'rule_total' => isset($r['rule_total']) && $r['rule_total'] !== null ? (float) $r['rule_total'] : null,
                 'rule_adjusted' => !empty($r['rule_adjusted']),
                 'stock_breakdown' => !empty($r['stock_breakdown']) ? json_decode((string) $r['stock_breakdown'], true) : null,

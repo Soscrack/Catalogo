@@ -2688,6 +2688,335 @@ button.cq-breakdown-chip {
     color: #991b1b;
 }
 
+/* Asistente de Descuento (dentro de Descuentos). */
+.cq-da-flag {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: #fde7d4;
+    color: #9a3412;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.cq-da-flag[hidden] {
+    display: none;
+}
+
+.cq-da {
+    --da-max: #7c2d12;
+    --da-min: #c45c26;
+    --da-zero: #8a7f72;
+    --da-desired: #2563eb;
+    --da-current: #1f2937;
+    --da-greedy: #b91c1c;
+    --da-comp: #15803d;
+    --da-suggested: #7c3aed;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cq-da:empty {
+    display: none;
+}
+
+.cq-da-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid #efe6da;
+}
+
+.cq-da-volume,
+.cq-da-status {
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+.cq-da-volume {
+    color: #6b6258;
+}
+
+.cq-da-volume.is-on {
+    color: #9a3412;
+    font-weight: 600;
+}
+
+.cq-da-status--ok {
+    color: var(--da-suggested);
+    font-weight: 600;
+}
+
+.cq-da-status--no_discount,
+.cq-da-status--no_cost {
+    color: #991b1b;
+}
+
+.cq-da-status--no_info {
+    color: #6b6258;
+}
+
+.cq-da .is-warn {
+    color: #991b1b;
+}
+
+.cq-da-bar {
+    position: relative;
+    height: 82px;
+    margin: 4px 10px 0;
+}
+
+.cq-da-track,
+.cq-da-range,
+.cq-da-ext {
+    position: absolute;
+    top: 62px;
+    height: 10px;
+    border-radius: 5px;
+}
+
+.cq-da-track {
+    left: 0;
+    right: 0;
+    background: #f1ebe3;
+}
+
+.cq-da-range {
+    background: #e8a774;
+}
+
+.cq-da-ext {
+    background: repeating-linear-gradient(90deg, #ddd2c5 0 6px, transparent 6px 10px);
+}
+
+.cq-da-mk {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    color: var(--da-mk, var(--da-zero));
+}
+
+.cq-da-mk:disabled {
+    cursor: default;
+}
+
+.cq-da-mk::before {
+    content: "";
+    position: absolute;
+    top: calc(var(--row, 0) * 18px + 16px);
+    bottom: 14px;
+    left: -1px;
+    width: 2px;
+    background: currentColor;
+    opacity: 0.45;
+}
+
+.cq-da-mk-dot {
+    position: absolute;
+    top: 61px;
+    left: -6px;
+    width: 12px;
+    height: 12px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 1px currentColor;
+}
+
+.cq-da-mk-label {
+    position: absolute;
+    top: calc(var(--row, 0) * 18px);
+    left: 0;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.cq-da-mk.is-start .cq-da-mk-label {
+    transform: translateX(-6px);
+}
+
+.cq-da-mk.is-end .cq-da-mk-label {
+    transform: translateX(calc(-100% + 6px));
+}
+
+.cq-da-mk:not(:disabled):hover .cq-da-mk-label,
+.cq-da-mk:focus-visible .cq-da-mk-label {
+    text-decoration: underline;
+}
+
+.cq-da-mk--max { --da-mk: var(--da-max); }
+.cq-da-mk--min { --da-mk: var(--da-min); }
+.cq-da-mk--zero { --da-mk: var(--da-zero); }
+.cq-da-mk--desired { --da-mk: var(--da-desired); }
+.cq-da-mk--current { --da-mk: var(--da-current); }
+.cq-da-mk--greedy { --da-mk: var(--da-greedy); }
+.cq-da-mk--comp_min,
+.cq-da-mk--comp_max { --da-mk: var(--da-comp); }
+
+.cq-da-mk.is-suggested {
+    --da-mk: var(--da-suggested);
+    z-index: 2;
+}
+
+.cq-da-mk.is-suggested .cq-da-mk-dot {
+    width: 16px;
+    height: 16px;
+    top: 59px;
+    left: -8px;
+}
+
+.cq-da-mk--current .cq-da-mk-dot {
+    border-radius: 2px;
+}
+
+.cq-da-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.82rem;
+}
+
+.cq-da-row {
+    display: grid;
+    grid-template-columns: 12px minmax(0, 1fr) auto auto auto 72px;
+    align-items: center;
+    gap: 4px 10px;
+    padding: 4px 6px;
+    border-radius: 6px;
+}
+
+.cq-da-row.is-suggested {
+    background: #f3edff;
+    font-weight: 600;
+}
+
+.cq-da-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--da-mk, var(--da-zero));
+}
+
+.cq-da-row--max { --da-mk: var(--da-max); }
+.cq-da-row--min { --da-mk: var(--da-min); }
+.cq-da-row--desired { --da-mk: var(--da-desired); }
+.cq-da-row--current { --da-mk: var(--da-current); }
+.cq-da-row--greedy { --da-mk: var(--da-greedy); }
+.cq-da-row--comp_min,
+.cq-da-row--comp_max { --da-mk: var(--da-comp); }
+.cq-da-row.is-suggested { --da-mk: var(--da-suggested); }
+
+.cq-da-row-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.cq-da-history summary {
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.cq-da-hist-list {
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.8rem;
+}
+
+.cq-da-hist-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 8px;
+    padding: 5px 0;
+    border-top: 1px solid #efe6da;
+}
+
+.cq-da-hist-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.cq-da-comp-modal .cq-modal-dialog {
+    max-width: 1040px;
+}
+
+.cq-da-comp-msg {
+    margin: 0;
+    padding: 0 16px 12px;
+}
+
+.cq-da-comp-table-wrap {
+    overflow-x: auto;
+}
+
+.cq-da-comp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+
+.cq-da-comp-table th,
+.cq-da-comp-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #efe6da;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.cq-da-comp-table td:nth-child(5) {
+    white-space: nowrap;
+}
+
+.cq-da-comp-table td.cq-num {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.cq-da-comp-table tr.is-reference td {
+    color: #8a7f72;
+}
+
+.cq-da-comp-add {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    align-items: end;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #efe6da;
+}
+
+.cq-da-comp-add h4 {
+    grid-column: 1 / -1;
+    margin: 0;
+}
+
+@media (max-width: 640px) {
+    .cq-da-row {
+        grid-template-columns: 12px minmax(0, 1fr) auto 72px;
+    }
+
+    .cq-da-row > .cq-da-row-num:nth-child(4),
+    .cq-da-row > .cq-da-row-num:nth-child(5) {
+        display: none;
+    }
+}
+
 /* «Otra regla» en el modal de línea. */
 .cq-line-rule-picker {
     display: flex;

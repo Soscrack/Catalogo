@@ -775,7 +775,8 @@
      * ?tab=explorer|history|folios|alerts|add
      */
 
-    var PH_TABS = ['process', 'explorer', 'history', 'analysis', 'folios', 'alerts', 'add'];
+    var PH_TABS = ['process', 'explorer', 'history', 'analysis', 'folios', 'alerts', 'add',
+        'descuentos', 'descuentos_historial'];
     var RPF_ORDER_DEFAULT = 'fecha_folio|DESC';
     /** Filtros de Procesar folios ↔ parámetro de URL. */
     var RPF_LIST_URL_FIELDS = [
@@ -994,6 +995,8 @@
         if (tab === 'alerts') {
             loadAlerts();
         }
+        // Asistente de descuento (discount-assistant-admin.js) carga sus pestañas.
+        $(document).trigger('riverso:ph-tab', [tab]);
         phCommitUrl();
     }
 
@@ -2288,8 +2291,37 @@
             '<td style="text-align:right">' + amountPair(rivalBruto, rivalNeto, viewMode) + '</td>' +
             '<td style="text-align:right">' + formatDelta(delta, deltaPct) + '</td>' +
             '<td>' + esc(r.snapshot_fecha || r.actualizado_at || '—') + '</td>' +
+            '<td>' + rpfCompActitudSelect(r) + '</td>' +
             '</tr>';
     }
+
+    /** Actitud del vínculo (Asistente de Descuento); sin clasificar usa la del competidor. */
+    function rpfCompActitudSelect(r) {
+        var value = r.actitud === 'codicioso' || r.actitud === 'competitivo' ? r.actitud : 'sin_clasificar';
+        var opts = [['sin_clasificar', 'Sin clasificar'], ['competitivo', 'Competitivo'], ['codicioso', 'Codicioso']];
+        return '<select class="rpf-comp-actitud" data-comp-id="' + esc(String(r.producto_competencia_id || '')) + '"' +
+            (canManageCompetencia ? '' : ' disabled') + ' aria-label="Actitud del competidor">' +
+            opts.map(function (o) {
+                return '<option value="' + o[0] + '"' + (o[0] === value ? ' selected' : '') + '>' + o[1] + '</option>';
+            }).join('') + '</select>';
+    }
+
+    $(document).on('change', '.rpf-comp-actitud', function () {
+        var $sel = $(this);
+        $sel.prop('disabled', true);
+        post('riverso_competencia_set_actitud', {
+            producto_competencia_id: $sel.data('comp-id'),
+            actitud: $sel.val()
+        }).done(function (res) {
+            $sel.prop('disabled', false);
+            if (!res.success) {
+                window.alert((res.data && res.data.message) || 'No se pudo guardar la actitud.');
+            }
+        }).fail(function () {
+            $sel.prop('disabled', false);
+            window.alert('Error de red al guardar la actitud.');
+        });
+    });
 
     function renderRpfCompetenciaTables(raw) {
         var data = normalizeCompetencia(raw);
@@ -2794,6 +2826,7 @@
                 precio_total: precio,
                 unidad: $('#rpf-comp-unidad').val() || 1,
                 tipo_match: tipo,
+                actitud: $('#rpf-comp-actitud').val() || 'sin_clasificar',
                 nota: $('#rpf-comp-nota').val() || ''
             }).done(function (res) {
                 $btn.prop('disabled', false).text('Guardar y confirmar');
@@ -2825,6 +2858,7 @@
                 $('#rpf-comp-precio').val('');
                 $('#rpf-comp-unidad').val('1');
                 $('#rpf-comp-tipo-match').val('');
+                $('#rpf-comp-actitud').val('sin_clasificar');
                 $('#rpf-comp-nota').val('');
                 $('#rpf-comp-tipo-warnings').hide().empty();
                 if (rpfCompCtx) {

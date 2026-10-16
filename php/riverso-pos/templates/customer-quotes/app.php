@@ -21,6 +21,9 @@ $js_ver = (is_string($js_path) && is_file($js_path)) ? (string) filemtime($js_pa
 // Descuentos y «Otra regla» compartidos con facturación.
 $line_discounts_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/line-discounts.js';
 $line_discounts_ver = (is_string($line_discounts_path) && is_file($line_discounts_path)) ? (string) filemtime($line_discounts_path) : $version;
+// Asistente de Descuento (barra, competencia e historial) dentro de Descuentos.
+$discount_assistant_path = (defined('RIVERSO_POS_PLUGIN_DIR') ? RIVERSO_POS_PLUGIN_DIR : '') . 'assets/js/discount-assistant.js';
+$discount_assistant_ver = (is_string($discount_assistant_path) && is_file($discount_assistant_path)) ? (string) filemtime($discount_assistant_path) : $version;
 $css_ver = (is_string($css_path) && is_file($css_path)) ? (string) filemtime($css_path) : $version;
 $css_portal_ver = (is_string($css_portal_path) && is_file($css_portal_path)) ? (string) filemtime($css_portal_path) : $version;
 $css_customers_ver = (is_string($css_customers_path) && is_file($css_customers_path)) ? (string) filemtime($css_customers_path) : $version;
@@ -425,7 +428,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                                     <input type="text" id="cq-modal-contains" autocomplete="off" placeholder="Escribe y Enter…" enterkeyhint="done">
                                     <button type="button" class="cq-btn" id="cq-modal-contains-add">Agregar</button>
                                 </div>
-                                <div id="cq-modal-contains-tags" class="cq-contains-tags" aria-live="polite"></div>
+                                <div id="cq-modal-contains-tags" class="cq-contains-tags"></div>
                             </div>
                             <div class="cq-search-row">
                                 <input type="search" id="cq-modal-q" autocomplete="off" placeholder="Buscar…" enterkeyhint="search">
@@ -692,6 +695,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                         <summary class="cq-discounts-summary">
                             <span class="cq-discounts-title">Descuentos</span>
                             <span class="cq-discounts-brief" id="cq-line-discounts-brief"></span>
+                            <span class="cq-da-flag" id="cq-line-da-flag" hidden></span>
                         </summary>
                         <div class="cq-discounts-body">
                             <div class="cq-line-fields cq-discounts-ref">
@@ -737,6 +741,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                                 </label>
                             </div>
                             <p id="cq-line-discount-hint" class="cq-line-preview cq-discounts-status" role="status"></p>
+                            <div class="cq-da" id="cq-line-da"></div>
                         </div>
                     </details>
                     <div class="cq-line-by-amount" id="cq-line-by-amount">
@@ -908,6 +913,7 @@ if (!function_exists('riverso_pos_cq_json')) {
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/print-quick.js?ver=<?php echo htmlspecialchars($print_js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <?php endif; ?>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/line-discounts.js?ver=<?php echo htmlspecialchars($line_discounts_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/discount-assistant.js?ver=<?php echo htmlspecialchars($discount_assistant_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script src="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>/js/customer-quotes.js?ver=<?php echo htmlspecialchars($js_ver, ENT_QUOTES, 'UTF-8'); ?>"></script>
 <?php if ($standalone): ?>
 </body>

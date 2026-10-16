@@ -339,6 +339,7 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
                             <th style="text-align:right">Rival P/u</th>
                             <th style="text-align:right">Δ</th>
                             <th>Actualizado</th>
+                            <th>Actitud</th>
                         </tr>
                     </thead>
                     <tbody id="rpf-comp-mapeados-body"></tbody>
@@ -395,6 +396,14 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
                             <option value="otro">Otro</option>
                         </select>
                         <div id="rpf-comp-tipo-warnings" style="display:none;margin-top:8px;"></div>
+                    </label>
+                    <label class="rpf-comp-form-full">
+                        Actitud del competidor en este producto
+                        <select id="rpf-comp-actitud" style="width:100%;">
+                            <option value="sin_clasificar">Sin clasificar (usa la del competidor)</option>
+                            <option value="competitivo">Competitivo</option>
+                            <option value="codicioso">Codicioso</option>
+                        </select>
                     </label>
                     <label class="rpf-comp-form-full">
                         Nota (opcional)

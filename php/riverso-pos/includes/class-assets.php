@@ -329,6 +329,23 @@ class Riverso_POS_Assets {
             'products_admin_url' => admin_url('admin.php?page=riverso-pos-products'),
             'admin_url' => admin_url(),
         ]);
+
+        // Pestañas «Asistente de descuento» e «Historial de descuentos».
+        if (class_exists('Riverso_Discount_Assistant_Module')) {
+            $da_path = RIVERSO_POS_PLUGIN_DIR . 'assets/js/discount-assistant-admin.js';
+            wp_enqueue_script(
+                'riverso-discount-assistant-admin',
+                RIVERSO_POS_PLUGIN_URL . 'assets/js/discount-assistant-admin.js',
+                ['jquery', 'riverso-price-history'],
+                file_exists($da_path) ? (string) filemtime($da_path) : RIVERSO_POS_VERSION,
+                true
+            );
+            wp_localize_script(
+                'riverso-discount-assistant-admin',
+                'riversoDiscountAssistantAdmin',
+                Riverso_Discount_Assistant_Module::client_config()
+            );
+        }
     }
 
     /**

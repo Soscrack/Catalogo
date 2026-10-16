@@ -30,10 +30,15 @@ class Riverso_Discount_Assistant_Service {
 
     /* ===== Ajustes ===== */
 
+    /**
+     * Criterio de volumen (solo aviso): (más de volume_units unidades y más de volume_amount)
+     * o más de volume_amount_alone sin importar las unidades (0 desactiva esta segunda condición).
+     */
     public static function default_settings() {
         return [
-            'volume_units' => 2000,
+            'volume_units' => 1000,
             'volume_amount' => 75000,
+            'volume_amount_alone' => 120000,
             'floor_factor' => 1.6,
             'desired_factor' => 1.7,
             'min_ratio_num' => 1.6,
@@ -47,6 +52,11 @@ class Riverso_Discount_Assistant_Service {
         $saved = get_option(self::OPTION, []);
         $settings = self::default_settings();
         if (is_array($saved)) {
+            // Ajustes guardados antes del criterio con monto solo: 2.000 u. era el valor por defecto antiguo.
+            if (!array_key_exists('volume_amount_alone', $saved) && isset($saved['volume_units'])
+                && (float) $saved['volume_units'] === 2000.0) {
+                unset($saved['volume_units']);
+            }
             foreach ($settings as $key => $default) {
                 if (isset($saved[$key]) && is_numeric($saved[$key])) {
                     $settings[$key] = (float) $saved[$key];
@@ -85,7 +95,7 @@ class Riverso_Discount_Assistant_Service {
         if ($settings['round_step'] < 1 || $settings['stale_days'] < 1) {
             return new WP_Error('invalid', 'Redondeo y días de vigencia deben ser al menos 1.');
         }
-        if ($settings['volume_units'] < 0 || $settings['volume_amount'] < 0) {
+        if ($settings['volume_units'] < 0 || $settings['volume_amount'] < 0 || $settings['volume_amount_alone'] < 0) {
             return new WP_Error('invalid', 'El criterio de volumen no puede ser negativo.');
         }
         $settings['round_step'] = (int) round($settings['round_step']);
@@ -345,6 +355,23 @@ class Riverso_Discount_Assistant_Service {
             return (string) Riverso_Competencia_Match_Service::tipo_match_label($tipo ?: 'otro');
         }
         return $tipo !== '' ? $tipo : 'otro';
+    }
+
+    /** SKU y nombre del producto local (búsquedas del modal Competencia). */
+    public static function product_label($producto_base_id) {
+        global $wpdb;
+        $producto_base_id = (int) $producto_base_id;
+        if ($producto_base_id <= 0) {
+            return null;
+        }
+        $row = $wpdb->get_row($wpdb->prepare(
+            'SELECT canonical_sku, nombre_canonico FROM ' . self::prefix() . 'producto_base WHERE id = %d',
+            $producto_base_id
+        ), ARRAY_A);
+        return $row ? [
+            'sku' => (string) ($row['canonical_sku'] ?? ''),
+            'nombre' => (string) ($row['nombre_canonico'] ?? ''),
+        ] : null;
     }
 
     /**

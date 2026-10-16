@@ -330,7 +330,7 @@ class Riverso_Folio_Price_Process_Service {
         global $wpdb;
         $pb_id = (int) ($product['producto_base_id'] ?? 0);
         $fam = $wpdb->get_row($wpdb->prepare(
-            "SELECT g.id, g.codigo_grupo, g.nombre
+            "SELECT g.id, g.codigo_grupo, g.nombre, g.es_producto_unitario, g.unit_producto_base_id
              FROM {$this->prefix()}equivalence_members em
              INNER JOIN {$this->prefix()}equivalence_groups g ON g.id = em.grupo_id AND g.activo = 1
              WHERE em.producto_base_id = %d AND em.activo = 1
@@ -360,6 +360,8 @@ class Riverso_Folio_Price_Process_Service {
                 'decision' => (string) ($product['familia_decision'] ?? ''),
                 'grupo_id' => $fam ? (int) $fam['id'] : null,
                 'label' => $fam ? trim((string) ($fam['codigo_grupo'] ?? '') . ' ' . (string) ($fam['nombre'] ?? '')) : '',
+                // Marcada unitaria pero sin unitario elegido: el precio va directo al SKU.
+                'sin_unitario' => $fam && !empty($fam['es_producto_unitario']) && empty($fam['unit_producto_base_id']),
             ],
             'emparejamiento' => $emp,
         ];

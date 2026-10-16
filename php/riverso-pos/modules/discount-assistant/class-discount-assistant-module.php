@@ -33,6 +33,9 @@ class Riverso_Discount_Assistant_Module {
         add_action('wp_ajax_riverso_da_domains', [$this, 'ajax_domains']);
         add_action('wp_ajax_riverso_da_settings_save', [$this, 'ajax_settings_save']);
         add_action('wp_ajax_riverso_da_history', [$this, 'ajax_history']);
+        add_action('wp_ajax_riverso_da_internal_search', [$this, 'ajax_internal_search']);
+        add_action('wp_ajax_riverso_da_confirm_preflight', [$this, 'ajax_confirm_preflight']);
+        add_action('wp_ajax_riverso_da_confirm_match', [$this, 'ajax_confirm_match']);
 
         add_action('riverso_customer_quote_status_changed', [$this, 'on_quote_status_changed'], 10, 3);
         add_action('riverso_billing_draft_finalized', [$this, 'on_draft_finalized'], 10, 1);
@@ -77,7 +80,13 @@ class Riverso_Discount_Assistant_Module {
                 'domains' => 'riverso_da_domains',
                 'settingsSave' => 'riverso_da_settings_save',
                 'history' => 'riverso_da_history',
+                'internalSearch' => 'riverso_da_internal_search',
+                'confirmPreflight' => 'riverso_da_confirm_preflight',
+                'confirmMatch' => 'riverso_da_confirm_match',
             ],
+            // «Abrir Competencia» y «Abrir en Buscador» (wp-admin), como en Procesar folios.
+            'competenciaUrl' => admin_url('admin.php?page=riverso-pos-competencia'),
+            'buscadorUrl' => admin_url('admin.php?page=riverso-pos-competencia&vista=buscador'),
         ];
     }
 
@@ -102,6 +111,7 @@ class Riverso_Discount_Assistant_Module {
         $settings = Riverso_Discount_Assistant_Service::get_settings();
         wp_send_json_success([
             'settings' => $settings,
+            'producto' => Riverso_Discount_Assistant_Service::product_label($pb),
             'competidores' => Riverso_Discount_Assistant_Service::competitors_for_product($pb, $settings),
             'historial' => Riverso_Discount_Assistant_Service::history_for_product($pb),
             'canManageCompetencia' => self::can_manage_competencia(),
@@ -181,6 +191,98 @@ class Riverso_Discount_Assistant_Module {
             'origen' => $this->post('origen'),
             'evento' => $this->post('evento'),
         ]));
+    }
+
+    /* ===== Fuentes internas (mismo flujo que Procesar folios) ===== */
+
+    private function match_service() {
+        if (!class_exists('Riverso_Competencia_Match_Service')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'modules/competencia/class-competencia-match-service.php';
+            if (file_exists($path)) {
+                require_once $path;
+            }
+        }
+        if (!class_exists('Riverso_Competencia_Match_Service')) {
+            wp_send_json_error(['message' => 'Módulo de competencia no disponible.']);
+        }
+    }
+
+    /** Catálogo scrapeado (Sande, DIMAFI) e ingresos manuales. */
+    public function ajax_internal_search() {
+        $this->guard(self::can_manage_competencia());
+        $this->match_service();
+        $fuente = sanitize_key($this->post('fuente'));
+        $modo = sanitize_key($this->post('coincidencia'));
+        $result = Riverso_Competencia_Match_Service::search_competencia_productos([
+            'search' => $this->post('search'),
+            'campo' => 'todo',
+            'coincidencia' => $modo === 'todas' ? 'todas' : 'alguna',
+            'fuentes' => $fuente !== '' ? [$fuente] : [],
+            'orden' => 'relevancia',
+            'page' => max(1, absint($_POST['page'] ?? 1)),
+            'per_page' => 10,
+        ]);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success($result);
+    }
+
+    public function ajax_confirm_preflight() {
+        $this->guard(self::can_manage_competencia());
+        $this->match_service();
+        $comp_id = absint($_POST['producto_competencia_id'] ?? 0);
+        if ($comp_id <= 0) {
+            wp_send_json_error(['message' => 'ID inválido.']);
+        }
+        $preflight = Riverso_Competencia_Match_Service::confirm_preflight($comp_id, absint($_POST['producto_base_id'] ?? 0));
+        if (empty($preflight['ok'])) {
+            wp_send_json_error(['message' => $preflight['message'] ?? 'No se pudo validar el vínculo.']);
+        }
+        wp_send_json_success($preflight);
+    }
+
+    /** Confirma el vínculo al SKU de la línea y deja la actitud elegida. */
+    public function ajax_confirm_match() {
+        $this->guard(self::can_manage_competencia());
+        $this->match_service();
+        $comp_id = absint($_POST['producto_competencia_id'] ?? 0);
+        $pb = absint($_POST['producto_base_id'] ?? 0);
+        $tipo = sanitize_key($this->post('tipo_match'));
+        if ($comp_id <= 0 || $pb <= 0) {
+            wp_send_json_error(['message' => 'IDs inválidos.']);
+        }
+        if (!Riverso_Competencia_Match_Service::is_allowed_tipo_match($tipo)) {
+            wp_send_json_error(['message' => 'Debes seleccionar el tipo de match (Exacto, Exacto diferente U de envase, Similar u Otro).']);
+        }
+        $nota = isset($_POST['nota']) ? sanitize_textarea_field(wp_unslash($_POST['nota'])) : '';
+        $match_id = Riverso_Competencia_Match_Service::confirm_match(
+            $comp_id,
+            $pb,
+            get_current_user_id(),
+            $nota !== '' ? $nota : 'Vinculado desde Asistente de Descuento',
+            $tipo
+        );
+        if (is_wp_error($match_id)) {
+            $data = $match_id->get_error_data();
+            wp_send_json_error([
+                'message' => $match_id->get_error_message(),
+                'blockers' => is_array($data) ? ($data['blockers'] ?? []) : [],
+            ]);
+        }
+        Riverso_Discount_Assistant_Service::set_link_attitude($comp_id, $this->post('actitud'));
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('competencia.buscador_link', 'competencia', $comp_id, [
+                'actor_type' => 'user',
+                'details' => [
+                    'match_id' => $match_id,
+                    'producto_base_id' => $pb,
+                    'tipo_match' => $tipo,
+                    'origen' => 'asistente_descuento',
+                ],
+            ]);
+        }
+        wp_send_json_success(['match_id' => $match_id]);
     }
 
     /* ===== Historial ===== */

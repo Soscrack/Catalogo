@@ -2711,13 +2711,67 @@ button.cq-breakdown-chip {
     --da-greedy: #b91c1c;
     --da-comp: #15803d;
     --da-suggested: #7c3aed;
+}
+
+.cq-da:empty,
+.cq-da[hidden] {
+    display: none;
+}
+
+/* Desplegable propio dentro de Descuentos (minimizado por defecto). */
+.cq-da-details {
+    border: 1px solid #efe6da;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.cq-da-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    padding: 8px 10px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.cq-da-summary::-webkit-details-marker {
+    display: none;
+}
+
+.cq-da-summary::before {
+    content: "▸";
+    color: #8a7f72;
+}
+
+.cq-da-details[open] > .cq-da-summary::before {
+    content: "▾";
+}
+
+.cq-da-title {
+    font-weight: 600;
+}
+
+.cq-da-brief {
+    font-size: 0.82rem;
+    color: #6b6258;
+}
+
+.cq-da-brief--ok {
+    color: var(--da-suggested);
+    font-weight: 600;
+}
+
+.cq-da-brief--no_discount,
+.cq-da-brief--no_cost {
+    color: #991b1b;
+}
+
+.cq-da-body {
     display: flex;
     flex-direction: column;
     gap: 8px;
-}
-
-.cq-da:empty {
-    display: none;
+    padding: 0 10px 10px;
 }
 
 .cq-da-head {
@@ -2725,8 +2779,6 @@ button.cq-breakdown-chip {
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding-top: 10px;
-    border-top: 1px solid #efe6da;
 }
 
 .cq-da-volume,
@@ -3058,4 +3110,117 @@ button.cq-breakdown-chip {
 
 .cq-rule-search-dialog {
     width: min(560px, 100%);
+}
+
+/* Asistente de descuento · modal Competencia: acciones y Fuentes internas. */
+.cq-da-comp-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cq-da-comp-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0 0;
+}
+
+.cq-da-ci {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #efe6da;
+}
+
+.cq-da-ci[hidden] {
+    display: none;
+}
+
+.cq-da-ci h4 {
+    margin: 0 0 4px;
+}
+
+.cq-da-ci-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 8px;
+    margin: 8px 0;
+}
+
+.cq-da-ci-q {
+    flex: 2 1 220px;
+}
+
+.cq-da-ci-hide {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+}
+
+.cq-da-ci-pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0 0;
+}
+
+.cq-da-ci-pager a {
+    margin-left: auto;
+}
+
+.cq-da-ci-link {
+    padding: 10px 12px;
+    border-left: 4px solid #c45c26;
+    background: #faf6f0;
+}
+
+.cq-da-ci-link-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.cq-da-ci-nota {
+    grid-column: 1 / -1;
+}
+
+.cq-da-ci-nota textarea {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.cq-da-ci-blockers {
+    margin: 8px 0;
+    padding: 8px 10px;
+    border-left: 4px solid #b91c1c;
+    background: #fdf0f0;
+    font-size: 0.82rem;
+}
+
+.cq-da-ci-blockers[hidden],
+.cq-da-ci-link [hidden] {
+    display: none;
+}
+
+.cq-da-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: #6b6258;
+    color: #fff;
+    font-size: 0.72rem;
+    white-space: nowrap;
+}
+
+.cq-da-badge--sande { background: #2271b1; }
+.cq-da-badge--dimafi { background: #8c5e00; }
+.cq-da-badge--manual { background: #007017; }
+.cq-da-badge.is-ok { background: #15803d; }
+
+.cq-da-comp-modal a.cq-btn {
+    text-decoration: none;
 }

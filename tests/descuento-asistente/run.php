@@ -117,7 +117,15 @@ check(isset($domains['dimafi.cl']) && $domains['dimafi.cl']['vinculos'] === 0, '
 
 echo "== Ajustes ==\n";
 $s = Riverso_Discount_Assistant_Service::get_settings();
-check($s['volume_units'] == 2000 && $s['floor_factor'] == 1.6 && $s['round_step'] === 50 && $s['stale_days'] === 90, 'valores por defecto');
+check($s['volume_units'] == 1000 && $s['volume_amount'] == 75000 && $s['volume_amount_alone'] == 120000
+    && $s['floor_factor'] == 1.6 && $s['round_step'] === 50 && $s['stale_days'] === 90, 'valores por defecto');
+$GLOBALS['TEST_OPTIONS']['riverso_discount_assistant_settings'] = ['volume_units' => 2000, 'volume_amount' => 75000, 'stale_days' => 60];
+$s = Riverso_Discount_Assistant_Service::get_settings();
+check($s['volume_units'] == 1000 && $s['stale_days'] === 60, 'ajustes antiguos: 2.000 u. pasa a 1.000, el resto se conserva');
+$GLOBALS['TEST_OPTIONS']['riverso_discount_assistant_settings'] = ['volume_units' => 2000, 'volume_amount_alone' => 120000];
+check(Riverso_Discount_Assistant_Service::get_settings()['volume_units'] == 2000, 'ajustes nuevos: 2.000 u. elegido a mano se respeta');
+unset($GLOBALS['TEST_OPTIONS']['riverso_discount_assistant_settings']);
+check(is_wp_error(Riverso_Discount_Assistant_Service::save_settings(['volume_amount_alone' => '-1'])), 'monto solo no puede ser negativo');
 check(is_wp_error(Riverso_Discount_Assistant_Service::save_settings(['min_ratio_num' => '1,9'])), 'A debe ser menor que B');
 $saved = Riverso_Discount_Assistant_Service::save_settings(['volume_units' => '1500', 'stale_days' => '60']);
 check(!is_wp_error($saved) && $saved['volume_units'] == 1500 && $saved['stale_days'] === 60, 'guarda volumen y vigencia');

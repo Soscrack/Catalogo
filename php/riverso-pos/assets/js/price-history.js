@@ -222,6 +222,33 @@
         return rpfPickCostBase(ln.costo_folio_bases, rpfCostMode, ln.costo_folio);
     }
 
+    /**
+     * Familia de la línea para «Ver familia»: el grupo del unitario o, si la familia
+     * aún no tiene unitario (o no es unitaria), el grupo al que pertenece el SKU.
+     */
+    function rpfLineFamilyGrupoId(ln) {
+        if (ln.es_familia_unitaria && ln.grupo_id) {
+            return ln.grupo_id;
+        }
+        var fam = (ln.answers && ln.answers.familia) || {};
+        return fam.grupo_id || 0;
+    }
+
+    function rpfFamilyButtonHtml(ln) {
+        var grupoId = rpfLineFamilyGrupoId(ln);
+        if (!grupoId) {
+            return '';
+        }
+        var html = '<button type="button" class="button button-small rpf-family" data-grupo="' + grupoId +
+            '" data-item="' + ln.item_id + '">Ver familia</button>';
+        var fam = (ln.answers && ln.answers.familia) || {};
+        if (!ln.es_familia_unitaria && fam.sin_unitario) {
+            html += '<div class="description rpf-family-no-unit" style="color:#b32d2e;">' +
+                'Familia sin producto unitario: el precio va directo a este SKU</div>';
+        }
+        return html;
+    }
+
     function rpfLineCostAnterior(ln) {
         return rpfPickCostBase(ln.costo_anterior_bases, rpfCostMode, ln.costo_anterior);
     }
@@ -1457,9 +1484,7 @@
             } else if (ln.requires_online) {
                 onlineInput = '<div class="description">Online: ' + money(rpfPriceDisplay(ln.precio_online_actual, iva)) + '</div>';
             }
-            var famBtn = (ln.es_familia_unitaria && ln.grupo_id)
-                ? '<button type="button" class="button button-small rpf-family" data-grupo="' + ln.grupo_id + '" data-item="' + ln.item_id + '">Ver familia</button>'
-                : '—';
+            var famBtn = rpfFamilyButtonHtml(ln) || '—';
             if (ln.family_rule) {
                 famBtn += '<div class="description">' + esc(ln.family_rule.codigo || '') + ' ' + esc(ln.family_rule.nombre || '') + '</div>';
             }
@@ -3821,7 +3846,16 @@
                 '</td><td>' + money(m.coste_unitario) + '</td><td>' + money(m.margen) + '</td></tr>';
         });
         html += '</tbody></table>';
-        html += '<p class="description">Al guardar se actualiza solo el P del producto unitario; los hijos se calculan por la regla.</p>';
+        if (snap.unit_producto_base_id) {
+            html += '<p class="description">Al guardar se actualiza solo el P del producto unitario; los hijos se calculan por la regla.</p>';
+        } else {
+            html += '<div class="notice notice-warning inline" style="margin:8px 0;"><p>' +
+                (snap.es_producto_unitario
+                    ? 'Esta familia está marcada como unitaria pero <strong>no tiene producto unitario configurado</strong>. '
+                    : 'Esta familia <strong>no usa producto unitario</strong>. ') +
+                'Al guardar, el precio se aplica directo al SKU del folio y la regla de familia no recalcula a los demás integrantes. ' +
+                'Configura el unitario en «Abrir Familia» para que la regla los cubra.</p></div>';
+        }
         if (d.es_producto_unitario && d.codes) {
             html += renderFamilyCodesBlock(
                 d.codes,
@@ -4712,10 +4746,7 @@
         if (fam.grupo_id) {
             famItem.state = 'answered';
             famItem.value = 'En familia <strong>' + esc(fam.label || ('#' + fam.grupo_id)) + '</strong>';
-            if (ln.es_familia_unitaria && ln.grupo_id) {
-                famItem.action = '<button type="button" class="button button-small rpf-family"' +
-                    ' data-grupo="' + ln.grupo_id + '" data-item="' + ln.item_id + '">Ver familia</button>';
-            }
+            famItem.action = rpfFamilyButtonHtml(ln);
         } else if (fam.decision === 'no_requiere') {
             famItem.state = 'answered';
             famItem.value = 'No requiere (queda solo)';

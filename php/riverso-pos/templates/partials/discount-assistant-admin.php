@@ -34,6 +34,10 @@ $da_num = function ($key) use ($da_settings) {
             <label>Y más de (monto bruto de la línea, $)
                 <input type="number" min="0" step="1" name="volume_amount" value="<?php echo $da_num('volume_amount'); ?>">
             </label>
+            <label>O más de (monto bruto, $) sin importar unidades
+                <input type="number" min="0" step="1" name="volume_amount_alone" value="<?php echo $da_num('volume_amount_alone'); ?>">
+            </label>
+            <p class="description">Avisa si la línea tiene (más de N unidades y más de $X) o más de $Y. Con 0 en el último campo solo cuenta la primera condición.</p>
         </fieldset>
         <fieldset>
             <legend>Rango recomendado</legend>

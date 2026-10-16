@@ -20,8 +20,9 @@
     var LD = global.RiversoLineDiscounts;
 
     var DEFAULTS = {
-        volume_units: 2000,
+        volume_units: 1000,
         volume_amount: 75000,
+        volume_amount_alone: 120000,
         floor_factor: 1.6,
         desired_factor: 1.7,
         min_ratio_num: 1.6,
@@ -55,6 +56,7 @@
         });
         if (raw && Number(raw.volume_units) === 0) s.volume_units = 0;
         if (raw && Number(raw.volume_amount) === 0) s.volume_amount = 0;
+        if (raw && Number(raw.volume_amount_alone) === 0) s.volume_amount_alone = 0;
         if (!(s.min_ratio_num < s.min_ratio_den)) {
             s.min_ratio_num = DEFAULTS.min_ratio_num;
             s.min_ratio_den = DEFAULTS.min_ratio_den;
@@ -111,7 +113,10 @@
             unitsOk: U > s.volume_units,
             amountOk: G > s.volume_amount
         };
-        out.volume.ok = out.volume.unitsOk && out.volume.amountOk;
+        // (más de N unidades y más de $X) o más de $Y sin importar unidades (Y = 0 la desactiva).
+        out.volume.byUnits = out.volume.unitsOk && out.volume.amountOk;
+        out.volume.byAmount = s.volume_amount_alone > 0 && G > s.volume_amount_alone;
+        out.volume.ok = out.volume.byUnits || out.volume.byAmount;
         if (!(G > 0) || !(U > 0)) {
             out.status = "empty";
             return out;
@@ -133,28 +138,40 @@
         out.factorBefore = G / base;
         out.hasInterval = floor < ceilMin;
 
-        function marker(key, label, value, extra) {
+        /**
+         * close: cómo queda el monto que se aplica (cifra cerrada en múltiplos de step):
+         * "down" piso, "up" techo (no bajar del factor), "below" justo bajo (codicioso),
+         * "exact" ya cerrado, null no se aplica (0 % quita el descuento; el actual es referencia).
+         */
+        function marker(key, label, value, close) {
+            var apply = null;
+            if (close === "down") apply = floorStep(value, step);
+            else if (close === "up") apply = ceilStep(value, step);
+            else if (close === "below") apply = belowStep(value, step);
+            else if (close === "exact") apply = value;
             var m = {
                 key: key,
                 label: label,
                 value: round2(value),
                 pct: G > 0 ? (1 - value / G) * 100 : 0,
                 factor: value / base,
+                apply: apply === null ? null : round2(apply),
+                applyPct: apply === null ? null : (1 - apply / G) * 100,
+                applyFactor: apply === null ? null : apply / base,
                 suggested: false
             };
-            if (extra) Object.keys(extra).forEach(function (k) { m[k] = extra[k]; });
             out.markers.push(m);
             return m;
         }
 
-        marker("zero", "Sin descuento (0 %)", G);
-        marker("min", "Descuento mínimo (" + LD.formatNumber(minDiscountPct(s), 2) + " %)", ceilMin);
+        marker("zero", "Sin descuento (0 %)", G, null);
+        marker("min", "Descuento mínimo (" + LD.formatNumber(minDiscountPct(s), 2) + " %)", ceilMin, "down");
         marker("max", "Descuento máximo · factor " + LD.formatNumber(s.floor_factor, 2)
-            + " (recargo " + LD.formatNumber((s.floor_factor - 1) * 100, 0) + " %)", floor);
-        marker("desired", "Deseado · factor " + LD.formatNumber(s.desired_factor, 2), desired);
+            + " (recargo " + LD.formatNumber((s.floor_factor - 1) * 100, 0) + " %)", floor, "up");
+        marker("desired", "Deseado · factor " + LD.formatNumber(s.desired_factor, 2), desired, "down");
         var finalTotal = Number(input.finalTotal);
         if (isFinite(finalTotal) && finalTotal > 0 && Math.abs(finalTotal - G) >= 0.005) {
-            marker("current", "Precio actual de la línea", finalTotal);
+            marker("current", "Precio actual de la línea", finalTotal, null);
         }
 
         (input.competitors || []).forEach(function (c) {
@@ -168,15 +185,15 @@
         var greedy = out.counted.filter(function (i) { return i.c.actitud === "codicioso"; }).sort(byTotal);
         var comp = out.counted.filter(function (i) { return i.c.actitud === "competitivo"; }).sort(byTotal);
         if (greedy.length) {
-            marker("greedy", "Codicioso más barato · " + (greedy[0].c.competidor || ""), greedy[0].total);
+            marker("greedy", "Codicioso más barato · " + (greedy[0].c.competidor || ""), greedy[0].total, "below");
         }
         if (comp.length) {
             marker("comp_min", (comp.length > 1 ? "Competitivo más barato · " : "Competitivo · ")
-                + (comp[0].c.competidor || ""), comp[0].total);
+                + (comp[0].c.competidor || ""), comp[0].total, "down");
         }
         if (comp.length > 1) {
             var last = comp[comp.length - 1];
-            marker("comp_max", "Competitivo más caro · " + (last.c.competidor || ""), last.total);
+            marker("comp_max", "Competitivo más caro · " + (last.c.competidor || ""), last.total, "down");
         }
 
         if (!out.hasInterval) {
@@ -234,8 +251,8 @@
         // 3) Piso (factor 1,6) y redondeo.
         var value = floorStep(target, step);
         if (value < floor) {
-            var up = ceilStep(floor, step);
-            value = up <= ceilMin ? up : floor;
+            // Cifra cerrada hacia arriba: no baja del factor del piso.
+            value = ceilStep(floor, step);
             source = "max";
             out.reasons.push("Se respeta el descuento máximo (factor " + LD.formatNumber(s.floor_factor, 2) + ").");
             if (ceilSource === "greedy" && ceil < floor) {
@@ -260,7 +277,7 @@
             same.suggested = true;
             suggestion.markerKey = same.key;
         } else {
-            var added = marker("suggested", "Sugerido", value);
+            var added = marker("suggested", "Sugerido", value, "exact");
             added.suggested = true;
             suggestion.markerKey = "suggested";
         }
@@ -405,33 +422,22 @@
         }
 
         function apply(m, res) {
-            var s = res.settings;
             if (m.suggested && res.suggestion) {
                 module.setAnchor("final_total", res.suggestion.value, "sugerido");
                 return;
             }
-            switch (m.key) {
-                case "zero":
-                    module.setAnchor(null);
-                    break;
-                case "max":
-                    module.setAnchor("factor", s.floor_factor, "maximo");
-                    break;
-                case "min":
-                    module.setAnchor("price_pct", minDiscountPct(s), "minimo");
-                    break;
-                case "desired":
-                    module.setAnchor("factor", s.desired_factor, "marcador");
-                    break;
-                default:
-                    module.setAnchor("final_total", m.value, "marcador");
+            if (m.key === "zero") {
+                module.setAnchor(null);
+                return;
             }
+            // Siempre el monto final cerrado (múltiplo de 50), no la cifra exacta del marcador.
+            var origin = m.key === "max" ? "maximo" : (m.key === "min" ? "minimo" : "marcador");
+            module.setAnchor("final_total", m.apply, origin);
         }
 
         function canApply(m, res) {
-            if (m.key === "current") return false;
             if (m.key === "zero") return true;
-            return m.value > 0 && m.value < res.gross - 0.005;
+            return m.apply !== null && m.apply > 0 && m.apply < res.gross - 0.005;
         }
 
         /* --- Aviso de volumen junto a «Descuentos» --- */
@@ -440,10 +446,43 @@
             var ok = !!(res && res.volume && res.volume.ok);
             config.flag.hidden = !ok;
             config.flag.textContent = ok ? "Volumen: revisar descuento" : "";
-            config.flag.title = ok
-                ? "Más de " + LD.formatNumber(res.settings.volume_units, 0) + " u. y más de "
-                    + LD.formatMoney(res.settings.volume_amount) + ": aplica el criterio de descuento por volumen."
-                : "";
+            config.flag.title = ok ? volumeText(res) : "";
+        }
+
+        function volumeText(res) {
+            var v = res.volume;
+            var s = res.settings;
+            var units = LD.formatNumber(v.units, 0) + " u.";
+            if (v.byUnits) {
+                return "Cumple el criterio de volumen: " + units + " > " + LD.formatNumber(s.volume_units, 0)
+                    + " y " + LD.formatMoney(v.amount) + " > " + LD.formatMoney(s.volume_amount) + ".";
+            }
+            if (v.byAmount) {
+                return "Cumple el criterio de volumen: " + LD.formatMoney(v.amount) + " > " + LD.formatMoney(s.volume_amount_alone) + ".";
+            }
+            return "No cumple el criterio de volumen: pide más de " + LD.formatNumber(s.volume_units, 0) + " u. y más de "
+                + LD.formatMoney(s.volume_amount)
+                + (s.volume_amount_alone > 0 ? ", o más de " + LD.formatMoney(s.volume_amount_alone) : "")
+                + " (la línea tiene " + units + " y " + LD.formatMoney(v.amount) + ").";
+        }
+
+        /** Resumen corto del desplegable (visible aunque esté minimizado). */
+        function briefText(res) {
+            if (st.loading && res.status !== "no_cost") return "Cargando competencia…";
+            switch (res.status) {
+                case "ok":
+                    var applied = st.snap && Math.abs(Number(st.snap.figures.finalTotal) - res.suggestion.value) < 0.5;
+                    return "Sugerido " + money(res.suggestion.value) + " (−" + pct(res.suggestion.pct) + ")"
+                        + (applied ? " · aplicado" : "");
+                case "no_info":
+                    return "Falta información";
+                case "no_discount":
+                    return "Sin descuento disponible";
+                case "no_cost":
+                    return "Sin costo";
+                default:
+                    return "";
+            }
         }
 
         /* --- Barra --- */
@@ -488,7 +527,9 @@
                         + (p < 10 ? " is-start" : (p > 90 ? " is-end" : "")),
                     style: "left:" + p + "%;--row:" + row,
                     title: (m.suggested ? "Sugerido · " : "") + m.label + ": " + money(m.value)
-                        + " (−" + pct(m.pct) + ", factor " + factor(m.factor) + ")",
+                        + " (−" + pct(m.pct) + ", factor " + factor(m.factor) + ")"
+                        + (m.suggested && res.suggestion ? " · aplica " + money(res.suggestion.value)
+                            : (m.apply !== null && Math.abs(m.apply - m.value) >= 0.005 ? " · aplica " + money(m.apply) : "")),
                     disabled: !canApply(m, res),
                     onclick: function () { apply(m, res); }
                 }, [
@@ -506,12 +547,17 @@
             res.markers.slice().sort(function (x, y) { return y.value - x.value; }).forEach(function (m) {
                 // Sugerido fusionado con su marcador: la fila muestra el monto sugerido.
                 var merged = m.suggested && m.key !== "suggested" && res.suggestion;
-                var shown = merged ? res.suggestion : m;
+                // Cada fila muestra lo que se aplica: la cifra cerrada (múltiplo de 50).
+                var shown = merged ? res.suggestion
+                    : (m.apply !== null ? { value: m.apply, pct: m.applyPct, factor: m.applyFactor } : m);
                 var label = m.label;
+                var exact = Math.abs(m.value - shown.value) < 0.005;
                 if (merged) {
-                    label = Math.abs(m.value - res.suggestion.value) < 0.005
+                    label = exact
                         ? m.label + " · sugerido"
                         : "Sugerido · " + m.label.charAt(0).toLowerCase() + m.label.slice(1) + " (" + money(m.value) + ")";
+                } else if (!exact) {
+                    label = m.label + " (" + money(m.value) + ")";
                 }
                 list.appendChild(h("li", { className: "cq-da-row cq-da-row--" + m.key + (m.suggested ? " is-suggested" : "") }, [
                     h("span", { className: "cq-da-swatch" }),
@@ -580,58 +626,82 @@
             }
         }
 
+        /** Desplegable «Asistente de descuento» dentro de Descuentos (se arma una vez). */
+        var panel = null;
+
+        function ensurePanel() {
+            if (panel) return panel;
+            var brief = h("span", { className: "cq-da-brief" });
+            var body = h("div", { className: "cq-da-body" });
+            var details = h("details", { className: "cq-da-details" }, [
+                h("summary", { className: "cq-da-summary" }, [
+                    h("span", { className: "cq-da-title", text: "Asistente de descuento" }),
+                    brief
+                ]),
+                body
+            ]);
+            details.addEventListener("toggle", function () {
+                if (details.open) {
+                    render();
+                    loadContext(false);
+                }
+            });
+            root.innerHTML = "";
+            root.appendChild(details);
+            panel = { details: details, brief: brief, body: body };
+            return panel;
+        }
+
         function render() {
             if (!st.snap) return;
             var res = evaluate();
             st.result = res;
             paintFlag(res);
             if (config.details && !config.details.open) return;
-            root.innerHTML = "";
-            if (!res || res.status === "empty") return;
+            var p = ensurePanel();
+            root.hidden = !res || res.status === "empty";
+            if (root.hidden) return;
+            p.brief.textContent = briefText(res);
+            p.brief.className = "cq-da-brief cq-da-brief--" + (st.loading ? "loading" : res.status);
+            if (!p.details.open) return;
 
-            var head = h("div", { className: "cq-da-head" }, [
-                h("strong", { className: "cq-da-title", text: "Asistente de descuento" }),
+            var body = p.body;
+            body.innerHTML = "";
+            var vol = res.volume;
+            body.appendChild(h("div", { className: "cq-da-head" }, [
+                h("p", { className: "cq-da-volume" + (vol.ok ? " is-on" : ""), text: volumeText(res) }),
                 st.pb ? h("button", { type: "button", className: "cq-btn cq-btn-small", text: "Competencia",
                     onclick: function () { modal.open(); } }) : null
-            ]);
-            root.appendChild(head);
+            ]));
 
-            var vol = res.volume;
-            root.appendChild(h("p", { className: "cq-da-volume" + (vol.ok ? " is-on" : ""),
-                text: (vol.ok ? "Cumple el criterio de volumen: " : "No cumple el criterio de volumen: ")
-                    + LD.formatNumber(vol.units, 0) + " u. " + (vol.unitsOk ? ">" : "≤") + " "
-                    + LD.formatNumber(res.settings.volume_units, 0) + " y " + LD.formatMoney(vol.amount) + " "
-                    + (vol.amountOk ? ">" : "≤") + " " + LD.formatMoney(res.settings.volume_amount) + "." }));
-
-            var status = h("p", { className: "cq-da-status cq-da-status--" + res.status, text: statusText(res) });
-            root.appendChild(status);
+            body.appendChild(h("p", { className: "cq-da-status cq-da-status--" + res.status, text: statusText(res) }));
             if (res.status === "no_cost") return;
 
-            if (st.loading) root.appendChild(h("p", { className: "cq-modal-hint", text: "Cargando competencia…" }));
-            if (st.error) root.appendChild(h("p", { className: "cq-modal-hint is-warn", text: st.error }));
+            if (st.loading) body.appendChild(h("p", { className: "cq-modal-hint", text: "Cargando competencia…" }));
+            if (st.error) body.appendChild(h("p", { className: "cq-modal-hint is-warn", text: st.error }));
             if (!st.pb) {
-                root.appendChild(h("p", { className: "cq-modal-hint",
+                body.appendChild(h("p", { className: "cq-modal-hint",
                     text: "Línea sin producto local: no hay competencia ni historial." }));
             }
 
-            root.appendChild(renderBar(res));
+            body.appendChild(renderBar(res));
             if (res.reasons.length && res.status === "ok") {
-                root.appendChild(h("p", { className: "cq-modal-hint cq-da-reasons", text: res.reasons.join(" ") }));
+                body.appendChild(h("p", { className: "cq-modal-hint cq-da-reasons", text: res.reasons.join(" ") }));
             }
             res.warnings.forEach(function (w) {
-                root.appendChild(h("p", { className: "cq-modal-hint is-warn", text: w }));
+                body.appendChild(h("p", { className: "cq-modal-hint is-warn", text: w }));
             });
-            root.appendChild(renderList(res));
+            body.appendChild(renderList(res));
 
             if (st.context) {
                 var refs = res.reference.length;
-                root.appendChild(h("p", { className: "cq-modal-hint", text: "Competencia: " + res.counted.length
+                body.appendChild(h("p", { className: "cq-modal-hint", text: "Competencia: " + res.counted.length
                     + (res.counted.length === 1 ? " precio considerado" : " precios considerados")
                     + (refs ? " · " + refs + " solo de referencia (similar, sin clasificar, sin precio o con más de "
                         + res.settings.stale_days + " días)" : "") + "." }));
             }
             var hist = renderHistory();
-            if (hist) root.appendChild(hist);
+            if (hist) body.appendChild(hist);
         }
 
         /* --- Modal Competencia --- */
@@ -662,8 +732,14 @@
                         "aria-label": "Competencia" }, [
                         h("header", { className: "cq-modal-head" }, [
                             h("h3", { text: "Competencia" }),
-                            h("button", { type: "button", className: "cq-modal-close", "aria-label": "Cerrar", text: "×",
-                                onclick: close })
+                            h("div", { className: "cq-da-comp-head-actions" }, [
+                                cfg.competenciaUrl
+                                    ? h("a", { className: "cq-btn cq-btn-small", href: cfg.competenciaUrl, target: "_blank",
+                                        rel: "noopener", text: "Abrir Competencia" })
+                                    : null,
+                                h("button", { type: "button", className: "cq-modal-close", "aria-label": "Cerrar", text: "×",
+                                    onclick: close })
+                            ])
                         ]),
                         body,
                         msg
@@ -772,6 +848,326 @@
                 return form;
             }
 
+            /** Nombre del producto local (o de la línea) para buscar en Google y en fuentes internas. */
+            function productName() {
+                var p = st.context && st.context.producto;
+                var line = st.snap ? st.snap.line : {};
+                return String((p && p.nombre) || line.description || line.sku || "").trim();
+            }
+
+            function buscadorUrl(q) {
+                if (!cfg.buscadorUrl) return "";
+                return cfg.buscadorUrl + (cfg.buscadorUrl.indexOf("?") >= 0 ? "&" : "?") + "q=" + encodeURIComponent(q || "");
+            }
+
+            /* --- Fuentes internas: catálogo scrapeado (Sande, DIMAFI) e ingresos manuales --- */
+            var internal = (function () {
+                var ps = { page: 1, expand: 0, last: null, seq: 0, timer: null, unitCtx: null };
+                var q = h("input", { type: "search", placeholder: "Palabra, código o URL…", "aria-label": "Buscar en fuentes internas" });
+                var modo = selectOf([["alguna", "Contiene alguna palabra"], ["todas", "Contiene todas las palabras"]], "alguna",
+                    { "aria-label": "Filtro" });
+                var fuente = selectOf([["", "Todas"], ["sande", "Sande"], ["dimafi", "DIMAFI"], ["manual", "Manual"]], "",
+                    { "aria-label": "Fuente" });
+                var hide = h("input", { type: "checkbox", checked: true });
+                var status = h("p", { className: "cq-modal-hint", role: "status" });
+                var panelMsg = h("p", { className: "cq-modal-hint", role: "status" });
+                var tbody = h("tbody");
+                var pageLabel = h("span", { className: "cq-modal-hint", text: "—" });
+                var prev = h("button", { type: "button", className: "cq-btn cq-btn-small", text: "Anterior", disabled: true,
+                    onclick: function () { if (ps.page > 1) { ps.page--; ps.expand = 0; search(true); } } });
+                var next = h("button", { type: "button", className: "cq-btn cq-btn-small", text: "Siguiente", disabled: true,
+                    onclick: function () { ps.page++; ps.expand = 0; search(true); } });
+                var openBuscador = h("a", { className: "cq-btn cq-btn-small", target: "_blank", rel: "noopener",
+                    text: "Abrir en Buscador", href: "#" });
+                var el = h("div", { className: "cq-da-ci", hidden: true }, [
+                    h("h4", { text: "Fuentes internas" }),
+                    h("p", { className: "cq-modal-hint", text: "Busca en el catálogo scrapeado (Sande, DIMAFI) y en ingresos manuales, y vincula al SKU de esta línea." }),
+                    h("div", { className: "cq-da-ci-filters" }, [
+                        h("label", { className: "cq-float-field cq-da-ci-q" }, [h("span", { text: "Buscar" }), q]),
+                        h("label", { className: "cq-float-field" }, [h("span", { text: "Filtro" }), modo]),
+                        h("label", { className: "cq-float-field" }, [h("span", { text: "Fuente" }), fuente]),
+                        h("button", { type: "button", className: "cq-btn cq-btn-primary", text: "Buscar",
+                            onclick: function () { ps.page = 1; ps.expand = 0; search(true); } })
+                    ]),
+                    h("label", { className: "cq-da-ci-hide" }, [hide, " Ocultar ya vinculados a este SKU"]),
+                    status,
+                    panelMsg,
+                    h("div", { className: "cq-da-comp-table-wrap" }, [
+                        h("table", { className: "cq-da-comp-table" }, [
+                            h("thead", {}, [h("tr", {}, ["Fuente", "Producto", "Precio/u", "Estado", "Acción"].map(function (t) {
+                                return h("th", { scope: "col", text: t });
+                            }))]),
+                            tbody
+                        ])
+                    ]),
+                    h("p", { className: "cq-da-ci-pager" }, [prev, pageLabel, next, openBuscador])
+                ]);
+
+                q.addEventListener("input", function () { ps.page = 1; ps.expand = 0; search(false); });
+                q.addEventListener("keydown", function (event) {
+                    if (event.key === "Enter") {
+                        event.preventDefault();
+                        ps.page = 1;
+                        ps.expand = 0;
+                        search(true);
+                    }
+                });
+                modo.addEventListener("change", function () { ps.page = 1; ps.expand = 0; search(true); });
+                fuente.addEventListener("change", function () { ps.page = 1; ps.expand = 0; search(true); });
+                hide.addEventListener("change", function () { ps.expand = 0; if (ps.last) renderRows(); });
+
+                function setPanelMsg(text, warn) {
+                    panelMsg.textContent = text || "";
+                    panelMsg.classList.toggle("is-warn", !!warn);
+                }
+
+                function emptyRow(text) {
+                    tbody.innerHTML = "";
+                    tbody.appendChild(h("tr", {}, [h("td", { colspan: "5", className: "cq-modal-hint", text: text })]));
+                }
+
+                function search(immediate) {
+                    clearTimeout(ps.timer);
+                    var run = function () {
+                        var text = String(q.value || "").trim();
+                        openBuscador.href = buscadorUrl(text) || "#";
+                        if (text.length < 2) {
+                            emptyRow("Escribe al menos 2 caracteres.");
+                            status.textContent = "";
+                            pageLabel.textContent = "—";
+                            prev.disabled = true;
+                            next.disabled = true;
+                            return;
+                        }
+                        var mySeq = ++ps.seq;
+                        status.textContent = "Buscando…";
+                        emptyRow("Cargando…");
+                        post(actions.internalSearch, {
+                            search: text,
+                            coincidencia: modo.value,
+                            fuente: fuente.value,
+                            page: ps.page
+                        }).then(function (data) {
+                            if (mySeq !== ps.seq) return;
+                            ps.last = data;
+                            renderRows();
+                        }).catch(function (error) {
+                            if (mySeq !== ps.seq) return;
+                            status.textContent = error.message;
+                            emptyRow(error.message);
+                        });
+                    };
+                    if (immediate) run();
+                    else ps.timer = setTimeout(run, 350);
+                }
+
+                function price(r) {
+                    var u = Number(r.precio_bruto_unitario);
+                    return r.precio_bruto_unitario === null || r.precio_bruto_unitario === undefined || !isFinite(u)
+                        ? "—" : LD.formatUnitPrice(u);
+                }
+
+                function renderRows() {
+                    var data = ps.last || {};
+                    var rows = data.rows || [];
+                    var total = data.total || 0;
+                    var pages = Math.max(1, Math.ceil(total / (data.per_page || 10)));
+                    var pb = st.pb;
+                    var filtered = rows.filter(function (r) {
+                        return !(hide.checked && r.match_estado === "confirmado" && Number(r.producto_base_id) === pb);
+                    });
+                    pageLabel.textContent = "Página " + ps.page + " / " + pages + " (" + total + " productos)";
+                    prev.disabled = ps.page <= 1;
+                    next.disabled = ps.page >= pages;
+                    status.textContent = filtered.length
+                        ? filtered.length + " en esta página" + (filtered.length < rows.length ? " (ocultos los ya vinculados)" : "")
+                        : "Sin resultados";
+                    if (!filtered.length) {
+                        emptyRow("Sin resultados");
+                        return;
+                    }
+                    tbody.innerHTML = "";
+                    filtered.forEach(function (r) {
+                        var id = Number(r.id) || 0;
+                        var rowPb = Number(r.producto_base_id) || 0;
+                        var estado;
+                        var action = null;
+                        if (r.match_estado === "confirmado" && rowPb === pb) {
+                            estado = h("span", { className: "cq-da-badge is-ok", text: "Ya vinculado a este SKU" });
+                        } else {
+                            var reassign = r.match_estado === "confirmado" && rowPb > 0;
+                            if (reassign) estado = "Vinculado a " + (r.canonical_sku || "#" + rowPb);
+                            else if (r.match_estado === "sugerido") estado = "Sugerido" + (r.canonical_sku ? " → " + r.canonical_sku : "");
+                            else if (r.match_estado === "rechazado") estado = "Rechazado";
+                            else estado = "Sin vincular";
+                            action = h("button", { type: "button",
+                                className: "cq-btn cq-btn-small" + (reassign ? "" : " cq-btn-primary"),
+                                text: reassign ? "Reasignar aquí" : "Vincular a este SKU",
+                                onclick: function () {
+                                    ps.expand = ps.expand === id ? 0 : id;
+                                    ps.unitCtx = null;
+                                    setPanelMsg("");
+                                    renderRows();
+                                } });
+                        }
+                        var code = String(r.codigo_externo || "").trim();
+                        tbody.appendChild(h("tr", {}, [
+                            h("td", {}, [h("span", { className: "cq-da-badge cq-da-badge--" + (r.fuente_slug || "otro"),
+                                text: r.fuente_nombre || r.fuente_slug || "—" })]),
+                            h("td", {}, [
+                                r.url_producto
+                                    ? h("a", { href: r.url_producto, target: "_blank", rel: "noopener", text: r.nombre || r.url_producto })
+                                    : (r.nombre || "—"),
+                                code ? h("div", {}, [h("code", { text: code })]) : null
+                            ]),
+                            h("td", { className: "cq-num", text: price(r) }),
+                            h("td", {}, [estado]),
+                            h("td", {}, [action || "—"])
+                        ]));
+                        if (ps.expand === id) {
+                            tbody.appendChild(linkPanel(r, r.match_estado === "confirmado" && rowPb > 0 && rowPb !== pb));
+                        }
+                    });
+                }
+
+                /** Validación (familia y unidades) + tipo, actitud y nota antes de confirmar. */
+                function linkPanel(r, reassign) {
+                    var id = Number(r.id) || 0;
+                    var info = h("p", { className: "cq-modal-hint", text: "Cargando validación…" });
+                    var blockers = h("div", { className: "cq-da-ci-blockers", hidden: true });
+                    var warn = h("p", { className: "cq-modal-hint is-warn", hidden: true });
+                    var tipo = selectOf([["", "— seleccionar —"]].concat(TIPOS), "", { "aria-label": "Tipo de match" });
+                    var act = selectOf(ACTITUDES, "sin_clasificar", { "aria-label": "Actitud" });
+                    var nota = h("textarea", { rows: "2", "aria-label": "Nota" });
+                    var confirmBtn = h("button", { type: "button", className: "cq-btn cq-btn-primary", text: "Confirmar vínculo",
+                        disabled: true });
+
+                    function paintWarn() {
+                        var ctx = ps.unitCtx || {};
+                        var text = "";
+                        if (tipo.value === "exacto_envase" && (ctx.family_status === "unknown" || ctx.family_status === "missing")) {
+                            text = "Advertencia familia: " + (ctx.family_warning || "revisa el estado de familia.");
+                        } else if (tipo.value && tipo.value !== "exacto_envase" && ctx.units_differ) {
+                            text = "Unidades distintas: local " + (ctx.local_unit_label || "1") + " vs competencia "
+                                + (ctx.cantidad_min || 1) + " u.";
+                        }
+                        warn.textContent = text;
+                        warn.hidden = !text;
+                    }
+                    tipo.addEventListener("change", paintWarn);
+
+                    post(actions.confirmPreflight, { producto_competencia_id: id, producto_base_id: st.pb }).then(function (d) {
+                        ps.unitCtx = d.unit_context || null;
+                        var comp = d.sande || {};
+                        var local = d.local || {};
+                        info.textContent = "Competencia: " + (comp.codigo ? comp.codigo + " " : "") + (comp.nombre || "")
+                            + " (" + (comp.cantidad_min || (ps.unitCtx && ps.unitCtx.cantidad_min) || 1) + " u) · Local: "
+                            + (local.canonical_sku || "") + " " + (local.nombre_canonico || "");
+                        var list = d.blockers || [];
+                        blockers.innerHTML = "";
+                        if (list.length || d.message) {
+                            if (d.message) blockers.appendChild(h("strong", { text: d.message }));
+                            if (list.length) {
+                                blockers.appendChild(h("ul", {}, list.map(function (b) {
+                                    return h("li", {}, [b.url
+                                        ? h("a", { href: b.url, target: "_blank", rel: "noopener", text: b.label || b.tipo })
+                                        : (b.label || b.tipo)]);
+                                })));
+                            }
+                            blockers.hidden = false;
+                        }
+                        confirmBtn.disabled = !d.can_confirm;
+                        confirmBtn.hidden = !d.can_confirm;
+                        paintWarn();
+                    }).catch(function (error) {
+                        info.textContent = error.message;
+                    });
+
+                    confirmBtn.addEventListener("click", function () {
+                        if (!tipo.value) {
+                            setPanelMsg("Debes seleccionar el tipo de match.", true);
+                            return;
+                        }
+                        if (reassign && !window.confirm("Este producto ya está vinculado a " + (r.canonical_sku || "otro SKU")
+                            + ". ¿Confirmas la reasignación a este SKU?")) {
+                            return;
+                        }
+                        var ctx = ps.unitCtx || {};
+                        if (tipo.value !== "exacto_envase" && ctx.units_differ && !window.confirm(
+                            "Las unidades son distintas (local " + (ctx.local_unit_label || "1") + " vs competencia "
+                            + (ctx.cantidad_min || 1) + " u). ¿Confirmas de todos modos?\n\n"
+                            + "Si es el mismo producto con otro envase, cancela y elige «Exacto diferente U de envase».")) {
+                            return;
+                        }
+                        confirmBtn.disabled = true;
+                        confirmBtn.textContent = "Guardando…";
+                        post(actions.confirmMatch, {
+                            producto_competencia_id: id,
+                            producto_base_id: st.pb,
+                            tipo_match: tipo.value,
+                            actitud: act.value,
+                            nota: nota.value || ""
+                        }).then(function () {
+                            ps.expand = 0;
+                            ps.unitCtx = null;
+                            setPanelMsg("Vínculo confirmado con este SKU.");
+                            loadContext(true);
+                            search(true);
+                        }).catch(function (error) {
+                            confirmBtn.disabled = false;
+                            confirmBtn.textContent = "Confirmar vínculo";
+                            setPanelMsg(error.message, true);
+                        });
+                    });
+
+                    return h("tr", { className: "cq-da-ci-expand" }, [h("td", { colspan: "5" }, [
+                        h("div", { className: "cq-da-ci-link" }, [
+                            info,
+                            blockers,
+                            warn,
+                            h("div", { className: "cq-da-ci-link-fields" }, [
+                                h("label", { className: "cq-float-field" }, [h("span", { text: "Tipo de match *" }), tipo]),
+                                h("label", { className: "cq-float-field" }, [h("span", { text: "Actitud" }), act]),
+                                h("label", { className: "cq-float-field cq-da-ci-nota" }, [h("span", { text: "Nota (opcional)" }), nota])
+                            ]),
+                            h("p", { className: "cq-da-comp-actions" }, [
+                                confirmBtn,
+                                h("button", { type: "button", className: "cq-btn", text: "Cancelar",
+                                    onclick: function () { ps.expand = 0; renderRows(); } })
+                            ])
+                        ])
+                    ])]);
+                }
+
+                return {
+                    el: el,
+                    open: function (name) {
+                        el.hidden = false;
+                        q.value = name || "";
+                        modo.value = "alguna";
+                        ps.page = 1;
+                        ps.expand = 0;
+                        setPanelMsg("");
+                        search(true);
+                        if (el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                    },
+                    reset: function () {
+                        clearTimeout(ps.timer);
+                        ps.seq++;
+                        ps.page = 1;
+                        ps.expand = 0;
+                        ps.last = null;
+                        el.hidden = true;
+                        q.value = "";
+                        fuente.value = "";
+                        hide.checked = true;
+                        status.textContent = "";
+                        setPanelMsg("");
+                        emptyRow("Pulsa «Buscar en Fuentes Internas» para buscar.");
+                    }
+                };
+            })();
+
             function render() {
                 if (!el) return;
                 body.innerHTML = "";
@@ -789,6 +1185,20 @@
                 var canManage = !!st.context.canManageCompetencia;
                 body.appendChild(renderTable(st.context.competidores || [], canManage));
                 if (canManage) body.appendChild(renderForm());
+                body.appendChild(h("p", { className: "cq-da-comp-actions" }, [
+                    h("button", { type: "button", className: "cq-btn", text: "Buscar en Google", onclick: function () {
+                        var name = productName();
+                        if (!name) {
+                            setMsg("No hay nombre de producto para buscar.", true);
+                            return;
+                        }
+                        window.open("https://www.google.com/search?q=" + encodeURIComponent(name), "_blank", "noopener,noreferrer");
+                    } }),
+                    canManage ? h("button", { type: "button", className: "cq-btn", text: "Buscar en Fuentes Internas",
+                        onclick: function () { internal.open(productName()); } }) : null
+                ]));
+                // El panel conserva la búsqueda al recargar la competencia (se mueve, no se rehace).
+                if (canManage) body.appendChild(internal.el);
                 else body.appendChild(h("p", { className: "cq-modal-hint", text: "Solo lectura: editar competencia requiere el permiso «Gestionar catálogo competencia»." }));
             }
 
@@ -796,6 +1206,7 @@
                 open: function () {
                     build();
                     setMsg("");
+                    internal.reset();
                     el.hidden = false;
                     el.setAttribute("aria-hidden", "false");
                     render();
@@ -831,7 +1242,12 @@
                     st.seq++;
                 }
                 modal.close();
-                root.innerHTML = "";
+                // Minimizado por defecto en cada línea, como Descuentos.
+                if (panel) {
+                    panel.details.open = false;
+                    panel.body.innerHTML = "";
+                    panel.brief.textContent = "";
+                }
             }
         };
     }

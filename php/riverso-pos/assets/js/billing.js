@@ -1642,6 +1642,7 @@
       .then(function () {
         goStep(2);
         syncDraftDeleteButton();
+        pinDirectDraftUrl();
         showAlert("Borrador listo. Agrega productos en Detalles.");
       })
       .catch(function (e) {
@@ -2105,6 +2106,33 @@
     return true;
   }
 
+  function pinDirectDraftUrl() {
+    if (!cfg.direct || !state.draftId || state.step !== 2) return;
+    var base = String(cfg.portalUrl || window.location.pathname).split("?")[0];
+    if (!base || !window.history || !window.history.replaceState) return;
+    window.history.replaceState(null, "", base + "?draft_id=" + encodeURIComponent(String(state.draftId)));
+    cfg.direct = false;
+    cfg.draftId = state.draftId;
+  }
+
+  function receiverReadyForInvoice() {
+    return missingReceiverFields().length === 0 && isValidRut((($("bill-recv-rut") || {}).value || "").trim());
+  }
+
+  /**
+   * Atajo desde cotización (?directo=1). Boleta entra al borrador.
+   * Factura entra al borrador si el receptor ya está completo; si no, se queda en el paso 1.
+   */
+  function maybeOpenDirectDraft() {
+    if (!cfg.direct) return;
+    var type = Number(cfg.initialDocType) === 2 ? 2 : 37;
+    if ($("bill-doc-type")) $("bill-doc-type").value = String(type);
+    updateFolioCard();
+    estimateFolio();
+    if (type === 2 && !receiverReadyForInvoice()) return;
+    ensureCustomerThenContinue();
+  }
+
   function loadQuoteIfAny() {
     if (!state.quoteId) {
       lockAllDetails();
@@ -2124,7 +2152,10 @@
             (q.customer_name ? " · " + q.customer_name : "");
         }
         if (q.issue_date && $("bill-issue-date")) {
-          $("bill-issue-date").value = q.issue_date;
+          var issue = String(q.issue_date).slice(0, 10);
+          if (/^\d{4}-\d{2}-\d{2}$/.test(issue)) {
+            $("bill-issue-date").value = issue;
+          }
         }
         if (data.receiver) {
           fillReceiver({
@@ -2138,12 +2169,17 @@
             facturacion_telefono: data.receiver.telefono,
             codigo_postal: data.receiver.codigo_postal,
           }, true);
-          if (data.receiver.rut && $("bill-doc-type")) {
+          var directType = cfg.direct ? (Number(cfg.initialDocType) === 2 ? 2 : 37) : 0;
+          var explicitBoleta = directType === 37;
+          if (!explicitBoleta && data.receiver.rut && $("bill-doc-type")) {
             $("bill-doc-type").value = "2";
             updateFolioCard();
             estimateFolio();
           }
-          if (data.receiver.rut) {
+          var openingDirect = !data.already_emitted && (
+            explicitBoleta || (directType === 2 && receiverReadyForInvoice())
+          );
+          if (data.receiver.rut && !openingDirect) {
             lookupSii(data.receiver.rut, { silent: true, hadLocal: true });
           }
         } else {
@@ -2185,6 +2221,9 @@
           };
         });
         renderBoletaLines();
+        if (!data.already_emitted) {
+          maybeOpenDirectDraft();
+        }
       })
       .catch(function (err) {
         showAlert(err.message || "No se pudo cargar la cotización", true);

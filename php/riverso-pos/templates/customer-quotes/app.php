@@ -253,7 +253,14 @@ if (!function_exists('riverso_pos_cq_json')) {
                         <button type="button" class="cq-btn" id="cq-state-btn" aria-haspopup="true" aria-expanded="false">Estado ▾</button>
                         <div class="cq-order-menu cq-state-menu" id="cq-transitions" hidden role="menu"></div>
                     </div>
-                    <button type="button" class="cq-btn cq-btn-primary" id="cq-invoice" hidden>Facturar</button>
+                    <div class="cq-split cq-invoice-split" id="cq-invoice-split" hidden>
+                        <button type="button" class="cq-btn cq-btn-primary" id="cq-invoice">Facturar</button>
+                        <button type="button" class="cq-btn cq-btn-primary cq-btn-caret" id="cq-invoice-caret" aria-haspopup="menu" aria-expanded="false" aria-label="Boleta o factura">▾</button>
+                        <div class="cq-order-menu" id="cq-invoice-menu" role="menu" hidden>
+                            <button type="button" role="menuitem" data-invoice-mode="boleta">Boleta</button>
+                            <button type="button" role="menuitem" data-invoice-mode="factura">Factura</button>
+                        </div>
+                    </div>
                     <a id="cq-order-link" class="cq-link cq-order-link" href="#" target="_blank" rel="noopener" hidden>Ver pedido</a>
                     <button type="button" class="cq-btn" id="cq-import" hidden title="Importar desde cotización recibida">Importar</button>
                     <label class="cq-pdf-template" title="Plantilla del PDF">
@@ -302,6 +309,8 @@ if (!function_exists('riverso_pos_cq_json')) {
             </header>
 
             <div class="cq-card">
+                <details class="cq-quote-details">
+                    <summary>Datos de Cotización</summary>
                 <div class="cq-header-grid">
                     <label class="cq-field">
                         <span>Nº cotización</span>
@@ -352,6 +361,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                         <input type="text" id="cq-validity-terms" maxlength="2000" placeholder="Opcional">
                     </label>
                 </div>
+                </details>
                 <dl class="cq-totals">
                     <div>
                         <dt>Bruto</dt>

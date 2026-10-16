@@ -171,6 +171,9 @@
         emailStateNote: document.getElementById("cq-email-state-note"),
         deleteBtn: document.getElementById("cq-delete"),
         invoice: document.getElementById("cq-invoice"),
+        invoiceSplit: document.getElementById("cq-invoice-split"),
+        invoiceCaret: document.getElementById("cq-invoice-caret"),
+        invoiceMenu: document.getElementById("cq-invoice-menu"),
         associatedCard: document.getElementById("cq-associated-card"),
         associatedList: document.getElementById("cq-associated-list"),
         orderLink: document.getElementById("cq-order-link"),
@@ -422,6 +425,9 @@
         if (els.printNowMenu && !els.printNowMenu.hidden) {
             closePrintNowMenu();
         }
+        if (els.invoiceMenu && !els.invoiceMenu.hidden) {
+            closeInvoiceMenu();
+        }
         if (els.emailModal && !els.emailModal.hidden) {
             event.preventDefault();
             closeEmailModal();
@@ -500,6 +506,7 @@
             if (open) {
                 els.orderMenu.hidden = false;
                 els.orderBtn.setAttribute("aria-expanded", "true");
+                placeMenuInView(els.orderMenu);
             }
         });
         Array.prototype.forEach.call(els.orderMenu.querySelectorAll("[data-order-by]"), function (btn) {
@@ -517,11 +524,17 @@
             });
         });
     }
+    window.addEventListener("resize", function () {
+        Array.prototype.forEach.call(document.querySelectorAll(".cq-order-menu, .cq-view-menu"), function (menu) {
+            if (!menu.hidden) placeMenuInView(menu);
+        });
+    });
     document.addEventListener("click", function () {
         closeViewMenus();
         closeOrderMenu();
         closeOptionsMenu();
         closePrintNowMenu();
+        closeInvoiceMenu();
         closeStateMenu();
     });
     // Interfaz vendedor: margen, utilidad, stock y costos solo a la vista del vendedor.
@@ -552,7 +565,33 @@
         });
     }
     if (els.invoice) {
-        els.invoice.addEventListener("click", invoiceQuote);
+        els.invoice.addEventListener("click", function () { invoiceQuote(); });
+    }
+    if (els.invoiceCaret && els.invoiceMenu) {
+        els.invoiceCaret.addEventListener("click", function (event) {
+            event.stopPropagation();
+            var open = els.invoiceMenu.hidden;
+            closeViewMenus();
+            closeOrderMenu();
+            closeOptionsMenu();
+            closePrintNowMenu();
+            closeStateMenu();
+            closeInvoiceMenu();
+            if (open) {
+                els.invoiceMenu.hidden = false;
+                els.invoiceCaret.setAttribute("aria-expanded", "true");
+                placeMenuInView(els.invoiceMenu);
+            }
+        });
+        els.invoiceMenu.addEventListener("click", function (event) {
+            event.stopPropagation();
+            var item = event.target.closest("[data-invoice-mode]");
+            if (!item) {
+                return;
+            }
+            closeInvoiceMenu();
+            invoiceQuote(item.getAttribute("data-invoice-mode"));
+        });
     }
     if (els.importBtn) {
         els.importBtn.addEventListener("click", openImportModal);
@@ -768,10 +807,12 @@
             closeOrderMenu();
             closeOptionsMenu();
             closePrintNowMenu();
+            closeInvoiceMenu();
             if (open) {
                 els.printNowMenu.hidden = false;
                 els.printNowCaret.setAttribute("aria-expanded", "true");
                 refreshPrintNow();
+                placeMenuInView(els.printNowMenu);
             }
         });
         els.printNowMenu.addEventListener("click", function (event) {
@@ -790,10 +831,12 @@
             closeViewMenus();
             closeOrderMenu();
             closeOptionsMenu();
+            closeInvoiceMenu();
             if (open) {
                 syncOptionsMenu(state.quote);
                 els.optionsMenu.hidden = false;
                 els.options.setAttribute("aria-expanded", "true");
+                placeMenuInView(els.optionsMenu);
             }
         });
         els.optionsMenu.addEventListener("click", function (event) {
@@ -814,10 +857,12 @@
             closeOrderMenu();
             closeOptionsMenu();
             closePrintNowMenu();
+            closeInvoiceMenu();
             closeStateMenu();
             if (open) {
                 els.transitions.hidden = false;
                 els.stateBtn.setAttribute("aria-expanded", "true");
+                placeMenuInView(els.transitions);
             }
         });
         els.transitions.addEventListener("click", function (event) {
@@ -1419,6 +1464,7 @@
             if (willOpen) {
                 menu.hidden = false;
                 state.openViewMenuId = quote.id;
+                placeMenuInView(menu);
             }
         });
         wrap.appendChild(main);
@@ -1675,6 +1721,42 @@
     function closeStateMenu() {
         if (els.transitions) els.transitions.hidden = true;
         if (els.stateBtn) els.stateBtn.setAttribute("aria-expanded", "false");
+    }
+
+    function closeInvoiceMenu() {
+        if (els.invoiceMenu) els.invoiceMenu.hidden = true;
+        if (els.invoiceCaret) els.invoiceCaret.setAttribute("aria-expanded", "false");
+    }
+
+    /** Si el menú se sale de la pantalla, lo fija dentro del borde visible. */
+    function placeMenuInView(menu) {
+        if (!menu || menu.hidden) return;
+        ["position", "left", "right", "top", "width", "minWidth", "maxWidth", "transform", "zIndex", "boxSizing"].forEach(function (key) {
+            menu.style[key] = "";
+        });
+        var pad = 8;
+        var view = window.visualViewport;
+        var viewW = (view && view.width) || document.documentElement.clientWidth || window.innerWidth;
+        var rect = menu.getBoundingClientRect();
+        if (!rect.width) return;
+        if (rect.left >= pad && rect.right <= viewW - pad) return;
+        var width = Math.min(rect.width, viewW - pad * 2);
+        var left = rect.left;
+        if (left + width > viewW - pad) left = viewW - pad - width;
+        if (left < pad) left = pad;
+        menu.style.position = "fixed";
+        menu.style.boxSizing = "border-box";
+        menu.style.left = Math.round(left) + "px";
+        menu.style.right = "auto";
+        menu.style.top = Math.round(rect.top) + "px";
+        menu.style.width = Math.round(width) + "px";
+        menu.style.minWidth = "0";
+        menu.style.zIndex = "80";
+    }
+
+    function setInvoiceBusy(busy) {
+        if (els.invoice) els.invoice.disabled = !!busy;
+        if (els.invoiceCaret) els.invoiceCaret.disabled = !!busy;
     }
 
     /** Menú «Estado ▾»: Esperando respuesta · Aprobar · Rechazar · Anular (· Reabrir). */
@@ -4139,10 +4221,14 @@
     }
 
 
-    function billingUrlForQuote(id) {
+    function billingUrlForQuote(id, mode) {
         var base = cfg.billingEmitUrl || "/interno/facturacion/";
         var sep = base.indexOf("?") >= 0 ? "&" : "?";
-        return base + sep + "quote_id=" + encodeURIComponent(String(id));
+        var url = base + sep + "quote_id=" + encodeURIComponent(String(id));
+        if (mode === "boleta" || mode === "factura") {
+            url += "&tipo=" + encodeURIComponent(mode) + "&directo=1";
+        }
+        return url;
     }
 
     function canShowInvoice(quote) {
@@ -4152,11 +4238,14 @@
     }
 
     function syncInvoiceButton(quote) {
-        if (!els.invoice) {
-            return;
+        var show = canShowInvoice(quote);
+        if (els.invoiceSplit) {
+            els.invoiceSplit.hidden = !show;
+        } else if (els.invoice) {
+            els.invoice.hidden = !show;
         }
-        els.invoice.hidden = !canShowInvoice(quote);
-        els.invoice.disabled = false;
+        setInvoiceBusy(false);
+        closeInvoiceMenu();
     }
 
     function associatedDocUrl(doc) {
@@ -4300,7 +4389,10 @@
         return wrap;
     }
 
-    function invoiceQuote() {
+    function invoiceQuote(mode) {
+        if (mode !== "boleta" && mode !== "factura") {
+            mode = "";
+        }
         if ((state.quote.quote_type || "venta") !== "venta") {
             setMessage("Solo se pueden facturar cotizaciones de tipo Venta.", true);
             return;
@@ -4319,26 +4411,20 @@
         )) {
             return;
         }
-        if (els.invoice) {
-            els.invoice.disabled = true;
-        }
+        setInvoiceBusy(true);
         setMessage("Guardando cotización…", false);
         // Solo se navega con el guardado confirmado: al salir, lo no guardado se pierde.
         ensureSaved().then(function () {
             if (!state.quote.id) {
                 setMessage("Guarda la cotización antes de facturar.", true);
-                if (els.invoice) {
-                    els.invoice.disabled = false;
-                }
+                setInvoiceBusy(false);
                 return;
             }
-            window.location.href = billingUrlForQuote(state.quote.id);
+            window.location.href = billingUrlForQuote(state.quote.id, mode);
         }).catch(function (error) {
             setMessage("No se abrió Facturación porque la cotización no se pudo guardar: "
                 + (error && error.message ? error.message : "error desconocido."), true);
-            if (els.invoice) {
-                els.invoice.disabled = false;
-            }
+            setInvoiceBusy(false);
         });
     }
 
@@ -6928,9 +7014,11 @@
                     html += '<a class="cq-now-link" role="menuitem" href="' + escapeHtml(rp.config.configUrl) + '">Configurar impresión…</a>';
                 }
                 menu.innerHTML = html;
+                placeMenuInView(menu);
             })
             .catch(function (err) {
                 menu.innerHTML = '<div class="cq-now-note is-error">' + escapeHtml(err.message || "No se pudo consultar la impresión.") + "</div>";
+                placeMenuInView(menu);
             });
     }
 

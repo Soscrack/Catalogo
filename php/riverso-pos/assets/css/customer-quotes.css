@@ -72,6 +72,62 @@
     margin-top: 16px;
 }
 
+.cq-quote-details {
+    border: 1px solid #e4d9c8;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.cq-quote-details > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+    padding: 10px 12px;
+    border-radius: 7px;
+    background: #f7f1e7;
+    font-weight: 650;
+}
+
+.cq-quote-details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.cq-quote-details > summary::marker {
+    content: "";
+}
+
+.cq-quote-details > summary::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #6b6258;
+    transform: rotate(-90deg);
+}
+
+.cq-quote-details[open] > summary {
+    border-bottom: 1px solid #e4d9c8;
+    border-radius: 7px 7px 0 0;
+}
+
+.cq-quote-details[open] > summary::before {
+    transform: rotate(0deg);
+}
+
+.cq-quote-details[open] > .cq-header-grid {
+    padding: 12px;
+}
+
+.cq-quote-details > summary:focus-visible {
+    outline: 2px solid #9a3412;
+    outline-offset: 2px;
+}
+
 .cq-header-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1418,9 +1474,33 @@ button.cq-breakdown-chip {
     font-weight: 600;
 }
 
-.cq-btn-primary#cq-invoice {
+.cq-btn-primary#cq-invoice,
+.riverso-cq .cq-invoice-split > .cq-btn-primary {
     background: #0f766e;
     border-color: #0f766e;
+}
+
+.cq-invoice-split[hidden] {
+    display: none !important;
+}
+
+.riverso-cq .cq-invoice-split > .cq-btn.cq-btn-caret {
+    border-left: 1px solid rgba(255, 255, 255, 0.35);
+    padding: 8px 10px;
+}
+
+@media (max-width: 640px) {
+    .riverso-cq .cq-invoice-split > .cq-btn.cq-btn-caret {
+        min-width: 46px;
+        min-height: 44px;
+        padding: 8px 14px;
+    }
+
+    .cq-order-menu,
+    .cq-view-menu {
+        max-width: calc(100vw - 16px);
+        box-sizing: border-box;
+    }
 }
 
 .cq-associated-title {
@@ -2248,6 +2328,12 @@ button.cq-breakdown-chip {
     border-left-width: 0;
     border-radius: 0 8px 8px 0;
     font-size: 11px;
+}
+
+@media (max-width: 640px) {
+    .riverso-cq .cq-invoice-split > .cq-btn.cq-btn-caret {
+        font-size: 16px;
+    }
 }
 
 .cq-now-dot {

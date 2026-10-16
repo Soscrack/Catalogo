@@ -164,8 +164,10 @@ class Riverso_Billing_Module {
         $draft_id = isset($_GET['draft_id']) ? absint($_GET['draft_id']) : 0;
         $dte_id = isset($_GET['dte_id']) ? absint($_GET['dte_id']) : 0;
         // Accesos rápidos del inicio: ?tipo=factura | ?tipo=boleta preselecciona el documento.
+        // directo=1 (desde cotización) salta al borrador cuando el tipo ya se puede crear.
         $tipo = isset($_GET['tipo']) ? sanitize_key((string) $_GET['tipo']) : '';
         $initial_doc_type = $tipo === 'factura' ? 2 : 37;
+        $direct = isset($_GET['directo']) && sanitize_key((string) $_GET['directo']) === '1';
         $user = function_exists('wp_get_current_user') ? wp_get_current_user() : null;
         $user_name = '';
         if ($user && !empty($user->ID)) {
@@ -201,6 +203,7 @@ class Riverso_Billing_Module {
             'draftId' => $draft_id,
             'dteId' => $dte_id,
             'initialDocType' => $initial_doc_type,
+            'direct' => $direct,
             'currentUserName' => $user_name,
             'searchUsers' => $search_users,
             'cashBoxes' => $cash_boxes,

@@ -381,6 +381,8 @@ class Riverso_POS_Activator {
         self::create_phase79_billing_draft_discount_anchor($prefix);
         self::create_phase80_reception_packs($prefix);
         self::create_phase81_discount_assistant($prefix, $charset_collate);
+        self::create_phase82_discount_assistant_urls($prefix);
+        self::create_phase83_competencia_usar_oculto($prefix);
 
         // Inicializar servicios core
         self::init_core_services();
@@ -6139,14 +6141,79 @@ class Riverso_POS_Activator {
     }
 
     /**
+     * Fase 82: Asistente de Descuento (2).
+     * - competencia_productos.deshabilitado*: URL que no cuenta para descuentos (precio viejo en la
+     *   página). El refresco nocturno sigue leyendo y deja precio_cambio_at si el precio cambia
+     *   respecto al congelado (deshabilitado_precio). deshabilitado_hasta: vuelve a contar después.
+     * - discount_review en líneas: marca «Revisar descuento» de «Aplicar descuentos sugeridos».
+     */
+    private static function create_phase82_discount_assistant_urls($prefix) {
+        $cp = "{$prefix}competencia_productos";
+        if (self::table_exists($cp)) {
+            self::add_column_if_missing($cp, 'deshabilitado', 'deshabilitado TINYINT(1) NOT NULL DEFAULT 0');
+            self::add_column_if_missing($cp, 'deshabilitado_at', 'deshabilitado_at DATETIME NULL DEFAULT NULL');
+            self::add_column_if_missing($cp, 'deshabilitado_por', 'deshabilitado_por BIGINT UNSIGNED NULL DEFAULT NULL');
+            self::add_column_if_missing($cp, 'deshabilitado_motivo', 'deshabilitado_motivo VARCHAR(255) NULL DEFAULT NULL');
+            self::add_column_if_missing($cp, 'deshabilitado_hasta', 'deshabilitado_hasta DATE NULL DEFAULT NULL');
+            self::add_column_if_missing($cp, 'deshabilitado_precio', 'deshabilitado_precio DECIMAL(18,6) NULL DEFAULT NULL');
+            self::add_column_if_missing($cp, 'precio_cambio_at', 'precio_cambio_at DATETIME NULL DEFAULT NULL');
+        }
+        foreach (array("{$prefix}customer_quote_items", "{$prefix}billing_draft_lines") as $table) {
+            if (self::table_exists($table)) {
+                self::add_column_if_missing($table, 'discount_review', 'discount_review TINYINT(1) NOT NULL DEFAULT 0');
+            }
+        }
+        if (get_option('riverso_pos_phase82_discount_assistant_urls') === '1') {
+            return;
+        }
+        update_option('riverso_pos_phase82_discount_assistant_urls', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase82_discount_assistant_urls', 'competencia_productos', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 82: URL de competencia deshabilitable y marca discount_review en lineas',
+            ));
+        }
+    }
+
+    /**
+     * Fase 83: precio oculto por el competidor (Sande «ocultarPrecio») que igual cuenta para los
+     * descuentos («Usar siempre» del Asistente de Descuento). El refresco nocturno no toca estas
+     * columnas: si el competidor deja de ocultarlo, la marca simplemente deja de importar.
+     */
+    private static function create_phase83_competencia_usar_oculto($prefix) {
+        $cp = "{$prefix}competencia_productos";
+        if (self::table_exists($cp)) {
+            self::add_column_if_missing($cp, 'usar_oculto', 'usar_oculto TINYINT(1) NOT NULL DEFAULT 0');
+            self::add_column_if_missing($cp, 'usar_oculto_at', 'usar_oculto_at DATETIME NULL DEFAULT NULL');
+            self::add_column_if_missing($cp, 'usar_oculto_por', 'usar_oculto_por BIGINT UNSIGNED NULL DEFAULT NULL');
+        }
+        if (get_option('riverso_pos_phase83_competencia_usar_oculto') === '1') {
+            return;
+        }
+        update_option('riverso_pos_phase83_competencia_usar_oculto', '1');
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log('schema.phase83_competencia_usar_oculto', 'competencia_productos', 0, array(
+                'actor_type' => 'computer',
+                'details' => 'Fase 83: precio oculto por el competidor que igual cuenta para descuentos (usar_oculto)',
+            ));
+        }
+    }
+
+    /**
      * Garantiza el schema del Asistente de Descuento (deploy sin bump de versión).
      */
     public static function ensure_discount_assistant_schema() {
         global $wpdb;
-        if (get_option('riverso_pos_phase81_discount_assistant') === '1') {
-            return;
+        $prefix = $wpdb->prefix . 'riverso_';
+        if (get_option('riverso_pos_phase81_discount_assistant') !== '1') {
+            self::create_phase81_discount_assistant($prefix, $wpdb->get_charset_collate());
         }
-        self::create_phase81_discount_assistant($wpdb->prefix . 'riverso_', $wpdb->get_charset_collate());
+        if (get_option('riverso_pos_phase82_discount_assistant_urls') !== '1') {
+            self::create_phase82_discount_assistant_urls($prefix);
+        }
+        if (get_option('riverso_pos_phase83_competencia_usar_oculto') !== '1') {
+            self::create_phase83_competencia_usar_oculto($prefix);
+        }
     }
 
     private static function create_phase78_quote_price_rule($prefix) {

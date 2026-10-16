@@ -265,7 +265,51 @@ class Riverso_Discount_Assistant_Service {
     }
 
     /**
+     * Otros miembros activos de la familia (grupo de equivalencia) del SKU: pb => [sku, nombre].
+     *
+     * @return array<int,array{sku:string,nombre:string}>
+     */
+    private static function family_members($producto_base_id) {
+        global $wpdb;
+        $prefix = self::prefix();
+        if (!self::has_table("{$prefix}equivalence_members") || !self::has_table("{$prefix}equivalence_groups")
+            || !self::has_table("{$prefix}producto_base")) {
+            return [];
+        }
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT DISTINCT o.producto_base_id, pb.canonical_sku, pb.nombre_canonico
+             FROM {$prefix}equivalence_members em
+             INNER JOIN {$prefix}equivalence_groups g ON g.id = em.grupo_id AND g.activo = 1
+             INNER JOIN {$prefix}equivalence_members o ON o.grupo_id = em.grupo_id AND o.activo = 1
+             INNER JOIN {$prefix}producto_base pb ON pb.id = o.producto_base_id
+             WHERE em.producto_base_id = %d AND em.activo = 1 AND o.producto_base_id <> %d",
+            (int) $producto_base_id,
+            (int) $producto_base_id
+        ), ARRAY_A) ?: [];
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row['producto_base_id']] = [
+                'sku' => (string) ($row['canonical_sku'] ?? ''),
+                'nombre' => (string) ($row['nombre_canonico'] ?? ''),
+            ];
+        }
+        return $out;
+    }
+
+    private static function has_table($table) {
+        static $cache = [];
+        if (!array_key_exists($table, $cache)) {
+            global $wpdb;
+            $cache[$table] = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) === $table;
+        }
+        return $cache[$table];
+    }
+
+    /**
      * Vínculos de competencia de un SKU con actitud efectiva, vigencia y si cuentan.
+     * Incluye los vínculos confirmados de los otros miembros de su familia (via_familia; el
+     * precio por unidad ya es comparable) y los sugeridos del propio SKU (no cuentan hasta
+     * confirmarlos).
      *
      * @return array<int,array>
      */
@@ -279,17 +323,34 @@ class Riverso_Discount_Assistant_Service {
         }
         $has_actitud = self::has_column("{$prefix}competencia_match", 'actitud');
         $actitud_sql = $has_actitud ? 'cm.actitud' : 'NULL';
+        // Fase 82 (URL deshabilitada) y precio oculto: columnas opcionales antes de migrar.
+        $disabled_sql = self::has_column("{$prefix}competencia_productos", 'deshabilitado')
+            ? 'cp.deshabilitado, cp.deshabilitado_at, cp.deshabilitado_motivo, cp.deshabilitado_hasta,
+               cp.deshabilitado_precio, cp.precio_cambio_at'
+            : '0 AS deshabilitado, NULL AS deshabilitado_at, NULL AS deshabilitado_motivo, NULL AS deshabilitado_hasta,
+               NULL AS deshabilitado_precio, NULL AS precio_cambio_at';
+        $oculto_sql = self::has_column("{$prefix}competencia_precios", 'oculto') ? 'pr.oculto' : '0';
+        // Fase 83: precio oculto que igual cuenta («Usar siempre»).
+        $usar_oculto_sql = self::has_column("{$prefix}competencia_productos", 'usar_oculto')
+            ? 'cp.usar_oculto, cp.usar_oculto_at'
+            : '0 AS usar_oculto, NULL AS usar_oculto_at';
+        $family = self::family_members($producto_base_id);
+        $pbs = array_merge([$producto_base_id], array_keys($family));
+        $in = implode(',', array_map('intval', $pbs));
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT cm.tipo_match, {$actitud_sql} AS actitud_vinculo,
+            "SELECT cm.tipo_match, {$actitud_sql} AS actitud_vinculo, cm.estado AS match_estado,
+                    cm.producto_base_id AS match_producto_base_id,
                     cp.id AS producto_competencia_id, cp.nombre, cp.url_producto, cp.slug, cp.fuente_id,
+                    {$disabled_sql}, {$usar_oculto_sql},
                     f.slug AS fuente_slug, f.nombre AS fuente_nombre, f.base_url AS fuente_base_url,
                     pr.precio_bruto_unitario, pr.precio_bruto_total, pr.cantidad_min,
-                    pr.snapshot_fecha, pr.actualizado_at
+                    pr.snapshot_fecha, pr.actualizado_at, {$oculto_sql} AS oculto
              FROM {$prefix}competencia_match cm
              INNER JOIN {$prefix}competencia_productos cp ON cp.id = cm.producto_competencia_id
              LEFT JOIN {$prefix}competencia_fuentes f ON f.id = cp.fuente_id
              LEFT JOIN {$prefix}competencia_precios pr ON pr.producto_id = cp.id
-             WHERE cm.producto_base_id = %d AND cm.estado = 'confirmado'
+             WHERE cm.producto_base_id IN ({$in})
+               AND (cm.estado = 'confirmado' OR (cm.estado = 'sugerido' AND cm.producto_base_id = %d))
              ORDER BY pr.precio_bruto_unitario ASC",
             $producto_base_id
         ), ARRAY_A) ?: [];
@@ -297,8 +358,15 @@ class Riverso_Discount_Assistant_Service {
         $map = self::domain_map();
         $now = current_time('timestamp');
         $stale_days = max(1, (int) $settings['stale_days']);
+        $today = current_time('Y-m-d');
         $out = [];
         foreach ($rows as $row) {
+            $disabled = self::url_disabled_state($row, $today);
+            $sugerido = ($row['match_estado'] ?? '') === 'sugerido';
+            $member_pb = (int) ($row['match_producto_base_id'] ?? 0);
+            $via = $member_pb !== $producto_base_id && isset($family[$member_pb])
+                ? ['producto_base_id' => $member_pb] + $family[$member_pb]
+                : null;
             $domain = self::row_domain($row);
             $known = $map[$domain] ?? null;
             $link = self::normalize_actitud($row['actitud_vinculo'] ?? '');
@@ -313,14 +381,28 @@ class Riverso_Discount_Assistant_Service {
                 : null;
             $tipo = sanitize_key((string) ($row['tipo_match'] ?? ''));
             $valid_tipo = in_array($tipo, self::TIPOS_VALIDOS, true);
-            $reason = '';
-            if (!$valid_tipo) {
-                $reason = 'Solo referencia: vínculo ' . strtolower(self::tipo_label($tipo)) . '.';
+            // Motivos antes y después del precio oculto: el asistente puede usar el oculto
+            // («Usar esta vez» / «Usar siempre») y entonces manda el motivo que quede.
+            $before = '';
+            if ($sugerido) {
+                $before = 'Sugerido por coincidencias: confírmalo para que cuente.';
+            } elseif (!$valid_tipo) {
+                $before = 'Solo referencia: vínculo ' . strtolower(self::tipo_label($tipo)) . '.';
             } elseif ($unit === null || $unit <= 0) {
-                $reason = 'Sin precio.';
-            } elseif ($stale) {
-                $reason = 'Precio desactualizado (más de ' . $stale_days . ' días).';
+                $before = 'Sin precio.';
             }
+            $after = '';
+            if ($disabled['activo']) {
+                $after = 'Deshabilitado' . ($disabled['motivo'] !== '' ? ': ' . $disabled['motivo'] : '') . '.'
+                    . ($disabled['precio_cambio'] ? ' El precio cambió el ' . $disabled['precio_cambio'] . ': revisar.' : '');
+            } elseif ($stale) {
+                $after = 'Precio desactualizado (más de ' . $stale_days . ' días).';
+            }
+            $oculto = !empty($row['oculto']);
+            $usar_oculto = !empty($row['usar_oculto']);
+            $reason_used = $before !== '' ? $before : $after;
+            $reason_unused = $before !== '' ? $before : ($oculto ? 'Precio oculto por el competidor.' : $after);
+            $reason = $oculto && $usar_oculto ? $reason_used : $reason_unused;
             $out[] = [
                 'producto_competencia_id' => (int) $row['producto_competencia_id'],
                 'nombre' => (string) ($row['nombre'] ?? ''),
@@ -343,9 +425,150 @@ class Riverso_Discount_Assistant_Service {
                 'actitud_dominio' => $dom_actitud,
                 'actitud' => $effective,
                 'actitud_label' => self::actitud_label($effective),
+                'sugerido' => $sugerido,
+                'via_familia' => $via,
+                'oculto' => $oculto,
+                'usar_oculto' => $usar_oculto,
+                'usar_oculto_desde' => $usar_oculto && !empty($row['usar_oculto_at']) ? substr((string) $row['usar_oculto_at'], 0, 10) : '',
+                // Motivo si se usa / no se usa el precio oculto ('' = cuenta); el navegador elige según «esta vez».
+                'motivo_oculto_usado' => $reason_used,
+                'motivo_oculto_sin_usar' => $reason_unused,
+                'deshabilitado' => $disabled['activo'],
+                'deshabilitado_marcado' => $disabled['marcado'],
+                'deshabilitado_motivo' => $disabled['motivo'],
+                'deshabilitado_desde' => $disabled['desde'],
+                'deshabilitado_hasta' => $disabled['hasta'],
+                'precio_cambio' => $disabled['precio_cambio'],
                 'cuenta' => $reason === '',
                 'motivo' => $reason,
             ];
+        }
+        return $out;
+    }
+
+    /**
+     * URL deshabilitada: marcada y sin «hasta» vencido. precio_cambio: fecha en que el refresco
+     * nocturno vio otro precio que el congelado al deshabilitar (para revisar y reactivar).
+     */
+    private static function url_disabled_state(array $row, $today) {
+        $marcado = !empty($row['deshabilitado']);
+        $hasta = !empty($row['deshabilitado_hasta']) ? substr((string) $row['deshabilitado_hasta'], 0, 10) : '';
+        return [
+            'marcado' => $marcado,
+            'activo' => $marcado && ($hasta === '' || $hasta >= $today),
+            'motivo' => (string) ($row['deshabilitado_motivo'] ?? ''),
+            'desde' => !empty($row['deshabilitado_at']) ? substr((string) $row['deshabilitado_at'], 0, 10) : '',
+            'hasta' => $hasta,
+            'precio_cambio' => $marcado && !empty($row['precio_cambio_at']) ? substr((string) $row['precio_cambio_at'], 0, 10) : '',
+        ];
+    }
+
+    /**
+     * Deshabilita o habilita una URL de competencia para los cálculos de descuento.
+     * Al deshabilitar congela el precio vigente; el refresco nocturno compara contra él.
+     *
+     * @return array|WP_Error
+     */
+    public static function set_url_enabled($producto_competencia_id, $enabled, $motivo = '', $hasta = '') {
+        global $wpdb;
+        $prefix = self::prefix();
+        $id = (int) $producto_competencia_id;
+        if (!self::has_column("{$prefix}competencia_productos", 'deshabilitado')) {
+            return new WP_Error('schema', 'Falta la migración de la fase 82.');
+        }
+        $exists = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}competencia_productos WHERE id = %d",
+            $id
+        ));
+        if ($exists <= 0) {
+            return new WP_Error('not_found', 'Producto de competencia no encontrado.');
+        }
+        if ($enabled) {
+            $data = [
+                'deshabilitado' => 0,
+                'deshabilitado_at' => null,
+                'deshabilitado_por' => null,
+                'deshabilitado_motivo' => null,
+                'deshabilitado_hasta' => null,
+                'deshabilitado_precio' => null,
+                'precio_cambio_at' => null,
+            ];
+        } else {
+            $hasta = trim((string) $hasta);
+            if ($hasta !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) {
+                return new WP_Error('invalid_date', 'Fecha «hasta» no válida (AAAA-MM-DD).');
+            }
+            if ($hasta !== '' && $hasta < current_time('Y-m-d')) {
+                return new WP_Error('invalid_date', 'La fecha «hasta» ya pasó.');
+            }
+            $precio = $wpdb->get_var($wpdb->prepare(
+                "SELECT precio_bruto_unitario FROM {$prefix}competencia_precios WHERE producto_id = %d LIMIT 1",
+                $id
+            ));
+            $motivo = trim((string) $motivo);
+            $data = [
+                'deshabilitado' => 1,
+                'deshabilitado_at' => current_time('mysql'),
+                'deshabilitado_por' => get_current_user_id() ?: null,
+                'deshabilitado_motivo' => substr($motivo !== '' ? $motivo : 'Precio desactualizado', 0, 255),
+                'deshabilitado_hasta' => $hasta !== '' ? $hasta : null,
+                'deshabilitado_precio' => $precio !== null ? round((float) $precio, 6) : null,
+                'precio_cambio_at' => null,
+            ];
+        }
+        $wpdb->update("{$prefix}competencia_productos", $data, ['id' => $id]);
+        return ['producto_competencia_id' => $id, 'habilitado' => (bool) $enabled];
+    }
+
+    /**
+     * «Usar siempre» / «Dejar de usar para siempre» un precio oculto por el competidor: el
+     * precio igual llega en la API (Sande) y con la marca cuenta en todos los descuentos.
+     *
+     * @return array|WP_Error
+     */
+    public static function set_hidden_price_use($producto_competencia_id, $use) {
+        global $wpdb;
+        $prefix = self::prefix();
+        $id = (int) $producto_competencia_id;
+        if (!self::has_column("{$prefix}competencia_productos", 'usar_oculto')) {
+            return new WP_Error('schema', 'Falta la migración de la fase 83.');
+        }
+        $exists = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$prefix}competencia_productos WHERE id = %d",
+            $id
+        ));
+        if ($exists <= 0) {
+            return new WP_Error('not_found', 'Producto de competencia no encontrado.');
+        }
+        if ($use) {
+            $oculto = self::has_column("{$prefix}competencia_precios", 'oculto')
+                ? (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT oculto FROM {$prefix}competencia_precios WHERE producto_id = %d LIMIT 1",
+                    $id
+                ))
+                : 0;
+            if ($oculto !== 1) {
+                return new WP_Error('not_hidden', 'Este precio no está oculto por el competidor: no hace falta marcarlo.');
+            }
+        }
+        $wpdb->update("{$prefix}competencia_productos", $use ? [
+            'usar_oculto' => 1,
+            'usar_oculto_at' => current_time('mysql'),
+            'usar_oculto_por' => get_current_user_id() ?: null,
+        ] : [
+            'usar_oculto' => 0,
+            'usar_oculto_at' => null,
+            'usar_oculto_por' => null,
+        ], ['id' => $id]);
+        return ['producto_competencia_id' => $id, 'usar_oculto' => (bool) $use];
+    }
+
+    /** Competencia de varios SKU (Aplicar descuentos sugeridos): pb => vínculos. */
+    public static function competitors_for_products(array $ids, $settings = null) {
+        $settings = $settings ?: self::get_settings();
+        $out = [];
+        foreach (array_slice(array_unique(array_filter(array_map('intval', $ids))), 0, 150) as $pb) {
+            $out[$pb] = self::competitors_for_product($pb, $settings);
         }
         return $out;
     }

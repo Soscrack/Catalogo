@@ -28,7 +28,12 @@ $GLOBALS['TEST_CAPS'] = [];
 
 function get_current_user_id() { return $GLOBALS['TEST_USER']; }
 function current_user_can($cap) { return !empty($GLOBALS['TEST_CAPS'][$cap]); }
-function current_time($type) { return $type === 'mysql' ? gmdate('Y-m-d H:i:s', time() - 3 * 3600) : time() - 3 * 3600; }
+function current_time($type) {
+    $local = time() - 3 * 3600;
+    if ($type === 'mysql') return gmdate('Y-m-d H:i:s', $local);
+    if ($type === 'timestamp' || $type === 'U') return $local;
+    return gmdate($type, $local); // formato de fecha, como en WordPress
+}
 function sanitize_key($key) { return preg_replace('/[^a-z0-9_\-]/', '', strtolower((string) $key)); }
 function sanitize_text_field($s) { return trim(preg_replace('/[\r\n\t ]+/', ' ', strip_tags((string) $s))); }
 function wp_json_encode($data, $flags = 0) { return json_encode($data, $flags); }

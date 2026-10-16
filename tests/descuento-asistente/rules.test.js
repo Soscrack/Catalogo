@@ -63,6 +63,50 @@ run("marcadores aplican cifras cerradas", { gross: 375000, units: 5000, cost: 29
   assert.equal(by.max.apply, 239400); assert.equal(by.min.apply, 333300); assert.equal(by.desired.apply, 254300);
   r.markers.forEach(m => { if (m.apply !== null) assert.equal(m.apply % 50, 0, m.key); });
 });
+run("un precio por competidor: cuenta la presentación más barata (granel)", { gross: 375000, units: 5000, cost: 29.92, competitors: [
+  comp("Sande", 39.2203, "competitivo", { dominio: "sande.cl", producto_competencia_id: 1 }),
+  comp("Sande", 53.1477, "competitivo", { dominio: "sande.cl", producto_competencia_id: 2 })] }, r => {
+  assert.equal(r.counted.length, 1); assert.equal(r.counted[0].c.producto_competencia_id, 1);
+  assert.ok(r.duplicates[2] && r.duplicates[2].indexOf("más barata") > 0);
+  assert.equal(r.suggestion.value, 239400);
+});
+run("competidores distintos cuentan por separado", { gross: 375000, units: 5000, cost: 29.92, competitors: [
+  comp("Sande", 39.2203, "competitivo", { dominio: "sande.cl" }),
+  comp("DIMAFI", 53.1477, "competitivo", { dominio: "dimafi.cl" })] }, r => {
+  assert.equal(r.counted.length, 2); assert.equal(r.suggestion.value, 254300);
+});
 run("codicioso aplica justo bajo él", { competitors: [comp("S", 38, "codicioso")] }, r => {
   const g = r.markers.filter(m => m.key === "greedy")[0]; assert.equal(g.value, 95000); assert.equal(g.apply, 94950);
+});
+
+// Precio oculto por el competidor: «Usar esta vez» (navegador) y «Usar siempre» (servidor: usar_oculto).
+function hidden(extra) {
+  return comp("Sande", 36, "competitivo", Object.assign({ producto_competencia_id: 5, oculto: true, usar_oculto: false,
+    cuenta: false, motivo: "Precio oculto por el competidor.", motivo_oculto_usado: "",
+    motivo_oculto_sin_usar: "Precio oculto por el competidor." }, extra || {}));
+}
+(function () {
+  const H = (c, ov) => DA.withHiddenUse([c], ov)[0];
+  let c = H(hidden(), {});
+  assert.ok(!c.cuenta && c.oculto_uso === "no", "oculto sin marcar: no cuenta");
+  c = H(hidden(), { 5: true });
+  assert.ok(c.cuenta && c.motivo === "" && c.oculto_uso === "esta_vez", "usar esta vez: cuenta");
+  c = H(hidden({ usar_oculto: true, cuenta: true, motivo: "" }), {});
+  assert.ok(c.cuenta && c.oculto_uso === "siempre", "usar siempre: cuenta");
+  c = H(hidden({ usar_oculto: true, cuenta: true, motivo: "" }), { 5: false });
+  assert.ok(!c.cuenta && c.oculto_uso === "siempre_no_ahora" && c.motivo.indexOf("oculto") >= 0, "siempre, dejar de usar ahora: no cuenta");
+  c = H(hidden({ motivo_oculto_usado: "Precio desactualizado (más de 90 días)." }), { 5: true });
+  assert.ok(!c.cuenta && c.motivo.indexOf("desactualizado") >= 0, "usar esta vez no salta otros motivos (vigencia)");
+  const plain = comp("DIMAFI", 40, "competitivo");
+  assert.strictEqual(DA.withHiddenUse([plain], { 5: true })[0], plain, "los no ocultos no cambian");
+  const original = hidden();
+  DA.withHiddenUse([original], { 5: true });
+  assert.ok(!original.cuenta, "no modifica la fila del servidor");
+  console.log("ok - precio oculto: esta vez / siempre / dejar de usar ahora");
+})();
+run("oculto usado esta vez entra al cálculo", { competitors: DA.withHiddenUse([hidden()], { 5: true }) }, r => {
+  assert.equal(r.status, "ok"); assert.equal(r.counted.length, 1);
+});
+run("oculto sin usar queda de referencia", { competitors: DA.withHiddenUse([hidden()], {}) }, r => {
+  assert.equal(r.status, "no_info"); assert.equal(r.reference.length, 1);
 });

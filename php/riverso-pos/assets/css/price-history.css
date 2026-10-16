@@ -2193,3 +2193,18 @@
 .rda-domains {
     max-width: 760px;
 }
+
+/* URL de competencia deshabilitada para descuentos (Asistente de descuento). */
+.rpe-disabled-badge {
+    display: inline-block;
+    margin-top: 2px;
+    padding: 0 6px;
+    border-radius: 8px;
+    background: #646970;
+    color: #fff;
+    font-size: 11px;
+}
+
+.rpe-disabled-badge.is-changed {
+    background: #b32d2e;
+}

@@ -340,6 +340,7 @@ $url_tasks = admin_url('admin.php?page=riverso-pos-tasks&from=precio-folio&need=
                             <th style="text-align:right">Δ</th>
                             <th>Actualizado</th>
                             <th>Actitud</th>
+                            <th>Uso</th>
                         </tr>
                     </thead>
                     <tbody id="rpf-comp-mapeados-body"></tbody>

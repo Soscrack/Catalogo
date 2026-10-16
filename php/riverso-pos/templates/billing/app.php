@@ -407,6 +407,7 @@ if (!function_exists('riverso_pos_billing_json')) {
                         <div class="bill-product-search-block">
                             <div class="bill-product-search-head">
                                 <label for="bill-product-search">Buscar producto</label>
+                                <button type="button" class="cq-btn cq-btn-small cq-da-bulk-btn" id="bill-da-bulk" title="Aplica el descuento sugerido por el Asistente de descuento en todas las líneas que se pueda">Aplicar descuentos sugeridos</button>
                                 <label class="cq-advanced-toggle" for="bill-advanced">
                                     <input type="checkbox" id="bill-advanced">
                                     <span>Modo avanzado</span>

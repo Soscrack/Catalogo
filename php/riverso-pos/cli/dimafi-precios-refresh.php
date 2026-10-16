@@ -23,6 +23,8 @@ if (PHP_SAPI !== 'cli') {
 
 date_default_timezone_set('America/Santiago');
 
+require_once __DIR__ . '/competencia-deshabilitados.php';
+
 const DIMAFI_BASE_URL = 'https://www.dimafi.cl';
 const DIMAFI_LIMIT    = 250;
 const IVA_FACTOR      = 1.19;
@@ -411,10 +413,13 @@ try {
           AND DAY(h.snapshot_fecha) NOT IN (1, 16)");
     $historial_pruned = $db->affected_rows;
 
+    // URL deshabilitadas para descuentos: avisar si el precio cambió respecto al congelado.
+    $deshabilitados_cambio = riverso_cli_mark_disabled_price_changes($db, $prefix, $fuente_id, date('Y-m-d H:i:s'));
+
     $db->commit();
     $db->close();
 
-    log_msg("OK variantes={$updated} historial_upsert={$historial_rows} historial_borrados={$historial_pruned} en " .
+    log_msg("OK variantes={$updated} historial_upsert={$historial_rows} historial_borrados={$historial_pruned} deshabilitados_con_cambio={$deshabilitados_cambio} en " .
         round(microtime(true) - $started, 1) . 's');
     exit(0);
 

@@ -2846,7 +2846,7 @@ button.cq-breakdown-chip {
 .cq-da-mk {
     position: absolute;
     top: 0;
-    bottom: 0;
+    height: 82px;
     width: 0;
     padding: 0;
     border: 0;
@@ -3004,7 +3004,7 @@ button.cq-breakdown-chip {
 }
 
 .cq-da-comp-modal .cq-modal-dialog {
-    max-width: 1040px;
+    max-width: 1240px;
 }
 
 .cq-da-comp-msg {
@@ -3223,4 +3223,148 @@ button.cq-breakdown-chip {
 
 .cq-da-comp-modal a.cq-btn {
     text-decoration: none;
+}
+
+/* Asistente de descuento · competidores de referencia («R» bajo la barra, abren su URL). */
+.cq-da-bar.has-refs {
+    height: calc(84px + var(--ref-rows, 1) * 20px);
+}
+
+.cq-da-ref {
+    position: absolute;
+    top: calc(80px + var(--row, 0) * 20px);
+    width: 16px;
+    height: 16px;
+    margin-left: -8px;
+    border: 1px solid #8a7f72;
+    border-radius: 50%;
+    background: #f4efe8;
+    color: #6b6258;
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 14px;
+    text-align: center;
+    text-decoration: none;
+}
+
+.cq-da-ref:hover,
+.cq-da-ref:focus-visible {
+    background: #6b6258;
+    color: #fff;
+}
+
+.cq-da-ref.is-disabled {
+    border-style: dashed;
+    opacity: 0.75;
+}
+
+.cq-da-ref.is-changed {
+    border-color: #c45c26;
+    color: #c45c26;
+}
+
+.cq-da-usage {
+    min-width: 120px;
+}
+
+.cq-da-usage > * + * {
+    margin-top: 4px;
+}
+
+.cq-da-badge.is-warn {
+    background: #c45c26;
+    white-space: normal;
+}
+
+/* Precio oculto en la web del competidor (Usar esta vez / Usar siempre). */
+.cq-da-badge.is-hidden-price {
+    background: #5b4b8a;
+}
+
+.cq-da-hidden {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    padding-top: 6px;
+    border-top: 1px dashed #d8cfc4;
+}
+
+.cq-da-hidden .cq-modal-hint {
+    flex-basis: 100%;
+    margin: 0;
+}
+
+/* «Aplicar descuentos sugeridos»: solo con Modo avanzado, a la izquierda del interruptor. */
+.cq-da-bulk-btn {
+    display: none;
+    margin-left: auto;
+}
+
+.is-advanced .cq-da-bulk-btn {
+    display: inline-flex;
+}
+
+.cq-da-bulk-modal .cq-modal-dialog {
+    max-width: 1100px;
+}
+
+.cq-da-bulk-summary {
+    margin: 0;
+    padding: 0 16px 8px;
+    font-weight: 600;
+}
+
+.cq-da-bulk-foot {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.cq-da-bulk-row.is-ignored td {
+    opacity: 0.55;
+}
+
+.cq-da-bulk-row.is-na td {
+    color: #8a7f72;
+}
+
+.cq-da-badge--apply,
+.cq-da-badge--done { background: #15803d; }
+.cq-da-badge--manual { background: #c45c26; white-space: normal; }
+.cq-da-badge--na { background: #8a7f72; white-space: normal; }
+
+/* Marca «Revisar descuento» en la fila (necesita descuento manual). */
+.cq-da-review {
+    display: inline-flex;
+    align-items: center;
+    margin: 4px 6px 0 0;
+    border: 1px solid #c45c26;
+    border-radius: 999px;
+    background: #fde7d4;
+    font-size: 0.74rem;
+}
+
+.cq-da-review button {
+    padding: 1px 8px;
+    border: 0;
+    background: none;
+    color: #9a3412;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cq-da-review button:disabled {
+    cursor: default;
+}
+
+.cq-da-review .cq-da-review-x {
+    padding: 1px 6px;
+    border-left: 1px solid #f3c7a5;
+}
+
+.cq-da-comp-table tr.is-suggested td:first-child {
+    box-shadow: inset 3px 0 0 #7c3aed;
 }

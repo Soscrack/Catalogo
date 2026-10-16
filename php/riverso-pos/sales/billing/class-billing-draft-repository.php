@@ -313,6 +313,10 @@ class Riverso_Billing_Draft_Repository {
                     ? (in_array($origin, ['sugerido', 'maximo', 'minimo', 'marcador', 'historial', 'manual'], true) ? $origin : 'manual')
                     : null;
             }
+            // «Revisar descuento» (fase 82).
+            if ($this->has_line_column('discount_review')) {
+                $line_row['discount_review'] = !empty($line['discount_review']) && $line['discount_review'] !== '0' ? 1 : 0;
+            }
             // Detalle de entrega (bolsas / sueltas) para la salida de stock.
             if ($this->has_breakdown_column() && class_exists('Riverso_Sale_Stock_Service')) {
                 $line_row['stock_breakdown'] = Riverso_Sale_Stock_Service::breakdown_json(
@@ -722,6 +726,7 @@ class Riverso_Billing_Draft_Repository {
                 'discount_anchor_value' => isset($r['discount_anchor_value']) && $r['discount_anchor_value'] !== null
                     ? round((float) $r['discount_anchor_value'], 6) : null,
                 'discount_origin' => isset($r['discount_origin']) && $r['discount_origin'] !== '' ? (string) $r['discount_origin'] : null,
+                'discount_review' => !empty($r['discount_review']),
                 'rule_total' => isset($r['rule_total']) && $r['rule_total'] !== null ? (float) $r['rule_total'] : null,
                 'rule_adjusted' => !empty($r['rule_adjusted']),
                 'stock_breakdown' => !empty($r['stock_breakdown']) ? json_decode((string) $r['stock_breakdown'], true) : null,

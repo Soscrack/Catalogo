@@ -36,6 +36,7 @@ class Riverso_Competencia_Module {
         add_action('wp_ajax_riverso_competencia_list_skus', [$this, 'ajax_list_skus']);
         add_action('wp_ajax_riverso_competencia_manual_ingreso', [$this, 'ajax_manual_ingreso']);
         add_action('wp_ajax_riverso_competencia_set_actitud', [$this, 'ajax_set_actitud']);
+        add_action('wp_ajax_riverso_competencia_set_habilitado', [$this, 'ajax_set_habilitado']);
         add_action('wp_ajax_riverso_competencia_list_fuentes', [$this, 'ajax_list_fuentes']);
         add_action('wp_ajax_riverso_competencia_update_fuente_precio', [$this, 'ajax_update_fuente_precio']);
         add_action('wp_ajax_riverso_competencia_eliminar_fuente', [$this, 'ajax_eliminar_fuente']);
@@ -302,6 +303,24 @@ class Riverso_Competencia_Module {
         $result = Riverso_Discount_Assistant_Service::set_link_attitude(
             isset($_POST['producto_competencia_id']) ? (int) $_POST['producto_competencia_id'] : 0,
             isset($_POST['actitud']) ? sanitize_key(wp_unslash($_POST['actitud'])) : ''
+        );
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success($result);
+    }
+
+    /** URL deshabilitada para descuentos (Asistente de Descuento, fase 82). */
+    public function ajax_set_habilitado() {
+        $this->guard();
+        if (!class_exists('Riverso_Discount_Assistant_Service')) {
+            wp_send_json_error(['message' => 'Asistente de descuento no disponible.']);
+        }
+        $result = Riverso_Discount_Assistant_Service::set_url_enabled(
+            isset($_POST['producto_competencia_id']) ? (int) $_POST['producto_competencia_id'] : 0,
+            !empty($_POST['habilitado']) && $_POST['habilitado'] !== '0',
+            isset($_POST['motivo']) ? sanitize_text_field(wp_unslash($_POST['motivo'])) : '',
+            isset($_POST['hasta']) ? sanitize_text_field(wp_unslash($_POST['hasta'])) : ''
         );
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);

@@ -506,6 +506,8 @@
                 line.discount_anchor = st.anchor || null;
                 line.discount_anchor_value = st.anchor ? st.value : null;
                 line.discount_origin = d && st.anchor && Number(d.discount_amount) > 0 ? (st.origin || "manual") : null;
+                // «Revisar descuento» se cumple al dejarle un descuento a la línea.
+                if (line.discount_origin) line.discount_review = false;
                 if (d && st.anchor) {
                     line.discount_amount = round2(Number(d.discount_amount) || 0);
                     line.price_discount = clampRate(d.price_discount);

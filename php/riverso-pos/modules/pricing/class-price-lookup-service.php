@@ -1070,9 +1070,16 @@ class Riverso_Price_Lookup_Service {
             'actitud'
         ));
         $actitud_sql = $has_actitud ? 'cm.actitud' : 'NULL';
+        $has_disabled = (bool) $wpdb->get_var($wpdb->prepare(
+            "SHOW COLUMNS FROM {$this->prefix}competencia_productos LIKE %s",
+            'deshabilitado'
+        ));
+        $disabled_sql = $has_disabled
+            ? 'cp.deshabilitado, cp.deshabilitado_motivo, cp.deshabilitado_hasta, cp.precio_cambio_at,'
+            : '0 AS deshabilitado, NULL AS deshabilitado_motivo, NULL AS deshabilitado_hasta, NULL AS precio_cambio_at,';
         $mapeados = $wpdb->get_results($wpdb->prepare(
             "SELECT cm.id AS match_id, cm.tipo_match, cm.metodo, cm.score, cm.estado AS match_estado,
-                    {$actitud_sql} AS actitud,
+                    {$actitud_sql} AS actitud, {$disabled_sql}
                     cp.id AS producto_competencia_id, cp.nombre, cp.codigo_externo, cp.url_producto, cp.slug,
                     f.slug AS fuente_slug, f.nombre AS fuente_nombre,
                     pr.precio, pr.precio_lista, pr.precio_bruto_unitario, pr.precio_bruto_total,

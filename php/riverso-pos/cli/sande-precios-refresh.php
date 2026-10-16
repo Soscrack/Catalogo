@@ -23,6 +23,8 @@ if (PHP_SAPI !== 'cli') {
 
 date_default_timezone_set('America/Santiago');
 
+require_once __DIR__ . '/competencia-deshabilitados.php';
+
 const SANDE_API = 'https://sandeonline.cl:2082/taskfocus/maestros/api';
 const SANDE_PROGRAMA = '639745';
 const SANDE_EMPRESA = '1';
@@ -463,10 +465,13 @@ try {
     $db->query($sql_prune);
     $historial_pruned = $db->affected_rows;
 
+    // URL deshabilitadas para descuentos: avisar si el precio cambió respecto al congelado.
+    $deshabilitados_cambio = riverso_cli_mark_disabled_price_changes($db, $prefix, $fuente_id, date('Y-m-d H:i:s'));
+
     $db->commit();
     $db->close();
 
-    log_msg("OK productos_api={$updated} productos_nuevos≈{$created} historial_upsert={$historial_rows} historial_borrados={$historial_pruned} en " .
+    log_msg("OK productos_api={$updated} productos_nuevos≈{$created} historial_upsert={$historial_rows} historial_borrados={$historial_pruned} deshabilitados_con_cambio={$deshabilitados_cambio} en " .
         round(microtime(true) - $started, 1) . 's');
     exit(0);
 } catch (Throwable $e) {

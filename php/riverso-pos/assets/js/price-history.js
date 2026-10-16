@@ -2317,8 +2317,51 @@
             '<td style="text-align:right">' + formatDelta(delta, deltaPct) + '</td>' +
             '<td>' + esc(r.snapshot_fecha || r.actualizado_at || '—') + '</td>' +
             '<td>' + rpfCompActitudSelect(r) + '</td>' +
+            '<td>' + rpfCompUsoButton(r) + '</td>' +
             '</tr>';
     }
+
+    /** Habilitar / deshabilitar la URL para los cálculos de descuento. */
+    function rpfCompUsoButton(r) {
+        var off = !!Number(r.deshabilitado);
+        if (!canManageCompetencia) {
+            return off ? 'Deshabilitada' : 'Habilitada';
+        }
+        return '<button type="button" class="button button-small rpf-comp-uso" data-comp-id="' +
+            esc(String(r.producto_competencia_id || '')) + '" data-on="' + (off ? '1' : '0') + '">' +
+            (off ? 'Habilitar' : 'Deshabilitar') + '</button>';
+    }
+
+    $(document).on('click', '.rpf-comp-uso', function () {
+        var $btn = $(this);
+        var enable = $btn.data('on') === 1 || $btn.attr('data-on') === '1';
+        var data = { producto_competencia_id: $btn.data('comp-id'), habilitado: enable ? 1 : 0 };
+        if (!enable) {
+            var motivo = window.prompt('Motivo (no contará para los descuentos; el refresco nocturno avisa si el precio cambia):',
+                'Precio desactualizado en la página');
+            if (motivo === null) {
+                return;
+            }
+            var hasta = window.prompt('Deshabilitar hasta (AAAA-MM-DD, vacío = sin fecha):', '');
+            if (hasta === null) {
+                return;
+            }
+            data.motivo = motivo;
+            data.hasta = (hasta || '').trim();
+        }
+        $btn.prop('disabled', true);
+        post('riverso_competencia_set_habilitado', data).done(function (res) {
+            $btn.prop('disabled', false);
+            if (!res.success) {
+                window.alert((res.data && res.data.message) || 'No se pudo cambiar el uso de la URL.');
+                return;
+            }
+            loadRpfCompetencia();
+        }).fail(function () {
+            $btn.prop('disabled', false);
+            window.alert('Error de red al cambiar el uso de la URL.');
+        });
+    });
 
     /** Actitud del vínculo (Asistente de Descuento); sin clasificar usa la del competidor. */
     function rpfCompActitudSelect(r) {
@@ -4969,10 +5012,26 @@
     }
 
     function rivalNameHtml(r) {
-        if (r.url_producto) {
-            return '<a href="' + esc(r.url_producto) + '" target="_blank" rel="noopener">' + esc(r.nombre || '') + '</a>';
+        var html = r.url_producto
+            ? '<a href="' + esc(r.url_producto) + '" target="_blank" rel="noopener">' + esc(r.nombre || '') + '</a>'
+            : esc(r.nombre || '');
+        return html + rivalDisabledBadge(r);
+    }
+
+    /** URL deshabilitada para descuentos (Asistente de Descuento): no cuenta; avisa si el precio cambió. */
+    function rivalDisabledBadge(r) {
+        if (!r || !Number(r.deshabilitado)) {
+            return '';
         }
-        return esc(r.nombre || '');
+        var hasta = r.deshabilitado_hasta ? String(r.deshabilitado_hasta).slice(0, 10) : '';
+        var title = 'No cuenta para descuentos' + (r.deshabilitado_motivo ? ': ' + r.deshabilitado_motivo : '') +
+            (hasta ? ' (hasta ' + hasta + ')' : '');
+        var html = '<br><span class="rpe-disabled-badge" title="' + esc(title) + '">Deshabilitada</span>';
+        if (r.precio_cambio_at) {
+            html += ' <span class="rpe-disabled-badge is-changed">Precio cambió el ' +
+                esc(String(r.precio_cambio_at).slice(0, 10)) + ', revisar</span>';
+        }
+        return html;
     }
 
     function amountPair(bruto, neto, viewMode) {

@@ -1346,6 +1346,7 @@ class Riverso_Customer_Quote_Repository {
                 'discount_anchor' => isset($line['discount_anchor']) ? $line['discount_anchor'] : null,
                 'discount_anchor_value' => isset($line['discount_anchor_value']) ? $line['discount_anchor_value'] : null,
                 'discount_origin' => isset($line['discount_origin']) ? $line['discount_origin'] : null,
+                'discount_review' => !empty($line['discount_review']) ? 1 : 0,
                 'discount_percent' => 0,
                 'subtotal' => $line_net + $discount,
                 'tax_percent' => 0,
@@ -1527,6 +1528,8 @@ class Riverso_Customer_Quote_Repository {
                 isset($line['discount_origin']) ? $line['discount_origin'] : null,
                 isset($line['discount_amount']) ? $line['discount_amount'] : 0
             ),
+            // «Revisar descuento» (Aplicar descuentos sugeridos): la línea necesita un descuento manual.
+            'discount_review' => !empty($line['discount_review']) && $line['discount_review'] !== '0',
             'family_mode' => $family_mode,
             'packaging' => $packaging,
             'units_per_pack' => $upp,
@@ -1878,6 +1881,7 @@ class Riverso_Customer_Quote_Repository {
                 isset($line['discount_origin']) ? $line['discount_origin'] : null,
                 $normalized['discount_amount']
             ),
+            'discount_review' => !empty($line['discount_review']) && $line['discount_review'] !== '0',
             'line_net' => $line_net,
             'line_profit' => $normalized['line_profit'],
             'line_margin_percent' => $normalized['line_margin_percent'],

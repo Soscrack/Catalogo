@@ -36,6 +36,9 @@ class Riverso_Discount_Assistant_Module {
         add_action('wp_ajax_riverso_da_internal_search', [$this, 'ajax_internal_search']);
         add_action('wp_ajax_riverso_da_confirm_preflight', [$this, 'ajax_confirm_preflight']);
         add_action('wp_ajax_riverso_da_confirm_match', [$this, 'ajax_confirm_match']);
+        add_action('wp_ajax_riverso_da_set_url_enabled', [$this, 'ajax_set_url_enabled']);
+        add_action('wp_ajax_riverso_da_set_hidden_use', [$this, 'ajax_set_hidden_use']);
+        add_action('wp_ajax_riverso_da_context_batch', [$this, 'ajax_context_batch']);
 
         add_action('riverso_customer_quote_status_changed', [$this, 'on_quote_status_changed'], 10, 3);
         add_action('riverso_billing_draft_finalized', [$this, 'on_draft_finalized'], 10, 1);
@@ -83,6 +86,9 @@ class Riverso_Discount_Assistant_Module {
                 'internalSearch' => 'riverso_da_internal_search',
                 'confirmPreflight' => 'riverso_da_confirm_preflight',
                 'confirmMatch' => 'riverso_da_confirm_match',
+                'setUrlEnabled' => 'riverso_da_set_url_enabled',
+                'setHiddenUse' => 'riverso_da_set_hidden_use',
+                'contextBatch' => 'riverso_da_context_batch',
             ],
             // «Abrir Competencia» y «Abrir en Buscador» (wp-admin), como en Procesar folios.
             'competenciaUrl' => admin_url('admin.php?page=riverso-pos-competencia'),
@@ -116,6 +122,51 @@ class Riverso_Discount_Assistant_Module {
             'historial' => Riverso_Discount_Assistant_Service::history_for_product($pb),
             'canManageCompetencia' => self::can_manage_competencia(),
         ]);
+    }
+
+    /** «Aplicar descuentos sugeridos»: competencia de todos los productos de la tabla. */
+    public function ajax_context_batch() {
+        $this->guard(self::can_view());
+        $raw = isset($_POST['producto_base_ids']) ? (string) wp_unslash($_POST['producto_base_ids']) : '';
+        $ids = array_filter(array_map('absint', explode(',', $raw)));
+        $settings = Riverso_Discount_Assistant_Service::get_settings();
+        wp_send_json_success([
+            'settings' => $settings,
+            'competidores' => (object) Riverso_Discount_Assistant_Service::competitors_for_products($ids, $settings),
+        ]);
+    }
+
+    /** Deshabilita (no cuenta para descuentos) o habilita una URL de competencia. */
+    public function ajax_set_url_enabled() {
+        $this->guard(self::can_manage_competencia());
+        $result = Riverso_Discount_Assistant_Service::set_url_enabled(
+            absint($_POST['producto_competencia_id'] ?? 0),
+            !empty($_POST['habilitado']) && $_POST['habilitado'] !== '0',
+            $this->post('motivo'),
+            $this->post('hasta')
+        );
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        wp_send_json_success($result);
+    }
+
+    /** Precio oculto por el competidor: «Usar siempre» o «Dejar de usar para siempre». */
+    public function ajax_set_hidden_use() {
+        $this->guard(self::can_manage_competencia());
+        $comp_id = absint($_POST['producto_competencia_id'] ?? 0);
+        $use = !empty($_POST['usar']) && $_POST['usar'] !== '0';
+        $result = Riverso_Discount_Assistant_Service::set_hidden_price_use($comp_id, $use);
+        if (is_wp_error($result)) {
+            wp_send_json_error(['message' => $result->get_error_message()]);
+        }
+        if (class_exists('Riverso_POS_Audit')) {
+            Riverso_POS_Audit::log($use ? 'competencia.usar_oculto' : 'competencia.dejar_usar_oculto', 'competencia', $comp_id, [
+                'actor_type' => 'user',
+                'details' => ['origen' => 'asistente_descuento'],
+            ]);
+        }
+        wp_send_json_success($result);
     }
 
     public function ajax_set_link_attitude() {

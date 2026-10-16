@@ -83,6 +83,40 @@
     }
 
     /**
+     * «Usar esta vez» / «Dejar de usar ahora» de precios ocultos por el competidor: solo en el
+     * navegador, por documento abierto (lo comparten el asistente de la línea y «Aplicar
+     * descuentos sugeridos»). docKey: la cotización abierta o un texto fijo (un borrador por página).
+     * Valor por producto_competencia_id: true usar, false no usar aunque esté «Usar siempre».
+     */
+    var hiddenSession = typeof Map === "function" ? new Map() : null;
+
+    function hiddenOverrides(docKey) {
+        if (!hiddenSession) return {};
+        var key = docKey === undefined || docKey === null ? "" : docKey;
+        if (!hiddenSession.has(key)) hiddenSession.set(key, {});
+        return hiddenSession.get(key);
+    }
+
+    /**
+     * Aplica «esta vez» sobre lo que manda el servidor («Usar siempre» = usar_oculto). Cada precio
+     * oculto queda con oculto_uso: no | esta_vez | siempre | siempre_no_ahora.
+     */
+    function withHiddenUse(competitors, overrides) {
+        overrides = overrides || {};
+        return (competitors || []).map(function (c) {
+            if (!c.oculto || c.motivo_oculto_usado === undefined) return c;
+            var o = overrides[c.producto_competencia_id];
+            var use = o === true || (o !== false && !!c.usar_oculto);
+            var copy = {};
+            Object.keys(c).forEach(function (k) { copy[k] = c[k]; });
+            copy.motivo = use ? c.motivo_oculto_usado : c.motivo_oculto_sin_usar;
+            copy.cuenta = copy.motivo === "";
+            copy.oculto_uso = c.usar_oculto ? (use ? "siempre" : "siempre_no_ahora") : (use ? "esta_vez" : "no");
+            return copy;
+        });
+    }
+
+    /**
      * Reglas del asistente (sin DOM).
      *
      * input: { gross, units, cost, finalTotal, competitors: [{ precio_unitario, actitud,
@@ -180,6 +214,24 @@
             var classified = c.actitud === "codicioso" || c.actitud === "competitivo";
             if (c.cuenta && item.total !== null && classified) out.counted.push(item);
             else out.reference.push(item);
+        });
+        // Un precio por competidor: el más barato por unidad (lo que pagaría el cliente, p. ej. granel).
+        // Sus otras presentaciones (caja de 100, vía familia…) quedan como referencia.
+        var compKey = function (c) { return String(c.dominio || c.competidor || "").toLowerCase(); };
+        var best = {};
+        out.counted.forEach(function (i) {
+            var k = compKey(i.c);
+            if (!best[k] || i.total < best[k].total) best[k] = i;
+        });
+        out.duplicates = {};
+        out.counted = out.counted.filter(function (i) {
+            var keep = best[compKey(i.c)];
+            if (keep === i) return true;
+            i.reason = "Otra presentación de " + (i.c.competidor || i.c.dominio || "este competidor")
+                + ": cuenta la más barata (" + LD.formatUnitPrice(keep.c.precio_unitario) + "/u).";
+            if (i.c.producto_competencia_id) out.duplicates[i.c.producto_competencia_id] = i.reason;
+            out.reference.push(i);
+            return false;
         });
         var byTotal = function (a, b) { return a.total - b.total; };
         var greedy = out.counted.filter(function (i) { return i.c.actitud === "codicioso"; }).sort(byTotal);
@@ -335,6 +387,7 @@
      * config.details / flag / container: <details> Descuentos, aviso del resumen y caja.
      * config.cfg: { ajaxUrl, nonce, actions, settings, canManageCompetencia }.
      * config.toView: bruto → vista Neto/Bruto del modal.
+     * config.docKey(): documento abierto, para «Usar esta vez» de precios ocultos.
      */
     function create(config) {
         var module = config.module;
@@ -408,6 +461,15 @@
             });
         }
 
+        function overrides() {
+            return hiddenOverrides(config.docKey ? config.docKey() : null);
+        }
+
+        /** Competencia del SKU con «Usar esta vez» del documento aplicado. */
+        function competitors() {
+            return withHiddenUse(st.context ? st.context.competidores || [] : [], overrides());
+        }
+
         function evaluate() {
             var snap = st.snap;
             if (!snap) return null;
@@ -417,8 +479,14 @@
                 units: f.units,
                 cost: f.cost,
                 finalTotal: f.finalTotal,
-                competitors: st.context ? st.context.competidores || [] : []
+                competitors: competitors()
             }, st.settings);
+        }
+
+        /** Repinta el asistente y, si está abierto, el modal Competencia. */
+        function refreshAll() {
+            render();
+            if (modal.isOpen()) modal.render();
         }
 
         function apply(m, res) {
@@ -487,7 +555,10 @@
 
         /* --- Barra --- */
         function renderBar(res) {
-            var values = res.markers.map(function (m) { return m.value; });
+            // Competidores de referencia (no cuentan): puntito «R» bajo la barra que abre su URL.
+            var refs = res.reference.filter(function (i) { return i.total !== null && i.total > 0 && i.c.url; });
+            var values = res.markers.map(function (m) { return m.value; })
+                .concat(refs.map(function (i) { return i.total; }));
             var lo = Math.min.apply(null, values);
             var hi = Math.max.apply(null, values);
             lo = Math.max(lo, res.floor * 0.75);
@@ -538,6 +609,34 @@
                 ]);
                 bar.appendChild(btn);
             });
+
+            var refRows = [];
+            refs.slice().sort(function (x, y) { return x.total - y.total; }).forEach(function (i) {
+                var c = i.c;
+                var p = pos(i.total);
+                var row = 0;
+                while (row < 3 && refRows[row] !== undefined && p - refRows[row] < 3.5) row++;
+                if (row > 2) row = 2;
+                refRows[row] = p;
+                var edge = i.total < lo + pad ? " ◂" : (i.total > hi - pad ? " ▸" : "");
+                bar.appendChild(h("a", {
+                    className: "cq-da-ref" + (c.deshabilitado ? " is-disabled" : "") + (c.precio_cambio ? " is-changed" : ""),
+                    href: c.url,
+                    target: "_blank",
+                    rel: "noopener noreferrer",
+                    style: "left:" + p + "%;--row:" + row,
+                    title: "Referencia · " + (c.competidor || c.dominio || "") + " · " + (c.tipo_match_label || "")
+                        + " · " + LD.formatUnitPrice(c.precio_unitario) + "/u = " + money(i.total)
+                        + (c.fecha ? " · " + c.fecha : "") + ((i.reason || c.motivo) ? " · " + (i.reason || c.motivo) : "") + edge
+                        + " · Abrir su página",
+                    "aria-label": "Abrir página de " + (c.competidor || c.dominio || "competidor") + " (referencia)",
+                    text: "R"
+                }));
+            });
+            if (refRows.length) {
+                bar.classList.add("has-refs");
+                bar.style.setProperty("--ref-rows", String(refRows.length));
+            }
             return bar;
         }
 
@@ -697,8 +796,16 @@
                 var refs = res.reference.length;
                 body.appendChild(h("p", { className: "cq-modal-hint", text: "Competencia: " + res.counted.length
                     + (res.counted.length === 1 ? " precio considerado" : " precios considerados")
-                    + (refs ? " · " + refs + " solo de referencia (similar, sin clasificar, sin precio o con más de "
+                    + (refs ? " · " + refs + " solo de referencia (sugeridos, similares, sin clasificar, otras presentaciones del mismo competidor, deshabilitados, ocultos o con más de "
                         + res.settings.stale_days + " días)" : "") + "." }));
+                // Precios ocultos por el competidor que sí se están usando.
+                var hidden = res.counted.filter(function (i) { return i.c.oculto; }).map(function (i) {
+                    return (i.c.competidor || i.c.dominio || "competidor") + (i.c.oculto_uso === "esta_vez" ? " (esta vez)" : " (siempre)");
+                });
+                if (hidden.length) {
+                    body.appendChild(h("p", { className: "cq-modal-hint is-warn",
+                        text: "Incluye precios ocultos en la web del competidor: " + hidden.join(", ") + "." }));
+                }
             }
             var hist = renderHistory();
             if (hist) body.appendChild(hist);
@@ -765,13 +872,232 @@
                 });
             }
 
+            var disableOpen = 0;
+
+            /** Uso de la URL: deshabilitada no cuenta para descuentos (precio viejo en la página). */
+            function usageCell(c, canManage) {
+                var parts = [];
+                if (c.deshabilitado_marcado) {
+                    var text = "Deshabilitada" + (c.deshabilitado_desde ? " desde " + c.deshabilitado_desde : "")
+                        + (c.deshabilitado_hasta ? " hasta " + c.deshabilitado_hasta : "")
+                        + (!c.deshabilitado ? " (vencido: vuelve a contar)" : "");
+                    parts.push(h("div", { className: "cq-modal-hint", text: text }));
+                    if (c.precio_cambio) {
+                        parts.push(h("span", { className: "cq-da-badge is-warn", text: "Precio cambió el " + c.precio_cambio + ", revisar" }));
+                    }
+                    if (canManage) {
+                        parts.push(h("button", { type: "button", className: "cq-btn cq-btn-small", text: "Habilitar",
+                            onclick: function () {
+                                changed(post(actions.setUrlEnabled, { producto_competencia_id: c.producto_competencia_id, habilitado: 1 }));
+                            } }));
+                    }
+                } else {
+                    parts.push(h("span", { className: "cq-modal-hint", text: "Habilitada" }));
+                    if (canManage) {
+                        parts.push(h("button", { type: "button", className: "cq-btn cq-btn-small", text: "Deshabilitar",
+                            title: "No usar este precio en los descuentos (por ejemplo, la página tiene un precio viejo)",
+                            onclick: function () {
+                                disableOpen = disableOpen === c.producto_competencia_id ? 0 : c.producto_competencia_id;
+                                render();
+                            } }));
+                    }
+                }
+                return h("td", { className: "cq-da-usage" }, parts.concat(hiddenParts(c, canManage)));
+            }
+
+            var stopOpen = 0;
+
+            function whoOf(c) {
+                return c.competidor || c.dominio || "el competidor";
+            }
+
+            function priceOf(c) {
+                return c.precio_unitario !== null ? " (" + LD.formatUnitPrice(c.precio_unitario) + "/u)" : "";
+            }
+
+            /** «Esta vez»: solo este documento, en el navegador. on: true usar, false no usar, null quitar. */
+            function setOnce(c, on) {
+                var ov = overrides();
+                if (on === null) delete ov[c.producto_competencia_id];
+                else ov[c.producto_competencia_id] = on;
+                stopOpen = 0;
+                setMsg("");
+                refreshAll();
+            }
+
+            /** «Siempre»: marca guardada en la competencia; quita lo de «esta vez» de este documento. */
+            function setAlways(c, on) {
+                stopOpen = 0;
+                changed(post(actions.setHiddenUse, { producto_competencia_id: c.producto_competencia_id, usar: on ? 1 : 0 })
+                    .then(function () { delete overrides()[c.producto_competencia_id]; }));
+            }
+
+            function askAlways(c) {
+                var who = whoOf(c);
+                if (window.confirm("¿Seguro que quieres usar siempre el precio oculto de " + who + priceOf(c) + "?\n\n"
+                    + "Contará en los descuentos de todas las cotizaciones y borradores aunque " + who
+                    + " lo siga ocultando en su web, hasta que elijas «Dejar de usar para siempre».")) {
+                    setAlways(c, true);
+                }
+            }
+
+            function askForever(c) {
+                var who = whoOf(c);
+                if (window.confirm("¿Seguro que quieres dejar de usar para siempre el precio oculto de " + who + priceOf(c) + "?\n\n"
+                    + "Dejará de contar en los descuentos de todas las cotizaciones y borradores mientras " + who + " lo oculte.")) {
+                    setAlways(c, false);
+                }
+            }
+
+            /**
+             * Precio oculto por el competidor (Sande «ocultarPrecio»): no cuenta salvo «Usar esta vez»
+             * (este documento) o «Usar siempre» (todos). «Dejar de usar» de un «siempre» pregunta si
+             * es solo ahora o para siempre.
+             */
+            function hiddenParts(c, canManage) {
+                if (!c.oculto || !c.oculto_uso) return [];
+                var mode = c.oculto_uso;
+                var who = whoOf(c);
+                var texts = {
+                    no: "Oculto en la web de " + who + ": no se usa.",
+                    esta_vez: "Oculto en la web: se usa esta vez (este documento).",
+                    siempre: "Oculto en la web: se usa siempre" + (c.usar_oculto_desde ? " (desde " + c.usar_oculto_desde + ")" : "") + ".",
+                    siempre_no_ahora: "Oculto en la web: «Usar siempre», pero no en este documento."
+                };
+                var parts = [
+                    h("span", { className: "cq-da-badge is-hidden-price", text: "Precio oculto" }),
+                    h("div", { className: "cq-modal-hint", text: texts[mode] || "" })
+                ];
+                var btn = function (text, title, onclick, primary) {
+                    return h("button", { type: "button", className: "cq-btn cq-btn-small" + (primary ? " cq-btn-primary" : ""),
+                        text: text, title: title, onclick: onclick });
+                };
+                var useOnce = btn("Usar esta vez", "Cuenta solo en el análisis de este documento", function () {
+                    var text = mode === "siempre_no_ahora"
+                        ? "¿Seguro que quieres volver a usar en este documento el precio oculto de " + who + priceOf(c) + "?"
+                        : "¿Seguro que quieres usar esta vez el precio oculto de " + who + priceOf(c) + "?\n\n"
+                            + who + " lo oculta en su web, así que puede no ser el precio que ofrece hoy. "
+                            + "Contará solo en el análisis de este documento mientras lo tengas abierto.";
+                    if (window.confirm(text)) setOnce(c, mode === "siempre_no_ahora" ? null : true);
+                }, true);
+                var useAlways = canManage ? btn("Usar siempre", "Cuenta en todas las cotizaciones y borradores", function () {
+                    askAlways(c);
+                }) : null;
+                if (mode === "no") {
+                    parts.push(useOnce, useAlways);
+                } else if (mode === "esta_vez") {
+                    parts.push(btn("Dejar de usar", "Deja de contar en este documento", function () {
+                        if (window.confirm("¿Seguro que quieres dejar de usar el precio oculto de " + who + " en este documento?")) {
+                            setOnce(c, null);
+                        }
+                    }), useAlways);
+                } else if (mode === "siempre") {
+                    parts.push(btn("Dejar de usar", "Solo ahora o para siempre", function () {
+                        stopOpen = stopOpen === c.producto_competencia_id ? 0 : c.producto_competencia_id;
+                        render();
+                    }));
+                } else {
+                    parts.push(useOnce, canManage ? btn("Dejar de usar para siempre",
+                        "Quita «Usar siempre»: deja de contar en todas las cotizaciones y borradores",
+                        function () { askForever(c); }) : null);
+                }
+                if (!canManage && mode !== "esta_vez") {
+                    parts.push(h("div", { className: "cq-modal-hint",
+                        text: "«Usar siempre» requiere el permiso «Gestionar catálogo competencia»." }));
+                }
+                return [h("div", { className: "cq-da-hidden" }, parts)];
+            }
+
+            /** «Dejar de usar» de un precio oculto con «Usar siempre»: ¿ahora o para siempre? */
+            function stopRow(c, canManage) {
+                var who = whoOf(c);
+                return h("tr", { className: "cq-da-ci-expand" }, [h("td", { colspan: "9" }, [
+                    h("div", { className: "cq-da-ci-link" }, [
+                        h("p", { className: "cq-modal-hint", text: "¿Dejar de usar el precio oculto de " + who + priceOf(c)
+                            + " solo ahora (en este documento) o para siempre (en todas las cotizaciones y borradores)?" }),
+                        h("p", { className: "cq-da-comp-actions" }, [
+                            h("button", { type: "button", className: "cq-btn cq-btn-primary", text: "Dejar de usar ahora",
+                                onclick: function () { setOnce(c, false); } }),
+                            canManage ? h("button", { type: "button", className: "cq-btn", text: "Dejar de usar para siempre",
+                                onclick: function () { askForever(c); } }) : null,
+                            h("button", { type: "button", className: "cq-btn", text: "Cancelar",
+                                onclick: function () { stopOpen = 0; render(); } })
+                        ])
+                    ])
+                ])]);
+            }
+
+            function disableRow(c) {
+                var motivo = h("input", { type: "text", value: "Precio desactualizado en la página", maxlength: "255",
+                    "aria-label": "Motivo" });
+                var hasta = h("input", { type: "date", "aria-label": "Deshabilitar hasta (opcional)" });
+                return h("tr", { className: "cq-da-ci-expand" }, [h("td", { colspan: "9" }, [
+                    h("div", { className: "cq-da-ci-link" }, [
+                        h("p", { className: "cq-modal-hint", text: "No contará para los descuentos. El refresco nocturno (Sande, DIMAFI) sigue leyendo su precio y avisa «Precio cambió, revisar» si cambia." }),
+                        h("div", { className: "cq-da-ci-link-fields" }, [
+                            h("label", { className: "cq-float-field" }, [h("span", { text: "Motivo" }), motivo]),
+                            h("label", { className: "cq-float-field" }, [h("span", { text: "Hasta (opcional)" }), hasta])
+                        ]),
+                        h("p", { className: "cq-da-comp-actions" }, [
+                            h("button", { type: "button", className: "cq-btn cq-btn-primary", text: "Deshabilitar",
+                                onclick: function () {
+                                    disableOpen = 0;
+                                    changed(post(actions.setUrlEnabled, {
+                                        producto_competencia_id: c.producto_competencia_id,
+                                        habilitado: 0,
+                                        motivo: motivo.value,
+                                        hasta: hasta.value
+                                    }));
+                                } }),
+                            h("button", { type: "button", className: "cq-btn", text: "Cancelar",
+                                onclick: function () { disableOpen = 0; render(); } })
+                        ])
+                    ])
+                ])]);
+            }
+
+            var confirmOpen = 0;
+
+            /** Confirmar un vínculo sugerido por coincidencias: tipo y actitud. */
+            function confirmRow(c) {
+                var tipo = selectOf(TIPOS, c.cantidad_min > 1 ? "exacto_envase" : "exacto", { "aria-label": "Tipo de match" });
+                var act = selectOf(ACTITUDES, "sin_clasificar", { "aria-label": "Actitud" });
+                return h("tr", { className: "cq-da-ci-expand" }, [h("td", { colspan: "9" }, [
+                    h("div", { className: "cq-da-ci-link" }, [
+                        h("p", { className: "cq-modal-hint", text: "Confirma el vínculo con este SKU. "
+                            + (c.cantidad_min > 1 ? "Es una presentación de " + c.cantidad_min + " u.: lo normal es «Exacto diferente U de envase». " : "")
+                            + "Sin clasificar usa la actitud del competidor." }),
+                        h("div", { className: "cq-da-ci-link-fields" }, [
+                            h("label", { className: "cq-float-field" }, [h("span", { text: "Tipo de match" }), tipo]),
+                            h("label", { className: "cq-float-field" }, [h("span", { text: "Actitud" }), act])
+                        ]),
+                        h("p", { className: "cq-da-comp-actions" }, [
+                            h("button", { type: "button", className: "cq-btn cq-btn-primary", text: "Confirmar vínculo",
+                                onclick: function () {
+                                    confirmOpen = 0;
+                                    changed(post(actions.confirmMatch, {
+                                        producto_competencia_id: c.producto_competencia_id,
+                                        producto_base_id: st.pb,
+                                        tipo_match: tipo.value,
+                                        actitud: act.value
+                                    }));
+                                } }),
+                            h("button", { type: "button", className: "cq-btn", text: "Cancelar",
+                                onclick: function () { confirmOpen = 0; render(); } })
+                        ])
+                    ])
+                ])]);
+            }
+
             function renderTable(list, canManage) {
                 if (!list.length) {
                     return h("p", { className: "cq-modal-hint", text: "Este producto no tiene competidores vinculados." });
                 }
                 var tbody = h("tbody");
+                var dupes = st.result && st.result.duplicates ? st.result.duplicates : {};
                 list.forEach(function (c) {
-                    var linkSel = selectOf(ACTITUDES, c.actitud_vinculo, { disabled: !canManage,
+                    // La actitud del vínculo se edita cuando está confirmado.
+                    var linkSel = selectOf(ACTITUDES, c.actitud_vinculo, { disabled: !canManage || c.sugerido,
                         "aria-label": "Actitud de este vínculo" });
                     linkSel.addEventListener("change", function () {
                         changed(post(actions.setLinkAttitude, {
@@ -788,23 +1114,43 @@
                         ? LD.formatUnitPrice(c.precio_unitario) + (c.cantidad_min > 1 ? " (" + LD.formatMoney(c.precio_total)
                             + " / " + c.cantidad_min + " u.)" : "")
                         : "—";
-                    tbody.appendChild(h("tr", { className: c.cuenta ? "" : "is-reference" }, [
+                    var dupe = dupes[c.producto_competencia_id];
+                    var counts = c.cuenta && !dupe;
+                    var estado = [h("span", { text: counts ? "Cuenta · " + c.actitud_label
+                        : (dupe || c.motivo || "Sin clasificar: no cuenta") })];
+                    if (c.sugerido && canManage) {
+                        estado.push(h("button", { type: "button", className: "cq-btn cq-btn-small cq-btn-primary", text: "Confirmar",
+                            onclick: function () {
+                                confirmOpen = confirmOpen === c.producto_competencia_id ? 0 : c.producto_competencia_id;
+                                render();
+                            } }));
+                    }
+                    tbody.appendChild(h("tr", { className: (counts ? "" : "is-reference") + (c.sugerido ? " is-suggested" : "") }, [
                         h("td", { text: c.competidor || c.dominio || "—" }),
-                        h("td", {}, [c.url
-                            ? h("a", { href: c.url, target: "_blank", rel: "noopener", text: c.nombre || c.url })
-                            : (c.nombre || "—")]),
-                        h("td", { text: c.tipo_match_label }),
+                        h("td", {}, [
+                            c.url
+                                ? h("a", { href: c.url, target: "_blank", rel: "noopener", text: c.nombre || c.url })
+                                : (c.nombre || "—"),
+                            c.via_familia ? h("div", { className: "cq-modal-hint",
+                                text: "Vía familia: " + (c.via_familia.sku || "#" + c.via_familia.producto_base_id)
+                                    + " " + (c.via_familia.nombre || "") }) : null
+                        ]),
+                        h("td", { text: c.sugerido ? "Sugerido" : c.tipo_match_label }),
                         h("td", { className: "cq-num", text: unit }),
                         h("td", { text: (c.fecha || "—") + (c.dias !== null ? " (" + c.dias + " d)" : "") }),
                         h("td", {}, [linkSel]),
                         h("td", {}, [domSel]),
-                        h("td", { text: c.cuenta ? "Cuenta · " + c.actitud_label : (c.motivo || "Sin clasificar: no cuenta") })
+                        usageCell(c, canManage),
+                        h("td", { className: "cq-da-usage" }, estado)
                     ]));
+                    if (canManage && disableOpen === c.producto_competencia_id) tbody.appendChild(disableRow(c));
+                    if (c.oculto_uso === "siempre" && stopOpen === c.producto_competencia_id) tbody.appendChild(stopRow(c, canManage));
+                    if (canManage && c.sugerido && confirmOpen === c.producto_competencia_id) tbody.appendChild(confirmRow(c));
                 });
                 return h("div", { className: "cq-da-comp-table-wrap" }, [
                     h("table", { className: "cq-da-comp-table" }, [
                         h("thead", {}, [h("tr", {}, ["Competidor", "Producto", "Tipo", "Precio unit. bruto", "Fecha",
-                            "Actitud vínculo", "Actitud competidor", "Estado"].map(function (t) {
+                            "Actitud vínculo", "Actitud competidor", "Uso", "Estado"].map(function (t) {
                             return h("th", { scope: "col", text: t });
                         }))]),
                         tbody
@@ -1183,7 +1529,7 @@
                     return;
                 }
                 var canManage = !!st.context.canManageCompetencia;
-                body.appendChild(renderTable(st.context.competidores || [], canManage));
+                body.appendChild(renderTable(competitors(), canManage));
                 if (canManage) body.appendChild(renderForm());
                 body.appendChild(h("p", { className: "cq-da-comp-actions" }, [
                     h("button", { type: "button", className: "cq-btn", text: "Buscar en Google", onclick: function () {
@@ -1206,6 +1552,9 @@
                 open: function () {
                     build();
                     setMsg("");
+                    disableOpen = 0;
+                    confirmOpen = 0;
+                    stopOpen = 0;
                     internal.reset();
                     el.hidden = false;
                     el.setAttribute("aria-hidden", "false");
@@ -1248,13 +1597,327 @@
                     panel.body.innerHTML = "";
                     panel.brief.textContent = "";
                 }
+            },
+            /** Abre Descuentos y el asistente (marca «Revisar descuento» de la tabla). */
+            reveal: function () {
+                if (config.details) config.details.open = true;
+                ensurePanel().details.open = true;
+                render();
+                loadContext(false);
             }
         };
+    }
+
+    /**
+     * Marca «Revisar descuento» en la fila de la tabla (la dejó «Aplicar descuentos sugeridos»).
+     * opts.onOpen: abre Editar línea con el asistente; opts.onDismiss: quita la marca.
+     */
+    function reviewBadge(opts) {
+        opts = opts || {};
+        return h("span", { className: "cq-da-review" }, [
+            h("button", { type: "button", className: "cq-da-review-open", text: "Revisar descuento",
+                disabled: !opts.onOpen,
+                title: "Necesita descuento manual: falta información para sugerirlo. Abre el asistente.",
+                onclick: function (event) {
+                    event.stopPropagation();
+                    if (opts.onOpen) opts.onOpen();
+                } }),
+            opts.onDismiss ? h("button", { type: "button", className: "cq-da-review-x", text: "×",
+                "aria-label": "Quitar marca Revisar descuento",
+                onclick: function (event) {
+                    event.stopPropagation();
+                    opts.onDismiss();
+                } }) : null
+        ]);
+    }
+
+    /**
+     * «Aplicar descuentos sugeridos» (junto a Modo avanzado): evalúa todas las líneas con las
+     * reglas del asistente y aplica el sugerido donde se puede.
+     *
+     * config.cfg: discountAssistant de la página. config.button: botón que abre el modal.
+     * config.getLines(): líneas del documento. config.lineInfo(line): { gross, units, cost,
+     *   finalTotal, discount } antes de aplicar. config.applySuggestion(line, monto final).
+     * config.setReview(line, bool). config.done(): repinta y guarda. config.canEdit().
+     * config.docKey(): documento abierto (el mismo que el asistente de la línea).
+     */
+    function createBulk(config) {
+        var cfg = config.cfg || {};
+        var actions = cfg.actions || {};
+        if (!config.button || !actions.contextBatch) return null;
+        var st = { rows: [], loading: false, error: "", seq: 0 };
+        var el = null;
+        var body = null;
+        var foot = null;
+        var summary = null;
+
+        function money(v) {
+            return LD.formatMoney(round2(v));
+        }
+
+        function post(data) {
+            var form = new FormData();
+            form.append("action", actions.contextBatch);
+            form.append("nonce", cfg.nonce || "");
+            Object.keys(data).forEach(function (k) { form.append(k, String(data[k])); });
+            return fetch(cfg.ajaxUrl, { method: "POST", body: form, credentials: "same-origin" })
+                .then(function (r) { return r.json(); })
+                .then(function (json) {
+                    if (!json || !json.success) {
+                        throw new Error((json && json.data && json.data.message) || "No se pudo leer la competencia.");
+                    }
+                    return json.data || {};
+                });
+        }
+
+        function close() {
+            if (!el) return;
+            el.hidden = true;
+            el.setAttribute("aria-hidden", "true");
+        }
+
+        function build() {
+            if (el) return;
+            body = h("div", { className: "cq-modal-body cq-da-bulk-body" });
+            summary = h("p", { className: "cq-modal-hint cq-da-bulk-summary", role: "status" });
+            foot = h("footer", { className: "cq-modal-foot cq-da-bulk-foot" });
+            el = h("div", { className: "cq-modal cq-da-comp-modal cq-da-bulk-modal", hidden: true, "aria-hidden": "true" }, [
+                h("div", { className: "cq-modal-backdrop", onclick: close }),
+                h("div", { className: "cq-modal-dialog cq-modal-wide", role: "dialog", "aria-modal": "true",
+                    "aria-label": "Aplicar descuentos sugeridos" }, [
+                    h("header", { className: "cq-modal-head" }, [
+                        h("h3", { text: "Aplicar descuentos sugeridos" }),
+                        h("button", { type: "button", className: "cq-modal-close", "aria-label": "Cerrar", text: "×", onclick: close })
+                    ]),
+                    body,
+                    summary,
+                    foot
+                ])
+            ]);
+            document.body.appendChild(el);
+            document.addEventListener("keydown", function (event) {
+                if (event.key === "Escape" && el && !el.hidden) {
+                    event.stopPropagation();
+                    event.preventDefault();
+                    close();
+                }
+            }, true);
+        }
+
+        /** Estado de una línea: apply (se aplica), done (ya tiene el sugerido), manual o na (no aplica). */
+        function classify(line, index, comps, settings) {
+            var info = config.lineInfo(line) || {};
+            var row = { line: line, index: index, info: info, ignore: false, kind: "na", reason: "", res: null };
+            var pb = Number(line.producto_base_id) || 0;
+            if (!pb) {
+                row.reason = "Línea sin producto local.";
+                return row;
+            }
+            var res = compute({
+                gross: info.gross,
+                units: info.units,
+                cost: info.cost,
+                finalTotal: info.finalTotal,
+                // Precios ocultos: lo elegido «esta vez» en el asistente de este documento.
+                competitors: withHiddenUse(comps[pb] || comps[String(pb)] || [],
+                    hiddenOverrides(config.docKey ? config.docKey() : null))
+            }, settings);
+            row.res = res;
+            if (res.status === "empty") {
+                row.reason = "Sin cantidad o precio.";
+            } else if (!res.volume.ok) {
+                row.reason = "No cumple el criterio de volumen.";
+            } else if (res.status === "no_discount") {
+                row.reason = "Sin descuento disponible (factor actual " + LD.formatNumber(res.factorBefore, 2) + ").";
+            } else if (res.status === "no_cost") {
+                row.kind = "manual";
+                row.reason = "Sin costo guardado.";
+            } else if (res.status === "no_info") {
+                row.kind = "manual";
+                row.reason = "Falta información: sin competidores codiciosos ni competitivos vigentes.";
+            } else if (res.status === "ok") {
+                var already = Math.abs((Number(info.finalTotal) || 0) - res.suggestion.value) < 0.5;
+                row.kind = already ? "done" : "apply";
+                row.reason = already ? "Ya tiene el sugerido." : "";
+            }
+            return row;
+        }
+
+        var LABELS = {
+            apply: "Aplicado",
+            done: "Aplicado",
+            manual: "Necesita manual (falta información)",
+            na: "No aplica para descuento"
+        };
+
+        function paintSummary() {
+            var count = { apply: 0, done: 0, manual: 0, na: 0, ignored: 0 };
+            var before = 0;
+            var after = 0;
+            var ready = !st.loading && !st.error;
+            st.rows.forEach(function (r) {
+                if (r.ignore) count.ignored++;
+                else count[r.kind]++;
+                var current = Number(r.info.finalTotal) || 0;
+                before += current;
+                after += r.kind === "apply" && !r.ignore ? r.res.suggestion.value : current;
+            });
+            summary.textContent = ready && st.rows.length
+                ? count.apply + " se aplican · " + count.done + " ya tienen el sugerido · " + count.manual
+                    + " necesitan manual · " + count.na + " no aplican"
+                    + (count.ignored ? " · " + count.ignored + " ignoradas" : "") + ". Total de las líneas: " + money(before)
+                    + " → " + money(after) + "."
+                : "";
+        }
+
+        function renderFoot() {
+            foot.innerHTML = "";
+            var hasApply = st.rows.some(function (r) { return r.kind === "apply" && !r.ignore; });
+            var hasManual = st.rows.some(function (r) { return r.kind === "manual" && !r.ignore; });
+            var busy = st.loading || !!st.error;
+            foot.appendChild(h("button", { type: "button", className: "cq-btn", text: "Cancelar", onclick: close }));
+            foot.appendChild(h("button", { type: "button", className: "cq-btn cq-btn-primary", text: "Aplicar",
+                disabled: busy || !hasApply, onclick: function () { commit(false); } }));
+            foot.appendChild(h("button", { type: "button", className: "cq-btn cq-btn-primary",
+                text: "Aplicar y marcar a los que no se pudo automático",
+                title: "Aplica los sugeridos y deja «Revisar descuento» en las líneas que necesitan descuento manual",
+                disabled: busy || (!hasApply && !hasManual), onclick: function () { commit(true); } }));
+        }
+
+        function renderRows() {
+            body.innerHTML = "";
+            if (st.loading) {
+                body.appendChild(h("p", { className: "cq-modal-hint", text: "Leyendo la competencia de " + st.rows.length + " líneas…" }));
+                return;
+            }
+            if (st.error) {
+                body.appendChild(h("p", { className: "cq-modal-hint is-warn", text: st.error }));
+                return;
+            }
+            if (!st.rows.length) {
+                body.appendChild(h("p", { className: "cq-modal-hint", text: "El documento no tiene líneas." }));
+                return;
+            }
+            var tbody = h("tbody");
+            st.rows.forEach(function (r) {
+                var line = r.line;
+                var result;
+                if (r.kind === "apply" || r.kind === "done") {
+                    var sug = r.res.suggestion;
+                    result = money(sug.value) + " (−" + LD.formatNumber(sug.pct, 2) + " %, ×" + LD.formatNumber(sug.factor, 3) + ")";
+                    if (r.kind === "apply" && Number(r.info.discount) > 0) {
+                        result += " · reemplaza el descuento actual (−" + money(r.info.discount) + ")";
+                    }
+                    if (r.reason) result += " · " + r.reason;
+                } else {
+                    result = r.reason;
+                }
+                var tr = h("tr", { className: "cq-da-bulk-row is-" + r.kind });
+                var ignoreCell = "—";
+                if (r.kind === "apply" || r.kind === "manual") {
+                    var ignore = h("input", { type: "checkbox", "aria-label": "Ignorar esta línea" });
+                    ignore.checked = r.ignore;
+                    ignore.addEventListener("change", function () {
+                        r.ignore = ignore.checked;
+                        tr.classList.toggle("is-ignored", r.ignore);
+                        paintSummary();
+                        renderFoot();
+                    });
+                    ignoreCell = h("label", { className: "cq-da-ci-hide" }, [ignore, " Ignorar"]);
+                }
+                [
+                    h("td", {}, [h("code", { text: line.sku || "—" }), h("div", { text: line.description || "" })]),
+                    h("td", { className: "cq-num", text: LD.formatNumber(r.info.units || 0, 0) }),
+                    h("td", { className: "cq-num", text: money(r.info.finalTotal || 0) }),
+                    h("td", {}, [h("span", { className: "cq-da-badge cq-da-badge--" + r.kind, text: LABELS[r.kind] })]),
+                    h("td", { text: result }),
+                    h("td", {}, [ignoreCell])
+                ].forEach(function (td) { tr.appendChild(td); });
+                tbody.appendChild(tr);
+            });
+            body.appendChild(h("p", { className: "cq-modal-hint", text: "Usa las mismas reglas del asistente. "
+                + "Las líneas que ya tienen descuento se reemplazan por el sugerido; marca «Ignorar» para dejarlas como están." }));
+            body.appendChild(h("div", { className: "cq-da-comp-table-wrap" }, [
+                h("table", { className: "cq-da-comp-table" }, [
+                    h("thead", {}, [h("tr", {}, ["Producto", "Unidades", "Precio actual", "Estado", "Cómo quedaría", ""].map(function (t) {
+                        return h("th", { scope: "col", text: t });
+                    }))]),
+                    tbody
+                ])
+            ]));
+        }
+
+        function render() {
+            renderRows();
+            paintSummary();
+            renderFoot();
+        }
+
+        function commit(mark) {
+            st.rows.forEach(function (r) {
+                if (r.ignore) return;
+                if (r.kind === "apply") {
+                    config.applySuggestion(r.line, r.res.suggestion.value);
+                    config.setReview(r.line, false);
+                } else if (r.kind === "done") {
+                    config.setReview(r.line, false);
+                } else if (r.kind === "manual" && mark) {
+                    config.setReview(r.line, true);
+                }
+            });
+            close();
+            config.done();
+        }
+
+        function open() {
+            build();
+            el.hidden = false;
+            el.setAttribute("aria-hidden", "false");
+            var lines = (config.getLines() || []).slice();
+            st.seq++;
+            if (config.canEdit && !config.canEdit()) {
+                st.rows = [];
+                st.loading = false;
+                st.error = "El documento no es editable.";
+                render();
+                return;
+            }
+            st.rows = lines.map(function (line, index) { return { line: line, index: index, info: {}, kind: "na" }; });
+            st.loading = true;
+            st.error = "";
+            render();
+            var ids = [];
+            lines.forEach(function (line) {
+                var pb = Number(line.producto_base_id) || 0;
+                if (pb && ids.indexOf(pb) < 0) ids.push(pb);
+            });
+            var mySeq = st.seq;
+            var request = ids.length ? post({ producto_base_ids: ids.join(",") }) : Promise.resolve({ competidores: {} });
+            request.then(function (data) {
+                if (mySeq !== st.seq) return;
+                var settings = data.settings || cfg.settings;
+                var comps = data.competidores || {};
+                st.rows = lines.map(function (line, index) { return classify(line, index, comps, settings); });
+                st.loading = false;
+                render();
+            }).catch(function (error) {
+                if (mySeq !== st.seq) return;
+                st.loading = false;
+                st.error = error.message;
+                render();
+            });
+        }
+
+        config.button.addEventListener("click", open);
+        return { open: open, close: close };
     }
 
     global.RiversoDiscountAssistant = {
         compute: compute,
         settingsOf: settingsOf,
-        create: create
+        withHiddenUse: withHiddenUse,
+        create: create,
+        createBulk: createBulk,
+        reviewBadge: reviewBadge
     };
 })(typeof window !== "undefined" ? window : globalThis);

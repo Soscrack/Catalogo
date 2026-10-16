@@ -262,6 +262,19 @@
         desc.className = "cq-desc";
         desc.textContent = line.description || "";
         detail.appendChild(desc);
+        if (line.discount_review && global.RiversoDiscountAssistant) {
+            detail.appendChild(global.RiversoDiscountAssistant.reviewBadge({
+                onOpen: function () {
+                    openLineModal(index);
+                    if (discountAssistant) discountAssistant.reveal();
+                },
+                onDismiss: function () {
+                    line.discount_review = false;
+                    renderBoletaEditor();
+                    scheduleDraftSave(300);
+                }
+            }));
+        }
         if (line.local_only || !line.product_id) {
             var tag = document.createElement("span");
             tag.className = "cq-local-only-tag";
@@ -611,6 +624,7 @@
             var rate = clampRate(parsed);
             // Escrito a mano en la tabla: el Asistente de Descuento lo registra como manual.
             line.discount_origin = rate > 0 ? "manual" : null;
+            if (rate > 0) line.discount_review = false;
             if (rate > 0) {
                 line.discount_anchor = field === "price_discount" ? "price_pct" : "margin_pct";
                 line.discount_anchor_value = rate;
@@ -2594,6 +2608,7 @@
       lineDmFactorBefore: g("bill-dm-factor-before"),
       lineDiscounts: g("bill-line-discounts"),
       lineDaFlag: g("bill-line-da-flag"),
+      daBulk: g("bill-da-bulk"),
       lineDa: g("bill-line-da"),
       lineDiscountsBrief: g("bill-line-discounts-brief"),
       lineFamilyNote: g("bill-line-family-note"),
@@ -2872,8 +2887,35 @@
         flag: billEls.lineDaFlag,
         container: billEls.lineDa,
         cfg: daCfg,
-        toView: brutoToView
+        toView: brutoToView,
+        // «Usar esta vez» (precios ocultos): un borrador por página.
+        docKey: function () { return "borrador"; }
       });
+      // «Aplicar descuentos sugeridos» (visible con Modo avanzado): mismas reglas en todas las líneas.
+      if (billEls.daBulk) {
+        global.RiversoDiscountAssistant.createBulk({
+          cfg: daCfg,
+          button: billEls.daBulk,
+          docKey: function () { return "borrador"; },
+          getLines: function () { return getLines() || []; },
+          lineInfo: function (line) {
+            var bases = anchorBases(line);
+            var fig = lineFigures(line);
+            return { gross: bases.gross, units: bases.billable, cost: bases.cost, finalTotal: fig.lineNet, discount: fig.discount };
+          },
+          applySuggestion: function (line, value) {
+            line.discount_anchor = "final_total";
+            line.discount_anchor_value = value;
+            line.discount_origin = "sugerido";
+            applyDiscountAnchor(line);
+          },
+          setReview: function (line, on) { line.discount_review = !!on; },
+          done: function () {
+            renderBoletaEditor();
+            scheduleDraftSave(0);
+          }
+        });
+      }
     }
     // «Otra regla»: se puede elegir otra para corregir la de la cotización.
     rulePicker = LD.createRulePicker({

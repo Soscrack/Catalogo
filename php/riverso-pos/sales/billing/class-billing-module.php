@@ -1174,6 +1174,7 @@ class Riverso_Billing_Module {
                 'discount_anchor' => $line['discount_anchor'] ?? null,
                 'discount_anchor_value' => $line['discount_anchor_value'] ?? null,
                 'discount_origin' => $line['discount_origin'] ?? null,
+                'discount_review' => !empty($line['discount_review']),
                 'product_id' => !empty($line['product_id']) ? (int) $line['product_id'] : null,
                 'producto_base_id' => !empty($line['producto_base_id']) ? (int) $line['producto_base_id'] : null,
                 'units_per_pack' => (float) ($line['units_per_pack'] ?? 1),
@@ -1245,6 +1246,7 @@ class Riverso_Billing_Module {
                 'discount_anchor' => $line['discount_anchor'] ?? null,
                 'discount_anchor_value' => $line['discount_anchor_value'] ?? null,
                 'discount_origin' => $line['discount_origin'] ?? null,
+                'discount_review' => !empty($line['discount_review']),
                 'rule_total' => $rule_total_persist,
                 'rule_adjusted' => $rule_adjusted_persist,
             ];
@@ -1379,6 +1381,7 @@ class Riverso_Billing_Module {
                 'discount_anchor' => $line['discount_anchor'] ?? null,
                 'discount_anchor_value' => $line['discount_anchor_value'] ?? null,
                 'discount_origin' => $line['discount_origin'] ?? null,
+                'discount_review' => !empty($line['discount_review']),
                 'rule_total' => $rule_adjusted ? round((float) $line['rule_total'], 2) : null,
                 'rule_adjusted' => $rule_adjusted,
                 'stock_breakdown' => $line['stock_breakdown'] ?? null,

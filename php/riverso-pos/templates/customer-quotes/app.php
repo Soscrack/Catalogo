@@ -390,6 +390,7 @@ if (!function_exists('riverso_pos_cq_json')) {
                 <div class="cq-search">
                     <div class="cq-search-head">
                         <label for="cq-search">Buscar producto</label>
+                        <button type="button" class="cq-btn cq-btn-small cq-da-bulk-btn" id="cq-da-bulk" title="Aplica el descuento sugerido por el Asistente de descuento en todas las líneas que se pueda">Aplicar descuentos sugeridos</button>
                         <label class="cq-advanced-toggle" for="cq-advanced">
                             <input type="checkbox" id="cq-advanced">
                             <span>Modo avanzado</span>

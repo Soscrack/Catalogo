@@ -242,6 +242,7 @@
         lineDmFactorBefore: document.getElementById("cq-dm-factor-before"),
         lineDiscounts: document.getElementById("cq-line-discounts"),
         lineDaFlag: document.getElementById("cq-line-da-flag"),
+        daBulk: document.getElementById("cq-da-bulk"),
         lineDa: document.getElementById("cq-line-da"),
         lineDiscountsBrief: document.getElementById("cq-line-discounts-brief"),
         lineByAmount: document.getElementById("cq-line-by-amount"),
@@ -751,9 +752,38 @@
             flag: els.lineDaFlag,
             container: els.lineDa,
             cfg: cfg.discountAssistant,
-            toView: brutoToView
+            toView: brutoToView,
+            // «Usar esta vez» (precios ocultos) vale para la cotización abierta.
+            docKey: function () { return state.quote; }
         })
         : null;
+    // «Aplicar descuentos sugeridos» (visible con Modo avanzado): mismas reglas en todas las líneas.
+    if (window.RiversoDiscountAssistant && cfg.discountAssistant && els.daBulk) {
+        window.RiversoDiscountAssistant.createBulk({
+            cfg: cfg.discountAssistant,
+            button: els.daBulk,
+            docKey: function () { return state.quote; },
+            getLines: function () { return state.quote.lines || []; },
+            lineInfo: function (line) {
+                var bases = anchorBases(line);
+                var fig = lineFigures(line);
+                return { gross: bases.gross, units: bases.billable, cost: bases.cost, finalTotal: fig.lineNet, discount: fig.discount };
+            },
+            applySuggestion: function (line, value) {
+                line.discount_anchor = "final_total";
+                line.discount_anchor_value = value;
+                line.discount_origin = "sugerido";
+                applyDiscountAnchor(line);
+            },
+            setReview: function (line, on) { line.discount_review = !!on; },
+            done: function () {
+                renderLines();
+                renderTotals();
+                scheduleAutosave(0);
+            },
+            canEdit: function () { return state.quote.editable !== false; }
+        });
+    }
     if (els.importCheckAll) {
         els.importCheckAll.addEventListener("change", function () {
             var on = !!els.importCheckAll.checked;
@@ -2042,6 +2072,19 @@
         desc.className = "cq-desc";
         desc.textContent = line.description || "";
         detail.appendChild(desc);
+        if (line.discount_review && window.RiversoDiscountAssistant) {
+            detail.appendChild(window.RiversoDiscountAssistant.reviewBadge({
+                onOpen: editable ? function () {
+                    openLineModal(index);
+                    if (discountAssistant) discountAssistant.reveal();
+                } : null,
+                onDismiss: editable ? function () {
+                    line.discount_review = false;
+                    renderLines();
+                    scheduleAutosave(300);
+                } : null
+            }));
+        }
         if (line.local_only || !line.product_id) {
             var tag = document.createElement("span");
             tag.className = "cq-local-only-tag";
@@ -2767,6 +2810,7 @@
             var rate = clampRate(parsed);
             // Escrito a mano en la tabla: el Asistente de Descuento lo registra como manual.
             line.discount_origin = rate > 0 ? "manual" : null;
+            if (rate > 0) line.discount_review = false;
             if (rate > 0) {
                 line.discount_anchor = field === "price_discount" ? "price_pct" : "margin_pct";
                 line.discount_anchor_value = rate;
@@ -3763,6 +3807,7 @@
                         ? line.discount_anchor_value
                         : null,
                     discount_origin: line.discount_origin || null,
+                    discount_review: !!line.discount_review,
                     family_mode: line.family_mode || null,
                     packaging: line.packaging || null,
                     units_per_pack: line.units_per_pack != null ? line.units_per_pack : null,

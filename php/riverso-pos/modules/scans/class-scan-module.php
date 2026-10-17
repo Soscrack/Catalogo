@@ -189,6 +189,9 @@ class Riverso_Scan_Module {
             $docs = $this->load_documents_for_archivo($archivo_id);
             $payload['documentos'] = $docs;
             $payload['message'] = count($docs) . ' documento(s) extraído(s)';
+            if (!$docs) {
+                $payload['file_url'] = $this->file_view_url($archivo_id);
+            }
         } elseif ($estado === 'error') {
             $payload['message'] = $row['error_mensaje'] ?: 'Error al procesar con IA';
             // El archivo se guarda igual: se puede abrir para ver qué se subió o escaneó.
@@ -609,6 +612,7 @@ class Riverso_Scan_Module {
             $documentos = $extractor->merge_continuation_pages($documentos);
         }
 
+        $kept_docs = [];
         $saved_docs = $this->persist_extracted_documents(
             $archivo_id,
             $hash,
@@ -616,7 +620,8 @@ class Riverso_Scan_Module {
             $type,
             $documentos,
             $extractor,
-            $r2
+            $r2,
+            $kept_docs
         );
 
         $wpdb->update($archivos_table, [
@@ -627,7 +632,7 @@ class Riverso_Scan_Module {
             'gemini_tokens_out' => $tokens_out,
             'gemini_llamadas'   => $gemini_calls,
             'gemini_reutilizado'=> 0,
-            'error_mensaje'     => empty($saved_docs) ? 'No se detectaron documentos' : null,
+            'error_mensaje'     => empty($saved_docs) ? $this->kept_documents_message($kept_docs) : null,
         ], ['id' => $archivo_id]);
 
         $this->cleanup_temp_upload($tmp_path);
@@ -705,9 +710,14 @@ class Riverso_Scan_Module {
     /**
      * Persiste documentos extraídos en BD y R2.
      */
-    private function persist_extracted_documents($archivo_id, $archivo_hash, $r2_key_original, $type, array $documentos, Riverso_Scan_Extractor $extractor, Riverso_R2_Client $r2) {
+    /**
+     * @param array $kept Salida: documentos que ya estaban en la bandeja revisados o ingresados y no se tocaron.
+     * @return array Documentos de este archivo (nuevos o reemplazados).
+     */
+    private function persist_extracted_documents($archivo_id, $archivo_hash, $r2_key_original, $type, array $documentos, Riverso_Scan_Extractor $extractor, Riverso_R2_Client $r2, &$kept = []) {
         global $wpdb;
         $saved = [];
+        $kept = [];
         $docs_table = $this->table('documentos_escaneados');
 
         foreach ($documentos as $doc) {
@@ -721,11 +731,17 @@ class Riverso_Scan_Module {
             $estado = 'pendiente';
             $factura_id = null;
 
-            // Dedup capa 2: mismo doc en bandeja
-            $dup_band = $wpdb->get_var($wpdb->prepare(
-                "SELECT id FROM {$docs_table} WHERE doc_hash = %s AND estado_revision NOT IN ('descartado') LIMIT 1",
+            // Dedup capa 2: mismo doc en bandeja (doc_hash es único, incluso descartados).
+            // Sin revisar ni ingresar (o descartado): el escaneo nuevo reemplaza la lectura anterior,
+            // p. ej. al volver a escanear una hoja que salió dada vuelta. Revisado o ingresado: no se toca.
+            $previo = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, estado_revision FROM {$docs_table} WHERE doc_hash = %s LIMIT 1",
                 $doc_hash
-            ));
+            ), ARRAY_A);
+            if ($previo && !in_array($previo['estado_revision'], ['pendiente', 'descartado'], true)) {
+                $kept[(int) $previo['id']] = $previo['estado_revision'];
+                continue;
+            }
 
             // Dedup capa 3: ya existe en riverso_facturas (XML u origen escaneo)
             $factura_existente = null;
@@ -743,9 +759,7 @@ class Riverso_Scan_Module {
                 }
             }
 
-            if ($dup_band) {
-                $estado = 'duplicado';
-            } elseif ($factura_existente) {
+            if ($factura_existente) {
                 $factura_id = (int) $factura_existente;
                 $this->attach_scan_to_factura($factura_id, $r2_key_original, $doc, $archivo_hash);
                 // Stub SII/FACTO: dejar pendiente de ingreso (detalle del escaneo aún no aplicado)
@@ -778,7 +792,7 @@ class Riverso_Scan_Module {
                 $r2->put_object($r2_doc_key, wp_json_encode($payload, JSON_UNESCAPED_UNICODE), 'application/json');
             }
 
-            $wpdb->insert($docs_table, [
+            $row = [
                 'archivo_id'          => $archivo_id,
                 'pagina_inicio'       => (int) ($doc['pagina_inicio'] ?? 1),
                 'pagina_fin'          => (int) ($doc['pagina_fin'] ?? 1),
@@ -803,15 +817,51 @@ class Riverso_Scan_Module {
                 'factura_id'          => $factura_id,
                 'r2_key_json'         => $r2_doc_key,
                 'datos_json'          => wp_json_encode($payload, JSON_UNESCAPED_UNICODE),
-            ]);
-            $doc_id = (int) $wpdb->insert_id;
+            ];
+            if ($previo) {
+                $doc_id = (int) $previo['id'];
+                if ($wpdb->update($docs_table, $row, ['id' => $doc_id]) === false) {
+                    error_log('[Riverso Escaneos] No se pudo reemplazar documento ' . $doc_id . ': ' . $wpdb->last_error);
+                    continue;
+                }
+                $wpdb->delete($this->table('documento_items'), ['documento_id' => $doc_id]);
+                $wpdb->delete($this->table('documento_referencias'), ['documento_id' => $doc_id]);
+            } else {
+                if (!$wpdb->insert($docs_table, $row)) {
+                    error_log('[Riverso Escaneos] No se pudo guardar documento ' . $doc_hash . ': ' . $wpdb->last_error);
+                    continue;
+                }
+                $doc_id = (int) $wpdb->insert_id;
+            }
             $this->save_documento_items($doc_id, $doc['items'] ?? []);
             $this->save_documento_referencias($doc_id, $doc['referencias'] ?? []);
 
-            $saved[] = $this->format_documento_row($doc_id);
+            // Un mismo documento repetido en el archivo queda una sola vez (la última lectura).
+            $saved[$doc_id] = $this->format_documento_row($doc_id);
         }
 
-        return $saved;
+        return array_values(array_filter($saved));
+    }
+
+    /**
+     * Mensaje para un archivo cuyos documentos ya estaban en la bandeja revisados o ingresados.
+     */
+    private function kept_documents_message(array $kept) {
+        global $wpdb;
+        $partes = [];
+        foreach ($kept as $id => $estado) {
+            $d = $wpdb->get_row($wpdb->prepare(
+                "SELECT tipo_dte, tipo_documento, folio, razon_social_emisor FROM {$this->table('documentos_escaneados')} WHERE id = %d",
+                (int) $id
+            ), ARRAY_A);
+            if (!$d) {
+                continue;
+            }
+            $partes[] = riverso_scan_tipo_label((int) $d['tipo_dte'], $d['tipo_documento']) . ' N° ' . $d['folio']
+                . ($d['razon_social_emisor'] ? ' (' . $d['razon_social_emisor'] . ')' : '')
+                . ($estado === 'revisado' ? ', en revisión en Facturas' : ', ya ingresado');
+        }
+        return $partes ? 'Ya estaba escaneado: ' . implode('; ', $partes) . '.' : 'No se detectaron documentos';
     }
 
     private function save_documento_items($documento_id, array $items) {

@@ -666,7 +666,11 @@
   /** Documentos que la IA encontró en un archivo (subido o escaneado). */
   function showScanDocs(card, data, single) {
     var docs = (data.documentos || []).filter(Boolean).map(normScan);
-    if (!docs.length) throw new Error("No se encontró ningún documento en el archivo.");
+    if (!docs.length) {
+      var empty = new Error("No se encontró ningún documento en el archivo.");
+      empty.fileUrl = data.file_url || "";
+      throw empty;
+    }
     docs.forEach(function (d) {
       state.scanDocs[d.id] = d;
     });

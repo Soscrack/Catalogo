@@ -40,6 +40,12 @@ class Riverso_Print_Module {
      * usan los del SII, que no pasan de 2 dígitos).
      */
     const QUOTE_TYPE = 900;
+    /** Etiqueta de lugar (CodigoLugar) en el ruteo. */
+    const LABEL_LOCATION_TYPE = 910;
+    /** Orden de impresión de etiquetas en el ruteo. */
+    const LABEL_ORDER_TYPE = 911;
+    /** Tope de ítems por trabajo: el JSON viaja en la cola (columna TEXT). */
+    const LABEL_MAX_ITEMS = 120;
     /** Primera versión del hub que genera un PDF y lo sube sin imprimir (correo de cotización). */
     const RENDER_MIN_HUB = '1.3.0';
     /** Tamaño máximo del PDF generado que se acepta. */
@@ -136,6 +142,15 @@ class Riverso_Print_Module {
             || current_user_can('manage_options');
     }
 
+    /** Quien imprime etiquetas (lugares u órdenes) puede encolar en el hub de PC2. */
+    public function can_print_labels() {
+        return current_user_can('riverso_print_orders')
+            || current_user_can('riverso_print_labels')
+            || current_user_can('riverso_create_print_orders')
+            || $this->can_manage()
+            || $this->can_print();
+    }
+
     /**
      * Configuración para el cliente JS (botón "Imprimir Ya!" y pantalla de configuración).
      *
@@ -148,6 +163,8 @@ class Riverso_Print_Module {
             'configUrl' => home_url('/interno/facturacion/?vista=impresion'),
             'canManage' => $this->can_manage(),
             'quoteTypeId' => self::QUOTE_TYPE,
+            'labelLocationType' => self::LABEL_LOCATION_TYPE,
+            'labelOrderType' => self::LABEL_ORDER_TYPE,
             'serverUrl' => untrailingslashit(home_url('/')),
             'actions' => [
                 'quick' => 'riverso_print_quick',
@@ -215,6 +232,85 @@ class Riverso_Print_Module {
             'extra' => ['plantilla' => Riverso_Quote_Pdf::normalize_template($template)],
         ]);
         return $job ? $this->present_job($job, true) : null;
+    }
+
+    /**
+     * Encola las etiquetas de una orden de impresión. Los ítems salen de la orden,
+     * no del navegador. El hub de PC2 (Impresion.exe) las imprime con bPAC.
+     *
+     * @param int   $order_id
+     * @param int   $document_type_id LABEL_LOCATION_TYPE o LABEL_ORDER_TYPE.
+     * @param array $opts station_id, preset_id, origen.
+     * @return array|null Trabajo presentado, o null si la orden no existe.
+     */
+    public function enqueue_labels($order_id, $document_type_id, array $opts = []) {
+        $orders = $this->print_order_module();
+        if (!$orders) {
+            return null;
+        }
+        $payload = $orders->label_job_payload($order_id);
+        if (is_wp_error($payload)) {
+            return $this->label_error_job($document_type_id, $order_id, $payload->get_error_message(), $opts);
+        }
+        $type = (int) $document_type_id;
+        if ($type !== self::LABEL_LOCATION_TYPE && $type !== self::LABEL_ORDER_TYPE) {
+            $type = (($payload['order']['tipo'] ?? '') === 'etiqueta_lugar') ? self::LABEL_LOCATION_TYPE : self::LABEL_ORDER_TYPE;
+        }
+        $items = $payload['etiquetas'];
+        $encoded = wp_json_encode($items);
+        if (count($items) > self::LABEL_MAX_ITEMS || !is_string($encoded) || strlen($encoded) > 50000) {
+            return $this->label_error_job($type, $order_id, 'La orden tiene demasiadas etiquetas para un solo trabajo. Divídela en dos.', $opts);
+        }
+        $numero = (string) ($payload['order']['numero_orden'] ?? $order_id);
+        $job = $this->enqueue([
+            'source_type' => 'etiqueta',
+            'source_id' => (int) $order_id,
+            'document_type_id' => $type,
+            'titulo' => 'Etiquetas ' . $numero,
+            'station_id' => absint($opts['station_id'] ?? 0),
+            'preset_id' => absint($opts['preset_id'] ?? 0),
+            'origen' => $this->sanitize_origin($opts['origen'] ?? 'boton'),
+            'extra' => ['etiquetas' => $items],
+        ]);
+        return $job ? $this->present_job($job, true) : null;
+    }
+
+    /**
+     * Trabajo ya cerrado, para mostrar el motivo sin pasar por el hub.
+     *
+     * @return array|null
+     */
+    private function label_error_job($document_type_id, $order_id, $message, array $opts) {
+        $id = $this->repo->create_job([
+            'origen' => $this->sanitize_origin($opts['origen'] ?? 'boton'),
+            'source_type' => 'etiqueta',
+            'source_id' => (int) $order_id,
+            'document_type_id' => (int) $document_type_id,
+            'titulo' => 'Etiquetas',
+            'station_id' => absint($opts['station_id'] ?? 0),
+            'estado' => 'error',
+            'error_code' => 'print_failed',
+            'error_msg' => mb_substr((string) $message, 0, 255),
+            'requested_by' => get_current_user_id() ?: null,
+            'finished_at' => Riverso_Print_Repository::now(),
+        ]);
+        $job = $id ? $this->repo->get_job($id) : null;
+        return $job ? $this->present_job($job, true) : null;
+    }
+
+    /**
+     * @return Riverso_Print_Order_Module|null
+     */
+    private function print_order_module() {
+        if (!class_exists('Riverso_Print_Order_Module')) {
+            $path = RIVERSO_POS_PLUGIN_DIR . 'modules/print-orders/class-print-order-module.php';
+            if (!file_exists($path)) {
+                return null;
+            }
+            require_once $path;
+        }
+        $module = Riverso_Print_Order_Module::get_instance();
+        return method_exists($module, 'label_job_payload') ? $module : null;
     }
 
     /**
@@ -553,6 +649,8 @@ class Riverso_Print_Module {
             41 => 'Boleta exenta electrónica',
             32 => 'Factura exenta electrónica',
             self::QUOTE_TYPE => 'Cotización',
+            self::LABEL_LOCATION_TYPE => 'Etiqueta de lugar',
+            self::LABEL_ORDER_TYPE => 'Orden de impresión',
         ];
     }
 
@@ -747,15 +845,16 @@ class Riverso_Print_Module {
     // ───────────────────────── AJAX ─────────────────────────
 
     /**
-     * @param bool $manage    Exige permiso de configuración.
-     * @param bool $quotes_ok También basta con poder ver cotizaciones (imprimirlas y seguir el trabajo).
+     * @param bool $manage     Exige permiso de configuración.
+     * @param bool $quotes_ok  También basta con poder ver cotizaciones (imprimirlas y seguir el trabajo).
+     * @param bool $labels_ok  También basta con poder imprimir etiquetas.
      */
-    private function authorize($manage = false, $quotes_ok = false) {
+    private function authorize($manage = false, $quotes_ok = false, $labels_ok = false) {
         $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
         if (!wp_verify_nonce($nonce, self::NONCE)) {
             wp_send_json_error(['message' => 'Sesión inválida. Recarga la página.'], 403);
         }
-        if (!$this->can_print() && !$this->can_manage() && !($quotes_ok && $this->can_print_quotes())) {
+        if (!$this->can_print() && !$this->can_manage() && !($quotes_ok && $this->can_print_quotes()) && !($labels_ok && $this->can_print_labels())) {
             wp_send_json_error(['message' => 'Sin permiso para imprimir documentos.'], 403);
         }
         if ($manage && !$this->can_manage()) {
@@ -773,14 +872,29 @@ class Riverso_Print_Module {
     }
 
     public function ajax_quick() {
-        $this->authorize(false, true);
+        $this->authorize(false, true, true);
         $opts = [
             'station_id' => $this->post_int('station_id'),
             'preset_id' => $this->post_int('preset_id'),
             'origen' => $this->post_text('origen', 20),
         ];
+        $label_order = $this->post_int('label_order_id');
+        if ($label_order > 0) {
+            if (!$this->can_print_labels()) {
+                wp_send_json_error(['message' => 'Sin permiso para imprimir etiquetas.'], 403);
+            }
+            $type = $this->post_int('document_type_id');
+            $job = $this->enqueue_labels($label_order, $type, $opts);
+            if (!$job) {
+                wp_send_json_error(['message' => 'No se pudo preparar la impresión de etiquetas.']);
+            }
+            wp_send_json_success(['job' => $job]);
+        }
         $quote_id = $this->post_int('quote_id');
         if ($quote_id > 0) {
+            if (!$this->can_print_quotes() && !$this->can_print() && !$this->can_manage()) {
+                wp_send_json_error(['message' => 'Sin permiso para imprimir cotizaciones.'], 403);
+            }
             $job = $this->enqueue_quote($quote_id, $this->post_text('template', 20), $opts);
             if (!$job) {
                 wp_send_json_error(['message' => 'Cotización no encontrada.']);
@@ -798,7 +912,7 @@ class Riverso_Print_Module {
     }
 
     public function ajax_job() {
-        $this->authorize(false, true);
+        $this->authorize(false, true, true);
         $this->repo->expire_jobs(self::STUCK_AFTER);
         $job = $this->repo->get_job($this->post_int('job_id'));
         if (!$job) {
@@ -808,7 +922,7 @@ class Riverso_Print_Module {
     }
 
     public function ajax_overview() {
-        $this->authorize(false, true);
+        $this->authorize(false, true, true);
         wp_send_json_success($this->overview($this->post_int('document_type_id'), $this->post_int('station_id')));
     }
 
@@ -1577,17 +1691,34 @@ class Riverso_Print_Module {
         if (!$this->hub_can_render($fields['version'])) {
             $skip[] = 'cotiz_pdf';
         }
+        // Impresion.exe (PC2) anuncia labels y solo retira etiquetas. El hub de PC1 no las ve,
+        // así un trabajo de etiquetas nunca se intenta imprimir como PDF.
+        $labels = !empty($body['labels']);
+        if ($labels) {
+            $skip = ['dte', 'cotizacion', 'cotiz_pdf', 'escaneo'];
+        } else {
+            $skip[] = 'etiqueta';
+        }
         $job = empty($body['probe']) ? $this->repo->claim_next((int) $agent['id'], $skip) : null;
         $payload = null;
         if ($job) {
             $settings = json_decode((string) $job['ajustes'], true);
-            $kinds = ['prueba' => 'prueba', 'escaneo' => 'scan', 'cotizacion' => 'html', 'cotiz_pdf' => 'render'];
+            $kinds = ['prueba' => 'prueba', 'escaneo' => 'scan', 'cotizacion' => 'html', 'cotiz_pdf' => 'render', 'etiqueta' => 'label'];
+            $kind = $kinds[$job['source_type']] ?? 'pdf';
+            if ($labels && $job['source_type'] === 'prueba') {
+                $kind = 'label_test';
+            }
             $payload = [
                 'id' => (int) $job['id'],
-                'kind' => $kinds[$job['source_type']] ?? 'pdf',
+                'kind' => $kind,
                 'titulo' => (string) $job['titulo'],
                 'settings' => is_array($settings) ? $settings : null,
             ];
+            if ($kind === 'label') {
+                $payload['etiquetas'] = (is_array($settings) && isset($settings['etiquetas']) && is_array($settings['etiquetas']))
+                    ? $settings['etiquetas']
+                    : [];
+            }
         }
         return new WP_REST_Response([
             'ok' => true,
@@ -1686,6 +1817,9 @@ class Riverso_Print_Module {
                     'error_code' => null,
                     'finished_at' => $now,
                 ]);
+                if ($applied && $job['source_type'] === 'etiqueta' && (int) $job['source_id'] > 0) {
+                    $this->mark_label_order_printed($job);
+                }
                 break;
             case 'error':
                 $code = mb_substr(sanitize_key((string) ($body['error_code'] ?? 'print_failed')), 0, 32) ?: 'print_failed';
@@ -1706,5 +1840,49 @@ class Riverso_Print_Module {
             'applied' => $applied,
             'estado' => $current ? (string) $current['estado'] : '',
         ], 200);
+    }
+
+    /**
+     * La orden queda impresa cuando el hub de etiquetas confirma el trabajo.
+     */
+    private function mark_label_order_printed(array $job) {
+        $orders = $this->print_order_module();
+        if (!$orders) {
+            return;
+        }
+        $settings = json_decode((string) ($job['ajustes'] ?? ''), true);
+        $printer = '';
+        if (is_array($settings)) {
+            $printer = trim((string) ($settings['printer_label'] ?? ''));
+            if ($printer === '') {
+                $printer = trim((string) ($settings['printer'] ?? ''));
+            }
+        }
+        if (!$orders->mark_printed_from_hub((int) $job['source_id'], $printer, (int) ($job['requested_by'] ?? 0))) {
+            error_log('Riverso: la etiqueta ' . (int) $job['id'] . ' se imprimió y la orden ' . (int) $job['source_id'] . ' no quedó marcada.');
+        }
+    }
+
+    /**
+     * CSS y JS de «Imprimir Ya!» para páginas que no son facturación (bodega, órdenes).
+     */
+    public function render_client_assets() {
+        static $done = false;
+        if ($done || !defined('RIVERSO_POS_PLUGIN_URL') || !defined('RIVERSO_POS_PLUGIN_DIR')) {
+            return;
+        }
+        $done = true;
+        $dir = RIVERSO_POS_PLUGIN_DIR;
+        $url = RIVERSO_POS_PLUGIN_URL;
+        $css_ver = is_file($dir . 'assets/css/printing.css') ? (string) filemtime($dir . 'assets/css/printing.css') : '1';
+        $js_ver = is_file($dir . 'assets/js/print-quick.js') ? (string) filemtime($dir . 'assets/js/print-quick.js') : '1';
+        $flags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+        $json = wp_json_encode($this->client_config(), $flags);
+        if (!is_string($json)) {
+            $json = '{}';
+        }
+        echo '<link rel="stylesheet" href="' . esc_url($url . 'assets/css/printing.css?ver=' . $css_ver) . '">' . "\n";
+        echo '<script>window.RIVERSO_PRINT = ' . $json . ';</script>' . "\n";
+        echo '<script src="' . esc_url($url . 'assets/js/print-quick.js?ver=' . $js_ver) . '"></script>' . "\n";
     }
 }

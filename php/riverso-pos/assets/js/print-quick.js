@@ -124,7 +124,7 @@
       case "tomado":
         return job.detalle || "Preparando…";
       case "imprimiendo":
-        return "Imprimiendo en " + where + "…";
+        return job.detalle || "Imprimiendo en " + where + "…";
       case "impreso":
         return "Impreso en " + where + ".";
       default:
@@ -234,6 +234,7 @@
     if (!jobId) return Promise.resolve(null);
     if (tracking[jobId]) return tracking[jobId];
     var started = Date.now();
+    var limit = ctx.trackLimitMs || TRACK_LIMIT_MS;
     var promise = new Promise(function (resolve) {
       function tick() {
         post(action("job", "riverso_print_job"), { job_id: jobId })
@@ -245,7 +246,7 @@
               return;
             }
             toast("busy", job.titulo || "Imprimiendo", progressText(job));
-            if (Date.now() - started > TRACK_LIMIT_MS) {
+            if (Date.now() - started > limit) {
               delete tracking[jobId];
               toast("error", job.titulo || "Impresión", "Sin confirmación del hub. Revisa la impresora antes de reintentar.");
               resolve(job);
@@ -255,7 +256,7 @@
           })
           .catch(function () {
             // Corte de red momentáneo: se sigue intentando hasta el límite.
-            if (Date.now() - started > TRACK_LIMIT_MS) {
+            if (Date.now() - started > limit) {
               delete tracking[jobId];
               toast("error", "Impresión", "No se pudo consultar el estado del trabajo.");
               resolve(null);
@@ -282,7 +283,12 @@
    */
   function printSource(source, opts) {
     opts = opts || {};
-    var ctx = { source: source, fallbackDialog: opts.fallbackDialog, onDone: opts.onDone };
+    var ctx = {
+      source: source,
+      fallbackDialog: opts.fallbackDialog,
+      onDone: opts.onDone,
+      trackLimitMs: source && source.label_order_id ? 15 * 60 * 1000 : TRACK_LIMIT_MS,
+    };
     toast("busy", "Imprimir Ya!", "Enviando a la impresora…");
     return post(action("quick", "riverso_print_quick"), Object.assign({}, source, {
       station_id: stationId(),
@@ -310,6 +316,18 @@
     return printSource({ quote_id: quoteId, template: template || "family" }, opts);
   }
 
+  /**
+   * Etiquetas de una orden (lugar u orden de impresión) en el hub de PC2.
+   * @param {{orderId: number, documentTypeId?: number}} spec
+   */
+  function printLabels(spec, opts) {
+    spec = spec || {};
+    return printSource({
+      label_order_id: spec.orderId || 0,
+      document_type_id: spec.documentTypeId || cfg.labelOrderType || 911,
+    }, opts);
+  }
+
   /** Qué preset usará "Imprimir Ya!" para un tipo de documento en esta estación. */
   function describe(documentTypeId) {
     return post(action("overview", "riverso_print_overview"), {
@@ -323,6 +341,7 @@
     post: post,
     printDte: printDte,
     printQuote: printQuote,
+    printLabels: printLabels,
     track: track,
     describe: describe,
     station: station,

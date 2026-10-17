@@ -3048,6 +3048,11 @@ $portal_task_type_categories = class_exists('Riverso_Task_Module') ? Riverso_Tas
         
         <?php elseif ($current_page === 'impresiones'): ?>
         <?php
+        if (class_exists('Riverso_Print_Module')) {
+            Riverso_Print_Module::get_instance()->render_client_assets();
+        }
+        ?>
+        <?php
         $po_can_create  = current_user_can('riverso_create_print_orders') || current_user_can('manage_options');
         $po_can_approve = current_user_can('riverso_approve_print_orders') || current_user_can('manage_options');
         $po_can_print   = current_user_can('riverso_print_orders') || current_user_can('riverso_print_labels') || current_user_can('manage_options');
@@ -5956,57 +5961,24 @@ function portalEliminarFactura(id, folio) {
         hideEditor();
     }
 
-    function jobsFrom(order) {
-        const printer = (typeof RiversoLabelPrint !== 'undefined' && RiversoLabelPrint.getPreferred) ? RiversoLabelPrint.getPreferred() : null;
-        return (order.items || []).map(it => ({
-            nombre: it.nombre,
-            sku: it.sku,
-            cantidad: it.cantidad_ean || 100,
-            precio: it.precio == null || it.precio === '' ? null : Math.round(Number(it.precio)),
-            copias: it.copias || 1,
-            modo: it.modo || 'BolsaCOD',
-            color: it.color || 'BN',
-            ean13: it.ean13 || null,
-            printerName: printer
-        }));
-    }
-
     function printOrder(order) {
-        if (typeof RiversoLabelPrint === 'undefined') {
+        if (!window.RiversoPrint) {
             alert('El módulo de impresión no está cargado.');
             return;
         }
-        const jobs = jobsFrom(order);
-        if (!jobs.length) {
+        if (!order.items || !order.items.length) {
             alert('La orden no tiene ítems');
             return;
         }
-        if (!RiversoLabelPrint.isHealthy()) {
-            alert('Agente de impresión no disponible. Ejecuta EtiquetadorRS.exe en este PC.');
-            return;
-        }
-        const printer = RiversoLabelPrint.getPreferred() || '';
-        if (!confirm(`Imprimir ${jobs.length} producto(s) / ${order.total_copias} copias${printer ? ' en ' + printer : ''}?`)) return;
-        const reprint = order.estado === 'impresa';
-        RiversoLabelPrint.print(jobs).then(() => {
-            if (reprint) {
-                hideEditor();
-                loadStats();
-                return null;
-            }
-            return post('riverso_print_orders_mark_printed', {
-                id: order.id,
-                impresora_nombre: printer
-            });
-        }).then(res => {
-            if (!res) return;
-            if (!res.success) {
-                alert('Se imprimió, pero no se pudo registrar: ' + (res.data?.message || 'error'));
-                return;
-            }
+        if (!confirm('Imprimir ' + order.items.length + ' producto(s) / ' + (order.total_copias || 0) + ' copias en la impresora de etiquetas?')) return;
+        RiversoPrint.printLabels({
+            orderId: order.id,
+            documentTypeId: (window.RIVERSO_PRINT && window.RIVERSO_PRINT.labelOrderType) || 911
+        }).then(job => {
+            if (!job || !job.ok) return;
             hideEditor();
             loadStats();
-        }).catch(err => alert(err && err.message ? err.message : 'Error de impresión'));
+        });
     }
 
     function openOrder(id) {

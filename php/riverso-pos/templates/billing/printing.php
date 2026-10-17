@@ -72,7 +72,7 @@ $can_manage = !empty($print_cfg['canManage']);
                 <button type="button" class="bill-btn" data-rp="agent-new">+ Agregar hub</button>
                 <?php endif; ?>
             </div>
-            <p class="bill-hint">Riverso Print Hub es el programa del PC que tiene las impresoras (PC1). Revisa la cola cada 2 segundos y avisa el estado de cada impresora.</p>
+            <p class="bill-hint">Riverso Print Hub es el programa del PC que tiene las impresoras de documentos (PC1). Impresion.exe, en el PC de la Brother QL-800 (PC2), usa el mismo token: en Facturación → Impresión agrega el hub «PC2 Etiquetas», pega el token en el ícono de Impresion.exe y crea las reglas «Etiqueta de lugar» y «Orden de impresión» apuntando a esa Brother.</p>
             <div id="rp-agents" class="bill-table-wrap"></div>
         </section>
 

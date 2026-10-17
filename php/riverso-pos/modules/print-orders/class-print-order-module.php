@@ -1019,6 +1019,96 @@ class Riverso_Print_Order_Module {
         wp_send_json_success(['order' => $this->get_order($id)]);
     }
 
+    /**
+     * Ítems listos para el hub de etiquetas.
+     *
+     * @param int $orden_id
+     * @return array|WP_Error {order, etiquetas}
+     */
+    public function label_job_payload($orden_id) {
+        $order = $this->get_order($orden_id);
+        if (!$order) {
+            return new WP_Error('missing', 'Orden de impresión no encontrada.');
+        }
+        if ($order['estado'] === 'cancelada') {
+            return new WP_Error('state', 'Esta orden está cancelada.');
+        }
+        if (!in_array($order['estado'], ['borrador', 'pendiente', 'aprobada', 'impresa'], true)) {
+            return new WP_Error('state', 'Esta orden no se puede imprimir.');
+        }
+        if (empty($order['items'])) {
+            return new WP_Error('empty', 'La orden no tiene ítems.');
+        }
+        $etiquetas = [];
+        foreach ($order['items'] as $it) {
+            $precio = $it['precio'];
+            $etiquetas[] = [
+                'nombre' => (string) $it['nombre'],
+                'sku' => (string) $it['sku'],
+                'cantidad' => max(1, (int) $it['cantidad_ean']),
+                'precio' => $precio === null ? null : (int) round((float) $precio),
+                'copias' => max(1, (int) $it['copias']),
+                'modo' => (string) ($it['modo'] ?: 'BolsaCOD'),
+                'color' => (string) ($it['color'] ?: 'BN'),
+                'ean13' => !empty($it['ean13']) ? (string) $it['ean13'] : null,
+            ];
+        }
+        return ['order' => $order, 'etiquetas' => $etiquetas];
+    }
+
+    /**
+     * Marca la orden impresa cuando el hub confirma el trabajo. Si ya estaba impresa
+     * (reimpresión), no cambia nada.
+     *
+     * @param int    $orden_id
+     * @param string $printer
+     * @param int    $user_id
+     */
+    public function mark_printed_from_hub($orden_id, $printer, $user_id) {
+        global $wpdb;
+        $order = $this->get_order($orden_id);
+        if (!$order || $order['estado'] === 'cancelada' || $order['estado'] === 'impresa') {
+            return $order && $order['estado'] === 'impresa';
+        }
+        if (!in_array($order['estado'], ['borrador', 'pendiente', 'aprobada'], true) || empty($order['items'])) {
+            return false;
+        }
+        $user_id = absint($user_id);
+        $printer = sanitize_text_field((string) $printer);
+        $now = current_time('mysql');
+        $updated = $wpdb->update(
+            $this->table_orders,
+            [
+                'estado' => 'impresa',
+                'impreso_por' => $user_id,
+                'impresora_nombre' => $printer !== '' ? $printer : null,
+                'impreso_en' => $now,
+                'aprobado_por' => $order['aprobado_por'] ? (int) $order['aprobado_por'] : $user_id,
+            ],
+            ['id' => (int) $orden_id]
+        );
+        if ($updated === false) {
+            return false;
+        }
+        $wpdb->update(
+            $this->table_items,
+            ['impreso' => 1],
+            ['orden_id' => (int) $orden_id],
+            ['%d'],
+            ['%d']
+        );
+        $this->audit('print_order.printed', (int) $orden_id, [
+            'old_value' => ['estado' => $order['estado']],
+            'new_value' => [
+                'estado' => 'impresa',
+                'impresora_nombre' => $printer,
+                'total_copias' => $order['total_copias'],
+            ],
+            'details' => 'Orden impresa desde el hub' . ($printer !== '' ? ' en ' . $printer : ''),
+        ]);
+        return true;
+    }
+
     public function ajax_mark_printed() {
         check_ajax_referer('riverso_pos_nonce', 'nonce');
         if (

@@ -343,6 +343,7 @@ $movement_types = Riverso_Warehouse_Module::MOVEMENT_TYPES;
             <div>
                 <h2>Imprimir etiqueta de lugar</h2>
                 <p id="loc-print-meta" style="margin:4px 0 0;color:#666;font-size:13px;"></p>
+                <p id="loc-print-route" style="margin:4px 0 0;font-size:13px;"></p>
             </div>
             <button type="button" class="riverso-modal-close" aria-label="Cerrar">&times;</button>
         </div>
@@ -633,6 +634,11 @@ $movement_types = Riverso_Warehouse_Module::MOVEMENT_TYPES;
 }
 </style>
 
+<?php
+if (class_exists('Riverso_Print_Module')) {
+    Riverso_Print_Module::get_instance()->render_client_assets();
+}
+?>
 <script>
 jQuery(function($) {
     const nonce = '<?php echo wp_create_nonce('riverso_pos_nonce'); ?>';
@@ -1075,58 +1081,46 @@ jQuery(function($) {
         $('#loc-print-choose').show();
         $('#loc-print-orders').hide();
         locPrintMsg('');
+        refreshLocPrintRoute();
         $('#modal-loc-print').css('display', 'flex');
     });
 
-    async function labelPrinterReady() {
-        if (typeof RiversoLabelPrint === 'undefined') return false;
-        const healthy = await RiversoLabelPrint.checkAgent();
-        if (!healthy) return false;
-        await RiversoLabelPrint.loadPrinters();
-        return RiversoLabelPrint.getPrinters().some(p => p.isBrother);
+    function refreshLocPrintRoute() {
+        const typeId = (window.RIVERSO_PRINT && window.RIVERSO_PRINT.labelLocationType) || 910;
+        const $route = $('#loc-print-route');
+        if (!window.RiversoPrint) {
+            $route.text('Falta el módulo de impresión. Recarga la página.');
+            return;
+        }
+        RiversoPrint.describe(typeId).then(function (ov) {
+            const route = ov && ov.route;
+            if (route && route.ok) {
+                $route.css('color', '#2e7d32').text('Lista: ' + (route.printer || route.nombre));
+            } else {
+                $route.css('color', '#b45309').text((route && route.message) || (ov && ov.noRouteMessage) || 'Sin impresora de etiquetas');
+            }
+        }).catch(function (err) {
+            $route.css('color', '#b45309').text(err && err.message ? err.message : 'No se pudo revisar la impresora');
+        });
     }
 
     $('#btn-loc-print-now').on('click', async function() {
         if (!printLoc) return;
-        const $btn = $(this).prop('disabled', true).text('Revisando impresora...');
+        const $btn = $(this).prop('disabled', true).text('Enviando...');
         const reset = () => $btn.prop('disabled', false).text('Imprimir ya');
-        let ready = false;
-        try { ready = await labelPrinterReady(); } catch (e) { ready = false; }
-        if (!ready) {
-            reset();
-            locPrintMsg('No hay impresora de etiquetas disponible en este computador. Agrega el lugar a una orden de impresión.');
-            showLocPrintOrders();
-            return;
-        }
-        $btn.text('Imprimiendo...');
         try {
             const res = await createLocOrder();
             if (!res.success) throw new Error((res.data && res.data.message) || 'No se pudo crear la orden');
-            const order = res.data.order;
-            const item = locPrintItem();
-            const printer = RiversoLabelPrint.getPreferred() || '';
-            await RiversoLabelPrint.print([{
-                nombre: item.nombre,
-                sku: item.sku,
-                cantidad: 1,
-                precio: null,
-                copias: item.copias,
-                modo: 'CodigoLugar',
-                color: 'BN',
-                ean13: null,
-                printerName: printer || null
-            }]);
-            const mark = await $.post(ajaxurl, {
-                action: 'riverso_print_orders_mark_printed',
-                nonce: nonce,
-                id: order.id,
-                impresora_nombre: printer
+            if (!window.RiversoPrint) throw new Error('Falta el módulo de impresión. Recarga la página.');
+            $btn.text('Imprimiendo...');
+            const job = await RiversoPrint.printLabels({
+                orderId: res.data.order.id,
+                documentTypeId: (window.RIVERSO_PRINT && window.RIVERSO_PRINT.labelLocationType) || 910
             });
             reset();
-            if (!mark.success) {
-                alert('Se imprimió, pero no se pudo registrar: ' + ((mark.data && mark.data.message) || 'error'));
+            if (job && job.ok) {
+                $('#modal-loc-print').hide();
             }
-            $('#modal-loc-print').hide();
         } catch (err) {
             reset();
             locPrintMsg(err && err.message ? err.message : 'Error de impresión');
